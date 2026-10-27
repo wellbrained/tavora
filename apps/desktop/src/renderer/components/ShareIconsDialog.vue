@@ -25,21 +25,21 @@ const steam = props.request.steam;
 const steamRows = ref<Row[] | null>(null);
 const looking = ref(steam !== undefined);
 
-// Every game whose own icon Tavora does not have yet, with the icon this PC has for it.
+// Every game workspace whose game's own icon Tavora does not have yet, with the icon this PC has for it.
 const rows = computed<Row[]>(() => {
   if (steam) return steamRows.value ?? [];
-  return Object.values(state.value!.library.games)
-    .filter((game) => game.shareIcon !== null)
+  return Object.values(state.value!.library.workspaces)
+    .filter((workspace) => workspace.shareIcon !== null)
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((game) => ({ key: game.id, name: game.name, icon: game.shareIcon! }));
+    .map((workspace) => ({ key: workspace.id, name: workspace.name, icon: workspace.shareIcon! }));
 });
 
-const ticked = ref(new Set<string>(props.request.gameIds));
+const ticked = ref(new Set<string>(props.request.workspaceIds));
 const busy = ref(false);
 const progress = ref<{ done: number; total: number } | null>(null);
 const error = ref<string | null>(null);
 const chosen = computed(() => rows.value.filter((row) => ticked.value.has(row.key)));
-/** Only signed-in players can share. */
+/** Only signed-in users can share. */
 const signedIn = computed(() => Boolean(account.value?.account));
 
 function signIn() {
@@ -65,7 +65,7 @@ onMounted(async () => {
     return;
   }
   steamRows.value = result.games.map((game) => ({ key: String(game.appid), name: game.name, icon: game.icon }));
-  // Everything is ticked at first: the player asked for these games.
+  // Everything is ticked at first: the user asked for these games.
   ticked.value = new Set(steamRows.value.map((row) => row.key));
 });
 
@@ -89,7 +89,7 @@ async function share() {
   progress.value = { done: 0, total: keys.length };
   for (let at = 0; at < keys.length; at += BATCH) {
     const part = keys.slice(at, at + BATCH);
-    const action: HostAction = steam ? { type: "share-steam-icons", appids: part.map(Number) } : { type: "share-icons", gameIds: part };
+    const action: HostAction = steam ? { type: "share-steam-icons", appids: part.map(Number) } : { type: "share-icons", workspaceIds: part };
     const result = await act(action, { quiet: true });
     if (!result.ok) {
       // Once a turn went through, a later one with nothing left to send changes nothing.

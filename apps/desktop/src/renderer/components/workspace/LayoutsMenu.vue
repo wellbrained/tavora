@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Saved layouts of the current game: apply one, or save the current layout.
+// Saved layouts of the current workspace: apply one, or save the current layout.
 // Below them, a Templates submenu (uneven arrangements of empty slots to fill
 // with modules) and a picker for even grids.
 import { ChevronDown, LayoutPanelLeft, LayoutTemplate } from "@lucide/vue";

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, modulePartition, orphanedPartitions, queueLocalDataMove } from "./gamedata";
+import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, modulePartition, orphanedPartitions, queueLocalDataMove } from "./module-data";
 import { IconError, imageType, importIcon, MAX_ICON_BYTES } from "./icons";
 import { initialBounds } from "./window-state";
 
@@ -13,7 +13,7 @@ async function tempDir() {
 }
 
 describe("deleteModuleData", () => {
-  it("deletes one game's data for every module of every owner and keeps other games", async () => {
+  it("deletes one workspace's data for every module of every owner and keeps other workspaces", async () => {
     const userData = await tempDir();
     const modules = ["local/local.a", "local/local.b", "official/tavora.notes", "0123456789abcdef0123456789abcdef/local.a"];
     for (const module of modules) {
@@ -28,7 +28,7 @@ describe("deleteModuleData", () => {
     }
   });
 
-  it("deletes the files modules keep for the game too", async () => {
+  it("deletes the files modules keep for the workspace too", async () => {
     const userData = await tempDir();
     for (const game of ["poe2", "satisfactory"]) {
       await mkdir(path.join(userData, "module-blobs", "local", "local.a", game), { recursive: true });
@@ -51,7 +51,7 @@ describe("deleteModuleData", () => {
 });
 
 describe("orphanedPartitions", () => {
-  it("finds module and Browser partitions of games that are gone", async () => {
+  it("finds module and Browser partitions of workspaces that are gone", async () => {
     const userData = await tempDir();
     // Windows forbids colons in directory names; Electron escapes them there.
     const rawPartition = process.platform === "win32" ? [] : ["module:local.example.b@gone-game"];
@@ -63,7 +63,7 @@ describe("orphanedPartitions", () => {
       ...rawPartition,
       "browser%40poe2",
       "browser%40gone-game",
-      // The Browser's sign-ins shared by every game belong to no game and stay.
+      // The Browser's sign-ins shared by every workspace belong to no workspace and stay.
       "browser",
       "something-else",
     ];
@@ -205,12 +205,12 @@ describe("leftover module data", () => {
     await expect(deleteModuleDataOf(userData, "..", "wellbrained.tracker")).rejects.toThrow();
   });
 
-  it("moves local data to the signed owner at the next start, keeping a game the signed module already has", async () => {
+  it("moves local data to the signed owner at the next start, keeping a workspace the signed module already has", async () => {
     const userData = await tempDir();
     await seed(userData, "local", "wellbrained.tracker", "poe2", "local poe2");
     await seed(userData, "local", "wellbrained.tracker", "satisfactory", "local satisfactory");
     await seed(userData, KEY, "wellbrained.tracker", "satisfactory", "signed satisfactory");
-    // The settings shared by every game (storage.app) move like a game's.
+    // The settings shared by every workspace (storage.app) move like a workspace's.
     for (const [folder, body] of [["_app", "local app"], ["not a game", "stays"]] as const) {
       await mkdir(path.join(userData, "module-data", "local", "wellbrained.tracker", folder), { recursive: true });
       await writeFile(path.join(userData, "module-data", "local", "wellbrained.tracker", folder, "storage.json"), body);

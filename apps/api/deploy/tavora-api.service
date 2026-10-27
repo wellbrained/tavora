@@ -19,7 +19,7 @@ Environment=TAVORA_STATE_DIR=/var/lib/tavora-api
 # CLAMD_SOCKET=... (the virus scan of new catalog versions; without it every new version waits for review) is set by tavora-api-clamav.sh, which also adds this user to the clamav group.
 EnvironmentFile=-/srv/tavora-api/shared/production.env
 ExecStart=/usr/local/bin/node /srv/tavora-api/current/server.mjs
-# The only writable place: icons players offered, approved ones and takedowns, accounts (small SQLite files), and the module catalog with its zips.
+# The only writable place: icons users offered, approved ones and takedowns, accounts (small SQLite files), and the module catalog with its zips.
 StateDirectory=tavora-api
 StateDirectoryMode=0700
 Restart=on-failure

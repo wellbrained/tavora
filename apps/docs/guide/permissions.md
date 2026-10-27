@@ -1,6 +1,6 @@
 # Permissions and consent
 
-A module can do everything inside its own panel without asking anyone. Whatever reaches outside it, such as a web API or the player's Discord, needs the player's yes first. This page is what that looks like from your side; the rules the host enforces are in the [security model](./security.md).
+A module can do everything inside its own panel without asking anyone. Whatever reaches outside it, such as a web API or the user's Discord, needs the user's yes first. This page is what that looks like from your side; the rules the host enforces are in the [security model](./security.md).
 
 ## Ask in the manifest
 
@@ -14,14 +14,14 @@ List what your module needs under `permissions` in [`tavora.module.json`](../ref
 ```
 
 - **`network`**: the exact hosts you call with `tavora.network.fetch`, HTTPS only, at most 32. No wildcards, IP addresses or local names. Your page itself still has no network: no `fetch`, remote images, CDN scripts or web fonts.
-- **`connectors`**: `"ai-usage"` for the player's Claude and Codex usage, `"discord"` for the Discord app on this PC, `"system-info"` for the PC's hardware, how busy it is and how its connection is doing, `"media"` for what plays on the PC (Spotify, browsers, video players) with play/pause and skip, `"stream-overlay"` to show your [overlay page](../reference/manifest.md#overlay) in OBS. Tavora keeps the sign-in; you get answers, never a token.
-- **`onRequest`**: connectors your module works without, which Tavora should ask for only when it first needs one. So far that's `"stream-overlay"`: list it in `connectors` and `onRequest`, and players are asked on their first Copy OBS link instead of when they add your module.
+- **`connectors`**: `"ai-usage"` for the user's Claude and Codex usage, `"discord"` for the Discord app on this PC, `"system-info"` for the PC's hardware, how busy it is and how its connection is doing, `"media"` for what plays on the PC (Spotify, browsers, video players) with play/pause and skip, `"stream-overlay"` to show your [overlay page](../reference/manifest.md#overlay) in OBS. Tavora keeps the sign-in; you get answers, never a token.
+- **`onRequest`**: connectors your module works without, which Tavora should ask for only when it first needs one. So far that's `"stream-overlay"`: list it in `connectors` and `onRequest`, and users are asked on their first Copy OBS link instead of when they add your module.
 
-Ask for as little as you can. Every host and connector is a line in the dialog the player reads.
+Ask for as little as you can. Every host and connector is a line in the dialog the user reads.
 
-## What the player sees
+## What the user sees
 
-When a player adds your module, Tavora shows its own dialog, which your page can't draw or hide. It names each host and connector, and says who made the module:
+When a user adds your module, Tavora shows its own dialog, which your page can't draw or hide. It names each host and connector, and says who made the module:
 
 | Your module is | The dialog says |
 | --- | --- |
@@ -31,7 +31,7 @@ When a player adds your module, Tavora shows its own dialog, which your page can
 
 How to get your name there is in [Your publisher key](./publisher-key.md#show-your-name).
 
-If the player cancels, the module isn't added. They can take a grant back any time in Settings (Modules > Website access for websites, Integrations for Discord and AI usage, Streaming for overlays), which removes the module's panels. An update that asks for more keeps what was granted, and its panels offer the player to review the new hosts, which they can put off with **Not now**.
+If the user cancels, the module isn't added. They can take a grant back any time in Settings (Modules > Website access for websites, Integrations for Discord and AI usage, Streaming for overlays), which removes the module's panels. An update that asks for more keeps what was granted, and its panels offer the user to review the new hosts, which they can put off with **Not now**.
 
 ## Check before you call
 
@@ -58,14 +58,14 @@ A 404 or 500 from the API is an answer with that `status`, not an error.
 
 ## Calls that need a click
 
-Some calls need no grant but only work right after the player clicked or pressed a key in your panel, within 2 seconds, one call per press:
+Some calls need no grant but only work right after the user clicked or pressed a key in your panel, within 2 seconds, one call per press:
 
-- `tavora.links.open(url)`: opens a web page in the game's Browser panel.
+- `tavora.links.open(url)`: opens a web page in the workspace's Browser panel.
 - `tavora.clipboard.writeImage(png)`: copies a PNG.
-- `tavora.pictures.save(png, name)`: saves a PNG where the player picks in Tavora's save dialog.
+- `tavora.pictures.save(png, name)`: saves a PNG where the user picks in Tavora's save dialog.
 - `tavora.ui.showMenu(...)`: a menu Tavora draws above every panel.
 - `tavora.overlay.copyLink(key)`: copies an overlay's link for OBS.
-- `tavora.overlay.showOverGame(key)`: shows an overlay over the player's game. It needs no permission, only the click.
+- `tavora.overlay.showOverGame(key)`: shows an overlay over the user's game. It needs no permission, only the click.
 - `tavora.overlay.preview(key)`: opens a preview window of an overlay. It needs no permission, only the click.
 - `tavora.hotkeys.set(action, target, label)`: opens Tavora's hotkey dialog.
 - `discord.connect`, `discord.allowControl`, joining a voice channel, muting and unmuting.

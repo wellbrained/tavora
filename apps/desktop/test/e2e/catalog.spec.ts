@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, launch, newUserData, openGame, panels, seedLibrary } from "./harness";
+import { expectModuleText, launch, newUserData, openWorkspace, panels, seedLibrary } from "./harness";
 
 interface Listed {
   entry: Record<string, unknown>;
@@ -45,6 +45,7 @@ function listing(id: string, name: string, zip: Buffer, owner: string, fields: R
     version: "1.0.0",
     minTavora: null,
     games: [],
+    personalWorkspaces: true,
     workspaces: true,
     permissions: { network: [], connectors: [] },
     owner,
@@ -75,10 +76,10 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
     }
     if (url.pathname === "/v1/catalog") {
       const game = url.searchParams.get("game");
-      const workspace = url.searchParams.get("workspace") === "1";
+      const personal = url.searchParams.get("personal") === "1";
       const fits = (entry: Record<string, unknown>) => {
         const games = entry.games as string[];
-        return workspace ? games.length === 0 && entry.workspaces !== false : !game || games.length === 0 || games.includes(game);
+        return personal ? games.length === 0 && entry.personalWorkspaces !== false : !game || games.length === 0 || games.includes(game);
       };
       return send(200, { modules: modules.map((item) => item.entry).filter(fits) });
     }
@@ -112,7 +113,7 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
   return { url: `http://127.0.0.1:${address.port}`, server, asked, reports };
 }
 
-test("a player browses the catalog for a game, sees who publishes a module and installs it", async () => {
+test("a user browses the catalog for a game, sees who publishes a module and installs it", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const tracker = await packed("wellbrained.tracker", "Tracker", key);
@@ -120,11 +121,11 @@ test("a player browses the catalog for a game, sees who publishes a module and i
   const { url, server, asked } = await catalogServer([
     { entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { publisher: "wellbrained", description: "<b>Tracks</b> your runs" }), body: tracker },
     // Made for another game: listed, but it says which game and Install stays greyed out.
-    { entry: listing("wellbrained.factory", "Factory", other, owner, { games: ["satisfactory"], workspaces: false }), body: other },
+    { entry: listing("wellbrained.factory", "Factory", other, owner, { games: ["satisfactory"], personalWorkspaces: false, workspaces: false }), body: other },
   ]);
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     const row = page.getByTestId("catalog-wellbrained.tracker");
@@ -155,7 +156,7 @@ test("a player browses the catalog for a game, sees who publishes a module and i
   }
 });
 
-test("a player opens a module's page with its readme, screenshots, access and homepage before installing", async () => {
+test("a user opens a module's page with its readme, screenshots, access and homepage before installing", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const tracker = await packed("wellbrained.tracker", "Tracker", key);
@@ -186,7 +187,7 @@ test("a player opens a module's page with its readme, screenshots, access and ho
   ]);
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     await page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-name").click();
@@ -209,7 +210,7 @@ test("a player opens a module's page with its readme, screenshots, access and ho
     expect(asked).toContain(`/v1/catalog/pictures/${hash(picture)}.png`);
     expect(await readdir(path.join(userData, "modules")).catch(() => [])).toEqual([]);
 
-    // The game has no Browser panel yet, so the player picks where the homepage opens.
+    // The game has no Browser panel yet, so the user picks where the homepage opens.
     await expect(info.getByTestId("catalog-info-homepage")).toHaveText("example.com/tracker");
     await info.getByTestId("catalog-info-homepage").click();
     await expect(page.getByTestId("link-choice-url")).toHaveText("https://example.com/tracker");
@@ -238,7 +239,7 @@ test("a player opens a module's page with its readme, screenshots, access and ho
   }
 });
 
-test("a player sees a module's rating on its card, how many gave each star, and its reviews on its page", async () => {
+test("a user sees a module's rating on its card, how many gave each star, and its reviews on its page", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const tracker = await packed("wellbrained.tracker", "Tracker", key);
@@ -270,7 +271,7 @@ test("a player sees a module's rating on its card, how many gave each star, and 
   ]);
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     const card = page.getByTestId("catalog-wellbrained.tracker");
@@ -331,7 +332,7 @@ test("a zip that is not the listed one, or not from the listed key, writes nothi
   ]);
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     await page.getByTestId("catalog-install-wellbrained.swapped").click();
@@ -355,8 +356,8 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
   try {
     await page.getByTestId("rail-add-game").click();
     await page.getByTestId("game-search").fill("Personal");
-    await page.getByTestId("open-add-workspace").click();
-    await page.getByTestId("create-workspace").click();
+    await page.getByTestId("open-add-personal").click();
+    await page.getByTestId("create-personal").click();
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     await expect(page.getByTestId("catalog-wellbrained.notes")).toBeVisible();
@@ -369,7 +370,7 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), onlineSearch: false }));
   const offline = await launch(userData, [], { env: { TAVORA_API_URL: url } });
   try {
-    await openGame(offline.page, "poe2");
+    await openWorkspace(offline.page, "poe2");
     await offline.page.getByTestId("add-module").click();
     await offline.page.getByTestId("module-tab-browse").click();
     await expect(offline.page.getByTestId("catalog-off")).toBeVisible();
@@ -380,7 +381,7 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
   }
 });
 
-test("catalog module updates wait for the player, install from the Updates view without a restart, and one adding a network host waits for consent while the old version keeps working", async () => {
+test("catalog module updates wait for the user, install from the Updates view without a restart, and one adding a network host waits for consent while the old version keeps working", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const id = "wellbrained.tracker";
@@ -401,7 +402,7 @@ test("catalog module updates wait for the player, install from the Updates view 
     await expect(page.getByTestId("toast")).toHaveText(toast);
   };
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     await page.getByTestId(`catalog-install-${id}`).click();
@@ -409,7 +410,7 @@ test("catalog module updates wait for the player, install from the Updates view 
     await expect(panels(page, id)).toHaveCount(1);
     await expectModuleText(app, id, "version", "1.0.0");
 
-    // Modules do not update by themselves unless the player turns that on: an update that asks for
+    // Modules do not update by themselves unless the user turns that on: an update that asks for
     // nothing new is only found, and the old version keeps running.
     modules[0] = await release("1.1.0", [], ["Faster."]);
     await checkForUpdates("Found 1 update. It is ready when you are.");
@@ -438,7 +439,7 @@ test("catalog module updates wait for the player, install from the Updates view 
     await expectModuleText(app, id, "version", "1.1.0");
     await expect(page.getByTestId("module-updates-button")).toHaveCount(0);
     await page.keyboard.press("Escape");
-    // The update check asked for the whole catalog, never for the modules this player has (C11).
+    // The update check asked for the whole catalog, never for the modules this user has (C11).
     expect(asked.filter((request) => request.startsWith("/v1/catalog?") || request === "/v1/catalog")).toContain("/v1/catalog");
     expect(asked.some((request) => request.startsWith("/v1/catalog?") && request.includes(id))).toBe(false);
 
@@ -507,7 +508,7 @@ test("catalog module updates wait for the player, install from the Updates view 
   }
 });
 
-test("a player reports a module from Browse and from Settings, and only its id, key and zip are sent", async () => {
+test("a user reports a module from Browse and from Settings, and only its id, key and zip are sent", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const tracker = await packed("wellbrained.tracker", "Tracker", key);
@@ -516,10 +517,10 @@ test("a player reports a module from Browse and from Settings, and only its id, 
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   const sent = { headers: { cookie: null, referer: null }, body: { id: "wellbrained.tracker", owner, sha256 } };
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
-    // Nothing is sent until the player says yes.
+    // Nothing is sent until the user says yes.
     // Report is only on the module's page, not on its card.
     await expect(page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-report-wellbrained.tracker")).toHaveCount(0);
     await page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-name").click();

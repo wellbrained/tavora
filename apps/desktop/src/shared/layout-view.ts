@@ -9,7 +9,7 @@ export const LAYOUT_ALL_GAMES = "$all";
 
 /** What an item's actions are aimed at: an overlay (by its subject) or a panel in game (by its id). */
 export type LayoutTarget =
-  | { kind: "overlay"; owner: string; moduleId: string; gameId: string; key: string }
+  | { kind: "overlay"; owner: string; moduleId: string; workspaceId: string; key: string }
   | { kind: "panel"; instanceId: string };
 
 export interface LayoutItemView {
@@ -17,7 +17,7 @@ export interface LayoutItemView {
   id: string;
   target: LayoutTarget;
   /** What the hotkey dialog is asked with (the key of the item). */
-  keyTarget: { owner: string; moduleId: string; gameId: string; key: string };
+  keyTarget: { owner: string; moduleId: string; workspaceId: string; key: string };
   /** The module's name with the key, or the panel's name. */
   name: string;
   moduleId: string;
@@ -77,7 +77,7 @@ export interface LayoutView {
   canRedo: boolean;
   /** Game overlays are off in Settings: the layout still works, but nothing shows over the game. */
   enabled: boolean;
-  /** A short sentence for the player (the game isn't running, a picture can't be used); null when there is none. */
+  /** A short sentence for the user (the game isn't running, a picture can't be used); null when there is none. */
   notice: string | null;
 }
 

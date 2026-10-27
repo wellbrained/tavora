@@ -82,7 +82,7 @@ const renaming = ref(false);
             <Button size="sm" variant="secondary" :disabled="off"><Plus :stroke-width="1.5" /> Add module</Button>
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
-                <Button size="sm" variant="secondary" class="px-1.5" aria-label="Modules in this game" title="Modules in this game" :disabled="off"><ChevronDown :stroke-width="1.5" /></Button>
+                <Button size="sm" variant="secondary" class="px-1.5" aria-label="Modules in this workspace" title="Modules in this workspace" :disabled="off"><ChevronDown :stroke-width="1.5" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem>Notes</DropdownMenuItem>

@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto
 import { DatabaseSync } from "node:sqlite";
 
 /**
- * Accounts: the only player data the service keeps (decided 2026-10-16). An
+ * Accounts: the only user data the service keeps (decided 2026-10-16). An
  * account has one or two sign-in methods: an email address (a code sent to it,
  * never a password) and a Discord login (known by the Discord user id; the
  * username is only a label). It lives in its own SQLite file, apart from the icons. Nothing
@@ -60,19 +60,19 @@ export interface PublishToken {
 export interface Device {
   id: string;
   os: DeviceOs;
-  /** The PC's name, as the app sent it or the player renamed it; null for a sign-in from before names. */
+  /** The PC's name, as the app sent it or the user renamed it; null for a sign-in from before names. */
   name: string | null;
   createdAt: string;
   lastUsedAt: string;
 }
 
-/** The player's profile as the account keeps it: private to its owner (decided 2026-10-16). */
+/** The user's profile as the account keeps it: private to its owner (decided 2026-10-16). */
 export interface StoredProfile {
   name: string;
   initials: string;
   /** A 256 px PNG, or null for initials. */
   picture: Uint8Array | null;
-  /** When the player last changed it, in ms; the newest change wins. */
+  /** When the user last changed it, in ms; the newest change wins. */
   updatedAt: number;
 }
 
@@ -95,7 +95,7 @@ export const MAX_PREFIXES = 3;
 const LINK_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 export const LINK_CODE = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/;
 
-/** An account's public name as a module developer: shown to players as "by <name>". */
+/** An account's public name as a module developer: shown to users as "by <name>". */
 export interface Developer {
   name: string;
   /** When it was last set, in ms; it can change again NAME_HOLD_MS later. */
@@ -125,7 +125,7 @@ export interface KeyRequest {
 
 export type NameChange = { ok: true; developer: Developer } | { ok: false; reason: "name-taken" | "name-reserved" | "name-too-soon"; nextChangeAt?: number };
 
-/** How long a checked Discord login waits for the player's yes to a new account. */
+/** How long a checked Discord login waits for the user's yes to a new account. */
 export const DISCORD_TICKET_TTL_MS = 10 * 60_000;
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -376,7 +376,7 @@ export class AccountStore {
 
   // ── Discord logins waiting for a new account ───────────────────────────
 
-  /** Holds a checked Discord login for 10 minutes while the app asks the player; the ticket goes to the app once, only its hash is kept. */
+  /** Holds a checked Discord login for 10 minutes while the app asks the user; the ticket goes to the app once, only its hash is kept. */
   holdDiscord(discord: DiscordLogin, now: number): string {
     this.db.prepare("delete from discord_tickets where expires_at <= ?").run(now);
     const ticket = randomBytes(32).toString("base64url");
@@ -753,7 +753,7 @@ export class AccountStore {
     return (this.db.prepare("select prefix from module_prefixes where account_id = ? order by prefix").all(accountId) as unknown as { prefix: string }[]).map((row) => row.prefix);
   }
 
-  /** The developer name players see for a key, or null when the key is not linked or its account has no name. */
+  /** The developer name users see for a key, or null when the key is not linked or its account has no name. */
   publisherName(fingerprint: string): string | null {
     const row = this.db.prepare("select d.name from publisher_keys k join developers d on d.account_id = k.account_id where k.fingerprint = ?").get(fingerprint) as { name: string } | undefined;
     return row?.name ?? null;
@@ -793,7 +793,7 @@ export class AccountStore {
 
   // ── Key vault ──────────────────────────────────────────────────────────
 
-  /** The account's sealed key vault (vault.ts): bytes only the player's recovery key opens. */
+  /** The account's sealed key vault (vault.ts): bytes only the user's recovery key opens. */
   vault(accountId: string): { version: number; data: Uint8Array; updatedAt: number } | null {
     const row = this.db.prepare("select version, data, updated_at from vaults where account_id = ?").get(accountId) as { version: number; data: Uint8Array; updated_at: number } | undefined;
     return row ? { version: row.version, data: row.data, updatedAt: row.updated_at } : null;
@@ -906,7 +906,7 @@ export class AccountStore {
   /**
    * Checks a code. A wrong one counts a try, and the last allowed try spends it.
    * A right one is spent only when asked, so the app can learn that an address
-   * has no account yet and ask the player before it creates one.
+   * has no account yet and ask the user before it creates one.
    */
   checkCode(email: string, purpose: CodePurpose, accountId: string | null, code: string, now: number, spend: boolean): boolean {
     const address = addressKey(email);

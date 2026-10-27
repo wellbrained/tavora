@@ -13,7 +13,7 @@ type Entry = { path: string; target: string; name: string };
 const queues = new Map<string, Promise<unknown>>();
 const reads = new Map<string,number>();
 let activeReads = 0;
-/** File authority stays on this PC, outside the player's backed-up module data. */
+/** File authority stays on this PC, outside the user's backed-up module data. */
 export class ReadOnlyFiles {
   private file: string;
   constructor(userData: string, owner: string, moduleId: string, gameId: string) {
@@ -25,7 +25,7 @@ export class ReadOnlyFiles {
     try {
       const value = JSON.parse(await readFile(path.join(path.dirname(this.file), 'picker.json'), 'utf8'));
       if (typeof value.directory === 'string' && path.isAbsolute(value.directory) && (await stat(value.directory)).isDirectory()) return value.directory;
-    } catch { /* Missing or stale hints fall back to the game folder. */ }
+    } catch { /* Missing or stale hints fall back to the folders of this workspace's files. */ }
     const entries = await this.entries().catch(() => ({} as Record<string, Entry>));
     for (const entry of Object.values(entries).reverse()) {
       const directory = path.dirname(entry.path);

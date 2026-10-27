@@ -1,10 +1,10 @@
 // Settings > Diagnostic info copies a report with no private data, and the
 // timings in it stay inside budgets: how long Tavora takes to start, to switch
-// games and to open a panel. The budgets have headroom over what a normal PC
+// workspaces and to open a panel. The budgets have headroom over what a normal PC
 // takes, so they catch a real slowdown, not noise.
 import { homedir } from "node:os";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { launch, openGame, openModule, VANILLA } from "./harness";
+import { launch, openWorkspace, openModule, VANILLA } from "./harness";
 
 async function copyReport(app: ElectronApplication, page: Page): Promise<string> {
   await page.getByTestId("copy-diagnostics").click();
@@ -22,7 +22,7 @@ function timing(report: string, name: string, column: "median" | "slowest" = "me
 test("Copy diagnostic info has what helps and nothing private, and the timings are inside budget", async () => {
   const { app, page, userData } = await launch();
   // Several switches, so one cold first switch does not decide it.
-  for (const id of ["satisfactory", "poe2", "satisfactory", "poe2"]) await openGame(page, id);
+  for (const id of ["satisfactory", "poe2", "satisfactory", "poe2"]) await openWorkspace(page, id);
   await openModule(page, VANILLA);
   // The panel's own load is what its timing waits for, so ask again until it is in the report.
   await page.getByTestId("rail-settings").click();
@@ -32,12 +32,12 @@ test("Copy diagnostic info has what helps and nothing private, and the timings a
 
   expect(report).toMatch(/^Tavora diagnostic info\nVersion: \d+\.\d+\.\d+ \(development run\)/);
   expect(report).toContain("Last errors:");
-  // No folders of this PC and no game names.
+  // No folders of this PC and no workspace names.
   for (const secret of [homedir(), userData, "Path of Exile", "Satisfactory"]) expect(report).not.toContain(secret);
 
   expect.soft(timing(report, "startup"), "startup").toBeLessThan(BUDGET.startup);
-  expect.soft(timing(report, "game-switch"), "game switch, typical").toBeLessThan(BUDGET.gameSwitch);
-  expect.soft(timing(report, "game-switch", "slowest"), "game switch, slowest").toBeLessThan(BUDGET.gameSwitchSlowest);
+  expect.soft(timing(report, "workspace-switch"), "workspace switch, typical").toBeLessThan(BUDGET.workspaceSwitch);
+  expect.soft(timing(report, "workspace-switch", "slowest"), "workspace switch, slowest").toBeLessThan(BUDGET.workspaceSwitchSlowest);
   expect.soft(timing(report, "panel-open"), "panel open").toBeLessThan(BUDGET.panelOpen);
   await app.close();
 });
@@ -47,4 +47,4 @@ test("Copy diagnostic info has what helps and nothing private, and the timings a
 // CI draws everything in software on a shared machine (measured there: startup 3800, a typical switch 2000), so
 // it only catches a collapse; the real budgets are enforced where `pnpm release` runs the tests, on a real PC.
 const SCALE = process.env.CI ? 20 : 1;
-const BUDGET = { startup: 2000 * SCALE, gameSwitch: 150 * SCALE, gameSwitchSlowest: 1000 * SCALE, panelOpen: 600 * SCALE };
+const BUDGET = { startup: 2000 * SCALE, workspaceSwitch: 150 * SCALE, workspaceSwitchSlowest: 1000 * SCALE, panelOpen: 600 * SCALE };

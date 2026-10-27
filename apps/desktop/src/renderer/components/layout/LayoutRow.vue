@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // One row of the Overlay layout's list (like a source in OBS): the name, the eye that hides it on the canvas only, and,
-// for the selected one, everything the player sets: when it shows (always, or with a key), how see-through it is, Hide
+// for the selected one, everything the user sets: when it shows (always, or with a key), how see-through it is, Hide
 // from capture, Reset position, Reset size, Preview and Remove. Selecting a row selects the item on the canvas, and the other way round.
 import { Eye, EyeOff, X } from "@lucide/vue";
 import { computed } from "vue";
@@ -25,12 +25,12 @@ type Change = { mode?: "always" | "toggle"; opacity?: 100 | 75 | 50 | 25; hideFr
 
 function change(next: Change) {
   const target = props.item.target;
-  void act(target.kind === "panel" ? { type: "set-panel-view", instanceId: target.instanceId, ...next } : { type: "set-game-overlay", owner: target.owner, moduleId: target.moduleId, gameId: target.gameId, key: target.key, ...next });
+  void act(target.kind === "panel" ? { type: "set-panel-view", instanceId: target.instanceId, ...next } : { type: "set-game-overlay", owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key, ...next });
 }
 
 function remove() {
   const target = props.item.target;
-  void act(target.kind === "panel" ? { type: "stop-panel-in-game", instanceId: target.instanceId } : { type: "remove-game-overlay", owner: target.owner, moduleId: target.moduleId, gameId: target.gameId, key: target.key });
+  void act(target.kind === "panel" ? { type: "stop-panel-in-game", instanceId: target.instanceId } : { type: "remove-game-overlay", owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key });
 }
 
 function askKey() {
@@ -39,7 +39,7 @@ function askKey() {
 
 function preview() {
   const target = props.item.target;
-  if (target.kind === "overlay") void act({ type: "preview-overlay", owner: target.owner, moduleId: target.moduleId, gameId: target.gameId, key: target.key });
+  if (target.kind === "overlay") void act({ type: "preview-overlay", owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key });
 }
 
 const modes = computed(() => [

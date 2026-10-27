@@ -107,7 +107,7 @@ describe("reporting a catalog module", () => {
 
   it("takes only the module, the key and the zip's hash with a reason and note, so nothing else about the user rides along", async () => {
     const { catalog, of, report } = setup();
-    for (const body of [{ ...of, player: "me" }, { id: of.id, sha256: of.sha256 }, { ...of, owner: "x" }, { ...of, id: "Not An Id" }, { ...of, sha256: of.sha256.toUpperCase() }, [of], "not json", null]) {
+    for (const body of [{ ...of, user: "me" }, { id: of.id, sha256: of.sha256 }, { ...of, owner: "x" }, { ...of, id: "Not An Id" }, { ...of, sha256: of.sha256.toUpperCase() }, [of], "not json", null]) {
       expect((await report(body)).status).toBe(400);
     }
     expect((await report(of, "text/plain")).status).toBe(415);
@@ -132,7 +132,7 @@ describe("reporting a catalog module", () => {
     expect(inbox.mails()).toHaveLength(1);
     expect(inbox.mails()[0]).toMatchObject({ to: "dev@example.com" });
     expect(inbox.mails()[0]!.text).toContain("Timer (wellbrained.timer)");
-    expect(inbox.mails()[0]!.text).not.toMatch(/player|reporter@example/);
+    expect(inbox.mails()[0]!.text).not.toMatch(/reporter@example/);
     expect(inbox.mails()[0]!.text).toContain("A user pressed Report");
     clock.now += 86_400_001;
     await report(of);

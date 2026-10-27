@@ -7,13 +7,13 @@ import { CopyError } from "./cloud-copy";
 import { newPairingKey, openFromPc, pairingCode, pairingCommit, sealForPc, type PairingKey } from "./copy-crypto";
 import { FOLDER_NAME } from "./copy-folder";
 import { writeFileAtomic } from "./fsutil";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 
-// Approving a new PC from an old one (decided 2026-10-20, "one recovery key", step 4), so the player
+// Approving a new PC from an old one (decided 2026-10-20, "one recovery key", step 4), so the user
 // types the recovery key only when every PC is gone. The new PC asks; an old PC that has the account's key
 // shows "Add <PC>?" with a code, the new PC shows the same code, and on Add the old PC sends the key
 // sealed to the new PC's one-time key. Signed in, the messages go through Tavora's service
-// (apps/api/src/pairing.ts); signed out with the cloud copy in a folder of the player's own, through files
+// (apps/api/src/pairing.ts); signed out with the cloud copy in a folder of the user's own, through files
 // in that folder's pairing/ folder, which a sync app may take minutes to carry. Either way, what passes
 // on the way opens nothing, and the matching codes show that nobody swapped a one-time key.
 
@@ -49,7 +49,7 @@ export interface PairingTransport {
   answer(id: string, publicKey: string): Promise<boolean>;
   reveal(id: string, publicKey: string): Promise<void>;
   sendKey(id: string, sealed: string): Promise<void>;
-  /** The asking PC is done or cancels (`declined` false), or the answering PC's player said no. */
+  /** The asking PC is done or cancels (`declined` false), or the answering PC's user said no. */
   end(id: string, declined: boolean): Promise<void>;
 }
 
@@ -94,7 +94,7 @@ const unb64 = (text: string) => Buffer.from(text, "base64url");
 export class Pairing {
   private asking: Asking | null = null;
   private answering: Answering | null = null;
-  /** Requests this PC's player turned down or that didn't check out: not answered again. */
+  /** Requests this PC's user turned down or that didn't check out: not answered again. */
   private refused = new Set<string>();
   private askTimer: ReturnType<typeof setTimeout> | undefined;
   private watchTimer: ReturnType<typeof setInterval> | undefined;
@@ -126,20 +126,20 @@ export class Pairing {
   async start(): Promise<void> {
     await this.cancel();
     const transport = this.options.service() ?? this.options.folder();
-    if (!transport) throw new PlayerError("pairing.error.nowhere");
+    if (!transport) throw new UserError("pairing.error.nowhere");
     const key = newPairingKey();
     let asked: { id: string; expiresAt: number };
     try {
       asked = await transport.ask(b64(pairingCommit(key.publicKey)));
     } catch (error) {
-      throw toPlayerError(error);
+      throw toUserError(error);
     }
     this.asking = { transport, id: asked.id, key, expiresAt: asked.expiresAt, step: "waiting", oldKey: null, code: null, from: null };
     this.changed();
     this.askSoon();
   }
 
-  /** The new PC gives up, or the player closes what went wrong. */
+  /** The new PC gives up, or the user closes what went wrong. */
   async cancel(): Promise<void> {
     const asking = this.asking;
     if (!asking) return;
@@ -294,10 +294,10 @@ export class Pairing {
     }
   }
 
-  /** The player's click on "Add <PC>?": the key goes to it sealed, or the request is turned down. */
+  /** The user's click on "Add <PC>?": the key goes to it sealed, or the request is turned down. */
   async decide(id: string, allow: boolean): Promise<void> {
     const answering = this.answering;
-    if (!answering || answering.id !== id || !answering.reveal) throw new PlayerError("pairing.error.gone");
+    if (!answering || answering.id !== id || !answering.reveal) throw new UserError("pairing.error.gone");
     this.answering = null;
     this.refused.add(id);
     this.changed();
@@ -306,19 +306,19 @@ export class Pairing {
       if (allow && key) await answering.transport.sendKey(id, b64(sealForPc(answering.key, answering.reveal, key)));
       else await answering.transport.end(id, true);
     } catch (error) {
-      throw toPlayerError(error);
+      throw toUserError(error);
     }
-    if (allow && !key) throw new PlayerError("pairing.error.gone");
+    if (allow && !key) throw new UserError("pairing.error.gone");
   }
 }
 
-function toPlayerError(error: unknown): PlayerError {
-  if (error instanceof PlayerError) return error;
+function toUserError(error: unknown): UserError {
+  if (error instanceof UserError) return error;
   const reason = error instanceof CopyError ? error.reason : "failed";
-  if (reason === "unreachable" || reason === "unavailable" || reason === "too-many") return new PlayerError("cloudCopy.error.offline");
-  if (reason === "signed-out") return new PlayerError("cloudCopy.error.signed-out");
-  if (reason === "no-folder") return new PlayerError("cloudCopy.error.no-folder");
-  return new PlayerError("pairing.error.gone");
+  if (reason === "unreachable" || reason === "unavailable" || reason === "too-many") return new UserError("cloudCopy.error.offline");
+  if (reason === "signed-out") return new UserError("cloudCopy.error.signed-out");
+  if (reason === "no-folder") return new UserError("cloudCopy.error.no-folder");
+  return new UserError("pairing.error.gone");
 }
 
 // ── Through Tavora's service ─────────────────────────────────────────
@@ -358,7 +358,7 @@ export class ServicePairing implements PairingTransport {
 
   private async step(route: string, body: unknown): Promise<Response> {
     const response = await this.request("POST", route, body);
-    if (response.status === 404) throw new PlayerError("pairing.error.gone");
+    if (response.status === 404) throw new UserError("pairing.error.gone");
     if (!response.ok && response.status !== 409) throw new CopyError("failed", `pairing answered ${response.status}`);
     return response;
   }
@@ -402,7 +402,7 @@ export class ServicePairing implements PairingTransport {
 
   async sendKey(id: string, sealed: string): Promise<void> {
     const response = await this.step(`/${encodeURIComponent(id)}/key`, { sealed });
-    if (!response.ok) throw new PlayerError("pairing.error.gone");
+    if (!response.ok) throw new UserError("pairing.error.gone");
   }
 
   async end(id: string): Promise<void> {

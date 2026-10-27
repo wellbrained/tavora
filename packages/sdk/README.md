@@ -10,13 +10,13 @@ Start a new module with `npm create @tavora/module` (or `pnpm create @tavora/mod
 import { connect, TavoraError } from "@tavora/sdk";
 
 const tavora = await connect();
-const game = await tavora.game.getCurrent(); // { id: "poe2", displayName: "Path of Exile 2" }
+const workspace = await tavora.workspace.getCurrent(); // { id: "poe2", displayName: "Path of Exile 2", kind: "game" }
 
-// Small settings, private to this module in this game.
+// Small settings, private to this module in this workspace.
 const count = (await tavora.storage.get<number>("count")) ?? 0;
 await tavora.storage.set("count", count + 1);
 
-// Documents are shared by all panels of this module in this game.
+// Documents are shared by all panels of this module in this workspace.
 const plan = await tavora.documents.get<{ steps: string[] }>("plan");
 try {
   await tavora.documents.put({ id: "plan", title: "Plan", data: { steps: ["Act 1"] }, ifRevision: plan?.revision ?? 0 });
@@ -46,20 +46,21 @@ Values you store must be JSON. Type parameters such as `get<number>()` are not c
 
 | API | What it does |
 | --- | --- |
-| `tavora.storage.app` | The same small settings, shared by every game: for choices the player expects to stay the same from game to game. |
+| `tavora.workspace.getCurrent()` | The workspace the panel is in: `{ id, displayName, kind }`, with `kind` `"game"` (a game workspace; the `id` is the game's) or `"personal"`. `tavora.game.getCurrent()` still answers but is deprecated. |
+| `tavora.storage.app` | The same small settings, shared by every workspace: for choices the user expects to stay the same from workspace to workspace. |
 | `tavora.ui.getLanguage()`, `onLanguageChange` | The language of Tavora's own texts (`"en"`, `"de"`). Show your module in it, or in English when you have no translation. |
-| `tavora.blobs` | Pictures too big for a document: up to 50 MB each and 500 MB per module and game. `put` a file, show it with `url(id)`. See [Files](https://docs.mytavora.app/reference/protocol#files-blobs). |
+| `tavora.blobs` | Pictures too big for a document: up to 50 MB each and 500 MB per module and workspace. `put` a file, show it with `url(id)`. See [Files](https://docs.mytavora.app/reference/protocol#files-blobs). |
 | `tavora.clipboard.writeImage(png)` | Puts a PNG on the system clipboard. Call it from the click or key press that asked for it. See [Clipboard](https://docs.mytavora.app/reference/protocol#clipboard). |
-| `tavora.pictures.save(png, name)` | Saves a PNG in the player's `Pictures\Tavora` folder and resolves with the file name. Call it from the click or key press that asked for it. See [Saving pictures](https://docs.mytavora.app/reference/protocol#saving-pictures). |
-| `tavora.links.open(url)` | Opens a web address in the game's Browser panel, from a click or key press. |
-| `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the player granted it. See [Network](https://docs.mytavora.app/reference/protocol#network). |
-| `tavora.network.readPage(url)` | Capture a public page in an isolated temporary browser, using the same grants. No player sign-ins or module scripts; Tavora 0.19.3+. |
-| `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |
+| `tavora.pictures.save(png, name)` | Saves a PNG in the user's `Pictures\Tavora` folder and resolves with the file name. Call it from the click or key press that asked for it. See [Saving pictures](https://docs.mytavora.app/reference/protocol#saving-pictures). |
+| `tavora.links.open(url)` | Opens a web address in the workspace's Browser panel, from a click or key press. |
+| `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the user granted it. See [Network](https://docs.mytavora.app/reference/protocol#network). |
+| `tavora.network.readPage(url)` | Capture a public page in an isolated temporary browser, using the same grants. No user sign-ins or module scripts; Tavora 0.19.3+. |
+| `tavora.connectors.aiUsage` | The usage of the user's Claude and Codex accounts, with the `ai-usage` connector. |
 | `tavora.connectors.systemInfo` | The PC's hardware and how busy it is, with the `system-info` connector: `info()`, `watch(options)`, `onSnapshot`, `onDrivesChange`, and for the connection `connectionLog()`, `clearConnectionLog()`, `connectionSettings()`, `setConnectionSettings(settings)`, `onConnectionChange`. |
 | `tavora.connectors.media` | What plays on the PC, with the `media` connector: `watch()`, `unwatch()`, `onChange`, `control(session, action)`. |
 | `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
 
-What needs the player's permission (`permissions.network` and `permissions.connectors` in the [manifest](https://docs.mytavora.app/reference/manifest)) works only once the player has granted it: they are asked when they add the module and can take it back in Settings > Integrations. Until then the call fails with `PERMISSION_DENIED`; `tavora.host.capabilities` lists what was granted when the module connected. See [Capabilities](https://docs.mytavora.app/reference/protocol#capabilities) and [Connectors](https://docs.mytavora.app/reference/protocol#connectors).
+What needs the user's permission (`permissions.network` and `permissions.connectors` in the [manifest](https://docs.mytavora.app/reference/manifest)) works only once the user has granted it: they are asked when they add the module and can take it back in Settings > Integrations. Until then the call fails with `PERMISSION_DENIED`; `tavora.host.capabilities` lists what was granted when the module connected. See [Capabilities](https://docs.mytavora.app/reference/protocol#capabilities) and [Connectors](https://docs.mytavora.app/reference/protocol#connectors).
 
 ## Examples
 
@@ -67,7 +68,7 @@ The same small module built three ways: [vanilla TypeScript](https://github.com/
 
 ## Building a module
 
-- Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, list its host in `permissions.network` and use `tavora.network.fetch` once the player has granted it.
+- Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, list its host in `permissions.network` and use `tavora.network.fetch` once the user has granted it.
 - Use relative asset paths (Vite: `base: "./"`). The page is served from `tavora-module://<module-id>/`.
 - Point the manifest's `entry` at the built HTML file.
 

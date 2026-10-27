@@ -60,7 +60,7 @@ describe("servePictureSave", () => {
     expect((await servePictureSave(again.request, again.url, value)).status).toBe(403);
   });
 
-  it("answers null when the player closed the save dialog", async () => {
+  it("answers null when the user closed the save dialog", async () => {
     const { state, value } = deps(true, true);
     const closed = post(makePng(20, 20));
     const response = await servePictureSave(closed.request, closed.url, value);

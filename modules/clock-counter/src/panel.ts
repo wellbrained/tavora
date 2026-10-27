@@ -18,7 +18,7 @@ export const ACTIONS: Record<ItemKind, readonly ActionId[]> = {
 export interface PanelContext {
   store: ItemStore;
   now: Ref<number>;
-  /** `action:target` for each hotkey set in this game. */
+  /** `action:target` for each hotkey set in this workspace. */
   hotkeys: Ref<ReadonlySet<string>>;
   /** Runs an action on an item, as a button or a hotkey does. */
   act(action: string, itemId: string): void;

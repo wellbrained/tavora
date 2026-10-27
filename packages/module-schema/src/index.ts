@@ -10,11 +10,11 @@ export interface ModuleViewport {
 
 /**
  * A named panel type (the decision log, named panels rows of 2026-10-17): one tool a module offers,
- * such as Inventory or Build planner. Players add each type on its own and may open several copies;
+ * such as Inventory or Build planner. Users add each type on its own and may open several copies;
  * every type shares the module's saved content and permissions.
  */
 export interface ModulePanelType {
-  /** Stable identity, never shown. Saved layouts keep it, so renaming `name` changes nothing for players. */
+  /** Stable identity, never shown. Saved layouts keep it, so renaming `name` changes nothing for users. */
   id: string;
   /** Short name on the panel's tab, such as `Build planner`. */
   name: string;
@@ -27,13 +27,13 @@ export interface ModulePanelType {
   /** Panels opened before the module had panel types become this type. At most one type says so; without one, the first type. */
   continues?: boolean;
   /**
-   * The player may show this panel in their game: its menu offers Show in game, and the panel appears over the game only
-   * while the player holds Tavora's in-game layer open. Needs a `minTavora` newer than LAST_TAVORA_WITHOUT_IN_GAME_PANELS.
+   * The user may show this panel in their game: its menu offers Show in game, and the panel appears over the game only
+   * while the user holds Tavora's in-game layer open. Needs a `minTavora` newer than LAST_TAVORA_WITHOUT_IN_GAME_PANELS.
    */
   inGame?: boolean;
 }
 
-/** Something a module can do on a key press (manifest `actions`). The player binds the key in Tavora; the module only hears which action fired. */
+/** Something a module can do on a key press (manifest `actions`). The user binds the key in Tavora; the module only hears which action fired. */
 export interface ModuleAction {
   /** Stable identity, never shown. Saved hotkeys keep it. */
   id: string;
@@ -65,11 +65,11 @@ export interface ModuleManifest {
   minTavora?: string;
   entry: string;
   icon?: string;
-  /** A JSON file inside the package with the module's patch notes (see validateChangelog), shown to players in Settings > Modules. */
+  /** A JSON file inside the package with the module's patch notes (see validateChangelog), shown to users in Settings > Modules. */
   changelog?: string;
   /** The module's web page, `http` or `https`, shown in the catalog. Tavora opens it like a module link. */
   homepage?: string;
-  /** Where players send feedback: an https address or an email address. A click opens the web page or the mail app. */
+  /** Where users send feedback: an https address or an email address. A click opens the web page or the mail app. */
   support?: string;
   /**
    * A `.md` or `.txt` file inside the package introducing the module, at most MAX_README_BYTES, shown in the catalog.
@@ -81,27 +81,33 @@ export interface ModuleManifest {
   games: string[];
   /**
    * Whether the module may be added to a personal workspace, which belongs to no game. Only modules for any game
-   * (an empty `games`) can be; leave it out for true, and set false for one that only makes sense in a game.
+   * (an empty `games`) can be; leave it out for true, and set false for one that only makes sense in a game. Needs a
+   * `minTavora` newer than LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES; for an older one, set `workspaces` instead.
+   */
+  personalWorkspaces?: boolean;
+  /**
+   * @deprecated The old name of `personalWorkspaces`, from before Tavora 0.21.43 called every item on the rail a
+   * workspace. Read until Tavora's 1.0 preparation; never together with `personalWorkspaces`.
    */
   workspaces?: boolean;
   viewport: ModuleViewport;
   /** Named panel types. Without them the module has one panel, made from `entry`, `icon` and `viewport`. */
   panels?: ModulePanelType[];
   /**
-   * For a module without panel types: the player may show its panel in their game, like a type's `inGame`. Needs a
+   * For a module without panel types: the user may show its panel in their game, like a type's `inGame`. Needs a
    * `minTavora` newer than LAST_TAVORA_WITHOUT_IN_GAME_PANELS; a module with `panels` sets it per type instead.
    */
   inGame?: boolean;
   /**
    * The page streaming software such as OBS shows as a Browser Source (overlay.copyLink). Tavora serves it on this PC
    * only, with the files next to it, and gives it live data from the module. Game overlays (overlay.showOverGame) show the
-   * same page over the player's game and need no connector; the `stream-overlay` connector is only for OBS links, and
+   * same page over the user's game and need no connector; the `stream-overlay` connector is only for OBS links, and
    * needs this page. A module with an overlay and no connector needs a `minTavora` newer than
    * LAST_TAVORA_WITHOUT_GAME_OVERLAYS, because older Tavoras refuse that.
    */
   overlay?: string;
   /**
-   * The size `overlay` starts at over the player's game, in pixels (the player can still resize it). Needs `overlay` and a
+   * The size `overlay` starts at over the user's game, in pixels (the user can still resize it). Needs `overlay` and a
    * `minTavora` newer than LAST_TAVORA_WITHOUT_OVERLAY_SIZE.
    */
   overlaySize?: { width: number; height: number };
@@ -114,9 +120,9 @@ export interface ModuleManifest {
    */
   translations?: Record<string, ModuleTranslation>;
   permissions: {
-    /** Hosts the module asks to reach through network.fetch, such as `api.example.com`. Each needs the player's grant. */
+    /** Hosts the module asks to reach through network.fetch, such as `api.example.com`. Each needs the user's grant. */
     network: string[];
-    /** Parts of Tavora that hold a sign-in, which the module asks to use (see CONNECTORS). Each needs the player's grant. */
+    /** Parts of Tavora that hold a sign-in, which the module asks to use (see CONNECTORS). Each needs the user's grant. */
     connectors?: Connector[];
     /**
      * Connectors of `connectors` that Tavora asks for only when the module first needs one (such as copying an overlay
@@ -138,7 +144,7 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "workspaces", "viewport", "panels", "inGame", "overlay", "overlaySize", "actions", "translations", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "personalWorkspaces", "workspaces", "viewport", "panels", "inGame", "overlay", "overlaySize", "actions", "translations", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
@@ -204,7 +210,7 @@ export interface ResolvedPanelType {
   entry: string;
   icon: string | undefined;
   viewport: ModuleViewport;
-  /** The player may show this panel in their game (the type's `inGame`). */
+  /** The user may show this panel in their game (the type's `inGame`). */
   inGame?: true;
 }
 
@@ -232,7 +238,7 @@ export interface ChangelogEntry {
   version: string;
   /** YYYY-MM-DD, when the version came out. */
   date?: string;
-  /** What players notice, one line each, as plain text. */
+  /** What users notice, one line each, as plain text. */
   notes: string[];
 }
 
@@ -305,9 +311,14 @@ export function isGameId(value: unknown): value is string {
   return typeof value === "string" && GAME_ID.test(value);
 }
 
+/** Whether a module may go into a personal workspace: it is made for any game and did not opt out (`personalWorkspaces`, or its old name `workspaces`). */
+export function allowsPersonalWorkspaces(manifest: Pick<ModuleManifest, "games" | "personalWorkspaces" | "workspaces">): boolean {
+  return manifest.games.length === 0 && (manifest.personalWorkspaces ?? manifest.workspaces) !== false;
+}
+
 /**
  * Connectors (glossary): parts of Tavora that reach outside the module's panel and let a granted module use them
- * without seeing what is behind them. `ai-usage` reads the usage of the player's Claude and Codex accounts with their
+ * without seeing what is behind them. `ai-usage` reads the usage of the user's Claude and Codex accounts with their
  * sign-ins; `discord` talks to the Discord app on this PC with Tavora's Discord sign-in (voice channels, who is
  * talking, joining and muting); `stream-overlay` shows the module's `overlay` page in streaming software on this PC;
  * `system-info` reads this PC's hardware and how busy it is (CPU, graphics card, memory, drives); `media` sees what plays
@@ -357,6 +368,8 @@ export const LAST_TAVORA_WITHOUT_IN_GAME_PANELS = "0.21.2";
 export const LAST_TAVORA_WITHOUT_TRANSLATIONS = "0.20.12";
 /** The last Tavora that refuses `overlaySize`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_OVERLAY_SIZE = "0.21.27";
+/** The last Tavora that refuses `personalWorkspaces` (it knows `workspaces`); a manifest with it needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES = "0.21.42";
 const LANGUAGE_CODE = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/;
 
 /** Whether a manifest may key a translation by this: a lowercase language code such as `de` or `pt-br`. */
@@ -594,9 +607,15 @@ export function validateManifest(input: unknown): ManifestResult {
   if (!Array.isArray(input.games) || !input.games.every(isGameId)) {
     errors.push("games must be an array of game ids (empty means any game)");
   }
-  if (input.workspaces !== undefined && typeof input.workspaces !== "boolean") errors.push("workspaces must be true or false");
-  else if (input.workspaces === true && Array.isArray(input.games) && input.games.length > 0) {
-    errors.push("workspaces can only be true for a module made for any game (games is empty)");
+  for (const field of ["personalWorkspaces", "workspaces"] as const) {
+    if (input[field] !== undefined && typeof input[field] !== "boolean") errors.push(`${field} must be true or false`);
+    else if (input[field] === true && Array.isArray(input.games) && input.games.length > 0) {
+      errors.push(`${field} can only be true for a module made for any game (games is empty)`);
+    }
+  }
+  if (input.personalWorkspaces !== undefined && input.workspaces !== undefined) errors.push("use personalWorkspaces only: workspaces is its old name");
+  else if (input.personalWorkspaces !== undefined && !officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES)) {
+    errors.push(`personalWorkspaces needs a minTavora newer than ${LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES}, because older Tavoras refuse it; set workspaces for them`);
   }
 
   checkViewport(input.viewport, "viewport", errors);

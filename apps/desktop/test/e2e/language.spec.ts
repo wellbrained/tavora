@@ -1,10 +1,10 @@
 // Language: Tavora follows the system's language (German, or English for
-// anything else), the player can pick one from a list with a search field,
+// anything else), the user can pick one from a list with a search field,
 // the pick is kept, and the official modules follow it.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { inModule, launch, newUserData, openGame, openModule, panels } from "./harness";
+import { inModule, launch, newUserData, openWorkspace, openModule, panels } from "./harness";
 
 /** What a module's page shows, or nothing while its panel is still loading. */
 const moduleText = (app: Parameters<typeof inModule>[0], id: string) => inModule<string>(app, id, "document.body.innerText").catch(() => "");
@@ -61,7 +61,7 @@ test("any other system language shows English", async () => {
 
 test("the official modules follow the language, also when it changes while they are open", async () => {
   const { app, page } = await launch(undefined, [], { locale: "de-DE" });
-  await openGame(page, "poe2");
+  await openWorkspace(page, "poe2");
   await openModule(page, "tavora.todos");
   await expect.poll(() => moduleText(app, "tavora.todos")).toContain("Behalte im Blick");
 
@@ -73,7 +73,7 @@ test("the official modules follow the language, also when it changes while they 
 
 test("module names follow the language, from the manifest's translations", async () => {
   const { app, page } = await launch(undefined, [], { locale: "de-DE" });
-  await openGame(page, "poe2");
+  await openWorkspace(page, "poe2");
   await page.getByTestId("add-module").click();
   await expect(page.getByTestId("add-module-dialog")).toContainText("Notizen");
   await page.getByTestId("open-tavora.notes").click();

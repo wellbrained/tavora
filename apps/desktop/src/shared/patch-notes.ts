@@ -3,7 +3,7 @@
  * of the Settings sections list is pressed (it is not a menu item).
  * Entries are added when a pull request merges, from its change note in
  * apps/desktop/changes/ (the Number workflow); a test keeps them in step with
- * apps/desktop/package.json. Write for players, in plain friendly words. At 1.0 these
+ * apps/desktop/package.json. Write for users, in plain friendly words. At 1.0 these
  * entries are replaced by a "1.0 release catalog" of all features, and a fresh
  * changelog starts (the decision log).
  */
@@ -14,7 +14,7 @@ export interface PatchNote {
   date: string;
   /** A few words on what this version is about. */
   title: string;
-  /** What players will notice, one line each. */
+  /** What users will notice, one line each. */
   notes: string[];
   /**
    * For Tavora Admin, never shown in the app: the pull requests this version holds and the areas they touched
@@ -27,6 +27,34 @@ export interface PatchNote {
 }
 
 export const PATCH_NOTES: readonly PatchNote[] = [
+  {
+    version: "0.21.43",
+    date: "2026-10-27",
+    title: "Everything on the rail is a workspace",
+    notes: [
+      "Each item on the rail is now a workspace: a game workspace for a game, or a personal workspace.",
+      "Settings > Workspaces lists all of them, personal ones too.",
+      "Your saved data moves to the new names once, on the first start. A copy of the old files stays in the `backups/before-workspaces` folder.",
+      "Older Tavora versions can't read the moved data. If you use cloud copy, update Tavora on every PC.",
+      "Modules can ask which workspace they're in with `workspace.getCurrent()`.",
+    ],
+    prs: [
+      { number: 407, title: "Game → Workspace rename" },
+    ],
+    tags: ["calculator", "catalog", "clock-counter", "cloud-copy", "discord", "games", "hotkeys", "icons", "library", "modules", "notes", "onboarding", "overlays", "privacy", "publishing", "rail", "sdk", "service", "settings", "system-monitor", "todos", "ui-kit", "website", "whiteboard", "workspace", "workspaces"],
+  },
+  {
+    version: "0.21.42",
+    date: "2026-10-27",
+    title: "Made for everyone",
+    notes: [
+      "Tavora no longer calls you a player: texts about sharing modules now talk about others and everyone.",
+    ],
+    prs: [
+      { number: 406, title: "Say \"user\" instead of \"player\" everywhere" },
+    ],
+    tags: ["accounts", "ai-usage", "catalog", "clock-counter", "cloud-copy", "discord", "games", "hotkeys", "icons", "media", "modules", "notes", "overlays", "privacy", "publishing", "rail", "sdk", "service", "settings", "stats", "system-monitor", "todos", "ui-kit", "updates", "website", "whiteboard", "workspace"],
+  },
   {
     version: "0.21.41",
     date: "2026-10-27",

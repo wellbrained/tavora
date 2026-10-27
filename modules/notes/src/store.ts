@@ -1,5 +1,5 @@
 // Reads and writes notes through the SDK. Each note is one document, shared
-// by every Notes panel of this game; the list keeps a light copy of each.
+// by every Notes panel of this workspace; the list keeps a light copy of each.
 
 import { readDocument, serial, updateDocument, type Versioned } from "@tavora/official-ui";
 import { TavoraError, type DocumentSummary, type TavoraSDK } from "@tavora/sdk";
@@ -36,7 +36,7 @@ export interface NotePatch {
 export function createNotesStore(sdk: TavoraSDK) {
   const entries = ref(new Map<string, NoteEntry>());
   const appearance = ref<Appearance>(parseAppearance(null));
-  /** The order the player put the notes in; notes not in it follow by age. */
+  /** The order the user put the notes in; notes not in it follow by age. */
   const order = ref<string[]>([]);
   /** How pictures are stored: shrunk (Optimized) or exactly as the file (Original). */
   const imageQuality = ref<ImageQuality>("optimized");
@@ -72,7 +72,7 @@ export function createNotesStore(sdk: TavoraSDK) {
     else forget(id);
   }
 
-  /** The text look chosen for this game, kept in the module's own storage. */
+  /** The text look chosen for this workspace, kept in the module's own storage. */
   async function loadAppearance(): Promise<void> {
     appearance.value = parseAppearance(await sdk.storage.get("appearance"));
   }
@@ -81,7 +81,7 @@ export function createNotesStore(sdk: TavoraSDK) {
     imageQuality.value = (await sdk.storage.get("imageQuality")) === "original" ? "original" : "optimized";
   }
 
-  /** Stores a picture the player picked, pasted or dropped, at the chosen quality, and returns its id. */
+  /** Stores a picture the user picked, pasted or dropped, at the chosen quality, and returns its id. */
   async function addImage(file: File): Promise<string> {
     if (!isAcceptedType(file.type)) throw new ImageProblem("type", "type", file.name);
     const usage = await sdk.blobs.usage();

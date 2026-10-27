@@ -1,28 +1,28 @@
 <script setup lang="ts">
-// Settings > Trash: removed games, kept for 30 days. Tick several to restore or delete them together.
+// Settings > Trash: removed workspaces, kept for 30 days. Tick several to restore or delete them together.
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, state, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
-import GameIcon from "../GameIcon.vue";
+import WorkspaceIcon from "../WorkspaceIcon.vue";
 import SettingGroup from "./SettingGroup.vue";
 
 defineProps<{ highlight: string | null }>();
 
 const library = computed(() => state.value!.library);
 
-// Games ticked to restore or delete together.
+// Workspaces ticked to restore or delete together.
 const trashTicked = ref(new Set<string>());
 watch(
   () => library.value.trash,
   (trash) => {
-    const there = new Set(trash.map((entry) => entry.game.id));
+    const there = new Set(trash.map((entry) => entry.workspace.id));
     if ([...trashTicked.value].some((id) => !there.has(id))) trashTicked.value = new Set([...trashTicked.value].filter((id) => there.has(id)));
   },
 );
-const trashAll = computed(() => library.value.trash.length > 0 && library.value.trash.every((entry) => trashTicked.value.has(entry.game.id)));
+const trashAll = computed(() => library.value.trash.length > 0 && library.value.trash.every((entry) => trashTicked.value.has(entry.workspace.id)));
 
 function tickTrash(id: string, on: boolean) {
   const next = new Set(trashTicked.value);
@@ -32,33 +32,33 @@ function tickTrash(id: string, on: boolean) {
 }
 
 function tickAllTrash(on: boolean) {
-  trashTicked.value = on ? new Set(library.value.trash.map((entry) => entry.game.id)) : new Set();
+  trashTicked.value = on ? new Set(library.value.trash.map((entry) => entry.workspace.id)) : new Set();
 }
 
 async function restoreTicked() {
-  const gameIds = [...trashTicked.value];
-  if (gameIds.length && (await act({ type: "restore-games", gameIds })).ok) trashTicked.value = new Set();
+  const workspaceIds = [...trashTicked.value];
+  if (workspaceIds.length && (await act({ type: "restore-workspaces", workspaceIds })).ok) trashTicked.value = new Set();
 }
 
 function deleteTicked() {
-  const gameIds = [...trashTicked.value];
-  if (!gameIds.length) return;
+  const workspaceIds = [...trashTicked.value];
+  if (!workspaceIds.length) return;
   confirmAction({
-    title: t("settings.trash.deleteManyTitle", { count: gameIds.length }),
+    title: t("settings.trash.deleteManyTitle", { count: workspaceIds.length }),
     message: t("settings.trash.deleteManyMessage"),
     confirm: t("settings.trash.deleteConfirm"),
     danger: true,
-    run: () => submitAction({ type: "delete-games", gameIds }),
+    run: () => submitAction({ type: "delete-workspaces", workspaceIds }),
   });
 }
 
-function deleteNow(gameId: string, name: string) {
+function deleteNow(workspaceId: string, name: string) {
   confirmAction({
     title: t("settings.trash.deleteTitle", { name }),
     message: t("settings.trash.deleteMessage"),
     confirm: t("settings.trash.deleteConfirm"),
     danger: true,
-    run: () => submitAction({ type: "delete-game", gameId }),
+    run: () => submitAction({ type: "delete-workspace", workspaceId }),
   });
 }
 </script>
@@ -77,7 +77,7 @@ function deleteNow(gameId: string, name: string) {
           />
           <span>{{ t("settings.trash.selectAll") }}</span>
         </label>
-        <span class="text-muted-foreground text-sm tabular-nums">{{ t("settings.games.selected", { count: trashTicked.size }) }}</span>
+        <span class="text-muted-foreground text-sm tabular-nums">{{ t("settings.workspaces.selected", { count: trashTicked.size }) }}</span>
         <Button variant="secondary" :disabled="!trashTicked.size" data-testid="trash-restore-selected" @click="restoreTicked">
           {{ t("settings.trash.restoreSelected") }}
         </Button>
@@ -88,32 +88,32 @@ function deleteNow(gameId: string, name: string) {
       <ul>
         <li
           v-for="entry in library.trash"
-          :key="entry.game.id"
+          :key="entry.workspace.id"
           :class="
             cn(
               '-mx-5 flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 border-b px-5 py-3 transition-colors duration-500 last:border-b-0',
-              highlight === `trash-${entry.game.id}` && 'bg-primary/10',
+              highlight === `trash-${entry.workspace.id}` && 'bg-primary/10',
             )
           "
-          :data-testid="`trash-${entry.game.id}`"
-          :data-setting="`trash-${entry.game.id}`"
+          :data-testid="`trash-${entry.workspace.id}`"
+          :data-setting="`trash-${entry.workspace.id}`"
         >
           <Checkbox
             class="flex-none"
-            :model-value="trashTicked.has(entry.game.id)"
-            :aria-label="entry.game.name"
-            :data-testid="`trash-tick-${entry.game.id}`"
-            @update:model-value="tickTrash(entry.game.id, $event === true)"
+            :model-value="trashTicked.has(entry.workspace.id)"
+            :aria-label="entry.workspace.name"
+            :data-testid="`trash-tick-${entry.workspace.id}`"
+            @update:model-value="tickTrash(entry.workspace.id, $event === true)"
           />
-          <GameIcon :game="entry.game" :size="40" />
+          <WorkspaceIcon :workspace="entry.workspace" :size="40" />
           <span class="flex min-w-0 flex-1 basis-40 flex-col gap-1">
-            <span class="truncate font-medium">{{ entry.game.name }}</span>
+            <span class="truncate font-medium">{{ entry.workspace.name }}</span>
             <span class="text-muted-foreground text-sm">{{ t("settings.trash.deleteOn", { date: formatDate(entry.purgeAt) }) }}</span>
           </span>
-          <Button variant="secondary" :data-testid="`restore-${entry.game.id}`" @click="act({ type: 'restore-game', gameId: entry.game.id })">
+          <Button variant="secondary" :data-testid="`restore-${entry.workspace.id}`" @click="act({ type: 'restore-workspace', workspaceId: entry.workspace.id })">
             {{ t("settings.trash.restore") }}
           </Button>
-          <Button variant="danger" :data-testid="`delete-${entry.game.id}`" @click="deleteNow(entry.game.id, entry.game.name)">
+          <Button variant="danger" :data-testid="`delete-${entry.workspace.id}`" @click="deleteNow(entry.workspace.id, entry.workspace.name)">
             {{ t("settings.trash.deleteNow") }}
           </Button>
         </li>

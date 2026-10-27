@@ -34,7 +34,7 @@ export function catalogTrust(catalog: CatalogStore, publicKey: string = CATALOGU
       const revocation = list("revocations")?.revoked.find((entry) => entry.fingerprint === fingerprint);
       return revocation !== undefined && !revocation.allow.includes(sha256);
     },
-    // The same rules as the app's SafetyLists.firstKey, so the catalog lists what players' Tavora installs.
+    // The same rules as the app's SafetyLists.firstKey, so the catalog lists what users' Tavora installs.
     firstKey(fingerprint) {
       const statements = list("successions")?.successions ?? [];
       // A key named as the new key of two different old keys has no clear owner: neither is followed.

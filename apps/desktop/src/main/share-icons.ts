@@ -1,11 +1,11 @@
 /**
  * Offering a game's icon to the Tavora service, which does not have one for it
  * yet. Only ever the game's own icon found on this PC (from the installed game
- * or the Steam folder), never a picture the player chose and never an icon
+ * or the Steam folder), never a picture the user chose and never an icon
  * downloaded from Tavora. The offer holds the icon, the game's id and its name,
- * and goes with the player's sign-in: only signed-in players can share, and the
+ * and goes with the user's sign-in: only signed-in users can share, and the
  * service keeps the account with an offer until a person has checked it. A
- * person checks every offer before anyone else sees it. A game the player added
+ * person checks every offer before anyone else sees it. A game the user added
  * by name (`local-`) is offered by that name.
  */
 
@@ -29,26 +29,27 @@ export function shareSource(file: string): "installed" | "steam" {
   return file.startsWith("exe-") ? "installed" : "steam";
 }
 
+/** A workspace of the library, as far as sharing its game's icon needs it. */
 export interface ShareGame {
   id: string;
   name: string;
-  kind: "game" | "workspace";
+  kind: "game" | "personal";
   catalogId: string | null;
   trashedAt: string | null;
   iconFile: string | null;
   iconSharedAt: string | null;
 }
 
-/** A game that could be offered at all: a game (not a personal workspace), not in Trash, not offered before, with an icon of its own. */
+/** A game that could be offered at all: the game of a game workspace (not a personal one), not in Trash, not offered before, with an icon of its own. */
 export function isShareCandidate(game: ShareGame): boolean {
   return game.kind === "game" && game.trashedAt === null && game.iconSharedAt === null && isOriginalIconFile(game.iconFile);
 }
 
 /**
  * The icon file of a game that could be offered right now, or null: the game's
- * own icon found on this PC (never a picture the player chose, a hosted icon or
+ * own icon found on this PC (never a picture the user chose, a hosted icon or
  * Steam's small one), while the service has no icon for the game (or one it
- * marked open for replacements) and the player's settings allow talking to it.
+ * marked open for replacements) and the user's settings allow talking to it.
  */
 export function shareableIconFile(
   game: ShareGame,
@@ -62,7 +63,7 @@ export function shareableIconFile(
 
 /**
  * The games of a Steam import whose icon could be offered without adding them:
- * ones the player does not have (`isNew`), with an id the service knows, that
+ * ones the user does not have (`isNew`), with an id the service knows, that
  * were not offered before and that the service has no icon for (or one open for replacements). Whether this PC
  * has the icon is for the caller to find out.
  */
@@ -127,7 +128,7 @@ function pickIcoFrame(ico: Uint8Array, better: (pixels: number, best: number) =>
 
 export interface SubmitOptions {
   baseUrl: string;
-  /** The player's sign-in token. */
+  /** The user's sign-in token. */
   token: string;
   fetchImpl?: typeof fetch;
 }

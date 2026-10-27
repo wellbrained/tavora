@@ -2,8 +2,8 @@
 # Daily backup of the Tavora service's own data (accounts.sqlite, icons.sqlite, reviews.sqlite, conversations.sqlite, stats.sqlite, the module catalog), run as root by
 # tavora-api-backup.timer. Consistent copies (SQLite's backup, safe while the service runs) go into
 # /srv/tavora-api/backups; 14 days are kept, as the privacy page says. No secrets: production.env
-# (the Brevo key, the admin token) is never part of it. The maintainer copies them off the server. The players'
-# cloud copies (copies.sqlite) are left out on purpose (decided 2026-10-19): they are on the players' PCs, which upload again.
+# (the Brevo key, the admin token) is never part of it. The maintainer copies them off the server. The users'
+# cloud copies (copies.sqlite) are left out on purpose (decided 2026-10-19): they are on the users' PCs, which upload again.
 set -eu
 umask 077
 state=/var/lib/tavora-api

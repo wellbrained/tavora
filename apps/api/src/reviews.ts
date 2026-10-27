@@ -400,7 +400,7 @@ export interface ReviewOptions {
 
 type Env = { Variables: { account: Account } };
 
-/** The answer for a review: what a player sees, never the account id. */
+/** The answer for a review: what a user sees, never the account id. */
 function reviewAnswer(review: StoredReview, accounts: AccountStore) {
   const profile = accounts.profile(review.accountId);
   // A name the filter would refuse is not shown on a review.

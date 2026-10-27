@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { expectModuleText, hintOf, launch, newUserData, openGame, openModule, PLAYGROUND, seedLibrary, VUE } from "./harness";
+import { expectModuleText, hintOf, launch, newUserData, openWorkspace, openModule, PLAYGROUND, seedLibrary, VUE } from "./harness";
 
 const ID = "devtest.tracker";
 
@@ -44,7 +44,7 @@ test("a development folder loads its module, reloads its panels on a new build, 
     await page.keyboard.press("Escape");
 
     // It is added like any module and listed under Development.
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await openModule(page, ID);
     await expectModuleText(app, ID, "build", "first build");
 
@@ -61,7 +61,7 @@ test("a development folder loads its module, reloads its panels on a new build, 
   }
   const waiting = await launch(userData);
   try {
-    await openGame(waiting.page, "poe2");
+    await openWorkspace(waiting.page, "poe2");
     await expect(waiting.page.locator('[data-testid^="panel-module-waiting-"]')).toContainText("Tracker can't load right now");
     await build(dir, "third build");
     await expectModuleText(waiting.app, ID, "build", "third build");
@@ -122,7 +122,7 @@ test("a folder of projects loads every project in it, says which still needs a b
   }
 });
 
-test("a module made for one game is listed in Add module only in that game", async () => {
+test("a module made for one game is listed in Add module only in that game's workspace", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "tavora-project-"));
   await writeFile(
     path.join(dir, "tavora.module.json"),
@@ -140,7 +140,7 @@ test("a module made for one game is listed in Add module only in that game", asy
     await page.keyboard.press("Escape");
 
     // In Satisfactory it is listed and opens.
-    await openGame(page, "satisfactory");
+    await openWorkspace(page, "satisfactory");
     await openModule(page, ID);
     await expectModuleText(app, ID, "build", "first build");
   } finally {
@@ -164,7 +164,7 @@ test("an example is copied into a project folder as a new project of its own", a
     await expect(examples.getByTestId(`module-${VUE}`)).toBeVisible();
     await expect(examples.getByTestId(`module-${PLAYGROUND}`)).toHaveCount(0);
 
-    // Make a copy offers the project folder, and names the module for the player to change.
+    // Make a copy offers the project folder, and names the module for the user to change.
     await page.getByTestId(`copy-example-${VANILLA}`).click();
     const dialog = page.getByTestId("copy-example-dialog");
     await expect(page.getByTestId("copy-example-name")).toHaveValue("My Module");

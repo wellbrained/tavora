@@ -24,7 +24,7 @@ beforeEach(async () => {
 });
 
 describe("filesTarget", () => {
-  it("puts the files in a folder of their own inside the place the player picked", async () => {
+  it("puts the files in a folder of their own inside the place the user picked", async () => {
     const picked = path.join(base, "D-drive");
     await mkdir(picked);
     const target = await filesTarget(picked, root, userData);
@@ -32,7 +32,7 @@ describe("filesTarget", () => {
     expect((await stat(path.join(picked, FILES_FOLDER_NAME))).isDirectory()).toBe(true);
   });
 
-  it("uses the folder itself when the player picks one that already has that name", async () => {
+  it("uses the folder itself when the user picks one that already has that name", async () => {
     const picked = path.join(base, FILES_FOLDER_NAME);
     await mkdir(picked);
     expect(await filesTarget(picked, root, userData)).toEqual({ root: picked });

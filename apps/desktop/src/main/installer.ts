@@ -1,4 +1,4 @@
-// Installs a module from a zip into the player's modules folder, following
+// Installs a module from a zip into the user's modules folder, following
 // "Rules for a future zip installer" in the threat model: the zip is read
 // and checked in memory (readZip), the manifest validated and the signature
 // verified before anything is written, then the files go to a staging folder
@@ -11,16 +11,16 @@ import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile
 import { compareModuleVersions } from "../shared/module-version";
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 import { OFFICIAL_PREFIX, type InstalledModule } from "./registry";
 import type { SafetyCheck } from "./safety-lists";
 
 export { compareModuleVersions };
 
-export class InstallError extends PlayerError {}
+export class InstallError extends UserError {}
 
 /**
- * Who signed each module the installer put into the player's modules folder, by folder name.
+ * Who signed each module the installer put into the user's modules folder, by folder name.
  * `owner` is whose data it uses: the first key of the publisher's account. `signer` is the key
  * that signed the zip installed now, when a succession made it another key, and `sha256` the
  * zip's hash, so a blocked zip can be stopped (catalog threat model, C7, C14). `catalog` marks a
@@ -56,7 +56,7 @@ async function writeOwnerRecords(userData: string, records: OwnerRecords): Promi
 }
 
 /**
- * Gives modules in the player's modules folder the owner the installer
+ * Gives modules in the user's modules folder the owner the installer
  * recorded for them. A folder put there by hand, or one whose module id no
  * longer matches the record, stays `local`.
  */
@@ -78,7 +78,7 @@ export async function forgetOwner(userData: string, folder: string): Promise<voi
 
 export interface InstallOptions {
   userData: string;
-  /** The player's modules folder (real path). */
+  /** The user's modules folder (real path). */
   userModules: string;
   /** Every module loaded now, with the folder it came from, and those stopped because their zip is blocked. */
   modules: ReadonlyMap<string, InstalledModule>;
@@ -127,7 +127,7 @@ export interface CheckedZip extends Installed {
 /**
  * Every check of the installer, with nothing written: what the zip is, who signed it, whether the
  * safety lists allow it and whether it may replace what is installed. A catalog update is checked
- * like this before the player is asked.
+ * like this before the user is asked.
  */
 export async function checkZipData(zip: Buffer, { userModules, modules, tavoraVersion, expect, safety }: InstallOptions): Promise<CheckedZip> {
   if (zip.length > ZIP_LIMITS.maxArchiveBytes) throw new InstallError("error.installRefused", { reason: "the zip is too big" });
@@ -172,7 +172,7 @@ export async function checkZipData(zip: Buffer, { userModules, modules, tavoraVe
   if (expect && signer !== expect.owner) throw new InstallError("error.installRefused", { reason: "it is not signed by the publisher key that was listed" });
 
   // An id already loaded is replaced only by a newer zip from the same
-  // publisher in the player's own folder (an update); two modules with one id never run together.
+  // publisher in the user's own folder (an update); two modules with one id never run together.
   const existing = modules.get(manifest.id);
   const folder = manifest.id;
   const target = path.join(userModules, folder);
@@ -180,7 +180,7 @@ export async function checkZipData(zip: Buffer, { userModules, modules, tavoraVe
   if (existing) {
     const own = existing.provenance === "local" && path.dirname(existing.root) === userModules && path.basename(existing.root) === folder;
     if (!own) {
-      // Say where the other copy comes from, so the player knows what to remove.
+      // Say where the other copy comes from, so the user knows what to remove.
       const name = existing.manifest.name;
       if (existing.developmentFolder) throw new InstallError("error.installTakenDevelopment", { name, folder: existing.developmentFolder });
       if (existing.provenance === "official") throw new InstallError("error.installTakenOfficial", { name });

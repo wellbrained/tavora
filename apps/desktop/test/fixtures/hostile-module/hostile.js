@@ -109,9 +109,11 @@ window.runProbes = async ({ serverUrl, otherModuleUrl }) => {
     handshake: await rpc(port, { method: "bridge.handshake", params: { protocol: 1, sdkVersion: "0.1.0" } }),
     game: await rpc(port, { method: "game.getCurrent" }),
     gameWithSpoofedParams: await rpc(port, { method: "game.getCurrent", params: { gameId: "satisfactory" } }),
+    workspace: await rpc(port, { method: "workspace.getCurrent" }),
+    workspaceWithSpoofedParams: await rpc(port, { method: "workspace.getCurrent", params: { workspaceId: "satisfactory" } }),
     spoofedStorageRead: await rpc(port, {
       method: "storage.get",
-      params: { key: "count", moduleId: "local.example.vanilla-module", gameId: "poe2" },
+      params: { key: "count", moduleId: "local.example.vanilla-module", gameId: "poe2", workspaceId: "poe2" },
     }),
     spoofedStorageWrite: await rpc(port, {
       method: "storage.set",

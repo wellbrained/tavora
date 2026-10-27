@@ -11,7 +11,7 @@ import type { CatalogListResult, CatalogModuleView, CatalogOwnReview, CatalogRat
 import { isWebUrl } from "./browser-url";
 import { catalogGame } from "./catalog";
 import type { MessageKey } from "../shared/i18n";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 import { MAX_MODULE_ICON, pictureDataUrl } from "./module-icon";
 import { DEFAULT_API_URL } from "./online";
 import { isPublisherName } from "./publisher-names";
@@ -27,7 +27,7 @@ const SHA256 = /^[0-9a-f]{64}$/;
 /** Text that could change how the text around it reads: controls and direction marks. */
 const HIDDEN = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g;
 
-/** A listing's screenshot or icon, fetched by its hash only when the player looks at it. */
+/** A listing's screenshot or icon, fetched by its hash only when the user looks at it. */
 export interface CatalogScreenshot {
   sha256: string;
   type: "png" | "webp";
@@ -37,7 +37,8 @@ export interface CatalogScreenshot {
 /** A listed module with the zip it comes as; only the main process sees the hash. */
 export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots" | "icon" | "fits" | "forGames"> {
   games: string[];
-  workspaces: boolean;
+  /** Whether it may be added to a personal workspace. */
+  personalWorkspaces: boolean;
   zip: { sha256: string; size: number };
   /** This version's patch notes, plain text. */
   notes: string[];
@@ -72,10 +73,10 @@ export interface CatalogVersion {
 const MAX_NOTES = 50;
 const MAX_VERSIONS = 200;
 
-/** Where the player is: a game (its catalog id) or a personal workspace. */
-export type CatalogScope = { game: string } | { workspace: true };
+/** Where the user is: a game workspace (its game's catalog id) or a personal workspace. */
+export type CatalogScope = { game: string } | { personal: true };
 
-export class CatalogError extends PlayerError {}
+export class CatalogError extends UserError {}
 
 function plain(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
@@ -180,7 +181,7 @@ export function parseCatalogReview(raw: unknown): CatalogReview | null {
   };
 }
 
-/** The player's own rating as the service answers it, or null. */
+/** The user's own rating as the service answers it, or null. */
 function parseOwnReview(raw: unknown): CatalogOwnReview | null {
   if (typeof raw !== "object" || raw === null) return null;
   const review = raw as Record<string, unknown>;
@@ -189,7 +190,7 @@ function parseOwnReview(raw: unknown): CatalogOwnReview | null {
   return { stars: review.stars as number, text: reviewText(review.text), version: review.version, hidden: review.hidden === true, held: review.held === true };
 }
 
-/** What the service said went wrong with a rating or reply, as a message for the player. */
+/** What the service said went wrong with a rating or reply, as a message for the user. */
 const REVIEW_REASONS: Record<string, MessageKey> = {
   "own-module": "error.reviewOwn",
   "review-words": "error.reviewWords",
@@ -214,7 +215,7 @@ export function parseCatalogVersion(raw: unknown): CatalogVersion | null {
 export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
   if (typeof raw !== "object" || raw === null) return null;
   const entry = raw as Record<string, unknown>;
-  const { id, version, minTavora, games, workspaces, permissions, owner, publisher, zip, publishedAt } = entry;
+  const { id, version, minTavora, games, personalWorkspaces, workspaces, permissions, owner, publisher, zip, publishedAt } = entry;
   if (!isModuleId(id) || typeof version !== "string" || !SEMVER.test(version) || version.length > 64) return null;
   const name = plain(entry.name, 100);
   if (!name) return null;
@@ -236,7 +237,8 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     version,
     minTavora: typeof minTavora === "string" ? minTavora : null,
     games: [...games],
-    workspaces: workspaces !== false,
+    // A service deployed before the Game → Workspace rename sends it as `workspaces` only.
+    personalWorkspaces: (typeof personalWorkspaces === "boolean" ? personalWorkspaces : workspaces) !== false,
     permissions: { network: [...new Set(network as string[])], connectors: [...new Set(connectors as Connector[])] },
     owner,
     // Only the name the service gives for the key's account, never a name the listing claims elsewhere.
@@ -257,9 +259,9 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
   };
 }
 
-/** Whether a module may go where the player is; the service filters too, but it is not trusted to. */
-export function fitsScope(entry: Pick<CatalogEntry, "games" | "workspaces">, scope: CatalogScope): boolean {
-  if ("workspace" in scope) return entry.games.length === 0 && entry.workspaces;
+/** Whether a module may go where the user is; the service filters too, but it is not trusted to. */
+export function fitsScope(entry: Pick<CatalogEntry, "games" | "personalWorkspaces">, scope: CatalogScope): boolean {
+  if ("personal" in scope) return entry.games.length === 0 && entry.personalWorkspaces;
   return entry.games.length === 0 || entry.games.includes(scope.game);
 }
 
@@ -271,10 +273,10 @@ export function shownTexts(entry: Pick<CatalogEntry, "name" | "description" | "t
 
 /**
  * The view the host UI gets: no hash, the name and description in `language`, the games by name, whether it fits
- * where the player is, and only whether there are pictures.
+ * where the user is, and only whether there are pictures.
  */
-export function catalogView({ games, workspaces, zip: _zip, notes: _notes, shots, icon, translations, ...view }: CatalogEntry, language: string, scope?: CatalogScope): CatalogModuleView {
-  const fits = scope ? fitsScope({ games, workspaces }, scope) : true;
+export function catalogView({ games, personalWorkspaces, zip: _zip, notes: _notes, shots, icon, translations, ...view }: CatalogEntry, language: string, scope?: CatalogScope): CatalogModuleView {
+  const fits = scope ? fitsScope({ games, personalWorkspaces }, scope) : true;
   return { ...view, ...shownTexts({ ...view, translations }, language), fits, forGames: games.map((id) => catalogGame(id)?.name ?? id), screenshots: shots.length, icon: icon !== null };
 }
 
@@ -305,8 +307,8 @@ export class CatalogClient {
   }
 
   /**
-   * Every listed module, in `language`: those that fit the game or personal workspace first, then the rest, each by
-   * name. The whole index is asked for, so the service doesn't learn which game is open. Never throws.
+   * Every listed module, in `language`: those that fit the workspace first, then the rest, each by
+   * name. The whole index is asked for, so the service doesn't learn which workspace is open. Never throws.
    */
   async list(scope: CatalogScope, language: string): Promise<CatalogListResult> {
     try {
@@ -331,7 +333,7 @@ export class CatalogClient {
 
   /**
    * Every listed module, for the update check (catalog-updates.ts). It asks for the whole index with
-   * no filter, so the service never learns which modules this player has (C11). Null when there is
+   * no filter, so the service never learns which modules this user has (C11). Null when there is
    * no usable answer.
    */
   async index(): Promise<CatalogEntry[] | null> {
@@ -347,12 +349,12 @@ export class CatalogClient {
     }
   }
 
-  /** The newest listing of one module. Throws a CatalogError the player can read. */
+  /** The newest listing of one module. Throws a CatalogError the user can read. */
   async module(id: string): Promise<CatalogEntry> {
     return (await this.details(id)).entry;
   }
 
-  /** The newest listing of one module and every version it was published at, newest first. Throws a CatalogError the player can read. */
+  /** The newest listing of one module and every version it was published at, newest first. Throws a CatalogError the user can read. */
   async details(id: string): Promise<{ entry: CatalogEntry; versions: CatalogVersion[]; readme: string | null }> {
     if (!isModuleId(id)) throw new CatalogError("error.catalogNotListed");
     let response: Response;
@@ -445,8 +447,8 @@ export class CatalogClient {
   }
 
   /**
-   * Reports a zip to Tavora, only after the player pressed Report: the module id, its key's
-   * fingerprint and the zip's hash, and nothing else (C12). Throws a CatalogError the player can read.
+   * Reports a zip to Tavora, only after the user pressed Report: the module id, its key's
+   * fingerprint and the zip's hash, and nothing else (C12). Throws a CatalogError the user can read.
    */
   async report(report: { id: string; owner: string; sha256: string }, token?: string): Promise<void> {
     if (!isModuleId(report.id) || !FINGERPRINT.test(report.owner) || !SHA256.test(report.sha256)) throw new CatalogError("error.catalogNotListed");
@@ -491,7 +493,7 @@ export class CatalogClient {
     }).catch(() => undefined);
   }
 
-  /** A module's ratings and newest reviews, each checked; a review that isn't is left out. Throws a CatalogError the player can read. */
+  /** A module's ratings and newest reviews, each checked; a review that isn't is left out. Throws a CatalogError the user can read. */
   async reviews(id: string): Promise<{ rating: CatalogRating | null; reviews: CatalogReview[] }> {
     const body = await this.send("GET", `/v1/catalog/modules/${encodeURIComponent(id)}/reviews`);
     const seen = new Set<string>();
@@ -519,7 +521,7 @@ export class CatalogClient {
     return { mine: parseOwnReview(body.review), own: body.own === true };
   }
 
-  /** Rates a module with the account, on a version the catalog published. Throws a CatalogError the player can read. */
+  /** Rates a module with the account, on a version the catalog published. Throws a CatalogError the user can read. */
   async rate(id: string, token: string, rating: { stars: number; text: string | null; version: string }): Promise<void> {
     await this.send("PUT", `/v1/catalog/modules/${encodeURIComponent(id)}/review`, token, { stars: rating.stars, text: rating.text, version: rating.version });
   }
@@ -528,13 +530,13 @@ export class CatalogClient {
     await this.send("DELETE", `/v1/catalog/modules/${encodeURIComponent(id)}/review`, token);
   }
 
-  /** The publisher's reply under a review; null takes it back. Throws a CatalogError the player can read. */
+  /** The publisher's reply under a review; null takes it back. Throws a CatalogError the user can read. */
   async reply(reviewId: string, token: string, text: string | null): Promise<void> {
     if (!REVIEW_ID.test(reviewId)) throw new CatalogError("error.catalogNotListed");
     await this.send(text === null ? "DELETE" : "PUT", `/v1/catalog/reviews/${reviewId}/reply`, token, text === null ? undefined : { text });
   }
 
-  /** Reports a review, only after the player pressed Report: its id, signed in (decided 2026-10-27). */
+  /** Reports a review, only after the user pressed Report: its id, signed in (decided 2026-10-27). */
   async reportReview(reviewId: string, token?: string): Promise<void> {
     if (!REVIEW_ID.test(reviewId)) throw new CatalogError("error.reviewGone");
     try {
@@ -546,7 +548,7 @@ export class CatalogClient {
     }
   }
 
-  /** One JSON request for ratings and reviews, signed in when a token is given. Throws a CatalogError the player can read. */
+  /** One JSON request for ratings and reviews, signed in when a token is given. Throws a CatalogError the user can read. */
   private async send(method: string, pathname: string, token?: string, body?: unknown): Promise<Record<string, unknown>> {
     let response: Response;
     try {

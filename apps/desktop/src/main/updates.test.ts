@@ -111,7 +111,7 @@ describe("UpdateManager", () => {
     expect(updater.installs).toEqual([]);
   });
 
-  it("with automatic download off waits for the player, then downloads on request", async () => {
+  it("with automatic download off waits for the user, then downloads on request", async () => {
     const { manager, updater } = make(false);
     updater.emit("update-available", { version: "0.3.0" });
     expect(manager.state).toEqual({ status: "available", version: "0.3.0" });

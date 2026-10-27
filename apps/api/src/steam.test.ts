@@ -10,8 +10,8 @@ describe("parseProfile", () => {
     [`https://steamcommunity.com/profiles/${ID}`, { kind: "id", id: ID }],
     [`https://steamcommunity.com/profiles/${ID}/`, { kind: "id", id: ID }],
     [`http://www.steamcommunity.com/profiles/${ID}`, { kind: "id", id: ID }],
-    ["https://steamcommunity.com/id/some_player-1", { kind: "vanity", name: "some_player-1" }],
-    ["https://steamcommunity.com/id/some_player-1/", { kind: "vanity", name: "some_player-1" }],
+    ["https://steamcommunity.com/id/some_user-1", { kind: "vanity", name: "some_user-1" }],
+    ["https://steamcommunity.com/id/some_user-1/", { kind: "vanity", name: "some_user-1" }],
   ])("reads %s", (input, expected) => expect(parseProfile(input)).toEqual(expected));
 
   it.each([
@@ -77,7 +77,7 @@ describe("createSteamClient", () => {
       ...owned([{ appid: 5, name: "Game" }]),
     });
     const client = createSteamClient({ key: "k", fetch: fetcher });
-    expect(await client.ownedGames("https://steamcommunity.com/id/some_player")).toEqual([{ appid: 5, name: "Game" }]);
+    expect(await client.ownedGames("https://steamcommunity.com/id/some_user")).toEqual([{ appid: 5, name: "Game" }]);
     expect(calls.map((call) => call.url.split("/")[3] + "/" + call.url.split("/")[4])).toEqual([
       "ISteamUser/ResolveVanityURL",
       "IPlayerService/GetOwnedGames",

@@ -11,7 +11,7 @@ export async function cleanUp(): Promise<void> {
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
 }
 
-/** A PC: its data folder, with a module files folder elsewhere that also holds the player's own files. */
+/** A PC: its data folder, with a module files folder elsewhere that also holds the user's own files. */
 export async function pc(files: Record<string, string> = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "tavora-copy-"));
   dirs.push(root);

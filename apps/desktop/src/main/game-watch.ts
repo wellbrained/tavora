@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { GameEntry } from "./library";
+import type { WorkspaceEntry } from "./library";
 import { NOT_THE_GAME, normalizeName, type InstalledGame } from "./launcher-games";
 import { windowsProgramProbe, type ProgramLook, type ProgramProbe } from "./program-list";
 
@@ -31,15 +31,15 @@ function folderOf(game: InstalledGame): string {
 }
 
 /** Whether a library entry is this installed game: by Steam id when both have one, else by name. */
-function isSameGame(entry: GameEntry, game: InstalledGame): boolean {
+function isSameGame(entry: WorkspaceEntry, game: InstalledGame): boolean {
   if (entry.steamAppId !== null && game.steamAppId !== undefined) return entry.steamAppId === game.steamAppId;
   const name = normalizeName(entry.name);
   return name !== "" && name === normalizeName(game.name);
 }
 
 /** Of several entries for one game, the one opened most recently (then the one added last). */
-function mostRecent(entries: readonly GameEntry[]): GameEntry | undefined {
-  return [...entries].sort((a, b) => (b.lastPlayedAt ?? "").localeCompare(a.lastPlayedAt ?? "") || b.addedAt.localeCompare(a.addedAt))[0];
+function mostRecent(entries: readonly WorkspaceEntry[]): WorkspaceEntry | undefined {
+  return [...entries].sort((a, b) => (b.lastOpenedAt ?? "").localeCompare(a.lastOpenedAt ?? "") || b.addedAt.localeCompare(a.addedAt))[0];
 }
 
 /**
@@ -47,10 +47,10 @@ function mostRecent(entries: readonly GameEntry[]): GameEntry | undefined {
  * Steam runs (0 or null for none). A game in the library twice counts once, as the entry opened most recently;
  * a game installed twice (two launchers) counts when either copy runs.
  */
-export function runningGames(entries: readonly GameEntry[], installed: readonly InstalledGame[], programs: Iterable<string>, steamAppId: number | null): Set<string> {
+export function runningGames(entries: readonly WorkspaceEntry[], installed: readonly InstalledGame[], programs: Iterable<string>, steamAppId: number | null): Set<string> {
   const games = entries.filter((entry) => entry.kind === "game" && entry.trashedAt === null);
   const running = new Set<string>();
-  const add = (matches: GameEntry[]) => {
+  const add = (matches: WorkspaceEntry[]) => {
     const pick = mostRecent(matches);
     if (pick) running.add(pick.id);
   };
@@ -63,7 +63,7 @@ export function runningGames(entries: readonly GameEntry[], installed: readonly 
     const key = gameFolderKey(folderOf(game));
     if (key) claims.set(key, (claims.get(key) ?? new Set()).add(normalizeName(game.name)));
   }
-  const folders = new Map<string, GameEntry[]>();
+  const folders = new Map<string, WorkspaceEntry[]>();
   for (const game of installed) {
     const key = gameFolderKey(folderOf(game));
     if (!key || claims.get(key)!.size > 1) continue;
@@ -87,7 +87,7 @@ export const POLL_SECONDS = 3;
 
 export interface GameWatcherOptions {
   /** The library's entries now; read at every look, so renames and new games count straight away. */
-  entries: () => readonly GameEntry[];
+  entries: () => readonly WorkspaceEntry[];
   /** The games launchers installed on this PC. */
   findInstalled: () => Promise<InstalledGame[]>;
   /**

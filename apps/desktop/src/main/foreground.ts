@@ -3,7 +3,7 @@
  * (game-overlay-service.ts): the program that owns it, where its client area is on screen, and whether Windows
  * thinks a full-screen game owns the screen exclusively. Like the game watcher (program-list.ts) it only reads, with
  * the same limited access Task Manager uses, and sends nothing anywhere. The one thing it changes is `focus`, which
- * gives the keyboard back to the game after the player arranged overlays. Windows only: koffi is loaded on the first
+ * gives the keyboard back to the game after the user arranged overlays. Windows only: koffi is loaded on the first
  * look, never elsewhere.
  */
 import { loadWindows, programPath, type Windows } from "./program-list";

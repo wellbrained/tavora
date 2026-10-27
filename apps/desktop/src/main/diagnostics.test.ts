@@ -73,7 +73,7 @@ describe("Timings", () => {
 });
 
 describe("buildReport", () => {
-  it("lists versions, timings, updates and errors without the player's folders", () => {
+  it("lists versions, timings, updates and errors without the user's folders", () => {
     const timings = new Timings();
     timings.record("startup", 900);
     const report = buildReport({
@@ -83,7 +83,7 @@ describe("buildReport", () => {
       chrome: "140.0",
       locale: "en-US",
       osName: "Windows 11 Pro",
-      games: 3,
+      workspaces: 3,
       panels: 2,
       updateLog: ["2026-10-15T10:00:00Z update 0.5.3 available"],
       errors: ["2026-10-15T10:01:00Z error could not read C:\\Users\\Alex\\x"],
@@ -92,7 +92,7 @@ describe("buildReport", () => {
       folders,
     });
     expect(report).toContain("Version: 0.5.2\n");
-    expect(report).toContain("Games: 3, panels open: 2, running for 61 s");
+    expect(report).toContain("Workspaces: 3, panels open: 2, running for 61 s");
     expect(report).toContain("startup: 900, 900, 900, 1x");
     expect(report).toContain("update 0.5.3 available");
     expect(report).toContain("could not read <home>\\x");

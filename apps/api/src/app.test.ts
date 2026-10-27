@@ -101,7 +101,7 @@ describe("steam library endpoint", () => {
     expect((await post(createApp({ db: steamDb }), { profile: "76561197960287930" })).status).toBe(503);
   });
 
-  it("passes on Steam's and the player's errors with their status", async () => {
+  it("passes on Steam's and the user's errors with their status", async () => {
     const app = createApp({ db: steamDb, steam: client });
     const response = await post(app, { profile: "private" });
     expect(response.status).toBe(502);
@@ -237,7 +237,7 @@ describe("icon offers", () => {
   const picture = (size: number) => Uint8Array.from({ length: size * size * 4 }, (_, i) => (i % 4 === 3 ? 255 : (i * 7) % 256));
   const icon = (size = 32) => Buffer.from(encodePng(size, size, picture(size))).toString("base64");
   const accountStore = new AccountStore(":memory:");
-  const account = accountStore.createAccount({ email: "player@example.test" }, Date.now());
+  const account = accountStore.createAccount({ email: "user@example.test" }, Date.now());
   const { token } = accountStore.createSession(account.id, "windows", Date.now());
   const setup = (options: { contact?: string; limit?: number; accounts?: boolean } = {}) => {
     const state = new IconState(":memory:");
@@ -281,7 +281,7 @@ describe("icon offers", () => {
     expect((await post(setup({ contact: "legal@example.test", accounts: false }).app, offer())).status).toBe(503);
   });
 
-  it("takes offers only from a signed-in player", async () => {
+  it("takes offers only from a signed-in user", async () => {
     const { app, state } = setup({ contact: "legal@example.test" });
     for (const authorization of [undefined, "Bearer nope", `Bearer ${"x".repeat(40)}`, token]) {
       const headers: Record<string, string> = { "Content-Type": "application/json", ...(authorization ? { Authorization: authorization } : {}) };
@@ -320,7 +320,7 @@ describe("icon offers", () => {
     expect(limited.headers.get("retry-after")).toBeTruthy();
   });
 
-  it("does not echo anything the player sent", async () => {
+  it("does not echo anything the user sent", async () => {
     const { app } = setup({ contact: "legal@example.test" });
     const response = await post(app, offer({ name: "SECRET-NAME", icon: "bad icon SECRET" }));
     expect(await response.text()).not.toMatch(/SECRET/);

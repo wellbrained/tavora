@@ -20,13 +20,13 @@ export interface PreviewRequest {
   /** The window's title: the module's name. */
   title: string;
   source: GameOverlaySource;
-  /** The window closed (the player closed it). */
+  /** The window closed (the user closed it). */
   closed(): void;
 }
 
 export interface OverlayPreviewsOptions {
   overlays: OverlayStore;
-  /** The module as installed now (with its manifest in the player's language). */
+  /** The module as installed now (with its manifest in the user's language). */
   module(moduleId: string): StreamingModule | undefined;
   openWindow(request: PreviewRequest): PreviewWindow;
 }

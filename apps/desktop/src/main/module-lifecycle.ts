@@ -1,7 +1,7 @@
 // The module lifecycle: installing, updating and removing a module, and granting or taking back what
 // it asks for. Each is a fixed order of steps the security model counts on (apps/docs/guide/security.md):
 // a removed module's grants go with it, a revoke closes its panels before the grant goes, and an update
-// that asks for more is granted only what the player was shown. The host lends it its panels, the
+// that asks for more is granted only what the user was shown. The host lends it its panels, the
 // recycle bin and the module list; the steps and their order live here.
 import path from "node:path";
 import { LOCAL_OWNER, type Connector } from "@tavora/module-schema";
@@ -10,7 +10,7 @@ import { CatalogUpdater, type CatalogInstalled } from "./catalog-updates";
 import type { GrantStore } from "./grants";
 import { checkZipData, forgetOwner, installZip, installZipData, type InstallOptions, type Installed } from "./installer";
 import { LibraryError } from "./library";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 import type { InstalledModule } from "./registry";
 import type { SafetyCheck } from "./safety-lists";
 
@@ -18,7 +18,7 @@ import type { SafetyCheck } from "./safety-lists";
 export interface ModulePanels {
   /** Starts a module's open panels again, so they load a new version or connect with a new grant. */
   reload(moduleId: string): void;
-  /** Closes a module's panels in every game, leaving their slots empty. */
+  /** Closes a module's panels in every workspace, leaving their slots empty. */
   close(moduleId: string): void;
 }
 
@@ -31,11 +31,11 @@ export interface ModuleLifecycleOptions {
   blocked(): ReadonlyMap<string, InstalledModule>;
   /** The ids the installer recorded as installed from the catalog. */
   catalogIds(): ReadonlySet<string>;
-  /** Whether a module is in the player's own modules folder, so they may remove it. */
+  /** Whether a module is in the user's own modules folder, so they may remove it. */
   removable(moduleId: string): boolean;
-  /** The player's modules folder (real path) and the newest safety lists, held ones when offline (C6, C14). */
+  /** The user's modules folder (real path) and the newest safety lists, held ones when offline (C6, C14). */
   installRules(): Promise<{ userModules: string; safety?: SafetyCheck }>;
-  /** What the player granted each module (grants.ts). */
+  /** What the user granted each module (grants.ts). */
   grants(): GrantStore;
   catalog: Pick<CatalogClient, "index" | "details" | "download" | "module" | "installed" | "updated">;
   /** Whether online features are on; the catalog is not asked otherwise. */
@@ -45,7 +45,7 @@ export interface ModuleLifecycleOptions {
   /** The first key of a key's account by its successions (safety-lists.ts). */
   firstKey(key: string): string;
   panels: ModulePanels;
-  /** A module was removed from the player's modules folder: whatever Tavora keeps only while it is installed (game overlays) goes. */
+  /** A module was removed from the user's modules folder: whatever Tavora keeps only while it is installed (game overlays) goes. */
   removed?(owner: string, moduleId: string): void;
   /** What a module is granted changed (granted, taken back, or removed with the module); things that run on a grant look again. */
   grantsChanged?(): void;
@@ -82,7 +82,7 @@ export class ModuleLifecycle {
   }
 
   /**
-   * Installs a module from a zip the player picked (installer.ts). An update from the same publisher
+   * Installs a module from a zip the user picked (installer.ts). An update from the same publisher
    * replaces the folder and reloads its open panels. Answers with the module's id.
    */
   async installFile(file: string): Promise<string> {
@@ -98,17 +98,17 @@ export class ModuleLifecycle {
    * installer writes anything.
    */
   async installFromCatalog(moduleId: string): Promise<string> {
-    if (!this.options.online()) throw new PlayerError("error.catalogOff");
+    if (!this.options.online()) throw new UserError("error.catalogOff");
     const entry = await this.options.catalog.module(moduleId);
     const zip = await this.options.catalog.download(entry.zip);
     const id = await this.finishInstall(await installZipData(zip, { ...(await this.installOptions()), expect: { id: entry.id, owner: entry.owner }, catalog: true }));
-    // Counted only here, when the player pressed Install: updates download the zip too but aren't installs.
+    // Counted only here, when the user pressed Install: updates download the zip too but aren't installs.
     void this.options.catalog.installed(id);
     return id;
   }
 
   /**
-   * The player said yes to an update that asks for more (exactly the version they were shown): it is
+   * The user said yes to an update that asks for more (exactly the version they were shown): it is
    * checked and installed by every installer rule again, what it asked for is granted, and its panels
    * reload with the new version.
    */
@@ -125,7 +125,7 @@ export class ModuleLifecycle {
     return installed.manifest.id;
   }
 
-  /** Moves a module out of the player's modules folder (to the recycle bin) and forgets it. */
+  /** Moves a module out of the user's modules folder (to the recycle bin) and forgets it. */
   async remove(moduleId: string): Promise<void> {
     const module = this.options.modules().get(moduleId);
     if (!module || !this.options.removable(moduleId)) throw new LibraryError("error.removeOnlyOwn");
@@ -146,7 +146,7 @@ export class ModuleLifecycle {
   }
 
   /**
-   * The player allowed what the consent dialog showed. Only hosts the module asks for are granted
+   * The user allowed what the consent dialog showed. Only hosts the module asks for are granted
    * (grants.ts), so a module updated while the dialog was open gets nothing it did not show. Open
    * panels of the module start again, so they connect with the new grant.
    */
@@ -158,7 +158,7 @@ export class ModuleLifecycle {
     this.options.panels.reload(moduleId);
   }
 
-  /** Takes back everything granted to a module, after its panels are removed in every game. Its data stays. */
+  /** Takes back everything granted to a module, after its panels are removed in every workspace. Its data stays. */
   async revoke(moduleId: string): Promise<void> {
     const module = this.options.modules().get(moduleId);
     if (!module) throw new LibraryError("error.moduleMissing");

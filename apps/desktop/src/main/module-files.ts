@@ -1,4 +1,4 @@
-// Moving the folder where modules keep their pictures (see blobs.ts) to another place. The player
+// Moving the folder where modules keep their pictures (see blobs.ts) to another place. The user
 // picks the place in a system dialog; everything is copied and checked first, the setting is
 // switched next, and only then are the old files removed, so a failure never loses a picture.
 
@@ -7,7 +7,7 @@ import path from "node:path";
 import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
 import { parseBlobFileName } from "./blobs";
 
-/** Inside the place the player picks, the files go into a folder of their own with this name. */
+/** Inside the place the user picks, the files go into a folder of their own with this name. */
 export const FILES_FOLDER_NAME = "Tavora";
 /** What that folder was called before; picking one of these uses it as it is. */
 const OLD_FOLDER_NAME = "Tavora module files";
@@ -16,14 +16,14 @@ const OLD_FOLDER_NAME = "Tavora module files";
 export const FILES_DIR = "module-blobs";
 
 /**
- * The files folder inside the app's data folder: the default until the player's Pictures folder took
+ * The files folder inside the app's data folder: the default until the user's Pictures folder took
  * its place (index.ts), and still the default where no Pictures folder is given (tests).
  */
 export function defaultFilesRoot(userData: string): string {
   return path.join(userData, FILES_DIR);
 }
 
-/** Why a place cannot be used. The host words these for the player. */
+/** Why a place cannot be used. The host words these for the user. */
 export type TargetProblem = "same" | "nested" | "inside-data" | "not-writable";
 
 const sameFolder = (a: string, b: string) => (process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b);
@@ -34,7 +34,7 @@ const inside = (child: string, parent: string) => {
 const insideOrSame = (child: string, parent: string) => sameFolder(child, parent) || inside(child, parent) || (process.platform === "win32" && inside(child.toLowerCase(), parent.toLowerCase()));
 
 /**
- * The folder the files would go to if the player picked `picked`: a folder called FILES_FOLDER_NAME
+ * The folder the files would go to if the user picked `picked`: a folder called FILES_FOLDER_NAME
  * inside it (or `picked` itself when it already has that name). Null with the problem when it cannot be used.
  */
 export async function filesTarget(
@@ -70,7 +70,7 @@ export interface StoredFile {
   bytes: number;
 }
 
-/** The pictures under a files folder: `<owner>/<module>/<game>/<id>.<ext>`, nothing else. */
+/** The pictures under a files folder: `<owner>/<module>/<workspace>/<id>.<ext>`, nothing else. */
 export async function listStoredFiles(root: string): Promise<StoredFile[]> {
   const files: StoredFile[] = [];
   const names = async (dir: string) => readdir(dir).catch(() => [] as string[]);

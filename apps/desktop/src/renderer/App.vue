@@ -13,7 +13,7 @@ import GrantDialog from "./components/GrantDialog.vue";
 import HotkeyDialog from "./components/HotkeyDialog.vue";
 import LinkChoiceDialog from "./components/LinkChoiceDialog.vue";
 import NavigationChoiceDialog from "./components/NavigationChoiceDialog.vue";
-import GameRail from "./components/GameRail.vue";
+import WorkspaceRail from "./components/WorkspaceRail.vue";
 import GameSwitchDialog from "./components/GameSwitchDialog.vue";
 import ModuleMenu from "./components/menus/ModuleMenu.vue";
 import PromptDialog from "./components/PromptDialog.vue";
@@ -22,7 +22,7 @@ import ShareIconsDialog from "./components/ShareIconsDialog.vue";
 import SteamImportDialog from "./components/SteamImportDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
 import { dialog, state, toast } from "./host";
-import GameWorkspace from "./pages/GameWorkspace.vue";
+import WorkspacePage from "./pages/WorkspacePage.vue";
 import OnboardingPage from "./pages/OnboardingPage.vue";
 import WelcomePage from "./pages/WelcomePage.vue";
 </script>
@@ -30,10 +30,10 @@ import WelcomePage from "./pages/WelcomePage.vue";
 <template>
   <div v-if="state" class="flex h-full">
     <TooltipProvider :delay-duration="150" :skip-delay-duration="500">
-      <GameRail />
+      <WorkspaceRail />
     </TooltipProvider>
     <div class="relative h-full min-w-0 flex-1">
-      <GameWorkspace v-if="state.screen === 'game' && state.currentGameId" :key="state.currentGameId" />
+      <WorkspacePage v-if="state.screen === 'workspace' && state.currentWorkspaceId" :key="state.currentWorkspaceId" />
       <template v-else>
         <OnboardingPage v-if="!state.library.onboarded" />
         <WelcomePage v-else />

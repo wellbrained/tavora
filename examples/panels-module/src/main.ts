@@ -66,7 +66,7 @@ const SAMPLE_BUILDS = [
 ];
 
 function describeLaunch(launch: PanelLaunch): string {
-  if (launch.reason === "add") return "add: the player just added this panel, so it picked the build used last";
+  if (launch.reason === "add") return "add: the user just added this panel, so it picked the build used last";
   if (launch.reason === "open") return launch.content ? `open: another panel opened it on "${launch.content.title}"` : "open: another panel opened it";
   return launch.content ? `restore: it was open before and showed "${launch.content.title}"` : "restore: it was open before and showed nothing";
 }

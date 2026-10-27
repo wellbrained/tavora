@@ -55,7 +55,7 @@ export const en = {
   "history.empty": "Your last results show up here.",
   "history.clear": "Clear history",
   "history.clearTitle": "Clear your history?",
-  "history.clearText": "Your saved results for this game are removed.",
+  "history.clearText": "Your saved results for this workspace are removed.",
   "history.show": "Show history",
   "history.use": "Use {result}",
 
@@ -134,7 +134,7 @@ export const de: Record<keyof typeof en, string> = {
   "history.empty": "Hier siehst du deine letzten Ergebnisse.",
   "history.clear": "Verlauf löschen",
   "history.clearTitle": "Verlauf löschen?",
-  "history.clearText": "Deine gespeicherten Ergebnisse für dieses Spiel werden entfernt.",
+  "history.clearText": "Deine gespeicherten Ergebnisse für diesen Arbeitsbereich werden entfernt.",
   "history.show": "Verlauf zeigen",
   "history.use": "{result} nehmen",
 

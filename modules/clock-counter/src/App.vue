@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Clock & Counter: a toolbar with Add, then the game's clocks and counters. Every panel of a game shows the same
+// Clock & Counter: a toolbar with Add, then the workspace's clocks and counters. Every panel of a workspace shows the same
 // list; which settings are open is each panel's own. Running clocks tick here only while the panel is visible: they
 // keep their start time, so nothing is lost while it is hidden. Hotkeys arrive at the panel used last.
 import { Plus, X } from "@lucide/vue";

@@ -9,13 +9,13 @@ import { OWNER_RECORDS_FILE } from "./installer";
 import { FILES_DIR } from "./module-files";
 import { DATA_FILES } from "./saved-data";
 
-// The cloud copy (decided 2026-10-19): one copy of the player's Tavora data per
+// The cloud copy (decided 2026-10-19): one copy of the user's Tavora data per
 // account, the same data as the daily backup, encrypted on this PC so only the
-// player can read it (copy-crypto.ts). This is the engine: finding what changed,
+// user can read it (copy-crypto.ts). This is the engine: finding what changed,
 // uploading it, downloading a copy into a staging folder and swapping it in.
-// When it runs (at start, after changes, at close) and what the player sees is
+// When it runs (at start, after changes, at close) and what the user sees is
 // decided by the host. Where the copy is kept is a CopyStorage: Tavora's service
-// (ServiceStorage, one copy per account) or a folder the player picks
+// (ServiceStorage, one copy per account) or a folder the user picks
 // (copy-folder.ts, decided 2026-10-20). Either takes a new version only when this
 // PC started from the current one, so a PC that missed an update gets a conflict
 // instead of overwriting newer work.
@@ -39,7 +39,7 @@ export interface CopyRoot {
   dir: boolean;
   /** Pictures are left out first when the copy would be too big. */
   picture: boolean;
-  /** For a folder: which top-level entries belong to Tavora (the module files folder may be the player's own). */
+  /** For a folder: which top-level entries belong to Tavora (the module files folder may be the user's own). */
   keep?: (name: string) => boolean;
 }
 
@@ -201,7 +201,7 @@ export type SwapAnswer =
   | { status: "too-big"; size?: number };
 
 /**
- * Where the copy is kept: Tavora's service (ServiceStorage) or a folder the player picks (copy-folder.ts).
+ * Where the copy is kept: Tavora's service (ServiceStorage) or a folder the user picks (copy-folder.ts).
  * It only ever holds sealed parts and a sealed manifest; everything else happens in CloudCopy.
  */
 export interface CopyStorage {
@@ -529,7 +529,7 @@ async function move(from: string, to: string): Promise<void> {
 /**
  * Puts a downloaded copy (in `staging`) in place of this PC's data, after moving what was there into
  * `keepIn`, so the side not kept stays as a local backup. A copy that left out pictures leaves this PC's
- * pictures where they are. Only runs while nothing reads the data (before the games load).
+ * pictures where they are. Only runs while nothing reads the data (before the workspaces load).
  * Returns the state to keep: the copy's files with their dates on this PC.
  */
 export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: string, copy: { version: number; pictures: boolean; files: Record<string, Omit<SyncedFile, "mtimeMs">> }): Promise<CopyState> {
@@ -538,7 +538,7 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
   for (const root of taking) {
     const staged = path.join(staging, root.name);
     if (root.keep) {
-      // Only Tavora's own entries of a folder the player may share (the module files folder).
+      // Only Tavora's own entries of a folder the user may share (the module files folder).
       for (const name of (await readdir(root.path).catch(() => [] as string[])).filter(root.keep)) await move(path.join(root.path, name), path.join(keepIn, root.name, name));
       for (const name of await readdir(staged).catch(() => [] as string[])) await move(path.join(staged, name), path.join(root.path, name));
       continue;

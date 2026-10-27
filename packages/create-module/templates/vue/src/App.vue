@@ -4,10 +4,10 @@
 import { connect, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 import { computed, onMounted, ref, shallowRef } from "vue";
 
-/** Your texts in English and German; Tavora says which language the player uses. */
+/** Your texts in English and German; Tavora says which language the user uses. */
 const TEXTS = {
-  en: { connecting: "Connecting to Tavora…", playing: "Playing {game}.", clicked: "Clicked {count} times in this game." },
-  de: { connecting: "Verbinde mit Tavora …", playing: "Du spielst {game}.", clicked: "{count}-mal in diesem Spiel geklickt." },
+  en: { connecting: "Connecting to Tavora…", here: "You're in {workspace}.", clicked: "Clicked {count} times here." },
+  de: { connecting: "Verbinde mit Tavora …", here: "Du bist in {workspace}.", clicked: "{count}-mal hier geklickt." },
 };
 const language = ref<keyof typeof TEXTS>("en");
 const text = (key: keyof (typeof TEXTS)["en"], params: Record<string, string | number> = {}) =>
@@ -15,10 +15,10 @@ const text = (key: keyof (typeof TEXTS)["en"], params: Record<string, string | n
 
 const title = document.title;
 const tavora = shallowRef<TavoraSDK | null>(null);
-const game = ref("");
+const workspace = ref("");
 const count = ref(0);
 const failed = ref<string | null>(null);
-const status = computed(() => (failed.value ? failed.value : tavora.value ? `${text("playing", { game: game.value })} ${text("clicked", { count: count.value })}` : text("connecting")));
+const status = computed(() => (failed.value ? failed.value : tavora.value ? `${text("here", { workspace: workspace.value })} ${text("clicked", { count: count.value })}` : text("connecting")));
 
 /** Tavora's theme as CSS variables (--background, --foreground, --primary, ...), so the module looks like Tavora. */
 function applyTheme(theme: TavoraTheme) {
@@ -36,8 +36,8 @@ onMounted(async () => {
     const setLanguage = (code: string) => (language.value = code.startsWith("de") ? "de" : "en");
     setLanguage(await sdk.ui.getLanguage());
     sdk.ui.onLanguageChange(setLanguage);
-    game.value = (await sdk.game.getCurrent()).displayName;
-    // storage keeps small settings for this module in the current game.
+    workspace.value = (await sdk.workspace.getCurrent()).displayName;
+    // storage keeps small settings for this module in the current workspace.
     count.value = (await sdk.storage.get<number>("count")) ?? 0;
     tavora.value = sdk;
   } catch (error) {

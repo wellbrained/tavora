@@ -1,8 +1,8 @@
 /**
- * Hotkeys the player sets for module actions (hotkeys.set): Electron accelerators such as `Ctrl+Alt+K` or `num5`,
- * registered system-wide while their game is shown. Keys are taken by where they are on the keyboard (`event.code`),
+ * Hotkeys the user sets for module actions (hotkeys.set): Electron accelerators such as `Ctrl+Alt+K` or `num5`,
+ * registered system-wide while their workspace is shown. Keys are taken by where they are on the keyboard (`event.code`),
  * so they stay the same whatever the layout. A key needs Ctrl, Alt or the Windows key, except F-keys and the number
- * pad, so a hotkey never takes a key the player types with.
+ * pad, so a hotkey never takes a key the user types with.
  */
 
 /** The parts of a browser key event a hotkey is made from. */
@@ -83,7 +83,7 @@ export function isHotkey(value: unknown): value is string {
   return parts.some((part) => part !== "Shift") || standsAlone(key);
 }
 
-/** The keys of a hotkey as the player reads them, one per key cap: `["Ctrl", "Alt", "K"]`, `["Num 5"]`. */
+/** The keys of a hotkey as the user reads them, one per key cap: `["Ctrl", "Alt", "K"]`, `["Num 5"]`. */
 export function hotkeyKeys(accelerator: string, mac = false): string[] {
   return accelerator.split("+").map((part) => {
     if (part === "Super") return mac ? "⌘" : "Win";

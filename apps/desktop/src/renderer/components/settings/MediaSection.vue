@@ -4,22 +4,22 @@
 // this lists the modules allowed to use it, each revocable (decision log, module grants row of 2026-10-16).
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { confirmAction, gamesUsing, listOf, state, submitAction } from "../../host";
+import { confirmAction, workspacesUsing, listOf, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import SettingGroup from "./SettingGroup.vue";
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 
-/** Modules the player allowed to see what plays on this PC. */
+/** Modules the user allowed to see what plays on this PC. */
 const users = computed(() => (state.value?.modules ?? []).filter((module) => module.permissions.granted.connectors.includes("media")));
 
 function revoke(module: ModuleView) {
-  const games = gamesUsing(module);
+  const workspaces = workspacesUsing(module);
   confirmAction({
     title: t("integrations.grants.revokeTitle", { name: module.name }),
-    message: games.length
-      ? t("integrations.grants.revokeUsed", { name: module.name, games: listOf(games) })
+    message: workspaces.length
+      ? t("integrations.grants.revokeUsed", { name: module.name, workspaces: listOf(workspaces) })
       : t("integrations.media.revokeUnused", { name: module.name }),
     confirm: t("integrations.grants.revoke"),
     danger: true,

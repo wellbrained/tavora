@@ -62,25 +62,25 @@ describe("what can be shared", () => {
     expect(steamShareGames([{ appid: 10, id: "starcraft-2", name: "StarCraft II" }], () => true, [], list)).toHaveLength(0);
   });
 
-  it("never offers a picture the player chose, a hosted icon or Steam's small one", () => {
+  it("never offers a picture the user chose, a hosted icon or Steam's small one", () => {
     for (const iconFile of ["hosted-diablo-iv.png", "1245620.jpg", null]) expect(shareableIconFile(game({ iconFile }), on, list)).toBeNull();
   });
 
-  it("offers a game the player added by name, unless the service has an icon by that name", () => {
+  it("offers a game the user added by name, unless the service has an icon by that name", () => {
     expect(shareableIconFile(game({ id: "local-my-mod", name: "My Mod", iconFile: "exe-local-my-mod.ico" }), on, list)).toBe("exe-local-my-mod.ico");
     expect(shareableIconFile(game({ id: "local-starcraft-ii", name: "StarCraft II", iconFile: "exe-local-starcraft-ii.ico" }), on, list)).toBeNull();
   });
 
   it("offers nothing for a personal workspace, a game in Trash or one already offered", () => {
-    expect(shareableIconFile(game({ id: "local-notes", kind: "workspace" }), on, list)).toBeNull();
+    expect(shareableIconFile(game({ id: "local-notes", kind: "personal" }), on, list)).toBeNull();
     expect(shareableIconFile(game({ trashedAt: "2026-10-15T00:00:00.000Z" }), on, list)).toBeNull();
     expect(shareableIconFile(game({ iconSharedAt: "2026-10-15T00:00:00.000Z" }), on, list)).toBeNull();
-    expect(isShareCandidate(game({ kind: "workspace" }))).toBe(false);
+    expect(isShareCandidate(game({ kind: "personal" }))).toBe(false);
     expect(isShareCandidate(game({ id: "local-x" }))).toBe(true);
     expect(isShareCandidate(game())).toBe(true);
   });
 
-  it("offers nothing while the list is unknown or the player has switched online features or icons off", () => {
+  it("offers nothing while the list is unknown or the user has switched online features or icons off", () => {
     expect(shareableIconFile(game(), on, null)).toBeNull();
     expect(shareableIconFile(game(), { ...on, onlineSearch: false }, list)).toBeNull();
     expect(shareableIconFile(game(), { ...on, steamIcons: false }, list)).toBeNull();

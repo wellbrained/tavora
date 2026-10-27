@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { expectModuleText, inModule, launch, NOTES, openGame, openModule, panels, PLAYGROUND, RAIL_WIDTH, setContentSize, TODOS, typeInModule, VUE, waitForShown } from "./harness";
+import { expectModuleText, inModule, launch, NOTES, openWorkspace, openModule, panels, PLAYGROUND, RAIL_WIDTH, setContentSize, TODOS, typeInModule, VUE, waitForShown } from "./harness";
 
 // The official Notes, To-Dos and UI Playground modules, driven through their own pages.
 
@@ -155,14 +155,14 @@ test("notes: write, pin and search notes, and find them again after a restart", 
   await expectModuleText(app, NOTES, "no-results", `No notes match "nothing like this".`);
 
   // Notes belong to their game.
-  await openGame(page, "satisfactory");
+  await openWorkspace(page, "satisfactory");
   await openModule(page, NOTES);
   await ready(app, NOTES, "editor");
   await expect.poll(() => noteTitles(app)).toEqual(["Scratchpad"]);
 
   await app.close();
   const again = await launch(userData);
-  await openGame(again.page, "poe2");
+  await openWorkspace(again.page, "poe2");
   await expect(panels(again.page, NOTES)).toHaveCount(1);
   await ready(again.app, NOTES, "editor");
   await expect.poll(() => noteTitles(again.app)).toEqual(["Scratchpad", "Count Geonor", "Atlas plan"]);
@@ -390,7 +390,7 @@ test("to-dos: groups, sub-to-dos, editing in place, objectives and finished task
 
   await app.close();
   const again = await launch(userData);
-  await openGame(again.page, "poe2");
+  await openWorkspace(again.page, "poe2");
   await ready(again.app, TODOS, "todos-app");
   await expect.poll(() => taskTitles(again.app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
   await expect.poll(() => taskTitles(again.app)).not.toContain("Defeat Count Geonor");
@@ -530,7 +530,7 @@ test("clipboard: a module copies a PNG only right after a key press, once, and o
   await openModule(page, NOTES);
   await ready(app, NOTES, "editor");
 
-  /** A real key press in the module's page, the way the player would make one. */
+  /** A real key press in the module's page, the way the user would make one. */
   const pressKey = () =>
     app.evaluate(
       async ({ webContents }, moduleId) => {
@@ -605,7 +605,7 @@ test("calculator: works out sums from keys and the keyboard, and keeps the last 
 
   await app.close();
   const again = await launch(userData);
-  await openGame(again.page, "poe2");
+  await openWorkspace(again.page, "poe2");
   await expect(panels(again.page, CALCULATOR)).toHaveCount(1);
   await ready(again.app, CALCULATOR, "history-item");
   await expect.poll(() => results(again.app)).toEqual(["7,056", "84"]);

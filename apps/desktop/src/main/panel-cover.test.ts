@@ -38,7 +38,7 @@ const theme = (mode: "dark" | "light", background: string) =>
   ({ mode, tokens: { background, border: "#333", "muted-foreground": "#999" } }) as never;
 
 describe("when the fire shows", () => {
-  it("shows it from the start only when the game took long last time", () => {
+  it("shows it from the start only when the workspace took long last time", () => {
     expect(fireDelay(900)).toBe(0);
     expect(fireDelay(FIRE_AFTER_MS)).toBe(FIRE_AFTER_MS);
     expect(fireDelay(200)).toBe(FIRE_AFTER_MS);
@@ -89,7 +89,7 @@ describe("open times", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("are kept per game and layout, whatever order the panels are in", () => {
+  it("are kept per workspace and layout, whatever order the panels are in", () => {
     const a = layoutKey("poe2", [{ moduleId: "wellbrained.poe2", panelType: "tree" }, { moduleId: "tavora.notes" }]);
     const b = layoutKey("poe2", [{ moduleId: "tavora.notes", panelType: null }, { moduleId: "wellbrained.poe2", panelType: "tree" }]);
     expect(a).toBe(b);

@@ -73,10 +73,10 @@ const access = computed(() => [
   ...module.value.permissions.network.map((host) => t("catalog.accessHost", { host })),
   ...module.value.permissions.connectors.map((id) => t(`catalog.accessConnector.${id}`)),
 ]);
-/** Why Install and Add are greyed out: the module is for another game, or not for workspaces. */
+/** Why Install and Add are greyed out: the module is for another game, or not for personal workspaces. */
 const notHere = computed(() => {
   if (module.value.fits) return null;
-  return module.value.forGames.length ? t("catalog.onlyFor", { games: module.value.forGames.join(", ") }) : t("catalog.notInWorkspaces");
+  return module.value.forGames.length ? t("catalog.onlyFor", { games: module.value.forGames.join(", ") }) : t("catalog.notInPersonal");
 });
 
 /** Opens the support link after a click: the main process reads it again from the module's manifest or the listing. */
@@ -98,7 +98,7 @@ async function openHomepage() {
   const outcome = await act({ type: "open-catalog-homepage", moduleId: module.value.id }, { quiet: true });
   opening.value = false;
   if (!outcome.ok) homepageError.value = outcome.error;
-  // Opened in a Browser panel: close the library so the player sees it. Asking where to open replaces it already.
+  // Opened in a Browser panel: close the library so the user sees it. Asking where to open replaces it already.
   else if (dialog.value === library) dialog.value = null;
 }
 </script>

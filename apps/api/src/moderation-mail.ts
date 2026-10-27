@@ -113,7 +113,7 @@ export function bannedMail(to: string, reason: DeclineReason, note: string | nul
         to,
         subject: "Your account can't publish to Tavora's catalog any more",
         text:
-          `Your developer account can't publish to the catalog any more, and your modules are no longer listed there. Players who already installed them keep them.\n\n${reasonBlock(reason, note, language)}\n\n` +
+          `Your developer account can't publish to the catalog any more, and your modules are no longer listed there. Users who already installed them keep them.\n\n${reasonBlock(reason, note, language)}\n\n` +
           `What's not allowed in the catalog: ${RULES_URL}\nThink this is a mistake? Write to ${CONTACT}.\n\nTavora\n`,
       };
 }
@@ -128,7 +128,7 @@ const UNPUBLISH_LABELS: Record<MailLanguage, Record<UnpublishReason, string>> = 
   de: { ...REASON_LABELS.de, request: "Du hast darum gebeten" },
 };
 
-/** Sent to the developer when a published module is unpublished. Players who already have it keep it. */
+/** Sent to the developer when a published module is unpublished. Users who already have it keep it. */
 export function unpublishedMail(to: string, module: { id: string; name: string }, reason: UnpublishReason, note: string | null, language: MailLanguage): Mail {
   const block = `${language === "de" ? "Grund" : "Reason"}: ${UNPUBLISH_LABELS[language][reason]}${note ? `
 ${note}` : ""}`;
@@ -152,7 +152,7 @@ Tavora
         to,
         subject: `${module.name} is no longer in Community modules`,
         text:
-          `We unpublished ${module.name} (${module.id}) from Community modules. Players who already installed it keep it.
+          `We unpublished ${module.name} (${module.id}) from Community modules. Users who already installed it keep it.
 
 ${block}
 

@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, rename, rmdir, stat } from "node:fs/promises"
 import path from "node:path";
 import { isGameId, OFFICIAL_OWNER } from "@tavora/module-schema";
 import { writeFileAtomic } from "./fsutil";
-import { modulePartition, partitionDirName } from "./gamedata";
+import { modulePartition, partitionDirName } from "./module-data";
 import { GAME_OVERLAYS_FILE } from "./game-overlays";
 import { HOTKEYS_FILE } from "./hotkeys";
 import { defaultFilesRoot } from "./module-files";
@@ -16,7 +16,7 @@ export const AI_USAGE_MODULE_ID = "wellbrained.ai-usage";
 
 /**
  * Official modules that left Tavora for the catalog (the core frame decision, 2026-10-26): each one's
- * catalog id, and the name its panels show until the player installs it.
+ * catalog id, and the name its panels show until the user installs it.
  */
 export const MOVED_MODULES: readonly { from: string; to: string; name: string }[] = [
   { from: "tavora.discord", to: DISCORD_MODULE_ID, name: "Discord" },
@@ -33,10 +33,10 @@ export function movedModule(moduleId: string): (typeof MOVED_MODULES)[number] | 
 
 /**
  * Runs at every start, before any module session or store is opened. What the official copies
- * saved goes to their catalog modules: settings, documents and files game by game (a game where
+ * saved goes to their catalog modules: settings, documents and files workspace by workspace (a workspace where
  * the catalog module saved something already keeps its own), browser storage, and the panels,
  * overlays, stream links and hotkeys that name them. Grants stay behind: the catalog module asks
- * for its connectors itself. A player who never installs it finds the data in Settings > Modules.
+ * for its connectors itself. A user who never installs it finds the data in Settings > Modules.
  */
 export async function moveOfficialModules(userData: string, log: (line: string) => void = () => undefined, blobRoot = defaultFilesRoot(userData)): Promise<void> {
   for (const { from, to } of MOVED_MODULES) {

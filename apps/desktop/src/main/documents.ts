@@ -36,7 +36,7 @@ export interface DocumentLimits {
 }
 
 /**
- * Named documents for one module in one game, one file each. A small index
+ * Named documents for one module in one workspace, one file each. A small index
  * makes listing cheap; it is rebuilt from the document files whenever it is
  * missing or older than any of them, so a crash between the two writes
  * never loses a change.
@@ -93,11 +93,11 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
       const existing = index.get(docId);
       checkRevision(existing, ifRevision);
       if (!existing && index.size >= this.limits.maxDocuments) {
-        throw new HostError("QUOTA_EXCEEDED", `a module may keep at most ${this.limits.maxDocuments} documents per game`);
+        throw new HostError("QUOTA_EXCEEDED", `a module may keep at most ${this.limits.maxDocuments} documents per workspace`);
       }
       const total = [...index.values()].reduce((sum, doc) => sum + doc.bytes, 0) - (existing?.bytes ?? 0) + bytes;
       if (total > this.limits.maxDocumentsBytes) {
-        throw new HostError("QUOTA_EXCEEDED", `documents are limited to ${this.limits.maxDocumentsBytes} bytes per module and game`);
+        throw new HostError("QUOTA_EXCEEDED", `documents are limited to ${this.limits.maxDocumentsBytes} bytes per module and workspace`);
       }
 
       const summary: DocumentSummary = {

@@ -10,9 +10,9 @@ export const BACKUP_KEEP = 7;
 export const BACKUP_MAX_BYTES = 300 * 1024 * 1024;
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-/** With DATA_FILES (saved-data.ts), the player's own data: every module's settings and documents. */
+/** With DATA_FILES (saved-data.ts), the user's own data: every module's settings and documents. */
 export const DATA_DIRS = ["module-data"];
-/** Pictures: the player's own images and profile picture, and the pictures modules keep (FILES_DIR, wherever its folder is). Left out of a snapshot that would be too big. */
+/** Pictures: the user's own images and profile picture, and the pictures modules keep (FILES_DIR, wherever its folder is). Left out of a snapshot that would be too big. */
 export const PICTURE_DIRS = ["game-icons", "profile", FILES_DIR];
 
 export function backupsDir(userData: string): string {
@@ -64,7 +64,7 @@ export type BackupResult =
   | { status: "too-big" };
 
 /**
- * Copies the player's data into backups/<today>, once a day, and keeps the
+ * Copies the user's data into backups/<today>, once a day, and keeps the
  * newest few days. The snapshot is built in a `.partial` folder and renamed
  * when complete, so a crash never leaves a half snapshot that looks whole.
  * Nothing is read through the app's own code, so a bug there cannot spoil it.
@@ -80,7 +80,7 @@ export async function backupData(options: BackupOptions): Promise<BackupResult> 
   if (await exists(target)) return { status: "exists", dir: target };
 
   const source = (name: string) => (name === FILES_DIR && options.moduleFiles ? options.moduleFiles : path.join(userData, name));
-  // In a folder the player can reach, like Pictures\Tavora, only the modules' own folders are theirs to back up.
+  // In a folder the user can reach, like Pictures\Tavora, only the modules' own folders are theirs to back up.
   const parts = async (name: string): Promise<string[]> => {
     if (name !== FILES_DIR) return [""];
     const owners = await readdir(source(name)).catch(() => [] as string[]);

@@ -44,7 +44,7 @@ export function checkRelease(version, state, options = {}) {
   if (state.noteVersions[0] !== version) {
     problems.push(`The newest patch-notes entry is ${state.noteVersions[0] ?? "missing"}; it must be ${version}.`);
   }
-  // Players only see released versions: entries since the last release are folded into the new one.
+  // Users only see released versions: entries since the last release are folded into the new one.
   const unfolded = state.noteVersions.filter(
     (v) => v !== version && compareVersions(v, version) < 0 && (previous === null || compareVersions(v, previous) > 0),
   );

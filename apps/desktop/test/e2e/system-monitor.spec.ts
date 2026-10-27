@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectModuleText, inModule, launch, openGame, openModule, shootPanels, typeInModule } from "./harness";
+import { expectModuleText, inModule, launch, openWorkspace, openModule, shootPanels, typeInModule } from "./harness";
 
 // The official System Monitor's apps dialog: the list Tavora reads for it alone (systemInfo.apps). That no other
 // module gets it is tested in system-apps.test.ts.
@@ -13,7 +13,7 @@ test("the Memory card lists the apps", async () => {
   const { app, page } = await launch();
   app.process().stderr?.on("data", (d) => process.stdout.write("STDERR " + d));
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await openModule(page, SYSTEM_MONITOR);
     await page.getByTestId("grant-allow").click();
     await expect.poll(() => inModule(app, SYSTEM_MONITOR, `!!${q("show-apps")}`).catch(() => false)).toBe(true);
@@ -44,11 +44,11 @@ test("the Memory card lists the apps", async () => {
 test("Traffic in the menu shows this week and the last months, as Windows counts them", async () => {
   const { app, page } = await launch();
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await openModule(page, SYSTEM_MONITOR);
     await page.getByTestId("grant-allow").click();
     await expect.poll(() => inModule(app, SYSTEM_MONITOR, `!!${q("connection-section")}`).catch(() => false)).toBe(true);
-    // Off until the player turns it on.
+    // Off until the user turns it on.
     expect(await inModule(app, SYSTEM_MONITOR, `!!${q("connection-traffic")}`)).toBe(false);
     // The menu opens from a real key press, as Tavora wants for ui.showMenu.
     await inModule(app, SYSTEM_MONITOR, `${q("menu")}.focus()`);

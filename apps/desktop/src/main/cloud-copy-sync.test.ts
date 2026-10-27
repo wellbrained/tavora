@@ -69,10 +69,10 @@ describe("the cloud copy, as Tavora runs it", () => {
 
   it("brings PC A's data to PC B once B has the recovery key, keeping B's own settings and data", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": JSON.stringify({ version: 1, games: { "elden-ring": {} }, moduleFilesFolder: "C:\\A pictures" }), "modules/dice/manifest.json": "dice" });
+    const a = await pc({ "library.json": JSON.stringify({ version: 2, workspaces: { "elden-ring": {} }, moduleFilesFolder: "C:\\A pictures" }), "modules/dice/manifest.json": "dice" });
     const { key } = await startCopy(cloud, a);
 
-    const b = await pc({ "library.json": JSON.stringify({ version: 1, games: {}, developmentFolders: ["D:\\mine"] }) });
+    const b = await pc({ "library.json": JSON.stringify({ version: 2, workspaces: {}, developmentFolders: ["D:\\mine"] }) });
     const atB = tavora(cloud, b);
     await atB.sync.beforeLoad();
     await atB.sync.turnOn();
@@ -83,17 +83,17 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(atB.sync.view().on).toBe(false);
 
     await atB.sync.enterKey(key.toLowerCase().replace(/-/g, " "));
-    // B has data of its own: the player keeps one side.
+    // B has data of its own: the user keeps one side.
     expect(atB.sync.view()).toMatchObject({ on: true, askKey: false, conflict: true });
     await atB.sync.keep("cloud");
     expect(atB.events.restarts).toBe(1);
     // Nothing changed yet: the copy is taken at the start, before anything reads the data.
-    expect(JSON.parse(await read(b.userData, "library.json")).games).toEqual({});
+    expect(JSON.parse(await read(b.userData, "library.json")).workspaces).toEqual({});
 
     const restarted = tavora(cloud, b);
     await restarted.sync.beforeLoad();
     const library = JSON.parse(await read(b.userData, "library.json"));
-    expect(library.games).toEqual({ "elden-ring": {} });
+    expect(library.workspaces).toEqual({ "elden-ring": {} });
     // Folders on this PC stay this PC's.
     expect(library.moduleFilesFolder).toBeUndefined();
     expect(library.developmentFolders).toEqual(["D:\\mine"]);
@@ -151,7 +151,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     await writeFile(path.join(b.userData, "library.json"), "b2!");
     const atB = tavora(cloud, b);
     await atB.sync.beforeLoad();
-    // Neither side is lost: B's change stays until the player picks.
+    // Neither side is lost: B's change stays until the user picks.
     expect(await read(b.userData, "library.json")).toBe("b2!");
     expect(atB.sync.view().conflict).toBe(true);
     // Nothing goes up while the question is open.
@@ -317,7 +317,7 @@ describe("the cloud copy, as Tavora runs it", () => {
 
   it("goes on at a new PC once another PC sent the key through the copy's folder, signed out", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": JSON.stringify({ version: 1, games: { "elden-ring": {} } }) });
+    const a = await pc({ "library.json": JSON.stringify({ version: 2, workspaces: { "elden-ring": {} } }) });
     const onedrive = path.join(a.root, "OneDrive");
     await mkdir(onedrive);
     const atA = tavora(cloud, a, { signedIn: false });
@@ -325,7 +325,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     await atA.sync.turnOn(onedrive);
     expect(atA.sync.view()).toMatchObject({ on: true, folder: onedrive });
 
-    const b = await pc({ "library.json": JSON.stringify({ version: 1, games: {} }) });
+    const b = await pc({ "library.json": JSON.stringify({ version: 2, workspaces: {} }) });
     const atB = tavora(cloud, b, { signedIn: false });
     await atB.sync.beforeLoad();
     await atB.sync.turnOn(onedrive);
@@ -353,7 +353,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     await fromA.lookForRequests();
     await fromA.decide(fromA.view().approve!.id, true);
     await toB.lookForAnswer();
-    // B has the key and takes up the copy: it has data of its own, so the player keeps one side.
+    // B has the key and takes up the copy: it has data of its own, so the user keeps one side.
     expect(atB.sync.view()).toMatchObject({ on: true, askKey: false, conflict: true, folder: onedrive });
     fromA.dispose();
     toB.dispose();

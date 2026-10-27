@@ -1,5 +1,5 @@
 // The module address for putting a picture on the system clipboard (see png.ts): POST /_clipboard/ with a PNG as
-// the body. It works only right after the player clicked or pressed a key in the module (one picture per click),
+// the body. It works only right after the user clicked or pressed a key in the module (one picture per click),
 // and only for a complete, well-formed PNG within the size limits.
 
 import { LIMITS, type ErrorCode } from "@tavora/sdk/protocol";
@@ -9,7 +9,7 @@ import { checkPng, type PngLimits } from "./png";
 export const CLIPBOARD_PNG_LIMITS: PngLimits = { maxSide: 16384, maxPixels: 100_000_000 };
 
 export interface ClipboardDeps {
-  /** Whether the player did something in the module just now. */
+  /** Whether the user did something in the module just now. */
   allowed(): boolean;
   /** Uses that up, so one click puts one picture on the clipboard. */
   consume(): void;

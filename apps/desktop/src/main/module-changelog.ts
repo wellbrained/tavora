@@ -5,7 +5,7 @@ import { resolveAsset } from "./assets";
 /**
  * A module's patch notes, read from the changelog file its manifest names, resolved inside the
  * package like any asset. A missing, oversized or invalid file gives no notes (and a warning), never
- * a module that fails to load: the notes are for players, not for running the module.
+ * a module that fails to load: the notes are for users, not for running the module.
  */
 export async function readModuleChangelog(root: string, file: string | undefined, moduleId: string): Promise<ChangelogEntry[]> {
   if (file === undefined || root === "") return [];

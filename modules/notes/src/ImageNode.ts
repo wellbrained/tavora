@@ -1,5 +1,5 @@
 // The picture node of a note. A picture is the id of a stored file (see blobs), shown on a line of its
-// own or at the left or right with the text flowing around it, always at a width the player chose
+// own or at the left or right with the text flowing around it, always at a width the user chose
 // (or its real size). Dragging its corner resizes it.
 
 import { Node } from "@tiptap/core";

@@ -14,12 +14,12 @@ Tavora is a local-first gaming companion for your second monitor. Keep notes, to
 
 ## What you can do
 
-- **Give every game its own workspace.** Arrange panels side by side or in tabs, resize them, maximize a panel, and save named layouts. Each game remembers its own setup.
+- **Give every game its own workspace.** Arrange panels side by side or in tabs, resize them, maximize a panel, and save named layouts. Each game workspace remembers its own setup. Add a personal workspace for things that belong to no game.
 - **Keep a game library.** Search the online game database, add a game by name, or import a public Steam library. Organize games with favorites and folders; removed games go to Trash before permanent deletion.
-- **Write Notes.** Rich text, images, named and pinned notes, search, and a scratchpad for each game. Notes save automatically and can be open in several panels.
+- **Write Notes.** Rich text, images, named and pinned notes, search, and a scratchpad for each workspace. Notes save automatically and can be open in several panels.
 - **Track To-Dos.** Colored groups, sub-to-dos, pinned objectives, descriptions, and undo for finishing or deleting a task.
-- **Sketch on a Whiteboard.** Multiple boards per game, drawing tools, pictures, and Copy as picture. Built on [Excalidraw](https://github.com/excalidraw/excalidraw).
-- **Keep guides nearby.** The built-in Browser has per-game tabs and sign-ins, ad blocking, and a choice to share a site's sign-in across games.
+- **Sketch on a Whiteboard.** Multiple boards per workspace, drawing tools, pictures, and Copy as picture. Built on [Excalidraw](https://github.com/excalidraw/excalidraw).
+- **Keep guides nearby.** The built-in Browser has per-workspace tabs and sign-ins, ad blocking, and a choice to share a site's sign-in across workspaces.
 - **Add more tools.** Notes, To-Dos, a Whiteboard and a few more come with Tavora; everything else, such as Discord and AI Usage, you install from the catalog or a ZIP file. Modules ask before using capabilities such as named websites or host connectors.
 - **Make it comfortable.** Three built-in themes, light/dark modes that can follow the system, custom themes, English and German, keyboard shortcuts, and Ctrl+K search.
 
@@ -29,7 +29,7 @@ Tavora is a local-first gaming companion for your second monitor. Keep notes, to
 
 ![Tavora Whiteboard showing a saved Stardew Valley farm plan with connected boxes and handwritten labels](docs/screenshots/whiteboard.png)
 
-*Whiteboard drawings and their pictures stay with the game. Copy a selection or the whole board as a PNG.*
+*Whiteboard drawings and their pictures stay with the workspace. Copy a selection or the whole board as a PNG.*
 
 ### A look that follows you
 
@@ -51,7 +51,7 @@ Game workspaces and module data are stored on your PC. On Windows, installed Tav
 
 Online features make their own connections: game search and accounts use Tavora's service; game icons can come from this PC, Steam and Tavora's icon service; Browser pages connect to the sites you open. Game search and icon fetching have switches in Settings.
 
-Module pages run in a sandbox. The host validates their requests, scopes stored data by publisher, module and game, and checks granted capabilities on every call. Network grants name the allowed hosts; Discord and AI Usage use dedicated host connectors. An installable module does not get arbitrary access to your files, processes or account credentials. See the [security model](https://docs.mytavora.app/guide/security) for the precise boundaries and known limits.
+Module pages run in a sandbox. The host validates their requests, scopes stored data by publisher, module and workspace, and checks granted capabilities on every call. Network grants name the allowed hosts; Discord and AI Usage use dedicated host connectors. An installable module does not get arbitrary access to your files, processes or account credentials. See the [security model](https://docs.mytavora.app/guide/security) for the precise boundaries and known limits.
 
 ## Run from source
 
@@ -98,7 +98,7 @@ Artifacts go to `apps/desktop/release/`. Packaged builds use the installed-app p
 
 ## Build a module
 
-A module is a small web app with a `tavora.module.json` manifest and built assets. The host supplies the current game, theme, language and permitted APIs through the TypeScript [`@tavora/sdk`](packages/sdk/README.md).
+A module is a small web app with a `tavora.module.json` manifest and built assets. The host supplies the current workspace, theme, language and permitted APIs through the TypeScript [`@tavora/sdk`](packages/sdk/README.md).
 
 Start with the [developer guide](https://docs.mytavora.app/guide/getting-started), or an example in [vanilla TypeScript](examples/vanilla-module), [React](examples/react-module) or [Vue](examples/vue-module), and one with [several panel types](examples/panels-module). The official modules use the same SDK. The UI Playground shows Tavora's shared controls and styling.
 

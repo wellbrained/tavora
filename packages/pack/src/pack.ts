@@ -92,7 +92,7 @@ export async function packModule(dir: string, key: KeyObject | Signer): Promise<
   return { manifest, zip };
 }
 
-/** A changelog the manifest names must be there and readable by Tavora, or players would see no patch notes. */
+/** A changelog the manifest names must be there and readable by Tavora, or users would see no patch notes. */
 async function checkChangelog(dir: string, name: string): Promise<void> {
   let text: string;
   try {

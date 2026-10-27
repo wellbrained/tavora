@@ -7,7 +7,7 @@ import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
-import { continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, translateManifest, type Connector, type ModuleManifest, type ResolvedPanelType } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, translateManifest, type Connector, type ModuleManifest, type ResolvedPanelType } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -29,20 +29,20 @@ import {
   type OpenDialogOptions,
   type WebContents,
 } from "electron";
-import type { TavoraGame, TavoraTheme } from "@tavora/sdk/protocol";
+import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, GameView, HostViewState, ModuleMenu, OnlineSearchResult, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS } from "./layout";
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
-import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./gamedata";
+import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./module-data";
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
 import { applyOwners, checkZipData, readOwnerRecords } from "./installer";
 import { readModulePage } from "./module-page";
@@ -54,43 +54,43 @@ import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
 import { clipInitials, clipName, type Profile, removePicture, savePicture } from "./profile";
 import {
-  addGame,
+  addWorkspace,
   createFolder,
   deleteFolder,
   iconFileShared,
-  deleteTrashedGame,
+  deleteTrashedWorkspace,
   cleanDevelopmentFolders,
   isLive,
   LibraryError,
-  liveGames,
+  liveWorkspaces,
   MAX_DEVELOPMENT_FOLDERS,
-  markPlayed,
-  playedTimes,
+  markOpened,
+  openedTimes,
   moveFolder,
-  moveGame,
+  moveWorkspace,
   placeFavorite,
   purgeDate,
   purgeExpired,
-  recentGames,
+  recentWorkspaces,
   removeFavorite,
   setSiteListed,
   renameFolder,
-  renameGame,
-  restoreGame,
+  renameWorkspace,
+  restoreWorkspace,
   searchCatalog,
   setFolderLabel,
-  setGameImage,
+  setWorkspaceImage,
   markIconOffered,
   markIconShared,
-  setGameLabel,
+  setWorkspaceLabel,
   setRail,
   sortedRoot,
-  trashedGames,
-  trashGame,
-  useOriginalGameIcon,
+  trashedWorkspaces,
+  trashWorkspace,
+  useOriginalWorkspaceIcon,
   type DialogPlace,
-  type GameEntry,
-  type GameIcon,
+  type WorkspaceEntry,
+  type WorkspaceIcon,
   type Library,
 } from "./library";
 import { MODULE_FONTS } from "./module-fonts";
@@ -124,6 +124,7 @@ import { LAYOUT_ACTIONS, parseLayoutMessage, requestForWindow } from "../shared/
 import { OverlayPreviews } from "./overlay-previews";
 import { OverlayPreviewWindow } from "./overlay-preview-window";
 import { GameWatcher } from "./game-watch";
+import { moveToWorkspaces } from "./workspace-move";
 import { Streaming } from "./streaming";
 import { findInstalledGames } from "./launcher-games";
 import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
@@ -179,8 +180,8 @@ import {
 import { copyExample, slugOf } from "./example-copy";
 import { writeFileAtomic } from "./fsutil";
 import {
-  emptyGameWorkspace,
-  GameWorkspaces,
+  emptyWorkspace,
+  Workspaces,
   settlePanelTypes,
   WorkspaceError,
   type InstanceRecord,
@@ -199,12 +200,12 @@ interface Rect {
 }
 
 /**
- * How long a game's panels may keep each other waiting when it opens; past it, every panel shows. Each page gives up on
+ * How long a workspace's panels may keep each other waiting when it opens; past it, every panel shows. Each page gives up on
  * its own REVEAL_CAP_MS after it starts loading, which ends the wait; this only catches a page that never starts. When
  * Tavora starts, pages start late, so a cap close to REVEAL_CAP_MS took the cover away while they still waited.
  */
 const OPENING_CAP_MS = REVEAL_CAP_MS * 4;
-/** A development run with TAVORA_TIMINGS set logs how long games and panels take to draw. */
+/** A development run with TAVORA_TIMINGS set logs how long workspaces and panels take to draw. */
 const timingLog = !app.isPackaged && process.env.TAVORA_TIMINGS ? (line: string) => console.log(`[tavora] ${line}`) : null;
 /** How long to wait for a still image of a panel before hiding it anyway. */
 const FREEZE_TIMEOUT_MS = 250;
@@ -225,7 +226,7 @@ const CREATE_MODULE_COMMAND = "npm create @tavora/module";
 /** Folders watched in one development folder for a new project, at most. */
 const MAX_DEVELOPMENT_SUBFOLDERS = 100;
 
-/** The player's own modules, next to the themes folder in their data folder. */
+/** The user's own modules, next to the themes folder in their data folder. */
 function userModulesDir(options: HostOptions): string {
   return path.join(options.userData, "modules");
 }
@@ -242,14 +243,14 @@ const DIALOG_BACKDROP_OPACITY = 0.8;
 
 export interface HostOptions {
   userData: string;
-  /** Where modules keep pictures unless the player chose another folder; left out, inside userData (module-files.ts). */
+  /** Where modules keep pictures unless the user chose another folder; left out, inside userData (module-files.ts). */
   picturesFolder?: string | undefined;
   moduleDirs: string[];
   /** Modules that ship with Tavora, shown as Official. */
   officialModuleDirs: string[];
   /** Themes that ship with Tavora, shown as Official. */
   officialThemeDirs: string[];
-  /** Development only: more folders of local themes besides the player's own themes folder. */
+  /** Development only: more folders of local themes besides the user's own themes folder. */
   themeDirs?: string[];
   rendererDir: string;
   modulePreload: string;
@@ -282,7 +283,7 @@ export interface HostOptions {
   accountUrl?: string | undefined;
   /**
    * Tests only: a pretend Discord sign-in page. The main process then follows it itself instead of
-   * opening the player's browser (it redirects straight back to the Discord login's return address).
+   * opening the user's browser (it redirects straight back to the Discord login's return address).
    */
   discordAuthorizeUrl?: string | undefined;
   /** Tests only: keep the window invisible, so e2e runs don't flash on screen. */
@@ -311,7 +312,7 @@ let moduleCss: string | undefined;
 
 /**
  * Writes `data` to the file a save dialog gave, adding `.extension` when the name lacks it. The dialog asked before
- * replacing the file the player chose; a name with the extension added was never asked about, so that one is not replaced.
+ * replacing the file the user chose; a name with the extension added was never asked about, so that one is not replaced.
  */
 async function writeWithExtension(picked: string, extension: string, data: Buffer | string, mode?: number): Promise<string> {
   const chosen = path.resolve(picked);
@@ -319,7 +320,7 @@ async function writeWithExtension(picked: string, extension: string, data: Buffe
   try {
     await writeFile(file, data, { flag: file === chosen ? "w" : "wx", ...(mode === undefined ? {} : { mode }) });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new PlayerError("error.file.taken", { name: path.basename(file) });
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new UserError("error.file.taken", { name: path.basename(file) });
     throw error;
   }
   return file;
@@ -349,7 +350,7 @@ export class Host {
    * A panel that panels.open asked to switch could not (it kept its content): the host UI offers to open the
    * content in a new panel instead (navigation-choice). What opens is kept here, never taken from the answer.
    */
-  private pendingNavigation: { gameId: string; moduleId: string; panelType: string; panelName: string; content: PanelContent } | null = null;
+  private pendingNavigation: { workspaceId: string; moduleId: string; panelType: string; panelName: string; content: PanelContent } | null = null;
   /** What every browser session is made safe with; built when the first Browser panel opens. */
   private browserHooks: BrowserSessionHooks | undefined;
   /** The Discord connector: Tavora's Discord sign-in and the connection to the Discord app, for modules granted it. */
@@ -358,7 +359,7 @@ export class Host {
   private readonly aiUsage: AiUsageConnector;
   /** The System info connector: this PC's hardware and usage, read in a worker thread only while a shown panel of a granted module watches. */
   private systemInfo!: SystemMonitorThread;
-  /** The connection watcher (connection.ts): pings the router and one internet address while System Monitor is in a game or workspace, and keeps the log of drops. */
+  /** The connection watcher (connection.ts): pings the router and one internet address while System Monitor is in a workspace, and keeps the log of drops. */
   private connection!: ConnectionWatcher;
   /** The Media connector: what plays on this PC, read by Tavora's media helper only while a panel of a granted module watches. */
   private readonly media = new MediaConnector(
@@ -366,7 +367,7 @@ export class Host {
       error === undefined ? console.warn(`[tavora] ${message}`) : console.warn(`[tavora] ${message}`, error),
     ),
   );
-  /** The player's Tavora account; the sign-in never leaves the main process. */
+  /** The user's Tavora account; the sign-in never leaves the main process. */
   private readonly account: AccountClient;
   /** The cloud copy: made before the data is read, since a newer copy is taken before anything reads it. */
   private copySync!: CopySync;
@@ -375,13 +376,13 @@ export class Host {
   /** The review screen and Publish for dev modules from project folders (module-publish.ts). */
   private publisher!: ModulePublisher;
   private pairing!: Pairing;
-  /** The developer names players see for publisher keys (publisher-names.ts). */
+  /** The developer names users see for publisher keys (publisher-names.ts). */
   private readonly publisherNames: PublisherNames;
   private screen: Screen = "welcome";
   private notice: string | null = null;
   /** Every (owner, module) with saved settings or documents, for Settings > Modules. */
   private moduleData: { owner: string; moduleId: string }[] = [];
-  /** What the player granted each module (grants.ts); loaded before any module panel opens. */
+  /** What the user granted each module (grants.ts); loaded before any module panel opens. */
   private grants!: GrantStore;
   /** The catalog's signed safety lists (revoked keys, blocked zips, successions). */
   private safetyLists!: SafetyLists;
@@ -400,21 +401,21 @@ export class Host {
   private layoutKeyRequest: number | null = null;
   /** True while a hotkey dialog is being opened for the Overlay layout, so the layout comes forward, not the main window. */
   private focusLayout = false;
-  /** Modules in the player's folder whose zip Tavora blocked: not loaded, data kept. */
+  /** Modules in the user's folder whose zip Tavora blocked: not loaded, data kept. */
   private blockedModules = new Map<string, InstalledModule>();
-  /** A link a module asked to open when no Browser panel exists; waits for the player's answer. */
+  /** A link a module asked to open when no Browser panel exists; waits for the user's answer. */
   private pendingLink: string | null = null;
-  /** The library games running on this PC, in the order they started, while "When a game starts" is not off (game-watch.ts). */
+  /** The games of the library running on this PC (by their workspaces' ids), in the order they started, while "When a game starts" is not off (game-watch.ts). */
   private running: string[] = [];
-  /** When each game was last played as of startup: the rail keeps this order until the next start. */
-  private playedAtStart: Record<string, string> = {};
-  /** A game that started while the player chose to be asked; waits for the answer. */
+  /** When each workspace was last opened as of startup: the rail keeps this order until the next start. */
+  private openedAtStart: Record<string, string> = {};
+  /** A game that started while the user chose to be asked; waits for the answer. */
   private pendingGameSwitch: string | null = null;
-  /** A connector a module asks for on request (permissions.onRequest), waiting for the player's answer in the consent dialog. */
+  /** A connector a module asks for on request (permissions.onRequest), waiting for the user's answer in the consent dialog. */
   private pendingConnector: { id: number; moduleId: string; connector: Connector; resolve(allowed: boolean): void } | null = null;
   private nextConnectorAsk = 1;
   private readonly gameWatcher = new GameWatcher({
-    entries: () => liveGames(this.library),
+    entries: () => liveWorkspaces(this.library),
     findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
     onChange: (running, initial) => this.gamesRunning(running, initial),
     log: (line) => console.warn(`[tavora] ${line}`),
@@ -434,23 +435,23 @@ export class Host {
   /** True while the window is minimized or hidden. */
   private windowHidden = false;
   /**
-   * Set while a game just opened and its panels load: none is shown until every visible one has its data, so
+   * Set while a workspace just opened and its panels load: none is shown until every visible one has its data, so
    * the workspace appears at once rather than panel by panel.
    */
   private opening: { startedAt: number; timer: ReturnType<typeof setTimeout>; layout: string } | null = null;
-  /** Covers the workspace while a game opens, until every panel has drawn (panel-cover.ts). */
+  /** Covers the workspace while it opens, until every panel has drawn (panel-cover.ts). */
   private cover!: PanelCover;
-  /** How long each game took to open here, so the cover knows whether to show the fire from the start. */
+  /** How long each workspace took to open here, so the cover knows whether to show the fire from the start. */
   private openTimes!: OpenTimes;
   /** Tavora's emblem for the cover's fire, read once. */
   private emblem: string | null = null;
-  /** Counts game openings, so the end of one that was left does not end the next. */
+  /** Counts workspace openings, so the end of one that was left does not end the next. */
   private openings = 0;
   private readonly onlineSearch: OnlineSearch;
   /** Tavora's module catalog (catalog-client.ts). */
   private readonly catalog: CatalogClient;
-  /** Every game's panels, layout and snapshots (workspace.ts). */
-  private readonly workspaces: GameWorkspaces;
+  /** Every workspace's panels, layout and snapshots (workspace.ts). */
+  private readonly workspaces: Workspaces;
   /** Installs, updates and removes modules, and grants or takes back what they ask for (module-lifecycle.ts). */
   private readonly lifecycle: ModuleLifecycle;
   /** The modules installed from the catalog, by id, as the installer recorded them. */
@@ -470,7 +471,7 @@ export class Host {
     private moduleInfo: Map<string, ModuleInfo>,
     private moduleProblems: ModuleProblem[],
     private readonly library: Library,
-    workspace: WorkspaceState,
+    workspaces: WorkspaceState,
     private readonly profile: Profile,
     windowState: WindowState,
     private themes: Map<string, InstalledTheme>,
@@ -496,7 +497,7 @@ export class Host {
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.catalog = new CatalogClient(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
-    this.workspaces = new GameWorkspaces(workspace, {
+    this.workspaces = new Workspaces(workspaces, {
       save: (state) => this.savedData.saveWorkspace(state),
     });
     this.lifecycle = new ModuleLifecycle({
@@ -599,6 +600,9 @@ export class Host {
     let created: Host | undefined;
     const copySync = await Host.cloudCopy(options, () => created);
     const savedData = new SavedData(userData);
+    // Before anything reads the files (a cloud copy taken just now included): what was saved under the old names of the
+    // Game → Workspace rename gets the new ones. When that fails, Tavora does not start on files it can't read.
+    await moveToWorkspaces(userData, (line) => console.warn(`[tavora] ${line}`));
     // A file saved by a newer Tavora is copied aside before this one can overwrite it.
     await savedData.keepNewerFiles();
     const library = await savedData.loadLibrary();
@@ -628,8 +632,8 @@ export class Host {
     const expired = purgeExpired(library, new Date());
     const waiting = waitingModules(moduleProblems);
     // A module that left Tavora for the catalog keeps its panels while it is not installed: they offer to install it.
-    const workspace = await savedData.loadWorkspace(Object.keys(library.games), (id) => modules.has(id) || waiting.has(id) || movedModule(id) !== undefined);
-    settlePanelTypes(workspace, panelTypesOf(modules));
+    const workspaces = await savedData.loadWorkspace(Object.keys(library.workspaces), (id) => modules.has(id) || waiting.has(id) || movedModule(id) !== undefined);
+    settlePanelTypes(workspaces, panelTypesOf(modules));
     const { profile, saved: profileSaved } = await savedData.loadProfile();
     const windowState = initialBounds(
       await savedData.loadWindow(),
@@ -647,9 +651,9 @@ export class Host {
       options.devServer,
     );
 
-    const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspace, profile, windowState, themes, themeProblems, savedData);
+    const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspaces, profile, windowState, themes, themeProblems, savedData);
     created = host;
-    host.playedAtStart = playedTimes(library);
+    host.openedAtStart = openedTimes(library);
     host.copySync = copySync;
     host.developerKeys = new DeveloperKeys({
       accountKey: copySync.accountKey,
@@ -708,29 +712,29 @@ export class Host {
     });
     // The id is made once and kept, so a new profile is written straight away.
     if (!profileSaved) host.saveProfile().catch(() => undefined); // logged by saveProfile
-    // Browser storage of games that are gone, removed before any session opens it.
-    for (const dir of await orphanedPartitions(userData, new Set(Object.keys(library.games)))) {
+    // Browser storage of workspaces that are gone, removed before any session opens it.
+    for (const dir of await orphanedPartitions(userData, new Set(Object.keys(library.workspaces)))) {
       await rm(dir, { recursive: true, force: true });
     }
-    for (const game of expired) await host.deleteGameData(game);
+    for (const workspace of expired) await host.deleteWorkspaceData(workspace);
     // Version 0.2.0 saved Steam covers here; they were replaced by Steam's own icons.
     await rm(path.join(userData, "steam-art"), { recursive: true, force: true });
-    const livePanels = new Set(Object.values(workspace.games).flatMap((game) => game.instances.map((i) => i.instanceId)));
+    const livePanels = new Set(Object.values(workspaces.workspaces).flatMap((workspace) => workspace.instances.map((i) => i.instanceId)));
     await host.data.panelState.prune(livePanels);
     if (expired.length) host.saveLibrary();
 
-    host.screen = library.startup === "last-game" && library.lastGameId ? "game" : "welcome";
+    host.screen = library.startup === "last-workspace" && library.lastWorkspaceId ? "workspace" : "welcome";
     host.registerIpc();
     await host.watchDevelopmentFolders();
     host.registerWindowEvents();
     host.window.once("ready-to-show", () => timings.record("startup", process.uptime() * 1000));
-    // The last game's pages start loading with the window, and its first look already has the one loading cover.
-    if (host.screen === "game") host.openCurrentGame();
+    // The last workspace's pages start loading with the window, and its first look already has the one loading cover.
+    if (host.screen === "workspace") host.openCurrentWorkspace();
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
     host.syncGameWatcher();
     host.gameOverlays.start();
     void host.files.check();
-    // Icons of games that have none yet are looked for quietly in the background.
+    // Icons of games of game workspaces that have none yet are looked for quietly in the background.
     host.fetchIconsSoon();
     host.backupSoon();
     host.checkCatalogSoon();
@@ -745,7 +749,7 @@ export class Host {
 
   /**
    * The built-in AI usage panel (before 0.16.10) kept its interval, style and last readings in
-   * ai-usage.json. They go to the AI Usage module's settings shared by every game, once, without
+   * ai-usage.json. They go to the AI Usage module's settings shared by every workspace, once, without
    * replacing anything the module saved itself; then the file keeps only the accounts.
    */
   private async moveAiUsagePanelData(): Promise<void> {
@@ -762,10 +766,10 @@ export class Host {
   }
 
   /**
-   * The built-in Discord panel (before 0.16.11) kept the channel to rejoin and the server each game
-   * remembers next to the sign-in in discord.json. They go to the Discord module once, without
-   * replacing anything the module saved itself: the channel to its settings shared by every game
-   * (`last`), each game's server to its settings in that game (`server`). The sign-in stays.
+   * The built-in Discord panel (before 0.16.11) kept the channel to rejoin and the server each workspace
+   * remembers next to the sign-in in discord.json (under `games`, as it was then). They go to the Discord module once,
+   * without replacing anything the module saved itself: the channel to its settings shared by every workspace
+   * (`last`), each workspace's server to its settings in that workspace (`server`). The sign-in stays.
    */
   private async moveDiscordPanelData(): Promise<void> {
     try {
@@ -773,10 +777,10 @@ export class Host {
       if (!legacy) return;
       const settings = this.data.appSettings(MOVED_MODULES_OWNER, DISCORD_MODULE_ID);
       if (legacy.last && (await settings.get("last")) === null) await settings.set("last", { ...legacy.last });
-      for (const [gameId, game] of Object.entries(legacy.games)) {
-        if (!this.library.games[gameId]) continue;
-        const store = this.data.get(MOVED_MODULES_OWNER, DISCORD_MODULE_ID, gameId).settings;
-        if ((await store.get("server")) === null) await store.set("server", { ...game });
+      for (const [workspaceId, server] of Object.entries(legacy.games)) {
+        if (!this.library.workspaces[workspaceId]) continue;
+        const store = this.data.get(MOVED_MODULES_OWNER, DISCORD_MODULE_ID, workspaceId).settings;
+        if ((await store.get("server")) === null) await store.set("server", { ...server });
       }
       await this.discord.forgetLegacyPanelData();
     } catch (error) {
@@ -784,7 +788,7 @@ export class Host {
     }
   }
 
-  /** The daily copy of the player's data, made a little after start so it never slows it. */
+  /** The daily copy of the user's data, made a little after start so it never slows it. */
   private backupSoon(): void {
     setTimeout(() => {
       backupData({ userData: this.options.userData, moduleFiles: this.files.root(), log: (line) => console.log(`[tavora] ${line}`) }).catch((error: unknown) => console.error("[tavora] backup failed", error));
@@ -815,7 +819,7 @@ export class Host {
     }
   }
 
-  /** Modules that ship with Tavora, the development folders the player added, any test folders, and the player's own modules folder. */
+  /** Modules that ship with Tavora, the development folders the user added, any test folders, and the user's own modules folder. */
   private static moduleSources(options: HostOptions, developmentFolders: string[]) {
     return { official: options.officialModuleDirs, development: developmentFolders, local: [...options.moduleDirs, userModulesDir(options)] };
   }
@@ -850,13 +854,13 @@ export class Host {
    * so (the decision log, named panels round 4); one whose type came back starts again.
    */
   private syncPanelTypes(): void {
-    const game = this.game;
-    if (!game) return;
-    for (const record of this.records(game.id)) {
+    const workspace = this.workspace;
+    if (!workspace) return;
+    for (const record of this.records(workspace.id)) {
       const open = this.views.has(record.instanceId);
       const missing = this.panelTypeOf(record) === undefined;
       if (open && missing) this.destroyView(record.instanceId);
-      else if (!open && !missing) this.createView(record, game);
+      else if (!open && !missing) this.createView(record, workspace);
     }
     this.workspaces.save();
   }
@@ -992,7 +996,7 @@ export class Host {
     if (moduleId !== undefined) this.reloadModuleViews(moduleId);
   }
 
-  /** The player picks a module project folder, or a folder of them; Tavora loads the modules from it from now on. Answers with the folder, or nothing when cancelled. */
+  /** The user picks a module project folder, or a folder of them; Tavora loads the modules from it from now on. Answers with the folder, or nothing when cancelled. */
   private async addDevelopmentFolder(): Promise<string | void> {
     const folder = await this.pickPath("development-folder", { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
     if (!folder) return;
@@ -1003,7 +1007,7 @@ export class Host {
     return path.resolve(folder);
   }
 
-  /** The development folder the player added that is `folder`, as it is kept in the library. */
+  /** The development folder the user added that is `folder`, as it is kept in the library. */
   private developmentFolder(folder: string): string | undefined {
     const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
     return this.library.developmentFolders.find((item) => key(item) === key(folder));
@@ -1011,7 +1015,7 @@ export class Host {
 
   /**
    * Copies an example that ships with Tavora into a new project, named after the module, in a development
-   * folder that holds projects or in a folder the player picks (`folder` null). A picked folder outside the
+   * folder that holds projects or in a folder the user picks (`folder` null). A picked folder outside the
    * development folders gets the new project added as one. Answers with the new project, or nothing when cancelled.
    */
   private async copyExampleModule(moduleId: string, name: string, folder: string | null): Promise<string | void> {
@@ -1063,7 +1067,7 @@ export class Host {
     if (error) throw new LibraryError("error.openFolder", { problem: error });
   }
 
-  /** Opens one of Tavora's pages for module developers in the player's browser. The renderer names the page, never an address. */
+  /** Opens one of Tavora's pages for module developers in the user's browser. The renderer names the page, never an address. */
   private openDeveloperLink(link: DeveloperLink): void {
     const url = Object.hasOwn(DEVELOPER_LINKS, link) ? DEVELOPER_LINKS[link] : undefined;
     if (url && !this.options.hidden) void shell.openExternal(url).catch((error: unknown) => console.error("[tavora]", error));
@@ -1084,7 +1088,7 @@ export class Host {
 
   /**
    * Deletes what a module that is not installed left behind: its settings and
-   * documents in every game now, its browser storage cleared now and its
+   * documents in every workspace now, its browser storage cleared now and its
    * folders removed at the next start. An installed module's data is not deleted here.
    */
   private async deleteLeftoverData(owner: string, moduleId: string): Promise<void> {
@@ -1159,14 +1163,14 @@ export class Host {
     if (changed) this.saveLibrary();
   }
 
-  /** What Settings shows of a module's patch notes: the newest version they cover, and whether any are new to the player. */
+  /** What Settings shows of a module's patch notes: the newest version they cover, and whether any are new to the user. */
   private notesView(module: InstalledModule): { latest: string | null; unseen: boolean } {
     const notes = installedNotes(this.moduleInfo.get(module.manifest.id)?.changelog ?? [], module.manifest.version);
     return { latest: notes[0]?.version ?? null, unseen: hasUnseenNotes(notes, module.manifest.version, this.library.moduleNotesSeen[Host.notesKey(module)]) };
   }
 
   /**
-   * Closes and forgets every panel whose module is not installed any more, in every game. Module data stays. A module
+   * Closes and forgets every panel whose module is not installed any more, in every workspace. Module data stays. A module
    * that is there but cannot load right now (being rebuilt, not built, needing a newer Tavora) keeps its panels; they
    * start again once it loads (syncPanelTypes).
    */
@@ -1196,24 +1200,24 @@ export class Host {
     for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === moduleId) view.reload();
   }
 
-  /** The games, by id in the library, with a panel of this module. */
-  private gamesUsing(moduleId: string): string[] {
-    return this.workspaces.gamesUsing(moduleId).filter((gameId) => gameId in this.library.games);
+  /** The workspaces, by id in the library, with a panel of this module. */
+  private workspacesUsing(moduleId: string): string[] {
+    return this.workspaces.workspacesUsing(moduleId).filter((workspaceId) => workspaceId in this.library.workspaces);
   }
 
-  /** Removes a module's panels in every game; a slot left with nothing stays as an empty slot. */
+  /** Removes a module's panels in every workspace; a slot left with nothing stays as an empty slot. */
   private removeModulePanels(moduleId: string): void {
     for (const instanceId of this.workspaces.vacate(moduleId)) this.closeView(instanceId);
   }
 
-  /** Takes a module out of the current game only: its panels close the same way, so the layout stays. Module data stays. */
-  private removeModuleFromGame(moduleId: string): void {
-    const game = this.game;
-    if (!game) return;
-    for (const instanceId of this.workspaces.vacate(moduleId, game.id)) this.closeView(instanceId);
+  /** Takes a module out of the current workspace only: its panels close the same way, so the layout stays. Module data stays. */
+  private removeModuleFromWorkspace(moduleId: string): void {
+    const workspace = this.workspace;
+    if (!workspace) return;
+    for (const instanceId of this.workspaces.vacate(moduleId, workspace.id)) this.closeView(instanceId);
   }
 
-  /** Installs a module from a zip the player picks. Answers with the module's id, or nothing when the player cancelled. */
+  /** Installs a module from a zip the user picks. Answers with the module's id, or nothing when the user cancelled. */
   private async installModule(): Promise<string | void> {
     const file = await this.pickPath("install-module", {
       title: translate(this.language, "dialog.installModule"),
@@ -1226,23 +1230,23 @@ export class Host {
     return id;
   }
 
-  /** Where the Browse tab of the module library looks: the current game, or the personal workspace. */
+  /** Where the Browse tab of the module library looks: the current game workspace's game, or a personal workspace. */
   private catalogScope(): CatalogScope | null {
-    const id = this.gameId;
-    const game = id ? this.library.games[id] : undefined;
-    if (!game) return null;
-    return game.kind === "workspace" ? { workspace: true } : { game: game.catalogId ?? game.id };
+    const id = this.workspaceId;
+    const workspace = id ? this.library.workspaces[id] : undefined;
+    if (!workspace) return null;
+    return workspace.kind === "personal" ? { personal: true } : { game: workspace.catalogId ?? workspace.id };
   }
 
   /**
    * Reports a module to Tavora (C12). A module installed from the catalog is reported as the zip that
-   * is installed, the one the player has seen; any other id as the version the catalog lists now.
-   * Only the id, the key and the zip's hash are sent, and only because the player pressed Report.
+   * is installed, the one the user has seen; any other id as the version the catalog lists now.
+   * Only the id, the key and the zip's hash are sent, and only because the user pressed Report.
    */
   private async reportCatalogModule(moduleId: string): Promise<void> {
-    if (!this.library.onlineSearch) throw new PlayerError("error.reportOff");
+    if (!this.library.onlineSearch) throw new UserError("error.reportOff");
     const token = this.account.token();
-    if (!token) throw new PlayerError("error.reportSignIn");
+    if (!token) throw new UserError("error.reportSignIn");
     const module = this.catalogModules.has(moduleId) ? (this.modules.get(moduleId) ?? this.blockedModules.get(moduleId)) : undefined;
     const record = module ? (await readOwnerRecords(this.options.userData))[path.basename(module.root)] : undefined;
     if (module && record?.id === moduleId && record.sha256) {
@@ -1255,10 +1259,10 @@ export class Host {
 
   /**
    * Opens a catalog module's homepage like a link from a module (C10): only http or https, in the
-   * game's Browser panel or where the player picks. The address comes from the listing, asked for again here.
+   * workspace's Browser panel or where the user picks. The address comes from the listing, asked for again here.
    */
   private async openCatalogHomepage(moduleId: string): Promise<void> {
-    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
     const { homepage } = await this.catalog.module(moduleId);
     if (homepage && isWebUrl(homepage)) this.openLinkFromModule(homepage);
   }
@@ -1266,13 +1270,13 @@ export class Host {
   /**
    * Opens a module's support link after a click. The link is read again here, from the installed module's own
    * manifest or the catalog listing, never taken from the page: a web address opens like the homepage, an
-   * email address in the player's mail app.
+   * email address in the user's mail app.
    */
   private async openModuleSupport(moduleId: string, source: "catalog" | "installed"): Promise<void> {
     let link: string | null | undefined;
     if (source === "installed") link = this.modules.get(moduleId)?.manifest.support;
     else {
-      if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+      if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
       link = (await this.catalog.module(moduleId)).support;
     }
     const target = link ? supportTarget(link) : null;
@@ -1286,9 +1290,9 @@ export class Host {
    * the address must be one of its http or https links, so the page can't ask for any other address.
    */
   private async openReadmeLink(moduleId: string, url: string): Promise<void> {
-    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
     const { readme } = await this.catalog.details(moduleId);
-    if (!readmeAllowsLink(readme, url)) throw new PlayerError("error.readmeLink");
+    if (!readmeAllowsLink(readme, url)) throw new UserError("error.readmeLink");
     this.openLinkFromModule(url);
   }
 
@@ -1302,7 +1306,7 @@ export class Host {
     try {
       details = await this.catalog.details(moduleId);
     } catch (error) {
-      const key = error instanceof PlayerError ? error.key : "";
+      const key = error instanceof UserError ? error.key : "";
       if (key === "error.catalogNotListed") return { status: "gone" };
       if (key === "error.catalogUnavailable") return { status: "unavailable" };
       if (key === "error.catalogBusy") return { status: "busy" };
@@ -1326,7 +1330,7 @@ export class Host {
   }
 
   /**
-   * A catalog module's ratings and reviews (decided 2026-10-21), with the player's own rating and what
+   * A catalog module's ratings and reviews (decided 2026-10-21), with the user's own rating and what
    * they can do. Rating needs a sign-in, not the module installed: someone who removed a bad module can
    * still rate it (decided 2026-10-27). Each reviewer's picture is fetched by its hash and checked like a listed picture.
    */
@@ -1339,7 +1343,7 @@ export class Host {
       listed = await this.catalog.reviews(moduleId);
       if (token) own = await this.catalog.ownReview(moduleId, token).catch(() => own);
     } catch (error) {
-      const key = error instanceof PlayerError ? error.key : "";
+      const key = error instanceof UserError ? error.key : "";
       if (key === "error.catalogNotListed") return { status: "gone" };
       if (key === "error.catalogUnavailable" || key === "error.reviewsUnavailable") return { status: "unavailable" };
       if (key === "error.catalogBusy") return { status: "busy" };
@@ -1362,20 +1366,20 @@ export class Host {
    * newest published version when it isn't installed.
    */
   private async rateCatalogModule(moduleId: string, stars: number, text: string | null): Promise<void> {
-    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
     const token = this.account.token();
-    if (!token) throw new PlayerError("account.error.signedOut");
+    if (!token) throw new UserError("account.error.signedOut");
     const installed = this.modules.get(moduleId)?.manifest.version;
     const { versions } = await this.catalog.details(moduleId);
     const version = installed ?? versions.map((published) => published.version).sort(compareModuleVersions).at(-1);
-    if (!version || !versions.some((published) => published.version === version)) throw new PlayerError("error.reviewVersion");
+    if (!version || !versions.some((published) => published.version === version)) throw new UserError("error.reviewVersion");
     await this.catalog.rate(moduleId, token, { stars, text: text?.trim() || null, version });
   }
 
   private async catalogReviewAction(run: (token: string) => Promise<void>): Promise<void> {
-    if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
     const token = this.account.token();
-    if (!token) throw new PlayerError("account.error.signedOut");
+    if (!token) throw new UserError("account.error.signedOut");
     await run(token);
   }
 
@@ -1392,7 +1396,7 @@ export class Host {
 
   /**
    * One update check (catalog-updates.ts). Updates that ask for nothing new are installed and their
-   * panels reload; the others wait for the player, shown in Settings > Modules and on their panels.
+   * panels reload; the others wait for the user, shown in Settings > Modules and on their panels.
    * Answers with how many modules were updated or are waiting.
    */
   private async checkCatalogUpdates(): Promise<{ updated: number; waiting: number }> {
@@ -1436,7 +1440,7 @@ export class Host {
     return nativeTheme.shouldUseDarkColors ? "dark" : "light";
   }
 
-  /** The theme and variation in use now: the player's pick, in the mode of the system when following it. */
+  /** The theme and variation in use now: the user's pick, in the mode of the system when following it. */
   private currentChoice() {
     return resolveTheme(this.themes, this.library.theme, this.library.followSystem ? Host.systemMode(this.options) : undefined);
   }
@@ -1501,7 +1505,7 @@ export class Host {
       electron: process.versions.electron ?? "?",
       chrome: process.versions.chrome ?? "?",
       locale: app.getLocale(),
-      games: Object.keys(this.library.games).length,
+      workspaces: Object.keys(this.library.workspaces).length,
       panels: this.views.size,
       updateLog: log.split("\n").filter(Boolean).slice(-30),
       errors: errorLog.recent(),
@@ -1517,18 +1521,20 @@ export class Host {
     void appendFile(path.join(this.options.userData, "updates.log"), `${new Date().toISOString()} ${line}\n`).catch(() => undefined);
   }
 
-  private get gameId(): string | null {
-    return this.screen === "game" ? this.library.lastGameId : null;
+  /** The workspace shown now, by id; null on Home. */
+  private get workspaceId(): string | null {
+    return this.screen === "workspace" ? this.library.lastWorkspaceId : null;
   }
 
-  private get game(): TavoraGame | null {
-    const id = this.gameId;
-    const entry = id ? this.library.games[id]! : null;
+  /** The workspace shown now, as its panels see it; null on Home. */
+  private get workspace(): TavoraWorkspace | null {
+    const id = this.workspaceId;
+    const entry = id ? this.library.workspaces[id]! : null;
     return entry ? { id: entry.id, displayName: entry.name, kind: entry.kind } : null;
   }
 
-  private records(gameId: string): InstanceRecord[] {
-    return this.workspaces.panels(gameId);
+  private records(workspaceId: string): InstanceRecord[] {
+    return this.workspaces.panels(workspaceId);
   }
 
 
@@ -1583,7 +1589,7 @@ export class Host {
         this.actionFromLayout = layoutOnly;
         return await runAction(handlers, action);
       } catch (error) {
-        if (error instanceof PlayerError) {
+        if (error instanceof UserError) {
           return { ok: false, error: translate(this.language, error.key, error.params) };
         }
         console.error(`[tavora] ${action.type} failed`, error);
@@ -1623,8 +1629,8 @@ export class Host {
       if (!fromHost(event) || typeof query !== "string" || query.length > 100) return { status: "ok", games: [] };
       if (!this.library.onlineSearch) return { status: "off", games: [] };
       const result = await this.onlineSearch.search(query);
-      // Games the player already has (Trash included) are not offered again.
-      return { ...result, games: result.games.filter((game) => !this.library.games[game.id]) };
+      // Games the user already has (Trash included) are not offered again.
+      return { ...result, games: result.games.filter((game) => !this.library.workspaces[game.id]) };
     });
     ipcMain.handle("host:browse-catalog", async (event): Promise<CatalogListResult> => {
       if (!fromHost(event)) return { status: "unreachable" };
@@ -1750,7 +1756,7 @@ export class Host {
           const { entry } = await this.catalog.details(id);
           return { version: entry.version, owner: entry.owner };
         } catch (error) {
-          if (error instanceof PlayerError && error.key === "error.catalogNotListed") return null;
+          if (error instanceof UserError && error.key === "error.catalogNotListed") return null;
           throw error;
         }
       },
@@ -1769,13 +1775,13 @@ export class Host {
   /** The project folder a dev module was loaded from, for Publish and Save as zip. */
   private projectOf(moduleId: string): string {
     const project = this.modules.get(moduleId)?.developmentProject;
-    if (!project) throw new PlayerError("publish.error.noProject");
+    if (!project) throw new UserError("publish.error.noProject");
     return project;
   }
 
   /** Packs a dev module signed with a kept key and saves the zip where the developer picks. */
   /**
-   * The system's save dialog with the zip's name suggested (numbered when taken), opening where the player last
+   * The system's save dialog with the zip's name suggested (numbered when taken), opening where the user last
    * saved a module zip while that folder is still there, else Documents\Tavora.
    */
   private async saveModuleZip(moduleId: string): Promise<string | undefined> {
@@ -1870,60 +1876,60 @@ export class Host {
       },
 
       // Library
-      "open-game": (action) => this.openGame(action.gameId),
-      "add-game": (action) => {
-        const id = addGame(this.library, action, new Date());
-        this.workspaces.addGames([id]);
+      "open-workspace": (action) => this.openWorkspace(action.workspaceId),
+      "add-workspace": (action) => {
+        const id = addWorkspace(this.library, action, new Date());
+        this.workspaces.addWorkspaces([id]);
         this.saveLibrary();
         this.fetchIconsSoon();
-        // A game added just now may have been installed since the last look.
+        // The game of a game workspace added just now may have been installed since the last look.
         if (this.gameWatcher.active) void this.gameWatcher.refreshInstalled();
         return id;
       },
-      "rename-game": saved((action) => renameGame(this.library, action.gameId, action.name)),
-      "set-game-label": saved(async (action) => {
-        const previous = setGameLabel(this.library, action.gameId, action.label);
+      "rename-workspace": saved((action) => renameWorkspace(this.library, action.workspaceId, action.name)),
+      "set-workspace-label": saved(async (action) => {
+        const previous = setWorkspaceLabel(this.library, action.workspaceId, action.label);
         await this.dropIconFile(previous);
       }),
-      "choose-game-image": saved((action) => this.chooseGameImage(action.gameId)),
+      "choose-workspace-image": saved((action) => this.chooseWorkspaceImage(action.workspaceId)),
       "use-original-icon": saved(async (action) => {
-        const previous = useOriginalGameIcon(this.library, action.gameId);
+        const previous = useOriginalWorkspaceIcon(this.library, action.workspaceId);
         await this.dropIconFile(previous);
       }),
-      "share-icons": (action) => this.shareIcons(action.gameIds),
+      "share-icons": (action) => this.shareIcons(action.workspaceIds),
       "share-steam-icons": (action) => this.shareSteamIcons(action.appids),
       "import-steam-games": (action) => this.importSteam(action.games),
-      "trash-game": saved((action) => {
-        const wasOpen = this.gameId === action.gameId;
-        trashGame(this.library, action.gameId, new Date());
+      "trash-workspace": saved((action) => {
+        const wasOpen = this.workspaceId === action.workspaceId;
+        trashWorkspace(this.library, action.workspaceId, new Date());
         if (wasOpen) this.showScreen("welcome");
       }),
-      "restore-game": saved((action) => restoreGame(this.library, action.gameId)),
-      "delete-game": saved(async (action) => {
-        const game = deleteTrashedGame(this.library, action.gameId);
+      "restore-workspace": saved((action) => restoreWorkspace(this.library, action.workspaceId)),
+      "delete-workspace": saved(async (action) => {
+        const workspace = deleteTrashedWorkspace(this.library, action.workspaceId);
         this.saveLibrary();
-        await this.deleteGameData(game);
+        await this.deleteWorkspaceData(workspace);
       }),
-      // Many at once: games already gone are skipped, so a list the screen showed a moment ago still works.
-      "trash-games": saved((action) => {
-        const live = action.gameIds.filter((id) => isLive(this.library, id));
-        for (const id of live) trashGame(this.library, id, new Date());
-        if (this.gameId !== null && live.includes(this.gameId)) this.showScreen("welcome");
+      // Many at once: workspaces already gone are skipped, so a list the screen showed a moment ago still works.
+      "trash-workspaces": saved((action) => {
+        const live = action.workspaceIds.filter((id) => isLive(this.library, id));
+        for (const id of live) trashWorkspace(this.library, id, new Date());
+        if (this.workspaceId !== null && live.includes(this.workspaceId)) this.showScreen("welcome");
       }),
-      "restore-games": saved((action) => {
-        for (const id of action.gameIds) if (this.library.games[id]?.trashedAt) restoreGame(this.library, id);
+      "restore-workspaces": saved((action) => {
+        for (const id of action.workspaceIds) if (this.library.workspaces[id]?.trashedAt) restoreWorkspace(this.library, id);
       }),
-      "delete-games": saved(async (action) => {
-        const games = action.gameIds.filter((id) => this.library.games[id]?.trashedAt).map((id) => deleteTrashedGame(this.library, id));
+      "delete-workspaces": saved(async (action) => {
+        const workspaces = action.workspaceIds.filter((id) => this.library.workspaces[id]?.trashedAt).map((id) => deleteTrashedWorkspace(this.library, id));
         this.saveLibrary();
-        for (const game of games) await this.forgetGameData(game);
+        for (const workspace of workspaces) await this.forgetWorkspaceData(workspace);
         await this.clearOrphanedSessions();
       }),
-      favorite: saved((action) => placeFavorite(this.library, action.gameId, action.index)),
-      unfavorite: saved((action) => removeFavorite(this.library, action.gameId)),
-      "move-game": saved((action) => moveGame(this.library, action.gameId, action)),
+      favorite: saved((action) => placeFavorite(this.library, action.workspaceId, action.index)),
+      unfavorite: saved((action) => removeFavorite(this.library, action.workspaceId)),
+      "move-workspace": saved((action) => moveWorkspace(this.library, action.workspaceId, action)),
       "create-folder": (action) => {
-        const id = createFolder(this.library, action.name, action.gameIds.filter((game) => isLive(this.library, game)));
+        const id = createFolder(this.library, action.name, action.workspaceIds.filter((id) => isLive(this.library, id)));
         this.saveLibrary();
         return id;
       },
@@ -1945,10 +1951,10 @@ export class Host {
         this.syncGameWatcher();
       }),
       "set-game-end": saved((action) => {
-        if (action.workspaceId !== null && !(isLive(this.library, action.workspaceId) && this.library.games[action.workspaceId]!.kind === "workspace")) {
-          throw new LibraryError("error.gameGone");
+        if (action.workspaceId !== null && !(isLive(this.library, action.workspaceId) && this.library.workspaces[action.workspaceId]!.kind === "personal")) {
+          throw new LibraryError("error.workspaceGone");
         }
-        this.library.gameEndWorkspace = action.workspaceId;
+        this.library.gameEndWorkspaceId = action.workspaceId;
       }),
       "set-grayscale-text": saved((action) => {
         this.library.grayscaleText = action.enabled;
@@ -1986,21 +1992,21 @@ export class Host {
         this.library.overlaysStay = action.enabled;
         this.gameOverlays.tick();
       }),
-      "open-overlay-layout": (action) => this.layout.open(action.gameId ?? this.game?.id ?? null),
+      "open-overlay-layout": (action) => this.layout.open(action.gameId ?? this.workspace?.id ?? null),
       "set-game-overlays-hidden": (action) => {
         this.gameOverlays.setHidden(action.hidden);
         this.syncGameWatcher();
       },
       "preview-overlay": (action) => {
-        const { owner, moduleId, gameId, key } = action;
-        // Only an overlay the player has: a game overlay, or an OBS link.
-        const subject = { owner, moduleId, gameId, key };
+        const { owner, moduleId, workspaceId, key } = action;
+        // Only an overlay the user has: a game overlay, or an OBS link.
+        const subject = { owner, moduleId, workspaceId, key };
         if (!this.gameOverlays.has(subject) && !this.streaming.overlayStore.peek(subject)) return;
         this.previews.show(subject);
       },
       "set-game-overlay": (action) => {
-        const { owner, moduleId, gameId, key, mode, opacity, hideFromCapture } = action;
-        this.gameOverlays.update({ owner, moduleId, gameId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
+        const { owner, moduleId, workspaceId, key, mode, opacity, hideFromCapture } = action;
+        this.gameOverlays.update({ owner, moduleId, workspaceId, key }, { ...(mode ? { mode } : {}), ...(opacity ? { opacity } : {}), ...(hideFromCapture !== undefined ? { hideFromCapture } : {}) });
       },
       "set-panel-view": (action) => {
         const { instanceId, mode, opacity, hideFromCapture } = action;
@@ -2008,8 +2014,8 @@ export class Host {
       },
       "remove-game-overlay": (action) => this.gameOverlays.remove(action),
       "set-overlay-key": (action) => {
-        const { gameId, owner, moduleId, key } = action;
-        const overlay = owner !== undefined && moduleId !== undefined && gameId !== undefined && key !== undefined ? { owner, moduleId, gameId, key } : null;
+        const { workspaceId, owner, moduleId, key } = action;
+        const overlay = owner !== undefined && moduleId !== undefined && workspaceId !== undefined && key !== undefined ? { owner, moduleId, workspaceId, key } : null;
         if (overlay && !this.gameOverlays.hasKey(overlay)) return;
         const binding = overlay ? toggleBinding(overlay) : layerBinding();
         const names = this.gameOverlays.dialogNames(binding);
@@ -2094,7 +2100,7 @@ export class Host {
       "install-module": () => this.installModule(),
       "install-catalog-module": (action) => this.lifecycle.installFromCatalog(action.moduleId),
       "check-module-updates": async () => {
-        if (!this.library.onlineSearch) throw new PlayerError("error.catalogOff");
+        if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
         return { ok: true, ...(await this.checkCatalogUpdates()) };
       },
       "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId),
@@ -2105,9 +2111,9 @@ export class Host {
       "unrate-catalog-module": (action) => this.catalogReviewAction((token) => this.catalog.unrate(action.moduleId, token)),
       "reply-catalog-review": (action) => this.catalogReviewAction((token) => this.catalog.reply(action.reviewId, token, action.text?.trim() || null)),
       "report-catalog-review": (action) => {
-        if (!this.library.onlineSearch) throw new PlayerError("error.reportOff");
+        if (!this.library.onlineSearch) throw new UserError("error.reportOff");
         const token = this.account.token();
-        if (!token) throw new PlayerError("error.reportSignIn");
+        if (!token) throw new UserError("error.reportSignIn");
         return this.catalog.reportReview(action.reviewId, token);
       },
       "apply-module-update": (action) => this.lifecycle.applyUpdate(action.moduleId, action.version),
@@ -2125,19 +2131,19 @@ export class Host {
         this.openModule(action.moduleId, { ...(action.panelType ? { panelType: action.panelType } : {}), ...(action.reuse ? { reuse: true } : {}) }),
       "choose-panel-type": (action) => this.choosePanelType(action.instanceId, action.panelType),
       "close-panel": (action) => this.closePanel(action.instanceId),
-      "remove-module-from-game": (action) => this.removeModuleFromGame(action.moduleId),
+      "remove-module-from-workspace": (action) => this.removeModuleFromWorkspace(action.moduleId),
       "reload-panel": (action) => this.views.get(action.instanceId)?.reload(),
       "stop-panel": (action) => this.views.get(action.instanceId)?.stop(),
       "show-panel-in-game": (action) => this.showPanelInGame(action.instanceId),
       "stop-panel-in-game": (action) => this.gameOverlays.stopPanel(action.instanceId),
-      "save-layout": (action) => this.workspaces.saveLayout(this.currentGameId(), action.layout),
-      "apply-layout-template": (action) => this.workspaces.applyTemplate(this.currentGameId(), layoutTemplate(action.templateId)),
-      "apply-layout-grid": (action) => this.workspaces.applyTemplate(this.currentGameId(), gridTemplate(action.columns, action.rows)),
-      "save-snapshot": (action) => this.workspaces.saveSnapshot(this.currentGameId(), action.name),
-      "update-snapshot": (action) => this.workspaces.updateSnapshot(this.currentGameId(), action.snapshotId),
+      "save-layout": (action) => this.workspaces.saveLayout(this.currentWorkspaceId(), action.layout),
+      "apply-layout-template": (action) => this.workspaces.applyTemplate(this.currentWorkspaceId(), layoutTemplate(action.templateId)),
+      "apply-layout-grid": (action) => this.workspaces.applyTemplate(this.currentWorkspaceId(), gridTemplate(action.columns, action.rows)),
+      "save-snapshot": (action) => this.workspaces.saveSnapshot(this.currentWorkspaceId(), action.name),
+      "update-snapshot": (action) => this.workspaces.updateSnapshot(this.currentWorkspaceId(), action.snapshotId),
       "apply-snapshot": (action) => this.applySnapshot(action.snapshotId),
-      "rename-snapshot": (action) => this.workspaces.renameSnapshot(this.currentGameId(), action.snapshotId, action.name),
-      "delete-snapshot": (action) => this.workspaces.deleteSnapshot(this.currentGameId(), action.snapshotId),
+      "rename-snapshot": (action) => this.workspaces.renameSnapshot(this.currentWorkspaceId(), action.snapshotId, action.name),
+      "delete-snapshot": (action) => this.workspaces.deleteSnapshot(this.currentWorkspaceId(), action.snapshotId),
 
       // Browser panels
       "browser-new-tab": (action) => this.openBrowserTab(action.instanceId, null, false),
@@ -2216,20 +2222,20 @@ export class Host {
       "account-link-code": () => this.account.newLinkCode(),
       "account-copy-link-command": () => {
         const code = this.account.view().linkCode?.code;
-        if (!code) throw new PlayerError("account.error.noCode");
+        if (!code) throw new UserError("account.error.noCode");
         clipboard.writeText(linkCommand(code));
       },
       "account-unlink-key": (action) => this.account.unlinkKey(action.fingerprint),
       "account-replace-key": async (action) => {
         const linked = (this.account.view().publisherKeys ?? []).map((key) => key.fingerprint);
-        if (!linked.includes(action.fingerprint)) throw new PlayerError("account.error.keyGone");
+        if (!linked.includes(action.fingerprint)) throw new UserError("account.error.keyGone");
         const next = await this.developerKeys.replacementFor(action.fingerprint, linked);
         return this.account.replaceKey(action.fingerprint, next, action.leaked);
       },
       "account-publish-token-create": (action) => this.account.createPublishToken(action.name),
       "account-publish-token-copy": () => {
         const token = this.account.newPublishTokenText();
-        if (!token) throw new PlayerError("error.generic");
+        if (!token) throw new UserError("error.generic");
         clipboard.writeText(token);
       },
       "account-publish-token-saved": () => this.account.publishTokenSaved(),
@@ -2251,7 +2257,7 @@ export class Host {
         const file = picked.filePaths[0];
         if (picked.canceled || !file) return;
         const text = await readFile(file, "utf8").catch(() => null);
-        if (text === null || text.length > 10_000) throw new PlayerError("developerKeys.error.notKey");
+        if (text === null || text.length > 10_000) throw new UserError("developerKeys.error.notKey");
         await this.developerKeys.add(text);
         this.rememberPicked("publisher-key", file);
       },
@@ -2326,7 +2332,7 @@ export class Host {
   }
 
   private showScreen(next: Screen): void {
-    if (this.screen === next && next !== "game") return;
+    if (this.screen === next && next !== "workspace") return;
     this.notice = null;
     this.pendingLink = null;
     this.pendingNavigation = null;
@@ -2334,27 +2340,27 @@ export class Host {
     this.screen = next;
   }
 
-  private openGame(gameId: string): void {
-    if (!isLive(this.library, gameId)) throw new LibraryError("error.gameGone");
-    if (this.pendingGameSwitch === gameId) this.pendingGameSwitch = null;
-    if (this.gameId === gameId) return;
-    this.showScreen("game");
-    markPlayed(this.library, gameId, new Date());
+  private openWorkspace(workspaceId: string): void {
+    if (!isLive(this.library, workspaceId)) throw new LibraryError("error.workspaceGone");
+    if (this.pendingGameSwitch === workspaceId) this.pendingGameSwitch = null;
+    if (this.workspaceId === workspaceId) return;
+    this.showScreen("workspace");
+    markOpened(this.library, workspaceId, new Date());
     this.saveLibrary();
-    this.openCurrentGame();
+    this.openCurrentWorkspace();
   }
 
-  private async chooseGameImage(gameId: string): Promise<void> {
-    if (!isLive(this.library, gameId)) throw new LibraryError("error.gameGone");
-    const source = await this.pickPath("game-image", {
+  private async chooseWorkspaceImage(workspaceId: string): Promise<void> {
+    if (!isLive(this.library, workspaceId)) throw new LibraryError("error.workspaceGone");
+    const source = await this.pickPath("workspace-image", {
       title: translate(this.language, "dialog.chooseIcon"),
       properties: ["openFile"],
       filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg"] }],
     });
     if (!source) return;
-    const file = await importIcon(this.iconDir, gameId, source);
-    this.rememberPicked("game-image", source);
-    const previous = setGameImage(this.library, gameId, file);
+    const file = await importIcon(this.iconDir, workspaceId, source);
+    this.rememberPicked("workspace-image", source);
+    const previous = setWorkspaceImage(this.library, workspaceId, file);
     await this.dropIconFile(previous);
   }
 
@@ -2377,7 +2383,7 @@ export class Host {
     return { name: this.profile.name, initials: this.profile.initials, picture, updatedAt: this.profile.updatedAt };
   }
 
-  /** Puts the account's profile in place of this PC's (checked like a picture the player picked). */
+  /** Puts the account's profile in place of this PC's (checked like a picture the user picked). */
   private async applyProfile(remote: ProfileData & { updatedAt: string }): Promise<void> {
     const previous = this.profile.picture;
     const picture = remote.picture ? await savePicture(this.profileDir, remote.picture) : null;
@@ -2468,25 +2474,25 @@ export class Host {
 
   /**
    * The icon file of a game that could be offered: the game's own icon found on
-   * this PC (never a picture the player chose, a hosted icon or Steam's small one),
+   * this PC (never a picture the user chose, a hosted icon or Steam's small one),
    * for a game with an id the service knows, that the service has no icon for and
    * that was not offered before. Null otherwise.
    */
-  private shareableFile(game: GameEntry): string | null {
+  private shareableFile(game: WorkspaceEntry): string | null {
     return shareableIconFile(game, this.library, this.hostedList);
   }
 
   /** Games that have an icon of their own and an id the service knows: the ones worth asking the list about. */
-  private shareCandidates(): GameEntry[] {
+  private shareCandidates(): WorkspaceEntry[] {
     const library = this.library;
     if (!library.steamIcons || !library.onlineSearch) return [];
-    return Object.values(library.games).filter(isShareCandidate);
+    return Object.values(library.workspaces).filter(isShareCandidate);
   }
 
   /** Adds the games of a Steam import that are not in the library yet. Answers with how many. */
   private importSteam(games: SteamImportGame[]): ActionResult {
     const added = importSteamGames(this.library, games, new Date());
-    this.workspaces.addGames(added);
+    this.workspaces.addWorkspaces(added);
     if (added.length > 0) {
       this.saveLibrary();
       this.fetchIconsSoon();
@@ -2495,18 +2501,18 @@ export class Host {
   }
 
   /** Offers these games' icons to the service, one at a time. Returns how many it took. */
-  private shareIcons(gameIds: string[]): Promise<ActionResult> {
-    const offers = gameIds.flatMap((id) => {
-      const game = this.library.games[id];
-      const file = game ? this.shareableFile(game) : null;
-      if (!game || !file) return [];
+  private shareIcons(workspaceIds: string[]): Promise<ActionResult> {
+    const offers = workspaceIds.flatMap((id) => {
+      const workspace = this.library.workspaces[id];
+      const file = workspace ? this.shareableFile(workspace) : null;
+      if (!workspace || !file) return [];
       return [
         {
-          id: game.id,
-          name: game.name,
+          id: workspace.id,
+          name: workspace.name,
           source: shareSource(file),
           read: async () => largestIcoFrame(new Uint8Array(await readFile(path.join(this.steamIconDir, file)))),
-          done: () => markIconShared(this.library, game.id, new Date()),
+          done: () => markIconShared(this.library, workspace.id, new Date()),
         },
       ];
     });
@@ -2518,7 +2524,7 @@ export class Host {
     const offers = appids.flatMap((appid) => {
       const offer = this.steamOffers.get(appid);
       // Added or offered since the dialog asked: the library flow or nobody offers it now.
-      if (!offer || this.library.iconsOffered.includes(offer.id) || this.library.games[offer.id]) return [];
+      if (!offer || this.library.iconsOffered.includes(offer.id) || this.library.workspaces[offer.id]) return [];
       return [
         {
           id: offer.id,
@@ -2538,7 +2544,7 @@ export class Host {
   private async sendOffers(
     offers: { id: string; name: string; source: "installed" | "steam"; read: () => Promise<Uint8Array | null>; done: () => void }[],
   ): Promise<ActionResult> {
-    // Only signed-in players can share: the service keeps the account with an offer until it is checked.
+    // Only signed-in users can share: the service keeps the account with an offer until it is checked.
     const token = this.account.token();
     if (offers.length > 0 && token === null) return { ok: false, error: translate(this.language, "error.share.signIn") };
     let tried = 0;
@@ -2587,7 +2593,7 @@ export class Host {
   private steamOffers = new Map<number, { id: string; name: string; ico: Uint8Array }>();
 
   /**
-   * Of these games from the last Steam look-up, the ones the player does not have whose icon Tavora
+   * Of these games from the last Steam look-up, the ones the user does not have whose icon Tavora
    * lacks and the Steam client on this PC keeps (named by its appinfo or the game's Steam shortcut).
    * Only files already on this PC are read; nothing is downloaded and nothing is added to the library.
    */
@@ -2629,36 +2635,36 @@ export class Host {
     return { status: "ok", games: views.sort((a, b) => a.name.localeCompare(b.name)) };
   }
 
-  private async dropIconFile(icon: GameIcon | null): Promise<void> {
+  private async dropIconFile(icon: WorkspaceIcon | null): Promise<void> {
     if (icon?.kind === "image") await removeIcon(this.iconDir, icon.file);
   }
 
-  /** Deletes everything stored for a game that left the library for good. */
-  private async deleteGameData(game: GameEntry): Promise<void> {
-    await this.forgetGameData(game);
+  /** Deletes everything stored for a workspace that left the library for good. */
+  private async deleteWorkspaceData(workspace: WorkspaceEntry): Promise<void> {
+    await this.forgetWorkspaceData(workspace);
     await this.clearOrphanedSessions();
   }
 
-  /** deleteGameData without the browser sessions, so many games can be deleted and the sessions cleared once. */
-  private async forgetGameData(game: GameEntry): Promise<void> {
-    const records = this.workspaces.forgetGame(game.id);
-    // A panel of this game that was over the game closes with it.
+  /** deleteWorkspaceData without the browser sessions, so many workspaces can be deleted and the sessions cleared once. */
+  private async forgetWorkspaceData(workspace: WorkspaceEntry): Promise<void> {
+    const records = this.workspaces.forgetWorkspace(workspace.id);
+    // A panel of this workspace that was over its game closes with it.
     for (const record of records) this.destroyView(record.instanceId);
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
-    this.data.forgetGame(game.id);
-    this.streaming.forgetGame(game.id);
-    this.gameOverlays.forgetGame(game.id);
-    this.layout.forgetGame(game.id);
-    // A folder the player chose can be gone (an unplugged drive): the game still goes, and they are told where its pictures may remain.
-    await this.files.noteGameDeleted(game.name, (root) => deleteModuleData(this.options.userData, game.id, root));
-    await this.dropIconFile(game.icon);
-    if (game.iconFile && !iconFileShared(this.library, game.iconFile, game.id)) await removeSteamIcon(this.steamIconDir, game.iconFile);
+    this.data.forgetWorkspace(workspace.id);
+    this.streaming.forgetWorkspace(workspace.id);
+    this.gameOverlays.forgetWorkspace(workspace.id);
+    this.layout.forgetWorkspace(workspace.id);
+    // A folder the user chose can be gone (an unplugged drive): the workspace still goes, and they are told where its pictures may remain.
+    await this.files.noteWorkspaceDeleted(workspace.name, (root) => deleteModuleData(this.options.userData, workspace.id, root));
+    await this.dropIconFile(workspace.icon);
+    if (workspace.iconFile && !iconFileShared(this.library, workspace.iconFile, workspace.id)) await removeSteamIcon(this.steamIconDir, workspace.iconFile);
   }
 
   private async clearOrphanedSessions(): Promise<void> {
     // Sessions may already be open in this run, so clear them; their
     // directories are removed at the next start.
-    const keep = new Set(Object.keys(this.library.games));
+    const keep = new Set(Object.keys(this.library.workspaces));
     for (const dir of await orphanedPartitions(this.options.userData, keep)) {
       const ses = session.fromPartition(`persist:${decodeURIComponent(path.basename(dir))}`);
       await ses.clearStorageData();
@@ -2676,22 +2682,22 @@ export class Host {
     options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string; launch?: PanelLaunch; reuse?: boolean } = {},
   ): string | void {
     const { openedFrom } = options;
-    const game = this.game;
+    const workspace = this.workspace;
     const module = this.modules.get(moduleId);
-    if (!game || !module || !this.supportsGame(module, game.id)) return;
+    if (!workspace || !module || !this.supportsWorkspace(module, workspace.id)) return;
     const types = panelTypes(module.manifest);
     const panelType = options.panelType ?? continuingPanelType(module.manifest) ?? undefined;
     if (panelType !== undefined && !types.some((type) => type.id === panelType)) throw new WorkspaceError("error.panelTypeGone");
-    const open = options.reuse ? this.panelsOfType(game.id, moduleId, panelType)[0] : undefined;
+    const open = options.reuse ? this.panelsOfType(workspace.id, moduleId, panelType)[0] : undefined;
     if (open) {
       this.showPanel(open.record.instanceId);
       return open.record.instanceId;
     }
     const record: InstanceRecord = { instanceId: randomUUID(), moduleId, ...(panelType ? { panelType } : {}) };
-    this.workspaces.openPanel(game.id, record);
+    this.workspaces.openPanel(workspace.id, record);
     if (openedFrom) this.openedFrom.set(record.instanceId, openedFrom);
     this.launches.set(record.instanceId, options.launch ?? { reason: "add" });
-    this.createView(record, game, performance.now());
+    this.createView(record, workspace, performance.now());
     return record.instanceId;
   }
 
@@ -2705,16 +2711,16 @@ export class Host {
   }
 
   /**
-   * A module asked to open a web address (links.open, already checked): a new tab in the game's
+   * A module asked to open a web address (links.open, already checked): a new tab in the workspace's
    * newest Browser panel, or in that panel itself while it is still empty, or in a new Browser panel.
    */
-  private openLinkFromModule(url: string, gameId?: string): void {
-    const game = this.game;
-    // The panel that asked belongs to a game that isn't the one shown (it is over its game): its link is not for this one.
-    if (gameId !== undefined && game?.id !== gameId) throw new HostError("PERMISSION_DENIED", "links.open works only in the game shown now");
-    if (!game) return;
+  private openLinkFromModule(url: string, workspaceId?: string): void {
+    const workspace = this.workspace;
+    // The panel that asked belongs to a workspace that isn't the one shown (it is over its game): its link is not for this one.
+    if (workspaceId !== undefined && workspace?.id !== workspaceId) throw new HostError("PERMISSION_DENIED", "links.open works only in the workspace shown now");
+    if (!workspace) return;
     try {
-      const browserId = this.records(game.id)
+      const browserId = this.records(workspace.id)
         .map((record) => record.instanceId)
         .reverse()
         .find((id) => this.views.get(id) instanceof BrowserPanel);
@@ -2723,11 +2729,11 @@ export class Host {
         if (panel.blank) panel.restore(url);
         else this.openBrowserTab(browserId, url, false);
       } else {
-        // Nothing to open it in yet: the player picks a new Browser panel or the system browser.
+        // Nothing to open it in yet: the user picks a new Browser panel or the system browser.
         this.pendingLink = url;
       }
     } catch (error) {
-      // The workspace is full; the player is told, as for Add module.
+      // The workspace is full; the user is told, as for Add module.
       if (error instanceof WorkspaceError) this.notice = error.message;
       else throw error;
     } finally {
@@ -2735,7 +2741,7 @@ export class Host {
     }
   }
 
-  /** The player's answer to pendingLink. The address is the one the host kept, never one sent with the answer. */
+  /** The user's answer to pendingLink. The address is the one the host kept, never one sent with the answer. */
   private chooseLink(choice: "panel" | "system" | "cancel"): void {
     const url = this.pendingLink;
     this.pendingLink = null;
@@ -2773,52 +2779,52 @@ export class Host {
     this.pushState();
   }
 
-  /** Switches or asks, as the player chose. "show" only offers it on the rail (runningGameId). */
+  /** Switches or asks, as the user chose. "show" only offers it on the rail (runningGameId). */
   private gameStarted(gameId: string): void {
-    if (this.gameId === gameId) return;
-    if (this.library.gameStart === "switch") this.openGameQuietly(gameId);
+    if (this.workspaceId === gameId) return;
+    if (this.library.gameStart === "switch") this.openWorkspaceQuietly(gameId);
     else if (this.library.gameStart === "ask") this.pendingGameSwitch = gameId;
   }
 
   /** Goes back to the chosen personal workspace, but only from the game that closed. */
   private gameClosed(gameId: string): void {
     if (this.pendingGameSwitch === gameId) this.pendingGameSwitch = null;
-    const back = this.library.gameEndWorkspace;
-    if (back && this.gameId === gameId && isLive(this.library, back) && this.library.games[back]!.kind === "workspace") this.openGameQuietly(back);
+    const back = this.library.gameEndWorkspaceId;
+    if (back && this.workspaceId === gameId && isLive(this.library, back) && this.library.workspaces[back]!.kind === "personal") this.openWorkspaceQuietly(back);
   }
 
-  /** Opens a game without bringing the window to the front, so the game keeps the focus. */
-  private openGameQuietly(gameId: string): void {
+  /** Opens a workspace without bringing the window to the front, so the game keeps the focus. */
+  private openWorkspaceQuietly(workspaceId: string): void {
     try {
-      this.openGame(gameId);
+      this.openWorkspace(workspaceId);
     } catch (error) {
-      console.error("[tavora] switching to a running game failed", error);
+      console.error("[tavora] switching to a running workspace failed", error);
     }
   }
 
-  /** The player's answer to pendingGameSwitch. */
+  /** The user's answer to pendingGameSwitch. */
   private chooseGameSwitch(choice: "switch" | "cancel"): void {
     const gameId = this.pendingGameSwitch;
     this.pendingGameSwitch = null;
-    if (choice === "switch" && gameId && isLive(this.library, gameId)) this.openGame(gameId);
+    if (choice === "switch" && gameId && isLive(this.library, gameId)) this.openWorkspace(gameId);
   }
 
   /** A panel whose type is gone becomes another type of the same module, and starts. */
   private choosePanelType(instanceId: string, panelType: string): void {
-    const game = this.game;
-    const record = game && this.records(game.id).find((item) => item.instanceId === instanceId);
-    if (!game || !record) throw new WorkspaceError("error.panelClosed");
+    const workspace = this.workspace;
+    const record = workspace && this.records(workspace.id).find((item) => item.instanceId === instanceId);
+    if (!workspace || !record) throw new WorkspaceError("error.panelClosed");
     if (this.panelTypeOf(record) !== undefined) return;
     const module = this.modules.get(record.moduleId);
     if (!module || !panelTypes(module.manifest).some((type) => type.id === panelType)) throw new WorkspaceError("error.panelTypeGone");
     record.panelType = panelType;
     this.workspaces.save();
-    this.createView(record, game, performance.now());
+    this.createView(record, workspace, performance.now());
   }
 
   private closePanel(instanceId: string): void {
-    const game = this.game;
-    if (!game || !this.workspaces.closePanel(game.id, instanceId)) return;
+    const workspace = this.workspace;
+    if (!workspace || !this.workspaces.closePanel(workspace.id, instanceId)) return;
     this.closeView(instanceId);
   }
 
@@ -2855,7 +2861,7 @@ export class Host {
       case "exit-fullscreen":
         return panel.exitFullscreen();
       case "open-external": {
-        // Only the page's own http or https address, and only on the player's click.
+        // Only the page's own http or https address, and only on the user's click.
         const url = panel.externalUrl;
         if (url && !this.options.hidden) void shell.openExternal(url);
         return;
@@ -2950,7 +2956,7 @@ export class Host {
         discordLogin({
           language,
           ...(options.discordAuthorizeUrl ? { authorizeUrl: options.discordAuthorizeUrl } : {}),
-          // The player's own browser; a test follows the pretend page itself.
+          // The user's own browser; a test follows the pretend page itself.
           open: options.discordAuthorizeUrl ? async (url) => void (await fetch(url)) : (url) => shell.openExternal(url),
         }),
     });
@@ -3058,15 +3064,15 @@ export class Host {
     return loadAdBlocker(path.join(__dirname, "../filters/engine.bin"));
   }
 
-  private browserSessionFor(kind: BrowserKind, gameId: string) {
-    return browserSession(browserPartition(kind, gameId), this.sessionHooks());
+  private browserSessionFor(kind: BrowserKind, workspaceId: string) {
+    return browserSession(browserPartition(kind, workspaceId), this.sessionHooks());
   }
 
-  /** Deletes the Browser's cookies, logins, storage and caches: the current game's, or the ones shared by all games. */
-  private async clearBrowserData(scope: "game" | "shared"): Promise<void> {
-    const game = this.game;
-    if (scope === "game" && !game) throw new LibraryError("error.openGameFirst");
-    const ses = this.browserSessionFor(scope, game?.id ?? "");
+  /** Deletes the Browser's cookies, logins, storage and caches: the current workspace's, or the ones shared by all workspaces. */
+  private async clearBrowserData(scope: "workspace" | "shared"): Promise<void> {
+    const workspace = this.workspace;
+    if (scope === "workspace" && !workspace) throw new LibraryError("error.openWorkspaceFirst");
+    const ses = this.browserSessionFor(scope, workspace?.id ?? "");
     await ses.clearStorageData();
     await ses.clearCache();
     await ses.clearAuthCache();
@@ -3075,42 +3081,42 @@ export class Host {
 
   // ── Layouts and snapshots ────────────────────────────────────────────
 
-  /** The game shown now, whose layout the player is changing. */
-  private currentGameId(): string {
-    const game = this.game;
-    if (!game) throw new WorkspaceError("error.openGameFirst");
-    return game.id;
+  /** The workspace shown now, whose layout the user is changing. */
+  private currentWorkspaceId(): string {
+    const workspace = this.workspace;
+    if (!workspace) throw new WorkspaceError("error.openWorkspaceFirst");
+    return workspace.id;
   }
 
   /** Replaces the open panels with the snapshot's; views start for the new panels and stop for the rest. */
   private applySnapshot(snapshotId: string): void {
-    const { opened, closed } = this.workspaces.applySnapshot(this.currentGameId(), snapshotId);
+    const { opened, closed } = this.workspaces.applySnapshot(this.currentWorkspaceId(), snapshotId);
     for (const record of closed) this.closeView(record.instanceId);
     for (const record of opened) {
       this.launches.set(record.instanceId, { reason: "add" });
-      this.createView(record, this.game!);
+      this.createView(record, this.workspace!);
     }
   }
 
   // ── Views ────────────────────────────────────────────────────────────
 
-  private openCurrentGame(): void {
-    const game = this.game;
-    if (!game) return;
-    for (const record of this.records(game.id)) this.createView(record, game);
+  private openCurrentWorkspace(): void {
+    const workspace = this.workspace;
+    if (!workspace) return;
+    for (const record of this.records(workspace.id)) this.createView(record, workspace);
     this.workspaces.relayout();
-    // Only this game's own module pages are waited for: a panel in the in-game layer runs on from another game.
-    if (this.records(game.id).some((record) => this.views.get(record.instanceId) instanceof ModuleView && !this.floating(record.instanceId))) {
+    // Only this workspace's own module pages are waited for: a panel in the in-game layer runs on from another workspace.
+    if (this.records(workspace.id).some((record) => this.views.get(record.instanceId) instanceof ModuleView && !this.floating(record.instanceId))) {
       this.endOpening();
-      const layout = layoutKey(game.id, this.records(game.id));
+      const layout = layoutKey(workspace.id, this.records(workspace.id));
       this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS), layout };
-      this.cover.start(this.currentTheme, translate(this.language, "panel.loading", { name: game.displayName }), this.openTimes.estimate(layout));
+      this.cover.start(this.currentTheme, translate(this.language, "panel.loading", { name: workspace.displayName }), this.openTimes.estimate(layout));
       // The host UI covers the panels from now on, not each panel with its own loader.
       this.pushStateSoon();
     }
   }
 
-  /** The game has opened once the host UI placed its panels and every visible module page has its data. */
+  /** The workspace has opened once the host UI placed its panels and every visible module page has its data. */
   private openingDone(): boolean {
     if (this.panelBounds.size === 0) return false;
     for (const instanceId of this.panelBounds.keys()) {
@@ -3120,7 +3126,7 @@ export class Host {
     return true;
   }
 
-  /** Ends the wait for a game's panels; `show` places them and tells the host UI, which takes its loading cover away. */
+  /** Ends the wait for a workspace's panels; `show` places them and tells the host UI, which takes its loading cover away. */
   private endOpening(show = false): void {
     if (!this.opening) return;
     const { startedAt, timer, layout } = this.opening;
@@ -3129,27 +3135,27 @@ export class Host {
     this.opening = null;
     const opening = ++this.openings;
     if (!show) return this.cover.cancel();
-    timings.record("game-open", took);
+    timings.record("workspace-open", took);
     this.applyBounds();
     this.pushState();
     // The panels are shown now, under the cover; it goes once every one has drawn.
     const shown = this.panelsInSlots();
-    this.logDraws(shown, "game open");
+    this.logDraws(shown, "workspace open");
     void Promise.all(shown.map((view) => view.drawn)).then(() => {
       if (opening !== this.openings || !this.cover.covering) return;
       const total = performance.now() - startedAt;
-      timings.record("game-drawn", total);
-      timingLog?.(`game open: data ${Math.round(took)} ms, every panel drawn ${Math.round(total)} ms, cover fire ${this.cover.fireShown ? "shown" : "not shown"}`);
+      timings.record("workspace-drawn", total);
+      timingLog?.(`workspace open: data ${Math.round(took)} ms, every panel drawn ${Math.round(total)} ms, cover fire ${this.cover.fireShown ? "shown" : "not shown"}`);
       void this.openTimes.record(layout, total);
       this.cover.finish();
     });
   }
 
-  /** openedAt is when the player asked for the panel; its time to a loaded page is measured from there. */
-  private createView(record: InstanceRecord, game: TavoraGame, openedAt?: number): void {
-    // Its panel is in the in-game layer and kept running there while another game was shown: it comes back when the layer closes.
+  /** openedAt is when the user asked for the panel; its time to a loaded page is measured from there. */
+  private createView(record: InstanceRecord, workspace: TavoraWorkspace, openedAt?: number): void {
+    // Its panel is in the in-game layer and kept running there while another workspace was shown: it comes back when the layer closes.
     if (this.views.has(record.instanceId)) return;
-    if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, game);
+    if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, workspace);
     const panelType = this.panelTypeOf(record);
     // Its type is gone: the slot says so and offers another type; nothing runs.
     if (panelType === undefined) return;
@@ -3159,8 +3165,8 @@ export class Host {
       instanceId: record.instanceId,
       module,
       panelType,
-      game,
-      data: this.data.get(module.owner, module.manifest.id, game.id),
+      workspace,
+      data: this.data.get(module.owner, module.manifest.id, workspace.id),
       panelState: this.data.panelState,
       hostVersion: app.getVersion(),
       preload: this.options.modulePreload,
@@ -3169,13 +3175,13 @@ export class Host {
       getLanguage: () => this.language,
       baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
       ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
-      onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, game.id),
+      onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, workspace.id),
       onReveal: () => {
         this.applyBounds();
         this.pushStateSoon();
       },
       onDrawn: () => this.pushStateSoon(),
-      onOpenLink: (url) => this.openLinkFromModule(url, game.id),
+      onOpenLink: (url) => this.openLinkFromModule(url, workspace.id),
       onNeedsTavora: () => {
         this.notice = translate(this.language, "overlays.bringBackFirst");
         this.pushState();
@@ -3185,7 +3191,7 @@ export class Host {
       saveJson: (data, name) => this.saveJsonAs(module, data, name),
       openJson: () => this.openJsonFrom(module),
       pickReadOnlyFile: async extensions => {
-        const defaultPath=await saveDialogDirectory(new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,game.id),this.library.games[game.id]?.catalogId ?? game.id);
+        const defaultPath=await saveDialogDirectory(new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id),this.library.workspaces[workspace.id]?.catalogId ?? workspace.id);
         const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+this.shown(module.manifest).name+' verknüpfen':'Link a file to '+this.shown(module.manifest).name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
         return picked.canceled ? null : picked.filePaths[0] ?? null;
       },
@@ -3204,13 +3210,13 @@ export class Host {
       connection: this.connection,
       media: this.media,
       overlay: {
-        ...this.streaming.overlayFor(module, game.id),
-        showOverGame: (key) => this.gameOverlays.show(module, game.id, key),
-        hideOverGame: (key) => this.gameOverlays.hide(module, game.id, key),
-        overGame: () => this.gameOverlays.keysOf(module, game.id),
-        preview: async (key) => this.previews.show({ owner: module.owner, moduleId: module.manifest.id, gameId: game.id, key }),
+        ...this.streaming.overlayFor(module, workspace.id),
+        showOverGame: (key) => this.gameOverlays.show(module, workspace.id, key),
+        hideOverGame: (key) => this.gameOverlays.hide(module, workspace.id, key),
+        overGame: () => this.gameOverlays.keysOf(module, workspace.id),
+        preview: async (key) => this.previews.show({ owner: module.owner, moduleId: module.manifest.id, workspaceId: workspace.id, key }),
       },
-      hotkeys: this.streaming.hotkeysFor(module, game.id),
+      hotkeys: this.streaming.hotkeysFor(module, workspace.id),
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
       onStatus: (status) => {
         if (!measured && status === "ready") {
@@ -3246,17 +3252,17 @@ export class Host {
 
   /**
    * panels.open from a panel, after its click was taken (the decision log, named panels rounds 2, 3, 5 and 6): one
-   * of the module's own panel types, in the game shown now. A panel of that type already showing the content comes
+   * of the module's own panel types, in the workspace shown now. A panel of that type already showing the content comes
    * to the front; else the one used last is asked to switch, saving first; else a new panel opens. A switch that
-   * fails leaves that panel as it was, and the player is asked whether to open the content in a new panel.
+   * fails leaves that panel as it was, and the user is asked whether to open the content in a new panel.
    */
   private async openRelatedPanel(from: InstanceRecord, type: string, content: PanelContent | null): Promise<PanelOpenResult> {
-    const game = this.game;
+    const workspace = this.workspace;
     const module = this.modules.get(from.moduleId);
-    if (!game || !module || !this.records(game.id).includes(from)) throw new HostError("PERMISSION_DENIED", "panels.open works only in the game shown now");
+    if (!workspace || !module || !this.records(workspace.id).includes(from)) throw new HostError("PERMISSION_DENIED", "panels.open works only in the workspace shown now");
     const target = panelTypes(this.shown(module.manifest)).find((item) => item.id === type);
     if (!target) throw new HostError("INVALID_PARAMS", `this module has no panel type "${type}"`);
-    const others = this.panelsOfType(game.id, from.moduleId, type).filter(
+    const others = this.panelsOfType(workspace.id, from.moduleId, type).filter(
       (item): item is { record: InstanceRecord; order: number; view: ModuleView } => item.record !== from && item.view instanceof ModuleView,
     );
     const showing = content ? others.find((item) => item.record.content?.id === content.id) : others[0];
@@ -3267,14 +3273,14 @@ export class Host {
     const last = others[0];
     if (last && content) {
       const outcome = await last.view.navigate(content);
-      // The player may have left the game while the panel saved.
-      if (this.game?.id !== game.id || !this.records(game.id).includes(last.record)) return "failed";
+      // The user may have left the workspace while the panel saved.
+      if (this.workspace?.id !== workspace.id || !this.records(workspace.id).includes(last.record)) return "failed";
       if (outcome === "switched") {
         this.showPanel(last.record.instanceId);
         return "switched";
       }
       if (outcome === "failed") {
-        this.pendingNavigation = { gameId: game.id, moduleId: from.moduleId, panelType: type, panelName: target.name, content };
+        this.pendingNavigation = { workspaceId: workspace.id, moduleId: from.moduleId, panelType: type, panelName: target.name, content };
         this.pushState();
         return "failed";
       }
@@ -3283,10 +3289,10 @@ export class Host {
     return this.openPanelOn(from.moduleId, type, content) ? "opened" : "failed";
   }
 
-  /** A game's panels of one of a module's panel types (undefined: a module without types); the one used last first, of panels nobody used the newest. */
-  private panelsOfType(gameId: string, moduleId: string, type: string | undefined) {
+  /** A workspace's panels of one of a module's panel types (undefined: a module without types); the one used last first, of panels nobody used the newest. */
+  private panelsOfType(workspaceId: string, moduleId: string, type: string | undefined) {
     const usedAt = (view: unknown) => (view instanceof ModuleView ? view.usedAt : 0);
-    return this.records(gameId)
+    return this.records(workspaceId)
       .map((record, order) => ({ record, order, view: this.views.get(record.instanceId) }))
       .filter((item) => item.record.moduleId === moduleId && item.record.panelType === type)
       .sort((a, b) => usedAt(b.view) - usedAt(a.view) || b.order - a.order);
@@ -3297,7 +3303,7 @@ export class Host {
     try {
       return this.openModule(moduleId, { panelType, launch: { reason: "open", content } }) !== undefined;
     } catch (error) {
-      // The workspace is full; the player is told, as for Add module.
+      // The workspace is full; the user is told, as for Add module.
       if (error instanceof WorkspaceError) this.notice = error.message;
       else throw error;
       return false;
@@ -3306,11 +3312,11 @@ export class Host {
     }
   }
 
-  /** The player's answer to pendingNavigation. */
+  /** The user's answer to pendingNavigation. */
   private chooseNavigation(choice: "new-panel" | "cancel"): void {
     const pending = this.pendingNavigation;
     this.pendingNavigation = null;
-    if (pending && choice === "new-panel" && this.game?.id === pending.gameId) this.openPanelOn(pending.moduleId, pending.panelType, pending.content);
+    if (pending && choice === "new-panel" && this.workspace?.id === pending.workspaceId) this.openPanelOn(pending.moduleId, pending.panelType, pending.content);
     else this.pushState();
   }
 
@@ -3342,13 +3348,13 @@ export class Host {
     return new Set(module ? this.grants.allowed(module).network : []);
   }
 
-  private createBrowser(record: InstanceRecord, game: TavoraGame): void {
+  private createBrowser(record: InstanceRecord, workspace: TavoraWorkspace): void {
     const { instanceId } = record;
     const panel: BrowserPanel = new BrowserPanel({
       instanceId,
       devTools: this.options.devTools,
       background: () => this.currentTheme.tokens.background,
-      sessionFor: (kind) => this.browserSessionFor(kind, game.id),
+      sessionFor: (kind) => this.browserSessionFor(kind, workspace.id),
       isSharedSite: (url) => this.isSiteListed("sharedSites", url),
       adblockOn: (url) => !this.isSiteListed("adblockOff", url),
       swap: (previous, next) => {
@@ -3371,7 +3377,7 @@ export class Host {
         try {
           this.openBrowserTab(instanceId, url, background);
         } catch (error) {
-          // The workspace is full; the player is told the same as for Add module.
+          // The workspace is full; the user is told the same as for Add module.
           if (error instanceof WorkspaceError) this.notice = error.message;
         } finally {
           this.pushState();
@@ -3417,8 +3423,8 @@ export class Host {
    * A module's browser storage grew past the limit (storage-guard.ts): stop its
    * panels, clear the storage and start the panels again, and say so.
    */
-  private async purgeModuleStorage(moduleId: string, gameId: string): Promise<void> {
-    const key = `${moduleId}@${gameId}`;
+  private async purgeModuleStorage(moduleId: string, workspaceId: string): Promise<void> {
+    const key = `${moduleId}@${workspaceId}`;
     if (this.purging.has(key)) return;
     this.purging.add(key);
     try {
@@ -3467,25 +3473,25 @@ export class Host {
   private closeAllViews(): void {
     this.endOpening();
     this.cover.cancel();
-    // A panel in the layer goes on running there, also while another game or the library is shown.
+    // A panel in the layer goes on running there, also while another workspace or Home is shown.
     for (const instanceId of [...this.views.keys()]) if (!this.floating(instanceId)) this.destroyView(instanceId, false);
     this.panelBounds.clear();
   }
 
   /**
-   * Panel menu > Show in game. The click is the player's consent; the panel must be one of the game shown now, and of a
-   * type the module marked `inGame`. It is over the game only while the player holds the in-game layer open.
+   * Panel menu > Show in game. The click is the user's consent; the panel must be one of the workspace shown now, and of a
+   * type the module marked `inGame`. It is over the game only while the user holds the in-game layer open.
    */
   private showPanelInGame(instanceId: string): void {
-    const game = this.game;
-    const record = game && this.records(game.id).find((item) => item.instanceId === instanceId);
+    const workspace = this.workspace;
+    const record = workspace && this.records(workspace.id).find((item) => item.instanceId === instanceId);
     const view = this.views.get(instanceId);
     const module = record && this.modules.get(record.moduleId);
-    if (!game || !record || !module || !(view instanceof ModuleView)) throw new WorkspaceError("error.panelClosed");
+    if (!workspace || !record || !module || !(view instanceof ModuleView)) throw new WorkspaceError("error.panelClosed");
     if (!this.canShowInGame(record)) throw new WorkspaceError("error.panelNotInGame");
     const viewport = this.panelTypeOf(record)?.viewport ?? this.shown(module.manifest).viewport;
     const result = this.gameOverlays.showPanel(
-      { owner: module.owner, moduleId: module.manifest.id, gameId: game.id, instanceId },
+      { owner: module.owner, moduleId: module.manifest.id, workspaceId: workspace.id, instanceId },
       { width: viewport.preferredWidth, height: viewport.preferredHeight },
     );
     if (result === "full") this.notice = translate(this.language, "overlays.full");
@@ -3506,8 +3512,8 @@ export class Host {
   }
 
   /** A panel's record, in whichever workspace it is. */
-  private recordOf(instanceId: string, gameId?: string): InstanceRecord | undefined {
-    for (const id of gameId ? [gameId] : Object.keys(this.library.games)) {
+  private recordOf(instanceId: string, workspaceId?: string): InstanceRecord | undefined {
+    for (const id of workspaceId ? [workspaceId] : Object.keys(this.library.workspaces)) {
       const record = this.records(id).find((item) => item.instanceId === instanceId);
       if (record) return record;
     }
@@ -3515,11 +3521,11 @@ export class Host {
   }
 
   /** The view of a panel to put in a window: its own when its workspace is shown, else one made for the layer and closed when it comes back. */
-  private panelViewForLayer(instanceId: string, gameId: string): ModuleView | null {
+  private panelViewForLayer(instanceId: string, workspaceId: string): ModuleView | null {
     const existing = this.views.get(instanceId);
     if (existing) return existing instanceof ModuleView ? existing : null;
-    const record = this.recordOf(instanceId, gameId);
-    const entry = this.library.games[gameId];
+    const record = this.recordOf(instanceId, workspaceId);
+    const entry = this.library.workspaces[workspaceId];
     if (!record || !entry || record.moduleId === BROWSER_MODULE_ID) return null;
     this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
     const made = this.views.get(instanceId);
@@ -3527,8 +3533,8 @@ export class Host {
   }
 
   /** The overlay window for a panel that moves over its game: the panel's own view goes into it, and no copy is made. */
-  private openPanelWindow(request: OverlayWindowRequest & { instanceId: string; gameId: string }): GameOverlayWindow | null {
-    const view = this.window.isDestroyed() ? null : this.panelViewForLayer(request.instanceId, request.gameId);
+  private openPanelWindow(request: OverlayWindowRequest & { instanceId: string; workspaceId: string }): GameOverlayWindow | null {
+    const view = this.window.isDestroyed() ? null : this.panelViewForLayer(request.instanceId, request.workspaceId);
     if (!view || view.view.webContents.isDestroyed()) return null;
     this.tooltips.close(request.instanceId);
     this.closeModuleMenu(request.instanceId);
@@ -3545,17 +3551,17 @@ export class Host {
       ended: request.ended,
       frameText: request.frameText,
       panel: view,
-      released: () => this.panelReturned(request.instanceId, request.gameId),
+      released: () => this.panelReturned(request.instanceId, request.workspaceId),
     });
   }
 
   /** A panel's overlay window let go of it (the layer closed, Stop showing in game, overlays turned off): back into its workspace slot. */
-  private panelReturned(instanceId: string, gameId: string): void {
+  private panelReturned(instanceId: string, workspaceId: string): void {
     const view = this.views.get(instanceId);
     // Not here any more: the panel itself is closing (destroyView), or Tavora is.
     if (!(view instanceof ModuleView) || this.windowClosed || this.window.isDestroyed() || view.view.webContents.isDestroyed()) return;
-    // The slot it comes back to is not on screen: the panel closes like any panel of a game that is left, and opens again with its game.
-    if (this.gameId !== gameId) return this.destroyView(instanceId, false);
+    // The slot it comes back to is not on screen: the panel closes like any panel of a workspace that is left, and opens again with its workspace.
+    if (this.workspaceId !== workspaceId) return this.destroyView(instanceId, false);
     this.window.contentView.addChildView(view.view);
     view.setVisible(false);
     // Laid out right now: its overlay window still counts as holding it while this runs, so applyBounds would skip it
@@ -3609,8 +3615,8 @@ export class Host {
   private layOut(instanceId: string, view: ModuleView | BrowserPanel): void {
     const rect = this.panelBounds.get(instanceId);
     if (rect) view.setBounds(rect);
-    // A module page stays hidden until it has its data, so switching games does not show it building itself;
-    // while a game opens, every panel waits for the others.
+    // A module page stays hidden until it has its data, so switching workspaces does not show it building itself;
+    // while a workspace opens, every panel waits for the others.
     view.setVisible(rect !== undefined && !this.overlay && !this.opening && (!(view instanceof ModuleView) || view.revealed));
     if (rect && !this.windowHidden) view.resume();
     else view.suspend();
@@ -3747,7 +3753,7 @@ export class Host {
     });
   }
 
-  /** The player chose an item or closed the menu. Only an item the module offered (and did not disable) counts. */
+  /** The user chose an item or closed the menu. Only an item the module offered (and did not disable) counts. */
   private answerModuleMenu(raw: unknown): void {
     const answer = (typeof raw === "object" && raw !== null ? raw : {}) as { requestId?: unknown; id?: unknown };
     const open = this.moduleMenu;
@@ -3770,69 +3776,70 @@ export class Host {
 
   // ── State ────────────────────────────────────────────────────────────
 
-  private supportsGame(module: InstalledModule, gameId: string): boolean {
-    const { games, workspaces } = module.manifest;
-    const entry = this.library.games[gameId];
-    // A workspace belongs to no game: only modules for any game that did not opt out go there.
-    if (entry?.kind === "workspace") return games.length === 0 && workspaces !== false;
+  private supportsWorkspace(module: InstalledModule, workspaceId: string): boolean {
+    const { games } = module.manifest;
+    const entry = this.library.workspaces[workspaceId];
+    // A personal workspace belongs to no game: only modules for any game that did not opt out go there.
+    if (entry?.kind === "personal") return allowsPersonalWorkspaces(module.manifest);
+    // A game workspace's id is its game's.
     const catalogId = entry?.catalogId;
-    return games.length === 0 || games.includes(gameId) || (catalogId != null && games.includes(catalogId));
+    return games.length === 0 || games.includes(workspaceId) || (catalogId != null && games.includes(catalogId));
   }
 
-  /** The game's own icon as an address, with the version of its file so a replaced file shows at once, and how it sits in its tile. */
-  private ownIcon(game: GameEntry): { steamIcon: string | null; steamIconTone: IconTone | null } {
-    if (!(this.library.steamIcons && game.useOriginalIcon && game.iconFile)) return { steamIcon: null, steamIconTone: null };
+  /** A game workspace's own icon (its game's) as an address, with the version of its file so a replaced file shows at once, and how it sits in its tile. */
+  private ownIcon(workspace: WorkspaceEntry): { steamIcon: string | null; steamIconTone: IconTone | null } {
+    if (!(this.library.steamIcons && workspace.useOriginalIcon && workspace.iconFile)) return { steamIcon: null, steamIconTone: null };
     const dir = this.steamIconDir;
     return {
-      steamIcon: `${STEAM_ICON_URL}${game.iconFile}?v=${iconVersion(dir, game.iconFile)}`,
-      steamIconTone: (this.toneReader ??= createToneReader(dir, loadSmallBitmap))(game.iconFile),
+      steamIcon: `${STEAM_ICON_URL}${workspace.iconFile}?v=${iconVersion(dir, workspace.iconFile)}`,
+      steamIconTone: (this.toneReader ??= createToneReader(dir, loadSmallBitmap))(workspace.iconFile),
     };
   }
 
   private toneReader: ((file: string) => IconTone) | undefined;
 
-  private gameView(game: GameEntry): GameView {
+  private workspaceView(workspace: WorkspaceEntry): WorkspaceView {
     return {
-      id: game.id,
-      kind: game.kind,
-      name: game.name,
-      icon: game.icon.kind === "image" ? { kind: "image", url: ICON_URL + game.icon.file } : game.icon,
-      ...this.ownIcon(game),
-      iconChoice: game.icon.kind === "image" ? "image" : game.useOriginalIcon ? "original" : "letters",
-      shareIcon: ((file) => (file ? STEAM_ICON_URL + file : null))(this.shareableFile(game)),
-      builtIn: game.catalogId !== null,
-      addedAt: game.addedAt,
-      lastPlayedAt: game.lastPlayedAt,
+      id: workspace.id,
+      kind: workspace.kind,
+      name: workspace.name,
+      icon: workspace.icon.kind === "image" ? { kind: "image", url: ICON_URL + workspace.icon.file } : workspace.icon,
+      ...this.ownIcon(workspace),
+      iconChoice: workspace.icon.kind === "image" ? "image" : workspace.useOriginalIcon ? "original" : "letters",
+      shareIcon: ((file) => (file ? STEAM_ICON_URL + file : null))(this.shareableFile(workspace)),
+      builtIn: workspace.catalogId !== null,
+      addedAt: workspace.addedAt,
+      lastOpenedAt: workspace.lastOpenedAt,
     };
   }
 
   /** What the host UI shows. `target`: the window it is for; the hotkey dialog is in the one that asked for it only. */
   private viewState(target: "main" | "layout" = "main"): HostViewState {
     const library = this.library;
-    const game = this.game;
-    const workspace = game ? this.workspaces.game(game.id) : emptyGameWorkspace();
-    const games: Record<string, GameView> = {};
-    for (const entry of Object.values(library.games)) {
-      if (entry.trashedAt === null) games[entry.id] = this.gameView(entry);
+    const current = this.workspace;
+    const workspace = current ? this.workspaces.workspace(current.id) : emptyWorkspace();
+    const workspaces: Record<string, WorkspaceView> = {};
+    for (const entry of Object.values(library.workspaces)) {
+      if (entry.trashedAt === null) workspaces[entry.id] = this.workspaceView(entry);
     }
     return {
       screen: this.screen,
-      currentGameId: game?.id ?? null,
+      currentWorkspaceId: current?.id ?? null,
       library: {
-        games,
+        workspaces,
         folders: structuredClone(library.folders),
-        root: sortedRoot(library, this.playedAtStart),
+        root: sortedRoot(library, this.openedAtStart),
         favorites: [...library.favorites],
-        recent: recentGames(library, 8).map((entry) => entry.id),
-        trash: trashedGames(library).map((entry) => ({
-          game: this.gameView(entry),
+        recent: recentWorkspaces(library, 8).map((entry) => entry.id),
+        trash: trashedWorkspaces(library).map((entry) => ({
+          workspace: this.workspaceView(entry),
           trashedAt: entry.trashedAt!,
           purgeAt: purgeDate(entry).toISOString(),
         })),
         sort: library.sort,
         startup: library.startup,
         gameStart: library.gameStart,
-        gameEndWorkspace: library.gameEndWorkspace && isLive(library, library.gameEndWorkspace) ? library.gameEndWorkspace : null,
+        gameEndWorkspaceId: library.gameEndWorkspaceId && isLive(library, library.gameEndWorkspaceId) ? library.gameEndWorkspaceId : null,
         grayscaleText: library.grayscaleText,
         onlineSearch: library.onlineSearch,
         autoUpdate: library.autoUpdate,
@@ -3848,7 +3855,7 @@ export class Host {
         id: module.manifest.id,
         name: this.shown(module.manifest).name,
         description: this.shown(module.manifest).description ?? null,
-        available: game !== null && this.supportsGame(module, game.id),
+        available: current !== null && this.supportsWorkspace(module, current.id),
         minWidth: module.manifest.viewport.minWidth,
         minHeight: module.manifest.viewport.minHeight,
         panels: panelTypes(this.shown(module.manifest)).map((type) => ({
@@ -3875,7 +3882,7 @@ export class Host {
           granted: this.grants.allowed(module),
           missing: this.grants.missing(module),
         },
-        usedIn: this.gamesUsing(module.manifest.id),
+        usedIn: this.workspacesUsing(module.manifest.id),
         notes: this.notesView(module),
         update: ((pending) => (pending ? { version: pending.version, asks: { network: [...pending.asks.network], connectors: [...pending.asks.connectors] }, notes: pending.notes } : null))(
           this.lifecycle.updates.pending(module.manifest.id),
@@ -3934,7 +3941,7 @@ export class Host {
           // A new page is also waiting until it has drawn once: its loader stays under the see-through view until then.
           const waiting = !overGame && (status === "loading" || status === "ready") && (!view?.revealed || !view.firstDrawn);
           const inGame = this.gameOverlays.hasPanel(record.instanceId);
-          const live = this.gameOverlays.liveFor(record.instanceId, this.modules.get(record.moduleId)?.owner ?? "", record.moduleId, game?.id ?? "");
+          const live = this.gameOverlays.liveFor(record.instanceId, this.modules.get(record.moduleId)?.owner ?? "", record.moduleId, current?.id ?? "");
           return {
             instanceId: record.instanceId,
             moduleId: record.moduleId,
@@ -3958,7 +3965,7 @@ export class Host {
       layoutEpoch: this.workspaces.epoch,
       opening: this.opening !== null,
       pendingLink: this.pendingLink,
-      runningGameId: this.running.filter((id) => id !== this.gameId && isLive(this.library, id)).at(-1) ?? null,
+      runningGameId: this.running.filter((id) => id !== this.workspaceId && isLive(this.library, id)).at(-1) ?? null,
       pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
       streaming: this.streaming.view(),
       gameOverlays: this.gameOverlays.view(),
@@ -3993,7 +4000,7 @@ export class Host {
 
   private appearanceView(): AppearanceView {
     const { theme, variation } = this.currentChoice();
-    // Official themes first, the default leading, then the player's own by name.
+    // Official themes first, the default leading, then the user's own by name.
     const order = (entry: InstalledTheme) => (entry.theme.id === DEFAULT_THEME.id ? 0 : entry.provenance === "official" ? 1 : 2);
     const themes = [...this.themes.values()].sort((a, b) => order(a) - order(b) || a.theme.name.localeCompare(b.theme.name));
     return {
@@ -4016,7 +4023,7 @@ export class Host {
   private pushState(): void {
     clearImmediate(this.statePush);
     this.statePush = undefined;
-    // Hotkeys follow the game shown now and its panels, which most changes that push the state can move.
+    // Hotkeys follow the workspace shown now and its panels, which most changes that push the state can move.
     this.streaming?.sync();
     this.syncConnection();
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
@@ -4029,22 +4036,22 @@ export class Host {
   private statePush: ReturnType<typeof setImmediate> | undefined;
 
   /**
-   * The connection watcher runs while the System Monitor module is in any game or workspace and the player has granted
+   * The connection watcher runs while the System Monitor module is in any workspace and the user has granted
    * it System info, whether or not a panel is shown, so drops are logged. Asked after every change of panels or grants.
    */
   private syncConnection(): void {
     if (!this.connection) return;
-    const present = this.workspaces.gamesUsing(SYSTEM_MONITOR_ID).length > 0;
+    const present = this.workspaces.workspacesUsing(SYSTEM_MONITOR_ID).length > 0;
     this.connection.setActive(process.platform === "win32" && present && this.connectorsOf(SYSTEM_MONITOR_ID).has("system-info"));
   }
 
-  /** Pushes the state once for a burst of changes, such as every panel of a game that just opened loading at once. */
+  /** Pushes the state once for a burst of changes, such as every panel of a workspace that just opened loading at once. */
   private pushStateSoon(): void {
     this.statePush ??= setImmediate(() => this.pushState());
   }
 
   /**
-   * The system's open dialog, opening in the folder the player last picked from in this `place` while
+   * The system's open dialog, opening in the folder the user last picked from in this `place` while
    * that folder is still there. Answers with what was picked, or nothing when cancelled; the caller
    * remembers it (rememberPicked) only once it worked, so a zip that failed to install is not where it opens next.
    */
@@ -4057,8 +4064,8 @@ export class Host {
 
   /**
    * pictures.save: the system's save dialog with the module's name suggested (numbered when taken), opening in the
-   * folder the player last saved a picture to while it is still there, else Pictures\Tavora. Answers with the name
-   * the file was saved under, or null when the player closed the dialog.
+   * folder the user last saved a picture to while it is still there, else Pictures\Tavora. Answers with the name
+   * the file was saved under, or null when the user closed the dialog.
    */
   private async savePictureAs(png: Buffer, name: string): Promise<string | null> {
     const last = this.library.dialogFolders["save-picture"];
@@ -4074,7 +4081,7 @@ export class Host {
     if (picked.canceled || !picked.filePath) return null;
     const chosen = path.resolve(picked.filePath);
     const file = /\.png$/i.test(chosen) ? chosen : `${chosen}.png`;
-    // The dialog asked before replacing the file the player chose; with .png added, it was never asked about.
+    // The dialog asked before replacing the file the user chose; with .png added, it was never asked about.
     try {
       await writeFile(file, png, { flag: file === chosen ? "w" : "wx" });
     } catch (error) {
@@ -4085,7 +4092,7 @@ export class Host {
     return path.basename(file);
   }
 
-  /** The folder a module's file dialogs open in: where the player last saved or opened a file for it while that is still there, else Documents\Tavora (made when needed). */
+  /** The folder a module's file dialogs open in: where the user last saved or opened a file for it while that is still there, else Documents\Tavora (made when needed). */
   private async fileFolderOf(module: InstalledModule): Promise<string> {
     const last = this.library.moduleFolders[Host.notesKey(module)];
     const folder = last && existsSync(last) ? last : documentsFolder();
@@ -4101,7 +4108,7 @@ export class Host {
   /**
    * files.saveJson: the system's save dialog with the module's name suggested (numbered when taken), opening in the
    * module's remembered folder, else Documents\Tavora. Answers with the name the file was saved under, or null when
-   * the player closed the dialog.
+   * the user closed the dialog.
    */
   private async saveJsonAs(module: InstalledModule, data: Buffer, name: string): Promise<string | null> {
     const folder = await this.fileFolderOf(module);
@@ -4115,7 +4122,7 @@ export class Host {
     if (picked.canceled || !picked.filePath) return null;
     const chosen = path.resolve(picked.filePath);
     const file = /\.json$/i.test(chosen) ? chosen : `${chosen}.json`;
-    // The dialog asked before replacing the file the player chose; with .json added, it was never asked about.
+    // The dialog asked before replacing the file the user chose; with .json added, it was never asked about.
     try {
       await writeFile(file, data, { flag: file === chosen ? "w" : "wx" });
     } catch (error) {
@@ -4128,7 +4135,7 @@ export class Host {
 
   /**
    * files.openJson: the system's open dialog in the module's remembered folder, else Documents\Tavora. Answers with
-   * the chosen file's name and text (at most 8 MiB), or null when the player closed the dialog. The folder is
+   * the chosen file's name and text (at most 8 MiB), or null when the user closed the dialog. The folder is
    * remembered once the file was read.
    */
   private async openJsonFrom(module: InstalledModule): Promise<{ fileName: string; text: string } | null> {
@@ -4184,7 +4191,7 @@ export class Host {
 
   /**
    * Shows Tavora's consent dialog for one connector a module asks for on request, after a click in its panel; resolves
-   * with whether the player allowed it. A newer request closes an older one as not allowed.
+   * with whether the user allowed it. A newer request closes an older one as not allowed.
    */
   private askConnector(moduleId: string, connector: Connector): Promise<boolean> {
     this.pendingConnector?.resolve(false);
@@ -4194,7 +4201,7 @@ export class Host {
     });
   }
 
-  /** The player's answer; allowing grants that connector alone, and the module's panels go on running with it. */
+  /** The user's answer; allowing grants that connector alone, and the module's panels go on running with it. */
   private async answerConnector(id: number, allow: boolean): Promise<void> {
     const pending = this.pendingConnector;
     if (!pending || pending.id !== id) return;
@@ -4231,14 +4238,14 @@ export class Host {
     });
   }
 
-  /** The Overlay layout (overlay-layout.ts): the window where the player arranges the overlays and panels in game. */
+  /** The Overlay layout (overlay-layout.ts): the window where the user arranges the overlays and panels in game. */
   private static layoutService(host: Host): OverlayLayout {
     const options = host.options;
     const pictures = new LayoutPictures(path.join(options.userData, PICTURES_FOLDER));
     const layout: OverlayLayout = new OverlayLayout({
       source: host.gameOverlays.layout,
       pictures,
-      gameName: (gameId) => host.library.games[gameId]?.name ?? null,
+      gameName: (gameId) => host.library.workspaces[gameId]?.name ?? null,
       screen: () => screen.getPrimaryDisplay().workArea,
       enabled: () => host.library.gameOverlays,
       language: () => host.language,
@@ -4268,7 +4275,7 @@ export class Host {
         host.layoutWindow = window;
         return window;
       },
-      // Only on the player's click, only the game's own window, with the OS's window capture (as OBS's Window Capture does).
+      // Only on the user's click, only the game's own window, with the OS's window capture (as OBS's Window Capture does).
       capture: async (handle, size) => {
         if (options.hidden) return null;
         // The first look asks for no picture at all (a 0 x 0 thumbnail), only for the list: no such window open, nothing to take.
@@ -4328,17 +4335,18 @@ export class Host {
       enabled: () => host.library.gameOverlays,
       stay: () => host.library.overlaysStay,
       module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
-      gameName: (gameId) => host.library.games[gameId]?.name ?? null,
+      workspaceName: (workspaceId) => host.library.workspaces[workspaceId]?.name ?? null,
       gamesOf: (program) => host.gameWatcher.gamesOf(program),
-      scopeOf: (gameId) => ((entry) => (entry ? scopeForKind(entry.kind) : "game"))(host.library.games[gameId]),
-      gameIds: () => Object.values(host.library.games).filter((game) => game.kind === "game" && !game.trashedAt).map((game) => game.id),
+      scopeOf: (workspaceId) => ((entry) => (entry ? scopeForKind(entry.kind) : "game"))(host.library.workspaces[workspaceId]),
+      // The games of the game workspaces, by their ids (a game workspace's id is its game's).
+      gameIds: () => Object.values(host.library.workspaces).filter((entry) => entry.kind === "game" && !entry.trashedAt).map((entry) => entry.id),
       openVeil: () => new GameVeilWindow({ hidden: !!options.hidden }),
       panels: {
         name: (instanceId) => host.panelName(instanceId),
-        exists: (gameId, instanceId) => host.recordOf(instanceId, gameId) !== undefined,
+        exists: (workspaceId, instanceId) => host.recordOf(instanceId, workspaceId) !== undefined,
         // Unknown (module not loaded yet) counts as allowed: a panel is dropped only when its type is known to say no.
-        allowed: (gameId, instanceId) => {
-          const record = host.recordOf(instanceId, gameId);
+        allowed: (workspaceId, instanceId) => {
+          const record = host.recordOf(instanceId, workspaceId);
           // A module without panel types says it at the top (`inGame`), as To-Dos does.
           return !record || host.panelTypeOf(record) === undefined || host.canShowInGame(record);
         },
@@ -4347,8 +4355,8 @@ export class Host {
           return view instanceof ModuleView ? view.usedAt : 0;
         },
         openWindow: (request) => host.openPanelWindow(request),
-        preferred: (gameId, instanceId) => {
-          const record = host.recordOf(instanceId, gameId);
+        preferred: (workspaceId, instanceId) => {
+          const record = host.recordOf(instanceId, workspaceId);
           const module = record && host.modules.get(record.moduleId);
           if (!record || !module) return null;
           const viewport = host.panelTypeOf(record)?.viewport ?? host.shown(module.manifest).viewport;
@@ -4411,8 +4419,8 @@ export class Host {
       module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
       overlayGranted: (moduleId) => host.connectorsOf(moduleId).has("stream-overlay"),
       askConnector: (moduleId, connector) => host.askConnector(moduleId, connector),
-      gameId: () => host.gameId,
-      gameName: (gameId) => host.library.games[gameId]?.name ?? null,
+      workspaceId: () => host.workspaceId,
+      workspaceName: (workspaceId) => host.library.workspaces[workspaceId]?.name ?? null,
       panels: () => [...host.views.values()].filter((view): view is ModuleView => view instanceof ModuleView),
       shortcuts: globalShortcut,
       writeClipboard: (text) => clipboard.writeText(text),
@@ -4437,13 +4445,13 @@ export class Host {
 }
 
 /**
- * Serves the trusted host UI, plus game icons and the profile picture the player picked, and blocks
+ * Serves the trusted host UI, plus game icons and the profile picture the user picked, and blocks
  * all network for the host renderer. With a dev server, the host UI comes
  * from there instead, and only that server is reachable.
  */
 async function registerHostProtocol(rendererDir: string, imageDirs: Record<string, string>, devServer?: string): Promise<void> {
   const root = devServer ? null : await realpath(rendererDir);
-  // Pictures the player picked, each folder under its own URL prefix.
+  // Pictures the user picked, each folder under its own URL prefix.
   const images = new Map<string, string>();
   for (const [prefix, dir] of Object.entries(imageDirs)) {
     await mkdir(dir, { recursive: true });

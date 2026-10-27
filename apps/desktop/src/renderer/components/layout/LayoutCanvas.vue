@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The layer over the Overlay layout's canvas: a transparent page that takes the mouse (the live pages below it can't) and
-// draws what the player works with: each item's outline, the selection with its eight handles, the key of a toggle
+// draws what the user works with: each item's outline, the selection with its eight handles, the key of a toggle
 // item, and the guide lines while something snaps. Dragging works in canvas units (the game window at 1080 high); the
 // main process moves the live pages and keeps the result. Holding Alt places freely.
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";

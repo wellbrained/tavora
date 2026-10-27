@@ -3,7 +3,7 @@
 /** Same rule as `isGameId` in @tavora/module-schema; a test keeps them equal. */
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
-/** Custom games made on a player's PC start with this; no canonical id may. */
+/** Custom games made on a user's PC start with this; no canonical id may. */
 export const LOCAL_PREFIX = "local-";
 
 export function isCanonicalId(value: unknown): value is string {

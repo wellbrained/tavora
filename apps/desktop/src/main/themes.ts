@@ -239,7 +239,7 @@ export const FALLBACK_THEME: ThemePackage = {
 export interface ThemeSources {
   /** Themes that ship with Tavora. Searched first, so they win over a local copy. */
   official?: string[];
-  /** The player's own themes folder, and any extra folders in development. */
+  /** The user's own themes folder, and any extra folders in development. */
   local?: string[];
 }
 
@@ -332,7 +332,7 @@ export function variationForMode(theme: ThemePackage, saved: string, mode: "dark
 
 /**
  * The theme and variation to show for a saved choice; anything missing falls back to the default. With a
- * `systemMode` (the player follows the system) the variation is the one that suits it.
+ * `systemMode` (the user follows the system) the variation is the one that suits it.
  */
 export function resolveTheme(
   themes: Map<string, InstalledTheme>,
@@ -362,7 +362,7 @@ export function moduleTheme(variation: ThemeVariation): TavoraTheme {
   };
 }
 
-// ── A starter for the player's own theme ─────────────────────────────────
+// ── A starter for the user's own theme ─────────────────────────────────
 
 export const STARTER_README = `Your own Tavora theme
 =====================
@@ -370,7 +370,7 @@ export const STARTER_README = `Your own Tavora theme
 This folder is a theme. Tavora reads only tavora.theme.json in it.
 
 1. Change the colours in tavora.theme.json. Every colour is #rrggbb.
-   "dark" and "light" are the two variations players switch between.
+   "dark" and "light" are the two variations users switch between.
 2. In Tavora, open Settings > Appearance and press Reload.
 3. Pick your theme. If something is wrong, Appearance says what,
    for example a colour pair without enough contrast.
@@ -397,7 +397,7 @@ export function starterTheme(themes: Map<string, InstalledTheme>, suffix: number
   };
 }
 
-/** The manifest as written to disk: defaults that a player would not need are left out. */
+/** The manifest as written to disk: defaults that a user would not need are left out. */
 export function themeManifest(theme: ThemePackage): string {
   const variations = theme.variations.map(({ contrast, ...rest }) => (contrast === "high" ? { ...rest, contrast } : rest));
   return `${JSON.stringify({ id: theme.id, name: theme.name, description: theme.description, author: theme.author, version: theme.version, variations }, null, 2)}\n`;

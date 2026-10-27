@@ -13,7 +13,7 @@ import {
   launch,
   noteText,
   onWindow,
-  openGame,
+  openWorkspace,
   openModule,
   panels,
   saveNote,
@@ -26,7 +26,7 @@ for (const { name, id } of EXAMPLES) {
     await openModule(page, id);
     await expectModuleText(app, id, "status", "Connected", 0);
     await expectModuleText(app, id, "status", "Connected", 1);
-    await expectModuleText(app, id, "game", "Path of Exile 2", 0);
+    await expectModuleText(app, id, "workspace", "Path of Exile 2", 0);
 
     await saveNote(app, id, "Act 2: get the second ascendancy", 0);
     await expectModuleText(app, id, "note-status", "Saved", 0);
@@ -94,7 +94,7 @@ test("modules are suspended while the window is hidden and resumed when it is sh
   await app.close();
 });
 
-test("each module's documents are private to it and to the current game", async () => {
+test("each module's documents are private to it and to the current workspace", async () => {
   const { app, page } = await launch();
   const [vanilla, react] = EXAMPLES;
   await openModule(page, vanilla.id);
@@ -108,12 +108,12 @@ test("each module's documents are private to it and to the current game", async 
   await expectModuleText(app, react.id, "note-status", "");
   expect(await noteText(app, react.id)).toBe("");
 
-  // The same module in another game starts empty.
-  await openGame(page, "satisfactory");
+  // The same module in another workspace starts empty.
+  await openWorkspace(page, "satisfactory");
   await openModule(page, vanilla.id);
   await expectModuleText(app, vanilla.id, "status", "Connected");
   await expect
-    .poll(() => inModule<string>(app, vanilla.id, `document.querySelector('[data-testid="game"]').dataset.gameId`))
+    .poll(() => inModule<string>(app, vanilla.id, `document.querySelector('[data-testid="workspace"]').dataset.workspaceId`))
     .toBe("satisfactory");
   await expectModuleText(app, vanilla.id, "note-revision", "0");
   await app.close();

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Ctrl+K: one box to jump to a game, open a module, use a saved layout,
+// Ctrl+K: one box to jump to a workspace, open a module, use a saved layout,
 // run an action or find a setting. Arrow keys move, Enter runs, Escape
 // closes.
 import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, SlidersHorizontal } from "@lucide/vue";
@@ -8,12 +8,12 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/o
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
-import type { CatalogMatch, GameView, OnlineGame } from "../../shared/host-api";
+import type { CatalogMatch, OnlineGame, WorkspaceView } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { act, addModule, api, dialog, hiddenSettingIds, hiddenSettings, openSettings, searchOpen, showOrAddPanel, state } from "../host";
 import { t, templateName } from "../i18n";
 
-import GameIcon from "./GameIcon.vue";
+import WorkspaceIcon from "./WorkspaceIcon.vue";
 import { sectionLabel, settingEntries } from "./settings/settings-index";
 
 interface Item {
@@ -24,12 +24,12 @@ interface Item {
   /** Other words that find the item. */
   keywords?: string[];
   icon?: Component;
-  game?: GameView;
+  workspace?: WorkspaceView;
   run: () => unknown;
 }
 
 interface Group {
-  id: "games" | "game" | "actions" | "settings" | "add";
+  id: "workspaces" | "here" | "actions" | "settings" | "add";
   label: string;
   items: Item[];
 }
@@ -52,7 +52,7 @@ watch(searchOpen, (open) => {
   }
 });
 
-// Games Tavora knows but the player has not added yet: the built-in list at
+// Games Tavora knows but the user has not added yet: the built-in list at
 // once, the Tavora service a moment after typing stops.
 const ONLINE_DELAY_MS = 250;
 const MAX_ADD_ITEMS = 5;
@@ -81,8 +81,8 @@ watch(query, (text) => {
 
 type NewGame = { catalogId: string } | { online: OnlineGame };
 async function addAndOpen(input: NewGame) {
-  const added = await act({ type: "add-game", ...input });
-  if (added.ok && added.id) await act({ type: "open-game", gameId: added.id });
+  const added = await act({ type: "add-workspace", ...input });
+  if (added.ok && added.id) await act({ type: "open-workspace", workspaceId: added.id });
 }
 
 const addItems = computed<Item[]>(() => {
@@ -101,7 +101,7 @@ const addItems = computed<Item[]>(() => {
 
 const view = computed(() => state.value!);
 const library = computed(() => view.value.library);
-const currentGame = computed(() => (view.value.screen === "game" && view.value.currentGameId ? library.value.games[view.value.currentGameId] : undefined));
+const currentWorkspace = computed(() => (view.value.screen === "workspace" && view.value.currentWorkspaceId ? library.value.workspaces[view.value.currentWorkspaceId] : undefined));
 
 /** Closes the box first, so the action's own dialog or screen takes over. */
 const close = (then: () => unknown) => () => {
@@ -109,36 +109,36 @@ const close = (then: () => unknown) => () => {
   return then();
 };
 
-// Recently played first, then the rest by name.
-const gamesInOrder = computed(() => {
-  const recent = library.value.recent.filter((id) => library.value.games[id]);
-  const rest = Object.values(library.value.games)
-    .filter((game) => !recent.includes(game.id))
+// Recently opened first, then the rest by name.
+const workspacesInOrder = computed(() => {
+  const recent = library.value.recent.filter((id) => library.value.workspaces[id]);
+  const rest = Object.values(library.value.workspaces)
+    .filter((workspace) => !recent.includes(workspace.id))
     .sort((a, b) => a.name.localeCompare(b.name));
-  return [...recent.map((id) => library.value.games[id]!), ...rest];
+  return [...recent.map((id) => library.value.workspaces[id]!), ...rest];
 });
 
 const groups = computed<Group[]>(() => {
   const all: Group[] = [
     {
-      id: "games",
-      label: t("common.games"),
+      id: "workspaces",
+      label: t("common.workspaces"),
       items: [
         { id: "home", label: t("rail.home"), keywords: splitWords(t("search.homeKeywords")), icon: Home, run: close(() => act({ type: "show-welcome" })) },
-        ...gamesInOrder.value.map((game) => ({
-          id: `game-${game.id}`,
-          label: game.name,
-          hint: game.id === currentGame.value?.id ? t("search.openNow") : undefined,
-          game,
-          run: close(() => act({ type: "open-game", gameId: game.id })),
+        ...workspacesInOrder.value.map((workspace) => ({
+          id: `workspace-${workspace.id}`,
+          label: workspace.name,
+          hint: workspace.id === currentWorkspace.value?.id ? t("search.openNow") : undefined,
+          workspace,
+          run: close(() => act({ type: "open-workspace", workspaceId: workspace.id })),
         })),
       ],
     },
   ];
-  if (currentGame.value) {
+  if (currentWorkspace.value) {
     all.push({
-      id: "game",
-      label: t("search.group.in", { name: currentGame.value.name }),
+      id: "here",
+      label: t("search.group.in", { name: currentWorkspace.value.name }),
       items: [
         // A module with panel types is one entry per type; an open one comes to the front instead of opening twice.
         ...view.value.modules
@@ -214,7 +214,7 @@ const groups = computed<Group[]>(() => {
   return all;
 });
 
-// Without a query: Home, recent games and what the current game offers.
+// Without a query: Home, recent workspaces and what the current workspace offers.
 // Settings only show up once something is typed.
 const shown = computed<Group[]>(() => {
   const text = query.value.trim();
@@ -222,8 +222,8 @@ const shown = computed<Group[]>(() => {
   const ranked = groups.value
     .map((group) => ({ ...group, items: rank(group.items, text, (item) => ({ name: item.label, extra: item.keywords })) }))
     .filter((group) => group.items.length > 0);
-  // Already ranked by the search itself, and placed after the player's own games.
-  if (addItems.value.length) ranked.splice(ranked[0]?.id === "games" ? 1 : 0, 0, { id: "add", label: t("addGame.title"), items: addItems.value });
+  // Already ranked by the search itself, and placed after the user's own workspaces.
+  if (addItems.value.length) ranked.splice(ranked[0]?.id === "workspaces" ? 1 : 0, 0, { id: "add", label: t("addGame.title"), items: addItems.value });
   return ranked;
 });
 
@@ -297,7 +297,7 @@ function onKey(event: KeyboardEvent) {
             @mousemove="active = flat.indexOf(item)"
             @click="item.run()"
           >
-            <GameIcon v-if="item.game" :game="item.game" :size="24" />
+            <WorkspaceIcon v-if="item.workspace" :workspace="item.workspace" :size="24" />
             <component :is="item.icon" v-else class="text-muted-foreground size-5 flex-none" :stroke-width="1.5" />
             <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
             <span v-if="item.hint" class="text-muted-foreground flex-none text-xs">{{ item.hint }}</span>

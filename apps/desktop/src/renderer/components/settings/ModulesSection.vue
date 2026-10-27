@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Settings > Modules: what is installed and where it came from, and the
-// player's own modules folder, the same way themes have theirs. Install from
+// user's own modules folder, the same way themes have theirs. Install from
 // zip checks and unpacks a module zip into the folder; dropping a module
 // package into the folder and pressing Reload adds it too. Remove moves it
 // to the recycle bin. A module's data stays, so adding it again finds it.
@@ -15,7 +15,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { act, confirmAction, dialog, gamesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
+import { act, confirmAction, dialog, workspacesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
 import { problemText } from "../../../shared/module-problem";
 import { t } from "../../i18n";
 import ModuleGrantsSection from "./ModuleGrantsSection.vue";
@@ -32,7 +32,7 @@ const modules = computed(() => state.value!.modules);
 const problems = computed(() => state.value!.moduleProblems);
 const leftover = computed(() => state.value!.leftoverModuleData);
 const files = computed(() => state.value!.moduleFiles);
-// Tavora's own modules first, then the player's; development modules are listed in Settings > Development.
+// Tavora's own modules first, then the user's; development modules are listed in Settings > Development.
 const sorted = computed(() => {
   const rank = (module: ModuleView) => (module.provenance === "official" ? 0 : 1);
   return modules.value.filter((module) => !module.development).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
@@ -48,7 +48,7 @@ function openLibrary() {
   dialog.value = { kind: "add-module", view: "catalog" };
 }
 
-/** Panels of a module that are open in the current game, so Remove can say what closes. */
+/** Panels of a module that are open in the current workspace, so Remove can say what closes. */
 function openCount(moduleId: string): number {
   return state.value!.panels.filter((panel) => panel.moduleId === moduleId).length;
 }
@@ -85,7 +85,7 @@ async function checkUpdates() {
   const updated = result.updated ?? 0;
   const waiting = result.waiting ?? 0;
   if (updated + waiting === 0) showToast(t("settings.modules.updatesNone"));
-  // Nothing installed: they were only found, and wait for the player.
+  // Nothing installed: they were only found, and wait for the user.
   else if (updated === 0) showToast(t("settings.modules.updatesWaiting", { count: waiting }));
   else showToast(t("settings.modules.updatesFound", { updated: String(updated), waiting: String(waiting) }));
 }
@@ -123,10 +123,10 @@ function report(module: ModuleView) {
 }
 
 function remove(module: ModuleView) {
-  const games = gamesUsing(module);
+  const workspaces = workspacesUsing(module);
   confirmAction({
     title: t("settings.modules.removeTitle", { name: module.name }),
-    message: games.length ? t("settings.modules.removeMessageUsed", { games: listOf(games) }) : t("settings.modules.removeMessage"),
+    message: workspaces.length ? t("settings.modules.removeMessageUsed", { workspaces: listOf(workspaces) }) : t("settings.modules.removeMessage"),
     confirm: t("common.remove"),
     danger: true,
     run: () => submitAction({ type: "remove-module", moduleId: module.id }),

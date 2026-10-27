@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { isGameId, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, isGameId, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, SIGNATURE_FILE, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
 
@@ -70,7 +70,7 @@ export const isSignedList = (value: string): value is SignedList => (SIGNED_LIST
 
 /**
  * Version order, newest last. The same order as `compareModuleVersions` in the app's installer,
- * which decides on the player's PC whether a catalog version is an update.
+ * which decides on the user's PC whether a catalog version is an update.
  */
 export function compareModuleVersions(a: string, b: string): number {
   const split = (version: string) => {
@@ -96,7 +96,7 @@ export function compareModuleVersions(a: string, b: string): number {
 
 export interface CheckedZip {
   manifest: ModuleManifest;
-  /** The publisher key's fingerprint: whose data the module gets on a player's PC. */
+  /** The publisher key's fingerprint: whose data the module gets on a user's PC. */
   owner: string;
   sha256: string;
   size: number;
@@ -213,7 +213,7 @@ export function checkCatalogZip(bytes: Buffer): CheckedZip {
   return { manifest, owner: verified.owner, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length, notes, screenshots, icon, readme, files };
 }
 
-/** What a player sees of a module in the catalog, at its newest version. */
+/** What a user sees of a module in the catalog, at its newest version. */
 export interface CatalogEntry {
   id: string;
   name: string;
@@ -223,6 +223,8 @@ export interface CatalogEntry {
   /** Empty: for any game. */
   games: string[];
   /** Whether it may be added to a personal workspace (only modules for any game can be). */
+  personalWorkspaces: boolean;
+  /** @deprecated The same, for Tavora 0.21.42 and older, which read it under this name. Sent until Tavora's 1.0 preparation. */
   workspaces: boolean;
   permissions: { network: string[]; connectors: string[] };
   /** The fingerprint of the publisher key that signed this version: the module's first key, or its successor. */
@@ -232,7 +234,7 @@ export interface CatalogEntry {
   notes: string[];
   /** The module's web page from its manifest, http or https; the app shows it as plain text and opens it like a module link. */
   homepage: string | null;
-  /** Where players send feedback, from its manifest: an https address or an email address; the app opens it only after a click. */
+  /** Where users send feedback, from its manifest: an https address or an email address; the app opens it only after a click. */
   support: string | null;
   /** The name and description in other languages, from the manifest's `translations`, keyed by language code. */
   translations: Record<string, { name?: string; description?: string }>;
@@ -246,7 +248,7 @@ export interface CatalogVersion {
   notes: string[];
 }
 
-export type CatalogFilter = { game: string } | { workspace: true } | Record<string, never>;
+export type CatalogFilter = { game: string } | { personal: true } | Record<string, never>;
 
 export interface CatalogReport {
   sha256: string;
@@ -336,7 +338,8 @@ function entryOf(row: VersionSql): CatalogEntry {
     version: row.version,
     minTavora: manifest.minTavora ?? null,
     games: manifest.games,
-    workspaces: manifest.games.length === 0 && manifest.workspaces !== false,
+    personalWorkspaces: allowsPersonalWorkspaces(manifest),
+    workspaces: allowsPersonalWorkspaces(manifest),
     permissions: { network: manifest.permissions.network, connectors: manifest.permissions.connectors ?? [] },
     owner: row.owner,
     zip: { sha256: row.sha256, size: row.size },
@@ -384,7 +387,7 @@ export class CatalogStore {
         unique (module_id, version)
       );
     `);
-    // Reports (C12): the module, key and zip a player pressed Report on, counted, never who pressed it.
+    // Reports (C12): the module, key and zip a user pressed Report on, counted, never who pressed it.
     this.db.exec(`
       create table if not exists reports (
         sha256 text primary key, module_id text not null, owner text not null,
@@ -813,7 +816,7 @@ export class CatalogStore {
   }
 
   /**
-   * Records a player's report of a zip. Only a zip the catalog lists, under that module id and key
+   * Records a user's report of a zip. Only a zip the catalog lists, under that module id and key
    * (the module's owner, or the key that signed that version), can be reported. Reports hide nothing: a person decides on the admin page (C12).
    */
   report(input: { id: string; owner: string; sha256: string }, now: Date = new Date(), sender?: { accountId: string; reason: string | null; note: string | null }): boolean {
@@ -848,7 +851,7 @@ export class CatalogStore {
     this.db.prepare("delete from report_senders where account_id = ?").run(accountId);
   }
 
-  /** Counts one install of a listed module from Browse. Nothing about the player is kept. */
+  /** Counts one install of a listed module from Browse. Nothing about the user is kept. */
   countInstall(id: string): boolean {
     if (!this.db.prepare("select 1 from modules m where m.id = ? and m.listed = 1 and exists (select 1 from versions where module_id = m.id and status = 'listed')").get(id)) return false;
     this.db.prepare("insert into installs (module_id, count) values (?, 1) on conflict (module_id) do update set count = count + 1").run(id);
@@ -978,7 +981,7 @@ export class CatalogStore {
   index(filter: CatalogFilter = {}): CatalogEntry[] {
     const entries = (this.db.prepare(`${LATEST} order by m.id`).all() as unknown as VersionSql[]).map(entryOf);
     if ("game" in filter) return entries.filter((entry) => entry.games.length === 0 || entry.games.includes(filter.game));
-    if ("workspace" in filter) return entries.filter((entry) => entry.workspaces);
+    if ("personal" in filter) return entries.filter((entry) => entry.personalWorkspaces);
     return entries;
   }
 
@@ -1071,10 +1074,14 @@ export class CatalogStore {
   }
 }
 
-/** The filter a request asks for: `?game=<id>`, `?workspace=1`, or neither for the whole catalog. */
-export function catalogFilter(game: string | undefined, workspace: string | undefined): CatalogFilter | null {
-  if (game !== undefined && workspace !== undefined) return null;
+/**
+ * The filter a request asks for: `?game=<id>`, `?personal=1` (modules for a personal workspace), or neither for the
+ * whole catalog. Tavora 0.21.42 and older ask for the personal ones as `?workspace=1`; that is answered until its 1.0 preparation.
+ */
+export function catalogFilter(game: string | undefined, personal: string | undefined, oldPersonal?: string): CatalogFilter | null {
+  if ([game, personal, oldPersonal].filter((value) => value !== undefined).length > 1) return null;
   if (game !== undefined) return isGameId(game) ? { game } : null;
-  if (workspace !== undefined) return workspace === "1" ? { workspace: true } : null;
+  const asked = personal ?? oldPersonal;
+  if (asked !== undefined) return asked === "1" ? { personal: true } : null;
   return {};
 }

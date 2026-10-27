@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Tavora's hotkey dialog (HostViewState.hotkeyRequest), opened by a module's hotkeys.set: the player presses the keys
+// Tavora's hotkey dialog (HostViewState.hotkeyRequest), opened by a module's hotkeys.set: the user presses the keys
 // for one action. Tavora draws it and catches the keys, never the module, which only hears that the action fired.
 // The main process lets every hotkey go while it is open, so keys set already can be caught here too.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";

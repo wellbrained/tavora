@@ -1,7 +1,7 @@
 // Named panel types (the decision log, named panels rows of 2026-10-17): the
 // module library lists a module's panel types, each opens its own page and
 // tells it which type it is, and a panel whose type an update removed keeps
-// its slot until the player picks another type. Each panel shows content of
+// its slot until the user picks another type. Each panel shows content of
 // its own, kept across restarts and named on its tab's hover text, and can
 // open the module's other panels on it.
 import { readFile, writeFile } from "node:fs/promises";
@@ -47,7 +47,7 @@ test("each panel type opens its own page, named on its tab", async () => {
   // An update that drops a type leaves its panel in place, saying so, until another type is picked.
   const file = path.join(userData, "workspace.json");
   const saved = JSON.parse(await readFile(file, "utf8"));
-  for (const record of saved.games.poe2.instances) if (record.panelType === "inventory") record.panelType = "removed";
+  for (const record of saved.workspaces.poe2.instances) if (record.panelType === "inventory") record.panelType = "removed";
   await writeFile(file, JSON.stringify(saved));
   const again = await launch(userData);
   const gone = again.page.locator('[data-testid^="panel-type-gone-"]');
@@ -70,7 +70,7 @@ test("the library stays open to add several panels, and Add all opens one of eac
   await page.getByTestId(`open-${PANELS}-planner`).click();
   await expect(panels(page, PANELS)).toHaveCount(2);
   await expect(page.getByTestId("add-module-dialog")).toBeVisible();
-  await expect(page.getByTestId(`in-game-${PANELS}`)).toHaveText("2 open");
+  await expect(page.getByTestId(`in-workspace-${PANELS}`)).toHaveText("2 open");
   // A click outside the card closes the list, which drops over the card below.
   await page.getByTestId("module-view-title").click();
   await expect(page.getByTestId(`panel-types-${PANELS}`)).toHaveCount(0);
@@ -85,7 +85,7 @@ test("the library stays open to add several panels, and Add all opens one of eac
 
 const ICE_SHOT = "0.5 Ice Shot Deadeye Leveling Guide";
 
-/** Picks a build in a panel's toolbar, as the player would. */
+/** Picks a build in a panel's toolbar, as the user would. */
 async function pickBuild(app: import("@playwright/test").ElectronApplication, build: string, index: number) {
   await inModule(
     app,
@@ -102,7 +102,7 @@ test("each panel keeps the content it shows, and its tab names it on hover", asy
 
   // A fresh panel is told it was added, and picks the first build.
   await addPanel(page, "planner");
-  await expectModuleText(app, PANELS, "launch", "add: the player just added this panel, so it picked the build used last");
+  await expectModuleText(app, PANELS, "launch", "add: the user just added this panel, so it picked the build used last");
   await expect(tabs.nth(0)).toHaveAttribute("data-content", ICE_SHOT);
   await expect.poll(() => hintOf(tabs.nth(0))).toBe(`Build planner · Panel Types Example\n${ICE_SHOT}`);
   await pickBuild(app, "lightning-arrow", 0);
@@ -165,7 +165,7 @@ test("a panel opens the module's other panels on its content, switching the one 
   await page.waitForTimeout(500);
   await expect(planners.nth(0)).toHaveAttribute("data-content", "Lightning Arrow Invoker");
 
-  // A planner that cannot switch keeps its build, and the player may open the build in a new panel.
+  // A planner that cannot switch keeps its build, and the user may open the build in a new panel.
   await inModule(app, PANELS, `document.querySelector('[data-testid="refuse-switch"]').click()`, 1);
   await pickBuild(app, "minion-witch", 0);
   await press(app, "open-planner", 0);
@@ -195,10 +195,10 @@ test("the modules menu adds the panel types not open yet and brings open ones to
 
   // The toolbar's ▾ lists the module with its panel types; the open one is checked.
   await page.getByTestId("modules-in-game").click();
-  await expect(page.getByTestId(`in-game-heading-${PANELS}`)).toHaveText("Panel Types Example");
-  await expect(page.getByTestId(`in-game-${PANELS}-planner`)).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByTestId(`in-game-${PANELS}-inventory`)).toHaveAttribute("aria-checked", "false");
-  await page.getByTestId(`in-game-${PANELS}-inventory`).click();
+  await expect(page.getByTestId(`in-workspace-heading-${PANELS}`)).toHaveText("Panel Types Example");
+  await expect(page.getByTestId(`in-workspace-${PANELS}-planner`)).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId(`in-workspace-${PANELS}-inventory`)).toHaveAttribute("aria-checked", "false");
+  await page.getByTestId(`in-workspace-${PANELS}-inventory`).click();
   await expect(tab("inventory")).toHaveCount(1);
   await expect(panels(page, PANELS)).toHaveCount(2);
 
@@ -209,7 +209,7 @@ test("the modules menu adds the panel types not open yet and brings open ones to
   await expect(front("planner")).toHaveCount(0);
   await tab("inventory").click({ button: "right" });
   await page.getByTestId("panel-in-game").click();
-  await page.getByTestId(`in-game-${PANELS}-planner`).click();
+  await page.getByTestId(`in-workspace-${PANELS}-planner`).click();
   await expect(front("planner")).toHaveCount(1);
   await expect(panels(page, PANELS)).toHaveCount(2);
 

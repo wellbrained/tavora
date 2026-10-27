@@ -1,6 +1,6 @@
 # Overlay setups (planned)
 
-Decided with the owner on 2026-10-27. Replaces the Overlay layout window and the per-game overrides described in [overlay-layout.md](overlay-layout.md) once built. The [Game → Workspace rename](workspace-rename.md) comes first, so this work uses the new names.
+Decided with the owner on 2026-10-27. Replaces the Overlay layout window and the per-game overrides described in [overlay-layout.md](overlay-layout.md) once built. It uses the names from the [Game → Workspace rename](workspace-rename.md), which is done.
 
 ## Setups
 
@@ -10,7 +10,7 @@ An overlay setup is a saved overlay layout: which items show, where, and how eac
 |---|---|---|
 | Everywhere | always | always, over any app, except while Tavora's own window is in front |
 | All games | always | a game is in front that has no setup of its own |
-| One per game workspace | added by the player | that game is in front |
+| One per game workspace | added by the user | that game is in front |
 
 - On screen: Everywhere, plus either the game's own setup or All games. Game setups stand alone; they never stack with All games.
 - A game setup is added by right-clicking the workspace on the rail ("Add overlay" / "Overlay hinzufügen") or with "Add overlay for…" in the Overlay page's dropdown; removed with "Remove overlay" / "Overlay entfernen". Removing a workspace removes its setup.
@@ -60,7 +60,7 @@ The button is hidden while overlays are off in Settings. Main sends a new live s
 
 ## Steps
 
-0. [Game → Workspace rename](workspace-rename.md).
+0. [Game → Workspace rename](workspace-rename.md) (done).
 1. Setups in the data, the which-setup-shows rule, the source rules, the limit, showing outside games, the data move, the security page.
 2. The Overlay page; Add overlay / Remove overlay on the workspace.
 3. The header button and the live state; Settings trimmed.

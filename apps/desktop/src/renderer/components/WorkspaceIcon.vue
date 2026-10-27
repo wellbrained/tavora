@@ -1,23 +1,23 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { GameView } from "../../shared/host-api";
-import { gameBadgeLook } from "../game-badge";
+import type { WorkspaceView } from "../../shared/host-api";
+import { badgeLook } from "../badge";
 import { backdropOf } from "../icon-tone";
 
-const props = withDefaults(defineProps<{ game: GameView; size?: number }>(), { size: 48 });
+const props = withDefaults(defineProps<{ workspace: WorkspaceView; size?: number }>(), { size: 48 });
 
-// Tone and pattern come from the id, so a game keeps its look when renamed.
-const look = computed(() => gameBadgeLook(props.game.id));
-// An image the player picked always wins; then the game's own icon (from the installed game or Steam); then the badge.
-const steamIcon = computed(() => (props.game.icon.kind === "monogram" ? props.game.steamIcon : null));
+// Tone and pattern come from the id, so a workspace keeps its look when renamed.
+const look = computed(() => badgeLook(props.workspace.id));
+// An image the user picked always wins; then its game's own icon (from the installed game or Steam); then the badge.
+const steamIcon = computed(() => (props.workspace.icon.kind === "monogram" ? props.workspace.steamIcon : null));
 // An icon that cannot be shown falls back to the badge instead of a broken image.
 const iconFailed = ref(false);
 watch(steamIcon, () => (iconFailed.value = false));
-// How the game's own icon sits in the tile depends on the picture; the host works it out (shared/icon-tone.ts).
-const tone = computed(() => props.game.steamIconTone ?? "onDark");
+// How a game's own icon sits in the tile depends on the picture; the host works it out (shared/icon-tone.ts).
+const tone = computed(() => props.workspace.steamIconTone ?? "onDark");
 // Small icons (folder collages) show only the first letter.
 const text = computed(() => {
-  const full = props.game.icon.kind === "monogram" ? props.game.icon.text : "";
+  const full = props.workspace.icon.kind === "monogram" ? props.workspace.icon.text : "";
   return props.size < 32 ? [...full].slice(0, 1).join("") : full;
 });
 const fontSize = computed(() => Math.max(12, Math.round(props.size * ([...text.value].length > 2 ? 0.3 : 0.38))));
@@ -29,7 +29,7 @@ const fontSize = computed(() => Math.max(12, Math.round(props.size * ([...text.v
     :style="{ width: `${size}px`, height: `${size}px`, borderRadius: `${Math.round(size / 4)}px` }"
     aria-hidden="true"
   >
-    <img v-if="game.icon.kind === 'image'" class="size-full object-cover" :src="game.icon.url" alt="" draggable="false" />
+    <img v-if="workspace.icon.kind === 'image'" class="size-full object-cover" :src="workspace.icon.url" alt="" draggable="false" />
     <template v-else-if="steamIcon && !iconFailed">
       <!-- The game's own icon, unchanged. A picture with no see-through parts fills the tile, so no tile colour or ring shows around it;
            one with see-through parts sits on a plain light or dark backdrop that contrasts with it. -->

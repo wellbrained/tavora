@@ -38,7 +38,7 @@ test.beforeAll(async () => {
   tokenUrl = `http://127.0.0.1:${(tokens.address() as AddressInfo).port}/api/oauth2/token`;
 });
 
-/** A real key press in the module's page, so what follows counts as the player's own click (D8). */
+/** A real key press in the module's page, so what follows counts as the user's own click (D8). */
 async function gesture(app: ElectronApplication) {
   await app.evaluate(({ webContents }, moduleId) => {
     const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
@@ -58,7 +58,7 @@ test.afterAll(async () => {
   await new Promise((resolve) => tokens.close(resolve));
 });
 
-test("a module with the discord connector asks first, connects once approved and acts only after the player's own click", async () => {
+test("a module with the discord connector asks first, connects once approved and acts only after the user's own click", async () => {
   const { app, page, userData } = await launch(undefined, [PROBES], { env: { TAVORA_DISCORD_IPC: fake.path, TAVORA_DISCORD_TOKEN_URL: tokenUrl } });
   try {
     // Adding it asks to let it use Discord with Tavora's sign-in (the module grants row of 2026-10-16).
@@ -68,10 +68,10 @@ test("a module with the discord connector asks first, connects once approved and
     await expect(page.getByTestId("grant-discord")).toContainText("Join or leave a voice channel when you click");
     await page.getByTestId("grant-allow").click();
     await expectModuleText(app, DISCORD, "probe-status", "ready");
-    // Nothing is asked of Discord before the player connects.
+    // Nothing is asked of Discord before the user connects.
     expect(fake.commands).toEqual([]);
 
-    // Connecting needs the player's own click (D8).
+    // Connecting needs the user's own click (D8).
     await clickInModule(app, DISCORD, "probe-connect");
     await expect.poll(async () => (await answers(app, "connect")).length).toBe(1);
     expect(fake.commands.some((c) => c.cmd === "AUTHORIZE")).toBe(false);
@@ -100,7 +100,7 @@ test("a module with the discord connector asks first, connects once approved and
     fake.dispatch("VOICE_CHANNEL_SELECT", { channel_id: null });
     await expect.poll(async () => (await events(app)).some((e) => e.event === "VOICE_CHANNEL_SELECT")).toBe(true);
 
-    // Muting needs the player's own click too (D8): unmuting would switch their microphone back on.
+    // Muting needs the user's own click too (D8): unmuting would switch their microphone back on.
     await clickInModule(app, DISCORD, "probe-mute");
     await expect.poll(async () => (await answers(app, "mute")).length).toBe(1);
     expect(fake.commands.some((c) => c.cmd === "SET_VOICE_SETTINGS")).toBe(false);
@@ -108,7 +108,7 @@ test("a module with the discord connector asks first, connects once approved and
     await clickInModule(app, DISCORD, "probe-mute");
     await expect.poll(() => fake.commands.find((c) => c.cmd === "SET_VOICE_SETTINGS")?.args).toEqual({ mute: true });
 
-    // Joining a channel needs the player's own click too (D8).
+    // Joining a channel needs the user's own click too (D8).
     await clickInModule(app, DISCORD, "probe-join-11");
     await expect.poll(async () => (await answers(app, "join")).length).toBe(1);
     expect(fake.commands.some((c) => c.cmd === "SELECT_VOICE_CHANNEL")).toBe(false);

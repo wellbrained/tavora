@@ -1,4 +1,4 @@
-// The game pictures of the Overlay layout: one PNG per game in the data folder, taken on the player's click from the
+// The game pictures of the Overlay layout: one PNG per game in the data folder, taken on the user's click from the
 // game's window or picked from a file, kept on this PC, never sent anywhere, and removable. This file holds the files and
 // the matching of a window to capture; Electron's part (desktopCapturer, decoding a chosen image) lives in the host.
 import { createHash } from "node:crypto";

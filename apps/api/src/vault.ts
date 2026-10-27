@@ -5,7 +5,7 @@ import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 
 /**
  * The key vault (decided 2026-10-20, "one recovery key"): one small sealed blob per account, which only the
- * player's recovery key opens. The PC seals it before it leaves; the service keeps the bytes and a version
+ * user's recovery key opens. The PC seals it before it leaves; the service keeps the bytes and a version
  * number, and gives them out only to a signed-in PC of the account. It holds what the recovery key keeps
  * safe besides the cloud copy (publisher keys, later), and its being there tells a new PC that the account
  * already has a recovery key. Unlike the copies it lives with the accounts, so the daily backup keeps it.

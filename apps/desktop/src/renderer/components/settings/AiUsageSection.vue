@@ -8,7 +8,7 @@ import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-co
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { AiProvider, AiUsageAccount } from "../../../shared/host-api";
-import { act, aiUsage, confirmAction, gamesUsing, listOf, state, submitAction } from "../../host";
+import { act, aiUsage, confirmAction, workspacesUsing, listOf, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import SettingGroup from "./SettingGroup.vue";
@@ -70,15 +70,15 @@ function removeAccount(account: AiUsageAccount) {
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 
-/** Modules the player allowed to read these accounts. */
+/** Modules the user allowed to read these accounts. */
 const readers = computed(() => (state.value?.modules ?? []).filter((module) => module.permissions.granted.connectors.includes("ai-usage")));
 
 function revoke(module: ModuleView) {
-  const games = gamesUsing(module);
+  const workspaces = workspacesUsing(module);
   confirmAction({
     title: t("integrations.grants.revokeTitle", { name: module.name }),
-    message: games.length
-      ? t("integrations.grants.revokeUsed", { name: module.name, games: listOf(games) })
+    message: workspaces.length
+      ? t("integrations.grants.revokeUsed", { name: module.name, workspaces: listOf(workspaces) })
       : t("integrations.aiUsage.revokeUnused", { name: module.name }),
     confirm: t("integrations.grants.revoke"),
     danger: true,

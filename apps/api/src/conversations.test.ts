@@ -170,7 +170,7 @@ describe("starting a conversation with a developer", () => {
     const { user, start, started, call } = setup();
     const mara = user("mara@example.com");
     const otto = user("otto@example.com", "Otto");
-    for (const extra of [{ text: "" }, { text: "   " }, { text: "x".repeat(2001) }, { type: "rant" }, { versions: { tavora: "latest", module: "1.0.0" } }, { versions: { tavora: "0.21.39" } }, { versions: null }, { player: "me" }, { previousId: "nope" }]) {
+    for (const extra of [{ text: "" }, { text: "   " }, { text: "x".repeat(2001) }, { type: "rant" }, { versions: { tavora: "latest", module: "1.0.0" } }, { versions: { tavora: "0.21.39" } }, { versions: null }, { someone: "me" }, { previousId: "nope" }]) {
       expect((await start(mara.token, extra)).status, JSON.stringify(extra)).toBe(400);
     }
     expect(((await (await start(mara.token, { text: "Visit https://evil.example now" })).json()) as { reason: string }).reason).toBe("message-link");

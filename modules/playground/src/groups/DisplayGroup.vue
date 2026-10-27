@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertTriangle, Blocks, CheckCircle2, Gamepad2, Info, Loader2, MoreHorizontal, Plus, StickyNote, Store, XCircle } from "@lucide/vue";
+import { AlertTriangle, Blocks, CheckCircle2, Info, LayoutGrid, Loader2, MoreHorizontal, Plus, StickyNote, Store, XCircle } from "@lucide/vue";
 import { SegmentedControl } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -28,7 +28,7 @@ const density = ref<"tight" | "normal">("normal");
 const selectedRow = ref("b");
 const navSelected = ref("all");
 const NAV_GROUPS: NavGroup[] = [
-  { heading: "Installed", items: [{ id: "all", label: "All", icon: Blocks, badge: 12 }, { id: "game", label: "In this game", icon: Gamepad2, badge: 3 }] },
+  { heading: "Installed", items: [{ id: "all", label: "All", icon: Blocks, badge: 12 }, { id: "workspace", label: "In this workspace", icon: LayoutGrid, badge: 3 }] },
   { heading: "More", items: [{ id: "catalog", label: "Catalog", icon: Store }] },
 ];
 function bump(by: number) {
@@ -60,7 +60,7 @@ function bump(by: number) {
         </Specimen>
       </DemoSection>
 
-<DemoSection v-if="visible.has('progress')" id="progress" :title="title('progress')" description="Show progress the player started. Nothing loops on its own.">
+<DemoSection v-if="visible.has('progress')" id="progress" :title="title('progress')" description="Show progress the user started. Nothing loops on its own.">
         <Specimen label="Progress bar" column>
           <div class="flex items-center gap-3">
             <Progress :model-value="progress" class="max-w-64" aria-label="Import progress" />
@@ -89,7 +89,7 @@ function bump(by: number) {
 
 <DemoSection v-if="visible.has('notices')" id="notices" :title="title('notices')" description="Inline notices inside a module. An icon and a sentence; colour only tints. Errors are announced at once.">
         <div class="flex flex-col gap-2">
-          <Notice>Notes are shared by every panel of this module in the current game.</Notice>
+          <Notice>Notes are shared by every panel of this module in the current workspace.</Notice>
           <Notice variant="success">Imported 24 to-dos.</Notice>
           <Notice variant="warning" title="Almost full">This note is almost at its size limit.</Notice>
           <Notice variant="error">
@@ -100,7 +100,7 @@ function bump(by: number) {
       </DemoSection>
 
 <DemoSection v-if="visible.has('empty')" id="empty" :title="title('empty')" description="A short title, one line and one action. Use it where a list has nothing in it yet.">
-        <EmptyState title="No notes yet" description="Notes you write for this game show up here.">
+        <EmptyState title="No notes yet" description="Notes you write in this workspace show up here.">
           <template #icon><StickyNote :stroke-width="1.5" /></template>
           <template #action><Button :disabled="off"><Plus :stroke-width="1.5" /> New note</Button></template>
         </EmptyState>

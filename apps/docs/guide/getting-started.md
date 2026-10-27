@@ -1,6 +1,6 @@
 # Getting started
 
-A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
+A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game or any other workspace. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
 
 ::: warning Preview
 `@tavora/sdk` speaks [bridge protocol v1](../reference/protocol.md). Until Tavora's first public release it can still change in ways that break modules; the [changelog](../reference/changelog.md) marks each such change and says which Tavora a version needs.
@@ -30,13 +30,13 @@ To add the SDK to a project of your own instead: `npm install @tavora/sdk`, and 
 import { connect, TavoraError } from "@tavora/sdk";
 
 const tavora = await connect();
-const game = await tavora.game.getCurrent(); // { id: "poe2", displayName: "Path of Exile 2" }
+const workspace = await tavora.workspace.getCurrent(); // { id: "poe2", displayName: "Path of Exile 2", kind: "game" }
 
-// Small settings, private to this module in this game.
+// Small settings, private to this module in this workspace.
 const count = (await tavora.storage.get<number>("count")) ?? 0;
 await tavora.storage.set("count", count + 1);
 
-// Documents are shared by all panels of this module in this game.
+// Documents are shared by all panels of this module in this workspace.
 const plan = await tavora.documents.get<{ steps: string[] }>("plan");
 try {
   await tavora.documents.put({ id: "plan", title: "Plan", data: { steps: ["Act 1"] }, ifRevision: plan?.revision ?? 0 });
@@ -64,23 +64,23 @@ Values you store must be JSON. Type parameters such as `get<number>()` are not c
 
 ## Where data lives
 
-Settings go in `tavora.storage`, the player's work in `tavora.documents`, pictures in `tavora.blobs` and where a panel is scrolled to in `tavora.panel`. Which to use when, and how two open panels avoid overwriting each other, is in [Saving data](./saving-data.md).
+Settings go in `tavora.storage`, the user's work in `tavora.documents`, pictures in `tavora.blobs` and where a panel is scrolled to in `tavora.panel`. Which to use when, and how two open panels avoid overwriting each other, is in [Saving data](./saving-data.md).
 
 ## More from the host
 
 | API | What it does |
 | --- | --- |
 | `tavora.ui.getLanguage()`, `onLanguageChange` | The language of Tavora's own texts (`"en"`, `"de"`). Show your module in it, or in English when you have no translation. |
-| `tavora.blobs` | Pictures too big for a document: up to 50 MB each and 500 MB per module and game. `put` a file, show it with `url(id)`. See [Files](../reference/protocol.md#files-blobs). |
+| `tavora.blobs` | Pictures too big for a document: up to 50 MB each and 500 MB per module and workspace. `put` a file, show it with `url(id)`. See [Files](../reference/protocol.md#files-blobs). |
 | `tavora.clipboard.writeImage(png)` | Puts a PNG on the system clipboard. Call it from the click or key press that asked for it. See [Clipboard](../reference/protocol.md#clipboard). |
-| `tavora.links.open(url)` | Opens a web address in the game's Browser panel, from a click or key press. |
-| `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the player granted it. See [Network](../reference/protocol.md#network). |
-| `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |
+| `tavora.links.open(url)` | Opens a web address in the workspace's Browser panel, from a click or key press. |
+| `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the user granted it. See [Network](../reference/protocol.md#network). |
+| `tavora.connectors.aiUsage` | The usage of the user's Claude and Codex accounts, with the `ai-usage` connector. |
 | `tavora.connectors.systemInfo` | Your PC's hardware, how busy it is (CPU, graphics card, memory, drives) and how its connection is doing (ping, lost pings, drops), with the `system-info` connector. |
 | `tavora.connectors.media` | What plays on the PC (Spotify, browsers, video players) with play/pause, next and previous, with the `media` connector. |
 | `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
 
-What reaches outside the panel needs the player's yes first; see [Permissions and consent](./permissions.md). Following the theme and the language is in [Look and languages](./look-and-languages.md).
+What reaches outside the panel needs the user's yes first; see [Permissions and consent](./permissions.md). Following the theme and the language is in [Look and languages](./look-and-languages.md).
 
 ## Made for one game
 
@@ -90,13 +90,13 @@ A module made for one game, such as a build planner for Path of Exile 2, lists t
 "games": ["poe2"]
 ```
 
-Tavora then offers it only in that game: in any other game it is not in Add module at all. `"games": []` means any game. The starter asks which game the module is for and fills this in. The ids of Tavora's built-in games are in the [manifest reference](../reference/manifest.md#game-ids).
+Tavora then offers it only in workspaces of that game: anywhere else it is not in Add module at all. `"games": []` means any game. The starter asks which game the module is for and fills this in. The ids of Tavora's built-in games are in the [manifest reference](../reference/manifest.md#game-ids).
 
-Players can also make personal workspaces, which belong to no game, for modules such as notes or a whiteboard. A module for any game is offered there too. If yours only makes sense in a game, add `"workspaces": false` (Tavora 0.18.1 or newer). `tavora.game.getCurrent()` says which one a panel is in: its `kind` is `"game"` or `"workspace"`.
+Every item on Tavora's rail is a workspace: a game workspace, linked to a game, or a personal workspace, which belongs to no game, for modules such as notes or a whiteboard. A module for any game is offered in personal workspaces too. If yours only makes sense in a game, add `"personalWorkspaces": false` (Tavora 0.21.43 or newer; set `minTavora` to at least `0.21.43`). `tavora.workspace.getCurrent()` says which one a panel is in: its `kind` is `"game"` or `"personal"`, and for a game workspace the `id` is the game's. `tavora.game.getCurrent()` and the manifest's `workspaces` field still work, but they are deprecated and go away before 1.0.
 
 ## Build the module
 
-- Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, name its host in `permissions.network` and call [`network.fetch`](../reference/protocol.md#network) once the player has granted it.
+- Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, name its host in `permissions.network` and call [`network.fetch`](../reference/protocol.md#network) once the user has granted it.
 - Use relative asset paths (Vite: `base: "./"`). The page is served from `tavora-module://<module-id>/`.
 - Don't use Ctrl+K (Cmd+K on macOS) as a shortcut. Tavora takes it for its own search before your page sees the key.
 - Point the manifest's `entry` at the built HTML file.
@@ -104,13 +104,13 @@ Players can also make personal workspaces, which belong to no game, for modules 
 
 ## Share the module
 
-Publish from Tavora: open **Settings > Development** and press **Publish** next to your module. The first time, Tavora walks you through signing in and choosing a developer name; saving the name makes your [publisher key](./publisher-key.md) and claims your prefix. Tavora keeps the key for you, and your recovery key is its backup. Read [Your publisher key](./publisher-key.md) before your first publish: updates and your players' data depend on that key.
+Publish from Tavora: open **Settings > Development** and press **Publish** next to your module. The first time, Tavora walks you through signing in and choosing a developer name; saving the name makes your [publisher key](./publisher-key.md) and claims your prefix. Tavora keeps the key for you, and your recovery key is its backup. Read [Your publisher key](./publisher-key.md) before your first publish: updates and your users' data depend on that key.
 
-Tavora packs what's already built, so keep `npm run dev` running or run `npm run build` first. The review screen shows what will go out: the name, version, patch notes, what the module asks for, and when it was built. When the catalog has this version already, it offers the next one and a box for its patch notes, and **Save to project** writes both into your files. Press **Publish** there to sign and upload; players find your module under **Browse** in the module library.
+Tavora packs what's already built, so keep `npm run dev` running or run `npm run build` first. The review screen shows what will go out: the name, version, patch notes, what the module asks for, and when it was built. When the catalog has this version already, it offers the next one and a box for its patch notes, and **Save to project** writes both into your files. Press **Publish** there to sign and upload; users find your module under **Browse** in the module library.
 
 The part of your module id before the first dot is your prefix, usually your developer name. Once it's yours, nobody else can publish under it; an account holds up to 3, and **Add another** under Module developer claims more. A module stays with the key that published its first version, and each new version must be newer. An account can publish 10 versions a day. [Publishing to the catalog](./publishing.md) covers the listing, updates, limits and reports.
 
-To share by hand instead, press **Save as zip** next to Publish (or in the module's menu in Add module). The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`), the icon and the changelog, plus `tavora.signature.json`; your sources and `node_modules` stay out. Players install it with **Settings > Modules > Install zip**.
+To share by hand instead, press **Save as zip** next to Publish (or in the module's menu in Add module). The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`), the icon and the changelog, plus `tavora.signature.json`; your sources and `node_modules` stay out. Users install it with **Settings > Modules > Install zip**.
 
 To publish from a build server, see [Publish from CI](./publishing.md#publish-from-ci).
 
@@ -118,7 +118,7 @@ While you build, keep loading the module from its development folder: it needs n
 
 ## Patch notes
 
-Tell players what changed in `changelog.json`, which the starter makes and the manifest's `changelog` names. Add an entry, newest first, every time you raise `version`:
+Tell users what changed in `changelog.json`, which the starter makes and the manifest's `changelog` names. Add an entry, newest first, every time you raise `version`:
 
 ```json
 [
@@ -127,6 +127,6 @@ Tell players what changed in `changelog.json`, which the starter makes and the m
 ]
 ```
 
-Players read them under the module in **Settings > Modules > Patch notes**. After an update, the notes newer than the version they had are marked New until they open them. Each line is plain text of at most 500 characters, at most 20 lines per version and 100 versions; Publishing refuses a changelog Tavora could not show. Needs Tavora 0.18.2 or newer, so set `minTavora` to at least `0.18.2`.
+Users read them under the module in **Settings > Modules > Patch notes**. After an update, the notes newer than the version they had are marked New until they open them. Each line is plain text of at most 500 characters, at most 20 lines per version and 100 versions; Publishing refuses a changelog Tavora could not show. Needs Tavora 0.18.2 or newer, so set `minTavora` to at least `0.18.2`.
 
 Something not working? See [Troubleshooting](./troubleshooting.md).

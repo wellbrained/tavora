@@ -1,4 +1,4 @@
-// The small tag a module carries in Add module and Settings: where this copy of it came from. Players
+// The small tag a module carries in Add module and Settings: where this copy of it came from. Users
 // mostly see Official, Catalog and From file; module authors also see Local (work in progress in a
 // development folder), Release (the copy they publish) and Example.
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The Whiteboard: a header with the board menu and the picture buttons, and the board below. Every Whiteboard panel
-// of a game shows the same boards; which board a panel shows, its views and where its palette sits are its own state.
+// of a workspace shows the same boards; which board a panel shows, its views and where its palette sits are its own state.
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
@@ -69,7 +69,7 @@ const cleanup: (() => void)[] = [];
 
 const level = computed(() => sizeLevel(bytes.value));
 
-/** A short message to the player, such as a picture that cannot be kept. */
+/** A short message to the user, such as a picture that cannot be kept. */
 function notify(message: string) {
   toast({ title: message, duration: NOTICE_MS });
 }
@@ -130,7 +130,7 @@ onMounted(async () => {
     const store = createBoards(connected);
     boards.value = store;
     sdk.value = connected;
-    // Where the toolbar goes is one choice for every game.
+    // Where the toolbar goes is one choice for every workspace.
     toolbar.value = toolbarPlace(await connected.storage.app.get("toolbar").catch(() => null));
 
     const [state, existing] = await Promise.all([connected.panel.getState<PanelState>(), refreshList()]);
@@ -222,7 +222,7 @@ async function pictureAction(run: (board: Controls) => Promise<void>, failed: (r
   }
 }
 
-/** What went wrong with a picture, in words for the player. */
+/** What went wrong with a picture, in words for the user. */
 function pictureProblem(reason: unknown, fallback: "copy.failed" | "savePicture.failed"): string {
   const code = reason instanceof TavoraError ? reason.code : undefined;
   if (code === "PERMISSION_DENIED") return t("copy.slow");

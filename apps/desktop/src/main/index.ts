@@ -92,7 +92,7 @@ const officialModuleDirs = !app.isPackaged && process.env.TAVORA_OFFICIAL_MODULE
   : app.isPackaged ? [path.join(process.resourcesPath, "official-modules")] : devOfficialModuleDirs;
 
 // Themes work the same way: Tavora's own ship inside the app, and the
-// player's own live in the themes folder of their data folder.
+// user's own live in the themes folder of their data folder.
 const officialThemeDirs = !app.isPackaged && process.env.TAVORA_OFFICIAL_THEME_DIRS
   ? dirList(process.env.TAVORA_OFFICIAL_THEME_DIRS)
   : [app.isPackaged ? path.join(process.resourcesPath, "official-themes") : path.join(repoRoot, "themes")];
@@ -152,7 +152,7 @@ if (!app.requestSingleInstanceLock()) {
     .then(async () => {
       host = await Host.create({
         userData: app.getPath("userData"),
-        // Pictures\Tavora, where the player can find them; a development run keeps its own. A run with its own data
+        // Pictures\Tavora, where the user can find them; a development run keeps its own. A run with its own data
         // folder (tests) keeps them in there.
         picturesFolder: !app.isPackaged && process.env.TAVORA_USER_DATA ? undefined : path.join(app.getPath("pictures"), app.isPackaged ? "Tavora" : "Tavora (dev)"),
         moduleDirs,

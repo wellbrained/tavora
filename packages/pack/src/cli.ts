@@ -4,7 +4,7 @@
 // tavora-pack <module folder> --key <key file> [--out <file.zip>]
 //   Packs a built module into a zip signed with your publisher key.
 // tavora-pack link <code> --key <key file>
-//   Links a key file to your Tavora account with a code from Tavora, so players see your developer
+//   Links a key file to your Tavora account with a code from Tavora, so users see your developer
 //   name. Keys Tavora keeps are linked by Tavora. Only the key's public half leaves this PC.
 // tavora-pack publish <file.zip> --key <key file>
 //   Publishes a zip packed with your key to Tavora's module catalog. TAVORA_PUBLISH_TOKEN holds a publish
@@ -85,7 +85,7 @@ async function main(): Promise<number> {
     const key = await keyFrom(values.key, (message) => new LinkError(message));
     const linked = await linkKey({ key, code: positionals[1]!, apiUrl: values.api ?? DEFAULT_API_URL });
     console.log(`Linked publisher key ${linked.fingerprint} to your Tavora account.`);
-    console.log(linked.name ? `Players now see your modules as "by ${linked.name}".` : "Choose a developer name in Tavora so players see it.");
+    console.log(linked.name ? `Users now see your modules as "by ${linked.name}".` : "Choose a developer name in Tavora so users see it.");
     return 0;
   }
 
@@ -99,14 +99,14 @@ async function main(): Promise<number> {
     const published = await publishZip({ key, zip, token, apiUrl: values.api ?? DEFAULT_API_URL });
     if (published.status === "waiting") {
       // Not an error: the upload is safe and complete, but not listed until a person at Tavora has looked at it.
-      console.log(`Waiting for review: ${published.id} ${published.version} is uploaded, but players can't see it yet.`);
+      console.log(`Waiting for review: ${published.id} ${published.version} is uploaded, but users can't see it yet.`);
       console.log("A person at Tavora looks at it first. Why:");
       for (const reason of published.reasons) console.log(`  - ${reason.text}`);
       console.log("You'll get an email when it's decided. Nothing else to do.");
       console.log(`Zip sha256 ${published.sha256}. To take it back: tavora-pack withdraw ${published.sha256}`);
     } else {
       console.log(`Published ${published.id} ${published.version} to Tavora's module catalog.`);
-      console.log(`Players find it under Browse in the module library. Zip sha256 ${published.sha256}`);
+      console.log(`Users find it under Browse in the module library. Zip sha256 ${published.sha256}`);
     }
     console.log(`What's not allowed in the catalog: ${CATALOG_RULES_URL}`);
     return 0;

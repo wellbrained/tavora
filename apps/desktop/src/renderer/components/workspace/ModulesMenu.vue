@@ -1,14 +1,14 @@
 <script setup lang="ts">
-// The ▾ joined to the toolbar's Add module button: the modules in this game
+// The ▾ joined to the toolbar's Add module button: the modules in this workspace
 // with their panel types, to add one not open yet or bring an open one to the
-// front (gameModulesMenu). Shown once the game has a panel.
+// front (workspaceModulesMenu). Shown once the workspace has a panel.
 import { ChevronDown } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { useFloating } from "../../host";
 import { t } from "../../i18n";
 import MenuEntries from "../menus/MenuEntries.vue";
-import { gameModulesMenu } from "./dock-context";
+import { workspaceModulesMenu } from "./dock-context";
 
 const track = useFloating();
 </script>
@@ -21,15 +21,15 @@ const track = useFloating();
         variant="secondary"
         class="px-1.5"
         data-testid="modules-in-game"
-        :aria-label="t('workspace.modulesInGame')"
-        :title="t('workspace.modulesInGame')"
+        :aria-label="t('workspace.modulesHere')"
+        :title="t('workspace.modulesHere')"
       >
         <ChevronDown :stroke-width="1.5" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent data-testid="menu" side="bottom" align="end" class="max-w-72 min-w-56">
-      <DropdownMenuLabel class="text-muted-foreground truncate text-xs font-normal">{{ t("workspace.modulesInGame") }}</DropdownMenuLabel>
-      <MenuEntries :items="gameModulesMenu()" kind="dropdown" />
+      <DropdownMenuLabel class="text-muted-foreground truncate text-xs font-normal">{{ t("workspace.modulesHere") }}</DropdownMenuLabel>
+      <MenuEntries :items="workspaceModulesMenu()" kind="dropdown" />
     </DropdownMenuContent>
   </DropdownMenu>
 </template>

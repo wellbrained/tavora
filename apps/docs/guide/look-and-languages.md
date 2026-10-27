@@ -1,6 +1,6 @@
 # Look and languages
 
-Players pick Tavora's theme and language, and your module should follow both, so it looks and reads like part of the app.
+Users pick Tavora's theme and language, and your module should follow both, so it looks and reads like part of the app.
 
 ## The default look
 
@@ -26,7 +26,7 @@ The same stylesheet defines the theme's colours as CSS variables, so your CSS ca
 }
 ```
 
-All of them are listed under [Default look](../reference/protocol.md#default-look). They change by themselves when the player switches theme. Don't hard-code colours: players use dark and light themes and their own ones.
+All of them are listed under [Default look](../reference/protocol.md#default-look). They change by themselves when the user switches theme. Don't hard-code colours: users use dark and light themes and their own ones.
 
 If you need the colours in script, for a canvas or a chart, ask the SDK:
 
@@ -46,7 +46,7 @@ Your page can't load anything from the internet, so bundle fonts and images with
 
 ## Languages
 
-Tavora is in English and German for now. Show your module in the player's language, or in English when you don't have it:
+Tavora is in English and German for now. Show your module in the user's language, or in English when you don't have it:
 
 ```ts
 const texts = { en: { add: "Add step" }, de: { add: "Schritt hinzufügen" } };
@@ -60,13 +60,13 @@ tavora.ui.onLanguageChange((language) => {
 });
 ```
 
-Store data in one language, not the player's: a default list named "To-Dos" keeps that name, and you show it translated. Then switching the language doesn't change what was saved.
+Store data in one language, not the user's: a default list named "To-Dos" keeps that name, and you show it translated. Then switching the language doesn't change what was saved.
 
-Your module's name, description and panel names come from the manifest. Add [`translations`](../reference/manifest.md#translations) to show them in the player's language too.
+Your module's name, description and panel names come from the manifest. Add [`translations`](../reference/manifest.md#translations) to show them in the user's language too.
 
 ## Shortcuts and size
 
 - Tavora takes Ctrl+K (Cmd+K on macOS) for its own search before your page sees it. Choose other shortcuts.
 - Panels can be narrow. Set `viewport.minWidth` and `minHeight` in the manifest to what your module really needs, and follow `tavora.workspace.onResize`.
-- Pause timers and animations on `tavora.lifecycle.onSuspend` and start them again on `onResume`: a hidden panel shouldn't use the player's CPU while they play.
+- Pause timers and animations on `tavora.lifecycle.onSuspend` and start them again on `onResume`: a hidden panel shouldn't use the user's CPU while they play.
 - Use `tavora.ui.showMenu` for menus, so they aren't cut off at your panel's edge and look like Tavora's own. See [Menus](../reference/protocol.md#menus).

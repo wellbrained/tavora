@@ -16,10 +16,10 @@ async function seed(userData: string, general = false) {
   await mkdir(userData, { recursive: true });
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), gameOverlays: true }));
   const anchor = { h: "left", v: "top", x: 0.036, y: 0.03, width: 0.356, height: 0.16 };
-  const overlay = (key: string) => ({ owner: "official", moduleId: "tavora.clock-counter", gameId: general ? "personal" : GAME, key, scope: general ? "all" : "game", mode: "always", opacity: 100, hideFromCapture: false, rect: { x: 0.036, y: 0.03, width: 0.2, height: 0.16 }, anchor });
+  const overlay = (key: string) => ({ owner: "official", moduleId: "tavora.clock-counter", workspaceId: general ? "personal" : GAME, key, scope: general ? "all" : "game", mode: "always", opacity: 100, hideFromCapture: false, rect: { x: 0.036, y: 0.03, width: 0.2, height: 0.16 }, anchor });
   await writeFile(
     path.join(userData, "game-overlays.json"),
-    JSON.stringify({ version: 3, overlays: [overlay("a")], panels: [], layout: { seen: { [GAME]: { width: 1920, height: 1080 } } } }),
+    JSON.stringify({ version: 4, overlays: [overlay("a")], panels: [], layout: { seen: { [GAME]: { width: 1920, height: 1080 } } } }),
   );
 }
 
@@ -97,7 +97,7 @@ test("Reset position and Reset size work from the list, and Take picture says wh
     await row.getByRole("button").first().click();
     await expect.poll(async () => (await state(shell)).selection).toBe(id);
 
-    // Drag it with the mouse on the layer, as the player does.
+    // Drag it with the mouse on the layer, as the user does.
     const layer = app.windows().find((candidate) => candidate.url().endsWith("#layer"))!;
     const outline = layer.locator('[data-testid^="layout-item-"]').first();
     await expect(outline).toBeVisible();

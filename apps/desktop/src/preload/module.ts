@@ -47,7 +47,7 @@ ipcRenderer.on("tavora:frame", (_event, requestId: unknown) => {
 });
 
 // Keep the last point as well as the first: dropping the trailing event can
-// reject a tooltip when the player crosses slots faster than the throttle.
+// reject a tooltip when the user crosses slots faster than the throttle.
 let pointerSentAt=0;
 let pointerTimer:ReturnType<typeof setTimeout>|undefined;
 let latestPointer:{x:number;y:number}|null=null;

@@ -3,6 +3,7 @@ import type { ActionResult, HostAction, HostActionType } from "../shared/host-ap
 import { check, hostActionTable, parseHostAction, parsed, type HostChecks } from "../shared/host-actions";
 import { isSite, MAX_ADDRESS } from "./browser-url";
 import { INSTANCE_ID } from "./ids";
+import { isWorkspaceId } from "./workspace-id";
 import { GAME_START_CHOICES } from "./library";
 import { parseLayout } from "./layout";
 import { MAX_INITIALS, MAX_PICTURE_BYTES, MAX_PROFILE_NAME } from "./profile";
@@ -18,6 +19,7 @@ const text = (max: number) => check<string>((value) => typeof value === "string"
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 const CHECKS: HostChecks = {
+  workspaceId: check(isWorkspaceId),
   gameId: check(isGameId),
   moduleId: check(isModuleId),
   ownerId: check(isOwnerId),

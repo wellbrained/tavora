@@ -121,13 +121,13 @@ function setUpLifecycle(tavora: TavoraSDK) {
 
 try {
   const tavora = await connect();
-  const [game, viewport, theme] = await Promise.all([
-    tavora.game.getCurrent(),
+  const [workspace, viewport, theme] = await Promise.all([
+    tavora.workspace.getCurrent(),
     tavora.workspace.getViewport(),
     tavora.ui.getTheme(),
   ]);
-  el("game").textContent = game.displayName;
-  el("game").dataset.gameId = game.id;
+  el("workspace").textContent = workspace.displayName;
+  el("workspace").dataset.workspaceId = workspace.id;
   el("viewport").textContent = `${viewport.width} × ${viewport.height}`;
   applyTheme(theme);
   tavora.workspace.onResize(({ width, height }) => {

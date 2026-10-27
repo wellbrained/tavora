@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "./fsutil";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 
 export const MAX_ICON_BYTES = 2 * 1024 * 1024;
 
@@ -17,17 +17,17 @@ export function imageType(bytes: Uint8Array): "png" | "jpg" | "webp" | null {
   return null;
 }
 
-export class IconError extends PlayerError {}
+export class IconError extends UserError {}
 
 /** Copies a picked image into the icon folder. Returns the new file name. */
-export async function importIcon(iconDir: string, gameId: string, source: string): Promise<string> {
+export async function importIcon(iconDir: string, workspaceId: string, source: string): Promise<string> {
   const info = await stat(source);
   if (!info.isFile()) throw new IconError("error.notFile");
   if (info.size > MAX_ICON_BYTES) throw new IconError("error.iconTooBig");
   const bytes = await readFile(source);
   const type = imageType(bytes);
   if (!type) throw new IconError("picture.type");
-  const file = `${gameId}-${randomBytes(4).toString("hex")}.${type}`;
+  const file = `${workspaceId}-${randomBytes(4).toString("hex")}.${type}`;
   await writeFileAtomic(path.join(iconDir, file), bytes);
   return file;
 }

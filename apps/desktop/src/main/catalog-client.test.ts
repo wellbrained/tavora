@@ -17,6 +17,7 @@ const entry = (fields: Record<string, unknown> = {}) => ({
   version: "1.2.0",
   minTavora: null,
   games: [],
+  personalWorkspaces: true,
   workspaces: true,
   permissions: { network: ["api.example.com"], connectors: [] },
   owner: OWNER,
@@ -42,6 +43,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 describe("parseCatalogEntry", () => {
   it("keeps a valid listing and leaves the hash out of the view", () => {
     expect(parseCatalogEntry(entry())).toMatchObject({ id: "wellbrained.tracker", name: "Tracker", publisher: "wellbrained", zip: { sha256: SHA, size: 1234 } });
+    // A service deployed before the workspace names sends only the old name.
+    expect(parseCatalogEntry(entry({ personalWorkspaces: undefined, workspaces: false }))?.personalWorkspaces).toBe(false);
+    expect(parseCatalogEntry(entry({ personalWorkspaces: false, workspaces: true }))?.personalWorkspaces).toBe(false);
+    expect(parseCatalogEntry(entry({ personalWorkspaces: undefined, workspaces: undefined }))?.personalWorkspaces).toBe(true);
   });
 
   it("keeps HTML in a description as plain text and drops hidden direction marks (C10)", () => {
@@ -96,11 +101,11 @@ describe("parseCatalogEntry", () => {
   });
 
   it("fits a module to a game or a personal workspace as the host does", () => {
-    expect(fitsScope({ games: [], workspaces: true }, { workspace: true })).toBe(true);
-    expect(fitsScope({ games: [], workspaces: false }, { workspace: true })).toBe(false);
-    expect(fitsScope({ games: ["poe2"], workspaces: false }, { workspace: true })).toBe(false);
-    expect(fitsScope({ games: ["poe2"], workspaces: false }, { game: "poe2" })).toBe(true);
-    expect(fitsScope({ games: ["poe2"], workspaces: false }, { game: "satisfactory" })).toBe(false);
+    expect(fitsScope({ games: [], personalWorkspaces: true }, { personal: true })).toBe(true);
+    expect(fitsScope({ games: [], personalWorkspaces: false }, { personal: true })).toBe(false);
+    expect(fitsScope({ games: ["poe2"], personalWorkspaces: false }, { personal: true })).toBe(false);
+    expect(fitsScope({ games: ["poe2"], personalWorkspaces: false }, { game: "poe2" })).toBe(true);
+    expect(fitsScope({ games: ["poe2"], personalWorkspaces: false }, { game: "satisfactory" })).toBe(false);
   });
 });
 
@@ -124,7 +129,7 @@ describe("CatalogClient.list", () => {
 
   it("marks modules for a game as not fitting a personal workspace", async () => {
     const { impl, calls } = fakeFetch(() => json({ modules: [entry({ games: ["poe2"] })] }));
-    const result = await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).list({ workspace: true }, "en");
+    const result = await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).list({ personal: true }, "en");
     expect(calls[0]!.url).toBe("https://catalog.test/v1/catalog");
     expect(result).toEqual({ status: "ok", modules: [expect.objectContaining({ fits: false, forGames: ["Path of Exile 2"] })] });
   });
@@ -320,7 +325,7 @@ describe("ratings and reviews", () => {
     }
   });
 
-  it("reads the player's own review, held for the maintainer or hidden after a report", async () => {
+  it("reads the user's own review, held for the maintainer or hidden after a report", async () => {
     const own = (fields: Record<string, unknown>) => json({ review: { stars: 4, text: "Nice", version: "1.2.0", ...fields }, own: false });
     const read = (fields: Record<string, unknown>) => new CatalogClient({ baseUrl: "https://api.test", fetchImpl: fakeFetch(() => own(fields)).impl }).ownReview("wellbrained.tracker", "t".repeat(30));
     expect((await read({ held: true })).mine).toEqual({ stars: 4, text: "Nice", version: "1.2.0", hidden: false, held: true });

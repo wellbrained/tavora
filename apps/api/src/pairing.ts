@@ -7,7 +7,7 @@ import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 /**
  * Approving a new PC from an old one (decided 2026-10-20, "one recovery key", step 4). The new PC asks; a
  * PC of the account that has the recovery key answers, both show a code made from both PCs' one-time keys,
- * and on the player's click the old PC sends the key sealed to the new PC's one-time key. The service only
+ * and on the user's click the old PC sends the key sealed to the new PC's one-time key. The service only
  * passes the messages on: it never sees anything that opens the key, and a code that matches on both
  * screens shows that nobody, the service included, swapped a one-time key on the way.
  *
@@ -16,7 +16,7 @@ import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
  *    sees the old PC's: neither side, nor the service, can try keys until the codes match.
  * 2. One old PC answers with its one-time key. The first answer wins.
  * 3. The new PC shows its key, which must match the commitment.
- * 4. The old PC's player clicks Add: the sealed key goes up, and to the new PC once.
+ * 4. The old PC's user clicks Add: the sealed key goes up, and to the new PC once.
  * Either side can end it. Requests live in memory only, ten minutes, one per account.
  */
 
@@ -45,7 +45,7 @@ interface Pairing {
   answer?: { by: string; name: string | null; publicKey: string };
   reveal?: string;
   sealed?: string;
-  /** An old PC's player said no: the new PC is told once. */
+  /** An old PC's user said no: the new PC is told once. */
   declined?: boolean;
 }
 
@@ -158,7 +158,7 @@ export function pairingRoutes({ accounts, clientKey, rateLimiter, now = Date.now
     return context.body(null, 204);
   });
 
-  // 4. The old PC's player said yes: the sealed key, for the new PC to take once.
+  // 4. The old PC's user said yes: the sealed key, for the new PC to take once.
   app.post("/:id/key", async (context) => {
     const pairing = find(context);
     if (!pairing || pairing.declined) return gone(context);
@@ -169,7 +169,7 @@ export function pairingRoutes({ accounts, clientKey, rateLimiter, now = Date.now
     return context.body(null, 204);
   });
 
-  // Either side ends it: the new PC cancels, or the old PC's player said no.
+  // Either side ends it: the new PC cancels, or the old PC's user said no.
   app.delete("/:id", (context) => {
     const pairing = find(context);
     if (!pairing) return context.body(null, 204);

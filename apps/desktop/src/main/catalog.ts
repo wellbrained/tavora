@@ -1,15 +1,15 @@
-// Built-in list of games a player can pick when adding a game. It only gives
+// Built-in list of games a user can pick when adding a game. It only gives
 // a canonical id and name: being listed says nothing about module support.
 // More games come from the online search (api.mytavora.app); this list is what
 // still works offline, and its ids are frozen.
 
 export interface CatalogGame {
-  /** Canonical id. Also the id of the player's game, so data stays keyed on it. */
+  /** Canonical id. Also the id of the user's game, so data stays keyed on it. */
   id: string;
   name: string;
   /** Other names people search for. */
   aliases?: string[];
-  /** The game's Steam application id, when it is on Steam. Used to fetch its icon on the player's PC. */
+  /** The game's Steam application id, when it is on Steam. Used to fetch its icon on the user's PC. */
   steamAppId?: number;
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The consent dialog (decision log, module grants row of 2026-10-16): what a module asks for that the
-// player has not granted, shown when the module is first added or when an update asks for more.
+// user has not granted, shown when the module is first added or when an update asks for more.
 // Tavora draws it, never the module, so a module cannot fake or hide what it asks for. A connector
 // shows what the module would read through it: for AI Usage, the accounts set up right now; for
 // Discord, what it can see and do in the Discord app, with Tavora's sign-in. For a catalog update that

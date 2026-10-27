@@ -23,9 +23,9 @@ import type { DiscordGame, DiscordLast, DiscordSecrets, DiscordToken } from "./d
 export const DISCORD_CLIENT_ID = "1560388687370387610";
 const TOKEN_URL = "https://discord.com/api/oauth2/token";
 const REDIRECT_URI = "http://localhost";
-/** Reading voice, joining and leaving a channel, and muting or deafening the player. Tavora can't speak or read messages. */
+/** Reading voice, joining and leaving a channel, and muting or deafening the user. Tavora can't speak or read messages. */
 export const SCOPES = ["rpc", "rpc.voice.read", "rpc.voice.write", "identify"];
-/** The scope that lets Tavora mute and deafen the player; sign-ins made before 0.5.11 lack it. */
+/** The scope that lets Tavora mute and deafen the user; sign-ins made before 0.5.11 lack it. */
 const WRITE_SCOPE = "rpc.voice.write";
 /** How often Tavora looks for the Discord app while it is not running. */
 export const RETRY_MS = 10_000;
@@ -161,13 +161,13 @@ export class DiscordConnector {
     for (const key of keys) if (!this.isSubscribed(key)) void this.client?.unsubscribe(argsOf(key).event, argsOf(key).args).catch(() => undefined);
   }
 
-  /** The player pressed Connect: approval in Discord may be asked for. */
+  /** The user pressed Connect: approval in Discord may be asked for. */
   async connectNow(): Promise<void> {
     await this.loaded;
     void this.start(true);
   }
 
-  /** The player pressed Allow muting: Discord is asked to approve the new permission. */
+  /** The user pressed Allow muting: Discord is asked to approve the new permission. */
   async allowControl(): Promise<void> {
     await this.loaded;
     void this.start(true, true);
@@ -193,7 +193,7 @@ export class DiscordConnector {
     if (command === "SET_VOICE_SETTINGS" && !this.granted.includes(WRITE_SCOPE)) {
       return { ok: false, reason: "refused", code: null, message: "Tavora's Discord sign-in may not mute or deafen yet; ask allowControl()." };
     }
-    // Joining takes the player out of a call they are in, as Discord's own channel list does.
+    // Joining takes the user out of a call they are in, as Discord's own channel list does.
     const sent = command === "SELECT_VOICE_CHANNEL" && args.channel_id !== null ? { ...args, force: true } : args;
     try {
       const answer = passOn(await client.command(command, sent, undefined, LIMITS.discordTimeoutMs));
@@ -243,7 +243,7 @@ export class DiscordConnector {
   }
 
   /**
-   * What Discord panels before 0.16.11 kept with the sign-in: the channel to rejoin and each game's
+   * What Discord panels before 0.16.11 kept with the sign-in: the channel to rejoin and each workspace's
    * server. The host moves it into the Discord module once.
    */
   async legacyPanelData(): Promise<{ last: DiscordLast | null; games: Record<string, DiscordGame> } | null> {
@@ -330,7 +330,7 @@ export class DiscordConnector {
     }, RETRY_MS);
   }
 
-  /** AUTHENTICATE with the saved token, refreshing it if needed; asks for approval only when the player pressed Connect. */
+  /** AUTHENTICATE with the saved token, refreshing it if needed; asks for approval only when the user pressed Connect. */
   private async signIn(client: RpcClient, interactive: boolean, live: () => boolean, reauthorize: boolean): Promise<{ id: string; name: string } | null> {
     let token = reauthorize ? null : this.secrets.token;
     if (token && token.expiresAt - this.now() < 60_000) token = await this.refresh(token).catch(() => null);

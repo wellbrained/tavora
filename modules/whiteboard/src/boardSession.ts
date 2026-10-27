@@ -34,7 +34,7 @@ export interface Controls {
   setPictureLocked(id: string, locked: boolean): void;
   /** Puts the selection, or the whole board when nothing is selected, on the clipboard as a PNG. Call it from a click or key press. */
   copyAsPicture(): Promise<"selection" | "board">;
-  /** Saves the same picture through Tavora's save dialog, named after `name`; null when the player closed it. Call it from a click or key press. */
+  /** Saves the same picture through Tavora's save dialog, named after `name`; null when the user closed it. Call it from a click or key press. */
   saveAsPicture(name: string): Promise<{ what: "selection" | "board"; fileName: string } | null>;
   /** Takes everything off the board, as one step that Undo brings back; returns how to put it all back. */
   clear(): () => void;

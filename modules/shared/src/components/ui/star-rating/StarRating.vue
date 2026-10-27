@@ -12,7 +12,7 @@ const props = withDefaults(
   defineProps<{
     /** The rating, 0 to 5. Read-only shows it to the nearest half; editable takes whole stars. */
     modelValue?: number
-    /** Lets the player pick 1 to 5 stars. */
+    /** Lets the user pick 1 to 5 stars. */
     editable?: boolean
     /** Read-only: what the stars say, such as "4.7 out of 5 stars". Editable: the group's name. */
     label: string

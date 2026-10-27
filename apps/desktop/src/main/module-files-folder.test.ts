@@ -49,7 +49,7 @@ describe("ModuleFilesFolder.moveFromOldDefault", () => {
     expect(await readdir(path.join(userData, "module-blobs", "official", "tavora.notes", "poe2"))).toEqual([PICTURE]);
   });
 
-  it("leaves a folder the player chose alone", async () => {
+  it("leaves a folder the user chose alone", async () => {
     const { userData, host, set, folder } = await setup("/somewhere/Tavora");
     await folder.moveFromOldDefault(() => undefined);
     expect(set).not.toHaveBeenCalled();

@@ -5,7 +5,7 @@ import {
   connect,
   TavoraError,
   type TavoraDocument,
-  type TavoraGame,
+  type TavoraWorkspace,
   type TavoraSDK,
   type TavoraTheme,
   type TavoraViewport,
@@ -22,7 +22,7 @@ type View = "list" | "grid";
 /** Everything the module shows, loaded before it reports "Connected". */
 interface Initial {
   tavora: TavoraSDK;
-  game: TavoraGame;
+  workspace: TavoraWorkspace;
   viewport: TavoraViewport;
   theme: TavoraTheme;
   count: number;
@@ -32,15 +32,15 @@ interface Initial {
 
 async function load(): Promise<Initial> {
   const tavora = await connect();
-  const [game, viewport, theme, count, note, panel] = await Promise.all([
-    tavora.game.getCurrent(),
+  const [workspace, viewport, theme, count, note, panel] = await Promise.all([
+    tavora.workspace.getCurrent(),
     tavora.workspace.getViewport(),
     tavora.ui.getTheme(),
     tavora.storage.get<number>("count"),
     tavora.documents.get<Note>("note"),
     tavora.panel.getState<{ view: View }>(),
   ]);
-  return { tavora, game, viewport, theme, count: count ?? 0, note, view: panel?.view ?? "list" };
+  return { tavora, workspace, viewport, theme, count: count ?? 0, note, view: panel?.view ?? "list" };
 }
 
 
@@ -53,7 +53,7 @@ function Counter({ tavora, initial, primary }: { tavora: TavoraSDK; initial: num
   };
   return (
     <section>
-      <h2>Clicks saved for this game</h2>
+      <h2>Clicks saved in this workspace</h2>
       <p data-testid="count">{count}</p>
       <button type="button" data-testid="increment" onClick={() => void increment()} style={primary}>
         Add a click
@@ -153,7 +153,7 @@ function PanelView({ tavora, initial }: { tavora: TavoraSDK; initial: View }) {
 }
 
 function Module({ initial }: { initial: Initial }) {
-  const { tavora, game } = initial;
+  const { tavora, workspace } = initial;
   const [viewport, setViewport] = useState(initial.viewport);
   const [theme, setTheme] = useState(initial.theme);
   const [lifecycle, setLifecycle] = useState("active");
@@ -177,9 +177,9 @@ function Module({ initial }: { initial: Initial }) {
     <Page background={colors.background} text={colors.text}>
       <p data-testid="status">Connected</p>
       <dl>
-        <dt style={muted}>Game</dt>
-        <dd data-testid="game" data-game-id={game.id}>
-          {game.displayName}
+        <dt style={muted}>Workspace</dt>
+        <dd data-testid="workspace" data-workspace-id={workspace.id}>
+          {workspace.displayName}
         </dd>
         <dt style={muted}>Viewport</dt>
         <dd data-testid="viewport">

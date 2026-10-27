@@ -1,7 +1,7 @@
-// What the player chose, and what that asks Tavora to watch. Pure, so it is tested on its own.
-//  - Module-wide (`storage.app`): how often it updates, and which drives to watch (null until the player has chosen).
+// What the user chose, and what that asks Tavora to watch. Pure, so it is tested on its own.
+//  - Module-wide (`storage.app`): how often it updates, and which drives to watch (null until the user has chosen).
 //  - Per panel (`panel.setState`): which sections (System, Connection) and blocks show, which graphics card, and
-//    whether the traffic shows (off until the player turns it on; while off, Tavora reads none).
+//    whether the traffic shows (off until the user turns it on; while off, Tavora reads none).
 //  - The connection watcher's own choices (on or off, the address pinged) are Tavora's, not kept here.
 import { SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, type SystemInfo, type SystemInterval, type SystemWatchBlocks } from "@tavora/sdk";
 
@@ -23,7 +23,7 @@ export const HISTORY_MS = 5 * 60 * 1000;
 
 export interface AppSettings {
   intervalMs: SystemInterval;
-  /** The drives to watch, as the player ticked them; null until they have chosen, so the internal ones show. */
+  /** The drives to watch, as the user ticked them; null until they have chosen, so the internal ones show. */
   drives: string[] | null;
 }
 
@@ -92,12 +92,12 @@ export function toggleSection(panel: PanelSettings, id: SectionId): PanelSetting
   return SECTIONS.some((section) => sections[section]) ? { ...panel, sections } : panel;
 }
 
-/** The internal drives, which are watched until the player chooses. */
+/** The internal drives, which are watched until the user chooses. */
 export function defaultDrives(info: SystemInfo): string[] {
   return info.drives.filter((drive) => drive.kind === "internal").map((drive) => drive.id);
 }
 
-/** The drives to watch: the player's choice, which may name a drive that is unplugged now, or the internal ones. */
+/** The drives to watch: the user's choice, which may name a drive that is unplugged now, or the internal ones. */
 export function watchedDrives(info: SystemInfo, settings: AppSettings): string[] {
   return (settings.drives ?? defaultDrives(info)).slice(0, SYSTEM_MAX_DRIVES);
 }

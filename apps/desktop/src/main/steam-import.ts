@@ -2,7 +2,7 @@ import { isGameId } from "@tavora/module-schema";
 import type { SteamGameView, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { translate, type Language, type MessageKey } from "../shared/i18n";
 import { normalizeName } from "./launcher-games";
-import { addGame, type Library } from "./library";
+import { addWorkspace, type Library } from "./library";
 import { isSteamAppId } from "./steam-icons";
 
 export const MAX_PROFILE_LENGTH = 200;
@@ -10,16 +10,16 @@ export const MAX_IMPORT_GAMES = 5000;
 const IMPORT_TIMEOUT_MS = 20_000;
 
 /**
- * Whether a game from a Steam library is already in the player's library: by its
+ * Whether a game from a Steam library is already in the user's library: by its
  * Tavora id, by the Steam appid a game was added with, or by name (a game the
- * player added by hand is the same game). Trash counts, so an import never
- * brings back a game the player removed.
+ * user added by hand is the same game). Trash counts, so an import never
+ * brings back a game the user removed.
  */
 export function steamGameStatus(library: Library, game: SteamImportGame): "new" | "owned" | "trash" {
   const name = normalizeName(game.name);
-  let found: Library["games"][string] | undefined = game.id ? library.games[game.id] : undefined;
+  let found: Library["workspaces"][string] | undefined = game.id ? library.workspaces[game.id] : undefined;
   if (!found) {
-    found = Object.values(library.games).find(
+    found = Object.values(library.workspaces).find(
       (own) => own.steamAppId === game.appid || (name !== "" && normalizeName(own.name) === name),
     );
   }
@@ -34,7 +34,7 @@ export function importSteamGames(library: Library, games: SteamImportGame[], now
     if (steamGameStatus(library, game) !== "new") continue;
     try {
       added.push(
-        addGame(library, game.id ? { online: { id: game.id, name: game.name, steamAppId: game.appid } } : { name: game.name, steamAppId: game.appid }, now),
+        addWorkspace(library, game.id ? { online: { id: game.id, name: game.name, steamAppId: game.appid } } : { name: game.name, steamAppId: game.appid }, now),
       );
     } catch {
       // A name that cannot be used is skipped; the rest still go in.
@@ -62,8 +62,8 @@ export interface SteamImportOptions {
 
 /**
  * Asks the Tavora service for the games a Steam account owns. The service holds
- * the Steam key and keeps nothing; the app sends only what the player typed.
- * Never throws: a problem comes back as a message the player can read.
+ * the Steam key and keeps nothing; the app sends only what the user typed.
+ * Never throws: a problem comes back as a message the user can read.
  */
 export async function fetchSteamLibrary(
   options: SteamImportOptions,
@@ -87,7 +87,7 @@ export async function fetchSteamLibrary(
     const body = (await response.json().catch(() => null)) as { games?: unknown; error?: unknown } | null;
     if (response.status === 429) return say("error.steam.tooMany");
     if (!response.ok) {
-      // The service words its refusals for players (a wrong link, a private profile, Steam being down).
+      // The service words its refusals for users (a wrong link, a private profile, Steam being down).
       return typeof body?.error === "string" && body.error.length <= 300 ? { status: "error", error: body.error } : say("error.steam.unavailable");
     }
     if (!Array.isArray(body?.games)) return say("error.steam.unreadable");
@@ -101,7 +101,7 @@ export async function fetchSteamLibrary(
   }
 }
 
-/** The list the dialog shows: each game with whether the player already has it. */
+/** The list the dialog shows: each game with whether the user already has it. */
 export function steamLibraryView(library: Library, games: SteamImportGame[]): SteamLibraryResult {
   const views: SteamGameView[] = games.map((game) => ({ ...game, status: steamGameStatus(library, game) }));
   return { status: "ok", games: views };

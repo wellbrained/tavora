@@ -1,5 +1,5 @@
 // Settings > Streaming and what modules use of it: Stream overlays (overlays.ts) and hotkeys for module actions
-// (hotkeys.ts). The host lends it the library, the installed modules, the game shown now and its panels; this keeps
+// (hotkeys.ts). The host lends it the library, the installed modules, the workspace shown now and its panels; this keeps
 // the stores, the overlay server, the keys registered with the system and Tavora's hotkey dialog.
 import type { ModuleManifest } from "@tavora/module-schema";
 import type { HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult } from "@tavora/sdk/protocol";
@@ -18,10 +18,10 @@ export interface StreamingModule {
   manifest: Pick<ModuleManifest, "id" | "name" | "overlay" | "overlaySize" | "actions" | "permissions">;
 }
 
-/** A panel of the game shown now that hears a hotkey. */
+/** A panel of the workspace shown now that hears a hotkey. */
 export interface HotkeyListener {
   moduleId: string;
-  /** When the player last used the panel; a press goes to the module's panel used last. */
+  /** When the user last used the panel; a press goes to the module's panel used last. */
   usedAt: number;
   hotkeyPressed(binding: HotkeyBinding): void;
 }
@@ -31,14 +31,14 @@ export interface StreamingOptions {
   settings(): { streamOverlays: boolean; overlayPort: number };
   saveSettings(next: { streamOverlays?: boolean; overlayPort?: number }): void;
   module(moduleId: string): StreamingModule | undefined;
-  /** Whether the player granted the module the stream-overlay connector, as it is installed now. */
+  /** Whether the user granted the module the stream-overlay connector, as it is installed now. */
   overlayGranted(moduleId: string): boolean;
-  /** Asks the player in Tavora's consent dialog for a connector the module asks for on request; whether they allowed it. */
+  /** Asks the user in Tavora's consent dialog for a connector the module asks for on request; whether they allowed it. */
   askConnector(moduleId: string, connector: "stream-overlay"): Promise<boolean>;
-  /** The game shown now, or null. */
-  gameId(): string | null;
-  gameName(gameId: string): string | null;
-  /** The module panels of the game shown now. */
+  /** The workspace shown now, or null. */
+  workspaceId(): string | null;
+  workspaceName(workspaceId: string): string | null;
+  /** The module panels of the workspace shown now. */
   panels(): HotkeyListener[];
   shortcuts: ShortcutRegistry;
   writeClipboard(text: string): void;
@@ -55,17 +55,17 @@ export interface OverlayKeys {
   /** The game in front; the keys of game overlays work only while one is. */
   frontGame(): string | null;
   wants(record: HotkeyRecord): boolean;
-  /** Whether the player has a game overlay for this key. */
+  /** Whether the user has a game overlay for this key. */
   has(subject: OverlaySubject): boolean;
   pressed(record: HotkeyRecord): void;
-  /** Whether the key works over every game (the layer key, a general overlay's key): it collides with any game's keys. */
+  /** Whether the key works over every game (the layer key, a general overlay's key): it collides with any workspace's keys. */
   general(binding: Omit<HotkeyRecord, "label" | "accelerator">): boolean;
 }
 
 interface PendingHotkey {
   id: number;
   binding: Omit<HotkeyRecord, "label" | "accelerator">;
-  /** For a key of game overlays: the words the dialog uses; the dialog stays open when the game changes. */
+  /** For a key of game overlays: the words the dialog uses; the dialog stays open when the workspace shown changes. */
   overlay?: { module: string; action: string };
   label: string;
   error: string | null;
@@ -114,12 +114,12 @@ export class Streaming {
   // ── What a module panel gets ─────────────────────────────────────────
 
   /**
-   * overlay.* for a panel of `module` in `gameId`; the bridge checked the keys, and the capability for resetLink.
+   * overlay.* for a panel of `module` in `workspaceId`; the bridge checked the keys, and the capability for resetLink.
    * copyLink needs the connector too: a module that asks for it on request gets Tavora's consent dialog there the first
    * time. publish and remove need no capability: they only set what a link or a game overlay shows.
    */
-  overlayFor(module: StreamingModule, gameId: string) {
-    const subject = (key: string): OverlaySubject => ({ owner: module.owner, moduleId: module.manifest.id, gameId, key });
+  overlayFor(module: StreamingModule, workspaceId: string) {
+    const subject = (key: string): OverlaySubject => ({ owner: module.owner, moduleId: module.manifest.id, workspaceId, key });
     const granted = async (): Promise<boolean> => {
       if (this.options.overlayGranted(module.manifest.id)) return true;
       if (!(module.manifest.permissions.onRequest ?? []).includes("stream-overlay")) {
@@ -153,12 +153,12 @@ export class Streaming {
     };
   }
 
-  /** hotkeys.* for a panel of `module` in `gameId`; the module view checked the action and the click. */
-  hotkeysFor(module: StreamingModule, gameId: string) {
-    const own = (record: HotkeyRecord) => record.owner === module.owner && record.moduleId === module.manifest.id && record.gameId === gameId;
+  /** hotkeys.* for a panel of `module` in `workspaceId`; the module view checked the action and the click. */
+  hotkeysFor(module: StreamingModule, workspaceId: string) {
+    const own = (record: HotkeyRecord) => record.owner === module.owner && record.moduleId === module.manifest.id && record.workspaceId === workspaceId;
     return {
-      list: (): HotkeyBinding[] => this.hotkeys.of(module.owner, module.manifest.id, gameId).map(({ action, target }) => ({ action, target })),
-      set: (action: string, target: string, label: string) => this.ask({ owner: module.owner, moduleId: module.manifest.id, gameId, action, target }, label),
+      list: (): HotkeyBinding[] => this.hotkeys.of(module.owner, module.manifest.id, workspaceId).map(({ action, target }) => ({ action, target })),
+      set: (action: string, target: string, label: string) => this.ask({ owner: module.owner, moduleId: module.manifest.id, workspaceId, action, target }, label),
       remove: (target: string, action: string | null) => {
         if (this.hotkeys.remove((record) => own(record) && record.target === target && (action === null || record.action === action))) this.changed();
       },
@@ -167,9 +167,9 @@ export class Streaming {
 
   // ── The hotkey dialog ────────────────────────────────────────────────
 
-  /** Opens Tavora's hotkey dialog; resolves with what the player did there. Only for the game shown now. */
+  /** Opens Tavora's hotkey dialog; resolves with what the user did there. Only for the workspace shown now. */
   private ask(binding: PendingHotkey["binding"], label: string, overlay?: PendingHotkey["overlay"]): Promise<HotkeySetResult> {
-    if (!overlay && this.options.gameId() !== binding.gameId) throw new HostError("PERMISSION_DENIED", "hotkeys.set works only in the game shown now");
+    if (!overlay && this.options.workspaceId() !== binding.workspaceId) throw new HostError("PERMISSION_DENIED", "hotkeys.set works only in the workspace shown now");
     this.pending?.resolve("cancelled");
     // Every key goes free while the dialog is open, so it can catch keys set already.
     this.registrar.pause();
@@ -180,7 +180,7 @@ export class Streaming {
     });
   }
 
-  /** Opens the hotkey dialog for a key of game overlays (Settings > Overlays), which is set for any game, not only the one shown. */
+  /** Opens the hotkey dialog for a key of game overlays (Settings > Overlays), which is set for any workspace, not only the one shown. */
   askOverlayKey(binding: PendingHotkey["binding"], label: string, words: { module: string; action: string }): Promise<HotkeySetResult> {
     return this.ask(binding, label, words);
   }
@@ -209,7 +209,7 @@ export class Streaming {
     } else if (removed) this.changed();
   }
 
-  /** The player's answer in the hotkey dialog. A refused key keeps the dialog open with the reason. */
+  /** The user's answer in the hotkey dialog. A refused key keeps the dialog open with the reason. */
   answer(id: number, choice: "set" | "remove" | "cancel", accelerator?: string): ActionResult {
     const pending = this.pending;
     if (!pending || pending.id !== id) return { ok: true };
@@ -251,23 +251,23 @@ export class Streaming {
     this.changed();
   }
 
-  /** The game changed or its panel went away while the dialog was open: it closes. */
+  /** The workspace changed or its panel went away while the dialog was open: it closes. */
   private dropStalePending(): void {
     const pending = this.pending;
-    if (pending && !pending.overlay && (this.options.gameId() !== pending.binding.gameId || !this.options.panels().some((panel) => panel.moduleId === pending.binding.moduleId))) this.close("cancelled");
+    if (pending && !pending.overlay && (this.options.workspaceId() !== pending.binding.workspaceId || !this.options.panels().some((panel) => panel.moduleId === pending.binding.moduleId))) this.close("cancelled");
   }
 
   // ── Keys registered with the system ──────────────────────────────────
 
   /**
-   * Registers the hotkeys that should work now: the game shown now, modules with a panel in its workspace. Cheap when
+   * Registers the hotkeys that should work now: the workspace shown now, modules with a panel in it. Cheap when
    * nothing changed, so the host calls it on every state push.
    */
   sync(): void {
     this.dropStalePending();
-    const gameId = this.options.gameId();
+    const workspaceId = this.options.workspaceId();
     const open = new Set(this.options.panels().map((panel) => panel.moduleId));
-    const wanted = gameId === null ? [] : this.hotkeys.all().filter((record) => record.gameId === gameId && !isOverlayAction(record.action) && open.has(record.moduleId) && this.options.module(record.moduleId)?.owner === record.owner);
+    const wanted = workspaceId === null ? [] : this.hotkeys.all().filter((record) => record.workspaceId === workspaceId && !isOverlayAction(record.action) && open.has(record.moduleId) && this.options.module(record.moduleId)?.owner === record.owner);
     // The keys of game overlays follow the game in front instead, so they take no key from other programs.
     // The layer key is for every game, an overlay's key for its own (or every game, for a general overlay).
     const front = this.overlayKeys?.frontGame() ?? null;
@@ -278,7 +278,7 @@ export class Streaming {
   /** One press is one action: it goes to one panel of the module, the one used last, so several panels don't each act on it. */
   private pressed(record: HotkeyRecord): void {
     if (isOverlayAction(record.action)) return this.overlayKeys?.pressed(record);
-    if (this.options.gameId() !== record.gameId) return;
+    if (this.options.workspaceId() !== record.workspaceId) return;
     const panel = this.options.panels().filter((item) => item.moduleId === record.moduleId).sort((a, b) => b.usedAt - a.usedAt)[0];
     panel?.hotkeyPressed({ action: record.action, target: record.target });
   }
@@ -309,10 +309,10 @@ export class Streaming {
     this.hotkeys.remove((record) => sameBinding(record, binding));
   }
 
-  /** A game left the library for good: its overlay links and hotkeys go too. */
-  forgetGame(gameId: string): void {
-    this.overlays.forget((link) => link.gameId === gameId);
-    this.hotkeys.remove((record) => record.gameId === gameId);
+  /** A workspace left the library for good: its overlay links and hotkeys go too. */
+  forgetWorkspace(workspaceId: string): void {
+    this.overlays.forget((link) => link.workspaceId === workspaceId);
+    this.hotkeys.remove((record) => record.workspaceId === workspaceId);
   }
 
   /** A module's data was deleted: its overlay links and hotkeys go too. */
@@ -338,14 +338,14 @@ export class Streaming {
           owner: link.owner,
           moduleId: link.moduleId,
           moduleName: this.options.module(link.moduleId)?.manifest.name ?? link.moduleId,
-          gameId: link.gameId,
-          gameName: this.options.gameName(link.gameId) ?? link.gameId,
+          workspaceId: link.workspaceId,
+          workspaceName: this.options.workspaceName(link.workspaceId) ?? link.workspaceId,
           key: link.key,
         })),
       hotkeys: this.hotkeys.all().filter((record) => !isOverlayAction(record.action)).map((record) => ({
           owner: record.owner,
-          gameId: record.gameId,
-          gameName: this.options.gameName(record.gameId) ?? record.gameId,
+          workspaceId: record.workspaceId,
+          workspaceName: this.options.workspaceName(record.workspaceId) ?? record.workspaceId,
           moduleId: record.moduleId,
           moduleName: this.options.module(record.moduleId)?.manifest.name ?? record.moduleId,
           action: record.action,

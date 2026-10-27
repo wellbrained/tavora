@@ -2,7 +2,7 @@
  * The connection watcher of the system-info connector: is this PC online, how fast do the router and one address on
  * the internet answer, how many pings get lost, how much goes through the network adapter, and a log of the drops.
  *
- * It runs inside Tavora, apart from any panel, while the System Monitor module is in a game or workspace and has its
+ * It runs inside Tavora, apart from any panel, while the System Monitor module is in a workspace and has its
  * grant (host.ts decides with `setActive`), so drops are logged even when no panel is shown. One timer looks every
  * 5 seconds: two pings (ICMP, from iphlpapi.dll, never blocking the main thread), one question to Windows whether it
  * thinks it is online, and one read of the adapter's byte counters. What a look finds goes through the ConnectionTracker
@@ -375,12 +375,12 @@ export class ConnectionWatcher implements ConnectionSource {
     this.tracker = new ConnectionTracker(prune([...options.initial.outages], this.now()));
   }
 
-  /** Whether the timer runs: wanted by the host and not switched off by the player. */
+  /** Whether the timer runs: wanted by the host and not switched off by the user. */
   get running(): boolean {
     return this.timer !== null || this.first !== null;
   }
 
-  /** The host says whether the System Monitor module is in a game or workspace with its grant. */
+  /** The host says whether the System Monitor module is in a workspace with its grant. */
   setActive(active: boolean): void {
     if (this.active === active) return;
     this.active = active;

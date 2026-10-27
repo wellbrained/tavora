@@ -1,12 +1,12 @@
 // Settings > Modules: the list says where each module came from, Reload picks
-// up a module put into the player's modules folder and explains one that
+// up a module put into the user's modules folder and explains one that
 // cannot be loaded, and Remove takes a module away together with its panels.
 import { generateKeyPairSync } from "node:crypto";
 import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, inModule, launch, newUserData, openGame, openModule, panels, seedLibrary, VANILLA } from "./harness";
+import { expectModuleText, inModule, launch, newUserData, openWorkspace, openModule, panels, seedLibrary, VANILLA } from "./harness";
 
 async function addModule(userData: string, folder: string, id: string): Promise<string> {
   const dir = path.join(userData, "modules", folder);
@@ -115,7 +115,7 @@ test("the modules page lists where modules came from, reloads, and removes one w
 
   // Open a panel of the module in a game, then remove the module.
   await page.getByTestId("settings-close").click();
-  await openGame(page, "poe2");
+  await openWorkspace(page, "poe2");
   await openModule(page, "local.test.mini");
   await expect(panels(page, "local.test.mini")).toHaveCount(1);
   await page.getByTestId("rail-settings").click();
@@ -156,7 +156,7 @@ test("data saved before modules had owners is moved under its owner and still fo
   await again.app.close();
 });
 
-/** Makes the next file dialog answer with this file, as if the player picked it (null: cancelled), and keeps the folder it opened in. */
+/** Makes the next file dialog answer with this file, as if the user picked it (null: cancelled), and keeps the folder it opened in. */
 async function pickFile(app: ElectronApplication, file: string | null) {
   await app.evaluate(({ dialog }, picked) => {
     dialog.showOpenDialog = (async (_window: unknown, options: { defaultPath?: string }) => {

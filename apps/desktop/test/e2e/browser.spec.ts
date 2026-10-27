@@ -10,7 +10,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { launch, openGame, openModule } from "./harness";
+import { launch, openWorkspace, openModule } from "./harness";
 
 const BROWSER = "tavora.browser";
 /** A name EasyList blocks (`||doubleclick.net^`), resolved to the test server. */
@@ -201,7 +201,7 @@ test("a page cannot reach Tavora, modules, other schemes or the local network (B
   expect(hits).not.toContain("127.0.0.1/local-nav");
   expect(hits).not.toContain("127.0.0.1/redirected");
 
-  // What the player types may be local, and a local page may use local addresses.
+  // What the user types may be local, and a local page may use local addresses.
   await go(page, localUrl("/page"));
   await waitForPage(app, localUrl("/page"));
   expect(await inPage(app, localUrl("/"), `fetch("/secret").then((r) => r.text())`)).toBe("reached");
@@ -247,7 +247,7 @@ test("new windows open as a Browser tab only after a click, and downloads are re
   await page.waitForTimeout(500);
   await expect(page.locator('[data-panel-tab][data-module-id="tavora.browser"]')).toHaveCount(3);
 
-  // B5: a download is refused and the player is told.
+  // B5: a download is refused and the user is told.
   const downloads = await app.evaluate(({ app }) => app.getPath("downloads"));
   await inPage(app, publicUrl("/"), `location.href = "/download"; null`);
   await expect(page.getByText("Tavora doesn't download files.")).toBeVisible();
@@ -281,7 +281,7 @@ test("ads are blocked unless allowed for the site", async () => {
   await app.close();
 });
 
-test("sign-ins are per game unless the site is shared, and the panel reopens where it was (B10)", async () => {
+test("sign-ins are per workspace unless the site is shared, and the panel reopens where it was (B10)", async () => {
   const first = await launch(undefined, [], { args: ARGS() });
   let { app, page } = first;
   const cookie = (url: string) => inPage<string>(app, url, "document.cookie");
@@ -292,18 +292,18 @@ test("sign-ins are per game unless the site is shared, and the panel reopens whe
   await inPage(app, publicUrl("/"), `document.cookie = "who=poe2; max-age=3600"; null`);
 
   // Another game's Browser has its own cookies.
-  await openGame(page, "satisfactory");
+  await openWorkspace(page, "satisfactory");
   await openModule(page, BROWSER);
   await go(page, publicUrl("/page"));
   await waitForPage(app, publicUrl("/page"));
   expect(await cookie(publicUrl("/"))).toBe("");
 
-  // Signed in for all games: the site moves to the shared session.
+  // Signed in for all workspaces: the site moves to the shared session.
   await page.getByTestId("browser-shared").click();
   await expect(page.getByTestId("browser-shared")).toHaveAttribute("aria-pressed", "true");
   await waitForPage(app, publicUrl("/page"));
   await inPage(app, publicUrl("/"), `document.cookie = "shared=yes; max-age=3600"; null`);
-  await openGame(page, "poe2");
+  await openWorkspace(page, "poe2");
   await waitForPage(app, publicUrl("/page"));
   await expect(page.getByTestId("browser-shared")).toHaveAttribute("aria-pressed", "true");
   expect(await cookie(publicUrl("/"))).toBe("shared=yes");

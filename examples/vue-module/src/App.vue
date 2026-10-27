@@ -2,7 +2,7 @@
 // Same features and data-testid values as the vanilla and React examples,
 // so one set of end-to-end tests covers all three.
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef } from "vue";
-import { connect, TavoraError, type TavoraGame, type TavoraSDK, type TavoraTheme, type TavoraViewport } from "@tavora/sdk";
+import { connect, TavoraError, type TavoraSDK, type TavoraTheme, type TavoraViewport, type TavoraWorkspace } from "@tavora/sdk";
 
 interface Note {
   text: string;
@@ -11,7 +11,7 @@ type View = "list" | "grid";
 
 const error = ref<string | null>(null);
 const tavora = shallowRef<TavoraSDK | null>(null);
-const game = ref<TavoraGame | null>(null);
+const workspace = ref<TavoraWorkspace | null>(null);
 const viewport = ref<TavoraViewport | null>(null);
 const theme = ref<TavoraTheme | null>(null);
 const lifecycle = ref("active");
@@ -35,15 +35,15 @@ async function loadNote(sdk: TavoraSDK) {
 onMounted(async () => {
   try {
     const sdk = await connect();
-    const [currentGame, initialViewport, initialTheme, savedCount, noteText, panel] = await Promise.all([
-      sdk.game.getCurrent(),
+    const [currentWorkspace, initialViewport, initialTheme, savedCount, noteText, panel] = await Promise.all([
+      sdk.workspace.getCurrent(),
       sdk.workspace.getViewport(),
       sdk.ui.getTheme(),
       sdk.storage.get<number>("count"),
       loadNote(sdk),
       sdk.panel.getState<{ view: View }>(),
     ]);
-    game.value = currentGame;
+    workspace.value = currentWorkspace;
     viewport.value = initialViewport;
     theme.value = initialTheme;
     count.value = savedCount ?? 0;
@@ -113,8 +113,8 @@ const primary = computed(() => ({ background: colors.value?.accent, color: color
     <template v-else>
       <p data-testid="status">Connected</p>
       <dl>
-        <dt :style="{ color: colors?.textMuted }">Game</dt>
-        <dd data-testid="game" :data-game-id="game?.id">{{ game?.displayName }}</dd>
+        <dt :style="{ color: colors?.textMuted }">Workspace</dt>
+        <dd data-testid="workspace" :data-workspace-id="workspace?.id">{{ workspace?.displayName }}</dd>
         <dt :style="{ color: colors?.textMuted }">Viewport</dt>
         <dd data-testid="viewport">{{ viewport ? `${viewport.width} × ${viewport.height}` : "–" }}</dd>
         <dt :style="{ color: colors?.textMuted }">Theme</dt>
@@ -124,7 +124,7 @@ const primary = computed(() => ({ background: colors.value?.accent, color: color
       </dl>
 
       <section>
-        <h2>Clicks saved for this game</h2>
+        <h2>Clicks saved in this workspace</h2>
         <p data-testid="count">{{ count }}</p>
         <button type="button" data-testid="increment" :style="primary" @click="increment">Add a click</button>
       </section>

@@ -7,9 +7,9 @@ import { isIdPrefix } from "../shared/id-prefix";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
 import type { DiscordLoginResult } from "./discord-login";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 
-// The player's Tavora account (decided 2026-10-16): signed into with an email
+// The user's Tavora account (decided 2026-10-16): signed into with an email
 // code, a Discord login (the browser, see discord-login.ts) or both. The main process talks to the service; the
 // host UI only sees the address, the devices and what step a sign-in is at.
 // The sign-in token is kept in account.json, encrypted like the Discord sign-in;
@@ -70,7 +70,7 @@ export function deviceOs(platform: NodeJS.Platform): DeviceOs {
   return platform === "win32" ? "windows" : platform === "linux" ? "linux" : platform === "darwin" ? "macos" : "other";
 }
 
-/** The player's profile as it travels between the PC and the account. `picture` is a base64 PNG. */
+/** The user's profile as it travels between the PC and the account. `picture` is a base64 PNG. */
 export interface ProfileData {
   name: string;
   initials: string;
@@ -96,7 +96,7 @@ export interface AccountClientOptions {
   baseUrl: string;
   fetch: typeof fetch;
   os: DeviceOs;
-  /** This PC's name (its computer name), which a new sign-in goes by until the player renames it. */
+  /** This PC's name (its computer name), which a new sign-in goes by until the user renames it. */
   deviceName?: string;
   language: () => Language;
   canKeepSignIn: () => boolean;
@@ -113,7 +113,7 @@ export interface AccountClientOptions {
   timeoutMs?: number;
 }
 
-/** What the service said went wrong, as a message for the player. */
+/** What the service said went wrong, as a message for the user. */
 const REASONS: Record<string, MessageKey> = {
   "discord-refused": "account.error.discordRefused",
   "discord-unreachable": "account.error.discordUnreachable",
@@ -217,17 +217,17 @@ export class AccountClient {
   private saved: SavedAccount | null = null;
   private devices: AccountDevice[] | null = null;
   private pending: AccountPending | null = null;
-  /** The right code for an address with no account yet, kept until the player says yes or no. */
+  /** The right code for an address with no account yet, kept until the user says yes or no. */
   private pendingCode: string | null = null;
-  /** The service's ticket for a checked Discord login with no account yet, kept until the player says yes or no. */
+  /** The service's ticket for a checked Discord login with no account yet, kept until the user says yes or no. */
   private pendingTicket: string | null = null;
-  /** The account's profile when it differs from this PC's on the first sign-in here: the player chooses once. */
+  /** The account's profile when it differs from this PC's on the first sign-in here: the user chooses once. */
   private profileChoice: (ProfileData & { updatedAt: string }) | null = null;
   /** The developer side as last read: the public name and the linked publisher keys. */
   private developer: AccountView["developer"] = null;
   private publisherKeys: AccountView["publisherKeys"] = null;
   private keyRequests: AccountView["keyRequests"] = null;
-  /** The code for `tavora-pack link` the player asked for, until it runs out. */
+  /** The code for `tavora-pack link` the user asked for, until it runs out. */
   private linkCode: AccountView["linkCode"] = null;
   private publishTokens: AccountView["publishTokens"] = null;
   /** A publish token just made, shown once until the developer closes it. */
@@ -250,7 +250,7 @@ export class AccountClient {
     if (this.saved) void this.readDeveloper();
   }
 
-  /** The sign-in token, for another call to the service that needs a signed-in player (sharing icons); null when signed out. */
+  /** The sign-in token, for another call to the service that needs a signed-in user (sharing icons); null when signed out. */
   token(): string | null {
     return this.options.enabled ? (this.saved?.token ?? null) : null;
   }
@@ -286,10 +286,10 @@ export class AccountClient {
     this.changed();
   }
 
-  /** Checks the code; for a new address the player is asked before an account is made. */
+  /** Checks the code; for a new address the user is asked before an account is made. */
   async verify(code: string): Promise<void> {
     const pending = this.pending;
-    if (pending?.kind !== "sign-in") throw new PlayerError("account.error.noCode");
+    if (pending?.kind !== "sign-in") throw new UserError("account.error.noCode");
     const answer = await this.call("POST", "/verify", { email: pending.email, code, ...this.device() });
     if (answer.status === "no-account") {
       this.pending = { ...pending, step: "create" };
@@ -300,16 +300,16 @@ export class AccountClient {
     await this.signedIn(answer);
   }
 
-  /** Makes the account, only once the player confirmed the minimum age (13, and 16 or a parent's permission; decided 2026-10-16). Nothing about the age is kept. */
+  /** Makes the account, only once the user confirmed the minimum age (13, and 16 or a parent's permission; decided 2026-10-16). Nothing about the age is kept. */
   async create(ageConfirmed: boolean): Promise<void> {
     const pending = this.pending;
     if (pending?.kind === "discord-create" && this.pendingTicket) {
-      if (!ageConfirmed) throw new PlayerError("account.error.ageRequired");
+      if (!ageConfirmed) throw new UserError("account.error.ageRequired");
       await this.signedIn(await this.call("POST", "/discord/create", { ticket: this.pendingTicket, ...this.device() }));
       return;
     }
-    if (pending?.kind !== "sign-in" || pending.step !== "create" || !this.pendingCode) throw new PlayerError("account.error.noCode");
-    if (!ageConfirmed) throw new PlayerError("account.error.ageRequired");
+    if (pending?.kind !== "sign-in" || pending.step !== "create" || !this.pendingCode) throw new UserError("account.error.noCode");
+    if (!ageConfirmed) throw new UserError("account.error.ageRequired");
     await this.signedIn(await this.call("POST", "/verify", { email: pending.email, code: this.pendingCode, ...this.device(), create: true }));
   }
 
@@ -339,7 +339,7 @@ export class AccountClient {
 
   /**
    * Connecting Discord starts with a code sent to the account's address, so a stolen sign-in cannot add a way in
-   * that it controls; the player then types the code and approves in Discord (connectDiscord).
+   * that it controls; the user then types the code and approves in Discord (connectDiscord).
    */
   async sendConnectDiscordCode(): Promise<void> {
     this.ensure(true);
@@ -350,7 +350,7 @@ export class AccountClient {
 
   /** Connects Discord to the signed-in account: the code from the email, then a fresh Discord sign-in in the browser. */
   async connectDiscord(emailCode: string): Promise<void> {
-    if (this.pending?.kind !== "connect-discord") throw new PlayerError("account.error.noCode");
+    if (this.pending?.kind !== "connect-discord") throw new UserError("account.error.noCode");
     const login = await this.discord();
     const answer = await this.call("POST", "/discord", { ...login, emailCode }, true);
     this.pending = null;
@@ -369,7 +369,7 @@ export class AccountClient {
   }
 
   async disconnectDiscord(code: string): Promise<void> {
-    if (this.pending?.kind !== "remove-discord") throw new PlayerError("account.error.noCode");
+    if (this.pending?.kind !== "remove-discord") throw new UserError("account.error.noCode");
     const answer = await this.call("POST", "/discord/remove", { code }, true);
     this.pending = null;
     await this.updated(answer);
@@ -384,7 +384,7 @@ export class AccountClient {
   }
 
   async removeEmail(code: string): Promise<void> {
-    if (this.pending?.kind !== "remove-email") throw new PlayerError("account.error.noCode");
+    if (this.pending?.kind !== "remove-email") throw new UserError("account.error.noCode");
     const answer = await this.call("POST", "/email/remove", { code }, true);
     this.pending = null;
     await this.updated(answer);
@@ -399,7 +399,7 @@ export class AccountClient {
   }
 
   private async discord(): Promise<DiscordLoginResult> {
-    if (!this.options.discordLogin) throw new PlayerError("account.error.unavailable");
+    if (!this.options.discordLogin) throw new UserError("account.error.unavailable");
     return this.options.discordLogin();
   }
 
@@ -446,7 +446,7 @@ export class AccountClient {
     await this.readPrefixes();
   }
 
-  /** Sets the public name players see on the modules of the account's linked keys. */
+  /** Sets the public name users see on the modules of the account's linked keys. */
   async setDeveloperName(name: string): Promise<void> {
     this.ensure(true);
     this.takeDeveloper(await this.call("PUT", "/developer", { name: name.trim() }, true));
@@ -456,7 +456,7 @@ export class AccountClient {
   async newLinkCode(): Promise<void> {
     this.ensure(true);
     const answer = await this.call("POST", "/keys/code", {}, true);
-    if (typeof answer.code !== "string" || !/^[A-Z0-9]{8}$/.test(answer.code) || !isText(answer.expiresAt, 40)) throw new PlayerError("error.generic");
+    if (typeof answer.code !== "string" || !/^[A-Z0-9]{8}$/.test(answer.code) || !isText(answer.expiresAt, 40)) throw new UserError("error.generic");
     this.linkCode = { code: answer.code, expiresAt: answer.expiresAt };
     this.changed();
   }
@@ -465,7 +465,7 @@ export class AccountClient {
   async linkPublisherKey(key: KeyObject): Promise<void> {
     this.ensure(true);
     const answer = await this.call("POST", "/keys/code", {}, true);
-    if (typeof answer.code !== "string" || !/^[A-Z0-9]{8}$/.test(answer.code)) throw new PlayerError("error.generic");
+    if (typeof answer.code !== "string" || !/^[A-Z0-9]{8}$/.test(answer.code)) throw new UserError("error.generic");
     await this.call("POST", "/link", linkRequest(key, answer.code), false, "/v1/publishers");
     this.takeDeveloper(await this.call("GET", "/developer", undefined, true));
   }
@@ -474,7 +474,7 @@ export class AccountClient {
   async createPublishToken(name: string): Promise<void> {
     this.ensure(true);
     const answer = await this.call("POST", "/publish-tokens", { name: name.trim() }, true);
-    if (typeof answer.token !== "string" || !/^tvp_[A-Za-z0-9_-]{20,100}$/.test(answer.token)) throw new PlayerError("error.generic");
+    if (typeof answer.token !== "string" || !/^tvp_[A-Za-z0-9_-]{20,100}$/.test(answer.token)) throw new UserError("error.generic");
     this.newPublishToken = { name: name.trim(), token: answer.token };
     this.takeDeveloper(answer);
   }
@@ -500,14 +500,14 @@ export class AccountClient {
    * account owns both the key and the id prefix. Its errors are the pack command's (PublishError).
    */
   async publishModule(key: KeyObject, zip: Buffer): Promise<Published> {
-    if (!this.saved) throw new PlayerError("account.error.signedOut");
+    if (!this.saved) throw new UserError("account.error.signedOut");
     return publishZip({ key, zip, token: this.saved.token, language: this.options.language(), apiUrl: this.baseUrl, fetch: this.options.fetch });
   }
 
   /**
    * Uploads a module zip Tavora packed, after the developer's click on the review screen: signed with
    * the key that signed the zip, and sent with this sign-in. The catalog checks the account owns both
-   * the key and the id prefix. Its refusals are messages for the player.
+   * the key and the id prefix. Its refusals are messages for the user.
    */
   async uploadModule(key: KeyObject, zip: Buffer): Promise<Published> {
     this.ensure(true);
@@ -515,7 +515,7 @@ export class AccountClient {
       headers: { "X-Tavora-Signature": publishSignature(key, zip), "Accept-Language": this.options.language() },
       timeoutMs: UPLOAD_TIMEOUT_MS,
     });
-    if (typeof answer.id !== "string" || typeof answer.version !== "string" || typeof answer.sha256 !== "string") throw new PlayerError("error.generic");
+    if (typeof answer.id !== "string" || typeof answer.version !== "string" || typeof answer.sha256 !== "string") throw new UserError("error.generic");
     // The upload reserved the prefix when it was new.
     await this.readPrefixes();
     // 202 is a version a person at Tavora looks at before it lists.
@@ -542,7 +542,7 @@ export class AccountClient {
   /** Claims a free id prefix for the account right away, before anything is published under it. */
   async claimPrefix(prefix: string): Promise<void> {
     this.ensure(true);
-    if (!isIdPrefix(prefix)) throw new PlayerError("publish.error.prefixInvalid");
+    if (!isIdPrefix(prefix)) throw new UserError("publish.error.prefixInvalid");
     try {
       await this.call("POST", `/prefixes/${prefix}`, {}, true);
     } catch (error) {
@@ -622,7 +622,7 @@ export class AccountClient {
 
   async changeEmail(code: string): Promise<void> {
     const pending = this.pending;
-    if (pending?.kind !== "change-email" || !this.saved) throw new PlayerError("account.error.noCode");
+    if (pending?.kind !== "change-email" || !this.saved) throw new UserError("account.error.noCode");
     const answer = await this.call("POST", "/email", { email: pending.email, code, language: this.options.language() }, true);
     this.pending = null;
     await this.updated({ account: { email: pending.email, ...(answer.account as Record<string, unknown> | undefined) } });
@@ -637,14 +637,14 @@ export class AccountClient {
 
   /** Deletes the account on the service. Everything on the PC stays. */
   async deleteAccount(code: string): Promise<void> {
-    if (this.pending?.kind !== "delete") throw new PlayerError("account.error.noCode");
+    if (this.pending?.kind !== "delete") throw new UserError("account.error.noCode");
     await this.call("POST", "/delete", { code }, true);
     await this.forget();
   }
 
   // ── Profile ────────────────────────────────────────────────────────────
 
-  /** The player changed the profile on this PC: send it up. A failure is caught up at the next start. */
+  /** The user changed the profile on this PC: send it up. A failure is caught up at the next start. */
   async profileChanged(): Promise<void> {
     if (!this.options.enabled || !this.saved) return;
     this.profileChoice = null;
@@ -665,7 +665,7 @@ export class AccountClient {
   /**
    * Brings the profile on this PC and the account's together. A new account
    * takes this PC's; a PC with the empty default takes the account's; on a first
-   * sign-in here with two different profiles the player is asked; otherwise
+   * sign-in here with two different profiles the user is asked; otherwise
    * the newer one wins.
    */
   private async syncProfile(firstSignIn: boolean): Promise<void> {
@@ -696,14 +696,14 @@ export class AccountClient {
   // ── Inside ─────────────────────────────────────────────────────────────
 
   private ensure(signedIn: boolean): void {
-    if (!this.options.enabled) throw new PlayerError("error.notAllowed");
-    if (signedIn && !this.saved) throw new PlayerError("account.error.signedOut");
+    if (!this.options.enabled) throw new UserError("error.notAllowed");
+    if (signedIn && !this.saved) throw new UserError("account.error.signedOut");
   }
 
   private async signedIn(answer: Record<string, unknown>): Promise<void> {
     const account = (answer.account ?? {}) as Record<string, unknown>;
     const saved = savedAccount({ token: answer.token, email: account.email, discord: (account.discord as Record<string, unknown> | null | undefined)?.name, createdAt: account.createdAt });
-    if (!saved) throw new PlayerError("error.generic");
+    if (!saved) throw new UserError("error.generic");
     this.saved = saved;
     this.pending = null;
     this.pendingCode = null;
@@ -743,7 +743,7 @@ export class AccountClient {
   }
 
   /**
-   * One request to the service. Its own errors become messages for the player;
+   * One request to the service. Its own errors become messages for the user;
    * a sign-in the service no longer knows (signed out from another device,
    * unused for a year, account deleted) is forgotten here too. A Buffer body goes as a zip.
    */
@@ -775,7 +775,7 @@ export class AccountClient {
         ...(zip ? { redirect: "error" as const } : {}),
       });
     } catch {
-      throw new PlayerError("account.error.unreachable");
+      throw new UserError("account.error.unreachable");
     } finally {
       clearTimeout(timer);
     }
@@ -784,32 +784,32 @@ export class AccountClient {
     if (response.ok) return json;
     if (response.status === 401 && auth) {
       await this.forget();
-      throw new PlayerError("account.error.signedOut");
+      throw new UserError("account.error.signedOut");
     }
     // The catalog's uploads for today are used up; it says nothing about when, so: tomorrow.
-    if (json.reason === "daily-limit" && root === "/v1/catalog") throw new PlayerError("publish.error.dailyLimit");
+    if (json.reason === "daily-limit" && root === "/v1/catalog") throw new UserError("publish.error.dailyLimit");
     if (response.status === 429) {
       const seconds = Number(response.headers.get("retry-after"));
-      throw new PlayerError("account.error.tooMany", { minutes: Math.max(1, Math.ceil((Number.isFinite(seconds) ? seconds : 60) / 60)) });
+      throw new UserError("account.error.tooMany", { minutes: Math.max(1, Math.ceil((Number.isFinite(seconds) ? seconds : 60) / 60)) });
     }
     if (json.reason === "name-too-soon") {
       const at = typeof json.nextChangeAt === "string" ? new Date(json.nextChangeAt) : null;
-      if (at && Number.isFinite(at.getTime())) throw new PlayerError("account.error.nameTooSoon", { date: new Intl.DateTimeFormat(this.options.language(), { dateStyle: "long" }).format(at) });
+      if (at && Number.isFinite(at.getTime())) throw new UserError("account.error.nameTooSoon", { date: new Intl.DateTimeFormat(this.options.language(), { dateStyle: "long" }).format(at) });
     }
     if (json.reason === "daily-limit") {
-      // The service's emails for today are used up: say when sending works again, in the player's own time.
+      // The service's emails for today are used up: say when sending works again, in the user's own time.
       const at = typeof json.retryAt === "string" ? new Date(json.retryAt) : null;
-      if (at && Number.isFinite(at.getTime())) throw new PlayerError("account.error.dailyLimit", { time: new Intl.DateTimeFormat(this.options.language(), { weekday: "long", hour: "2-digit", minute: "2-digit" }).format(at) });
-      throw new PlayerError("account.error.dailyLimitSoon");
+      if (at && Number.isFinite(at.getTime())) throw new UserError("account.error.dailyLimit", { time: new Intl.DateTimeFormat(this.options.language(), { weekday: "long", hour: "2-digit", minute: "2-digit" }).format(at) });
+      throw new UserError("account.error.dailyLimitSoon");
     }
     const key = typeof json.reason === "string" ? REASONS[json.reason] : undefined;
-    if (key) throw new PlayerError(key);
+    if (key) throw new UserError(key);
     // A zip the catalog refused comes with the catalog's own sentence about it.
     if ((json.reason === "invalid" || json.reason === "conflict") && typeof json.error === "string" && json.error.trim()) {
-      throw new PlayerError("publish.error.refused", { message: json.error.replace(/\s+/g, " ").trim().slice(0, 300) });
+      throw new UserError("publish.error.refused", { message: json.error.replace(/\s+/g, " ").trim().slice(0, 300) });
     }
     // 503: switched off on the service; 404: a service that has no accounts at all yet.
-    if (response.status === 503 || response.status === 404) throw new PlayerError("account.error.unavailable");
-    throw new PlayerError("error.generic");
+    if (response.status === 503 || response.status === 404) throw new UserError("account.error.unavailable");
+    throw new UserError("error.generic");
   }
 }

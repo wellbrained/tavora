@@ -1,10 +1,10 @@
 <script setup lang="ts">
-// Settings > Modules > Website access: every module the player allowed to reach websites,
+// Settings > Modules > Website access: every module the user allowed to reach websites,
 // with what it may reach, and taking that back (decision log, module grants row of 2026-10-16).
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@/lib/utils";
-import { confirmAction, gamesUsing, listOf, state, submitAction } from "../../host";
+import { confirmAction, workspacesUsing, listOf, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import SettingGroup from "./SettingGroup.vue";
@@ -16,11 +16,11 @@ type ModuleView = NonNullable<typeof state.value>["modules"][number];
 const granted = computed(() => (state.value?.modules ?? []).filter((module) => module.permissions.granted.network.length > 0));
 
 function revoke(module: ModuleView) {
-  const games = gamesUsing(module);
+  const workspaces = workspacesUsing(module);
   confirmAction({
     title: t("integrations.grants.revokeTitle", { name: module.name }),
-    message: games.length
-      ? t("integrations.grants.revokeUsed", { name: module.name, games: listOf(games) })
+    message: workspaces.length
+      ? t("integrations.grants.revokeUsed", { name: module.name, workspaces: listOf(workspaces) })
       : t("integrations.grants.revokeUnused", { name: module.name }),
     confirm: t("integrations.grants.revoke"),
     danger: true,
