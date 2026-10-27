@@ -492,8 +492,10 @@ export class GameOverlays {
     this.store.forgetSeen(workspaceId);
     this.handles.delete(workspaceId);
     this.options.windowsChanged?.();
-    this.forget((overlay) => overlay.workspaceId === workspaceId);
+    // Items from elsewhere leave its setup the same way, so one in no setup any more loses its key.
+    this.forget((overlay, setupId) => overlay.workspaceId === workspaceId || setupId === workspaceId);
     this.forgetPanels((panel) => panel.workspaceId === workspaceId, true);
+    this.forgetPanels((_panel, setupId) => setupId === workspaceId);
     if (this.store.removeSetup(workspaceId)) {
       this.tick();
       this.options.changed();
@@ -572,7 +574,14 @@ export class GameOverlays {
 
   /** The setups on screen now (setupsOnScreen): Everywhere unless Tavora's window is in front, and the game's or All games. */
   private onScreen(): string[] {
+    // A layer over the screen holds only what the keys reach, never a game setup staying over the spot of a game left.
+    if (this.layer !== null && this.layer.game === null) return this.keySetups();
     return setupsOnScreen(this.front ?? this.away?.gameId ?? null, this.tavoraFront, (id) => this.store.hasSetup(id));
+  }
+
+  /** The setups whose keys work now: as on screen, but a game's only while it is in front, not while its items stay over its spot. */
+  private keySetups(): string[] {
+    return setupsOnScreen(this.front, this.tavoraFront, (id) => this.store.hasSetup(id));
   }
 
   /** Where the items of a setup sit: Everywhere's on the main screen, the others on the game's window (the one in front, or the one they stay over). */
@@ -595,9 +604,9 @@ export class GameOverlays {
     return placed;
   }
 
-  /** Whether something shows now (the setups on screen have items): the keys work only then. */
+  /** Whether something shows for the keys now (keySetups have items): they work only then. */
   showing(): boolean {
-    return this.active() && this.onScreen().some((id) => this.store.count(id) > 0);
+    return this.active() && this.keySetups().some((id) => this.store.count(id) > 0);
   }
 
   /** The game in front that has something to show (its own setup, or All games), or null. */
@@ -607,9 +616,9 @@ export class GameOverlays {
 
   // ── Keys ─────────────────────────────────────────────────────────────
 
-  /** The item a toggle key belongs to, as it is on screen now; undefined when it isn't. */
+  /** The item a toggle key belongs to, as it is in the setups its keys work in now; undefined when it isn't. */
   private placedOfKey(record: Pick<HotkeyRecord, "owner" | "moduleId" | "workspaceId" | "target">): (Placed<GameOverlay | InGamePanel> & { id: string }) | undefined {
-    const setups = this.onScreen();
+    const setups = this.keySetups();
     const overlay = this.placedOverlays(setups).get(overlayId({ owner: record.owner, moduleId: record.moduleId, workspaceId: record.workspaceId, key: record.target }));
     if (overlay) return { ...overlay, id: overlayId(overlay.item) };
     const panel = this.placedPanels(setups).get(record.target);

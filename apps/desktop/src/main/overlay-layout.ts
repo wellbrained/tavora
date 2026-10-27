@@ -91,7 +91,7 @@ export class OverlayLayout {
 
   /** Opens the window on a setup (or a workspace: its game's setup, else All games; or the one it showed), or brings it forward. */
   open(gameId?: string | null): void {
-    if (gameId) this.gameId = gameId;
+    if (gameId) this.switchTo(gameId);
     if (this.window) {
       this.window.focus();
       this.refresh();
@@ -104,6 +104,16 @@ export class OverlayLayout {
     this.sentView = "";
     this.window = this.options.openWindow({ closed: () => this.closed() });
     this.refresh();
+  }
+
+  /** Shows another setup: what was selected, dragged or done in the one before stays with it. */
+  private switchTo(gameId: string): void {
+    if (gameId === this.gameId) return;
+    this.gameId = gameId;
+    this.selection = null;
+    this.undo.clear();
+    this.notice = null;
+    this.dragging.clear();
   }
 
   /** The window was closed (by the user, or Tavora is quitting). */
@@ -251,7 +261,7 @@ export class OverlayLayout {
     if (!window) return;
     const games = this.games();
     const gameId = this.current(games);
-    if (gameId !== this.gameId && gameId) this.gameId = gameId;
+    if (gameId) this.switchTo(gameId);
     if (this.pictureFor !== gameId) {
       this.pictureFor = gameId;
       this.picture = null;
@@ -290,11 +300,7 @@ export class OverlayLayout {
         return;
       case "game":
         if (!fromShell || message.gameId === this.gameId) return;
-        this.gameId = message.gameId;
-        this.selection = null;
-        this.undo.clear();
-        this.notice = null;
-        this.dragging.clear();
+        this.switchTo(message.gameId);
         break;
       case "grid":
         this.options.source.setGrid(message.grid);

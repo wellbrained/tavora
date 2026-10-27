@@ -189,6 +189,13 @@ describe("opening", () => {
     layout.handle({ type: "redo" }, true);
     expect(world.items[1]!.rect).not.toEqual(base);
     expect(world.items[0]!.rect).toEqual(base);
+    // Opened on another setup while open (from the rail, say): the steps of the one before stay with it.
+    layout.handle({ type: "undo" }, true);
+    layout.open("$all");
+    expect(layout.view().gameId).toBe("$all");
+    layout.handle({ type: "redo" }, true);
+    expect(world.items[0]!.rect).toEqual(base);
+    expect(world.items[1]!.rect).toEqual(base);
   });
   it("opens one window and brings it forward when opened again", () => {
     const { layout, world } = setup([clock("a")]);
