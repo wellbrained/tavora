@@ -277,8 +277,10 @@ export interface AdminModule {
   createdAt: string;
   installs: number;
   storedBytes: number;
-  /** notes: that version's patch notes from the module's changelog (empty when it has none). */
-  versions: { version: string; sha256: string; publishedAt: string; size: number; zipKept: boolean; notes: string[] }[];
+  /** The newest version's listing icon, if it has one: shown in the admin lists. */
+  icon: CatalogScreenshot | null;
+  /** status: listed once approved; waiting while a person still has to review it. notes: that version's patch notes from the module's changelog (empty when it has none). */
+  versions: { version: string; sha256: string; publishedAt: string; size: number; zipKept: boolean; status: VersionStatus; notes: string[] }[];
 }
 
 interface WaitingSql {
@@ -906,8 +908,8 @@ export class CatalogStore {
   adminModules(): AdminModule[] {
     const rows = this.db.prepare("select id, owner, listed, created_at from modules order by id").all() as unknown as { id: string; owner: string; listed: number; created_at: string }[];
     const versions = this.db
-      .prepare("select module_id, version, sha256, manifest, notes, size, published_at, zip_removed from versions order by seq desc")
-      .all() as unknown as { module_id: string; version: string; sha256: string; manifest: string; notes: string; size: number; published_at: string; zip_removed: string | null }[];
+      .prepare("select module_id, version, sha256, manifest, notes, size, published_at, zip_removed, icon, status from versions order by seq desc")
+      .all() as unknown as { module_id: string; version: string; sha256: string; manifest: string; notes: string; size: number; published_at: string; zip_removed: string | null; icon: string | null; status: VersionStatus }[];
     const installs = new Map((this.db.prepare("select module_id, count from installs").all() as unknown as { module_id: string; count: number }[]).map((row) => [row.module_id, row.count]));
     return rows.map((row) => {
       const own = versions.filter((version) => version.module_id === row.id);
@@ -919,12 +921,14 @@ export class CatalogStore {
         createdAt: row.created_at,
         installs: installs.get(row.id) ?? 0,
         storedBytes: own.filter((version) => version.zip_removed === null).reduce((sum, version) => sum + version.size, 0),
+        icon: own[0]?.icon ? (JSON.parse(own[0].icon) as CatalogScreenshot) : null,
         versions: own.map((version) => ({
           version: version.version,
           sha256: version.sha256,
           publishedAt: version.published_at,
           size: version.size,
           zipKept: version.zip_removed === null,
+          status: version.status,
           notes: JSON.parse(version.notes) as string[],
         })),
       };
@@ -975,6 +979,18 @@ export class CatalogStore {
   list(name: SignedList): Buffer | null {
     try {
       return readFileSync(path.join(this.lists, `${name}.json`));
+    } catch {
+      return null;
+    }
+  }
+
+  /** A module's icon by its hash and type, listed or not: for the admin panel only. */
+  iconFile(sha256: string, type: string): Buffer | null {
+    if (!SHA256.test(sha256) || (type !== "png" && type !== "webp")) return null;
+    if (!this.db.prepare("select 1 from versions where icon like ?").get(`%"${sha256}"%`)) return null;
+    try {
+      const bytes = readFileSync(path.join(this.shots, `${sha256}.${type}`));
+      return createHash("sha256").update(bytes).digest("hex") === sha256 ? bytes : null;
     } catch {
       return null;
     }

@@ -23,6 +23,8 @@ export interface AccountsAdminOptions {
   /** How the person is told (suspended). Absent: nobody is. */
   mailer?: Mailer | undefined;
   mailDailyLimit?: number | undefined;
+  /** The owner's address (MAINTAINER_EMAIL, any case): that account is marked as the owner and can't be suspended. */
+  ownerEmail?: string | undefined;
   now?: (() => number) | undefined;
 }
 
@@ -32,7 +34,7 @@ const FILTERS = ["all", "developers", "banned", "suspended"] as const;
 type Filter = (typeof FILTERS)[number];
 const iso = (at: number | null) => (at === null ? null : new Date(at).toISOString());
 
-export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer, mailDailyLimit, now = Date.now }: AccountsAdminOptions) {
+export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer, mailDailyLimit, ownerEmail, now = Date.now }: AccountsAdminOptions) {
   const app = new Hono();
   const notifier: Notifier = mailer ? createNotifier({ store: accounts, mailer, mailDailyLimit, now }) : { send: async () => false };
 
@@ -44,6 +46,8 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
       return {};
     }
   };
+
+  const isOwner = (email: string | null | undefined) => Boolean(ownerEmail?.trim() && email && email.toLowerCase() === ownerEmail.trim().toLowerCase());
 
   const stateOf = (row: Pick<AccountRow, "banned" | "suspended">) => (row.suspended ? "suspended" : row.banned ? "banned" : "active");
 
@@ -60,6 +64,7 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
     devices: row.devices,
     banned: row.banned,
     suspended: row.suspended,
+    owner: isOwner(row.email),
     state: stateOf(row),
   });
 
@@ -111,6 +116,7 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
     return context.json({
       id,
       email: account.email,
+      owner: isOwner(account.email),
       discord: account.discord ? { name: account.discord.name } : null,
       createdAt: account.createdAt,
       lastActiveAt: iso(row.lastActiveAt),
@@ -123,7 +129,8 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
       publishTokens: accounts.publishTokens(id, at).map((token) => ({ name: token.name, createdAt: iso(token.createdAt), expiresAt: iso(token.expiresAt), lastUsedAt: iso(token.lastUsedAt) })),
       modules: moduleIds.map((moduleId) => {
         const module = listed.get(moduleId);
-        return { id: moduleId, name: module?.name ?? moduleId, listed: module?.listed ?? false, installs: module?.installs ?? 0, versions: module?.versions.length ?? 0 };
+        const state = !module?.listed ? "unpublished" : module.versions.some((version) => version.status === "listed") ? "published" : "waiting";
+        return { id: moduleId, name: module?.name ?? moduleId, listed: module?.listed ?? false, state, installs: module?.installs ?? 0, versions: module?.versions.length ?? 0 };
       }),
       reviews: reviews ? reviews.countByAccount(id) : { written: 0, hidden: 0 },
       cloudCopy: copy ? { size: copy.size, updatedAt: iso(copy.updatedAt) } : null,
@@ -150,6 +157,7 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
     }
     const account = ID.test(id) ? accounts.account(id) : null;
     if (!account) return context.json({ error: "No such account." }, 404);
+    if (isOwner(account.email)) return context.json({ error: "This is the owner's account. It can't be suspended." }, 403);
     // Suspending again changes nothing but finishes what a failed first try left (the reviews), so a retry is safe: no new reason, no second email.
     if (accounts.isSuspended(id)) return context.json({ ok: true, already: true, signedOut: 0, hiddenReviews: reviews?.hideForSuspension(id) ?? 0, mailed: false });
     const language = mailLanguage(catalog?.languageOf(id));

@@ -25,6 +25,8 @@ export interface ModerationAdminOptions {
   now?: () => number;
   /** Versions of a module that keep their zip once one is approved (the publishing limit by default). */
   keepVersions?: number;
+  /** The owner's address (MAINTAINER_EMAIL): that account can't be banned. */
+  ownerEmail?: string | undefined;
 }
 
 const MAX_NOTE = 500;
@@ -86,7 +88,7 @@ function describe(waiting: WaitingVersion, catalog: CatalogStore, accounts: Acco
   };
 }
 
-export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDailyLimit, now = Date.now, keepVersions = PUBLISH_LIMITS.keepVersions }: ModerationAdminOptions) {
+export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDailyLimit, ownerEmail, now = Date.now, keepVersions = PUBLISH_LIMITS.keepVersions }: ModerationAdminOptions) {
   const app = new Hono();
   const notifier: Notifier = mailer ? createNotifier({ store: accounts, mailer, mailDailyLimit, now }) : { send: async () => false };
   let running = false;
@@ -175,6 +177,7 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
     if (!id) return context.json({ error: "No such developer." }, 404);
     if (accounts.isBanned(id)) return context.json({ error: "This developer is banned already." }, 409);
     const email = accounts.account(id)?.email;
+    if (email && ownerEmail?.trim() && email.toLowerCase() === ownerEmail.trim().toLowerCase()) return context.json({ error: "This is the owner's account. It can't be banned." }, 403);
     if (!email && !accounts.developer(id) && accounts.keys(id).length === 0 && catalog.modulesOfAccount(id, []).length === 0) return context.json({ error: "No such developer." }, 404);
     const language = mailLanguage(catalog.languageOf(id));
     const keys = accounts.keys(id).map((key) => key.fingerprint);

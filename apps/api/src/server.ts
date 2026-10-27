@@ -160,6 +160,7 @@ if (adminToken && adminToken.length >= 24) {
     ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
     stateDir,
     stats,
+    ...(maintainerEmail ? { ownerEmail: maintainerEmail } : {}),
     moderation: { ...(scanner ? { scanner } : {}), ...(mailer ? { mailer } : {}), mailDailyLimit },
   });
   serve({ fetch: admin.fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {

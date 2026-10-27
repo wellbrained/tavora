@@ -36,7 +36,7 @@ function moduleZip(key: KeyObject, id = "wellbrained.timer", version = "1.0.0"):
   return writeZip([...files, signFiles(files, key)]);
 }
 
-function setup() {
+function setup(ownerEmail?: string) {
   const store = new AccountStore(":memory:");
   const reviews = new ReviewStore(":memory:");
   const copies = new CopyStore(":memory:");
@@ -70,6 +70,7 @@ function setup() {
     reviews,
     copies,
     moderation: { mailer: inbox, now: () => clock.now },
+    ...(ownerEmail ? { ownerEmail } : {}),
   });
   const adminCall = (method: string, url: string, body?: unknown, token: string | null = TOKEN) =>
     admin.request(`http://admin.test${url}`, {
@@ -164,6 +165,7 @@ describe("the account list", () => {
       devices: 1,
       banned: false,
       suspended: false,
+      owner: false,
       state: "active",
     });
     const text = JSON.stringify(body);
@@ -216,7 +218,7 @@ describe("one account's details", () => {
       developer: { name: "Well Brained" },
       prefixes: [{ prefix: "wellbrained" }],
       publishTokens: [{ name: "GitHub Actions", lastUsedAt: null }],
-      modules: [{ id: "wellbrained.timer", name: "Timer", listed: true, installs: 0, versions: 1 }],
+      modules: [{ id: "wellbrained.timer", name: "Timer", listed: true, state: "published", installs: 0, versions: 1 }],
       reviews: { written: 0, hidden: 0 },
       vault: { updatedAt: "2026-10-26T12:00:00.000Z" },
       ban: null,
@@ -593,5 +595,22 @@ describe("an old reviews database", () => {
     expect(store.review("r2")!.hidden).toBe(true);
     store.close();
     new ReviewStore(file).close();
+  });
+});
+
+describe("the owner's account", () => {
+  it("is marked as the owner, in any case, and can't be suspended", async () => {
+    const { get, post, developer, store } = setup("Dev@Example.com");
+    expect((await get(`/api/accounts/${developer.id}`)).body.owner).toBe(true);
+    const list = await get("/api/accounts/list");
+    expect(list.body.accounts.find((row: { id: string }) => row.id === developer.id).owner).toBe(true);
+    const refused = await post("/api/accounts/suspend", { id: developer.id, reason: "spam" });
+    expect(refused.status).toBe(403);
+    expect(store.isSuspended(developer.id)).toBe(false);
+  });
+
+  it("is nobody's account without an owner address", async () => {
+    const { get, developer } = setup();
+    expect((await get(`/api/accounts/${developer.id}`)).body.owner).toBe(false);
   });
 });
