@@ -37,6 +37,11 @@ export interface ClamdTarget {
 const CHUNK = 64 * 1024;
 /** The biggest thing sent to clamd as one stream (its StreamMaxLength is 25 MB by default). */
 const MAX_STREAM = 20 * 1024 * 1024;
+/**
+ * Extra time a stream gets per MB: clamd unpacks a zip and scans every file in it, which took 53 s for a fresh 13.6 MB module
+ * zip of 817 files on the 2-core server (2026-10-27), so a fixed limit held every big zip as "not answered in time".
+ */
+const MS_PER_MB = 5_000;
 
 /** Sends bytes to clamd as one INSTREAM and returns the threat's name, or null when it is clean. */
 export function clamdScan(target: ClamdTarget, data: Buffer, timeoutMs: number): Promise<string | null> {
@@ -93,7 +98,7 @@ async function pool<T>(items: readonly T[], limit: number, work: (item: T) => Pr
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
 }
 
-/** Scans through clamd: the zip itself, then every file in it on its own. */
+/** Scans through clamd: the zip itself, then every file in it on its own. Each stream gets `timeoutMs` plus time for its size. */
 export function createClamdScanner(target: ClamdTarget, options: { timeoutMs?: number } = {}): Scanner {
   const timeoutMs = options.timeoutMs ?? 30_000;
   return {
@@ -108,7 +113,7 @@ export function createClamdScanner(target: ClamdTarget, options: { timeoutMs?: n
         parts.push({ label: file.name, data: file.data });
       }
       await pool(parts, 4, async ({ label, data }) => {
-        const threat = await clamdScan(target, data, timeoutMs);
+        const threat = await clamdScan(target, data, timeoutMs + Math.ceil((data.length / (1024 * 1024)) * MS_PER_MB));
         if (threat !== null) threats.push(`${threat} in ${label}`);
       });
       return threats.length === 0 ? { clean: true } : { clean: false, threats };

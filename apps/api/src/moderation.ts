@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { validateChangelog } from "@tavora/module-schema";
 import type { ZipFile } from "@tavora/pack";
 import { type CatalogStore, type CheckedZip, copyHashes, type ReviewReason } from "./catalog.ts";
@@ -150,6 +151,24 @@ const SIGN_LABEL: Record<Sign, string> = { eval: "eval or new Function", obfusca
 
 const around = (text: string, index: number) => text.slice(Math.max(0, index - 30), index + 70).replace(/\s+/g, " ").trim();
 
+/**
+ * Long base64 data that libraries ship and decode with atob, by the sha256 of the text between the quotes. Only this exact
+ * text passes; anything else that long still counts as packed code.
+ */
+const KNOWN_DATA = new Set([
+  // brotli 2.1.0, dec/dictionary.bin.js: the Brotli dictionary (RFC 7932)
+  "28898156df2fa67a6ed6cb5901658b9ed1bc8d71adb6d45190a91a5366275a4b",
+]);
+
+/** The first match the filter keeps; `pattern` needs the g flag. */
+function firstWhere(pattern: RegExp, text: string, keep: (match: RegExpExecArray) => boolean): RegExpExecArray | null {
+  for (const match of text.matchAll(pattern)) if (keep(match)) return match;
+  return null;
+}
+
+/** Whether the match sits on a line that is only a // comment, which never runs. */
+const onCommentLine = (text: string, index: number) => text.slice(text.lastIndexOf("\n", index) + 1, index).trimStart().startsWith("//");
+
 function signsIn(name: string, text: string): { sign: Sign; detail: string }[] {
   const found: { sign: Sign; detail: string }[] = [];
   const add = (sign: Sign, match: RegExpExecArray | null | undefined) => {
@@ -165,7 +184,12 @@ function signsIn(name: string, text: string): { sign: Sign; detail: string }[] {
   add("wasm", /\bwasm-unsafe-eval\b/.exec(text));
 
   add("remote-code", /\bimport\s*\(\s*["'`](?:https?:|data:|blob:|\/\/)/.exec(text));
-  add("remote-code", /\bimport\s*\(\s*(?!["'`])[^)\s]/.exec(text));
+  // import(x) with x not a string. Not `obj.import(x)`, a method called import, nor `import(a, b) {` on one line, which
+  // only defines one (a call there would be a syntax error; with a line break between, it is a call).
+  add(
+    "remote-code",
+    firstWhere(/(?<![\w$.])import\s*\(\s*(?!["'`])[^)\s](?![^()]*\)[ \t]*(?::[^;{}()\n]*)?\{)/g, text, (match) => !onCommentLine(text, match.index)),
+  );
   add("remote-code", /\b(?:from|import)\s*["'`](?:https?:)?\/\/[^"'`]+["'`]/.exec(text));
   add("remote-code", /\bimportScripts\s*\(/.exec(text));
   add("remote-code", /createElement(?:NS)?\s*\(\s*(?:["'`]http:\/\/www\.w3\.org\/2000\/svg["'`]\s*,\s*)?["'`]script["'`]/.exec(text));
@@ -179,7 +203,10 @@ function signsIn(name: string, text: string): { sign: Sign; detail: string }[] {
   if (escapes >= 100 && (escapes * 5) / text.length >= 0.08) found.push({ sign: "obfuscated", detail: `${name}: ${escapes} escaped characters` });
   if (text.length >= 500 && count(/[[\]()!+]/g) / text.length >= 0.8) found.push({ sign: "obfuscated", detail: `${name}: reads like JSFuck` });
   if (count(/String\.fromCharCode/g) >= 40) add("obfuscated", /String\.fromCharCode/.exec(text));
-  if (/\batob\s*\(/.test(text)) add("obfuscated", /(?<!base64,)["'`][A-Za-z0-9+/]{4000,}={0,2}["'`]/.exec(text));
+  if (/\batob\s*\(/.test(text)) {
+    const known = (match: RegExpExecArray) => KNOWN_DATA.has(createHash("sha256").update(match[0].slice(1, -1)).digest("hex"));
+    add("obfuscated", firstWhere(/(?<!base64,)["'`][A-Za-z0-9+/]{4000,}={0,2}["'`]/g, text, (match) => !known(match)));
+  }
   return found;
 }
 
