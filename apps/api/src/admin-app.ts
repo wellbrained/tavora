@@ -356,6 +356,37 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     }),
   );
 
+  // Every rating and review of one module for its detail view (#345): held and hidden ones too, with the author, the state,
+  // how often it was reported, and the module's public summary (held ratings don't count there). The dates let the panel
+  // draw the average over time. 404 for a module the catalog doesn't know and nobody rated.
+  app.get("/api/modules/:id/reviews", (context) => {
+    const id = context.req.param("id");
+    const all = reviews?.byModule(id) ?? [];
+    const name = catalog?.module(id)?.module.name ?? catalog?.adminModules().find((module) => module.id === id)?.name ?? null;
+    if (!name && !all.length) return context.json({ error: "No such module." }, 404);
+    const reported = new Map((reviews?.reports() ?? []).map((report) => [report.review.id, report.count]));
+    return context.json({
+      module: { id, name: name ?? id },
+      summary: reviews?.summary(id) ?? null,
+      reviews: all.map((review) => ({
+        id: review.id,
+        stars: review.stars,
+        text: review.text,
+        version: review.version,
+        hidden: review.hidden,
+        held: review.held,
+        capped: review.capped,
+        seen: review.seen,
+        reports: reported.get(review.id) ?? 0,
+        author: accounts?.profile(review.accountId)?.name ?? null,
+        authorId: review.accountId,
+        createdAt: new Date(review.createdAt).toISOString(),
+        updatedAt: new Date(review.updatedAt).toISOString(),
+        reply: review.reply ? { text: review.reply.text, at: new Date(review.reply.updatedAt).toISOString() } : null,
+      })),
+    });
+  });
+
   app.post("/api/reviews/approve", async (context) => {
     const { id } = await json(context.req.raw);
     if (typeof id !== "string") return context.json({ error: "Send { id }." }, 400);
