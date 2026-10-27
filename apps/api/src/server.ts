@@ -154,8 +154,8 @@ if (adminToken && adminToken.length >= 24) {
     ...(reviews ? { reviews } : {}),
     ...(copies ? { copies } : {}),
     // The built panel: deployed from wellbrained/tavora-admin to /srv/tavora-admin/current; in development
-    // the TavoraAdmin checkout next to this repo.
-    adminDir: process.env.TAVORA_ADMIN_DIR ?? "../../../TavoraAdmin/dist",
+    // the tavora-admin checkout next to this repo.
+    adminDir: process.env.TAVORA_ADMIN_DIR ?? "../../../tavora-admin/dist",
     dataset: () => ({ games: Number(meta().games ?? 0), builtAt: meta().built_at ?? null }),
     ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
     stateDir,
