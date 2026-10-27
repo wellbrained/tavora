@@ -99,6 +99,18 @@ describe("adding to the catalog", () => {
     ]);
   });
 
+  it("tells the admin panel which versions are listed and which still wait for review", () => {
+    const catalog = store();
+    const waiting = { reasons: [{ check: "virus", text: "The virus scan found something." }], language: "en", token: null };
+    catalog.add(moduleZip(), new Date("2026-10-18T10:00:00Z"), null, undefined, undefined, waiting);
+    expect(catalog.adminModules()[0]?.versions.map((version) => [version.version, version.status])).toEqual([["1.0.0", "waiting"]]);
+    catalog.add(moduleZip({ version: "1.1.0" }), new Date("2026-10-19T10:00:00Z"));
+    expect(catalog.adminModules()[0]?.versions.map((version) => [version.version, version.status])).toEqual([
+      ["1.1.0", "listed"],
+      ["1.0.0", "waiting"],
+    ]);
+  });
+
   it("stores a signed zip under its hash with this version's notes", () => {
     const catalog = store();
     const zip = moduleZip({ changelog: [{ version: "1.0.0", notes: ["First version."] }] });

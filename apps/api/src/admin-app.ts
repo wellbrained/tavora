@@ -68,12 +68,14 @@ export interface AdminOptions {
   /** The plain daily totals for GET /api/stats. Absent: the route answers 503. */
   stats?: StatsStore;
   /** The review before listing (`/api/moderation/*`; needs `catalog` and `accounts`): the scanner, and how developers are emailed. */
+  /** The owner's address (MAINTAINER_EMAIL): that account is marked as the owner and can't be suspended or banned. */
+  ownerEmail?: string;
   moderation?: Pick<ModerationAdminOptions, "scanner" | "mailer" | "mailDailyLimit" | "now" | "keepVersions">;
 }
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation, ownerEmail }: AdminOptions) {
   const app = new Hono();
   const expected = digest(token);
 
@@ -291,10 +293,10 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     return context.json({ ...range, ...stats.series(range.from, range.to) });
   });
   // Approval: versions waiting for review, Approve, Decline, Ban, and the one-time check of what is live (moderation-admin.ts).
-  if (catalog && accounts) app.route("/api/moderation", moderationRoutes({ catalog, accounts, ...moderation }));
+  if (catalog && accounts) app.route("/api/moderation", moderationRoutes({ catalog, accounts, ...moderation, ownerEmail }));
 
   // The account list and Suspend (accounts-admin.ts). The counts at GET /api/accounts stay in admin-panel.ts.
-  if (accounts) app.route("/api/accounts", accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer: moderation?.mailer, mailDailyLimit: moderation?.mailDailyLimit, now: moderation?.now }));
+  if (accounts) app.route("/api/accounts", accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer: moderation?.mailer, mailDailyLimit: moderation?.mailDailyLimit, ownerEmail, now: moderation?.now }));
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));
   app.onError((error, context) => {

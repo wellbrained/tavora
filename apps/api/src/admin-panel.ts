@@ -74,7 +74,7 @@ export function registerPanelRoutes(app: Hono, options: PanelOptions): void {
       numbers: {
         hostedIcons: store.list().length,
         modules: modules.length,
-        listedModules: modules.filter((module) => module.listed).length,
+        listedModules: modules.filter((module) => module.listed && module.versions.some((version) => version.status === "listed")).length,
         installs: modules.reduce((sum, module) => sum + module.installs, 0),
         accounts: accounts ? accounts.counts(now()).total : null,
         catalogBytes: catalog?.storedBytes() ?? 0,
@@ -96,6 +96,13 @@ export function registerPanelRoutes(app: Hono, options: PanelOptions): void {
   app.get("/api/modules", (context) => {
     const modules = (catalog?.adminModules() ?? []).map((module) => ({ ...module, publisher: accounts?.publisherName(module.owner) ?? null }));
     return context.json({ modules, storedBytes: catalog?.storedBytes() ?? 0, limitBytes: PUBLISH_LIMITS.catalogBytes, fullSince: catalog?.fullSince() ?? null });
+  });
+
+  // A module's icon, listed or not.
+  app.get("/api/modules/icons/:file", (context) => {
+    const match = /^([0-9a-f]{64})\.(png|webp)$/.exec(context.req.param("file"));
+    const bytes = match ? catalog?.iconFile(match[1]!, match[2]!) : null;
+    return bytes ? new Response(new Uint8Array(bytes), { headers: { "Content-Type": `image/${match![2]}`, "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=31536000, immutable" } }) : context.json({ error: "Not found." }, 404);
   });
 
   app.get("/api/accounts", (context) => (accounts ? context.json({ on: true, ...accounts.counts(now()) }) : context.json({ on: false })));
