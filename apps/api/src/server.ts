@@ -17,6 +17,7 @@ import { createBrevoMailer, createTestInbox, createTestInboxApp, type Mailer } f
 import { clientOf } from "./rate-limit.ts";
 import { StatsStore } from "./stats.ts";
 import { ReviewStore } from "./reviews.ts";
+import { ConversationStore } from "./conversations.ts";
 import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
 import { scannerFromEnv } from "./virus-scan.ts";
@@ -93,6 +94,14 @@ const copies = accountStore ? new CopyStore(path.join(stateDir, "copies.sqlite")
 const catalog = new CatalogStore(path.join(stateDir, "catalog"));
 // Ratings and reviews of catalog modules, keyed by account: their own file, in the daily backup.
 const reviews = accountStore ? new ReviewStore(path.join(stateDir, "reviews.sqlite")) : undefined;
+// Conversations between users and developers, and with Tavora (conversations.ts): their own file, in the daily backup.
+const conversations = accountStore ? new ConversationStore(path.join(stateDir, "conversations.sqlite")) : undefined;
+if (conversations) {
+  // Idle conversations close after 30 days and closed ones go after 180 (unless reported); once an hour is plenty.
+  const sweepConversations = () => conversations.sweep(Date.now());
+  sweepConversations();
+  setInterval(sweepConversations, 60 * 60_000).unref();
+}
 console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
 // Plain daily totals (stats.ts): nothing about a player. Once a day the account numbers are written down too.
 const stats = new StatsStore(path.join(stateDir, "stats.sqlite"));
@@ -122,6 +131,7 @@ const app = createApp({
           mailer,
           ...(copies ? { copies } : {}),
           ...(reviews ? { reviews } : {}),
+          ...(conversations ? { conversations } : {}),
           ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
           // Discord login: Tavora's public Discord app, no secret; DISCORD_API only for a pretend Discord in tests.
           discord: createDiscordClient(process.env.DISCORD_API ? { api: process.env.DISCORD_API } : {}),
@@ -154,6 +164,7 @@ if (adminToken && adminToken.length >= 24) {
     catalog,
     ...(accountStore ? { accounts: accountStore } : {}),
     ...(reviews ? { reviews } : {}),
+    ...(conversations ? { conversations } : {}),
     ...(copies ? { copies } : {}),
     // The built panel: deployed from wellbrained/tavora-admin to /srv/tavora-admin/current; in development
     // the tavora-admin checkout next to this repo.

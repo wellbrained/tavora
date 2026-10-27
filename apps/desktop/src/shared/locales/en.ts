@@ -1073,6 +1073,7 @@ export const en = {
   "error.reportOff": "Turn on online features in Settings to report a module.",
   "error.catalogBadZip": "The download doesn't match what was published, so nothing was installed.",
   "error.reviewOwn": "You can't rate your own module.",
+  "error.reportSignIn": "Sign in to report.",
   "error.reviewWords": "Some words in it aren't allowed. Try saying it another way.",
   "error.reviewLink": "Reviews can't have links or email addresses.",
   "error.reviewNotPublisher": "Only the module's developer can reply.",

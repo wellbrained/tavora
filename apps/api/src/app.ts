@@ -8,6 +8,8 @@ import { reportHandlers } from "./catalog-report.ts";
 import { copyRoutes } from "./cloud-copy.ts";
 import { pairingRoutes } from "./pairing.ts";
 import { reviewRoutes, type ReviewStore } from "./reviews.ts";
+import { conversationRoutes, createConversationNotifier } from "./conversations.ts";
+import { createNotifier } from "./moderation-mail.ts";
 import { vaultRoutes } from "./vault.ts";
 import { catalogFilter, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
 import { isAppVersion, type StatsStore } from "./stats.ts";
@@ -57,11 +59,13 @@ export interface AppOptions {
   maintainerEmail?: string;
   /** Ratings, replies and review reports written per client. */
   reviewRateLimiter?: RateLimiter;
+  /** Conversation messages and settings written per client. */
+  conversationRateLimiter?: RateLimiter;
   /** Plain daily totals (stats.ts). Absent: nothing is counted. */
   stats?: StatsStore;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter, stats }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, stats }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
@@ -267,7 +271,8 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const found = catalog!.module(context.req.param("id"));
     if (!found) return context.json({ error: "Not found." }, 404);
     context.header("Cache-Control", "public, max-age=300");
-    return context.json({ module: listed(found.module), versions: found.versions, readme: found.readme });
+    const contact = accounts?.conversations?.contact(found.module.id);
+    return context.json({ module: { ...listed(found.module), ...(contact ? { contact } : {}) }, versions: found.versions, readme: found.readme });
   });
   // Sent once by the app after a player installed a module from Browse: only the module id.
   catalogApp.post("/installed", async (context) => {
@@ -332,6 +337,32 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   } else {
     const off = (context: Context) => context.json({ error: "Ratings are not available right now.", reason: "unavailable" }, 503);
     catalogApp.all("/modules/:id/review", off).all("/modules/:id/reviews", off).all("/reviews/*", off);
+  }
+  // Conversations (conversations.ts): the developer's contact settings under /v1/catalog, the user routes, and the editable texts.
+  const talk = accounts?.conversations;
+  if (talk && catalog && accounts) {
+    const notifier = createConversationNotifier({
+      conversations: talk,
+      accounts: accounts.store,
+      catalog,
+      notifier: createNotifier({ store: accounts.store, mailer: accounts.mailer, ...(accounts.mailDailyLimit === undefined ? {} : { mailDailyLimit: accounts.mailDailyLimit }), ...(accounts.now ? { now: accounts.now } : {}) }),
+    });
+    const routes = conversationRoutes({
+      conversations: talk,
+      catalog,
+      accounts: accounts.store,
+      clientKey: (request) => (clientKey ? clientKey(request) : "local"),
+      notifier,
+      ...(conversationRateLimiter ? { writeRateLimiter: conversationRateLimiter } : {}),
+      ...(accounts.now ? { now: accounts.now } : {}),
+    });
+    catalogApp.route("/", routes.contact);
+    app.route("/v1/conversations", routes.user);
+    app.route("/v1/texts", routes.texts);
+  } else {
+    const off = (context: Context) => context.json({ error: "Messages are not available right now.", reason: "unavailable" }, 503);
+    app.all("/v1/conversations", off).all("/v1/conversations/*", off).all("/v1/texts", off);
+    catalogApp.all("/modules/:id/contact", off);
   }
   app.route("/v1/catalog", catalogApp);
 

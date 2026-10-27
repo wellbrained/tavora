@@ -240,6 +240,13 @@ describe("CatalogClient.report", () => {
     expect(JSON.parse(String(calls[0]!.init!.body))).toEqual(report);
   });
 
+  it("sends the sign-in with a report, and maps a 401 to Sign in to report", async () => {
+    const { impl, calls } = fakeFetch(() => json({ status: "received" }, 202));
+    await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).report(report, "t".repeat(30));
+    expect((calls[0]!.init!.headers as Record<string, string>).Authorization).toBe(`Bearer ${"t".repeat(30)}`);
+    await expect(new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: fakeFetch(() => json({ reason: "signed-out" }, 401)).impl }).report(report)).rejects.toMatchObject({ key: "error.reportSignIn" });
+  });
+
   it("says plainly when the module is not listed, the catalog is busy or the service is away", async () => {
     const client = (answer: () => Response) => new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: fakeFetch(answer).impl });
     await expect(client(() => json({}, 404)).report(report)).rejects.toMatchObject({ key: "error.catalogNotListed" });
@@ -320,12 +327,13 @@ describe("ratings and reviews", () => {
     expect((await read({ hidden: true })).mine).toMatchObject({ hidden: true, held: false });
   });
 
-  it("reports a review by its id alone", async () => {
+  it("reports a review by its id, signed in", async () => {
     const { impl, calls } = fakeFetch(() => json({ status: "received" }, 202));
-    await new CatalogClient({ baseUrl: "https://api.test", fetchImpl: impl }).reportReview("AbCdEfGhIjKlMnOp");
+    await new CatalogClient({ baseUrl: "https://api.test", fetchImpl: impl }).reportReview("AbCdEfGhIjKlMnOp", "t".repeat(30));
     expect(calls[0]!.url).toBe("https://api.test/v1/catalog/reviews/AbCdEfGhIjKlMnOp/report");
     expect(calls[0]!.init?.body).toBeUndefined();
-    expect((calls[0]!.init?.headers as Record<string, string>).Authorization).toBeUndefined();
+    expect((calls[0]!.init?.headers as Record<string, string>).Authorization).toBe(`Bearer ${"t".repeat(30)}`);
+    await expect(new CatalogClient({ baseUrl: "https://api.test", fetchImpl: fakeFetch(() => json({ reason: "signed-out" }, 401)).impl }).reportReview("AbCdEfGhIjKlMnOp")).rejects.toMatchObject({ key: "error.reportSignIn" });
   });
 });
 

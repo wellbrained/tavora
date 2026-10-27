@@ -350,7 +350,7 @@ describe("Suspend account", () => {
     const hiddenByPerson = reviews.own(other.account.id, "wellbrained.timer")!;
     reviews.setReply(own.id, "Thanks.", clock.now);
     reviews.setHidden(hiddenByPerson.id, true);
-    reviews.report(own.id, clock.now);
+    reviews.report(own.id, other.account.id, clock.now);
     expect(reviews.reports()).toHaveLength(1);
     const listed = async () => ((await (await catalogCall("GET", "/modules/wellbrained.timer/reviews")).json()) as { summary: { count: number; average: number }; reviews: { text: string; reply: unknown }[] });
 
@@ -423,7 +423,7 @@ describe("everything one person wrote", () => {
     const other = player("other@example.com", "Otto");
     await catalogCall("PUT", "/modules/wellbrained.timer/review", mara.token, { stars: 1, text: "Awful.", version: "1.0.0" });
     await catalogCall("PUT", "/modules/wellbrained.timer/review", other.token, { stars: 5, text: "Great!", version: "1.0.0" });
-    reviews.report(reviews.own(mara.account.id, "wellbrained.timer")!.id, Date.now());
+    reviews.report(reviews.own(mara.account.id, "wellbrained.timer")!.id, other.account.id, Date.now());
 
     const listed = await get(`/api/accounts/${mara.account.id}/reviews`);
     expect(listed.body.reviews).toEqual([expect.objectContaining({ moduleId: "wellbrained.timer", moduleName: "Timer", stars: 1, text: "Awful.", hidden: false, held: false })]);

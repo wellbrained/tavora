@@ -18,6 +18,8 @@ import { mailLanguage } from "./mail.ts";
 import { moderationRoutes, type ModerationAdminOptions } from "./moderation-admin.ts";
 import { createNotifier, isUnpublishReason, unpublishedMail, UNPUBLISH_REASONS } from "./moderation-mail.ts";
 import type { ReviewStore } from "./reviews.ts";
+import { accountName, createConversationNotifier, type ConversationStore } from "./conversations.ts";
+import { conversationsAdminRoutes, textsAdminRoutes } from "./conversations-admin.ts";
 import { statsRange, type StatsStore } from "./stats.ts";
 import type { Submissions } from "./submissions.ts";
 
@@ -58,6 +60,8 @@ export interface AdminOptions {
   copies?: CopyStore;
   /** Ratings and reviews, for the reported reviews. Absent: the list is empty. */
   reviews?: ReviewStore;
+  /** Conversations, for Messages and Texts. Absent: those routes answer 404. */
+  conversations?: ConversationStore;
   /** The built panel (Tavora Admin's dist; on the server /srv/tavora-admin/current). Absent or missing: the page says it is not built. */
   adminDir?: string;
   /** What the panel asks the outside world; the real ones by default. */
@@ -80,7 +84,7 @@ export interface AdminOptions {
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation, ownerEmail, activity }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, conversations, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation, ownerEmail, activity }: AdminOptions) {
   const app = new Hono();
   const expected = digest(token);
 
@@ -177,6 +181,18 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
       const id = text(body.id);
       return id ? { type: "module", id, label: catalog?.module(id)?.module.name ?? null } : null;
     }
+    if (kind === "messages/start") {
+      const id = text(body.accountId);
+      return id ? person(id) : null;
+    }
+    if (kind.startsWith("messages/")) {
+      const id = text(body.id);
+      return id ? { type: "conversation", id, label: null } : null;
+    }
+    if (kind === "texts") {
+      const key = text(body.key);
+      return key ? { type: "text", id: key, label: null } : null;
+    }
     if (kind.startsWith("reviews/")) {
       const id = text(body.id);
       return id ? { type: "review", id, label: null } : null;
@@ -261,7 +277,14 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
   });
 
   // With the reports: since when the catalog has been full (C9), or null while there is room.
-  app.get("/api/reports", (context) => context.json({ reports: catalog?.reports() ?? [], catalogFullSince: catalog?.fullSince() ?? null }));
+  // Each report says who reported it while it is open (decided 2026-10-27): the account, its name and the reason and note given.
+  const reporter = (accountId: string, reason: string | null, note: string | null, at: number) => ({ accountId, name: accountName(accounts!, accountId), reason, note, at: new Date(at).toISOString() });
+  app.get("/api/reports", (context) =>
+    context.json({
+      reports: (catalog?.reports() ?? []).map((report) => ({ ...report, reporters: accounts ? (catalog?.reporters(report.sha256) ?? []).map((row) => reporter(row.accountId, row.reason, row.note, row.at)) : [] })),
+      catalogFullSince: catalog?.fullSince() ?? null,
+    }),
+  );
 
   app.post("/api/reports/dismiss", async (context) => {
     const { sha256 } = await json(context.req.raw);
@@ -293,6 +316,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     context.json({
       reports: (reviews?.reports() ?? []).map(({ review, count, firstAt, lastAt }) => ({
         count,
+        reporters: accounts ? (reviews?.reporters(review.id) ?? []).map((row) => reporter(row.accountId, null, null, row.at)) : [],
         firstAt: new Date(firstAt).toISOString(),
         lastAt: new Date(lastAt).toISOString(),
         review: {
@@ -406,6 +430,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     catalog,
     accounts,
     reviews,
+    conversations,
     probes: probes ?? createProbes(),
     blocksToSign: () => (catalog ? blocksToSign(catalog, trust()).length : 0),
     keysWaiting: () => (accounts?.allKeyRequests() ?? []).filter((request) => keyRequestStatus(request, trust()) === "waiting").length,
@@ -423,6 +448,13 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
   });
   // Approval: versions waiting for review, Approve, Decline, Ban, and the one-time check of what is live (moderation-admin.ts).
   if (catalog && accounts) app.route("/api/moderation", moderationRoutes({ catalog, accounts, ...moderation, ownerEmail }));
+
+  // Messages (conversations-admin.ts): Tavora's own conversations and the reported ones, and the editable texts.
+  if (conversations && accounts) {
+    const conversationNotifier = notifier && catalog ? createConversationNotifier({ conversations, accounts, catalog, notifier }) : undefined;
+    app.route("/api/messages", conversationsAdminRoutes({ conversations, accounts, catalog, notifier: conversationNotifier, now: moderation?.now }));
+    app.route("/api/texts", textsAdminRoutes({ conversations }));
+  }
 
   // The account list and Suspend (accounts-admin.ts). The counts at GET /api/accounts stay in admin-panel.ts.
   if (accounts) app.route("/api/accounts", accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer: moderation?.mailer, mailDailyLimit: moderation?.mailDailyLimit, ownerEmail, now: moderation?.now }));

@@ -391,6 +391,13 @@ export class CatalogStore {
         count integer not null, first_at text not null, last_at text not null
       );
       create table if not exists report_notices (owner text primary key, notified_at text not null);
+      -- Who reported (decided 2026-10-27): kept only while the report is open, one row per report.
+      create table if not exists report_senders (
+        id integer primary key autoincrement, sha256 text not null, module_id text not null, account_id text not null,
+        reason text, note text, at integer not null
+      );
+      create index if not exists report_senders_sha on report_senders (sha256);
+      create index if not exists report_senders_account on report_senders (account_id);
     `);
     // Installs from Browse, counted per module, never who installed it or from where.
     this.db.exec("create table if not exists installs (module_id text primary key, count integer not null)");
@@ -546,7 +553,10 @@ export class CatalogStore {
 
   /** Takes a module out of the catalog or puts it back. Its versions and zips are kept. */
   setListed(id: string, listed: boolean): boolean {
-    return Number(this.db.prepare("update modules set listed = ? where id = ?").run(listed ? 1 : 0, id).changes) > 0;
+    const changed = Number(this.db.prepare("update modules set listed = ? where id = ?").run(listed ? 1 : 0, id).changes) > 0;
+    // Acting on a report (taking the module down) closes it: the senders are no longer kept.
+    if (changed && !listed) this.db.prepare("delete from report_senders where module_id = ?").run(id);
+    return changed;
   }
 
   // ── Review before listing (decided 2026-10-26) ─────────────────────────
@@ -756,7 +766,9 @@ export class CatalogStore {
 
   /** Delists these modules; returns those that were listed (and so are the ones to list again later). */
   unlistAll(ids: readonly string[]): string[] {
-    return ids.filter((id) => Number(this.db.prepare("update modules set listed = 0 where id = ? and listed = 1").run(id).changes) > 0);
+    const done = ids.filter((id) => Number(this.db.prepare("update modules set listed = 0 where id = ? and listed = 1").run(id).changes) > 0);
+    for (const id of ids) this.db.prepare("delete from report_senders where module_id = ?").run(id);
+    return done;
   }
 
   /** A waiting version's picture for the maintainer's review: only one a waiting version names. */
@@ -804,7 +816,7 @@ export class CatalogStore {
    * Records a player's report of a zip. Only a zip the catalog lists, under that module id and key
    * (the module's owner, or the key that signed that version), can be reported. Reports hide nothing: a person decides on the admin page (C12).
    */
-  report(input: { id: string; owner: string; sha256: string }, now: Date = new Date()): boolean {
+  report(input: { id: string; owner: string; sha256: string }, now: Date = new Date(), sender?: { accountId: string; reason: string | null; note: string | null }): boolean {
     const known = this.db
       .prepare("select 1 from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.id = ? and (m.owner = ? or v.signer = ?) and m.listed = 1 and v.status = 'listed'")
       .get(input.sha256, input.id, input.owner, input.owner);
@@ -813,7 +825,27 @@ export class CatalogStore {
     this.db
       .prepare("insert into reports (sha256, module_id, owner, count, first_at, last_at) values (?, ?, ?, 1, ?, ?) on conflict (sha256) do update set count = count + 1, last_at = excluded.last_at")
       .run(input.sha256, input.id, input.owner, at, at);
+    if (sender) {
+      this.db
+        .prepare("insert into report_senders (sha256, module_id, account_id, reason, note, at) values (?, ?, ?, ?, ?, ?)")
+        .run(input.sha256, input.id, sender.accountId, sender.reason, sender.note, now.getTime());
+    }
     return true;
+  }
+
+  /** Who reported a zip while its report is open, oldest first. */
+  reporters(sha256: string): { accountId: string; reason: string | null; note: string | null; at: number }[] {
+    return (this.db.prepare("select account_id, reason, note, at from report_senders where sha256 = ? order by id").all(sha256) as unknown as { account_id: string; reason: string | null; note: string | null; at: number }[]).map((row) => ({
+      accountId: row.account_id,
+      reason: row.reason,
+      note: row.note,
+      at: row.at,
+    }));
+  }
+
+  /** Deletes an account's reports as a sender; the counts stay. */
+  forgetReporter(accountId: string): void {
+    this.db.prepare("delete from report_senders where account_id = ?").run(accountId);
   }
 
   /** Counts one install of a listed module from Browse. Nothing about the player is kept. */
@@ -889,6 +921,7 @@ export class CatalogStore {
 
   /** Closes a report once a person has looked at it. */
   dismissReport(sha256: string): boolean {
+    this.db.prepare("delete from report_senders where sha256 = ?").run(sha256);
     return Number(this.db.prepare("delete from reports where sha256 = ?").run(sha256).changes) > 0;
   }
 
