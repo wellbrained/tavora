@@ -4,6 +4,7 @@ import type { CatalogStore } from "./catalog.ts";
 import {
   ABOUT_TYPES,
   accountName,
+  builtInTexts,
   cleanMessage,
   MAX_MESSAGE_LENGTH,
   placeholdersOk,
@@ -166,11 +167,11 @@ export function conversationsAdminRoutes({ conversations, accounts, catalog, not
 
 const TEXT_MAX = 2000;
 
-/** The editable texts at `/api/texts`: the keys with what is saved, and the allowed placeholders. */
+/** The editable texts at `/api/texts`: the keys with what is saved, the built-in texts, and the allowed placeholders. */
 export function textsAdminRoutes({ conversations }: { conversations: ConversationStore }) {
   const app = new Hono();
 
-  app.get("/", (context) => context.json({ keys: TEXT_KEYS, placeholders: TEXT_PLACEHOLDERS, texts: conversations.texts() }));
+  app.get("/", (context) => context.json({ keys: TEXT_KEYS, placeholders: TEXT_PLACEHOLDERS, texts: conversations.texts(), builtIn: builtInTexts() }));
 
   app.post("/", async (context) => {
     const { key, en, de } = await json(context.req.raw);

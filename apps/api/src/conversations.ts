@@ -9,6 +9,7 @@ import type { Notifier } from "./moderation-mail.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { checkReviewText } from "./review-filter.ts";
 import { MIN_ACCOUNT_AGE_MS, ownsModule } from "./reviews.ts";
+import { BUILT_IN_TEXTS } from "../../desktop/src/shared/conversations.ts";
 
 /**
  * Conversations (decided 2026-10-27, "Conversations" in the design doc). Two kinds exist and nothing else, so
@@ -561,6 +562,12 @@ const MAIL_TEXTS: Record<"newRequest" | "newReply" | "tavora", Record<MailLangua
     de: { subject: "Neue Nachricht von Tavora", lead: "Tavora hat dir geschrieben." },
   },
 };
+
+/** The built-in text of every editable key in English and German: the app's inbox notes and the opening line of each email copy. */
+export function builtInTexts(): Record<(typeof TEXT_KEYS)[number], { en: string; de: string }> {
+  const lead = (kind: keyof typeof MAIL_TEXTS) => ({ en: MAIL_TEXTS[kind].en.lead, de: MAIL_TEXTS[kind].de.lead });
+  return { ...BUILT_IN_TEXTS, "mail.newRequest": lead("newRequest"), "mail.newReply": lead("newReply"), "mail.tavora": lead("tavora") };
+}
 
 export interface ConversationNotifier {
   /** Sends the receiving side an email copy of a new message when it wants one and has an address. Never throws; best effort. */
