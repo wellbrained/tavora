@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { countAppUpdate } from "./usage-counts";
 
 describe("countAppUpdate", () => {
-  it("sends only the version, with nothing that identifies the player", async () => {
+  it("sends only the version, with nothing that identifies the user", async () => {
     const calls: { url: string; init: RequestInit }[] = [];
     const fetchImpl = (async (url: string, init: RequestInit) => (calls.push({ url, init }), new Response(null, { status: 204 }))) as unknown as typeof fetch;
     await countAppUpdate({ baseUrl: "https://api.test/", fetchImpl }, "0.21.29");

@@ -1,5 +1,5 @@
 // Why a module did not load, as the host reports it. Each reason has a kind and the
-// details its text names, so the window can say it in the player's language instead
+// details its text names, so the window can say it in the user's language instead
 // of showing the English line the log gets.
 import type { MessageKey, Params } from "./i18n";
 

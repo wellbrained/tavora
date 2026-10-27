@@ -58,7 +58,7 @@ describe("SavedData", () => {
     expect(await list()).toEqual(["grants.json", "grants.json.from-version-99", "library.json", "library.json.from-version-99", "workspace.json"]);
   });
 
-  it("keeps the window out of the player's own data", () => {
+  it("keeps the window out of the user's own data", () => {
     expect(DATA_FILES).not.toContain(WINDOW_FILE);
   });
 });

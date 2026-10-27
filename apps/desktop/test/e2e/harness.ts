@@ -220,7 +220,7 @@ export const TODOS = "tavora.todos";
 export const PLAYGROUND = "tavora.playground";
 export const WHITEBOARD = "tavora.whiteboard";
 
-/** Types text into whatever has focus in the nth panel of a module, as a player would. */
+/** Types text into whatever has focus in the nth panel of a module, as a user would. */
 export async function typeInModule(app: ElectronApplication, moduleId: string, text: string, index = 0): Promise<void> {
   await app.evaluate(
     async ({ webContents }, { moduleId, text, index }) => {

@@ -201,7 +201,7 @@ test("a page cannot reach Tavora, modules, other schemes or the local network (B
   expect(hits).not.toContain("127.0.0.1/local-nav");
   expect(hits).not.toContain("127.0.0.1/redirected");
 
-  // What the player types may be local, and a local page may use local addresses.
+  // What the user types may be local, and a local page may use local addresses.
   await go(page, localUrl("/page"));
   await waitForPage(app, localUrl("/page"));
   expect(await inPage(app, localUrl("/"), `fetch("/secret").then((r) => r.text())`)).toBe("reached");
@@ -247,7 +247,7 @@ test("new windows open as a Browser tab only after a click, and downloads are re
   await page.waitForTimeout(500);
   await expect(page.locator('[data-panel-tab][data-module-id="tavora.browser"]')).toHaveCount(3);
 
-  // B5: a download is refused and the player is told.
+  // B5: a download is refused and the user is told.
   const downloads = await app.evaluate(({ app }) => app.getPath("downloads"));
   await inPage(app, publicUrl("/"), `location.href = "/download"; null`);
   await expect(page.getByText("Tavora doesn't download files.")).toBeVisible();

@@ -74,7 +74,7 @@ export class OnlineSearch {
         .filter((game): game is OnlineGame => game !== null);
       return { status: "ok", games };
     } catch {
-      // A search replaced by a newer one is not a failure the player should see.
+      // A search replaced by a newer one is not a failure the user should see.
       return controller.signal.aborted && this.pending !== controller ? { status: "ok", games: [] } : { status: "unreachable", games: [] };
     } finally {
       clearTimeout(timer);

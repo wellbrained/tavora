@@ -4,7 +4,7 @@
 // during menus and drags, or the module's name and state. A Browser panel
 // also gets its toolbar here, above the page, and its start and error pages.
 // A module whose update asks for more gets a bar above its view to review it, and so does one whose
-// catalog update waits for the player's yes because it asks for more (the panel keeps running the
+// catalog update waits for the user's yes because it asks for more (the panel keeps running the
 // installed version until then).
 // A panel that is over the game right now (the in-game layer is open) leaves a quiet note in its slot (game-overlay-window.ts).
 // A panel whose type the module no longer offers says so, with Remove and the

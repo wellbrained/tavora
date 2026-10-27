@@ -156,7 +156,7 @@ describe("the review page's key requests", () => {
     const { request, adminCall, developer, sign, catalog, clock } = setup();
     const dev = await developer("dev@example.com");
     const earlier = await developer("earlier@example.com");
-    // A module the leaked key published before the report: players keep it.
+    // A module the leaked key published before the report: users keep it.
     catalog.add(moduleZip(dev.lost, "1.0.0"), new Date(clock.now - 3_600_000));
     sign("successions", [{ old: earlier.old, new: earlier.new, account: earlier.accountId }]);
     await request("POST", `/v1/account/keys/${dev.old}/replace`, { new: dev.new, leaked: true }, dev.token);

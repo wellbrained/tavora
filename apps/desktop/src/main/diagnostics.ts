@@ -1,7 +1,7 @@
 // What "Copy diagnostic info" puts on the clipboard, so a tester can paste it to
-// whoever is helping. Nothing here is sent anywhere: it is text the player
+// whoever is helping. Nothing here is sent anywhere: it is text the user
 // copies and shares on purpose. It holds versions, counts, timings and the
-// last errors, never game or module names, notes or the player's folders.
+// last errors, never game or module names, notes or the user's folders.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,7 +12,7 @@ const STARTUP_LOG_KEPT = 50;
 const SAMPLES_KEPT = 20;
 const LINE_MAX = 400;
 
-/** Replaces the player's folders and user name, so the report can be shared. */
+/** Replaces the user's folders and user name, so the report can be shared. */
 export function scrub(text: string, folders: { home?: string; userData?: string } = {}): string {
   let out = text;
   // Longest first: the data folder usually sits inside the home folder.
@@ -71,7 +71,7 @@ export interface TimingSummary {
   max: number;
 }
 
-/** How long the things a player waits for took, in milliseconds. */
+/** How long the things a user waits for took, in milliseconds. */
 export class Timings {
   private samples = new Map<string, number[]>();
 
@@ -92,7 +92,7 @@ export class Timings {
 
 /**
  * Adds a line to the startup log (logs/startup.log in the data folder), keeping the newest
- * few. It survives a start that fails before any window, so a player can send it.
+ * few. It survives a start that fails before any window, so a user can send it.
  */
 export function appendStartupLog(file: string, text: string, folders: { home?: string; userData?: string } = {}, now = new Date()): void {
   let lines: string[] = [];

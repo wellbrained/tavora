@@ -48,7 +48,7 @@ describe("the pairing keys", () => {
 });
 
 describe("approving a new PC through the service", () => {
-  it("sends the key once the old PC's player clicks Add, with the same code on both", async () => {
+  it("sends the key once the old PC's user clicks Add, with the same code on both", async () => {
     const cloud = await service();
     const old = await onPc(cloud.fetch, cloud.token);
     await old.accountKey.setUp();
@@ -77,7 +77,7 @@ describe("approving a new PC through the service", () => {
     old.pairing.dispose();
   });
 
-  it("tells the new PC when the old PC's player said no, and isn't asked again", async () => {
+  it("tells the new PC when the old PC's user said no, and isn't asked again", async () => {
     const cloud = await service();
     const old = await onPc(cloud.fetch, cloud.token);
     await old.accountKey.setUp();

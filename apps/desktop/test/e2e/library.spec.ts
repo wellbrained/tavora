@@ -67,7 +67,7 @@ test("the first-run welcome takes a name and games, and can be shown again", asy
   await again.app.close();
 });
 
-test("players add games from the built-in list or by name", async () => {
+test("users add games from the built-in list or by name", async () => {
   const running = await launch(undefined, [], { seed: false });
   const { page, userData } = running;
   // A new install starts with the first-run welcome; skipping it leads Home.
@@ -174,7 +174,7 @@ test("dropping a game on a folder leaves the folder open or closed as it was", a
   await expect(folder).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByRole("group", { name: "Builders" })).toHaveCount(0);
 
-  // Opened by the player, the folder holds both games.
+  // Opened by the user, the folder holds both games.
   await folder.click();
   await expect(folder).toHaveAttribute("aria-expanded", "true");
   const inside = page.getByRole("group", { name: "Builders" });
@@ -259,7 +259,7 @@ test("many games are moved to Trash, restored and deleted together from Settings
   await app.close();
 });
 
-test("a game in Trash is deleted for good after 30 days or when the player says so", async () => {
+test("a game in Trash is deleted for good after 30 days or when the user says so", async () => {
   const userData = await newUserData();
   const running = await launch(userData);
   const { page } = running;

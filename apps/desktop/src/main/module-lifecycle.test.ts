@@ -164,7 +164,7 @@ describe("ModuleLifecycle", () => {
     expect(grants.get(owner, ID)).toBeUndefined();
   });
 
-  it("removes only modules the player may remove, and keeps everything when the bin fails", async () => {
+  it("removes only modules the user may remove, and keeps everything when the bin fails", async () => {
     const { lifecycle, steps, state, zipFile } = await setup();
     await expect(lifecycle.remove(ID)).rejects.toMatchObject({ key: "error.removeOnlyOwn" });
     await lifecycle.installFile(await zipFile(zipOf("1.0.0", null)));

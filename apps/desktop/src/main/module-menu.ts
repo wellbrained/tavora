@@ -13,7 +13,7 @@ const MAX_COORDINATE = 100_000;
 
 export interface CheckedMenu {
   request: MenuRequest;
-  /** Ids the player can pick: items that are not disabled, in submenus that are not disabled. */
+  /** Ids the user can pick: items that are not disabled, in submenus that are not disabled. */
   choices: ReadonlySet<string>;
 }
 

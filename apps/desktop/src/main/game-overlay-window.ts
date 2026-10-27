@@ -1,11 +1,11 @@
 // The window one game overlay lives in: a frameless, transparent Tavora window above the game that never takes the
 // keyboard or the mouse (clicks go through to the game), loading the module's overlay page from game-overlay-page.ts.
 // Nothing is injected into the game or drawn by it. The page has no bridge and no preload, its session can reach only
-// its own address, and the window is visible to screen capture unless the player turned "Hide from capture" on (some anti-cheats flag windows hidden from capture over a game). While
-// the player arranges overlays a second view of Tavora's own, with an outline, edges and a close button, sits on top
+// its own address, and the window is visible to screen capture unless the user turned "Hide from capture" on (some anti-cheats flag windows hidden from capture over a game). While
+// the user arranges overlays a second view of Tavora's own, with an outline, edges and a close button, sits on top
 // and the window takes the mouse, but still never the keyboard.
 //
-// The same window also holds a whole panel the player shows in their game (`panel`), while the in-game layer is open.
+// The same window also holds a whole panel the user shows in their game (`panel`), while the in-game layer is open.
 // It is the panel's own view, moved here from the workspace and moved back when the window goes; nothing about the
 // panel changes. While the layer is open that window takes the mouse and the keyboard too, and the frame sits around
 // the panel instead of over it.
@@ -19,7 +19,7 @@ import { GAME_OVERLAY_FRAME_DOCUMENT } from "../shared/game-overlay-frame";
 /** What the window needs of a panel it holds (implemented by ModuleView). */
 export interface OverlayPanel {
   readonly view: WebContentsView;
-  /** The panel is over the game now; its clicks and keys count as the player's only while `arranging()` says so. */
+  /** The panel is over the game now; its clicks and keys count as the user's only while `arranging()` says so. */
   enterGame(arranging: () => boolean): void;
   /** The panel is in its workspace slot again. */
   leaveGame(): void;
@@ -42,11 +42,11 @@ export interface GameOverlayWindowOptions {
   id: string;
   /** The game window's client area now, to keep drags inside it. */
   gameBounds(): Rect | null;
-  /** The player dragged or resized the window; where it is now. */
+  /** The user dragged or resized the window; where it is now. */
   moved(rect: Rect): void;
-  /** The player pressed the frame's close button. */
+  /** The user pressed the frame's close button. */
   closeRequested(): void;
-  /** The player pressed the frame's Overlay layout button. */
+  /** The user pressed the frame's Overlay layout button. */
   layoutRequested(): void;
   /** The window or its page is gone (the page crashed). */
   ended(): void;
@@ -125,7 +125,7 @@ export class GameOverlayWindow {
     // Above full-screen windows too; the lowest level that is.
     window.setAlwaysOnTop(true, "screen-saver");
     window.setIgnoreMouseEvents(true);
-    // Visible to screen capture; setHideFromCapture hides it when the player asks.
+    // Visible to screen capture; setHideFromCapture hides it when the user asks.
     if (options.hidden) window.setOpacity(0);
     const contents = window.webContents;
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -136,7 +136,7 @@ export class GameOverlayWindow {
       if (!this.options.panel && !contents.isDestroyed() && contents.getZoomFactor() !== this.zoom) contents.setZoomFactor(this.zoom);
     });
     contents.once("render-process-gone", () => this.end());
-    // A window holding a panel is never closed by the player (Alt+F4 while arranging): that would strand the panel.
+    // A window holding a panel is never closed by the user (Alt+F4 while arranging): that would strand the panel.
     // Closing the layer (or Stop showing in game) is how it leaves. Tavora's own destroy() does not go through this.
     window.on("close", (event) => {
       if (options.panel && !this.destroyed && !this.quitting) event.preventDefault();
@@ -189,7 +189,7 @@ export class GameOverlayWindow {
     return this.destroyed || this.window.isDestroyed();
   }
 
-  /** The player is dragging or resizing it now. */
+  /** The user is dragging or resizing it now. */
   get dragging(): boolean {
     return this.drag !== null;
   }

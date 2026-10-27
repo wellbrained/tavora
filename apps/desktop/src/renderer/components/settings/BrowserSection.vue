@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Settings > Browser: the sites the player marked in a Browser panel's
+// Settings > Browser: the sites the user marked in a Browser panel's
 // toolbar, and clearing what websites stored. Sites are only added from the
-// toolbar, where the player is on the site; here they can be removed.
+// toolbar, where the user is on the site; here they can be removed.
 import { X } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";

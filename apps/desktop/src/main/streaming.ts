@@ -21,7 +21,7 @@ export interface StreamingModule {
 /** A panel of the game shown now that hears a hotkey. */
 export interface HotkeyListener {
   moduleId: string;
-  /** When the player last used the panel; a press goes to the module's panel used last. */
+  /** When the user last used the panel; a press goes to the module's panel used last. */
   usedAt: number;
   hotkeyPressed(binding: HotkeyBinding): void;
 }
@@ -31,9 +31,9 @@ export interface StreamingOptions {
   settings(): { streamOverlays: boolean; overlayPort: number };
   saveSettings(next: { streamOverlays?: boolean; overlayPort?: number }): void;
   module(moduleId: string): StreamingModule | undefined;
-  /** Whether the player granted the module the stream-overlay connector, as it is installed now. */
+  /** Whether the user granted the module the stream-overlay connector, as it is installed now. */
   overlayGranted(moduleId: string): boolean;
-  /** Asks the player in Tavora's consent dialog for a connector the module asks for on request; whether they allowed it. */
+  /** Asks the user in Tavora's consent dialog for a connector the module asks for on request; whether they allowed it. */
   askConnector(moduleId: string, connector: "stream-overlay"): Promise<boolean>;
   /** The game shown now, or null. */
   gameId(): string | null;
@@ -55,7 +55,7 @@ export interface OverlayKeys {
   /** The game in front; the keys of game overlays work only while one is. */
   frontGame(): string | null;
   wants(record: HotkeyRecord): boolean;
-  /** Whether the player has a game overlay for this key. */
+  /** Whether the user has a game overlay for this key. */
   has(subject: OverlaySubject): boolean;
   pressed(record: HotkeyRecord): void;
   /** Whether the key works over every game (the layer key, a general overlay's key): it collides with any game's keys. */
@@ -167,7 +167,7 @@ export class Streaming {
 
   // ── The hotkey dialog ────────────────────────────────────────────────
 
-  /** Opens Tavora's hotkey dialog; resolves with what the player did there. Only for the game shown now. */
+  /** Opens Tavora's hotkey dialog; resolves with what the user did there. Only for the game shown now. */
   private ask(binding: PendingHotkey["binding"], label: string, overlay?: PendingHotkey["overlay"]): Promise<HotkeySetResult> {
     if (!overlay && this.options.gameId() !== binding.gameId) throw new HostError("PERMISSION_DENIED", "hotkeys.set works only in the game shown now");
     this.pending?.resolve("cancelled");
@@ -209,7 +209,7 @@ export class Streaming {
     } else if (removed) this.changed();
   }
 
-  /** The player's answer in the hotkey dialog. A refused key keeps the dialog open with the reason. */
+  /** The user's answer in the hotkey dialog. A refused key keeps the dialog open with the reason. */
   answer(id: number, choice: "set" | "remove" | "cancel", accelerator?: string): ActionResult {
     const pending = this.pending;
     if (!pending || pending.id !== id) return { ok: true };

@@ -39,7 +39,7 @@ const busy = ref(false);
 const progress = ref<{ done: number; total: number } | null>(null);
 const error = ref<string | null>(null);
 const chosen = computed(() => rows.value.filter((row) => ticked.value.has(row.key)));
-/** Only signed-in players can share. */
+/** Only signed-in users can share. */
 const signedIn = computed(() => Boolean(account.value?.account));
 
 function signIn() {
@@ -65,7 +65,7 @@ onMounted(async () => {
     return;
   }
   steamRows.value = result.games.map((game) => ({ key: String(game.appid), name: game.name, icon: game.icon }));
-  // Everything is ticked at first: the player asked for these games.
+  // Everything is ticked at first: the user asked for these games.
   ticked.value = new Set(steamRows.value.map((row) => row.key));
 });
 

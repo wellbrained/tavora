@@ -132,7 +132,7 @@ export function pruneLayout(
 
 /**
  * Takes panels out without changing the arrangement: a group that loses some panels keeps the
- * rest, and one that loses all of them stays as an empty slot, so the player sees where they were
+ * rest, and one that loses all of them stays as an empty slot, so the user sees where they were
  * (decision log, module grants row of 2026-10-16).
  */
 export function vacateLayout(layout: SavedLayout | null, remove: (id: string) => boolean): SavedLayout | null {

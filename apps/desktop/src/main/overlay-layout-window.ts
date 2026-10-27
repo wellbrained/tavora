@@ -1,5 +1,5 @@
 // The Overlay layout window: a normal, resizable Tavora window (not on top, in the taskbar, with the focus like any
-// other) where the player arranges what shows over their game. It is three layers:
+// other) where the user arranges what shows over their game. It is three layers:
 //   1. the shell, the window's own page: the toolbar, the list and the canvas background (grid, game picture);
 //   2. one live page per overlay or panel with an overlay page, sized to its rectangle on the canvas. They are served
 //      exactly like a game overlay's page (game-overlay-page.ts): from a Tavora-internal address, no bridge, no

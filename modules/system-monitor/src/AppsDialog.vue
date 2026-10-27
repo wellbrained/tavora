@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The apps running on this PC with their memory and CPU, opened from the Memory card. Tavora reads the list only
 // while this dialog is open and the panel is shown: every 2 seconds, the next read only after the last one came back.
-// Apps under 5 % of the installed RAM fold away below the rest until the player opens them; a search finds them too.
+// Apps under 5 % of the installed RAM fold away below the rest until the user opens them; a search finds them too.
 import { ArrowDown, ArrowUp } from "@lucide/vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -75,7 +75,7 @@ function sort(by: AppsSort): void {
 
 const rows = computed(() => (read.value ? listApps(read.value.apps, query.value, sortBy.value, direction.value, language.value) : []));
 const groups = computed(() => splitApps(rows.value, props.totalBytes, query.value));
-/** The rows the player sees: the small ones only while open. */
+/** The rows the user sees: the small ones only while open. */
 const visible = computed(() => (showSmall.value ? rows.value : groups.value.big));
 const total = computed(() =>
   read.value && read.value.usedBytes > 0 ? t("apps.total", { shown: size(shownBytes(visible.value), language.value), used: size(read.value.usedBytes, language.value) }) : "",

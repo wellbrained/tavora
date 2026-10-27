@@ -70,7 +70,7 @@ function removeAccount(account: AiUsageAccount) {
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 
-/** Modules the player allowed to read these accounts. */
+/** Modules the user allowed to read these accounts. */
 const readers = computed(() => (state.value?.modules ?? []).filter((module) => module.permissions.granted.connectors.includes("ai-usage")));
 
 function revoke(module: ModuleView) {

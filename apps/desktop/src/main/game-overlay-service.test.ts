@@ -555,7 +555,7 @@ describe("the in-game layer", () => {
     expect(world.veils[0]!.rect).toEqual({ x: 100, y: 50, width: 1280, height: 720 });
   });
 
-  it("saves where the player left an overlay, relative to the game, and leaves a window being dragged alone", async () => {
+  it("saves where the user left an overlay, relative to the game, and leaves a window being dragged alone", async () => {
     const { service, live, world } = await setup();
     show(service);
     const window = live()[0]!;
@@ -789,11 +789,11 @@ describe("a page that crashes", () => {
     crash(live);
     for (let i = 0; i < 3; i++) service.tick();
     expect(live()).toHaveLength(0);
-    // Told once, in the player's words.
+    // Told once, in the user's words.
     expect(world.notices).toEqual(["This overlay stopped working."]);
   });
 
-  it("gets another chance when the player shows it again, or toggles it", async () => {
+  it("gets another chance when the user shows it again, or toggles it", async () => {
     const { service, world, live, key } = await setup();
     show(service);
     for (let i = 0; i < 3; i++) {
@@ -980,7 +980,7 @@ describe("a panel in the game", () => {
     world.registered.get("Escape")!();
     expect(window!.destroyed).toBe(true);
     expect(service.panelOpen(PANEL)).toBe(false);
-    // Still one the player shows in the game: it comes up again with the next layer.
+    // Still one the user shows in the game: it comes up again with the next layer.
     expect(service.hasPanel(PANEL)).toBe(true);
     service.pressed(layerKey(key));
     expect(panelWindows(world)).toHaveLength(2);
@@ -1022,7 +1022,7 @@ describe("a panel in the game", () => {
     expect(first!.log.filter((step, at) => first!.log.indexOf(step) === at)).toEqual(["rect", "show", "arrange", "raise", "focus"]);
   });
 
-  it("is kept where the player put it, relative to the game, and closing its frame stops showing it in game", async () => {
+  it("is kept where the user put it, relative to the game, and closing its frame stops showing it in game", async () => {
     const { service, world, key } = await setup();
     add(service);
     service.pressed(layerKey(key));
@@ -1429,7 +1429,7 @@ describe("a panel's live view", () => {
     expect(liveWindows(world)[0]!.request.state()).toBe("mine");
   });
 
-  it("gives a view whose page crashed too often another chance when the player shows the panel again", async () => {
+  it("gives a view whose page crashed too often another chance when the user shows the panel again", async () => {
     const { service, world } = await setup();
     add(service);
     await feed(service, "x");
@@ -1527,7 +1527,7 @@ describe("positions that scale with the game window", () => {
     expect(saved.find({ owner: "official", moduleId: "tavora.clock-counter", gameId: "elden", key: "item-1" })!.legacy).toBeUndefined();
   });
 
-  it("writes where the player left it in the frame as an anchored place", async () => {
+  it("writes where the user left it in the frame as an anchored place", async () => {
     const { service, live } = await setup();
     show(service);
     live()[0]!.request.moved({ x: 1400, y: 700, width: 480, height: 270 });

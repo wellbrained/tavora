@@ -815,7 +815,7 @@ describe("the game picture", () => {
     expect(world.captured).toEqual([]);
   });
 
-  it("keeps a picture the player chose, tells when it can't be used, and does nothing when they cancel", async () => {
+  it("keeps a picture the user chose, tells when it can't be used, and does nothing when they cancel", async () => {
     const chosen = setup([clock("a")], { choose: PNG });
     chosen.layout.open("elden");
     chosen.layout.handle({ type: "choose-picture" }, true);

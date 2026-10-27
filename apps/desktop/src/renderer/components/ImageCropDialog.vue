@@ -8,7 +8,7 @@ import { useFloating } from "../host";
 import { t } from "../i18n";
 
 // Crops a picked image to a square. The whole image stays still and fitted;
-// the player moves the crop frame over it and sizes it with the slider, the
+// the user moves the crop frame over it and sizes it with the slider, the
 // mouse wheel or the handle on its edge. Used for the profile picture; meant
 // for game icons too.
 const props = withDefaults(

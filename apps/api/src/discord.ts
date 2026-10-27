@@ -1,7 +1,7 @@
 /**
  * Discord login (decided 2026-10-16): the app sends the code Discord gave it
- * after the player approved Tavora in the browser, with the PKCE verifier only
- * the app knew. The service exchanges them itself, reads who the player is,
+ * after the user approved Tavora in the browser, with the PKCE verifier only
+ * the app knew. The service exchanges them itself, reads who the user is,
  * and throws the Discord token away at once (revoking it too). Tavora's
  * Discord application is a public client, so no secret exists anywhere; only
  * the `identify` scope is asked for, never the email.

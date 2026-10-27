@@ -11,7 +11,7 @@ import SettingGroup from "./SettingGroup.vue";
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 
-/** Modules the player allowed to see this PC's hardware and usage. */
+/** Modules the user allowed to see this PC's hardware and usage. */
 const users = computed(() => (state.value?.modules ?? []).filter((module) => module.permissions.granted.connectors.includes("system-info")));
 
 function revoke(module: ModuleView) {

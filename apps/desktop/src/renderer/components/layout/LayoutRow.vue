@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // One row of the Overlay layout's list (like a source in OBS): the name, the eye that hides it on the canvas only, and,
-// for the selected one, everything the player sets: when it shows (always, or with a key), how see-through it is, Hide
+// for the selected one, everything the user sets: when it shows (always, or with a key), how see-through it is, Hide
 // from capture, Reset position, Reset size, Preview and Remove. Selecting a row selects the item on the canvas, and the other way round.
 import { Eye, EyeOff, X } from "@lucide/vue";
 import { computed } from "vue";

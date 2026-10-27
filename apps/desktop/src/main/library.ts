@@ -4,7 +4,7 @@ import { isGameId, isModuleId } from "@tavora/module-schema";
 import type { GameStart, RootItem, RootSort, Startup } from "../shared/host-api";
 import { isSite } from "./browser-url";
 import { isLanguageSetting, type LanguageSetting } from "../shared/i18n";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 import { CATALOG, catalogGame } from "./catalog";
 import { DEFAULT_OVERLAY_PORT, MAX_OVERLAY_PORT, MIN_OVERLAY_PORT } from "./overlays";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
@@ -13,7 +13,7 @@ import { DEFAULT_THEME, isVariationId } from "./themes";
 export type { RootItem, RootSort, Startup };
 
 /**
- * The player's game library: which games exist, how the rail arranges them
+ * The user's game library: which games exist, how the rail arranges them
  * and the few app preferences that go with it. Pure data and pure
  * operations; the host persists it and acts on what the operations return.
  */
@@ -38,16 +38,16 @@ export interface GameEntry {
   icon: GameIcon;
   /**
    * Whether the game shows its own icon (the one found on this PC or from Steam) while it has one. False means
-   * the player chose their own letters. A picked image wins over both, so this only matters without one.
+   * the user chose their own letters. A picked image wins over both, so this only matters without one.
    */
   useOriginalIcon: boolean;
   /** The game's Steam application id, a hidden key used to find its icon; null when it has none. */
   steamAppId: number | null;
-  /** The game's own icon in the player's data folder, kept unchanged (from the installed game or from Steam); null until found. */
+  /** The game's own icon in the user's data folder, kept unchanged (from the installed game or from Steam); null until found. */
   iconFile: string | null;
   /** When no icon was found for this game, so it is not looked up again for a while. */
   iconCheckedAt: string | null;
-  /** When the player offered the game's icon to the Tavora service, so it is not offered again. */
+  /** When the user offered the game's icon to the Tavora service, so it is not offered again. */
   iconSharedAt: string | null;
   showNews: boolean;
   addedAt: string;
@@ -84,35 +84,35 @@ export interface Library {
   grayscaleText: boolean;
   /** Search may ask the Tavora service online. Off means the built-in games only. */
   onlineSearch: boolean;
-  /** New versions of Tavora download by themselves. Off means the player starts the download. */
+  /** New versions of Tavora download by themselves. Off means the user starts the download. */
   autoUpdate: boolean;
-  /** Updates of catalog modules that ask for nothing new install by themselves; off, they wait for the player. */
+  /** Updates of catalog modules that ask for nothing new install by themselves; off, they wait for the user. */
   autoUpdateModules: boolean;
   /** Game icons may be taken from Steam on this PC. Off means the generated badge. */
   steamIcons: boolean;
   /** The panel tabs show an icon before the module name. */
   moduleIcons: boolean;
-  /** Stream overlays: Tavora serves module overlays to streaming software on this PC (overlays.ts). Off until the player turns it on. */
+  /** Stream overlays: Tavora serves module overlays to streaming software on this PC (overlays.ts). Off until the user turns it on. */
   streamOverlays: boolean;
   /** The port Stream overlays listen on, on 127.0.0.1. */
   overlayPort: number;
-  /** Game overlays: module overlay pages shown over the player's game (game-overlays.ts). Off until the player turns it on. */
+  /** Game overlays: module overlay pages shown over the user's game (game-overlays.ts). Off until the user turns it on. */
   gameOverlays: boolean;
-  /** Game overlays stay where they are when the player switches to another window, as long as the game window is open. */
+  /** Game overlays stay where they are when the user switches to another window, as long as the game window is open. */
   overlaysStay: boolean;
-  /** Where modules keep their pictures, when the player moved it from the default folder. */
+  /** Where modules keep their pictures, when the user moved it from the default folder. */
   moduleFilesFolder: string | null;
   /** Module project folders a developer added in Settings > Modules; loaded straight from there (registry.ts). */
   developmentFolders: string[];
-  /** Per system file dialog, the folder the player last picked from in it; the dialog opens there next time. */
+  /** Per system file dialog, the folder the user last picked from in it; the dialog opens there next time. */
   dialogFolders: Partial<Record<DialogPlace, string>>;
-  /** Per `owner:module id`, the folder the player last saved a file to or opened one from for that module (files.saveJson, files.openJson). */
+  /** Per `owner:module id`, the folder the user last saved a file to or opened one from for that module (files.saveJson, files.openJson). */
   moduleFolders: Record<string, string>;
-  /** Per `owner:module id`, the module version whose patch notes the player has seen; newer notes are marked new. */
+  /** Per `owner:module id`, the module version whose patch notes the user has seen; newer notes are marked new. */
   moduleNotesSeen: Record<string, string>;
-  /** The Steam profile link or id the player chose to remember for the Steam import, or null. Kept only on this PC. */
+  /** The Steam profile link or id the user chose to remember for the Steam import, or null. Kept only on this PC. */
   steamProfile: string | null;
-  /** Ids of games not in the library whose icon the player offered to the Tavora service (Steam import), so they are not offered again. */
+  /** Ids of games not in the library whose icon the user offered to the Tavora service (Steam import), so they are not offered again. */
   iconsOffered: string[];
   /** The language of Tavora's texts: one of them, or the system's. */
   language: LanguageSetting;
@@ -134,7 +134,7 @@ export const TRASH_DAYS = 30;
 export const MAX_NAME = 80;
 export const MAX_LABEL = 3;
 
-/** The system file dialogs that open where the player last picked from. */
+/** The system file dialogs that open where the user last picked from. */
 export const DIALOG_PLACES = ["install-module", "development-folder", "game-image", "module-files", "cloud-copy", "save-picture", "module-zip", "publisher-key", "layout-picture"] as const;
 export type DialogPlace = (typeof DIALOG_PLACES)[number];
 
@@ -163,8 +163,8 @@ export function cleanDevelopmentFolders(values: unknown[]): string[] {
   return folders;
 }
 
-/** A problem the player caused and should read, e.g. a duplicate game. */
-export class LibraryError extends PlayerError {}
+/** A problem the user caused and should read, e.g. a duplicate game. */
+export class LibraryError extends UserError {}
 
 export function emptyLibrary(): Library {
   return {
@@ -356,7 +356,7 @@ export function addGame(library: Library, input: NewGame, now: Date): string {
     steamAppId = known.steamAppId ?? null;
   } else if ("online" in input) {
     // The service issues canonical ids; a built-in game found online is still that built-in game.
-    // `local-` ids belong to games the player added by name.
+    // `local-` ids belong to games the user added by name.
     const known = catalogGame(input.online.id);
     id = input.online.id;
     if (id.startsWith("local-")) throw new LibraryError("error.game.cantAdd");
@@ -411,13 +411,13 @@ export function recordIcon(library: Library, id: string, outcome: { file: string
   }
 }
 
-/** Notes that the player offered this game's icon to the Tavora service. */
+/** Notes that the user offered this game's icon to the Tavora service. */
 export function markIconShared(library: Library, id: string, now: Date): void {
   const game = library.games[id];
   if (game) game.iconSharedAt = now.toISOString();
 }
 
-/** Notes that the player offered the icon of a game that is not in the library, newest last. */
+/** Notes that the user offered the icon of a game that is not in the library, newest last. */
 export function markIconOffered(library: Library, id: string): void {
   library.iconsOffered = [...library.iconsOffered.filter((other) => other !== id), id].slice(-MAX_ICONS_OFFERED);
 }
@@ -439,7 +439,7 @@ export function renameGame(library: Library, id: string, name: unknown): void {
 
 /**
  * Chooses letters for the icon (null: the ones derived from the name). The game stops showing its own icon,
- * which is what the player asked for by choosing letters. Returns the previous icon so a picked image's file can go.
+ * which is what the user asked for by choosing letters. Returns the previous icon so a picked image's file can go.
  */
 export function setGameLabel(library: Library, id: string, label: unknown): GameIcon | null {
   const game = liveGame(library, id);

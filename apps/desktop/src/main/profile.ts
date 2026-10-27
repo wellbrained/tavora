@@ -5,7 +5,7 @@ import { writeFileAtomic } from "./fsutil";
 import { IconError, imageType } from "./icons";
 
 /**
- * The player's profile on this PC. The id never changes. When the player is
+ * The user's profile on this PC. The id never changes. When the user is
  * signed in, the account keeps a copy (main/account.ts), so it follows them.
  */
 export interface Profile {
@@ -16,7 +16,7 @@ export interface Profile {
   initials: string;
   /** File name in the profile folder, or null for initials or the person icon. */
   picture: string | null;
-  /** When the player last changed it (ISO), so the newest change wins between PCs; null if never. */
+  /** When the user last changed it (ISO), so the newest change wins between PCs; null if never. */
   updatedAt: string | null;
 }
 

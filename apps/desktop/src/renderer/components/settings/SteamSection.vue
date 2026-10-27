@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Settings > Games > Steam: adding the games the player owns on Steam. Always first in Games.
+// Settings > Games > Steam: adding the games the user owns on Steam. Always first in Games.
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { dialog, state } from "../../host";

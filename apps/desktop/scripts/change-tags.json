@@ -1,5 +1,5 @@
 {
-  "$comment": "Tags for patch-notes entries, from the files a pull request changed (change-notes.mjs). For Tavora Admin only; players never see them. In a path, * is anything but a slash and ** anything at all. Add a line when a new area turns up.",
+  "$comment": "Tags for patch-notes entries, from the files a pull request changed (change-notes.mjs). For Tavora Admin only; users never see them. In a path, * is anything but a slash and ** anything at all. Add a line when a new area turns up.",
   "tags": [
     { "tag": "overlays", "paths": ["apps/desktop/src/main/*overlay*", "apps/desktop/src/main/game-veil*", "apps/desktop/src/renderer/**/*verlay*"] },
     { "tag": "workspace", "paths": ["apps/desktop/src/renderer/components/workspace/**", "apps/desktop/src/renderer/dock*", "apps/desktop/src/renderer/layout*", "apps/desktop/src/renderer/pages/GameWorkspace.vue", "apps/desktop/src/main/layout*", "apps/desktop/src/main/panel-*"] },

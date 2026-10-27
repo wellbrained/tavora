@@ -43,7 +43,7 @@ export function pictureFileIds(elements: readonly { type: string; isDeleted?: bo
 export interface SyncResult {
   /** The stored file of every picture on the board that has one, for the board's data. */
   files: Record<string, StoredFile>;
-  /** Pictures that could not be kept, worded for the player. */
+  /** Pictures that could not be kept, worded for the user. */
   problems: { kind: "unsupported" | "failed"; message: string }[];
 }
 

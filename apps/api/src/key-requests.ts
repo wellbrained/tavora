@@ -39,7 +39,7 @@ export function successionEntries(store: AccountStore, trust: CatalogTrust | nul
 
 /**
  * Every revocation to sign next: the ones in force now, then each waiting leaked key. A new one allows
- * the zips the catalog took from that key before the request, so players keep what they installed;
+ * the zips the catalog took from that key before the request, so users keep what they installed;
  * the maintainer takes out any that look wrong before signing.
  */
 export function revocationEntries(store: AccountStore, trust: CatalogTrust | null, catalog: CatalogStore | undefined): Revocation[] {

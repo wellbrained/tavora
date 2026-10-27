@@ -36,9 +36,9 @@ const narrow = computed(() => width.value < NARROW_PX);
 const showList = ref(false);
 /** How long a notice or the Undo offer stays when left alone. */
 const TOAST_MS = 10_000;
-/** The last delete or clear, which the player can still undo for a few seconds. */
+/** The last delete or clear, which the user can still undo for a few seconds. */
 let undoToast: { dismiss: () => void } | null = null;
-/** A short message to the player, such as a picture that could not be added. */
+/** A short message to the user, such as a picture that could not be added. */
 function showNotice(message: string) {
   toast({ title: message, duration: TOAST_MS, testid: "undo-toast" });
 }
@@ -203,7 +203,7 @@ function offerUndo(message: string, run: () => Promise<void>) {
   });
 }
 
-/** Deletes a note, or clears the scratchpad, at once; the player can undo it for a few seconds. */
+/** Deletes a note, or clears the scratchpad, at once; the user can undo it for a few seconds. */
 async function removeNote(entry: NoteEntry) {
   const notes = store.value!;
   const open = entry.id === selectedId.value;

@@ -39,7 +39,7 @@ describe("Discord browser sign-in", () => {
     await expect(result).rejects.toMatchObject({ key: "account.error.discordCancelled" });
   });
 
-  it("says cancelled when the player declines on Discord", async () => {
+  it("says cancelled when the user declines on Discord", async () => {
     const { result } = await run((url, port) => `http://127.0.0.1:${port}/discord?error=access_denied&state=${url.searchParams.get("state")}`);
     await expect(result).rejects.toMatchObject({ key: "account.error.discordCancelled" });
   });

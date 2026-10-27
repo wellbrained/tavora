@@ -13,7 +13,7 @@ type Entry = { path: string; target: string; name: string };
 const queues = new Map<string, Promise<unknown>>();
 const reads = new Map<string,number>();
 let activeReads = 0;
-/** File authority stays on this PC, outside the player's backed-up module data. */
+/** File authority stays on this PC, outside the user's backed-up module data. */
 export class ReadOnlyFiles {
   private file: string;
   constructor(userData: string, owner: string, moduleId: string, gameId: string) {

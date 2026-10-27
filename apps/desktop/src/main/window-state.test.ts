@@ -6,7 +6,7 @@ const second = { x: 1920, y: 0, width: 2560, height: 1400 };
 const saved = { bounds: { x: 2000, y: 100, width: 900, height: 600 }, maximized: false };
 
 describe("initialLayoutBounds", () => {
-  it("opens where the player left it, while that screen is still there", () => {
+  it("opens where the user left it, while that screen is still there", () => {
     expect(reusable(saved, [first, second])).toBe(true);
     expect(initialLayoutBounds(saved, [first, second], first, { x: 0, y: 0, width: 1920, height: 1080 })).toEqual(saved);
   });

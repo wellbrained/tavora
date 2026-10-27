@@ -8,7 +8,7 @@ import { suggestPrefix } from "../shared/id-prefix";
 import { parseReadme } from "./catalog-readme";
 import { writeFileAtomic } from "./fsutil";
 import { compareModuleVersions } from "./installer";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 
 // The Publish button (decided 2026-10-21, "Easier module publishing"): a dev module from a project folder
 // goes to the catalog from Tavora, with no terminal. Tavora packs the folder as it is (it builds nothing:
@@ -33,12 +33,12 @@ export interface ModulePublisherOptions {
   };
   /** What the catalog lists under an id: its newest version and key, or null for nothing. Throws when it can't be asked. */
   listed: (id: string) => Promise<{ version: string; owner: string } | null>;
-  /** Every check the installer makes of a zip, with nothing written. Throws a PlayerError. */
+  /** Every check the installer makes of a zip, with nothing written. Throws a UserError. */
   check: (zip: Buffer) => Promise<void>;
   /** The loaded module's icon, as Settings shows it. */
   icon: (id: string) => string | null;
-  /** A player error in the player's language. */
-  translate: (error: PlayerError) => string;
+  /** A user error in the user's language. */
+  translate: (error: UserError) => string;
   onChange: (view: PublishView | null) => void;
   now?: () => number;
 }
@@ -63,7 +63,7 @@ export class ModulePublisher {
 
   /** Opens the review screen for a project folder and packs it. */
   async open(project: string): Promise<void> {
-    if (!this.options.key()) throw new PlayerError("publish.error.setup");
+    if (!this.options.key()) throw new UserError("publish.error.setup");
     const view = emptyView(project);
     // Name the module right away, so packing doesn't show an empty title.
     const manifest = await readManifest(project);
@@ -83,8 +83,8 @@ export class ModulePublisher {
     try {
       next = await this.look(review.view.project);
     } catch (error) {
-      if (!(error instanceof PlayerError)) console.error("[tavora] reviewing a module failed", error);
-      next = { ...review, view: { ...review.view, status: "ready", error: this.options.translate(error instanceof PlayerError ? error : new PlayerError("error.generic")) }, zip: null };
+      if (!(error instanceof UserError)) console.error("[tavora] reviewing a module failed", error);
+      next = { ...review, view: { ...review.view, status: "ready", error: this.options.translate(error instanceof UserError ? error : new UserError("error.generic")) }, zip: null };
     }
     if (round !== this.round || this.review !== review) return;
     this.review = next;
@@ -101,7 +101,7 @@ export class ModulePublisher {
   /** Gives the reviewed module a new id, while nothing is published under the old one. */
   async setId(id: string): Promise<void> {
     const review = this.current();
-    if (!review.view.problems.some((problem) => problem.kind === "prefix") && review.view.catalog.kind !== "first") throw new PlayerError("publish.error.idPublished");
+    if (!review.view.problems.some((problem) => problem.kind === "prefix") && review.view.catalog.kind !== "first") throw new UserError("publish.error.idPublished");
     await writeId(review.view.project, id);
     await this.refresh();
   }
@@ -110,15 +110,15 @@ export class ModulePublisher {
   async publish(): Promise<void> {
     const review = this.current();
     const { zip, key } = review;
-    if (review.view.status !== "ready" || !zip || !key || review.view.problems.length > 0) throw new PlayerError("publish.error.notReady");
+    if (review.view.status !== "ready" || !zip || !key || review.view.problems.length > 0) throw new UserError("publish.error.notReady");
     review.view = { ...review.view, status: "publishing", error: null };
     this.changed();
     try {
       const published = await this.options.account.upload(key, zip);
       review.view = { ...review.view, status: "published", published: { id: published.id, version: published.version, ...(published.status === "waiting" ? { waiting: true } : {}) } };
     } catch (error) {
-      review.view = { ...review.view, status: "ready", error: this.options.translate(error instanceof PlayerError ? error : new PlayerError("error.generic")) };
-      if (!(error instanceof PlayerError)) console.error("[tavora] publishing failed", error);
+      review.view = { ...review.view, status: "ready", error: this.options.translate(error instanceof UserError ? error : new UserError("error.generic")) };
+      if (!(error instanceof UserError)) console.error("[tavora] publishing failed", error);
     }
     if (this.review === review) this.changed();
   }
@@ -132,17 +132,17 @@ export class ModulePublisher {
   /** Packs a project folder signed with a kept key, for Save as zip. */
   async pack(project: string): Promise<{ manifest: ModuleManifest; zip: Buffer }> {
     const signer = this.options.key();
-    if (!signer) throw new PlayerError("publish.error.setup");
+    if (!signer) throw new UserError("publish.error.setup");
     try {
       return await packModule(project, signer.key);
     } catch (error) {
-      if (error instanceof PackError) throw new PlayerError("publish.error.pack", { message: error.message });
+      if (error instanceof PackError) throw new UserError("publish.error.pack", { message: error.message });
       throw error;
     }
   }
 
   private current(): Review {
-    if (!this.review) throw new PlayerError("publish.error.notReady");
+    if (!this.review) throw new UserError("publish.error.notReady");
     return this.review;
   }
 
@@ -182,14 +182,14 @@ export class ModulePublisher {
     }
 
     const signer = this.options.key(listed?.owner);
-    if (!signer) throw new PlayerError("publish.error.setup");
+    if (!signer) throw new UserError("publish.error.setup");
     let zip: Buffer;
     try {
       zip = (await packModule(project, signer.key)).zip;
       await this.options.check(zip);
     } catch (error) {
-      if (!(error instanceof PackError) && !(error instanceof PlayerError)) throw error;
-      const message = error instanceof PlayerError ? this.options.translate(error) : this.options.translate(new PlayerError("publish.error.pack", { message: error.message }));
+      if (!(error instanceof PackError) && !(error instanceof UserError)) throw error;
+      const message = error instanceof UserError ? this.options.translate(error) : this.options.translate(new UserError("publish.error.pack", { message: error.message }));
       view.problems.push({ kind: "invalid", message });
       return { view: { ...view, status: "ready" }, zip: null, key: null };
     }
@@ -321,7 +321,7 @@ async function readJson(file: string): Promise<{ value: Record<string, unknown>;
   try {
     value = JSON.parse(text);
   } catch {
-    throw new PlayerError("publish.error.badFile", { file: path.basename(file) });
+    throw new UserError("publish.error.badFile", { file: path.basename(file) });
   }
   return { value: value as Record<string, unknown>, indent: /^([ \t]+)"/m.exec(text)?.[1] ?? "  ", newline: text.endsWith("\n") };
 }
@@ -337,9 +337,9 @@ const jsonText = (value: unknown, indent = "  ", newline = true) => JSON.stringi
 export async function writeVersion(project: string, version: string, notes: string[], date: string): Promise<void> {
   const manifestFile = path.join(project, MANIFEST_FILE);
   const manifest = await readJson(manifestFile);
-  if (!manifest) throw new PlayerError("publish.error.badFile", { file: MANIFEST_FILE });
+  if (!manifest) throw new UserError("publish.error.badFile", { file: MANIFEST_FILE });
   const current = validateManifest(manifest.value);
-  if (!current.ok) throw new PlayerError("publish.error.badFile", { file: MANIFEST_FILE });
+  if (!current.ok) throw new UserError("publish.error.badFile", { file: MANIFEST_FILE });
   const next: Record<string, unknown> = { ...manifest.value, version };
   const lines = notes.map((note) => note.trim()).filter(Boolean);
   if (lines.length > 0) {
@@ -359,15 +359,15 @@ export async function writeVersion(project: string, version: string, notes: stri
           return { ok: false as const };
         }
       })();
-      if (!parsed.ok) throw new PlayerError("publish.error.badFile", { file: name });
+      if (!parsed.ok) throw new UserError("publish.error.badFile", { file: name });
       entries = parsed.entries.filter((entry) => entry.version !== version);
     }
     const changelog = [{ version, date, notes: lines }, ...entries];
     const checked = validateChangelog(changelog);
-    if (!checked.ok) throw new PlayerError("publish.error.notes", { message: checked.errors[0] ?? "" });
+    if (!checked.ok) throw new UserError("publish.error.notes", { message: checked.errors[0] ?? "" });
     await writeFileAtomic(file, jsonText(changelog, /^([ \t]+)/m.exec(existing ?? "")?.[1] ?? "  "));
   }
-  if (!validateManifest(next).ok) throw new PlayerError("publish.error.version");
+  if (!validateManifest(next).ok) throw new UserError("publish.error.version");
   await writeFileAtomic(manifestFile, jsonText(next, manifest.indent, manifest.newline));
   // The starter keeps package.json at the module's version; it follows when it still does.
   const pkgFile = path.join(project, "package.json");
@@ -379,9 +379,9 @@ export async function writeVersion(project: string, version: string, notes: stri
 export async function writeId(project: string, id: string): Promise<void> {
   const file = path.join(project, MANIFEST_FILE);
   const manifest = await readJson(file);
-  if (!manifest) throw new PlayerError("publish.error.badFile", { file: MANIFEST_FILE });
+  if (!manifest) throw new UserError("publish.error.badFile", { file: MANIFEST_FILE });
   const next = { ...manifest.value, id };
-  if (!validateManifest(next).ok) throw new PlayerError("publish.error.badId");
+  if (!validateManifest(next).ok) throw new UserError("publish.error.badId");
   await writeFileAtomic(file, jsonText(next, manifest.indent, manifest.newline));
 }
 

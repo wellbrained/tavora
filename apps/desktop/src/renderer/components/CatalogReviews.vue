@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The Ratings and reviews section of a catalog module's page (decided 2026-10-21). It shows the
-// summary with its 5 to 1 star bars, the player's own rating, and the newest reviews with the
+// summary with its 5 to 1 star bars, the user's own rating, and the newest reviews with the
 // publisher's one reply. Rating needs a sign-in and the module installed, and never your own module;
 // the main process checks the rest and sends the installed version along. Every text is plain text,
 // and a reviewer's picture is a PNG the main process checked by its hash. Report sends only the review's id.

@@ -5,9 +5,9 @@ import { CopyError, type CopyStorage, type RemoteCopy, type SwapAnswer } from ".
 import { PART_ID_BYTES } from "./copy-crypto";
 import { writeFileAtomic } from "./fsutil";
 
-// The cloud copy in a folder the player picks (decided 2026-10-20): usually one their
+// The cloud copy in a folder the user picks (decided 2026-10-20): usually one their
 // OneDrive, Dropbox or Google Drive app syncs, or a NAS or USB stick. Tavora writes the
-// same sealed parts and manifests the service would keep; the player's own sync app moves
+// same sealed parts and manifests the service would keep; the user's own sync app moves
 // them. Nothing goes to Tavora's service and no account is needed.
 //
 // A sync app is slow and has no version check, so:
@@ -15,13 +15,13 @@ import { writeFileAtomic } from "./fsutil";
 //   top of. Versions count up in the high bits and are random in the low ones, so two PCs
 //   saving at once get different versions, and every PC agrees which one is newer.
 // - A PC whose last save lost against another PC's (it is not in the newest version's
-//   line) is told, so the player keeps one side instead of losing that save.
+//   line) is told, so the user keeps one side instead of losing that save.
 // - Parts that are missing may still be on their way, not lost.
 // - Only names Tavora writes are read: "file (1)" copies a sync app makes are left alone.
 // - Old manifests and parts no manifest uses are cleaned up after a while, so a PC still
 //   catching up finds what it needs. `pairing/` is kept free for approving new PCs.
 
-/** The folder Tavora makes inside the one the player picks. */
+/** The folder Tavora makes inside the one the user picks. */
 export const FOLDER_NAME = "Tavora";
 /** Low bits of a version that are random; the rest counts up. */
 const RANDOM_BITS = 2 ** 20;
@@ -58,7 +58,7 @@ export class FolderStorage implements CopyStorage {
   readonly arrivesLate = true;
   private readonly root: string;
 
-  /** `folder` is the one the player picked; the copy goes in a "Tavora" folder inside it. */
+  /** `folder` is the one the user picked; the copy goes in a "Tavora" folder inside it. */
   constructor(
     readonly folder: string,
     private readonly options: FolderStorageOptions = {},

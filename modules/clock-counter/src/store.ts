@@ -15,7 +15,7 @@ export function createItemStore(sdk: TavoraSDK) {
   let stored: Versioned<ItemList> = { data: list.value, revision: 0 };
   let saving = 0;
   const queue = serial();
-  /** Whether the player allowed stream overlays; asked for on the first Copy OBS link, so it can turn true later. */
+  /** Whether the user allowed stream overlays; asked for on the first Copy OBS link, so it can turn true later. */
   const overlays = ref(sdk.host.capabilities.includes("overlay"));
 
   async function load(): Promise<void> {

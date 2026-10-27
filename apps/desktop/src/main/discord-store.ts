@@ -24,7 +24,7 @@ export interface DiscordToken {
   expiresAt: number;
 }
 
-/** Before 0.16.11: the voice channel the player was last in on a server, to rejoin from the panel. */
+/** Before 0.16.11: the voice channel the user was last in on a server, to rejoin from the panel. */
 export interface DiscordLast {
   channelId: string;
   guildId: string;
@@ -32,7 +32,7 @@ export interface DiscordLast {
   serverName: string | null;
 }
 
-/** Before 0.16.11: the server a game remembered, and the channel the player was last in there. */
+/** Before 0.16.11: the server a game remembered, and the channel the user was last in there. */
 export interface DiscordGame {
   guildId: string | null;
   serverName: string | null;

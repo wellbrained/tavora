@@ -19,9 +19,9 @@
 //
 // Entries, as a JSON array:
 //   revocations  [{ "fingerprint": "<32 hex>", "revoked": "2026-10-18T12:00:00Z", "allow": ["<zip SHA-256>", ...] }]
-//                allow: zips the key signed before the revocation that players may still install.
+//                allow: zips the key signed before the revocation that users may still install.
 //   blocks       [{ "sha256": "<zip SHA-256>", "reason": "Sends your files to a stranger's server." }]
-//                reason: one line players read in Settings > Modules.
+//                reason: one line users read in Settings > Modules.
 //   successions  [{ "old": "<32 hex>", "new": "<32 hex>", "account": "<account id>" }]
 //                only after the service checked that the account linked the old key before it was lost.
 import { createPrivateKey, generateKeyPairSync, type KeyObject } from "node:crypto";

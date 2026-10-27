@@ -3,10 +3,10 @@ import { CopyError } from "./cloud-copy";
 import { newCopyKey, openVault, parseRecoveryKey, recoveryKey, sealVault } from "./copy-crypto";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 
 // The account's key (decided 2026-10-20, "one recovery key"): one random 256-bit root key per account,
-// made on the first PC that needs it and shown to the player once as the recovery key. Everything the
+// made on the first PC that needs it and shown to the user once as the recovery key. Everything the
 // recovery key keeps safe is sealed under keys derived from it: the cloud copy, and the key vault on
 // Tavora's service. The vault is small and goes out only to a signed-in PC of the account; it holds the
 // account's publisher keys, which sign modules (developer-keys.ts). Its being on the service tells a new PC
@@ -75,7 +75,7 @@ export class AccountKey {
 
   /**
    * Makes sure this PC has the account's key. When the account has none yet, one is made here
-   * (`created`: show the recovery key now). When another PC made one, the player types it in ("ask").
+   * (`created`: show the recovery key now). When another PC made one, the user types it in ("ask").
    */
   async setUp(): Promise<KeySetUp> {
     const vault = await this.vault();
@@ -110,17 +110,17 @@ export class AccountKey {
     return !vault || opens(this.key, vault.data);
   }
 
-  /** The recovery key the player typed in: checked against the account's vault, then kept on this PC. */
+  /** The recovery key the user typed in: checked against the account's vault, then kept on this PC. */
   async enter(text: string): Promise<void> {
     const key = parseRecoveryKey(text);
-    if (!key) throw new PlayerError("cloudCopy.error.badKey");
+    if (!key) throw new UserError("cloudCopy.error.badKey");
     await this.take(key);
   }
 
   /** The account's key, typed in as the recovery key or sent by another PC (pairing.ts): checked against the vault, then kept. */
   async take(key: Buffer): Promise<void> {
     const vault = await this.vault();
-    if (vault && !opens(key, vault.data)) throw new PlayerError("cloudCopy.error.wrongKey");
+    if (vault && !opens(key, vault.data)) throw new UserError("cloudCopy.error.wrongKey");
     // No vault (the account started over, or it was never made): the typed key becomes the account's.
     if (!vault) await this.putVault(0, key, EMPTY_VAULT);
     await this.save(key);
@@ -178,7 +178,7 @@ export class AccountKey {
   }
 
   /**
-   * Signed out, for a copy in a folder of the player's own (decided 2026-10-20): the key is made here
+   * Signed out, for a copy in a folder of the user's own (decided 2026-10-20): the key is made here
    * without the vault, or asked for when the folder holds a copy already. Signing in later gives the
    * account a vault with it (setUp).
    */
@@ -192,7 +192,7 @@ export class AccountKey {
   /** Signed out: the recovery key typed in is kept here. Whether it opens the folder's copy is the check. */
   async enterHere(text: string): Promise<void> {
     const key = parseRecoveryKey(text);
-    if (!key) throw new PlayerError("cloudCopy.error.badKey");
+    if (!key) throw new UserError("cloudCopy.error.badKey");
     await this.save(key);
   }
 
@@ -225,7 +225,7 @@ export class AccountKey {
   }
 
   private async save(key: Buffer): Promise<void> {
-    if (!this.canKeep) throw new PlayerError("cloudCopy.error.cantKeep");
+    if (!this.canKeep) throw new UserError("cloudCopy.error.cantKeep");
     await writeFileAtomic(this.options.file, JSON.stringify({ v: 1, data: this.options.encryptor.encrypt(key.toString("base64")).toString("base64") }));
     this.key = key;
   }

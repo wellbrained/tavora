@@ -50,7 +50,7 @@ test.beforeAll(async () => {
     } else if (url.pathname === "/api/oauth2/token") {
       response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ access_token: "pretend-token", scope: "identify" }));
     } else if (url.pathname === "/api/users/@me") {
-      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ id: "123456789012345678", username: "pretend_player" }));
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ id: "123456789012345678", username: "pretend_user" }));
     } else {
       response.writeHead(200).end();
     }
@@ -83,24 +83,24 @@ async function codeFor(email: string): Promise<string> {
   return code;
 }
 
-test("a player creates an account with an emailed code, sees this PC, and signs out", async () => {
+test("a user creates an account with an emailed code, sees this PC, and signs out", async () => {
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: apiUrl } });
   try {
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-account").click();
 
-    await page.getByTestId("account-email").fill("player@example.com");
+    await page.getByTestId("account-email").fill("user@example.com");
     await page.getByTestId("account-send-code").click();
-    await expect(page.getByTestId("account-code-sent")).toContainText("player@example.com");
+    await expect(page.getByTestId("account-code-sent")).toContainText("user@example.com");
 
-    await page.getByTestId("account-code").fill(await codeFor("player@example.com"));
+    await page.getByTestId("account-code").fill(await codeFor("user@example.com"));
     await page.getByTestId("account-verify").click();
     // A new address: the app asks before it makes the account.
     await expect(page.getByTestId("account-create")).toBeDisabled();
     await page.getByTestId("account-age").check();
     await page.getByTestId("account-create").click();
 
-    await expect(page.getByTestId("account")).toContainText("player@example.com");
+    await expect(page.getByTestId("account")).toContainText("user@example.com");
     // The devices are folded away; each is named after its PC and can be renamed.
     await expect(page.getByTestId("account-devices")).toHaveCount(0);
     await page.getByTestId("account-devices-toggle").click();
@@ -119,7 +119,7 @@ test("a player creates an account with an emailed code, sees this PC, and signs 
   }
 });
 
-test("a player creates a Discord-only account in the browser, adds an email, and the last way in stays", async () => {
+test("a user creates a Discord-only account in the browser, adds an email, and the last way in stays", async () => {
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_AUTHORIZE_URL: `${discordUrl}/oauth2/authorize` } });
   try {
     await page.getByTestId("rail-settings").click();
@@ -127,10 +127,10 @@ test("a player creates a Discord-only account in the browser, adds an email, and
 
     await page.getByTestId("account-discord-sign-in").click();
     // A new Discord login: the app asks, with the age tick box.
-    await expect(page.getByTestId("account")).toContainText("@pretend_player");
+    await expect(page.getByTestId("account")).toContainText("@pretend_user");
     await page.getByTestId("account-age").check();
     await page.getByTestId("account-create").click();
-    await expect(page.getByTestId("account-discord")).toContainText("@pretend_player");
+    await expect(page.getByTestId("account-discord")).toContainText("@pretend_user");
     await expect(page.getByTestId("account-discord-disconnect")).toHaveCount(0);
 
     // Add an email with a code; then Discord may be disconnected.
@@ -156,7 +156,7 @@ test("a player creates a Discord-only account in the browser, adds an email, and
     await expect(page.getByTestId("account-confirm-discord")).toBeVisible();
     await page.getByTestId("account-code").fill(await codeFor("discord@example.com"));
     await page.getByTestId("account-confirm-discord").click();
-    await expect(page.getByTestId("account-discord")).toContainText("@pretend_player");
+    await expect(page.getByTestId("account-discord")).toContainText("@pretend_user");
 
     // Moved to another address, the email can then be removed with a code sent to it; Discord stays the way in.
     await page.getByTestId("account-change-email").click();
@@ -171,7 +171,7 @@ test("a player creates a Discord-only account in the browser, adds an email, and
     await page.getByTestId("account-code").fill(await codeFor("second@example.com"));
     await page.getByTestId("account-confirm-remove-email").click();
     await expect(page.getByTestId("account")).not.toContainText("second@example.com");
-    await expect(page.getByTestId("account-discord")).toContainText("@pretend_player");
+    await expect(page.getByTestId("account-discord")).toContainText("@pretend_user");
 
     await page.getByTestId("account-sign-out").click();
     await expect(page.getByTestId("account-email")).toBeVisible();
@@ -246,7 +246,7 @@ test("a developer chooses a public name and links a key file with tavora-pack li
     await page.getByTestId("account-link-refresh").click();
     await expect(page.getByTestId(`account-key-${fingerprint}`)).toBeVisible();
     await expect(page.getByTestId("account-link")).toHaveCount(0);
-    // Players' Tavora learns the name, and nothing else.
+    // Users' Tavora learns the name, and nothing else.
     expect(await (await fetch(`${apiUrl}/v1/publishers/${fingerprint}`)).json()).toEqual({ name: "example-dev" });
 
     // The key file alone publishes nothing: it needs a publish token, made here and shown once.

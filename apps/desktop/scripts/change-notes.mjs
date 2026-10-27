@@ -1,5 +1,5 @@
 // Version numbers are given out when a pull request merges, not while it is open, so
-// two pull requests never grab the same number. A pull request that players will
+// two pull requests never grab the same number. A pull request that users will
 // notice adds a change note to apps/desktop/changes/ and leaves the version alone;
 // on main, the Number workflow turns each note into the next version and its
 // patch-notes entry (the decision log, 2026-10-20).
@@ -18,7 +18,7 @@
 // For Tavora Admin, where the maintainer searches the releases, each entry also
 // gets the pull request it came from and a few tags. The tags come from the files
 // the pull request changed (change-tags.json maps paths to tags), plus any the note
-// names on a `tags: cloud-copy, recovery-key` line before its title. Players never
+// names on a `tags: cloud-copy, recovery-key` line before its title. Users never
 // see either: the app doesn't show them.
 //
 // Usage:

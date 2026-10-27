@@ -190,7 +190,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const at = now();
     const existing = store.accountByEmail(email);
     const create = input.create === true;
-    // A new address keeps its code until the player said yes to an account.
+    // A new address keeps its code until the user said yes to an account.
     if (!store.checkCode(email, "sign-in", null, input.code, at, Boolean(existing) || create)) return wrongCode(context);
     if (!existing && !create) return context.json({ status: "no-account" });
     // Said only after the code was right, so the answer never tells whether an address has an account.
@@ -504,7 +504,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   // knew; the service asks Discord who this is and keeps the user id and
   // username, never the token. Nothing is ever linked by email address.
 
-  /** Who the player is on Discord, or an answer to send instead. */
+  /** Who the user is on Discord, or an answer to send instead. */
   const identify = async (context: Context, input: Record<string, unknown>): Promise<DiscordIdentity | Response> => {
     if (!options.discord) return context.json({ error: "Discord sign-in is not available right now.", reason: "unavailable" }, 503);
     if (!isDiscordCode(input.code) || !isPkceVerifier(input.verifier)) return context.json({ error: "Send { code, verifier }.", reason: "bad-request" }, 400);

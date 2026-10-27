@@ -2,9 +2,9 @@
 // the older export that writes into Downloads without asking):
 //   POST /_files/json/save?name=…  with the JSON as the body    -> { fileName } or { fileName: null }
 //   POST /_files/json/open                                      -> { fileName, value } or null
-// Both work only right after the player clicked or pressed a key in the module (one per click). The player picks
+// Both work only right after the user clicked or pressed a key in the module (one per click). The user picks
 // every file in the dialog (host.ts); the module only suggests a name and gets back a name, or the parsed value of
-// the file the player chose, never a path. They are module addresses rather than bridge calls so a document up to
+// the file the user chose, never a path. They are module addresses rather than bridge calls so a document up to
 // 8 MiB does not go through the bridge's message limit, like pictures.save and exportJson.
 
 import { open } from "node:fs/promises";
@@ -15,14 +15,14 @@ import { MAX_JSON_EXPORT_BYTES } from "./json-export-http";
 export interface JsonSaveDeps {
   allowed(): boolean;
   consume(): void;
-  /** Writes the formatted JSON under a name made from `name`, and returns the file name used, or null when the player did not save it. */
+  /** Writes the formatted JSON under a name made from `name`, and returns the file name used, or null when the user did not save it. */
   save(data: Buffer, name: string): Promise<string | null>;
 }
 
 export interface JsonOpenDeps {
   allowed(): boolean;
   consume(): void;
-  /** Lets the player pick a file; answers with its name and the checked, read text, or null when the player closed the dialog. */
+  /** Lets the user pick a file; answers with its name and the checked, read text, or null when the user closed the dialog. */
   open(): Promise<{ fileName: string; text: string } | null>;
 }
 

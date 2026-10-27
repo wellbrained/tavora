@@ -1,5 +1,5 @@
 // The preview window: a normal, small Tavora window that shows a module's overlay page at its real size, on a dark,
-// light or checkered background, so the player can see what an overlay looks like without a game or OBS. It serves the
+// light or checkered background, so the user can see what an overlay looks like without a game or OBS. It serves the
 // page the way the game overlay window does (game-overlay-page.ts: the same address, the same live state, no bridge, a
 // session that reaches nothing else). One window per overlay. It works whether or not Game overlays or Stream overlays
 // are on, and is not part of the in-game layer: it is not on top, not click-through, and closes with Tavora.

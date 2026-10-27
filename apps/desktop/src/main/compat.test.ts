@@ -32,7 +32,7 @@ const LIBRARY_0_1_0 = {
 describe("a library saved by 0.1.0", () => {
   const library = sanitizeLibrary(structuredClone(LIBRARY_0_1_0));
 
-  it("keeps every game, folder, favorite and the player's choices", () => {
+  it("keeps every game, folder, favorite and the user's choices", () => {
     expect(Object.keys(library.games).sort()).toEqual(["elden-ring", "local-my-game", "poe2"]);
     expect(library.games["elden-ring"]!.trashedAt).toBe("2026-10-14T12:00:00.000Z");
     expect(library.games["local-my-game"]!.icon).toEqual({ kind: "image", file: "local-my-game-1a2b3c4d.png" });

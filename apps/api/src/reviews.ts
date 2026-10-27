@@ -268,7 +268,7 @@ export class ReviewStore {
     return Number(this.db.prepare("delete from reviews where id = ?").run(reviewId).changes) > 0;
   }
 
-  /** Records that a player pressed Report on a shown review. Nothing about who pressed it is kept. */
+  /** Records that a user pressed Report on a shown review. Nothing about who pressed it is kept. */
   report(reviewId: string, now: number): boolean {
     const review = this.review(reviewId);
     if (!review || review.text === null || review.hidden) return false;
@@ -382,7 +382,7 @@ export interface ReviewOptions {
 
 type Env = { Variables: { account: Account } };
 
-/** The answer for a review: what a player sees, never the account id. */
+/** The answer for a review: what a user sees, never the account id. */
 function reviewAnswer(review: StoredReview, accounts: AccountStore) {
   const profile = accounts.profile(review.accountId);
   // A name the filter would refuse is not shown on a review.

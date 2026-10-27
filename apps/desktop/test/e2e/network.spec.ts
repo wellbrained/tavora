@@ -1,4 +1,4 @@
-// Network grants (the threat model, N1–N7): a module reaches the hosts the player granted
+// Network grants (the threat model, N1–N7): a module reaches the hosts the user granted
 // through network.fetch, nothing else, and its page still has no network of its own.
 
 import { writeFile } from "node:fs/promises";
@@ -35,9 +35,9 @@ interface Reply {
   error?: { code: string; capability?: string; message: string };
 }
 
-test("a module reaches only the hosts the player granted, through Tavora", async () => {
+test("a module reaches only the hosts the user granted, through Tavora", async () => {
   const userData = await newUserData();
-  // The player granted both hosts the module asks for (the consent dialog itself is tested in grants.spec.ts,
+  // The user granted both hosts the module asks for (the consent dialog itself is tested in grants.spec.ts,
   // and a host asked for but not granted with the Review bar there).
   await writeFile(
     path.join(userData, "grants.json"),

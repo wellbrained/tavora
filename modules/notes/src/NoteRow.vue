@@ -28,7 +28,7 @@ const when = computed(() =>
     locale: locale(),
   }),
 );
-/** The stored title of the scratchpad and of a note without text are English; show them in the player's language. */
+/** The stored title of the scratchpad and of a note without text are English; show them in the user's language. */
 const title = computed(() => (scratchpad.value ? t("scratchpad") : props.entry.title === UNTITLED ? t("untitled") : props.entry.title));
 
 const renaming = ref(false);

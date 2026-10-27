@@ -10,7 +10,7 @@ updates.mytavora.app {
     # updater sends (X-Tavora-Update, see updates.ts), so updates and resumed downloads don't. The API
     # keeps only the version from the file name (it is told the address, nothing about who asked).
     # It never stands in the way: whatever the API answers (or if it is down or slow, after 1-2 seconds)
-    # the installer is served, only not counted (an API that cannot be reached costs the player one redirect).
+    # the installer is served, only not counted (an API that cannot be reached costs the user one redirect).
     @installer {
         method GET
         path /Tavora-Setup-*.exe

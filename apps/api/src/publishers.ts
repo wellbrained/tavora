@@ -5,7 +5,7 @@ import { LINK_CODE, type AccountStore } from "./account-store.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 
 /**
- * Publishers under /v1/publishers: which developer name a publisher key shows to players, and
+ * Publishers under /v1/publishers: which developer name a publisher key shows to users, and
  * linking a key to an account. A developer gets a one-time code in the app (signed in) and runs
  * `tavora-pack link <code>`, which signs the code with the key. The service checks that signature
  * against the public half it was sent, so only whoever holds the key can link it, and keeps only
@@ -67,7 +67,7 @@ export function publisherRoutes(options: PublisherOptions, limiter: RateLimiter,
     await next();
   });
 
-  // Public: the name players see for a key. Nothing else about the account is ever said.
+  // Public: the name users see for a key. Nothing else about the account is ever said.
   app.get("/:fingerprint", (context) => {
     const fingerprint = context.req.param("fingerprint") ?? "";
     if (!FINGERPRINT.test(fingerprint)) return context.json({ error: "Not a key fingerprint.", reason: "bad-request" }, 400);

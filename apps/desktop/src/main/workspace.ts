@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isPanelTypeId } from "@tavora/module-schema";
 import { INSTANCE_ID } from "./ids";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 import type { LayoutTemplate } from "../shared/layout-templates";
 import { LAYOUT_LIMITS, layoutPanels, parseLayout, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
 import { checkPanelContent, type PanelContent } from "./panel-content";
@@ -47,8 +47,8 @@ export interface WorkspaceState {
   games: Record<string, GameWorkspace>;
 }
 
-/** A problem with the workspace that the player can fix; its message is shown as-is. */
-export class WorkspaceError extends PlayerError {}
+/** A problem with the workspace that the user can fix; its message is shown as-is. */
+export class WorkspaceError extends UserError {}
 
 export const MAX_SNAPSHOTS = 50;
 export const MAX_SNAPSHOT_NAME = 80;

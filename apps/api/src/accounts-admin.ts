@@ -176,7 +176,7 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
     return context.json({ ok: true, removedReviews: reviews?.removeAllOf(id) ?? 0 });
   });
 
-  // The profile picture, as the PNG the player chose. The panel fetches it with its token and shows it from a blob.
+  // The profile picture, as the PNG the user chose. The panel fetches it with its token and shows it from a blob.
   app.get("/:id/picture.png", (context) => {
     const id = context.req.param("id");
     const picture = ID.test(id) ? accounts.profile(id)?.picture : null;
