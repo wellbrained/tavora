@@ -4,7 +4,7 @@
 // listed with its fix right here: the next version and its patch notes, an id with the developer's own
 // prefix (Check, then Claim it), or a build. Publish uploads exactly what this shows; the click is the
 // approval, so nothing asks again.
-import { CircleAlert, TriangleAlert } from "@lucide/vue";
+import { CircleAlert, Loader, TriangleAlert } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
@@ -159,7 +159,10 @@ function browse() {
         </div>
       </div>
 
-      <p v-if="view.status === 'checking'" class="text-muted-foreground text-sm" role="status" data-testid="publish-checking">{{ t("publish.checking") }}</p>
+      <p v-if="view.status === 'checking'" class="text-muted-foreground flex items-center gap-2 text-sm" role="status" data-testid="publish-checking">
+        <Loader class="size-4 animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
+        {{ t("publish.checking") }}
+      </p>
 
       <template v-else>
         <ul v-if="module" class="text-muted-foreground flex flex-col gap-1 text-sm">
@@ -253,6 +256,7 @@ function browse() {
       <div class="flex items-center justify-end gap-2">
         <Button variant="secondary" :disabled="view.status === 'publishing'" data-testid="publish-cancel" @click="close">{{ t("common.cancel") }}</Button>
         <Button :disabled="busy || view.status !== 'ready' || view.problems.length > 0" data-testid="publish-upload" @click="run({ type: 'publish-upload' })">
+          <Loader v-if="view.status === 'publishing'" class="size-4 animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
           {{ view.status === "publishing" ? t("publish.publishing") : t("publish.publish") }}
         </Button>
       </div>
