@@ -94,8 +94,6 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["game-overlays", "overlays"],
   ["overlays-stay", "overlays"],
   ["overlay-layer-key", "overlays"],
-  ["overlay-hide-all", "overlays"],
-  ["overlay-layout", "overlays"],
   ["browser-shared-sites", "browser"],
   ["browser-adblock-off", "browser"],
   ["browser-clear-workspace", "browser"],

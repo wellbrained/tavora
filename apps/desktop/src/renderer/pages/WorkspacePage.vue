@@ -42,6 +42,7 @@ import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import EmptySlot from "../components/workspace/EmptySlot.vue";
 import GroupActions from "../components/workspace/GroupActions.vue";
 import LayoutsMenu from "../components/workspace/LayoutsMenu.vue";
+import OverlayButton from "../components/workspace/OverlayButton.vue";
 import ModuleUpdatesButton from "../components/workspace/ModuleUpdatesButton.vue";
 import ModulesMenu from "../components/workspace/ModulesMenu.vue";
 import GridPicker from "../components/workspace/GridPicker.vue";
@@ -444,6 +445,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       <span class="text-info ml-auto min-w-0 truncate text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>
       <div class="app-no-drag flex flex-none items-center gap-2">
         <ModuleUpdatesButton />
+        <OverlayButton />
         <LayoutsMenu />
         <ButtonGroup>
           <Button size="sm" variant="secondary" data-testid="add-module" @click="dialog = { kind: 'add-module' }">
