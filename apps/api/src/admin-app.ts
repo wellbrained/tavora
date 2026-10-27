@@ -12,8 +12,11 @@ import { keyRequestStatus, revocationEntries, successionEntries } from "./key-re
 import type { IconState } from "./icon-state.ts";
 import { isIconId, type IconStore } from "./icons.ts";
 import { accountsAdminRoutes } from "./accounts-admin.ts";
+import { ActivityLog, type ActivityTarget } from "./activity-log.ts";
 import type { CopyStore } from "./cloud-copy.ts";
+import { mailLanguage } from "./mail.ts";
 import { moderationRoutes, type ModerationAdminOptions } from "./moderation-admin.ts";
+import { createNotifier, isUnpublishReason, unpublishedMail, UNPUBLISH_REASONS } from "./moderation-mail.ts";
 import type { ReviewStore } from "./reviews.ts";
 import { statsRange, type StatsStore } from "./stats.ts";
 import type { Submissions } from "./submissions.ts";
@@ -70,12 +73,14 @@ export interface AdminOptions {
   /** The review before listing (`/api/moderation/*`; needs `catalog` and `accounts`): the scanner, and how developers are emailed. */
   /** The owner's address (MAINTAINER_EMAIL): that account is marked as the owner and can't be suspended or banned. */
   ownerEmail?: string;
+  /** What the maintainer did, for the Activity page. Absent: nothing is kept and the page is empty. */
+  activity?: ActivityLog;
   moderation?: Pick<ModerationAdminOptions, "scanner" | "mailer" | "mailDailyLimit" | "now" | "keepVersions">;
 }
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation, ownerEmail }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation, ownerEmail, activity }: AdminOptions) {
   const app = new Hono();
   const expected = digest(token);
 
@@ -118,6 +123,77 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
       return context.json({ error: "Send JSON." }, 415);
     }
     await next();
+  });
+
+  // Every change the maintainer makes is written down: the route, what it touched, the reason and note typed for it.
+  if (activity) {
+    const log = activity;
+    const FIELDS = ["id", "accountId", "sha256", "version", "listed", "hidden", "replaceable", "block"] as const;
+    app.use("/api/*", async (context, next) => {
+      if (context.req.method !== "POST") return next();
+      let body: Record<string, unknown> = {};
+      try {
+        const text = await context.req.raw.clone().text();
+        if (text.length <= 20_000) body = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        body = {};
+      }
+      const kind = new URL(context.req.url).pathname.replace(/^\/api\//, "");
+      const target = activityTarget(kind, body);
+      await next();
+      if (context.res.status < 200 || context.res.status >= 300) return;
+      const answer = (await context.res.clone().json().catch(() => null)) as Record<string, unknown> | null;
+      const detail: Record<string, string | number | boolean> = {};
+      for (const field of FIELDS) {
+        const value = body[field];
+        if (field !== "id" && field !== "accountId" && field !== "sha256" && (typeof value === "boolean" || typeof value === "string")) detail[field] = value;
+      }
+      for (const [field, value] of Object.entries(answer ?? {})) if (field !== "ok" && (typeof value === "boolean" || typeof value === "number")) detail[field] = value;
+      const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim().slice(0, 500) : null);
+      log.record({ at: Date.now(), kind, target, reason: text(body.reason), note: text(body.note), detail });
+    });
+  }
+
+  /** What an action touched, named the way a person knows it, worked out before the action changes it. */
+  function activityTarget(kind: string, body: Record<string, unknown>): ActivityTarget | null {
+    const text = (value: unknown) => (typeof value === "string" ? value : null);
+    const person = (id: string) => ({ type: "account", id, label: accounts?.profile(id)?.name ?? accounts?.account(id)?.email ?? null });
+    if (kind.startsWith("accounts/")) {
+      const id = text(body.id);
+      return id ? person(id) : null;
+    }
+    if (kind === "moderation/ban" || kind === "moderation/unban") {
+      const sha = text(body.sha256);
+      const id = text(body.accountId) ?? (sha ? (catalog?.waitingVersion(sha)?.accountId ?? null) : null);
+      return id ? person(id) : null;
+    }
+    if (kind.startsWith("moderation/")) {
+      const sha = text(body.sha256);
+      const waiting = sha ? catalog?.waitingVersion(sha) : undefined;
+      if (waiting) return { type: "version", id: `${waiting.id}@${waiting.version}`, label: `${waiting.manifest.name} ${waiting.version}` };
+      return sha ? { type: "version", id: sha.slice(0, 12), label: null } : null;
+    }
+    if (kind === "catalog/listed") {
+      const id = text(body.id);
+      return id ? { type: "module", id, label: catalog?.module(id)?.module.name ?? null } : null;
+    }
+    if (kind.startsWith("reviews/")) {
+      const id = text(body.id);
+      return id ? { type: "review", id, label: null } : null;
+    }
+    if (kind.startsWith("reports/")) {
+      const sha = text(body.sha256);
+      return sha ? { type: "module", id: sha.slice(0, 12), label: null } : null;
+    }
+    const id = text(body.id) ?? text(body.sha256);
+    return id ? { type: kind.split("/")[0] ?? "other", id: id.length > 64 ? id.slice(0, 12) : id, label: null } : null;
+  }
+
+  app.get("/api/activity", (context) => {
+    const query = context.req.query();
+    const before = Number(query.before);
+    const limit = Number(query.limit);
+    return context.json(activity?.list({ ...(Number.isFinite(limit) && limit > 0 ? { limit } : {}), ...(Number.isInteger(before) && before > 0 ? { before } : {}), ...(query.kind ? { kind: query.kind } : {}), ...(query.q ? { q: query.q } : {}) }) ?? { entries: [], hasMore: false });
   });
 
   app.get("/api/overview", (context) => {
@@ -193,10 +269,23 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     return catalog?.dismissReport(sha256) ? context.json({ ok: true }) : context.json({ error: "No such report." }, 404);
   });
 
+  // Unpublish takes a reason and a note, and tells the developer by email; Publish takes neither.
+  const notifier = accounts && moderation?.mailer ? createNotifier({ store: accounts, mailer: moderation.mailer, ...(moderation.mailDailyLimit === undefined ? {} : { mailDailyLimit: moderation.mailDailyLimit }), ...(moderation.now ? { now: moderation.now } : {}) }) : null;
   app.post("/api/catalog/listed", async (context) => {
-    const { id, listed } = await json(context.req.raw);
-    if (typeof id !== "string" || typeof listed !== "boolean") return context.json({ error: "Send { id, listed }." }, 400);
-    return catalog?.setListed(id, listed) ? context.json({ ok: true }) : context.json({ error: "No such module." }, 404);
+    const { id, listed, reason, note } = await json(context.req.raw);
+    const text = note === undefined || note === null ? null : typeof note === "string" ? note.trim() || null : undefined;
+    if (typeof id !== "string" || typeof listed !== "boolean" || (reason !== undefined && !isUnpublishReason(reason)) || text === undefined || (text !== null && text.length > 500)) {
+      return context.json({ error: `Send { id, listed, reason?, note? } with reason one of ${UNPUBLISH_REASONS.join(", ")} and a note of at most 500 characters.` }, 400);
+    }
+    const found = catalog?.adminModules().find((module) => module.id === id) ?? null;
+    if (!catalog?.setListed(id, listed)) return context.json({ error: "No such module." }, 404);
+    let mailed = false;
+    if (!listed && reason !== undefined && notifier) {
+      const owner = catalog.accountOfModule(id) ?? (found ? (accounts?.accountOfKey(found.owner) ?? null) : null);
+      const to = owner ? accounts?.account(owner)?.email : undefined;
+      if (to && owner) mailed = await notifier.send(unpublishedMail(to, { id, name: found?.name ?? id }, reason, text, mailLanguage(catalog.languageOf(owner))));
+    }
+    return context.json({ ok: true, ...(!listed && reason !== undefined ? { mailed } : {}) });
   });
 
   // Reported reviews, with what helps judge them: the module, the stars, the text and its reply.

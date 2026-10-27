@@ -118,6 +118,53 @@ export function bannedMail(to: string, reason: DeclineReason, note: string | nul
       };
 }
 
+/** Why a module is unpublished: the decline reasons, and "request" when its developer asked for it. */
+export const UNPUBLISH_REASONS = [...DECLINE_REASONS, "request"] as const;
+export type UnpublishReason = (typeof UNPUBLISH_REASONS)[number];
+export const isUnpublishReason = (value: unknown): value is UnpublishReason => (UNPUBLISH_REASONS as readonly unknown[]).includes(value);
+
+const UNPUBLISH_LABELS: Record<MailLanguage, Record<UnpublishReason, string>> = {
+  en: { ...REASON_LABELS.en, request: "You asked for it" },
+  de: { ...REASON_LABELS.de, request: "Du hast darum gebeten" },
+};
+
+/** Sent to the developer when a published module is unpublished. Players who already have it keep it. */
+export function unpublishedMail(to: string, module: { id: string; name: string }, reason: UnpublishReason, note: string | null, language: MailLanguage): Mail {
+  const block = `${language === "de" ? "Grund" : "Reason"}: ${UNPUBLISH_LABELS[language][reason]}${note ? `
+${note}` : ""}`;
+  return language === "de"
+    ? {
+        to,
+        subject: `${module.name} ist nicht mehr bei den Community-Modulen`,
+        text:
+          `Wir haben ${module.name} (${module.id}) bei den Community-Modulen zurückgezogen. Wer es schon installiert hat, behält es.
+
+${block}
+
+` +
+          `Was dort nicht erlaubt ist: ${RULES_URL}
+Denkst du, das ist ein Fehler? Schreib uns an ${CONTACT}.
+
+Tavora
+`,
+      }
+    : {
+        to,
+        subject: `${module.name} is no longer in Community modules`,
+        text:
+          `We unpublished ${module.name} (${module.id}) from Community modules. Players who already installed it keep it.
+
+${block}
+
+` +
+          `What's not allowed there: ${RULES_URL}
+Think this is a mistake? Write to ${CONTACT}.
+
+Tavora
+`,
+      };
+}
+
 /** Why an account is suspended: the ban reasons, with "other" instead of "broken". */
 export const SUSPEND_REASONS = ["unsafe", "hateful", "adult", "spam", "other"] as const;
 export type SuspendReason = (typeof SUSPEND_REASONS)[number];

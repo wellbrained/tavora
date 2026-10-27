@@ -6,6 +6,7 @@ import { AccountStore } from "./account-store.ts";
 import { CatalogStore } from "./catalog.ts";
 import { CopyStore } from "./cloud-copy.ts";
 import { createAdminApp } from "./admin-app.ts";
+import { ActivityLog } from "./activity-log.ts";
 import { createDiscordClient } from "./discord.ts";
 import { createApp } from "./app.ts";
 import { createHostedStore } from "./hosted-store.ts";
@@ -95,6 +96,7 @@ const reviews = accountStore ? new ReviewStore(path.join(stateDir, "reviews.sqli
 console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
 // Plain daily totals (stats.ts): nothing about a player. Once a day the account numbers are written down too.
 const stats = new StatsStore(path.join(stateDir, "stats.sqlite"));
+const activity = new ActivityLog(path.join(stateDir, "activity.sqlite"));
 const snapshotAccounts = () => {
   if (accountStore && !stats.hasSnapshot()) stats.snapshotAccounts(accountStore.activity(Date.now()));
 };
@@ -160,6 +162,7 @@ if (adminToken && adminToken.length >= 24) {
     ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
     stateDir,
     stats,
+    activity,
     ...(maintainerEmail ? { ownerEmail: maintainerEmail } : {}),
     moderation: { ...(scanner ? { scanner } : {}), ...(mailer ? { mailer } : {}), mailDailyLimit },
   });

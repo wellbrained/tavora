@@ -5,6 +5,7 @@ import path from "node:path";
 import { publishSignature, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
+import { ActivityLog } from "./activity-log.ts";
 import { createAdminApp } from "./admin-app.ts";
 import { createApp } from "./app.ts";
 import { CatalogStore } from "./catalog.ts";
@@ -60,6 +61,7 @@ function setup(ownerEmail?: string) {
   const state = new IconState(":memory:");
   const hosted = createHostedStore({ list: () => [], file: () => null }, state);
   const submissions = createSubmissions({ state, store: hosted, gameName: () => null, gamesNamed: () => [] });
+  const activity = new ActivityLog(":memory:");
   const admin = createAdminApp({
     token: TOKEN,
     submissions,
@@ -71,6 +73,7 @@ function setup(ownerEmail?: string) {
     copies,
     moderation: { mailer: inbox, now: () => clock.now },
     ...(ownerEmail ? { ownerEmail } : {}),
+    activity,
   });
   const adminCall = (method: string, url: string, body?: unknown, token: string | null = TOKEN) =>
     admin.request(`http://admin.test${url}`, {
@@ -126,7 +129,7 @@ function setup(ownerEmail?: string) {
     const code = /\n {4}(\d{6})\n/.exec(inbox.mails().at(-1)?.text ?? "")?.[1] ?? "";
     return account("/verify", "POST", { email, code, os: "windows", create: false });
   };
-  return { store, reviews, copies, catalog, inbox, clock, adminCall, get, post, account, catalogCall, developer, devSession, publishToken, publish, player, signIn };
+  return { activity, store, reviews, copies, catalog, inbox, clock, adminCall, get, post, account, catalogCall, developer, devSession, publishToken, publish, player, signIn };
 }
 
 describe("the account list", () => {
@@ -612,5 +615,47 @@ describe("the owner's account", () => {
   it("is nobody's account without an owner address", async () => {
     const { get, developer } = setup();
     expect((await get(`/api/accounts/${developer.id}`)).body.owner).toBe(false);
+  });
+});
+
+describe("the activity log and Unpublish", () => {
+  it("writes down what the maintainer did, with the reason and note, newest first", async () => {
+    const { get, post, developer } = setup();
+    await post("/api/accounts/suspend", { id: developer.id, reason: "spam", note: "Many copies." });
+    await post("/api/accounts/unsuspend", { id: developer.id });
+    const { status, body } = await get("/api/activity");
+    expect(status).toBe(200);
+    expect(body.hasMore).toBe(false);
+    expect(body.entries.map((entry: { kind: string }) => entry.kind)).toEqual(["accounts/unsuspend", "accounts/suspend"]);
+    expect(body.entries[1]).toMatchObject({ target: { type: "account", id: developer.id, label: "Dev Person" }, reason: "spam", note: "Many copies." });
+    expect((await get("/api/activity?kind=accounts/suspend")).body.entries).toHaveLength(1);
+    expect((await get("/api/activity?q=copies")).body.entries).toHaveLength(1);
+    expect((await get("/api/activity?q=nothing-like-this")).body.entries).toEqual([]);
+    const first = body.entries[0].id as number;
+    expect((await get(`/api/activity?before=${first}`)).body.entries.map((entry: { kind: string }) => entry.kind)).toEqual(["accounts/suspend"]);
+    expect((await get("/api/activity?limit=1")).body).toMatchObject({ hasMore: true });
+  });
+
+  it("keeps nothing of a refused action and needs the admin token", async () => {
+    const { get, post, adminCall } = setup();
+    expect((await post("/api/catalog/listed", { id: "nobody.here", listed: false })).status).toBe(404);
+    expect((await get("/api/activity")).body.entries).toEqual([]);
+    expect((await adminCall("GET", "/api/activity", undefined, null)).status).toBe(401);
+  });
+
+  it("unpublishes with a reason, tells the developer by email and logs it; publishing needs no reason", async () => {
+    const { get, post, inbox, developer } = setup();
+    const refused = await post("/api/catalog/listed", { id: "wellbrained.timer", listed: false, reason: "not-a-reason" });
+    expect(refused.status).toBe(400);
+    const done = await post("/api/catalog/listed", { id: "wellbrained.timer", listed: false, reason: "broken", note: "It crashes on start." });
+    expect(done.body).toEqual({ ok: true, mailed: true });
+    const mail = inbox.mails().at(-1)!;
+    expect(mail.to).toBe("dev@example.com");
+    expect(mail.subject).toContain("Timer");
+    expect(mail.text).toContain("It crashes on start.");
+    expect((await get("/api/accounts/" + developer.id)).body.modules[0].state).toBe("unpublished");
+    expect((await post("/api/catalog/listed", { id: "wellbrained.timer", listed: true })).body).toEqual({ ok: true });
+    const log = (await get("/api/activity")).body.entries;
+    expect(log[1]).toMatchObject({ kind: "catalog/listed", target: { type: "module", id: "wellbrained.timer", label: "Timer" }, reason: "broken", detail: { listed: false, mailed: true } });
   });
 });
