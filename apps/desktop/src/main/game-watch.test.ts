@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { gameFolderKey, GameWatcher, POLL_SECONDS, runningGames } from "./game-watch";
 import type { InstalledGame } from "./launcher-games";
-import { addGame, emptyLibrary, liveGames, markPlayed, trashGame } from "./library";
+import { addWorkspace, emptyLibrary, liveWorkspaces, markOpened, trashWorkspace } from "./library";
 import type { ProgramLook } from "./program-list";
 
 const day = (n: number) => new Date(Date.UTC(2026, 9, n));
@@ -24,56 +24,56 @@ describe("gameFolderKey", () => {
 describe("runningGames", () => {
   it("finds a game by a program inside its install folder", () => {
     const library = emptyLibrary();
-    addGame(library, { catalogId: "diablo-4" }, day(1));
-    addGame(library, { name: "Fortnite" }, day(1));
-    const running = runningGames(liveGames(library), [DIABLO, FORTNITE], ["C:\\Windows\\explorer.exe", "D:\\Epic\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe"], null);
+    addWorkspace(library, { catalogId: "diablo-4" }, day(1));
+    addWorkspace(library, { name: "Fortnite" }, day(1));
+    const running = runningGames(liveWorkspaces(library), [DIABLO, FORTNITE], ["C:\\Windows\\explorer.exe", "D:\\Epic\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe"], null);
     expect([...running]).toEqual(["local-fortnite"]);
   });
 
   it("ignores installers, crash reporters and launchers in the folder", () => {
     const library = emptyLibrary();
-    addGame(library, { name: "Fortnite" }, day(1));
+    addWorkspace(library, { name: "Fortnite" }, day(1));
     const programs = ["D:\\Epic\\Fortnite\\CrashReportClient.exe", "D:\\Epic\\Fortnite\\FortniteLauncher.exe", "D:\\Epic\\Fortnite\\unins000.exe"];
-    expect(runningGames(liveGames(library), [FORTNITE], programs, null).size).toBe(0);
+    expect(runningGames(liveWorkspaces(library), [FORTNITE], programs, null).size).toBe(0);
   });
 
   it("finds a Steam game by the id Steam runs, without its folder", () => {
     const library = emptyLibrary();
-    addGame(library, { name: "Some Game", steamAppId: 570 }, day(1));
-    expect([...runningGames(liveGames(library), [], [], 570)]).toEqual(["local-some-game"]);
-    expect(runningGames(liveGames(library), [], [], 730).size).toBe(0);
+    addWorkspace(library, { name: "Some Game", steamAppId: 570 }, day(1));
+    expect([...runningGames(liveWorkspaces(library), [], [], 570)]).toEqual(["local-some-game"]);
+    expect(runningGames(liveWorkspaces(library), [], [], 730).size).toBe(0);
   });
 
   it("counts a game in the library twice once, as the one opened last", () => {
     const library = emptyLibrary();
-    addGame(library, { catalogId: "diablo-4" }, day(1));
-    addGame(library, { name: "Diablo 4" }, day(2));
+    addWorkspace(library, { catalogId: "diablo-4" }, day(1));
+    addWorkspace(library, { name: "Diablo 4" }, day(2));
     const programs = ["G:\\Blizzard\\Diablo IV\\Diablo IV.exe"];
     // Never opened: the one added last.
-    expect([...runningGames(liveGames(library), [DIABLO], programs, null)]).toEqual(["local-diablo-4"]);
-    markPlayed(library, "diablo-4", day(3));
-    expect([...runningGames(liveGames(library), [DIABLO], programs, null)]).toEqual(["diablo-4"]);
+    expect([...runningGames(liveWorkspaces(library), [DIABLO], programs, null)]).toEqual(["local-diablo-4"]);
+    markOpened(library, "diablo-4", day(3));
+    expect([...runningGames(liveWorkspaces(library), [DIABLO], programs, null)]).toEqual(["diablo-4"]);
   });
 
   it("counts a game installed by two launchers when either copy runs", () => {
     const library = emptyLibrary();
-    addGame(library, { name: "Diablo IV" }, day(1));
+    addWorkspace(library, { name: "Diablo IV" }, day(1));
     const steamCopy: InstalledGame = { source: "steam", name: "Diablo® IV", file: "E:\\Steam\\steamapps\\common\\Diablo IV\\Diablo IV.exe", index: 0, folder: "E:\\Steam\\steamapps\\common\\Diablo IV" };
-    expect([...runningGames(liveGames(library), [DIABLO, steamCopy], ["E:\\Steam\\steamapps\\common\\Diablo IV\\Diablo IV.exe"], null)]).toEqual(["local-diablo-iv"]);
-    expect([...runningGames(liveGames(library), [DIABLO, steamCopy], ["G:\\Blizzard\\Diablo IV\\Diablo IV.exe"], null)]).toEqual(["local-diablo-iv"]);
+    expect([...runningGames(liveWorkspaces(library), [DIABLO, steamCopy], ["E:\\Steam\\steamapps\\common\\Diablo IV\\Diablo IV.exe"], null)]).toEqual(["local-diablo-iv"]);
+    expect([...runningGames(liveWorkspaces(library), [DIABLO, steamCopy], ["G:\\Blizzard\\Diablo IV\\Diablo IV.exe"], null)]).toEqual(["local-diablo-iv"]);
   });
 
-  it("ignores a folder two games claim, workspaces and games in Trash", () => {
+  it("ignores a folder two games claim, personal workspaces and games in Trash", () => {
     const library = emptyLibrary();
-    addGame(library, { name: "Alpha" }, day(1));
-    addGame(library, { name: "Beta" }, day(1));
-    addGame(library, { workspace: "Fortnite" }, day(1));
-    addGame(library, { name: "Gamma" }, day(1));
-    trashGame(library, "local-gamma", day(2));
+    addWorkspace(library, { name: "Alpha" }, day(1));
+    addWorkspace(library, { name: "Beta" }, day(1));
+    addWorkspace(library, { personal: "Fortnite" }, day(1));
+    addWorkspace(library, { name: "Gamma" }, day(1));
+    trashWorkspace(library, "local-gamma", day(2));
     const shared = (name: string): InstalledGame => ({ source: "windows", name, file: "C:\\Tools\\Hub\\hub.exe", index: 0 });
     const gamma: InstalledGame = { source: "windows", name: "Gamma", file: "C:\\Gamma\\gamma.exe", index: 0 };
     const programs = ["C:\\Tools\\Hub\\hub.exe", "D:\\Epic\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient.exe", "C:\\Gamma\\gamma.exe"];
-    expect(runningGames(Object.values(library.games), [shared("Alpha"), shared("Beta"), FORTNITE, gamma], programs, null).size).toBe(0);
+    expect(runningGames(Object.values(library.workspaces), [shared("Alpha"), shared("Beta"), FORTNITE, gamma], programs, null).size).toBe(0);
   });
 });
 
@@ -85,13 +85,13 @@ describe("GameWatcher", () => {
     vi.useFakeTimers();
     try {
       const library = emptyLibrary();
-      addGame(library, { name: "Fortnite" }, day(1));
-      addGame(library, { name: "Some Game", steamAppId: 570 }, day(1));
+      addWorkspace(library, { name: "Fortnite" }, day(1));
+      addWorkspace(library, { name: "Some Game", steamAppId: 570 }, day(1));
       let now = look([[1, FORTNITE_EXE]]);
       const probe = vi.fn(() => now);
       const changes: [string[], boolean][] = [];
       const watcher = new GameWatcher({
-        entries: () => liveGames(library),
+        entries: () => liveWorkspaces(library),
         findInstalled: async () => [FORTNITE],
         onChange: (running, initial) => changes.push([[...running], initial]),
         probe,
@@ -120,8 +120,8 @@ describe("GameWatcher", () => {
 
   it("says which games a program belongs to once the installed games are known, for the window in front", async () => {
     const library = emptyLibrary();
-    addGame(library, { name: "Fortnite" }, day(1));
-    const watcher = new GameWatcher({ entries: () => liveGames(library), findInstalled: async () => [FORTNITE], onChange: () => undefined, probe: () => look([]), platform: "win32" });
+    addWorkspace(library, { name: "Fortnite" }, day(1));
+    const watcher = new GameWatcher({ entries: () => liveWorkspaces(library), findInstalled: async () => [FORTNITE], onChange: () => undefined, probe: () => look([]), platform: "win32" });
     expect(watcher.gamesOf(FORTNITE_EXE).size).toBe(0);
     watcher.start();
     await watcher.refreshInstalled();

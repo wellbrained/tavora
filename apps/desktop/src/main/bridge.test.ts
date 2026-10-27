@@ -51,7 +51,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     isMaximized: () => false,
     setMaximized: () => Promise.resolve(),
     setLive: () => {},
-    game: { id: "poe2", displayName: "Path of Exile 2" },
+    workspace: { id: "poe2", displayName: "Path of Exile 2", kind: "game" },
     data: registry.get("local", moduleId, "poe2"),
     appSettings: registry.appSettings("local", moduleId),
     aiUsage: { accounts: () => Promise.reject(new Error("no AI accounts in this test")), read: () => Promise.reject(new Error("no AI accounts in this test")) },
@@ -165,17 +165,25 @@ describe("identity", () => {
     expect(await call(port, "ui.getLanguage", { x: 1 })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   });
 
-  it("answers with the bound game, ignoring anything the module claims", async () => {
-    expect(await call(port, "game.getCurrent")).toEqual({
+  it("answers with the bound workspace, ignoring anything the module claims", async () => {
+    expect(await call(port, "workspace.getCurrent")).toEqual({
       v: 1,
       id: expect.any(Number),
       ok: true,
-      result: { id: "poe2", displayName: "Path of Exile 2" },
+      result: { id: "poe2", displayName: "Path of Exile 2", kind: "game" },
     });
-    expect(await call(port, "game.getCurrent", { gameId: "satisfactory" })).toMatchObject({
+    expect(await call(port, "workspace.getCurrent", { workspaceId: "satisfactory" })).toMatchObject({
       ok: false,
       error: { code: "INVALID_PARAMS" },
     });
+  });
+
+  it("still answers game.getCurrent in the words of Tavora before the workspace names", async () => {
+    expect(await call(port, "game.getCurrent")).toMatchObject({ ok: true, result: { id: "poe2", displayName: "Path of Exile 2", kind: "game" } });
+    expect(await call(port, "game.getCurrent", { gameId: "satisfactory" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    const personal = await connected({ ...makeContext(OTHER_INSTANCE), workspace: { id: "local-notes", displayName: "Notes", kind: "personal" }, data: registry.get("local", "local.example.a", "local-notes") });
+    expect(await call(personal, "game.getCurrent")).toMatchObject({ ok: true, result: { id: "local-notes", displayName: "Notes", kind: "workspace" } });
+    expect(await call(personal, "workspace.getCurrent")).toMatchObject({ ok: true, result: { id: "local-notes", displayName: "Notes", kind: "personal" } });
   });
 
   it("reads and writes only the bound settings", async () => {
@@ -537,10 +545,10 @@ describe("network.fetch", () => {
 });
 
 describe("storage.app", () => {
-  it("shares a module's settings across games, apart from each game's own", async () => {
+  it("shares a module's settings across workspaces, apart from each workspace's own", async () => {
     expect(await call(port, "storage.app.set", { key: "style", value: "used" })).toMatchObject({ ok: true, result: null });
     expect(await call(port, "storage.get", { key: "style" })).toMatchObject({ ok: true, result: null });
-    const otherGame = await connected({ ...makeContext(OTHER_INSTANCE), game: { id: "wow", displayName: "World of Warcraft" }, data: registry.get("local", "local.example.a", "wow") });
+    const otherGame = await connected({ ...makeContext(OTHER_INSTANCE), workspace: { id: "wow", displayName: "World of Warcraft", kind: "game" }, data: registry.get("local", "local.example.a", "wow") });
     expect(await call(otherGame, "storage.app.get", { key: "style" })).toMatchObject({ ok: true, result: "used" });
     expect(await call(otherGame, "storage.app.keys")).toMatchObject({ ok: true, result: ["style"] });
     expect(await call(otherGame, "storage.app.delete", { key: "style" })).toMatchObject({ ok: true, result: null });

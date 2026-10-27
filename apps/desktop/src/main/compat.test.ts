@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { emptyLibrary, sanitizeLibrary } from "./library";
 import { sanitizeProfile } from "./profile";
 import { SUPPORTED_VERSIONS } from "./saved-data";
-import { emptyWorkspace, loadWorkspace, saveWorkspace } from "./workspace";
+import { emptyWorkspaces, loadWorkspace, saveWorkspace } from "./workspace";
+import { moveLibrary, moveToWorkspaces } from "./workspace-move";
 
 /** library.json as 0.1.0 wrote it. */
 const LIBRARY_0_1_0 = {
@@ -30,16 +31,18 @@ const LIBRARY_0_1_0 = {
 };
 
 describe("a library saved by 0.1.0", () => {
-  const library = sanitizeLibrary(structuredClone(LIBRARY_0_1_0));
+  // As Tavora reads it: moved to the workspace names at start (workspace-move.ts), then cleaned up.
+  const library = sanitizeLibrary(moveLibrary(structuredClone(LIBRARY_0_1_0)));
 
-  it("keeps every game, folder, favorite and the user's choices", () => {
-    expect(Object.keys(library.games).sort()).toEqual(["elden-ring", "local-my-game", "poe2"]);
-    expect(library.games["elden-ring"]!.trashedAt).toBe("2026-10-14T12:00:00.000Z");
-    expect(library.games["local-my-game"]!.icon).toEqual({ kind: "image", file: "local-my-game-1a2b3c4d.png" });
-    expect(library.folders["11111111-1111-4111-8111-111111111111"]).toMatchObject({ name: "ARPGs", label: "AR", games: ["poe2"] });
-    expect(library.root).toEqual(LIBRARY_0_1_0.root);
+  it("keeps every workspace, folder, favorite and the user's choices", () => {
+    expect(Object.keys(library.workspaces).sort()).toEqual(["elden-ring", "local-my-game", "poe2"]);
+    expect(library.workspaces["elden-ring"]!.trashedAt).toBe("2026-10-14T12:00:00.000Z");
+    expect(library.workspaces["local-my-game"]!.icon).toEqual({ kind: "image", file: "local-my-game-1a2b3c4d.png" });
+    expect(library.folders["11111111-1111-4111-8111-111111111111"]).toMatchObject({ name: "ARPGs", label: "AR", workspaces: ["poe2"] });
+    expect(library.root).toEqual([{ kind: "folder", id: "11111111-1111-4111-8111-111111111111" }, { kind: "workspace", id: "local-my-game" }]);
+    expect(library.workspaces.poe2).toMatchObject({ kind: "game", lastOpenedAt: "2026-10-15T09:00:00.000Z" });
     expect(library.favorites).toEqual(["local-my-game"]);
-    expect(library).toMatchObject({ sort: "manual", startup: "welcome", grayscaleText: true, onlineSearch: false, lastGameId: "poe2" });
+    expect(library).toMatchObject({ sort: "manual", startup: "welcome", grayscaleText: true, onlineSearch: false, lastWorkspaceId: "poe2" });
     expect(library.rail).toEqual({ expanded: true, width: 300 });
   });
 
@@ -51,8 +54,8 @@ describe("a library saved by 0.1.0", () => {
     expect(library.onboarded).toBe(true);
     // Nobody had chosen light or dark before, so the theme follows the system.
     expect(library.followSystem).toBe(true);
-    // Fields added later start empty on games saved before them.
-    expect(library.games.poe2).toMatchObject({ iconFile: null, iconCheckedAt: null });
+    // Fields added later start empty on workspaces saved before them.
+    expect(library.workspaces.poe2).toMatchObject({ iconFile: null, iconCheckedAt: null });
   });
 
   it("writes something this version reads back unchanged", () => {
@@ -61,18 +64,20 @@ describe("a library saved by 0.1.0", () => {
 });
 
 describe("a library from a newer Tavora", () => {
-  it("keeps the games it understands and ignores fields it does not know", () => {
-    const newer = { ...structuredClone(LIBRARY_0_1_0), version: 7, somethingNew: { a: 1 }, games: { ...LIBRARY_0_1_0.games, poe2: { ...LIBRARY_0_1_0.games.poe2, futureField: true } } };
+  it("keeps the workspaces it understands and ignores fields it does not know", () => {
+    const moved = moveLibrary(structuredClone(LIBRARY_0_1_0))!;
+    const workspaces = moved.workspaces as Record<string, object>;
+    const newer = { ...moved, version: 7, somethingNew: { a: 1 }, workspaces: { ...workspaces, poe2: { ...workspaces.poe2, futureField: true } } };
     const library = sanitizeLibrary(newer);
-    expect(Object.keys(library.games).sort()).toEqual(["elden-ring", "local-my-game", "poe2"]);
-    expect(library.games.poe2).not.toHaveProperty("futureField");
+    expect(Object.keys(library.workspaces).sort()).toEqual(["elden-ring", "local-my-game", "poe2"]);
+    expect(library.workspaces.poe2).not.toHaveProperty("futureField");
   });
 });
 
 describe("the versions this Tavora writes", () => {
   it("are the versions it declares it understands", () => {
     expect(emptyLibrary().version).toBe(SUPPORTED_VERSIONS["library.json"]);
-    expect(emptyWorkspace([]).version).toBe(SUPPORTED_VERSIONS["workspace.json"]);
+    expect(emptyWorkspaces([]).version).toBe(SUPPORTED_VERSIONS["workspace.json"]);
     expect(sanitizeProfile(null).version).toBe(SUPPORTED_VERSIONS["profile.json"]);
   });
 });
@@ -90,17 +95,19 @@ describe("a workspace saved before layouts existed (version 1)", () => {
     const file = path.join(dir, "workspace.json");
     const panel = "22222222-2222-4222-8222-222222222222";
     await writeFile(file, JSON.stringify({ version: 1, games: { poe2: { instances: [{ instanceId: panel, moduleId: "tavora.notes" }] } } }));
+    await moveToWorkspaces(dir);
     const workspace = await loadWorkspace(file, ["poe2"], (id) => id === "tavora.notes");
-    expect(workspace.games.poe2!.instances).toEqual([{ instanceId: panel, moduleId: "tavora.notes" }]);
+    expect(workspace.workspaces.poe2!.instances).toEqual([{ instanceId: panel, moduleId: "tavora.notes" }]);
     await saveWorkspace(file, workspace);
     expect(JSON.parse(await readFile(file, "utf8")).version).toBe(SUPPORTED_VERSIONS["workspace.json"]);
   });
 
-  it("drops panels of modules that are gone but keeps the game", async () => {
+  it("drops panels of modules that are gone but keeps the workspace", async () => {
     const file = path.join(dir, "workspace.json");
     await mkdir(dir, { recursive: true });
     await writeFile(file, JSON.stringify({ version: 2, games: { poe2: { instances: [{ instanceId: "22222222-2222-4222-8222-222222222222", moduleId: "local.removed" }] } } }));
+    await moveToWorkspaces(dir);
     const workspace = await loadWorkspace(file, ["poe2"], () => false);
-    expect(workspace.games.poe2!.instances).toEqual([]);
+    expect(workspace.workspaces.poe2!.instances).toEqual([]);
   });
 });

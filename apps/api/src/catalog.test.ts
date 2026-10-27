@@ -21,7 +21,9 @@ interface Options {
   id?: string;
   version?: string;
   games?: string[];
+  /** The old name of personalWorkspaces. */
   workspaces?: boolean;
+  personalWorkspaces?: boolean;
   key?: KeyObject | null;
   changelog?: unknown;
   homepage?: string;
@@ -35,7 +37,7 @@ interface Options {
 }
 
 /** A module zip as tavora-pack makes it: manifest, page, optional changelog, and the signature. */
-function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, key = publisher, changelog, homepage, support, translations, readme, icon, screenshots = [], extra = [] }: Options = {}): Buffer {
+function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, personalWorkspaces, key = publisher, changelog, homepage, support, translations, readme, icon, screenshots = [], extra = [] }: Options = {}): Buffer {
   const manifest = {
     id,
     name: "Timer",
@@ -45,6 +47,7 @@ function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], wo
     entry: "dist/index.html",
     games,
     ...(workspaces === undefined ? {} : { workspaces }),
+    ...(personalWorkspaces === undefined ? {} : { minTavora: "0.21.43", personalWorkspaces }),
     ...(changelog === undefined ? {} : { changelog: "changelog.json" }),
     ...(homepage === undefined ? {} : { homepage }),
     ...(support === undefined ? {} : { support }),
@@ -125,6 +128,7 @@ describe("adding to the catalog", () => {
         version: "1.0.0",
         minTavora: null,
         games: [],
+        personalWorkspaces: true,
         workspaces: true,
         permissions: { network: ["api.example.com"], connectors: [] },
         owner: added.owner,
@@ -238,19 +242,22 @@ describe("adding to the catalog", () => {
     ]);
   });
 
-  it("filters by game and workspace, and hides delisted modules and their zips", () => {
+  it("filters by game and personal workspace, and hides delisted modules and their zips", () => {
     const catalog = store();
     const any = catalog.add(moduleZip({ id: "wellbrained.notes" }));
     catalog.add(moduleZip({ id: "wellbrained.map", games: ["elden-ring"] }));
     catalog.add(moduleZip({ id: "wellbrained.overlay", workspaces: false }));
+    catalog.add(moduleZip({ id: "wellbrained.radar", personalWorkspaces: false }));
     const ids = (filter: Parameters<CatalogStore["index"]>[0]) => catalog.index(filter).map((entry) => entry.id);
-    expect(ids({})).toEqual(["wellbrained.map", "wellbrained.notes", "wellbrained.overlay"]);
-    expect(ids({ game: "elden-ring" })).toEqual(["wellbrained.map", "wellbrained.notes", "wellbrained.overlay"]);
-    expect(ids({ game: "satisfactory" })).toEqual(["wellbrained.notes", "wellbrained.overlay"]);
-    expect(ids({ workspace: true })).toEqual(["wellbrained.notes"]);
+    expect(ids({})).toEqual(["wellbrained.map", "wellbrained.notes", "wellbrained.overlay", "wellbrained.radar"]);
+    expect(ids({ game: "elden-ring" })).toEqual(["wellbrained.map", "wellbrained.notes", "wellbrained.overlay", "wellbrained.radar"]);
+    expect(ids({ game: "satisfactory" })).toEqual(["wellbrained.notes", "wellbrained.overlay", "wellbrained.radar"]);
+    expect(ids({ personal: true })).toEqual(["wellbrained.notes"]);
+    // Tavora 0.21.42 and older read the old name.
+    expect(catalog.index({}).map((entry) => [entry.id, entry.personalWorkspaces, entry.workspaces])).toContainEqual(["wellbrained.radar", false, false]);
 
     expect(catalog.setListed("wellbrained.notes", false)).toBe(true);
-    expect(ids({ workspace: true })).toEqual([]);
+    expect(ids({ personal: true })).toEqual([]);
     expect(catalog.module("wellbrained.notes")).toBeNull();
     expect(catalog.zip(any.sha256)).toBeNull();
     expect(catalog.modules().find((row) => row.id === "wellbrained.notes")?.listed).toBe(false);
@@ -360,6 +367,10 @@ describe("catalog routes", () => {
     expect((await get("/v1/catalog?workspace=yes")).status).toBe(400);
     expect((await get("/v1/catalog?game=elden-ring&workspace=1")).status).toBe(400);
     expect((await get("/v1/catalog?workspace=1")).status).toBe(200);
+    expect((await get("/v1/catalog?personal=1")).status).toBe(200);
+    expect((await get("/v1/catalog?personal=yes")).status).toBe(400);
+    expect((await get("/v1/catalog?personal=1&workspace=1")).status).toBe(400);
+    expect((await get("/v1/catalog?game=elden-ring&personal=1")).status).toBe(400);
   });
 
   it("answers 503 without a catalog, and 429 when a client asks too often", async () => {

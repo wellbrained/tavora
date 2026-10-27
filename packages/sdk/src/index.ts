@@ -68,6 +68,7 @@ import {
   type TavoraDocument,
   type TavoraGame,
   type TavoraTheme,
+  type TavoraWorkspace,
   type TavoraViewport,
 } from "./protocol.js";
 
@@ -125,6 +126,7 @@ export type {
   TavoraGame,
   TavoraTheme,
   TavoraViewport,
+  TavoraWorkspace,
   ThemeToken,
 } from "./protocol.js";
 export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, THEME_TOKENS } from "./protocol.js";
@@ -133,7 +135,7 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.11";
+export const SDK_VERSION = "0.2.12";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
@@ -172,17 +174,19 @@ export interface KeyValueStore {
 export interface TavoraSDK {
   /** What the host reported when this module connected. */
   readonly host: HandshakeResult;
+  /** @deprecated Use `workspace.getCurrent`. Tavora answers it until its 1.0 preparation. */
   game: {
+    /** @deprecated Use `workspace.getCurrent`. */
     getCurrent(): Promise<TavoraGame>;
   };
-  /** Small key/value settings, private to this module in the current game. */
+  /** Small key/value settings, private to this module in the current workspace. */
   storage: KeyValueStore & {
-    /** The same, shared by every game: settings that should not change from game to game. */
+    /** The same, shared by every workspace: settings that should not change from one workspace to the next. */
     app: KeyValueStore;
   };
   /**
    * Named documents (builds, plans, checklists), private to this module in
-   * the current game and shared by all of its panels.
+   * the current workspace and shared by all of its panels.
    */
   documents: {
     list(): Promise<DocumentSummary[]>;
@@ -232,7 +236,7 @@ export interface TavoraSDK {
      * What this panel's live view shows: while the user shows the panel in their game and the in-game layer is closed,
      * Tavora shows the module's overlay page (the manifest's `overlay`) read-only and click-through in the panel's spot,
      * with this state. Any JSON up to LIMITS.maxOverlayStateBytes; null shows nothing. Tavora keeps showing the last
-     * state while the panel isn't running, e.g. while you look at another game in Tavora; after a restart nothing shows
+     * state while the panel isn't running, e.g. while you look at another workspace in Tavora; after a restart nothing shows
      * until the panel runs again and calls setLive. Needs no click or permission. Tavora 0.21.11 and newer.
      */
     setLive(state: JsonValue | null): Promise<void>;
@@ -240,7 +244,7 @@ export interface TavoraSDK {
   /** The module's other panels. */
   panels: {
     /**
-     * Opens one of this module's own panel types in the current game, on `content` when given. Tavora brings
+     * Opens one of this module's own panel types in the current workspace, on `content` when given. Tavora brings
      * forward a panel of that type already showing the content, else switches the one used last
      * (`panel.onNavigate`), else opens a new one. Call it from the click or key press that asked for it: the host
      * refuses it otherwise (PERMISSION_DENIED). Needs Tavora 0.17.18 or newer.
@@ -248,6 +252,11 @@ export interface TavoraSDK {
     open(type: string, options?: { content?: PanelContent }): Promise<PanelOpenResult>;
   };
   workspace: {
+    /**
+     * The workspace this panel is in: a game workspace (`kind` "game", its id is the game's) or a personal one. On a
+     * Tavora older than 0.21.43 this asks `game.getCurrent` and puts its answer in the new words.
+     */
+    getCurrent(): Promise<TavoraWorkspace>;
     getViewport(): Promise<TavoraViewport>;
     onResize(fn: (viewport: TavoraViewport) => void): Unsubscribe;
   };
@@ -275,7 +284,7 @@ export interface TavoraSDK {
     };
   };
   /**
-   * Files (pictures) this module keeps in the current game, shared by all of its panels. They live
+   * Files (pictures) this module keeps in the current workspace, shared by all of its panels. They live
    * in a folder Tavora manages, not in a document, so they can be large: up to 50 MB each and
    * 500 MB together. Only PNG, JPEG, GIF and WebP are accepted, judged by the file itself.
    */
@@ -300,7 +309,7 @@ export interface TavoraSDK {
   files: {
     /** Opens Tavora's native picker after a real click and remembers read-only access on this PC. */
     pickReadOnly(options: { extensions: string[] }): Promise<ReadOnlyFile | null>;
-    /** Rereads only a file previously picked by this module in this game. At most 32 MiB. */
+    /** Rereads only a file previously picked by this module in this workspace. At most 32 MiB. */
     read(id: string): Promise<Uint8Array>;
     /** Revokes a remembered file reference; never deletes the user's file. */
     forget(id: string): Promise<void>;
@@ -340,7 +349,7 @@ export interface TavoraSDK {
   };
   links: {
     /**
-     * Opens a web address (http or https) in a Browser panel of this game, as a new tab or in a new
+     * Opens a web address (http or https) in a Browser panel of this workspace, as a new tab or in a new
      * panel. Call it from the click or key press that asked for it: the host refuses it otherwise
      * (PERMISSION_DENIED). The module learns nothing about the page.
      */
@@ -386,7 +395,7 @@ export interface TavoraSDK {
       onDrivesChange(fn: () => void): Unsubscribe;
       /**
        * The drops of the connection in the last 30 days, newest first (Tavora 0.21.22 and newer). Tavora watches the
-       * connection while a System Monitor panel exists in any game or workspace, shown or not: it pings the router
+       * connection while a System Monitor panel exists in any workspace, shown or not: it pings the router
        * and one internet address every 5 seconds and sends nothing else.
        */
       connectionLog(): Promise<SystemConnectionLog>;
@@ -486,8 +495,8 @@ export interface TavoraSDK {
     preview(key: string): Promise<void>;
   };
   /**
-   * Hotkeys for the manifest's `actions`. The user picks the keys in a Tavora dialog, for this game; the module
-   * only hears which action fired, for which target, in its panel used last in the game shown now. Tavora 0.19.26 and newer.
+   * Hotkeys for the manifest's `actions`. The user picks the keys in a Tavora dialog, for this workspace; the module
+   * only hears which action fired, for which target, in its panel used last in the workspace shown now. Tavora 0.19.26 and newer.
    */
   hotkeys: {
     list(): Promise<HotkeyBinding[]>;
@@ -726,6 +735,13 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         call("panels.open", { type, ...(options.content ? { content: options.content } : {}) }, LIMITS.navigateTimeoutMs + 5_000),
     },
     workspace: {
+      getCurrent: () =>
+        call("workspace.getCurrent").catch(async (error: unknown) => {
+          if (!(error instanceof TavoraError) || error.code !== "UNKNOWN_METHOD") throw error;
+          // A Tavora older than 0.21.43 knows the workspace by its old name.
+          const game = await call("game.getCurrent");
+          return { id: game.id, displayName: game.displayName, kind: game.kind === "workspace" ? "personal" : "game" } satisfies TavoraWorkspace;
+        }),
       getViewport: () => call("workspace.getViewport"),
       onResize: (fn) => on("workspace.resize", fn),
     },

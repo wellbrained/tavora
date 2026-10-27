@@ -1,6 +1,6 @@
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
+import { isModuleId, isOwnerId } from "@tavora/module-schema";
 import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
 import { BlobStore } from "./blobs";
 import { DocumentStore } from "./documents";
@@ -8,6 +8,7 @@ import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside, serializeJson } from "./json";
 import { INSTANCE_ID } from "./ids";
+import { isWorkspaceId } from "./workspace-id";
 import { defaultFilesRoot } from "./module-files";
 
 export { isJsonValue } from "./json";
@@ -19,8 +20,8 @@ export function validateKey(key: unknown): asserts key is string {
 }
 
 /**
- * Private key/value settings for one module in one game, or shared by all its
- * games (storage.app). Values are kept serialized so the quota is measured on
+ * Private key/value settings for one module in one workspace, or shared by all its
+ * workspaces (storage.app). Values are kept serialized so the quota is measured on
  * exactly what is written to disk.
  */
 export class ModuleStore {
@@ -152,12 +153,12 @@ export interface ModuleData {
 }
 
 /**
- * The folder next to a module's game folders that holds its settings shared by every game
- * (storage.app). Game ids never start with "_", so it cannot be taken for a game.
+ * The folder next to a module's workspace folders that holds its settings shared by every workspace
+ * (storage.app). Workspace ids never start with "_", so it cannot be taken for a workspace.
  */
 export const APP_DATA_DIR = "_app";
 
-/** One settings store and one document store per (owner, module, game), shared by all its panels. */
+/** One settings store and one document store per (owner, module, workspace), shared by all its panels. */
 export class DataRegistry {
   private readonly data = new Map<string, ModuleData>();
   private readonly app = new Map<string, ModuleStore>();
@@ -165,7 +166,7 @@ export class DataRegistry {
 
   constructor(
     private readonly dataDir: string,
-    /** The folder every module's files are kept under, by owner, module and game. */
+    /** The folder every module's files are kept under, by owner, module and workspace. */
     private readonly blobRoot: () => string = () => defaultFilesRoot(dataDir),
     /** True while that folder is being moved. */
     private readonly blobsLocked: () => boolean = () => false,
@@ -173,24 +174,24 @@ export class DataRegistry {
     this.panelState = new PanelStateStore(path.join(dataDir, "panel-state"));
   }
 
-  get(owner: string, moduleId: string, gameId: string): ModuleData {
-    // Ids were validated when the module and game were registered; checking
+  get(owner: string, moduleId: string, workspaceId: string): ModuleData {
+    // Ids were validated when the module and workspace were registered; checking
     // again here keeps them from ever forming a path outside dataDir.
-    if (!isOwnerId(owner) || !isModuleId(moduleId) || !isGameId(gameId)) throw new Error("invalid owner, module or game id");
-    const dir = path.join(this.dataDir, "module-data", owner, moduleId, gameId);
+    if (!isOwnerId(owner) || !isModuleId(moduleId) || !isWorkspaceId(workspaceId)) throw new Error("invalid owner, module or workspace id");
+    const dir = path.join(this.dataDir, "module-data", owner, moduleId, workspaceId);
     let data = this.data.get(dir);
     if (!data) {
       data = {
         settings: new ModuleStore(path.join(dir, "storage.json")),
         documents: new DocumentStore(path.join(dir, "documents")),
-        blobs: new BlobStore(() => path.join(this.blobRoot(), owner, moduleId, gameId), undefined, this.blobsLocked),
+        blobs: new BlobStore(() => path.join(this.blobRoot(), owner, moduleId, workspaceId), undefined, this.blobsLocked),
       };
       this.data.set(dir, data);
     }
     return data;
   }
 
-  /** The settings one owner's module shares across every game (storage.app), with the same limit as a game's. */
+  /** The settings one owner's module shares across every workspace (storage.app), with the same limit as a workspace's. */
   appSettings(owner: string, moduleId: string): ModuleStore {
     if (!isOwnerId(owner) || !isModuleId(moduleId)) throw new Error("invalid owner or module id");
     const file = path.join(this.dataDir, "module-data", owner, moduleId, APP_DATA_DIR, "storage.json");
@@ -210,10 +211,10 @@ export class DataRegistry {
     }
   }
 
-  /** Drops cached stores for a game whose data is being deleted. */
-  forgetGame(gameId: string): void {
+  /** Drops cached stores for a workspace whose data is being deleted. */
+  forgetWorkspace(workspaceId: string): void {
     for (const key of [...this.data.keys()]) {
-      if (path.basename(key) === gameId) this.data.delete(key);
+      if (path.basename(key) === workspaceId) this.data.delete(key);
     }
   }
 }

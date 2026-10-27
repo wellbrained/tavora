@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // Calculator: the sum and its result as you type, a keypad (the keyboard works too, with the Windows shortcuts @ for √,
-// q for x² and F9 for ±), Copy, and the game's last results. The toolbar switches between the Basic keypad and Plus,
+// q for x² and F9 for ±), Copy, and the workspace's last results. The toolbar switches between the Basic keypad and Plus,
 // which is laid out like the Windows one, and shows or hides the history; its ⚙ menu picks the history length, the
-// decimal places and the short form (1.5M) results show with. All of these hold in every game.
+// decimal places and the short form (1.5M) results show with. All of these hold in every workspace.
 // The keypad keeps a calculator size: its keys never shrink below a button nor grow past a big one. The history sits
 // beside it once the panel is wide enough for both, else below; a panel too short for both scrolls.
 // Save as… keeps the result under a name; the Values tab taps it into a sum, where it counts with its number now.
-// The history and the values live in the game's module storage, so every panel of the game shares them; a panel
+// The history and the values live in the workspace's module storage, so every panel of the workspace shares them; a panel
 // reads them again when it shows or gets focus, since storage has no change events.
 import { BookmarkPlus, Check, Copy, Delete, Ellipsis, History, Pencil, Settings2, Trash2 } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage, SegmentedControl, serial } from "@tavora/official-ui";
@@ -147,7 +147,7 @@ const decimalsLabel = (option: Decimals) => (option === "auto" ? t("options.deci
 /** The history as long as the player picked. */
 const recent = computed(() => history.value.slice(0, settings.value.historyLength));
 
-/** Changes a toolbar choice and keeps it for every game. */
+/** Changes a toolbar choice and keeps it for every workspace. */
 function choose(change: Partial<Settings>): void {
   settings.value = { ...settings.value, ...change };
   void sdk.value?.storage.app
@@ -220,7 +220,7 @@ function use(calculation: Calculation): void {
 
 // ── History and values ───────────────────────────────────────────────
 
-/** Reads the newest list from the game's storage, changes it and writes it back, one save at a time. */
+/** Reads the newest list from the workspace's storage, changes it and writes it back, one save at a time. */
 function update<T extends Calculation | Value>(
   key: string,
   list: Ref<T[]>,

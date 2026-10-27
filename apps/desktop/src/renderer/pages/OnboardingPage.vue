@@ -8,7 +8,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
-import GameIcon from "../components/GameIcon.vue";
+import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import ImageCropDialog from "../components/ImageCropDialog.vue";
 import { readPicture } from "../components/profile/picture";
 import ProfileAvatar from "../components/profile/ProfileAvatar.vue";
@@ -20,7 +20,8 @@ const STEPS = ["you", "games", "tips"] as const;
 
 const view = computed(() => state.value!);
 const profile = computed(() => view.value.profile);
-const games = computed(() => Object.values(view.value.library.games));
+// The games added so far: their game workspaces.
+const games = computed(() => Object.values(view.value.library.workspaces).filter((workspace) => workspace.kind === "game"));
 
 const step = ref(0);
 /** Which way the steps slide. */
@@ -57,7 +58,7 @@ async function finish() {
 }
 
 const tips = computed(() => [
-  { icon: PanelLeft, title: t("onboarding.tip.games.title"), text: t("onboarding.tip.games.text") },
+  { icon: PanelLeft, title: t("onboarding.tip.workspaces.title"), text: t("onboarding.tip.workspaces.text") },
   { icon: Search, title: t("onboarding.tip.find.title"), keys: [MOD(), "K"], text: t("onboarding.tip.find.text") },
   { icon: Keyboard, title: t("onboarding.tip.shortcuts.title"), keys: [MOD(), "/"], text: t("onboarding.tip.shortcuts.text", { mod: MOD() }) },
 ]);
@@ -130,7 +131,7 @@ const tips = computed(() => [
 
         <ul class="mb-6 flex flex-wrap justify-center gap-3" data-testid="onboarding-games">
           <li v-for="game in games" :key="game.id" class="flex w-20 flex-col items-center gap-1.5">
-            <GameIcon :game="game" :size="56" />
+            <WorkspaceIcon :workspace="game" :size="56" />
             <span class="max-w-full truncate text-xs">{{ game.name }}</span>
           </li>
           <li>

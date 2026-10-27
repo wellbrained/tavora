@@ -1,6 +1,6 @@
 // The module address for stored files (see blobs.ts): POST /_blobs/ stores a picture and answers
 // with its description, GET /_blobs/<id> serves it. Answered inside the module's own session, so
-// a page can only reach the files of its own module and game.
+// a page can only reach the files of its own module and workspace.
 
 import { createReadStream } from "node:fs";
 import { Readable } from "node:stream";

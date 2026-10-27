@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Notes: a list and an editor side by side, or one at a time when the panel
-// is narrow. Every Notes panel of a game shows the same notes; which note a
+// is narrow. Every Notes panel of a workspace shows the same notes; which note a
 // panel shows is that panel's own state.
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";

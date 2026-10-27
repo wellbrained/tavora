@@ -28,8 +28,8 @@ export function shortcutGroups(): { title: string; rows: ShortcutRow[] }[] {
       ],
     },
     {
-      title: t("shortcuts.group.games"),
-      rows: [{ action: t("shortcuts.openGame"), keys: [mod, "1–9"] }],
+      title: t("shortcuts.group.workspaces"),
+      rows: [{ action: t("shortcuts.openWorkspace"), keys: [mod, "1–9"] }],
     },
     {
       title: t("shortcuts.group.browser"),
@@ -55,21 +55,21 @@ export function shortcutGroups(): { title: string; rows: ShortcutRow[] }[] {
 }
 
 /**
- * The games Ctrl+1 to Ctrl+9 open: the rail from top to bottom, favorites
- * first, games in folders in their folder's place even when it is closed.
+ * The workspaces Ctrl+1 to Ctrl+9 open: the rail from top to bottom, favorites
+ * first, workspaces in folders in their folder's place even when it is closed.
  */
-export function numberedGames(library: HostViewState["library"]): string[] {
+export function numberedWorkspaces(library: HostViewState["library"]): string[] {
   const order: string[] = [...library.favorites];
   const seen = new Set(order);
   const add = (id: string) => {
-    if (!seen.has(id) && library.games[id]) {
+    if (!seen.has(id) && library.workspaces[id]) {
       seen.add(id);
       order.push(id);
     }
   };
   for (const entry of library.root) {
-    if (entry.kind === "game") add(entry.id);
-    else for (const id of library.folders[entry.id]?.games ?? []) add(id);
+    if (entry.kind === "workspace") add(entry.id);
+    else for (const id of library.folders[entry.id]?.workspaces ?? []) add(id);
   }
   return order.slice(0, 9);
 }

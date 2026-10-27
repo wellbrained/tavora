@@ -32,7 +32,7 @@ describe("Discord and AI Usage leaving Tavora", () => {
     expect((await readdir(path.join(userData, "Partitions"))).sort()).toEqual([`module%3A${OWNER}%3Awellbrained.discord@valheim`, "module%3Aofficial%3Atavora.notes@valheim"]);
   });
 
-  it("keep what the catalog module already saved in a game", async () => {
+  it("keep what the catalog module already saved in a workspace", async () => {
     const userData = await mkdtemp(path.join(tmpdir(), "tavora-moved-"));
     const data = path.join(userData, "module-data");
     await put(path.join(data, "official", "tavora.discord", "valheim", "settings.json"), "old");

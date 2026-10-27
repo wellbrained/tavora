@@ -1,8 +1,8 @@
 // Ctrl+K search and the Settings search box.
 import { expect, test } from "@playwright/test";
-import { inModule, launch, openGame, openModule, panels, VANILLA } from "./harness";
+import { inModule, launch, openWorkspace, openModule, panels, VANILLA } from "./harness";
 
-test("Tavora's shortcuts open the overview, Settings, Home and numbered games", async () => {
+test("Tavora's shortcuts open the overview, Settings, Home and numbered workspaces", async () => {
   const { app, page } = await launch();
   await page.keyboard.press("Control+/");
   // The list is its own Settings section, not a dialog of its own.
@@ -18,7 +18,7 @@ test("Tavora's shortcuts open the overview, Settings, Home and numbered games", 
   await app.close();
 });
 
-test("Ctrl+K finds games, modules and settings and runs them", async () => {
+test("Ctrl+K finds workspaces, modules and settings and runs them", async () => {
   const { app, page } = await launch();
   await page.keyboard.press("Control+K");
   const search = page.getByTestId("search");
@@ -27,12 +27,12 @@ test("Ctrl+K finds games, modules and settings and runs them", async () => {
 
   // Arrow keys move through the results; Enter opens the selected one.
   await page.getByTestId("search-input").fill("satis");
-  await expect(page.getByTestId("search-game-satisfactory")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("search-workspace-satisfactory")).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Enter");
   await expect(search).toHaveCount(0);
-  await expect(page.getByTestId("rail-game-satisfactory")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveAttribute("aria-current", "page");
 
-  // Modules of the current game can be opened from the box.
+  // Modules of the current workspace can be opened from the box.
   await page.keyboard.press("Control+K");
   await page.getByTestId("search-input").fill("vanilla");
   await page.getByTestId(`search-module-${VANILLA}`).click();
@@ -58,7 +58,7 @@ test("Ctrl+K finds games, modules and settings and runs them", async () => {
 
 test("Ctrl+K works while a module panel has focus", async () => {
   const { app, page } = await launch();
-  await openGame(page, "poe2");
+  await openWorkspace(page, "poe2");
   await openModule(page, VANILLA);
   await expect.poll(() => inModule(app, VANILLA, "document.readyState").catch(() => null)).toBe("complete");
   await app.evaluate(({ webContents }, moduleId) => {
@@ -71,9 +71,9 @@ test("Ctrl+K works while a module panel has focus", async () => {
   await app.close();
 });
 
-test("Settings search finds settings and games in Trash", async () => {
+test("Settings search finds settings and workspaces in Trash", async () => {
   const { app, page } = await launch();
-  await page.getByTestId("rail-game-satisfactory").click({ button: "right" });
+  await page.getByTestId("rail-workspace-satisfactory").click({ button: "right" });
   await page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove"]').click();
   await page.getByTestId("confirm-submit").click();
 

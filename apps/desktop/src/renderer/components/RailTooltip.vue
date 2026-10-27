@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The name of a game or folder beside its icon in the compact rail, shown with the shared kit tooltip.
+// The name of a workspace or folder beside its icon in the compact rail, shown with the shared kit tooltip.
 //
 // Module panels are views drawn above the host page, so a label over the workspace would be hidden behind them.
 // While a tooltip is open it counts as an open menu: the host freezes and hides the panels, as it does for menus.
@@ -11,10 +11,10 @@ import { useFloating } from "../host";
 const props = defineProps<{
   text: string;
   disabled?: boolean;
-  /** A folder: `lines` are the games inside it. */
+  /** A folder: `lines` are the workspaces inside it. */
   folder?: boolean;
   lines?: string[];
-  /** How many more games the folder holds than `lines` lists. */
+  /** How many more workspaces the folder holds than `lines` lists. */
   more?: number;
   /** A short second line in quieter text, such as what a click does. */
   hint?: string;
@@ -70,7 +70,7 @@ onBeforeUnmount(() => {
   >
     <slot />
     <Tooltip :open="open" :at="at" :title="text" :description="hint" @dismiss="hide">
-      <ul v-if="folder" class="rail-tooltip-games" data-testid="rail-tooltip-games">
+      <ul v-if="folder" class="rail-tooltip-workspaces" data-testid="rail-tooltip-workspaces">
         <li v-for="line in lines" :key="line" class="truncate">{{ line }}</li>
         <li v-if="more">{{ t("rail.folderMore", { count: more }) }}</li>
         <li v-if="!lines?.length">{{ t("rail.emptyFolder") }}</li>
@@ -80,7 +80,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.rail-tooltip-games {
+.rail-tooltip-workspaces {
   margin: 8px 0 0;
   padding: 0;
   list-style: none;

@@ -23,7 +23,7 @@ const CLOCK: StreamingModule = {
   manifest: { id: "tavora.clock-counter", name: "Clock & Counter", overlay: "dist/overlay.html", permissions: { network: [], connectors: [] } },
 };
 const NOTES: StreamingModule = { owner: "official", root: "/nowhere", manifest: { id: "tavora.notes", name: "Notes", permissions: { network: [] } } };
-const subject = (key = "item-1", moduleId = CLOCK.manifest.id) => ({ owner: "official", moduleId, gameId: "elden", key });
+const subject = (key = "item-1", moduleId = CLOCK.manifest.id) => ({ owner: "official", moduleId, workspaceId: "elden", key });
 
 class FakeWindow implements PreviewWindow {
   focused = 0;

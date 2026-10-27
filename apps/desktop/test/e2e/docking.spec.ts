@@ -195,7 +195,7 @@ test("a module maximizes its own panel after a key press, and it stays maximized
   await again.app.close();
 });
 
-test("a module is removed from one game from its panel menu, leaving empty slots", async () => {
+test("a module is removed from one workspace from its panel menu, leaving empty slots", async () => {
   const { app, page } = await launch();
   await setContentSize(app, RAIL_WIDTH + 1000, 500);
   await openModule(page, VANILLA);

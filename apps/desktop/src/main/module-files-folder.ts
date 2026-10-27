@@ -134,11 +134,11 @@ export class ModuleFilesFolder {
     if (error) throw new LibraryError("error.openModuleFiles", { problem: error });
   }
 
-  /** Called with a game that is being deleted: tells the user where its pictures may remain when the folder they chose is gone. */
-  async noteGameDeleted(gameName: string, deleteFiles: (root: string) => Promise<void>): Promise<void> {
+  /** Called with a workspace that is being deleted: tells the user where its pictures may remain when the folder they chose is gone. */
+  async noteWorkspaceDeleted(workspaceName: string, deleteFiles: (root: string) => Promise<void>): Promise<void> {
     const root = this.root();
     const gone = !(await this.isThere());
     await deleteFiles(root);
-    if (gone) this.host.notify(translate(this.host.language(), "notice.moduleFilesLeft", { name: gameName, folder: root }));
+    if (gone) this.host.notify(translate(this.host.language(), "notice.moduleFilesLeft", { name: workspaceName, folder: root }));
   }
 }

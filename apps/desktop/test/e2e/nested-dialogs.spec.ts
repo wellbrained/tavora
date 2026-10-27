@@ -23,10 +23,10 @@ async function placement(page: Page, innerId = "confirm", maxWidth = 420, outerI
 test("a confirmation opened from Settings stays inside Settings", async ({}, testInfo) => {
   const { app, page } = await launch();
   try {
-    await page.getByTestId("rail-game-poe2").click({ button: "right" });
-    await page.locator('[role="menu"][data-state="open"] [data-testid="menu-manage-games"]').click();
-    await page.getByTestId("games-select-all").check();
-    await page.getByTestId("games-remove").click();
+    await page.getByTestId("rail-workspace-poe2").click({ button: "right" });
+    await page.locator('[role="menu"][data-state="open"] [data-testid="menu-manage-workspaces"]').click();
+    await page.getByTestId("workspaces-select-all").check();
+    await page.getByTestId("workspaces-remove").click();
     await expect(page.getByTestId("confirm")).toBeVisible();
 
     for (const [name, width, height] of [

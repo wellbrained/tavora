@@ -529,7 +529,7 @@ async function move(from: string, to: string): Promise<void> {
 /**
  * Puts a downloaded copy (in `staging`) in place of this PC's data, after moving what was there into
  * `keepIn`, so the side not kept stays as a local backup. A copy that left out pictures leaves this PC's
- * pictures where they are. Only runs while nothing reads the data (before the games load).
+ * pictures where they are. Only runs while nothing reads the data (before the workspaces load).
  * Returns the state to keep: the copy's files with their dates on this PC.
  */
 export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: string, copy: { version: number; pictures: boolean; files: Record<string, Omit<SyncedFile, "mtimeMs">> }): Promise<CopyState> {

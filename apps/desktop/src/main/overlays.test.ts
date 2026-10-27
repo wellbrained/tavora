@@ -24,7 +24,7 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true, maxRetries: 5 });
 });
 
-const subject = (key = "item-1", gameId = "poe2"): OverlaySubject => ({ owner: "official", moduleId: "tavora.clock-counter", gameId, key });
+const subject = (key = "item-1", workspaceId = "poe2"): OverlaySubject => ({ owner: "official", moduleId: "tavora.clock-counter", workspaceId, key });
 
 describe("OverlayStore", () => {
   it("gives a key one link, and keeps links and states across a restart", async () => {
@@ -74,16 +74,16 @@ describe("OverlayStore", () => {
     expect(seen).toEqual([{ value: 1 }, null, undefined]);
   });
 
-  it("forgets a game's links", async () => {
+  it("forgets a workspace's links", async () => {
     const store = await OverlayStore.load(dir);
     const kept = store.link(subject("a", "poe2")).token;
     const gone = store.link(subject("a", "elden-ring")).token;
-    store.forget((link) => link.gameId === "elden-ring");
+    store.forget((link) => link.workspaceId === "elden-ring");
     expect(store.find(kept)).not.toBeNull();
     expect(store.find(gone)).toBeNull();
   });
 
-  it("limits the overlays of one module in one game", async () => {
+  it("limits the overlays of one module in one workspace", async () => {
     const store = await OverlayStore.load(dir);
     for (let i = 0; i < LIMITS.maxOverlays; i++) store.link(subject(`k${i}`));
     expect(() => store.link(subject("one-more"))).toThrow(expect.objectContaining({ code: "QUOTA_EXCEEDED" }));

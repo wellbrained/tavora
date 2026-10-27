@@ -18,7 +18,7 @@ hero:
 
 features:
   - title: Getting started
-    details: Set up a module, connect to the host and store data per game.
+    details: Set up a module, connect to the host and store data per workspace.
     link: /guide/getting-started
   - title: Module manifest
     details: Every field of tavora.module.json and what Tavora refuses.

@@ -3,7 +3,7 @@
 // integration is a group of its own; Discord is the first. Discord and AI usage
 // show only once an installed module asks for them (they left Tavora as modules). Which websites
 // modules may reach is in Settings > Modules, and the Steam import, which is
-// Tavora's own and not a module's, is in Settings > Games.
+// Tavora's own and not a module's, is in Settings > Workspaces.
 import AiUsageSection from "./AiUsageSection.vue";
 import DiscordSection from "./DiscordSection.vue";
 import SystemInfoSection from "./SystemInfoSection.vue";

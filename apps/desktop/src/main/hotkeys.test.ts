@@ -20,7 +20,7 @@ afterEach(async () => {
 const record = (fields: Partial<HotkeyRecord> = {}): HotkeyRecord => ({
   owner: "official",
   moduleId: "tavora.clock-counter",
-  gameId: "poe2",
+  workspaceId: "poe2",
   action: "start-pause",
   target: "item-1",
   label: "Boss timer",
@@ -38,27 +38,27 @@ describe("HotkeyStore", () => {
     expect((await HotkeyStore.load(dir)).all()).toEqual([record({ accelerator: "F9" })]);
   });
 
-  it("finds a key another binding in the same game uses, not one in another game", async () => {
+  it("finds a key another binding in the same workspace uses, not one in another workspace", async () => {
     const store = await HotkeyStore.load(dir);
     store.set(record());
     expect(store.conflict(record({ target: "item-2" }), "Ctrl+Alt+1")).toEqual(record());
     expect(store.conflict(record(), "Ctrl+Alt+1")).toBeUndefined();
-    expect(store.conflict(record({ gameId: "elden-ring" }), "Ctrl+Alt+1")).toBeUndefined();
-    // A key that works over every game (a general overlay's) collides with any game's key, in either direction.
+    expect(store.conflict(record({ workspaceId: "elden-ring" }), "Ctrl+Alt+1")).toBeUndefined();
+    // A key that works over every workspace (a general overlay's) collides with any workspace's key, in either direction.
     const general = (key: { target: string }) => key.target === "wide";
-    expect(store.conflict(record({ gameId: "elden-ring", target: "wide" }), "Ctrl+Alt+1", general)).toEqual(record());
-    expect(store.conflict(record({ gameId: "elden-ring", target: "narrow" }), "Ctrl+Alt+1", general)).toBeUndefined();
+    expect(store.conflict(record({ workspaceId: "elden-ring", target: "wide" }), "Ctrl+Alt+1", general)).toEqual(record());
+    expect(store.conflict(record({ workspaceId: "elden-ring", target: "narrow" }), "Ctrl+Alt+1", general)).toBeUndefined();
   });
 
-  it("limits the hotkeys of one module in one game", async () => {
+  it("limits the hotkeys of one module in one workspace", async () => {
     const store = await HotkeyStore.load(dir);
     for (let i = 0; i < LIMITS.maxHotkeys; i++) expect(store.set(record({ target: `t${i}`, accelerator: `F${(i % 24) + 1}` }))).toBe(true);
     expect(store.set(record({ target: "one-more" }))).toBe(false);
-    expect(store.set(record({ target: "one-more", gameId: "elden-ring" }))).toBe(true);
+    expect(store.set(record({ target: "one-more", workspaceId: "elden-ring" }))).toBe(true);
   });
 
   it("drops entries with a key it doesn't take", async () => {
-    await writeFile(path.join(dir, HOTKEYS_FILE), JSON.stringify({ version: 1, hotkeys: [record(), record({ target: "x", accelerator: "K" }), { owner: 1 }] }));
+    await writeFile(path.join(dir, HOTKEYS_FILE), JSON.stringify({ version: 2, hotkeys: [record(), record({ target: "x", accelerator: "K" }), { owner: 1 }] }));
     expect((await HotkeyStore.load(dir)).all()).toEqual([record()]);
   });
 });

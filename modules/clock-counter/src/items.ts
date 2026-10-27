@@ -1,4 +1,4 @@
-// What Clock & Counter keeps for a game: one document with every clock and counter, in the order shown. Clocks keep
+// What Clock & Counter keeps for a workspace: one document with every clock and counter, in the order shown. Clocks keep
 // real time: a running clock stores when it started (`since`, epoch ms) and what it had counted before (`counted`, ms),
 // so it goes on through restarts and needs no saving while it runs. Every change here is a plain function of the
 // list, so a change made twice (after a save conflict) gives the same result.

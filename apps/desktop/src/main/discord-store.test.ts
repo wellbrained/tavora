@@ -48,7 +48,7 @@ describe("Discord secrets on disk", () => {
     expect((await loadDiscordSecrets(where, encryptor())).last).toBeNull();
   });
 
-  it("keeps the server of each game, and drops entries that are damaged", async () => {
+  it("keeps the server of each workspace, and drops entries that are damaged", async () => {
     const where = await file();
     const games = {
       poe2: { guildId: "20", serverName: "Wellbrained Crew", channelId: "10", channelName: "Factory Floor" },

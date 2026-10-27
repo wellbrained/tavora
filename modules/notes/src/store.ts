@@ -1,5 +1,5 @@
 // Reads and writes notes through the SDK. Each note is one document, shared
-// by every Notes panel of this game; the list keeps a light copy of each.
+// by every Notes panel of this workspace; the list keeps a light copy of each.
 
 import { readDocument, serial, updateDocument, type Versioned } from "@tavora/official-ui";
 import { TavoraError, type DocumentSummary, type TavoraSDK } from "@tavora/sdk";
@@ -72,7 +72,7 @@ export function createNotesStore(sdk: TavoraSDK) {
     else forget(id);
   }
 
-  /** The text look chosen for this game, kept in the module's own storage. */
+  /** The text look chosen for this workspace, kept in the module's own storage. */
   async function loadAppearance(): Promise<void> {
     appearance.value = parseAppearance(await sdk.storage.get("appearance"));
   }

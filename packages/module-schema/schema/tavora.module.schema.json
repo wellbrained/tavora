@@ -220,9 +220,14 @@
         ]
       ]
     },
+    "personalWorkspaces": {
+      "type": "boolean",
+      "description": "Whether the module may be added to a personal workspace, which belongs to no game. Only for modules with an empty games list; leave it out for true, set false for a module that only makes sense in a game. Needs a minTavora newer than 0.21.42; for older Tavoras, set workspaces instead.",
+      "default": true
+    },
     "workspaces": {
       "type": "boolean",
-      "description": "Whether the module may be added to a personal workspace, which belongs to no game. Only for modules with an empty games list; leave it out for true, set false for a module that only makes sense in a game. Needs Tavora 0.18.1 or newer.",
+      "description": "Deprecated: the old name of personalWorkspaces, read until Tavora's 1.0 preparation. Never together with personalWorkspaces. Needs Tavora 0.18.1 or newer.",
       "default": true
     },
     "viewport": {

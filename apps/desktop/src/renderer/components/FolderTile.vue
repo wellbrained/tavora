@@ -1,23 +1,23 @@
 <script setup lang="ts">
-// A folder in the rail: a folder shape (with its tab), so it cannot be taken for a game, with up to four of its
-// games inside. The four places stay put and fill from the top left to the bottom right, so one game sits in
+// A folder in the rail: a folder shape (with its tab), so it cannot be taken for a workspace, with up to four of its
+// workspaces inside. The four places stay put and fill from the top left to the bottom right, so one workspace sits in
 // the first place and the rest stay empty. An open folder has an
 // outlined shape in the accent colour.
 import { computed } from "vue";
-import type { GameView } from "../../shared/host-api";
+import type { WorkspaceView } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
-import GameIcon from "./GameIcon.vue";
+import WorkspaceIcon from "./WorkspaceIcon.vue";
 
 const props = defineProps<{
-  /** The folder's games in order; only the first four are drawn. */
-  games: GameView[];
-  /** Letters the user chose for the folder, shown instead of its games. */
+  /** The folder's workspaces in order; only the first four are drawn. */
+  workspaces: WorkspaceView[];
+  /** Letters the user chose for the folder, shown instead of its workspaces. */
   label: string | null;
   open: boolean;
 }>();
 
 const SLOTS = [0, 1, 2, 3];
-const shown = computed(() => props.games.slice(0, 4));
+const shown = computed(() => props.workspaces.slice(0, 4));
 </script>
 
 <template>
@@ -32,7 +32,7 @@ const shown = computed(() => props.games.slice(0, 4));
     <span v-if="label" class="absolute inset-x-1 top-2 bottom-1 flex items-center justify-center text-sm font-semibold">{{ label }}</span>
     <span v-else class="absolute top-2 left-[5.5px] grid grid-cols-[17px_17px] grid-rows-[17px_17px] gap-[3px]">
       <template v-for="slot in SLOTS" :key="slot">
-        <GameIcon v-if="shown[slot]" :game="shown[slot]!" :size="17" />
+        <WorkspaceIcon v-if="shown[slot]" :workspace="shown[slot]!" :size="17" />
         <span v-else class="bg-foreground/[0.07] size-[17px] rounded-[4px]" data-testid="folder-empty-slot" />
       </template>
     </span>

@@ -4,7 +4,7 @@
 
 import { BLOB_ID, type JsonValue } from "@tavora/sdk";
 
-/** The one note every game has. It cannot be deleted, only cleared. */
+/** The one note every workspace has. It cannot be deleted, only cleared. */
 export const SCRATCHPAD_ID = "scratchpad";
 export const SCRATCHPAD_TITLE = "Scratchpad";
 /** The document that remembers the order the user put the notes in. It is not a note. */

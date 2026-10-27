@@ -47,7 +47,7 @@ test("each panel type opens its own page, named on its tab", async () => {
   // An update that drops a type leaves its panel in place, saying so, until another type is picked.
   const file = path.join(userData, "workspace.json");
   const saved = JSON.parse(await readFile(file, "utf8"));
-  for (const record of saved.games.poe2.instances) if (record.panelType === "inventory") record.panelType = "removed";
+  for (const record of saved.workspaces.poe2.instances) if (record.panelType === "inventory") record.panelType = "removed";
   await writeFile(file, JSON.stringify(saved));
   const again = await launch(userData);
   const gone = again.page.locator('[data-testid^="panel-type-gone-"]');
@@ -70,7 +70,7 @@ test("the library stays open to add several panels, and Add all opens one of eac
   await page.getByTestId(`open-${PANELS}-planner`).click();
   await expect(panels(page, PANELS)).toHaveCount(2);
   await expect(page.getByTestId("add-module-dialog")).toBeVisible();
-  await expect(page.getByTestId(`in-game-${PANELS}`)).toHaveText("2 open");
+  await expect(page.getByTestId(`in-workspace-${PANELS}`)).toHaveText("2 open");
   // A click outside the card closes the list, which drops over the card below.
   await page.getByTestId("module-view-title").click();
   await expect(page.getByTestId(`panel-types-${PANELS}`)).toHaveCount(0);
@@ -195,10 +195,10 @@ test("the modules menu adds the panel types not open yet and brings open ones to
 
   // The toolbar's ▾ lists the module with its panel types; the open one is checked.
   await page.getByTestId("modules-in-game").click();
-  await expect(page.getByTestId(`in-game-heading-${PANELS}`)).toHaveText("Panel Types Example");
-  await expect(page.getByTestId(`in-game-${PANELS}-planner`)).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByTestId(`in-game-${PANELS}-inventory`)).toHaveAttribute("aria-checked", "false");
-  await page.getByTestId(`in-game-${PANELS}-inventory`).click();
+  await expect(page.getByTestId(`in-workspace-heading-${PANELS}`)).toHaveText("Panel Types Example");
+  await expect(page.getByTestId(`in-workspace-${PANELS}-planner`)).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId(`in-workspace-${PANELS}-inventory`)).toHaveAttribute("aria-checked", "false");
+  await page.getByTestId(`in-workspace-${PANELS}-inventory`).click();
   await expect(tab("inventory")).toHaveCount(1);
   await expect(panels(page, PANELS)).toHaveCount(2);
 
@@ -209,7 +209,7 @@ test("the modules menu adds the panel types not open yet and brings open ones to
   await expect(front("planner")).toHaveCount(0);
   await tab("inventory").click({ button: "right" });
   await page.getByTestId("panel-in-game").click();
-  await page.getByTestId(`in-game-${PANELS}-planner`).click();
+  await page.getByTestId(`in-workspace-${PANELS}-planner`).click();
   await expect(front("planner")).toHaveCount(1);
   await expect(panels(page, PANELS)).toHaveCount(2);
 

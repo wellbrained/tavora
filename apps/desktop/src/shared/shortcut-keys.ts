@@ -32,6 +32,6 @@ export function shortcutForKey(input: KeyInput, mac: boolean): HostShortcut | nu
   if (key === "k") return "search";
   if (key === ",") return "settings";
   if (key === "h") return "home";
-  if (/^[1-9]$/.test(key)) return `game-${Number(key)}`;
+  if (/^[1-9]$/.test(key)) return `workspace-${Number(key)}`;
   return null;
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// A game's workspace: the toolbar and the docking area. The docking library
+// A workspace: the toolbar and the docking area. The docking library
 // lays out tabs, groups and splits in this page; each panel's module runs in
 // a native view that the main process draws over the panel's content area,
 // at the bounds this page reports.
@@ -38,7 +38,7 @@ import {
   type PanelInfo,
 } from "../dock";
 import DropGuide, { type GuideState } from "../components/workspace/DropGuide.vue";
-import GameIcon from "../components/GameIcon.vue";
+import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import EmptySlot from "../components/workspace/EmptySlot.vue";
 import GroupActions from "../components/workspace/GroupActions.vue";
 import LayoutsMenu from "../components/workspace/LayoutsMenu.vue";
@@ -58,7 +58,7 @@ const THEME = { name: "tavora", className: "dockview-theme-tavora", colorScheme:
 const SAVE_DELAY_MS = 300;
 
 const view = computed(() => state.value!);
-const game = computed(() => (view.value.currentGameId ? view.value.library.games[view.value.currentGameId] : undefined));
+const workspace = computed(() => (view.value.currentWorkspaceId ? view.value.library.workspaces[view.value.currentWorkspaceId] : undefined));
 
 function info(instanceId: string): PanelInfo | undefined {
   return panelInfo(
@@ -167,7 +167,7 @@ function reportSoon() {
   });
 }
 
-/** Tells the main process where the workspace is: its cover goes there while a game opens. */
+/** Tells the main process where the workspace is: its cover goes there while it opens. */
 function reportArea() {
   const rect = area.value?.getBoundingClientRect();
   const bounds = rect && rect.width >= 1 && rect.height >= 1 ? { x: rect.left, y: rect.top, width: rect.width, height: rect.height } : null;
@@ -439,8 +439,8 @@ const emptySlot = EmptySlot as unknown as VueComponent;
 <template>
   <main class="flex h-full min-w-0 flex-col" data-testid="workspace">
     <header class="app-drag flex h-14 flex-none items-center gap-3 pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+1rem)] pl-4">
-      <GameIcon v-if="game" :game="game" :size="32" />
-      <h1 class="max-w-72 min-w-0 truncate text-lg font-semibold">{{ game?.name }}</h1>
+      <WorkspaceIcon v-if="workspace" :workspace="workspace" :size="32" />
+      <h1 class="max-w-72 min-w-0 truncate text-lg font-semibold">{{ workspace?.name }}</h1>
       <span class="text-info ml-auto min-w-0 truncate text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>
       <div class="app-no-drag flex flex-none items-center gap-2">
         <ModuleUpdatesButton />
@@ -494,9 +494,9 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         </Button>
       </div>
       <DropGuide v-if="guide" :guide="guide" />
-      <!-- The game just opened: one plain card over the dock until every panel has its data. The host's cover lies over it
+      <!-- The workspace just opened: one plain card over the dock until every panel has its data. The host's cover lies over it
            until every panel has drawn, and shows the fire when opening takes long (panel-cover.ts). -->
-      <div v-if="view.opening" class="bg-background absolute inset-x-2 top-0 bottom-2 z-20 rounded-[10px] border" role="status" :aria-label="t('panel.loading', { name: game?.name ?? '' })" data-testid="workspace-loading"></div>
+      <div v-if="view.opening" class="bg-background absolute inset-x-2 top-0 bottom-2 z-20 rounded-[10px] border" role="status" :aria-label="t('panel.loading', { name: workspace?.name ?? '' })" data-testid="workspace-loading"></div>
       <div
         v-if="!view.panels.length && !view.layout"
         class="bg-background absolute inset-x-2 top-0 bottom-2 z-10 flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed text-center"
@@ -504,7 +504,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       >
         <LayoutGrid class="text-muted-foreground mb-2 size-12" :stroke-width="1" />
         <p class="text-lg font-semibold">{{ t("workspace.startTitle") }}</p>
-        <p class="text-muted-foreground max-w-sm text-sm">{{ t("workspace.startText", { name: game?.name ?? "" }) }}</p>
+        <p class="text-muted-foreground max-w-sm text-sm">{{ t("workspace.startText", { name: workspace?.name ?? "" }) }}</p>
         <div class="mt-3 flex flex-wrap justify-center gap-2" role="group" :aria-label="t('workspace.chooseLayout')" data-testid="empty-templates">
           <button
             v-for="template in LAYOUT_TEMPLATES"

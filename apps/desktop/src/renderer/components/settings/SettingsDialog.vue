@@ -17,7 +17,7 @@ import AccountSection from "./AccountSection.vue";
 import AppearanceSection from "./AppearanceSection.vue";
 import BrowserSection from "./BrowserSection.vue";
 import DevelopmentSection from "./DevelopmentSection.vue";
-import GamesSection from "./GamesSection.vue";
+import WorkspacesSection from "./WorkspacesSection.vue";
 import GeneralSection from "./GeneralSection.vue";
 import IntegrationsSection from "./IntegrationsSection.vue";
 import ModulesSection from "./ModulesSection.vue";
@@ -100,13 +100,13 @@ interface Result {
   keywords: string[];
 }
 
-// Settings, plus the games in Trash, so "valheim" finds a removed game.
+// Settings, plus the workspaces in Trash, so "valheim" finds a removed one.
 const results = computed<Result[]>(() => {
   if (!query.value.trim()) return [];
   const trashed = library.value.trash.map((entry) => ({
-    id: `trash-${entry.game.id}`,
+    id: `trash-${entry.workspace.id}`,
     section: "trash" as const,
-    label: entry.game.name,
+    label: entry.workspace.name,
     description: t("settings.results.trashUntil", { date: formatDate(entry.purgeAt) }),
     keywords: [],
   }));
@@ -227,7 +227,7 @@ function onSearchKey(event: KeyboardEvent) {
             <OverlaysSection v-else-if="section === 'overlays'" :highlight="highlight" />
             <BrowserSection v-else-if="section === 'browser'" :highlight="highlight" />
             <DevelopmentSection v-else-if="section === 'development'" :highlight="highlight" />
-            <GamesSection v-else-if="section === 'games'" :highlight="highlight" />
+            <WorkspacesSection v-else-if="section === 'workspaces'" :highlight="highlight" />
             <TrashSection v-else-if="section === 'trash'" :highlight="highlight" />
             <PatchNotesSection v-else-if="section === 'patch-notes'" />
           </div>

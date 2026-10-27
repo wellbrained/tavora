@@ -60,7 +60,7 @@ A 404 or 500 from the API is an answer with that `status`, not an error.
 
 Some calls need no grant but only work right after the user clicked or pressed a key in your panel, within 2 seconds, one call per press:
 
-- `tavora.links.open(url)`: opens a web page in the game's Browser panel.
+- `tavora.links.open(url)`: opens a web page in the workspace's Browser panel.
 - `tavora.clipboard.writeImage(png)`: copies a PNG.
 - `tavora.pictures.save(png, name)`: saves a PNG where the user picks in Tavora's save dialog.
 - `tavora.ui.showMenu(...)`: a menu Tavora draws above every panel.

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Settings > Streaming: Stream overlays (module pages for OBS, served on this PC only) and the hotkeys set for
-// module actions, in every game. Modules ask for overlays with the stream-overlay connector; taking it back here
+// module actions, in every workspace. Modules ask for overlays with the stream-overlay connector; taking it back here
 // takes back everything the module was granted, as in Settings > Modules.
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -10,7 +10,7 @@ import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import type { HotkeyView } from "../../../shared/host-api";
-import { act, confirmAction, gamesUsing, listOf, state, submitAction } from "../../host";
+import { act, confirmAction, workspacesUsing, listOf, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import SettingGroup from "./SettingGroup.vue";
@@ -61,11 +61,11 @@ function resetLinks() {
 const overlayModules = computed(() => (state.value?.modules ?? []).filter((module) => module.permissions.granted.connectors.includes("stream-overlay")));
 
 function revoke(module: ModuleView) {
-  const games = gamesUsing(module);
+  const workspaces = workspacesUsing(module);
   confirmAction({
     title: t("integrations.grants.revokeTitle", { name: module.name }),
-    message: games.length
-      ? t("integrations.grants.revokeUsed", { name: module.name, games: listOf(games) })
+    message: workspaces.length
+      ? t("integrations.grants.revokeUsed", { name: module.name, workspaces: listOf(workspaces) })
       : t("integrations.grants.revokeUnused", { name: module.name }),
     confirm: t("integrations.grants.revoke"),
     danger: true,
@@ -73,22 +73,22 @@ function revoke(module: ModuleView) {
   });
 }
 
-/** Hotkeys by game, games in the order of their names. */
-const hotkeyGames = computed(() => {
-  const games = new Map<string, { name: string; hotkeys: HotkeyView[] }>();
+/** Hotkeys by workspace, workspaces in the order of their names. */
+const hotkeyWorkspaces = computed(() => {
+  const workspaces = new Map<string, { name: string; hotkeys: HotkeyView[] }>();
   for (const hotkey of streaming.value.hotkeys) {
-    if (!games.has(hotkey.gameId)) games.set(hotkey.gameId, { name: hotkey.gameName, hotkeys: [] });
-    games.get(hotkey.gameId)!.hotkeys.push(hotkey);
+    if (!workspaces.has(hotkey.workspaceId)) workspaces.set(hotkey.workspaceId, { name: hotkey.workspaceName, hotkeys: [] });
+    workspaces.get(hotkey.workspaceId)!.hotkeys.push(hotkey);
   }
-  return [...games.entries()].map(([id, game]) => ({ id, ...game })).sort((a, b) => a.name.localeCompare(b.name));
+  return [...workspaces.entries()].map(([id, workspace]) => ({ id, ...workspace })).sort((a, b) => a.name.localeCompare(b.name));
 });
 
 function previewLink(link: (typeof streaming.value.links)[number]) {
-  void act({ type: "preview-overlay", owner: link.owner, moduleId: link.moduleId, gameId: link.gameId, key: link.key });
+  void act({ type: "preview-overlay", owner: link.owner, moduleId: link.moduleId, workspaceId: link.workspaceId, key: link.key });
 }
 
 function removeHotkey(hotkey: HotkeyView) {
-  void act({ type: "remove-hotkey", owner: hotkey.owner, moduleId: hotkey.moduleId, gameId: hotkey.gameId, action: hotkey.action, target: hotkey.target });
+  void act({ type: "remove-hotkey", owner: hotkey.owner, moduleId: hotkey.moduleId, workspaceId: hotkey.workspaceId, action: hotkey.action, target: hotkey.target });
 }
 </script>
 
@@ -130,10 +130,10 @@ function removeHotkey(hotkey: HotkeyView) {
   <SettingGroup :title="t('streaming.links.title')">
     <p v-if="!streaming.links.length" class="text-muted-foreground py-4 text-sm" data-testid="overlay-links-empty">{{ t("streaming.links.none") }}</p>
     <ul v-else class="flex flex-col" data-testid="overlay-link-list">
-      <li v-for="link in streaming.links" :key="`${link.gameId}:${link.moduleId}:${link.key}`" class="flex items-center gap-3 border-b py-3 last:border-b-0">
+      <li v-for="link in streaming.links" :key="`${link.workspaceId}:${link.moduleId}:${link.key}`" class="flex items-center gap-3 border-b py-3 last:border-b-0">
         <span class="flex min-w-0 flex-1 flex-col">
           <span class="truncate font-medium">{{ link.moduleName }} · {{ link.key }}</span>
-          <span class="text-muted-foreground truncate text-xs">{{ link.gameName }}</span>
+          <span class="text-muted-foreground truncate text-xs">{{ link.workspaceName }}</span>
         </span>
         <Button variant="secondary" size="sm" :aria-label="t('overlays.previewLabel', { name: link.moduleName })" :data-testid="`link-preview-${link.key}`" @click="previewLink(link)">{{ t("overlays.preview") }}</Button>
       </li>
@@ -146,11 +146,11 @@ function removeHotkey(hotkey: HotkeyView) {
       data-setting="hotkeys"
       :data-highlighted="highlight === 'hotkeys' || undefined"
     >
-      <p v-if="!hotkeyGames.length" class="text-muted-foreground py-4 text-sm" data-testid="hotkeys-empty">{{ t("streaming.hotkeys.none") }}</p>
-      <section v-for="game in hotkeyGames" :key="game.id" class="border-b py-3 last:border-b-0" :data-testid="`hotkeys-${game.id}`">
-        <h4 class="text-muted-foreground mb-1 text-sm font-medium">{{ game.name }}</h4>
+      <p v-if="!hotkeyWorkspaces.length" class="text-muted-foreground py-4 text-sm" data-testid="hotkeys-empty">{{ t("streaming.hotkeys.none") }}</p>
+      <section v-for="workspace in hotkeyWorkspaces" :key="workspace.id" class="border-b py-3 last:border-b-0" :data-testid="`hotkeys-${workspace.id}`">
+        <h4 class="text-muted-foreground mb-1 text-sm font-medium">{{ workspace.name }}</h4>
         <ul class="flex flex-col">
-          <li v-for="hotkey in game.hotkeys" :key="`${hotkey.moduleId}:${hotkey.target}:${hotkey.action}`" class="flex min-h-10 flex-wrap items-center gap-x-4 gap-y-1 py-1">
+          <li v-for="hotkey in workspace.hotkeys" :key="`${hotkey.moduleId}:${hotkey.target}:${hotkey.action}`" class="flex min-h-10 flex-wrap items-center gap-x-4 gap-y-1 py-1">
             <span class="flex min-w-0 flex-1 basis-48 flex-col">
               <span class="truncate">{{ hotkey.label }} · {{ hotkey.actionName }}</span>
               <span class="text-muted-foreground truncate text-xs">{{ hotkey.moduleName }}<template v-if="hotkey.taken"> · <span class="text-destructive">{{ t("streaming.hotkeys.taken") }}</span></template></span>

@@ -69,7 +69,7 @@ function make(extra: Record<string, unknown> = {}) {
     instanceId: "11111111-1111-4111-8111-111111111111",
     module: { owner: "official", root: "/nowhere", provenance: "official", manifest: { id: "tavora.todos", entry: "dist/index.html", permissions: {} } },
     panelType: null,
-    game: { id: "elden", displayName: "Elden Ring", kind: "game" },
+    workspace: { id: "elden", displayName: "Elden Ring", kind: "game" },
     data: { blobs: {} },
     getTheme: () => ({ tokens: { background: "#202020" } }),
     savePicture: async () => null,

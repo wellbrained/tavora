@@ -4,7 +4,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { desktopDir, inModule, launch, newUserData, openGame, openModule, VANILLA } from "./harness";
+import { desktopDir, inModule, launch, newUserData, openWorkspace, openModule, VANILLA } from "./harness";
 
 const rootToken = (page: Page, name: string) =>
   page.evaluate((token) => getComputedStyle(document.documentElement).getPropertyValue(`--${token}`).trim(), name);
@@ -17,7 +17,7 @@ async function openAppearance(page: Page) {
 test("picking a theme recolours Tavora and its modules, and is kept after a restart", async () => {
   const userData = await newUserData();
   const { app, page } = await launch(userData);
-  await openGame(page, "poe2");
+  await openWorkspace(page, "poe2");
   await openModule(page, VANILLA);
 
   await openAppearance(page);

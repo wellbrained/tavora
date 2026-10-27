@@ -23,16 +23,16 @@ const gameStart = computed({
   get: () => library.value.gameStart,
   set: (value: GameStart) => void act({ type: "set-game-start", gameStart: value }),
 });
-/** Not a game id, so it can stand for staying on the game. */
+/** Not a workspace id, so it can stand for staying where the user is. */
 const STAY = ":stay";
 const gameEnd = computed({
-  get: () => library.value.gameEndWorkspace ?? STAY,
+  get: () => library.value.gameEndWorkspaceId ?? STAY,
   set: (value: string) => void act({ type: "set-game-end", workspaceId: value === STAY ? null : value }),
 });
 const gameEndOptions = computed(() => [
   { value: STAY, label: t("settings.game-end.stay") },
-  ...Object.values(library.value.games)
-    .filter((entry) => entry.kind === "workspace")
+  ...Object.values(library.value.workspaces)
+    .filter((entry) => entry.kind === "personal")
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((entry) => ({ value: entry.id, label: entry.name })),
 ]);
@@ -88,7 +88,7 @@ async function showWelcomeAgain() {
         :label="t('settings.startup.label')"
         :options="[
           { value: 'welcome', label: t('settings.startup.home'), testid: 'startup-welcome' },
-          { value: 'last-game', label: t('settings.startup.lastGame'), testid: 'startup-last-game' },
+          { value: 'last-workspace', label: t('settings.startup.lastWorkspace'), testid: 'startup-last-workspace' },
         ]"
       />
     </SettingRow>

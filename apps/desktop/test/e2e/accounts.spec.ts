@@ -334,7 +334,7 @@ async function signIn(page: import("@playwright/test").Page, email: string, crea
   await expect(page.getByTestId("account-methods")).toContainText(email);
 }
 
-test("the cloud copy takes one PC's games to another, with the recovery key", async () => {
+test("the cloud copy takes one PC's workspaces to another, with the recovery key", async () => {
   // Three starts of Tavora.
   test.setTimeout(120_000);
   // A pretend Discord app turns on the test key store on Linux, which has no keyring here; the copy key needs one.
@@ -377,8 +377,8 @@ test("the cloud copy takes one PC's games to another, with the recovery key", as
   }
   const again = await launch(b.userData, [], { env, seed: false });
   try {
-    await expect(again.page.getByTestId("rail-game-poe2")).toBeVisible();
-    await expect(again.page.getByTestId("rail-game-satisfactory")).toBeVisible();
+    await expect(again.page.getByTestId("rail-workspace-poe2")).toBeVisible();
+    await expect(again.page.getByTestId("rail-workspace-satisfactory")).toBeVisible();
   } finally {
     await again.app.close();
   }

@@ -6,7 +6,7 @@ import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, inModule, launch, newUserData, openGame, openModule, panels, seedLibrary, VANILLA } from "./harness";
+import { expectModuleText, inModule, launch, newUserData, openWorkspace, openModule, panels, seedLibrary, VANILLA } from "./harness";
 
 async function addModule(userData: string, folder: string, id: string): Promise<string> {
   const dir = path.join(userData, "modules", folder);
@@ -115,7 +115,7 @@ test("the modules page lists where modules came from, reloads, and removes one w
 
   // Open a panel of the module in a game, then remove the module.
   await page.getByTestId("settings-close").click();
-  await openGame(page, "poe2");
+  await openWorkspace(page, "poe2");
   await openModule(page, "local.test.mini");
   await expect(panels(page, "local.test.mini")).toHaveCount(1);
   await page.getByTestId("rail-settings").click();

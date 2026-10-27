@@ -1,7 +1,7 @@
 // Stream overlays: pages a module ships for streaming software such as OBS (the manifest's `overlay`). The user
 // adds an overlay's link as a Browser Source; Tavora serves the page and its files from this PC only, and passes on
 // what the module published for it (overlay.publish) as server-sent events. Each link belongs to one key of one
-// module in one game and carries a random token, which is the only thing that makes it reachable: the server
+// module in one workspace and carries a random token, which is the only thing that makes it reachable: the server
 // listens on 127.0.0.1, refuses any other Host header (so a web page can't reach it through DNS rebinding), and serves
 // a link only while its module is installed under the same owner with the `stream-overlay` connector granted.
 import { randomBytes } from "node:crypto";
@@ -32,7 +32,7 @@ const TOKEN = /^[0-9a-f]{32}$/;
 export interface OverlaySubject {
   owner: string;
   moduleId: string;
-  gameId: string;
+  workspaceId: string;
   key: string;
 }
 
@@ -40,9 +40,9 @@ export interface OverlayLink extends OverlaySubject {
   token: string;
 }
 
-type OverlayFile = { version: 1; links: (OverlayLink & { state?: JsonValue })[] };
+type OverlayFile = { version: 2; links: (OverlayLink & { state?: JsonValue })[] };
 
-const sameSubject = (a: OverlaySubject, b: OverlaySubject) => a.owner === b.owner && a.moduleId === b.moduleId && a.gameId === b.gameId && a.key === b.key;
+const sameSubject = (a: OverlaySubject, b: OverlaySubject) => a.owner === b.owner && a.moduleId === b.moduleId && a.workspaceId === b.workspaceId && a.key === b.key;
 
 function isSubjectField(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 128;
@@ -67,9 +67,9 @@ export class OverlayStore {
     const states = new Map<string, JsonValue>();
     for (const entry of Array.isArray(raw?.links) ? raw.links : []) {
       if (typeof entry !== "object" || entry === null) continue;
-      const { token, owner, moduleId, gameId, key, state } = entry as Partial<OverlayLink & { state: unknown }>;
-      if (typeof token !== "string" || !TOKEN.test(token) || ![owner, moduleId, gameId, key].every(isSubjectField)) continue;
-      links.set(token, { token, owner: owner!, moduleId: moduleId!, gameId: gameId!, key: key! });
+      const { token, owner, moduleId, workspaceId, key, state } = entry as Partial<OverlayLink & { state: unknown }>;
+      if (typeof token !== "string" || !TOKEN.test(token) || ![owner, moduleId, workspaceId, key].every(isSubjectField)) continue;
+      links.set(token, { token, owner: owner!, moduleId: moduleId!, workspaceId: workspaceId!, key: key! });
       if (state !== undefined && isJsonValue(state)) states.set(token, state);
     }
     return new OverlayStore(file, links, states);
@@ -97,8 +97,8 @@ export class OverlayStore {
     const existing = this.linkOf(subject);
     if (existing) return existing;
     let count = 0;
-    for (const link of this.links.values()) if (link.owner === subject.owner && link.moduleId === subject.moduleId && link.gameId === subject.gameId) count++;
-    if (count >= LIMITS.maxOverlays) throw new HostError("QUOTA_EXCEEDED", `at most ${LIMITS.maxOverlays} overlays per module and game`);
+    for (const link of this.links.values()) if (link.owner === subject.owner && link.moduleId === subject.moduleId && link.workspaceId === subject.workspaceId) count++;
+    if (count >= LIMITS.maxOverlays) throw new HostError("QUOTA_EXCEEDED", `at most ${LIMITS.maxOverlays} overlays per module and workspace`);
     const link = { ...subject, token: randomBytes(16).toString("hex") };
     this.links.set(link.token, link);
     this.saveSoon();
@@ -139,7 +139,7 @@ export class OverlayStore {
     return [...this.links.values()];
   }
 
-  /** Forgets the links matching `test` (a deleted game, a module whose data was deleted). */
+  /** Forgets the links matching `test` (a deleted workspace, a module whose data was deleted). */
   forget(test: (link: OverlayLink) => boolean): void {
     let changed = false;
     for (const link of [...this.links.values()]) {
@@ -191,7 +191,7 @@ export class OverlayStore {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
     const body: OverlayFile = {
-      version: 1,
+      version: 2,
       links: [...this.links.values()].map((link) => (this.states.has(link.token) ? { ...link, state: this.states.get(link.token)! } : { ...link })),
     };
     const text = `${JSON.stringify(body, null, 2)}\n`;

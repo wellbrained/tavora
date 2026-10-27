@@ -33,7 +33,7 @@ const steamIcons = computed({
       <Switch v-model="steamIcons" :aria-label="t('settings.steam-icons.label')" data-testid="steam-icons" />
     </SettingRow>
     <SettingRow :label="t('settings.share-icons.label')" :description="t('settings.share-icons.description')" setting="share-icons" :highlighted="highlight === 'share-icons'">
-      <Button variant="secondary" data-testid="open-share-icons" :disabled="!library.onlineSearch || !library.steamIcons" @click="dialog = { kind: 'share-icons', gameIds: [] }">
+      <Button variant="secondary" data-testid="open-share-icons" :disabled="!library.onlineSearch || !library.steamIcons" @click="dialog = { kind: 'share-icons', workspaceIds: [] }">
         {{ t("settings.shareIcons.button") }}
       </Button>
     </SettingRow>

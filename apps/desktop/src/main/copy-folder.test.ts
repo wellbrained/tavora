@@ -219,7 +219,7 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
 
   it("works signed out, stays on after signing out, and brings a PC's data to another", async () => {
     const onedrive = await folder();
-    const a = await pc({ "library.json": JSON.stringify({ version: 1, games: { "elden-ring": {} } }) });
+    const a = await pc({ "library.json": JSON.stringify({ version: 2, workspaces: { "elden-ring": {} } }) });
     const atA = tavora(a);
     await atA.sync.beforeLoad();
     await atA.sync.turnOn(onedrive);
@@ -233,7 +233,7 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
     await again.sync.beforeLoad();
     expect(again.sync.view()).toMatchObject({ on: true, folder: onedrive });
 
-    const b = await pc({ "library.json": JSON.stringify({ version: 1, games: {} }) });
+    const b = await pc({ "library.json": JSON.stringify({ version: 2, workspaces: {} }) });
     const atB = tavora(b);
     await atB.sync.beforeLoad();
     await atB.sync.turnOn(onedrive);
@@ -242,7 +242,7 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
     await atB.sync.keep("cloud");
     expect(atB.events.restarts).toBe(1);
     await tavora(b).sync.beforeLoad();
-    expect(JSON.parse(await read(b.userData, "library.json")).games).toHaveProperty("elden-ring");
+    expect(JSON.parse(await read(b.userData, "library.json")).workspaces).toHaveProperty("elden-ring");
   });
 
   it("moves to another folder with the same key, and the other PCs turn off until turned on there", async () => {

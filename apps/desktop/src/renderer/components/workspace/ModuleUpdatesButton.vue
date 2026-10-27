@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// In the game header, only while module updates wait: how many, and a way to the module library's
+// In the workspace header, only while module updates wait: how many, and a way to the module library's
 // Updates view. The app's own update has its marker on the rail instead.
 import { CloudDownload } from "@lucide/vue";
 import { computed } from "vue";

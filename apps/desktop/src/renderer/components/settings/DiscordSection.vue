@@ -5,7 +5,7 @@
 // sign-in encrypted; none of it comes to this page or to a module.
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { act, confirmAction, discord, gamesUsing, listOf, state, submitAction } from "../../host";
+import { act, confirmAction, discord, workspacesUsing, listOf, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import SettingGroup from "./SettingGroup.vue";
@@ -37,11 +37,11 @@ type ModuleView = NonNullable<typeof state.value>["modules"][number];
 const users = computed(() => (state.value?.modules ?? []).filter((module) => module.permissions.granted.connectors.includes("discord")));
 
 function revoke(module: ModuleView) {
-  const games = gamesUsing(module);
+  const workspaces = workspacesUsing(module);
   confirmAction({
     title: t("integrations.grants.revokeTitle", { name: module.name }),
-    message: games.length
-      ? t("integrations.grants.revokeUsed", { name: module.name, games: listOf(games) })
+    message: workspaces.length
+      ? t("integrations.grants.revokeUsed", { name: module.name, workspaces: listOf(workspaces) })
       : t("integrations.discord.revokeUnused", { name: module.name }),
     confirm: t("integrations.grants.revoke"),
     danger: true,

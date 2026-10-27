@@ -1,6 +1,6 @@
 // Hotkeys for module actions (the manifest's `actions`, hotkeys.set). The user picks each key in Tavora's own
-// dialog, for one game; the module only hears which action fired for which target. Keys are registered with the
-// system only for the game shown now, and only for modules with a panel in its workspace, so a key does nothing
+// dialog, for one workspace; the module only hears which action fired for which target. Keys are registered with the
+// system only for the workspace shown now, and only for modules with a panel in it, so a key does nothing
 // (and is not taken from other programs) anywhere else. Kept in hotkeys.json in the data folder.
 import path from "node:path";
 import { LIMITS } from "@tavora/sdk/protocol";
@@ -14,7 +14,7 @@ export const HOTKEYS_FILE = "hotkeys.json";
 export interface HotkeyRecord {
   owner: string;
   moduleId: string;
-  gameId: string;
+  workspaceId: string;
   /** One of the module's manifest `actions` ids. */
   action: string;
   /** The module's own id for what the action works on. */
@@ -25,13 +25,13 @@ export interface HotkeyRecord {
   accelerator: string;
 }
 
-type HotkeyFile = { version: 1; hotkeys: HotkeyRecord[] };
+type HotkeyFile = { version: 2; hotkeys: HotkeyRecord[] };
 
-const FIELDS = ["owner", "moduleId", "gameId", "action", "target", "label"] as const;
+const FIELDS = ["owner", "moduleId", "workspaceId", "action", "target", "label"] as const;
 
-/** Whether two records are for the same action on the same target of one module in one game. */
+/** Whether two records are for the same action on the same target of one module in one workspace. */
 export function sameBinding(a: Omit<HotkeyRecord, "label" | "accelerator">, b: Omit<HotkeyRecord, "label" | "accelerator">): boolean {
-  return a.owner === b.owner && a.moduleId === b.moduleId && a.gameId === b.gameId && a.action === b.action && a.target === b.target;
+  return a.owner === b.owner && a.moduleId === b.moduleId && a.workspaceId === b.workspaceId && a.action === b.action && a.target === b.target;
 }
 
 export class HotkeyStore {
@@ -59,9 +59,9 @@ export class HotkeyStore {
     return this.records;
   }
 
-  /** A module's hotkeys in one game. */
-  of(owner: string, moduleId: string, gameId: string): HotkeyRecord[] {
-    return this.records.filter((record) => record.owner === owner && record.moduleId === moduleId && record.gameId === gameId);
+  /** A module's hotkeys in one workspace. */
+  of(owner: string, moduleId: string, workspaceId: string): HotkeyRecord[] {
+    return this.records.filter((record) => record.owner === owner && record.moduleId === moduleId && record.workspaceId === workspaceId);
   }
 
   find(binding: Omit<HotkeyRecord, "label" | "accelerator">): HotkeyRecord | undefined {
@@ -69,20 +69,20 @@ export class HotkeyStore {
   }
 
   /**
-   * The other hotkey of a game that uses this key, if any. A key that works over every game (the layer key, or the key
-   * of a general overlay; `general` tells) conflicts with any game's keys.
+   * The other hotkey of a workspace that uses this key, if any. A key that works over every workspace (the layer key, or the key
+   * of a general overlay; `general` tells) conflicts with any workspace's keys.
    */
   conflict(binding: Omit<HotkeyRecord, "label" | "accelerator">, accelerator: string, general: (key: Omit<HotkeyRecord, "label" | "accelerator">) => boolean = () => false): HotkeyRecord | undefined {
-    const all = (key: Omit<HotkeyRecord, "label" | "accelerator">) => key.gameId === ALL_GAMES || general(key);
+    const all = (key: Omit<HotkeyRecord, "label" | "accelerator">) => key.workspaceId === ALL_GAMES || general(key);
     const bindingAll = all(binding);
-    return this.records.find((record) => (record.gameId === binding.gameId || bindingAll || all(record)) && record.accelerator === accelerator && !sameBinding(record, binding));
+    return this.records.find((record) => (record.workspaceId === binding.workspaceId || bindingAll || all(record)) && record.accelerator === accelerator && !sameBinding(record, binding));
   }
 
-  /** Sets (or changes) the key of a binding; false when the module already has the most hotkeys in this game. */
+  /** Sets (or changes) the key of a binding; false when the module already has the most hotkeys in this workspace. */
   set(record: HotkeyRecord): boolean {
     const index = this.records.findIndex((item) => sameBinding(item, record));
     if (index >= 0) this.records[index] = { ...record };
-    else if (this.of(record.owner, record.moduleId, record.gameId).length >= LIMITS.maxHotkeys) return false;
+    else if (this.of(record.owner, record.moduleId, record.workspaceId).length >= LIMITS.maxHotkeys) return false;
     else this.records.push({ ...record });
     void this.save();
     return true;
@@ -98,7 +98,7 @@ export class HotkeyStore {
   }
 
   private save(): Promise<void> {
-    const text = `${JSON.stringify({ version: 1, hotkeys: this.records } satisfies HotkeyFile, null, 2)}\n`;
+    const text = `${JSON.stringify({ version: 2, hotkeys: this.records } satisfies HotkeyFile, null, 2)}\n`;
     return this.queue.run(() => writeFileAtomic(this.file, text)).catch((error: unknown) => console.error("[tavora] saving hotkeys failed", error));
   }
 }
