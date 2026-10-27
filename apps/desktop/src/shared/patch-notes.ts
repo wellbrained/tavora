@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.52",
+    date: "2026-10-27",
+    title: "Fewer modules held for review",
+    notes: [
+      "Big modules no longer wait for a person just because the virus scan needed more time.",
+      "The code check no longer mistakes a method called import, a comment, or the Brotli library for warning signs.",
+    ],
+    prs: [
+      { number: 418, title: "Moderation: fewer false holds from the code check and the virus scan" },
+    ],
+    tags: ["catalog", "service"],
+  },
+  {
     version: "0.21.51",
     date: "2026-10-27",
     title: "Tidy project folders",
