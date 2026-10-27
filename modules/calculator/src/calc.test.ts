@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyText, EMPTY, evaluate, format, insert, press, pretty, type Entry } from "./calc";
+import { copyText, EMPTY, evaluate, format, insert, press, pretty, reference, segments, type Entry, type Lookup } from "./calc";
 
 const value = (text: string) => {
   const outcome = evaluate(text);
@@ -148,5 +148,69 @@ describe("copyText", () => {
     expect(copyText({ text: "1000*1.5", fresh: false })).toBe("1500");
     expect(copyText({ text: "1234.5", fresh: true }, true)).toBe("1234,5");
     expect(copyText({ text: "2+", fresh: false })).toBeNull();
+  });
+});
+
+describe("k, m and b", () => {
+  it("count thousands, millions and billions", () => {
+    expect(value("5k")).toBe("5000");
+    expect(value("2.5m+1K")).toBe("2501000");
+    expect(value("1b/4")).toBe("250000000");
+  });
+
+  it("follow a number once, and a number after them multiplies", () => {
+    expect(type(["5", "k", "m"])).toBe("5m");
+    expect(type(["+", "k", "(", "k"])).toBe("(");
+    expect(type(["2", "k", "3"])).toBe("2k*3");
+    expect(type(["2", "k", "square"])).toBe("2k²");
+  });
+});
+
+describe("round up", () => {
+  it("works on the number, the bracket or the result", () => {
+    expect(type(["7", "/", "2", "ceil"])).toBe("7/⌈2⌉");
+    expect(type(["(", "7", "/", "2", ")", "ceil"])).toBe("⌈7/2⌉");
+    expect(type(["ceil"], { text: "3.5", fresh: true })).toBe("⌈3.5⌉");
+  });
+
+  it("rounds up what shows, not float noise", () => {
+    expect(value("⌈7/2⌉")).toBe("4");
+    expect(value("⌈-3.5⌉")).toBe("-3");
+    expect(value("⌈0.1*3*10⌉")).toBe("3");
+    expect(value("2⌈1.2⌉")).toBe("4");
+    expect(value("⌈1.2")).toBe("2");
+  });
+
+  it("goes as a whole with Delete last", () => {
+    expect(type(["back"], { text: "5+⌈7/2⌉", fresh: false })).toBe("5+7/2");
+  });
+});
+
+describe("saved values", () => {
+  const values: Lookup = (name) => ({ iron: 100, copper: 2.5 })[name.toLowerCase()];
+
+  it("are worked out with their number now", () => {
+    expect(evaluate("[iron]*2+[Copper]", values)).toEqual({ ok: true, value: 202.5 });
+    expect(copyText({ text: "[copper]", fresh: false }, true, values)).toBe("2,5");
+  });
+
+  it("can't be found once deleted", () => {
+    expect(evaluate("[gold]+1", values)).toEqual({ ok: false, reason: "missing" });
+    expect(evaluate("[iron]")).toEqual({ ok: false, reason: "missing" });
+  });
+
+  it("are tapped in like a number", () => {
+    expect(reference(EMPTY, "iron").text).toBe("[iron]");
+    expect(reference({ text: "5+", fresh: false }, "iron").text).toBe("5+[iron]");
+    expect(reference({ text: "2", fresh: false }, "iron").text).toBe("2*[iron]");
+    expect(reference({ text: "42", fresh: true }, "iron").text).toBe("[iron]");
+    expect(type(["3"], reference(EMPTY, "iron"))).toBe("[iron]*3");
+    expect(type(["sqrt"], reference(EMPTY, "iron"))).toBe("√[iron]");
+    expect(type(["back"], { text: "2*[iron]", fresh: false })).toBe("2*");
+  });
+
+  it("show by name, without grouping the name's digits", () => {
+    expect(pretty("1000*[iron1000]")).toBe("1,000×iron1000");
+    expect(segments("2*[iron]")).toEqual([{ text: "2×" }, { text: "iron", name: "iron" }]);
   });
 });
