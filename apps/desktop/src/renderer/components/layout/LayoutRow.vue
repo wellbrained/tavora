@@ -18,19 +18,22 @@ import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import { send } from "./layout-state";
 
-const props = defineProps<{ item: LayoutItemView; selected: boolean; gameName: string; perGame: boolean }>();
+/** `setup`: the overlay setup shown, whose item this row changes. */
+const props = defineProps<{ item: LayoutItemView; selected: boolean; setup: string; setupName: string }>();
 const mac = navigator.platform.startsWith("Mac");
 
 type Change = { mode?: "always" | "toggle"; opacity?: 100 | 75 | 50 | 25; hideFromCapture?: boolean };
 
 function change(next: Change) {
   const target = props.item.target;
-  void act(target.kind === "panel" ? { type: "set-panel-view", instanceId: target.instanceId, ...next } : { type: "set-game-overlay", owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key, ...next });
+  const setup = props.setup;
+  void act(target.kind === "panel" ? { type: "set-panel-view", setup, instanceId: target.instanceId, ...next } : { type: "set-game-overlay", setup, owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key, ...next });
 }
 
 function remove() {
   const target = props.item.target;
-  void act(target.kind === "panel" ? { type: "stop-panel-in-game", instanceId: target.instanceId } : { type: "remove-game-overlay", owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key });
+  const setup = props.setup;
+  void act(target.kind === "panel" ? { type: "stop-panel-in-game", setup, instanceId: target.instanceId } : { type: "remove-game-overlay", setup, owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key });
 }
 
 function askKey() {
@@ -50,7 +53,7 @@ const opacity = computed({
   get: () => String(props.item.opacity),
   set: (value: string) => change({ opacity: Number(value) as 100 | 75 | 50 | 25 }),
 });
-const removeLabel = computed(() => (props.item.kind === "panel" ? t("overlays.stopShowingNamed", { name: props.item.name }) : t("overlays.removeLabel", { name: props.item.name, game: props.item.general ? t("overlays.allGames") : props.gameName })));
+const removeLabel = computed(() => (props.item.kind === "panel" ? t("overlays.stopShowingNamed", { name: props.item.name }) : t("overlays.removeLabel", { name: props.item.name, game: props.setupName })));
 </script>
 
 <template>
@@ -59,8 +62,7 @@ const removeLabel = computed(() => (props.item.kind === "panel" ? t("overlays.st
       <button type="button" class="flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left outline-none focus-visible:ring-2" :aria-pressed="selected" @click="send({ type: 'select', id: selected ? null : item.id })">
         <ModuleIcon :module-id="item.moduleId" />
         <span :class="cn('min-w-0 flex-1 truncate text-sm font-medium', item.hiddenOnCanvas && 'text-muted-foreground')">{{ item.name }}</span>
-        <Badge v-if="item.general" variant="outline">{{ t("overlays.allGames") }}</Badge>
-        <Badge v-else-if="item.kind === 'panel'" variant="secondary">{{ t("overlays.layout.panel") }}</Badge>
+        <Badge v-if="item.kind === 'panel'" variant="secondary">{{ t("overlays.layout.panel") }}</Badge>
       </button>
       <Button
         variant="ghost"
@@ -75,10 +77,6 @@ const removeLabel = computed(() => (props.item.kind === "panel" ? t("overlays.st
       </Button>
     </div>
     <div v-if="selected" class="flex flex-col gap-3 border-t px-3 py-3">
-      <div v-if="item.general && perGame" class="flex flex-wrap items-center gap-2">
-        <span class="text-muted-foreground text-xs">{{ item.ownPosition ? t('overlays.layout.ownPlace', { game: gameName }) : t('overlays.layout.followsAll') }}</span>
-        <Button v-if="item.ownPosition" variant="secondary" size="sm" :data-testid="`layout-follow-${item.id}`" @click="send({ type: 'follow-item', id: item.id })">{{ t('overlays.layout.followAgain') }}</Button>
-      </div>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span class="text-muted-foreground w-20 flex-none text-sm">{{ t("overlays.mode.label") }}</span>
         <SegmentedControl :model-value="item.mode" :options="modes" :label="t('overlays.mode.label')" @update:model-value="change({ mode: $event })" />

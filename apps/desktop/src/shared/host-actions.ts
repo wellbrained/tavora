@@ -127,6 +127,8 @@ export function hostActionTable(c: HostChecks) {
   const workspaces = (max: number) => list(c.workspaceId, { min: 1, max, unique: true });
   /** Most workspaces one action may move to Trash, restore or delete; as many as a Steam import adds. */
   const bulkWorkspaces = workspaces(c.maxImportGames);
+  /** An overlay setup: Everywhere, All games, or a game's (by its workspace id). */
+  const setup: Field<string> = (value) => (value === "$everywhere" || value === "$all" ? value : c.workspaceId(value));
   const onlineGame: Field<OnlineGame> = (value) => {
     if (typeof value !== "object" || value === null) return BAD;
     const game = value as Record<string, unknown>;
@@ -235,8 +237,9 @@ export function hostActionTable(c: HostChecks) {
     "set-game-overlays": { enabled: bool },
     /** Settings > Overlays: overlays stay when the user leaves the game window. */
     "set-overlays-stay": { enabled: bool },
-    /** Changes what the user set for one game overlay (mode, opacity, Hide from capture). */
+    /** Changes what the user set for one game overlay (mode, opacity, Hide from capture), in one setup or in every setup that has it. */
     "set-game-overlay": {
+      setup: optional(setup),
       owner: c.ownerId,
       moduleId: c.moduleId,
       workspaceId: c.workspaceId,
@@ -247,17 +250,18 @@ export function hostActionTable(c: HostChecks) {
     },
     /** Changes the live view of a panel in game (mode, opacity, Hide from capture). */
     "set-panel-view": {
+      setup: optional(setup),
       instanceId: c.uuid,
       mode: optional(oneOf("always", "toggle")),
       opacity: optional(check<100 | 75 | 50 | 25>((value) => value === 100 || value === 75 || value === 50 || value === 25)),
       hideFromCapture: optional(bool),
     },
-    /** Removes one game overlay, and its key. */
-    "remove-game-overlay": { owner: c.ownerId, moduleId: c.moduleId, workspaceId: c.workspaceId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
+    /** Removes one game overlay from one setup, or from every setup (and then its key). */
+    "remove-game-overlay": { setup: optional(setup), owner: c.ownerId, moduleId: c.moduleId, workspaceId: c.workspaceId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     /** Opens the hotkey dialog for the layer key (without workspaceId, owner, moduleId and key) or for one overlay's toggle key. */
     "set-overlay-key": { workspaceId: optional(c.workspaceId), owner: optional(c.ownerId), moduleId: optional(c.moduleId), key: optional(matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)) },
-    /** Opens the Overlay layout window (Settings > Overlays, a panel's menu), on a game when it is given, else on the last one. */
-    "open-overlay-layout": { gameId: optional(c.gameId) },
+    /** Opens the Overlay layout window (Settings > Overlays, a panel's menu), on a setup when it is given, else on the current workspace's or the last one. */
+    "open-overlay-layout": { setup: optional(setup) },
     /** "Hide all for now" in Settings > Overlays, and "Show again": until Tavora starts again. */
     "set-game-overlays-hidden": { hidden: bool },
     /** Opens the preview window of an overlay (Settings > Overlays, Settings > Streaming). */
@@ -371,8 +375,8 @@ export function hostActionTable(c: HostChecks) {
     "stop-panel": { instanceId: c.uuid },
     /** Panel menu > Show in game: the panel appears over the game while the in-game layer is open (Settings > Overlays). */
     "show-panel-in-game": { instanceId: c.uuid },
-    /** Panel menu or Settings > Overlays > Stop showing in game. */
-    "stop-panel-in-game": { instanceId: c.uuid },
+    /** Panel menu or Settings > Overlays > Stop showing in game: out of one setup, or out of every setup. */
+    "stop-panel-in-game": { setup: optional(setup), instanceId: c.uuid },
     /** Null when nothing is docked any more. */
     "save-layout": { layout: nullable(c.layout) },
     /** Rearranges the workspace into empty slots of a layout template; open panels fill the first ones. */

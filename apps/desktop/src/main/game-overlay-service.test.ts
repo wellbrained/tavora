@@ -102,6 +102,8 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
   }
   const world = {
     enabled,
+    /** One of Tavora's own windows has the keyboard. */
+    tavora: false,
     /** Settings > Overlays: Keep when you switch windows. */
     stay: false,
     /** The game window kept by the probe, where it is now; null once it is minimized or closed. */
@@ -174,6 +176,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     probe: () => probe,
     toDip: (rect) => rect,
     screen: () => ({ ...SCREEN }),
+    tavoraInFront: () => world.tavora,
     stay: () => world.stay,
     openWindow: (request) => {
       const window = new FakeWindow(request);
@@ -215,26 +218,29 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
 const show = (service: GameOverlays, module = CLOCK, workspaceId = "elden", key = "item-1") => service.show(module, workspaceId, key);
 
 describe("showOverGame", () => {
-  it("uses per-game positions in the real overlay windows, including moves in the layer", async () => {
+  it("keeps an item's own place in each setup, also for moves in the layer", async () => {
     const { service, world, live } = await setup();
     show(service, CLOCK, "personal");
-    const item = service.layout.items("elden")[0]!;
+    // Elden Ring's setup is made for its own overlay, with a copy of the general one.
+    show(service, CLOCK, "elden", "own");
+    const item = service.layout.items("$all")[0]!;
+    expect(service.layout.items("elden").map((info) => info.id)).toEqual([item.id, expect.any(String)]);
     const shared = { ...live()[0]!.rect! };
     const own = { h: "left", v: "top", x: 0.5, y: 0.3, width: 0.2, height: 0.1 } as const;
-    service.layout.setRect(item.ref, own, "elden");
+    service.layout.setRect("elden", item.ref, own);
     expect(live()[0]!.rect).toEqual({ x: 540, y: 324, width: 216, height: 108 });
+    // Another game has no setup of its own: All games shows, with its place.
     world.foreground = { program: "D:\\Games\\Other\\game.exe", bounds: { ...SCREEN }, notification: 0 };
     service.tick();
     expect(live()[0]!.rect).toEqual(shared);
     live()[0]!.request.moved({ x: 700, y: 100, width: 300, height: 150 });
     service.tick();
     expect(live()[0]!.rect).toEqual({ x: 700, y: 100, width: 300, height: 150 });
-    expect(service.layout.items("$all")[0]!.rect).toEqual(item.rect);
+    expect(service.layout.items("$all")[0]!.rect).not.toEqual(item.rect);
+    expect(service.layout.items("elden")[0]!.rect).toEqual(own);
     world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0 };
     service.tick();
     expect(live()[0]!.rect).toEqual({ x: 540, y: 324, width: 216, height: 108 });
-    service.layout.follow("elden", item.id);
-    expect(live()[0]!.rect).toEqual(shared);
     await service.shutdown();
   });
   it("puts the overlay over the game right away when the game is in front", async () => {
@@ -256,7 +262,7 @@ describe("showOverGame", () => {
     const { service, world } = await setup({ enabled: false });
     expect(show(service)).toBe("off");
     expect(world.opened).toEqual(["game-overlays"]);
-    expect(service.layout.games()).toEqual({ own: [], general: false });
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all"]);
     expect(world.windows).toHaveLength(0);
   });
 
@@ -439,21 +445,24 @@ describe("modes and settings", () => {
     service.remove({ owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "elden", key: "item-1" });
     expect(live()).toHaveLength(0);
     expect(world.removedKeys).toEqual([record]);
-    expect(service.layout.games()).toEqual({ own: [], general: false });
+    // The game keeps its setup, now empty.
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all", "elden"]);
+    expect(service.layout.items("elden")).toEqual([]);
   });
 
-  it("tells Settings the switches, and the Overlay layout the overlays by game", async () => {
+  it("tells Settings the switches, and the Overlay layout the items by setup", async () => {
     const { service } = await setup();
     show(service);
     show(service, CLOCK, "elden", "item-2");
     expect(service.view()).toEqual({ supported: true, enabled: true, stay: false, hidden: false, showing: true, layerKey: null });
-    expect(service.layout.games()).toEqual({ own: ["elden"], general: false });
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all", "elden"]);
     expect(service.layout.items("elden")).toMatchObject([
       { name: "Clock & Counter · item-1", mode: "always", scope: "game", source: expect.anything() },
       { name: "Clock & Counter · item-2" },
     ]);
-    // Another game has none of them.
+    // Another game has no setup, All games none of them.
     expect(service.layout.items("other")).toEqual([]);
+    expect(service.layout.items("$all")).toEqual([]);
   });
 });
 
@@ -599,18 +608,16 @@ describe("the in-game layer", () => {
     show(service);
     live()[0]!.request.closeRequested();
     expect(live()).toHaveLength(0);
-    expect(service.layout.games()).toEqual({ own: [], general: false });
+    expect(service.layout.items("elden")).toEqual([]);
   });
 });
 
 describe("general overlays", () => {
-  it("made in a workspace that is no game show over every library game in front", async () => {
+  it("made in a workspace that is no game land in All games and show over every library game in front", async () => {
     const { service, world, live } = await setup();
     show(service, CLOCK, "personal");
-    expect(service.layout.games()).toEqual({ own: [], general: true });
-    // Its one place is shown in every game's layout.
-    expect(service.layout.items("elden")).toMatchObject([{ scope: "all" }]);
-    expect(service.layout.items("other")).toMatchObject([{ scope: "all" }]);
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all"]);
+    expect(service.layout.items("$all")).toMatchObject([{ scope: "all" }]);
     expect(live()).toHaveLength(1);
     expect(live()[0]!.shown).toBe(true);
     expect(service.frontGame()).toBe("elden");
@@ -721,9 +728,10 @@ describe("what goes with a game or a module", () => {
     show(service);
     show(service, CLOCK, "other", "item-1");
     service.forgetWorkspace("other");
-    expect(service.layout.games().own).toEqual(["elden"]);
+    // The deleted game's setup goes with it.
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all", "elden"]);
     service.forgetModule(CLOCK.manifest.id, "official");
-    expect(service.layout.games()).toEqual({ own: [], general: false });
+    expect(service.layout.items("elden")).toEqual([]);
     expect(live()).toHaveLength(0);
   });
 
@@ -742,7 +750,7 @@ describe("what goes with a game or a module", () => {
     world.modules.set(CLOCK.manifest.id, { ...CLOCK, owner: "someone-else" });
     expect(request.page()).toBeNull();
     service.tick();
-    expect(service.layout.games()).toEqual({ own: [], general: false });
+    expect(service.layout.items("elden")).toEqual([]);
     expect(live()).toHaveLength(0);
   });
 
@@ -865,7 +873,8 @@ describe("leftovers", () => {
     for (let i = 0; i < LIMITS.maxOverlays; i++) overlays.link(subject("k" + i));
     expect(() => show(service)).toThrowError(expect.objectContaining({ code: "QUOTA_EXCEEDED" }));
     expect(service.has(subject("item-1"))).toBe(false);
-    expect(service.layout.games()).toEqual({ own: [], general: false });
+    // Nor the setup made for it.
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all"]);
     expect(world.windows).toHaveLength(0);
   });
 
@@ -1093,7 +1102,7 @@ describe("a panel in the game", () => {
   it("is over any library game in front when it comes from a workspace that is no game", async () => {
     const { service, world, key } = await setup();
     add(service, PANEL, "personal");
-    expect(service.layout.items("elden")).toMatchObject([{ name: "To-Dos", scope: "all", mode: "always", opacity: 100, hideFromCapture: false, hotkey: null, source: null, ref: { kind: "panel", instanceId: PANEL } }]);
+    expect(service.layout.items("$all")).toMatchObject([{ name: "To-Dos", scope: "all", mode: "always", opacity: 100, hideFromCapture: false, hotkey: null, source: null, ref: { kind: "panel", instanceId: PANEL } }]);
     world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
     service.tick();
     service.pressed(layerKey(key));
@@ -1221,7 +1230,7 @@ describe("a panel in the game", () => {
     add(service);
     await service.shutdown();
     const again = await GameOverlayStore.load(dir);
-    expect(again.panelOf(PANEL)).toMatchObject({ instanceId: PANEL, workspaceId: "elden", scope: "game" });
+    expect(again.panelOf(PANEL, "elden")).toMatchObject({ instanceId: PANEL, workspaceId: "elden" });
   });
 });
 
@@ -1567,9 +1576,11 @@ describe("positions that scale with the game window", () => {
     const { service, live } = await setup();
     show(service);
     const ref = service.layout.items("elden")[0]!.ref;
-    expect(service.layout.setRect(ref, { h: "right", v: "bottom", x: 0.05, y: 0.05, width: 0.3, height: 0.2 })).toBe(true);
+    expect(service.layout.setRect("elden", ref, { h: "right", v: "bottom", x: 0.05, y: 0.05, width: 0.3, height: 0.2 })).toBe(true);
     expect(live()[0]!.rect).toEqual({ x: 1920 - 324 - 54, y: 1080 - 216 - 54, width: 324, height: 216 });
-    expect(service.layout.setRect({ kind: "overlay", subject: { ...subject, key: "gone" } }, { h: "left", v: "top", x: 0, y: 0, width: 0.1, height: 0.1 })).toBe(false);
+    expect(service.layout.setRect("elden", { kind: "overlay", subject: { ...subject, key: "gone" } }, { h: "left", v: "top", x: 0, y: 0, width: 0.1, height: 0.1 })).toBe(false);
+    // Not in that setup: All games has nothing.
+    expect(service.layout.setRect("$all", ref, { h: "left", v: "top", x: 0, y: 0, width: 0.1, height: 0.1 })).toBe(false);
   });
 
   it("gives the size a new overlay or panel starts with, as when it was made, for Reset size", async () => {
@@ -1657,5 +1668,212 @@ describe("positions that scale with the game window", () => {
     service.pressed(key(toggleBinding(subject)));
     expect(service.layout.items("elden")[0]!.toggledOn).toBe(true);
     expect(world.changes).toBeGreaterThan(before);
+  });
+});
+
+describe("setups on screen", () => {
+  const NOTEPAD = "C:\\Windows\\notepad.exe";
+  const TAVORA = "C:\\Program Files\\Tavora\\Tavora.exe";
+  const anchored = (x = 0.05, y = 0.05) => ({ h: "left", v: "top", x, y, width: 0.2, height: 0.1 });
+  const item = (key: string, workspaceId = "personal", extra: object = {}) => ({ owner: "official", moduleId: CLOCK.manifest.id, workspaceId, key, mode: "always", opacity: 100, hideFromCapture: false, anchor: anchored(), ...extra });
+  const panelItem = (instanceId = PANEL, workspaceId = "personal", extra: object = {}) => ({ owner: "official", moduleId: TODOS.manifest.id, workspaceId, instanceId, mode: "always", opacity: 100, hideFromCapture: false, anchor: anchored(), ...extra });
+  const file = (setups: { id: string; overlays?: unknown[]; panels?: unknown[] }[]) => ({ version: 5, setups: setups.map((setup) => ({ overlays: [], panels: [], ...setup })) });
+  const byKey = (windows: FakeWindow[], key: string) => windows.find((window) => window.request.id.endsWith(`\n${key}`));
+  const panelWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.request.instanceId !== undefined && !window.destroyed);
+
+  it("shows Everywhere over any app and the desktop, on the main screen, and hides it while Tavora's own window is in front", async () => {
+    const { service, world, live } = await setup({ file: file([{ id: "$everywhere", overlays: [item("clock")] }]) });
+    world.foreground = { program: NOTEPAD, bounds: { x: 300, y: 200, width: 800, height: 600 }, notification: 0 };
+    service.tick();
+    expect(live()).toHaveLength(1);
+    // On the screen, not on the app's window.
+    expect(live()[0]).toMatchObject({ shown: true, rect: { x: 54, y: 54, width: 216, height: 108 } });
+    world.foreground = null;
+    service.tick();
+    expect(live()[0]!.shown).toBe(true);
+    world.foreground = { program: GAME_EXE, bounds: { x: 0, y: 0, width: 1280, height: 720 }, notification: 0 };
+    service.tick();
+    expect(live()[0]).toMatchObject({ shown: true, rect: { x: 54, y: 54 } });
+    world.tavora = true;
+    service.tick();
+    expect(live()[0]!.shown).toBe(false);
+    world.tavora = false;
+    service.tick();
+    expect(live()[0]!.shown).toBe(true);
+    // Nothing of it needs the game watcher.
+    expect(service.needsWatcher()).toBe(false);
+  });
+
+  it("shows Everywhere next to the game's own setup or else All games, never All games next to a game's own", async () => {
+    const { service, world, live } = await setup({
+      file: file([
+        { id: "$everywhere", overlays: [item("everywhere")] },
+        { id: "$all", overlays: [item("general")] },
+        { id: "elden", overlays: [item("own", "elden")] },
+      ]),
+    });
+    const shown = () => ["everywhere", "general", "own"].filter((key) => byKey(live(), key)?.shown);
+    service.tick();
+    expect(shown()).toEqual(["everywhere", "own"]);
+    world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(shown()).toEqual(["everywhere", "general"]);
+    world.foreground = { program: NOTEPAD, bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(shown()).toEqual(["everywhere"]);
+    expect(service.needsWatcher()).toBe(true);
+  });
+
+  it("shows an item in Everywhere and in the game's setup once, as the game's setup has it", async () => {
+    const { service, world, live, key } = await setup({
+      file: file([
+        { id: "$everywhere", overlays: [item("clock")], panels: [panelItem()] },
+        { id: "elden", overlays: [item("clock", "personal", { anchor: anchored(0.5, 0.5), opacity: 50 })], panels: [panelItem(PANEL, "personal", { anchor: anchored(0.5, 0.5) })] },
+      ]),
+    });
+    service.tick();
+    expect(live()).toHaveLength(1);
+    expect(live()[0]).toMatchObject({ opacity: 50, rect: { x: 540, y: 540 } });
+    world.foreground = { program: NOTEPAD, bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(live()).toHaveLength(1);
+    expect(live()[0]).toMatchObject({ opacity: 100, rect: { x: 54, y: 54 } });
+    // The panel too: one window in the layer, where the game's setup has it.
+    world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    service.pressed(layerKey(key));
+    expect(panelWindows(world)).toHaveLength(1);
+    expect(panelWindows(world)[0]!.rect).toMatchObject({ x: 540, y: 540 });
+  });
+
+  it("opens the layer over the screen with only Everywhere, Esc closes it, and the keys rest while Tavora's window is in front", async () => {
+    const { service, world, live, key } = await setup({ file: file([{ id: "$everywhere", overlays: [item("clock")], panels: [panelItem()] }]) });
+    world.foreground = { program: NOTEPAD, handle: "0x1", bounds: { x: 300, y: 200, width: 800, height: 600 }, notification: 0 };
+    service.tick();
+    const layer = layerKey(key);
+    expect(service.wants(layer)).toBe(true);
+    service.pressed(layer);
+    expect(service.layerOpen).toBe(true);
+    expect(world.veils[0]).toMatchObject({ rect: SCREEN, destroyed: false });
+    expect(live().find((window) => window.request.instanceId === undefined)).toMatchObject({ shown: true, arranging: true });
+    expect(panelWindows(world)).toHaveLength(1);
+    expect(panelWindows(world)[0]).toMatchObject({ shown: true, arranging: true, rect: { x: 54, y: 54 } });
+    // A panel that took the keyboard keeps the layer open.
+    panelWindows(world)[0]!.focused = true;
+    world.foreground = { program: TAVORA, bounds: { ...SCREEN }, notification: 0, own: true, handle: "0x1" };
+    world.tavora = true;
+    service.tick();
+    expect(service.layerOpen).toBe(true);
+    world.registered.get("Escape")!();
+    expect(service.layerOpen).toBe(false);
+    expect(world.veils[0]!.destroyed).toBe(true);
+    expect(panelWindows(world)).toHaveLength(0);
+    // Tavora's own window in front: nothing shows, so the keys rest.
+    world.foreground = { program: TAVORA, bounds: { ...SCREEN }, notification: 0, own: true };
+    service.tick();
+    expect(service.wants(layer)).toBe(false);
+    service.pressed(layer);
+    expect(service.layerOpen).toBe(false);
+  });
+
+  it("closes the layer over the screen when another window, a game or Tavora's own comes in front", async () => {
+    const { service, world, key } = await setup({ file: file([{ id: "$everywhere", overlays: [item("clock")] }, { id: "$all", overlays: [item("general")] }]) });
+    const layer = layerKey(key);
+    const open = () => {
+      world.foreground = { program: NOTEPAD, handle: "0x1", bounds: { ...SCREEN }, notification: 0 };
+      world.tavora = false;
+      service.tick();
+      service.pressed(layer);
+      expect(service.layerOpen).toBe(true);
+    };
+    open();
+    world.foreground = { program: "C:\\Browser\\browser.exe", handle: "0x2", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(service.layerOpen).toBe(false);
+    open();
+    world.foreground = { program: GAME_EXE, handle: "0x3", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(service.layerOpen).toBe(false);
+    open();
+    world.foreground = { program: TAVORA, handle: "0x1", bounds: { ...SCREEN }, notification: 0, own: true };
+    world.tavora = true;
+    service.tick();
+    expect(service.layerOpen).toBe(false);
+    expect(world.focused).toBe(0);
+  });
+
+  it("tells the hotkeys when something starts or stops showing", async () => {
+    const { service, world } = await setup({ file: file([{ id: "$everywhere", overlays: [item("clock")] }]) });
+    world.foreground = { program: NOTEPAD, bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    expect(service.showing()).toBe(true);
+    const before = world.changes;
+    world.tavora = true;
+    service.tick();
+    expect(service.showing()).toBe(false);
+    expect(world.changes).toBe(before + 1);
+    service.tick();
+    expect(world.changes).toBe(before + 1);
+  });
+
+  it("lands a game workspace's overlay in its game's setup and a personal one in All games, never in Everywhere", async () => {
+    const { service } = await setup();
+    show(service, CLOCK, "personal", "general");
+    show(service, CLOCK, "elden", "own");
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all", "elden"]);
+    expect(service.layout.items("$all").map((info) => info.name)).toEqual(["Clock & Counter"]);
+    expect(service.layout.items("elden").map((info) => info.ref)).toEqual([
+      { kind: "overlay", subject: { owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "personal", key: "general" } },
+      { kind: "overlay", subject: { owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "elden", key: "own" } },
+    ]);
+    expect(service.layout.items("$everywhere")).toEqual([]);
+    // Shown again: it stays where it is, wherever that is.
+    expect(show(service, CLOCK, "personal", "general")).toBe("shown");
+    expect(service.layout.items("$all")).toHaveLength(1);
+  });
+
+  it("takes an item out of one setup from the layout or its frame, and out of every setup when its panel closes or its module hides it", async () => {
+    const { service, world, key } = await setup({
+      file: file([
+        { id: "$everywhere", overlays: [item("clock")], panels: [panelItem()] },
+        { id: "$all", overlays: [item("clock")], panels: [panelItem()] },
+      ]),
+    });
+    world.foreground = { program: "D:\\Games\\Other\\other.exe", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    service.pressed(layerKey(key));
+    // The frame of the panel shown from All games.
+    panelWindows(world)[0]!.request.closeRequested();
+    expect(service.layout.items("$all").map((info) => info.ref.kind)).toEqual(["overlay"]);
+    expect(service.hasPanel(PANEL)).toBe(true);
+    service.layout.remove("$everywhere", { kind: "overlay", subject: { owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "personal", key: "clock" } });
+    expect(service.layout.items("$all")).toHaveLength(1);
+    expect(service.layout.items("$everywhere").map((info) => info.ref.kind)).toEqual(["panel"]);
+    service.stopPanel(PANEL);
+    expect(service.hasPanel(PANEL)).toBe(false);
+    service.hide(CLOCK, "personal", "clock");
+    expect(service.layout.items("$all")).toEqual([]);
+  });
+
+  it("keeps an item's key while another setup still has it, and takes it when the last one lets go", async () => {
+    const { service, world, key } = await setup({ file: file([{ id: "$everywhere", overlays: [item("clock")] }, { id: "$all", overlays: [item("clock")] }]) });
+    const subject = { owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "personal", key: "clock" };
+    const record = key(toggleBinding(subject));
+    expect(service.general(record)).toBe(true);
+    service.layout.remove("$all", { kind: "overlay", subject });
+    expect(world.removedKeys).toEqual([]);
+    service.layout.remove("$everywhere", { kind: "overlay", subject });
+    expect(world.removedKeys).toEqual([record]);
+  });
+
+  it("changes an item in the setup the layout shows only", async () => {
+    const { service, live } = await setup({ file: file([{ id: "$everywhere", overlays: [item("clock")] }, { id: "elden", overlays: [item("clock")] }]) });
+    service.tick();
+    const subject = { owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "personal", key: "clock" };
+    service.layout.setOverlay("$everywhere", subject, { opacity: 25 });
+    expect(live()[0]!.opacity).toBe(100);
+    service.layout.setOverlay("elden", subject, { opacity: 50 });
+    expect(live()[0]!.opacity).toBe(50);
+    expect(service.layout.items("$everywhere")[0]!.opacity).toBe(25);
   });
 });

@@ -3,10 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { GridSetting } from "../shared/layout-math";
-import { LAYOUT_ALL_GAMES, type LayoutMessage, type LayoutView } from "../shared/layout-view";
+import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, type LayoutMessage, type LayoutView } from "../shared/layout-view";
 import { DEFAULT_PANEL_ANCHORED, DEFAULT_RECT, placeAnchored, placeLegacy, type AnchoredRect, type LegacyRect } from "../shared/overlay-anchor";
 import type { LayoutItemInfo, LayoutItemRef, LayoutSource } from "./game-overlay-service";
-import type { GameLayoutState, SeenSize } from "./game-overlays";
+import type { SeenSize } from "./game-overlays";
 import { LayoutPictures } from "./layout-pictures";
 import { OverlayLayout, type LayoutFrame, type LayoutWindow } from "./overlay-layout";
 import type { WindowState } from "./window-state";
@@ -26,9 +26,12 @@ const at = (x: number, y: number, width: number, height: number): AnchoredRect =
 
 interface Item {
   key: string;
-  /** The game the item was made in; "all" scope shows in every game. */
+  /** The workspace the item was made in (a game workspace's id is its game's). */
   gameId: string;
+  /** "all": made in a personal workspace. */
   scope: "game" | "all";
+  /** The setup it is in: by default its game's, or All games for a general one. */
+  setup?: string;
   rect: AnchoredRect;
   /** Not converted yet: the fractions of the window. */
   legacy?: LegacyRect;
@@ -45,7 +48,8 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
   const world = {
     items,
     grid: "normal" as GridSetting,
-    layouts: new Map<string, GameLayoutState>(),
+    /** The games that have a setup; one stays when its last item goes. */
+    gameSetups: [...new Set(items.map((item) => setupOf(item)).filter((id) => id !== LAYOUT_ALL_GAMES && id !== LAYOUT_EVERYWHERE))],
     windowState: null as WindowState | null,
     seen: { ...options.seen },
     opened: 0,
@@ -81,18 +85,11 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
       keyTarget: subject,
     };
   };
-  const find = (ref: LayoutItemRef) => world.items.find((item) => (ref.kind === "panel" ? item.panel && item.key === ref.instanceId : !item.panel && item.key === ref.subject.key && item.gameId === ref.subject.workspaceId));
+  const find = (setupId: string, ref: LayoutItemRef) =>
+    world.items.find((item) => setupOf(item) === setupId && (ref.kind === "panel" ? item.panel && item.key === ref.instanceId : !item.panel && item.key === ref.subject.key && item.gameId === ref.subject.workspaceId));
   const source: LayoutSource = {
-    items: (gameId) => world.items.filter((item) => item.scope === "all" || item.gameId === gameId).map((item) => {
-      const result = info(item);
-      const rect = world.layouts.get(gameId)?.positions[result.id];
-      if (rect && item.scope === "all") {
-        result.rect = rect;
-        delete result.legacy;
-      }
-      return result;
-    }),
-    games: () => ({ own: [...new Set(world.items.filter((item) => item.scope === "game").map((item) => item.gameId))], general: world.items.some((item) => item.scope === "all") }),
+    items: (setupId) => world.items.filter((item) => setupOf(item) === setupId).map(info),
+    setups: () => [LAYOUT_EVERYWHERE, LAYOUT_ALL_GAMES, ...world.gameSetups],
     seenSize: (gameId) => world.seen[gameId],
     handleOf: (gameId) => (world.running.has(gameId) ? (world.handles[gameId] ?? null) : null),
     gameRunning: (gameId) => world.running.has(gameId),
@@ -101,32 +98,9 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     setGrid: (grid) => void (world.grid = grid),
     window: () => world.windowState,
     setWindow: (state) => void (world.windowState = state),
-    layoutState: (gameId) => structuredClone(world.layouts.get(gameId) ?? { detached: false, positions: {} }),
-    setLayoutState: (gameId, state) => void world.layouts.set(gameId, structuredClone(state)),
-    customize: (gameId) => {
-      const state = source.layoutState(gameId);
-      state.detached = true;
-      for (const item of source.items(gameId)) if (item.scope === "all") state.positions[item.id] = item.rect;
-      source.setLayoutState(gameId, state);
-    },
-    follow: (gameId, id) => {
-      if (!id) world.layouts.delete(gameId);
-      else {
-        const state = source.layoutState(gameId);
-        delete state.positions[id];
-        state.detached = false;
-        source.setLayoutState(gameId, state);
-      }
-    },
-    setRect: (ref, rect, gameId) => {
-      const item = find(ref);
+    setRect: (setupId, ref, rect) => {
+      const item = find(setupId, ref);
       if (item) {
-        if (item.scope === "all" && gameId && gameId !== LAYOUT_ALL_GAMES) {
-          const state = source.layoutState(gameId);
-          state.positions[info(item).id] = rect;
-          source.setLayoutState(gameId, state);
-          return true;
-        }
         item.rect = rect;
         delete item.legacy;
       }
@@ -136,9 +110,9 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
       world.sizedOn.push(size);
       return ref.kind === "panel" ? (options.startSizes?.panel ?? { width: DEFAULT_PANEL_ANCHORED.width, height: DEFAULT_PANEL_ANCHORED.height }) : (options.startSizes?.overlay ?? { width: DEFAULT_RECT.width, height: DEFAULT_RECT.height });
     },
-    setOverlay: (_subject, change) => void world.changed.push({ overlay: change }),
-    setPanel: (_id, change) => void world.changed.push({ panel: change }),
-    remove: (ref) => void world.removed.push(ref),
+    setOverlay: (_setup, _subject, change) => void world.changed.push({ overlay: change }),
+    setPanel: (_setup, _id, change) => void world.changed.push({ panel: change }),
+    remove: (_setup, ref) => void world.removed.push(ref),
     layerOpen: () => false,
   };
   const window: LayoutWindow = {
@@ -178,6 +152,9 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
   return { layout, world, sent, placed, last, lastPlace, bounds, flush, pictures };
 }
 
+/** The setup an item is in. */
+const setupOf = (item: Item) => item.setup ?? (item.scope === "all" ? LAYOUT_ALL_GAMES : item.gameId);
+
 const clock = (key: string, gameId = "elden", rect = at(0.036, 0.03, 0.356, 0.16)): Item => ({ key, gameId, scope: "game", rect });
 
 describe("opening", () => {
@@ -198,38 +175,20 @@ describe("opening", () => {
     expect(layout.view().items.map((item) => item.name)).toEqual(["general"]);
   });
 
-  it("undoes and redoes whole-layout customization and returning to All games", () => {
-    const { layout } = setup([{ ...clock("general", "personal"), scope: "all" }]);
-    layout.open("elden");
-    layout.handle({ type: "customize" }, true);
-    expect(layout.view()).toMatchObject({ customized: true, hasOverrides: true });
-    expect(layout.view().items[0]!.ownPosition).toBe(true);
-    layout.handle({ type: "undo" }, true);
-    expect(layout.view()).toMatchObject({ customized: false, hasOverrides: false });
-    layout.handle({ type: "redo" }, true);
-    expect(layout.view().customized).toBe(true);
-    layout.handle({ type: "follow-all" }, true);
-    expect(layout.view().hasOverrides).toBe(false);
-    layout.handle({ type: "undo" }, true);
-    expect(layout.view().customized).toBe(true);
-  });
-
-  it("undoes a per-item move back to inheritance, and can follow one item again", () => {
-    const { layout, world } = setup([{ ...clock("general", "personal"), scope: "all" }]);
+  it("moves an item in the setup shown only, and undoes it there", () => {
+    const general = { ...clock("general", "personal"), scope: "all" as const };
+    const { layout, world } = setup([general, { ...general, rect: { ...general.rect }, setup: "elden" }]);
     layout.open("elden");
     const id = layout.view().items[0]!.id;
     const base = { ...world.items[0]!.rect };
     layout.handle({ type: "commit", id, rect: { x: 600, y: 400, width: 300, height: 200 } }, false);
-    expect(layout.view().items[0]!.ownPosition).toBe(true);
+    expect(world.items[1]!.rect).not.toEqual(base);
     expect(world.items[0]!.rect).toEqual(base);
     layout.handle({ type: "undo" }, true);
-    expect(layout.view().items[0]!.ownPosition).toBe(false);
+    expect(world.items[1]!.rect).toEqual(base);
     layout.handle({ type: "redo" }, true);
-    expect(layout.view().items[0]!.ownPosition).toBe(true);
-    layout.handle({ type: "follow-item", id }, true);
-    expect(layout.view().items[0]!.ownPosition).toBe(false);
-    layout.handle({ type: "undo" }, true);
-    expect(layout.view().items[0]!.ownPosition).toBe(true);
+    expect(world.items[1]!.rect).not.toEqual(base);
+    expect(world.items[0]!.rect).toEqual(base);
   });
   it("opens one window and brings it forward when opened again", () => {
     const { layout, world } = setup([clock("a")]);
@@ -266,23 +225,36 @@ describe("opening", () => {
   });
 });
 
-describe("the games of the picker", () => {
-  it("lists the games that have overlays or panels, and shows the general ones in each", () => {
+describe("the setups of the picker", () => {
+  it("lists All games and the games that have a setup, each with its own items", () => {
     const { layout } = setup([clock("a", "elden"), clock("b", "poe2"), { key: "g", gameId: "personal", scope: "all", rect: at(0.1, 0.1, 0.2, 0.2) }]);
     layout.open("elden");
     const view = layout.view();
     expect(view.games).toEqual([{ id: LAYOUT_ALL_GAMES, name: "All games" }, { id: "elden", name: "Elden Ring" }, { id: "poe2", name: "Path of Exile 2" }]);
     expect(view.gameId).toBe("elden");
-    expect(view.items.map((item) => [item.name, item.general])).toEqual([["a", false], ["g", true]]);
+    expect(view.items.map((item) => item.name)).toEqual(["a"]);
     layout.handle({ type: "game", gameId: "poe2" }, true);
-    expect(layout.view().items.map((item) => [item.name, item.general])).toEqual([["b", false], ["g", true]]);
+    expect(layout.view().items.map((item) => item.name)).toEqual(["b"]);
+    layout.handle({ type: "game", gameId: LAYOUT_ALL_GAMES }, true);
+    expect(layout.view().items.map((item) => item.name)).toEqual(["g"]);
   });
 
-  it("includes the game it was opened for, even when it has nothing of its own yet", () => {
+  it("shows All games for a game that has no setup of its own: that is what shows over it", () => {
     const { layout } = setup([{ key: "g", gameId: "personal", scope: "all", rect: at(0.1, 0.1, 0.2, 0.2) }, clock("b", "poe2")]);
     layout.open("elden");
-    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_ALL_GAMES, "elden", "poe2"]);
+    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_ALL_GAMES, "poe2"]);
+    expect(layout.view().gameId).toBe(LAYOUT_ALL_GAMES);
     expect(layout.view().items.map((item) => item.name)).toEqual(["g"]);
+  });
+
+  it("lists Everywhere while it has something, on the main screen's shape", () => {
+    const { layout, world } = setup([{ key: "e", gameId: "personal", scope: "all", setup: LAYOUT_EVERYWHERE, rect: at(0.1, 0.1, 0.2, 0.2) }]);
+    layout.open(LAYOUT_EVERYWHERE);
+    expect(layout.view().games).toEqual([{ id: LAYOUT_ALL_GAMES, name: "All games" }, { id: LAYOUT_EVERYWHERE, name: "Everywhere" }]);
+    expect(layout.view()).toMatchObject({ gameId: LAYOUT_EVERYWHERE, canTakePicture: false, seen: false, canvas: { width: 1920, height: 1080 } });
+    world.items = [];
+    layout.refresh();
+    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_ALL_GAMES]);
   });
 
   it("falls back to All games when only general ones exist and no game is known", () => {
@@ -303,10 +275,12 @@ describe("the games of the picker", () => {
     expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_ALL_GAMES, "elden", "poe2"]);
   });
 
-  it("shows the first game when the one asked for is not a game it knows", () => {
+  it("shows All games when the setup asked for is not one it knows", () => {
     const { layout } = setup([clock("b", "poe2")]);
     layout.open();
-    expect(layout.view().gameId).toBe("poe2");
+    expect(layout.view().gameId).toBe(LAYOUT_ALL_GAMES);
+    layout.open("nowhere");
+    expect(layout.view().gameId).toBe(LAYOUT_ALL_GAMES);
   });
 });
 
@@ -485,18 +459,18 @@ describe("moving and resizing", () => {
     expect(layout.view().items[0]!.placed).toEqual({ x: 1400, y: 800, width: 400, height: 200 });
   });
 
-  it("keeps a general item's move in one game separate from All games and other games", () => {
-    const { layout, world } = setup([{ key: "g", gameId: "personal", scope: "all", rect: at(0.1, 0.1, 0.2, 0.2) }, clock("a", "elden"), clock("b", "poe2")], { seen: { elden: { width: 1920, height: 1080 }, poe2: { width: 2560, height: 1080 } } });
+  it("keeps a move of an item in one game's setup apart from the same item in another setup", () => {
+    const general = (setupId: string): Item => ({ key: "g", gameId: "personal", scope: "all", setup: setupId, rect: at(0.1, 0.1, 0.2, 0.2) });
+    const { layout } = setup([general(LAYOUT_ALL_GAMES), general("elden"), general("poe2")], { seen: { elden: { width: 1920, height: 1080 }, poe2: { width: 2560, height: 1080 } } });
     layout.open("elden");
-    const id = layout.view().items.find((item) => item.general)!.id;
+    const id = layout.view().items[0]!.id;
     layout.handle({ type: "commit", id, rect: { x: 700, y: 300, width: 300, height: 200 } }, false);
-    expect(layout.view().items.find((item) => item.general)).toMatchObject({ ownPosition: true, placed: { width: 300 } });
-    const moved = world.items[0]!.rect;
+    expect(layout.view().items[0]!.placed).toMatchObject({ x: 700, width: 300 });
     layout.handle({ type: "game", gameId: "poe2" }, true);
-    // The same record is in the other game's canvas, at the same place for its own shape.
-    expect(layout.view().items.find((item) => item.general)!.rect).toEqual(moved);
-    expect(layout.view().items.find((item) => item.general)!.placed.width).toBe(216);
-    expect(layout.view().items.find((item) => item.general)!.ownPosition).toBe(false);
+    expect(layout.view().items[0]!.rect).toEqual(at(0.1, 0.1, 0.2, 0.2));
+    expect(layout.view().items[0]!.placed.width).toBe(216);
+    layout.handle({ type: "game", gameId: LAYOUT_ALL_GAMES }, true);
+    expect(layout.view().items[0]!.rect).toEqual(at(0.1, 0.1, 0.2, 0.2));
   });
 
   it("keeps an item on the canvas and above the smallest size", () => {
@@ -800,7 +774,7 @@ describe("the game picture", () => {
   });
 
   it("has no picture to take for All games", () => {
-    const { layout } = setup([{ ...clock("g", "elden"), scope: "all" }], { handles: { elden: "5" } });
+    const { layout } = setup([{ ...clock("g", "personal"), scope: "all" }], { handles: { elden: "5" } });
     layout.open(LAYOUT_ALL_GAMES);
     expect(layout.view()).toMatchObject({ gameId: LAYOUT_ALL_GAMES, canTakePicture: false });
   });

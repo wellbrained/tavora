@@ -52,8 +52,8 @@ export interface StreamingOptions {
 
 /** What game overlays need of the hotkeys: which of their keys work now, and what a press does (game-overlay-service.ts). */
 export interface OverlayKeys {
-  /** The game in front; the keys of game overlays work only while one is. */
-  frontGame(): string | null;
+  /** Whether something shows over a game or the screen now; the keys of game overlays work only then. */
+  showing(): boolean;
   wants(record: HotkeyRecord): boolean;
   /** Whether the user has a game overlay for this key. */
   has(subject: OverlaySubject): boolean;
@@ -268,10 +268,9 @@ export class Streaming {
     const workspaceId = this.options.workspaceId();
     const open = new Set(this.options.panels().map((panel) => panel.moduleId));
     const wanted = workspaceId === null ? [] : this.hotkeys.all().filter((record) => record.workspaceId === workspaceId && !isOverlayAction(record.action) && open.has(record.moduleId) && this.options.module(record.moduleId)?.owner === record.owner);
-    // The keys of game overlays follow the game in front instead, so they take no key from other programs.
-    // The layer key is for every game, an overlay's key for its own (or every game, for a general overlay).
-    const front = this.overlayKeys?.frontGame() ?? null;
-    if (front !== null) wanted.push(...this.hotkeys.all().filter((record) => isOverlayAction(record.action) && this.overlayKeys!.wants(record)));
+    // The keys of game overlays follow what shows instead (a game's setup, All games, Everywhere), so they take no key
+    // from other programs while nothing does. An item's key works where the item shows.
+    if (this.overlayKeys?.showing()) wanted.push(...this.hotkeys.all().filter((record) => isOverlayAction(record.action) && this.overlayKeys!.wants(record)));
     this.registrar.apply(wanted);
   }
 
