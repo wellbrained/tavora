@@ -148,7 +148,7 @@ test("a player browses the catalog for a game, sees who publishes a module and i
     // The installed module is listed among the installed ones, from its publisher, tagged as from the catalog.
     await page.getByTestId("add-module").click();
     await expect(page.getByTestId("module-wellbrained.tracker")).toBeVisible();
-    await expect(page.getByTestId("provenance-wellbrained.tracker")).toHaveText("Catalog");
+    await expect(page.getByTestId("provenance-wellbrained.tracker")).toHaveText("Community");
   } finally {
     await app.close();
     server.close();
@@ -335,7 +335,7 @@ test("a zip that is not the listed one, or not from the listed key, writes nothi
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     await page.getByTestId("catalog-install-wellbrained.swapped").click();
-    await expect(page.getByTestId("catalog-error-wellbrained.swapped")).toHaveText("The download doesn't match what the catalog listed, so nothing was installed.");
+    await expect(page.getByTestId("catalog-error-wellbrained.swapped")).toHaveText("The download doesn't match what was published, so nothing was installed.");
     await page.getByTestId("catalog-install-wellbrained.foreign").click();
     await expect(page.getByTestId("catalog-error-wellbrained.foreign")).toContainText("not signed by the publisher key that was listed");
     expect(await readdir(path.join(userData, "modules")).catch(() => [])).toEqual([]);
