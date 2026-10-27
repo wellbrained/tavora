@@ -141,6 +141,41 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
     });
   });
 
+  // Everything the account rated and wrote, for the per-author view (decided 2026-10-27): each rating with its module, text and state.
+  app.get("/:id/reviews", (context) => {
+    const id = context.req.param("id");
+    if (!ID.test(id) || !accounts.account(id)) return context.json({ error: "No such account." }, 404);
+    return context.json({
+      reviews: (reviews?.byAccount(id) ?? []).map((review) => ({
+        id: review.id,
+        moduleId: review.moduleId,
+        moduleName: catalog?.module(review.moduleId)?.module.name ?? catalog?.adminModules().find((module) => module.id === review.moduleId)?.name ?? review.moduleId,
+        stars: review.stars,
+        text: review.text,
+        version: review.version,
+        hidden: review.hidden,
+        held: review.held,
+        createdAt: iso(review.createdAt),
+        updatedAt: iso(review.updatedAt),
+        reply: review.reply?.text ?? null,
+      })),
+    });
+  });
+
+  // Hide everything this person wrote: every review text goes off the module pages, the stars stay (like Hide, one by one).
+  app.post("/hide-reviews", async (context) => {
+    const { id } = await json(context.req.raw);
+    if (typeof id !== "string" || !ID.test(id) || !accounts.account(id)) return context.json({ error: "No such account." }, 404);
+    return context.json({ ok: true, hiddenReviews: reviews?.hideAllOf(id) ?? 0 });
+  });
+
+  // Remove every rating this person gave: texts, replies and stars, for good (a wave of fake ratings).
+  app.post("/remove-reviews", async (context) => {
+    const { id } = await json(context.req.raw);
+    if (typeof id !== "string" || !ID.test(id) || !accounts.account(id)) return context.json({ error: "No such account." }, 404);
+    return context.json({ ok: true, removedReviews: reviews?.removeAllOf(id) ?? 0 });
+  });
+
   // The profile picture, as the PNG the player chose. The panel fetches it with its token and shows it from a blob.
   app.get("/:id/picture.png", (context) => {
     const id = context.req.param("id");
