@@ -28,6 +28,34 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.48",
+    date: "2026-10-27",
+    title: "Write to developers",
+    notes: [
+      "Press Contact the developer on a module's page to send a bug report, feature request or question. The developer never sees your name or email.",
+      "Report to Tavora now asks why, and you add a note if you like.",
+      "A new inbox icon in the header shows your conversations. It shows while one is open, and always for developers with a published module.",
+      "Read, answer, close, block, report or delete a conversation. Closed ones stay in Settings > Account > Messages, where you can also get new messages by email.",
+      "Developers switch messages on or off per module in Settings > Development, and can show a public link instead.",
+    ],
+    prs: [
+      { number: 412, title: "Conversations in the app: contact the developer, inbox, report with reason (CoreHub #344)" },
+    ],
+    tags: ["catalog", "modules", "publishing", "settings", "workspace"],
+  },
+  {
+    version: "0.21.47",
+    date: "2026-10-27",
+    title: "Publishing shows it's working",
+    notes: [
+      "Packing and publishing a module now show a spinner, so you can tell it's still busy.",
+    ],
+    prs: [
+      { number: 413, title: "Spinner while a module packs and publishes" },
+    ],
+    tags: ["publishing"],
+  },
+  {
     version: "0.21.46",
     date: "2026-10-27",
     title: "Overlay setups",
