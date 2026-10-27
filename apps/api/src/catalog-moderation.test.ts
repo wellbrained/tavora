@@ -231,6 +231,8 @@ describe("check 4: warning signs in the code", () => {
     for (const text of [
       "import('https://evil.example/x.js')",
       "import(url)",
+      "import(url)\n{ run() }",
+      "const a = 1; // import(x) below\nimport(url)",
       "import x from 'https://cdn.example/x.js'",
       "importScripts('x.js')",
       "document.createElement('script')",
@@ -259,6 +261,11 @@ describe("check 4: warning signs in the code", () => {
       "fetch('https://api.example.com/data').then((r) => r.json())",
       "const x = 'new Fun' + 'ction'",
       "el.innerHTML = '<p>hi</p>'",
+      "class Maps { async import(name, character) { return name } }",
+      "class M{async import(e,t,n){return e}}",
+      "class Maps { import(name: string, world?: Snapshot): Promise<void> { return save(name) } }",
+      "repository.import(file)",
+      "// node types come from the checked import (gameSkillData.json)",
     ];
     for (const text of honest) expect(await flagged(text), text).toBe("listed");
     expect(await flagged('<p>hello</p><script src="app.js"></script>', "page.html")).toBe("listed");

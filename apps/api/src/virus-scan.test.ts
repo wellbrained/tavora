@@ -15,8 +15,8 @@ describe("clamd's answers", () => {
   });
 });
 
-/** A pretend clamd on a local port: reads one INSTREAM and answers as `reply` says about what it received. */
-function fakeClamd(reply: (received: Buffer) => string | null) {
+/** A pretend clamd on a local port: reads one INSTREAM and answers as `reply` says about what it received, after `delayMs`. */
+function fakeClamd(reply: (received: Buffer) => string | null, delayMs = 0) {
   const received: Buffer[] = [];
   const server = net.createServer((socket) => {
     let data = Buffer.alloc(0);
@@ -39,7 +39,7 @@ function fakeClamd(reply: (received: Buffer) => string | null) {
       received.push(body);
       const answer = reply(body);
       if (answer === null) return;
-      socket.end(`${answer}\0`);
+      setTimeout(() => socket.end(`${answer}\0`), delayMs);
     });
   });
   return new Promise<{ port: number; received: Buffer[]; close: () => void }>((resolve) =>
@@ -72,6 +72,15 @@ describe("scanning through clamd", () => {
     ];
     expect(await scanner.scan(Buffer.from("zip bytes"), files.slice(0, 1))).toEqual({ clean: true });
     expect(await scanner.scan(Buffer.from("zip bytes"), files)).toEqual({ clean: false, threats: ["Eicar-Test-Signature in evil.js"] });
+  });
+
+  it("gives a bigger stream more time", async () => {
+    const slow = await fakeClamd(() => "stream: OK", 600);
+    closers.push(slow.close);
+    const scanner = createClamdScanner({ port: slow.port }, { timeoutMs: 300 });
+    await expect(scanner.scan(Buffer.from("z"), [])).rejects.toThrow(/in time/);
+    // 1 MB gets 5 s on top.
+    expect(await scanner.scan(Buffer.alloc(1024 * 1024, "z"), [])).toEqual({ clean: true });
   });
 
   it("throws, never answers clean, when clamd is not there, answers an error, hangs up or is too slow", async () => {
