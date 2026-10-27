@@ -113,11 +113,16 @@ describe("rating a catalog module", () => {
     expect(await (await call("GET", "/modules/wellbrained.timer/review", devToken)).json()).toEqual({ review: null, own: true });
   });
 
-  it("refuses slurs and links, and hides a name the filter refuses", async () => {
+  it("holds slurs and links for the maintainer instead of showing them, and hides a name the filter refuses", async () => {
     const { player, rate, call } = setup();
     const mara = player("mara@example.com");
-    expect(await (await rate(mara.token, { stars: 1, text: "get it at www.example.com", version: "1.0.0" })).json()).toMatchObject({ reason: "review-link" });
-    expect(await (await rate(mara.token, { stars: 1, text: "made by a f4ggot", version: "1.0.0" })).json()).toMatchObject({ reason: "review-words" });
+    const link = await rate(mara.token, { stars: 1, text: "get it at www.example.com", version: "1.0.0" });
+    expect(link.status).toBe(200);
+    expect(await link.json()).toMatchObject({ review: { held: true, hidden: true } });
+    expect(await (await call("GET", "/modules/wellbrained.timer/reviews")).json()).toEqual({ summary: null, reviews: [] });
+    const rude0 = player("rude0@example.com", "Rudi");
+    expect(await (await rate(rude0.token, { stars: 1, text: "made by a f4ggot", version: "1.0.0" })).json()).toMatchObject({ review: { held: true } });
+    expect(await (await call("GET", "/modules/wellbrained.timer/review", rude0.token)).json()).toMatchObject({ review: { held: true } });
     const rude = player("rude@example.com", "c u n t");
     expect((await rate(rude.token, { stars: 2, text: "Meh.", version: "1.0.0" })).status).toBe(200);
     const answer = (await (await call("GET", "/modules/wellbrained.timer/reviews")).json()) as { reviews: { author: { name: string | null } }[] };
@@ -184,5 +189,43 @@ describe("review text", () => {
     expect(cleanReviewText(5)).toBeUndefined();
     expect(cleanReviewText("ä".repeat(500))).toBe("ä".repeat(500));
     expect(cleanReviewText("ä".repeat(501))).toBeUndefined();
+  });
+});
+
+describe("the maintainer's queue", () => {
+  it("holds filtered reviews, lists new live ones, and lets the maintainer approve, mark seen or remove", async () => {
+    const { player, rate, reviews, call } = setup();
+    const clean = player("clean@example.com", "Cleo");
+    const rude = player("rude@example.com", "Rudi");
+    await rate(clean.token, { stars: 5, text: "Works well", version: "1.0.0" });
+    await rate(rude.token, { stars: 1, text: "made by a f4ggot", version: "1.0.0" });
+    expect(reviews.queue().map((review) => [review.text, review.held, review.seen])).toEqual([
+      ["made by a f4ggot", true, false],
+      ["Works well", false, false],
+    ]);
+    // A held rating's stars don't count, and nothing of it shows.
+    expect(await (await call("GET", "/modules/wellbrained.timer/reviews")).json()).toMatchObject({ reviews: [{ text: "Works well" }] });
+    expect(reviews.summary("wellbrained.timer")?.count).toBe(1);
+
+    const heldId = reviews.queue()[0]!.id;
+    expect(reviews.approve(heldId)).toBe(true);
+    expect(reviews.approve(heldId)).toBe(false);
+    expect(reviews.summary("wellbrained.timer")?.count).toBe(2);
+    expect(reviews.markSeen(reviews.queue().map((review) => review.id))).toBe(1);
+    expect(reviews.queue()).toEqual([]);
+
+    expect(reviews.remove(heldId)).toBe(true);
+    expect(reviews.summary("wellbrained.timer")?.count).toBe(1);
+    expect(reviews.remove(heldId)).toBe(false);
+  });
+
+  it("puts a held review back in the queue when its author edits it, and releases it when the new text is clean", async () => {
+    const { player, rate, reviews } = setup();
+    const mara = player("mara@example.com");
+    await rate(mara.token, { stars: 1, text: "get it at www.example.com", version: "1.0.0" });
+    expect(reviews.queue()[0]).toMatchObject({ held: true });
+    await rate(mara.token, { stars: 2, text: "Not for me, sorry", version: "1.0.0" });
+    expect(reviews.queue()[0]).toMatchObject({ held: false, hidden: false, seen: false });
+    expect(reviews.summary("wellbrained.timer")?.count).toBe(1);
   });
 });
