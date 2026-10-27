@@ -17,6 +17,7 @@ import { cleanReviewText, ReviewStore } from "./reviews.ts";
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
 const roomy = () => createRateLimiter({ limit: 1000, windowMs: 60_000 });
 const rawKey = (key: KeyObject) => createPublicKey(key).export({ format: "der", type: "spki" }).subarray(12);
+const DAY = 24 * 3_600_000;
 const PNG = Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000", "hex");
 
 function moduleZip(key: KeyObject, version = "1.0.0"): Buffer {
@@ -36,8 +37,9 @@ function setup() {
   const developer = store.createAccount({ email: "dev@example.com" }, clock.now);
   store.linkKey(developer.id, keyFingerprint(rawKey(key)), rawKey(key).toString("base64"), clock.now);
   const app = createApp({ db, catalog, rateLimiter: roomy(), reviewRateLimiter: roomy(), accounts: { store, mailer: createTestInbox(), reviews, now: () => clock.now } });
-  const player = (email: string, name = "Mara") => {
-    const account = store.createAccount({ email }, clock.now);
+  // Players are a day old, so the minimum account age doesn't get in the way.
+  const player = (email: string, name = "Mara", createdAt = clock.now - DAY) => {
+    const account = store.createAccount({ email }, createdAt);
     if (name) store.setProfile(account.id, { name, initials: name.slice(0, 2).toUpperCase(), picture: PNG, updatedAt: clock.now });
     return { account, token: store.createSession(account.id, "windows", clock.now).token };
   };
@@ -227,5 +229,47 @@ describe("the maintainer's queue", () => {
     await rate(mara.token, { stars: 2, text: "Not for me, sorry", version: "1.0.0" });
     expect(reviews.queue()[0]).toMatchObject({ held: false, hidden: false, seen: false });
     expect(reviews.summary("wellbrained.timer")?.count).toBe(1);
+  });
+
+  it("holds a module's 21st new rating of the day, keeps it held through edits, and lets the maintainer approve it", async () => {
+    const { player, rate, reviews, clock } = setup();
+    for (let index = 0; index < 20; index++) reviews.rate(`account-${index}`, "wellbrained.timer", { stars: 1, text: null, version: "1.0.0" }, clock.now - index * 60_000);
+    const mara = player("mara@example.com");
+    expect(await (await rate(mara.token, { stars: 5, text: null, version: "1.0.0" })).json()).toMatchObject({ review: { held: true } });
+    expect(reviews.queue()[0]).toMatchObject({ held: true, capped: true, text: null });
+    expect(reviews.summary("wellbrained.timer")?.count).toBe(20);
+    expect(await (await rate(mara.token, { stars: 4, text: "Clean words", version: "1.0.0" })).json()).toMatchObject({ review: { held: true } });
+    expect(reviews.approve(reviews.queue()[0]!.id)).toBe(true);
+    expect(reviews.summary("wellbrained.timer")?.count).toBe(21);
+    // A day later the module takes new ratings again.
+    clock.now += DAY;
+    expect(await (await rate(player("next@example.com").token, { stars: 3, text: null, version: "1.0.0" })).json()).toMatchObject({ review: { held: false } });
+  });
+});
+
+describe("rating limits", () => {
+  it("refuses an account younger than a day, with the hours left", async () => {
+    const { player, rate, clock } = setup();
+    const fresh = player("fresh@example.com", "Fia", clock.now - 4.5 * 3_600_000);
+    const answer = await rate(fresh.token, { stars: 5, text: null, version: "1.0.0" });
+    expect(answer.status).toBe(403);
+    expect(await answer.json()).toMatchObject({ reason: "account-too-new", hours: 20 });
+    clock.now += 20 * 3_600_000;
+    expect((await rate(fresh.token, { stars: 5, text: null, version: "1.0.0" })).status).toBe(200);
+  });
+
+  it("lets an account give 10 new ratings a day, edits free, and counts deleting and rating again", async () => {
+    const { player, rate, call, reviews, clock } = setup();
+    const mara = player("mara@example.com");
+    for (let index = 0; index < 9; index++) reviews.rate(mara.account.id, `wellbrained.other${index}`, { stars: 3, text: null, version: "1.0.0" }, clock.now - 3_600_000 * (index + 1));
+    expect((await rate(mara.token, { stars: 4, text: null, version: "1.0.0" })).status).toBe(200);
+    expect((await rate(mara.token, { stars: 5, text: "Changed my mind", version: "1.0.0" })).status).toBe(200);
+    expect((await call("DELETE", "/modules/wellbrained.timer/review", mara.token)).status).toBe(204);
+    const again = await rate(mara.token, { stars: 5, text: null, version: "1.0.0" });
+    expect(again.status).toBe(429);
+    // The oldest of the ten was given 9 hours ago, so a slot opens in 15.
+    expect(await again.json()).toMatchObject({ reason: "daily-limit", hours: 15 });
+    clock.now += 15 * 3_600_000;
+    expect((await rate(mara.token, { stars: 5, text: null, version: "1.0.0" })).status).toBe(200);
   });
 });

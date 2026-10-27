@@ -120,7 +120,7 @@ function setup(ownerEmail?: string) {
     });
   };
   const player = (email: string, name = "Mara") => {
-    const created = store.createAccount({ email }, clock.now);
+    const created = store.createAccount({ email }, clock.now - 86_400_000); // a day old, old enough to rate
     if (name) store.setProfile(created.id, { name, initials: name.slice(0, 2).toUpperCase(), picture: null, updatedAt: clock.now });
     return { account: created, token: store.createSession(created.id, "linux", clock.now, "Mara's PC").token };
   };

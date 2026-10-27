@@ -317,6 +317,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
       queue: (reviews?.queue() ?? []).map((review) => ({
         id: review.id,
         held: review.held,
+        capped: review.capped,
         moduleId: review.moduleId,
         moduleName: catalog?.module(review.moduleId)?.module.name ?? review.moduleId,
         stars: review.stars,
