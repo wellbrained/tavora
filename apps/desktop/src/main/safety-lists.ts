@@ -44,7 +44,7 @@ export interface SafetyListsOptions {
   baseUrl: string;
   /** Raw catalogue public key, base64 (CATALOGUE_PUBLIC_KEY outside tests). */
   publicKey: string;
-  /** Whether the player allows Tavora to ask its service (Settings > Online). */
+  /** Whether the user allows Tavora to ask its service (Settings > Online). */
   online: () => boolean;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
@@ -161,7 +161,7 @@ export class SafetyLists implements SafetyCheck {
 }
 
 /**
- * Takes the modules in the player's modules folder whose zip is blocked out of
+ * Takes the modules in the user's modules folder whose zip is blocked out of
  * `modules`, so their panels stop and they do not load, and says why in
  * `problems`. Their folders and data stay; installing a zip that is not
  * blocked brings them back. Answers with the modules it took out, which the

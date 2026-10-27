@@ -69,7 +69,7 @@
       "minLength": 1,
       "maxLength": 80,
       "pattern": "\\S",
-      "description": "Name shown to players."
+      "description": "Name shown to users."
     },
     "description": {
       "type": "string",
@@ -138,7 +138,7 @@
           "pattern": "\\.json$"
         }
       ],
-      "description": "A JSON file inside the package with the module's patch notes: an array of { version, date, notes } objects, newest first. Players see them in Settings > Modules. Needs Tavora 0.18.2 or newer.",
+      "description": "A JSON file inside the package with the module's patch notes: an array of { version, date, notes } objects, newest first. Users see them in Settings > Modules. Needs Tavora 0.18.2 or newer.",
       "examples": [
         "changelog.json"
       ]
@@ -163,7 +163,7 @@
           "pattern": "^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
         }
       ],
-      "description": "Where players send feedback: an https address or an email address. The module's page has a Send feedback button that opens it. Needs Tavora 0.20.39 or newer.",
+      "description": "Where users send feedback: an https address or an email address. The module's page has a Send feedback button that opens it. Needs Tavora 0.20.39 or newer.",
       "examples": [
         "https://example.com/campaign-companion/feedback",
         "feedback@example.com"
@@ -222,7 +222,7 @@
     },
     "personalWorkspaces": {
       "type": "boolean",
-      "description": "Whether the module may be added to a personal workspace, which belongs to no game. Only for modules with an empty games list; leave it out for true, set false for a module that only makes sense in a game. Needs a minTavora newer than 0.21.41; for older Tavoras, set workspaces instead.",
+      "description": "Whether the module may be added to a personal workspace, which belongs to no game. Only for modules with an empty games list; leave it out for true, set false for a module that only makes sense in a game. Needs a minTavora newer than 0.21.42; for older Tavoras, set workspaces instead.",
       "default": true
     },
     "workspaces": {
@@ -236,13 +236,13 @@
     },
     "inGame": {
       "type": "boolean",
-      "description": "For a module without panel types: the player may show its panel in their game (Show in game in its menu; it appears only while the in-game layer is open). Not together with panels; set it per type there. Needs a minTavora newer than 0.21.2 (except Tavora's own modules); the TypeScript validator checks that."
+      "description": "For a module without panel types: the user may show its panel in their game (Show in game in its menu; it appears only while the in-game layer is open). Not together with panels; set it per type there. Needs a minTavora newer than 0.21.2 (except Tavora's own modules); the TypeScript validator checks that."
     },
     "panels": {
       "type": "array",
       "minItems": 1,
       "maxItems": 16,
-      "description": "Named panel types the module offers, such as Inventory and Build planner. Players add each on its own and may open several copies; all share the module's saved content and permissions. Ids must be unique and at most one type sets continues.",
+      "description": "Named panel types the module offers, such as Inventory and Build planner. Users add each on its own and may open several copies; all share the module's saved content and permissions. Ids must be unique and at most one type sets continues.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -303,7 +303,7 @@
           },
           "inGame": {
             "type": "boolean",
-            "description": "The player may show this panel in their game: its menu offers Show in game, and the panel appears over the game only while the player holds Tavora's in-game layer open. Needs a minTavora newer than 0.21.2 (except Tavora's own modules); the TypeScript validator checks that."
+            "description": "The user may show this panel in their game: its menu offers Show in game, and the panel appears over the game only while the user holds Tavora's in-game layer open. Needs a minTavora newer than 0.21.2 (except Tavora's own modules); the TypeScript validator checks that."
           }
         }
       }
@@ -318,7 +318,7 @@
           "pattern": "\\.html$"
         }
       ],
-      "description": "The page streaming software such as OBS shows as a Browser Source, and the page game overlays show over the player's game. Tavora serves it on this PC only, with the files next to it, and gives it live data from the module. Needs no connector, but the \"stream-overlay\" connector needs this page. Without that connector, a minTavora newer than 0.20.50 is needed (except Tavora's own modules); the TypeScript validator checks that.",
+      "description": "The page streaming software such as OBS shows as a Browser Source, and the page game overlays show over the user's game. Tavora serves it on this PC only, with the files next to it, and gives it live data from the module. Needs no connector, but the \"stream-overlay\" connector needs this page. Without that connector, a minTavora newer than 0.20.50 is needed (except Tavora's own modules); the TypeScript validator checks that.",
       "examples": [
         "dist/overlay.html"
       ]
@@ -331,7 +331,7 @@
         "width": { "type": "integer", "minimum": 1, "maximum": 10000 },
         "height": { "type": "integer", "minimum": 1, "maximum": 10000 }
       },
-      "description": "The size the overlay page starts at over the player's game, in pixels; the player can still resize it. Without it the overlay starts at a fifth of the game window's width. Needs an overlay page and a minTavora newer than 0.21.27 (except Tavora's own modules); the TypeScript validator checks that.",
+      "description": "The size the overlay page starts at over the user's game, in pixels; the user can still resize it. Without it the overlay starts at a fifth of the game window's width. Needs an overlay page and a minTavora newer than 0.21.27 (except Tavora's own modules); the TypeScript validator checks that.",
       "examples": [
         { "width": 440, "height": 100 }
       ]
@@ -340,7 +340,7 @@
       "type": "array",
       "minItems": 1,
       "maxItems": 16,
-      "description": "What the module can do on a key press. The player binds the keys in Tavora; the module only hears which action fired. Ids must be unique.",
+      "description": "What the module can do on a key press. The user binds the keys in Tavora; the module only hears which action fired. Ids must be unique.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -387,7 +387,7 @@
             "minLength": 1,
             "maxLength": 80,
             "pattern": "\\S",
-            "description": "Name shown to players in this language."
+            "description": "Name shown to users in this language."
           },
           "description": {
             "type": "string",
@@ -435,7 +435,7 @@
       "required": [
         "network"
       ],
-      "description": "What the module asks for. Each permission needs the player's grant before it works; the player is asked when they first add the module.",
+      "description": "What the module asks for. Each permission needs the user's grant before it works; the user is asked when they first add the module.",
       "properties": {
         "network": {
           "type": "array",
@@ -451,7 +451,7 @@
         "connectors": {
           "type": "array",
           "uniqueItems": true,
-          "description": "Parts of Tavora that reach outside the module's panel, which the module asks to use without seeing what is behind them. ai-usage reads the usage of the player's Claude and Codex accounts; discord talks to the Discord app on this PC (voice channels, who is talking, joining and muting); stream-overlay shows the module's overlay page in streaming software on this PC; system-info reads this PC's hardware and how busy it is (CPU, graphics card, memory, drives); media sees what plays on this PC (Spotify, browsers, video players) and can play, pause and skip.",
+          "description": "Parts of Tavora that reach outside the module's panel, which the module asks to use without seeing what is behind them. ai-usage reads the usage of the user's Claude and Codex accounts; discord talks to the Discord app on this PC (voice channels, who is talking, joining and muting); stream-overlay shows the module's overlay page in streaming software on this PC; system-info reads this PC's hardware and how busy it is (CPU, graphics card, memory, drives); media sees what plays on this PC (Spotify, browsers, video players) and can play, pause and skip.",
           "items": {
             "enum": [
               "ai-usage",

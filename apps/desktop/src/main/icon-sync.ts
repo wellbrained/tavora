@@ -100,7 +100,7 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     try {
       hash = readClientIcons(cache, new Set([appid])).get(appid);
     } catch (error) {
-      // A file this app cannot read is not the player's problem: no client icons, no noise.
+      // A file this app cannot read is not the user's problem: no client icons, no noise.
       if (error instanceof AppInfoError) {
         appInfo = null;
         return { status: "none" };

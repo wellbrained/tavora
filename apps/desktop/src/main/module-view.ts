@@ -63,18 +63,18 @@ export interface ModuleViewOptions {
   onReveal?(): void;
   /** The page has drawn for the first time in its slot (see ModuleView.firstDrawn). */
   onDrawn?(): void;
-  /** The player opened a web address from the module (links.open); it was checked to be one. */
+  /** The user opened a web address from the module (links.open); it was checked to be one. */
   onOpenLink(url: string): void;
-  /** A call that needs Tavora's own window was refused because the panel is over the game; the host tells the player (once per press). */
+  /** A call that needs Tavora's own window was refused because the panel is over the game; the host tells the user (once per press). */
   onNeedsTavora?(): void;
   /** Shows a module's menu in the host UI, over this panel (host.ts); resolves with the chosen id, or null. */
   showMenu(menu: CheckedMenu): Promise<string | null>;
   pickReadOnlyFile?(extensions:string[]):Promise<string|null>;
-  /** pictures.save, after its click was taken: Tavora's save dialog for the checked PNG; the file name, or null when the player closed it. */
+  /** pictures.save, after its click was taken: Tavora's save dialog for the checked PNG; the file name, or null when the user closed it. */
   savePicture(png: Buffer, name: string): Promise<string | null>;
-  /** files.saveJson, after its click was taken: Tavora's save dialog for the formatted JSON; the file name, or null when the player closed it. */
+  /** files.saveJson, after its click was taken: Tavora's save dialog for the formatted JSON; the file name, or null when the user closed it. */
   saveJson(data: Buffer, name: string): Promise<string | null>;
-  /** files.openJson, after its click was taken: Tavora's open dialog; the chosen file's name and text, or null when the player closed it. */
+  /** files.openJson, after its click was taken: Tavora's open dialog; the chosen file's name and text, or null when the user closed it. */
   openJson(): Promise<{ fileName: string; text: string } | null>;
   tooltip?: {
     show(request:TooltipRequest):Promise<boolean>;
@@ -91,9 +91,9 @@ export interface ModuleViewOptions {
   setMaximized(maximized: boolean): void;
   /** panel.setLive from this panel (size already checked): what its live view over the game shows; null shows nothing. */
   setLive(state: JsonValue | null): void;
-  /** Hosts the player granted this module for network.fetch, as installed now; asked on every call and redirect. */
+  /** Hosts the user granted this module for network.fetch, as installed now; asked on every call and redirect. */
   networkHosts(): ReadonlySet<string>;
-  /** Connectors the player granted this module, as installed now; asked on every call. */
+  /** Connectors the user granted this module, as installed now; asked on every call. */
   connectors(): ReadonlySet<string>;
   /** The module's settings shared by every workspace (storage.app). */
   appSettings: ModuleStore;
@@ -139,7 +139,7 @@ export function moduleOrigin(moduleId: string): string {
 const hardened = new WeakSet<Session>();
 
 /**
- * When the player last clicked or pressed a key in a page of this session (one module in one workspace). The clipboard
+ * When the user last clicked or pressed a key in a page of this session (one module in one workspace). The clipboard
  * address is answered by the session, which cannot tell its panels apart, so this is kept per session; all of its
  * panels are the same module.
  */
@@ -149,7 +149,7 @@ const sessionGestures = new WeakMap<Session, SessionGesture>();
 interface SessionGesture {
   at: number;
   overGame?: boolean;
-  /** Tells the player once per press that the panel has to come back first. */
+  /** Tells the user once per press that the panel has to come back first. */
   refuse?: () => void;
 }
 
@@ -173,13 +173,13 @@ async function writeClipboardPicture(png: Buffer): Promise<void> {
   await clipboard.write([new ClipboardItem({ "image/png": new Blob([new Uint8Array(png)], { type: "image/png" }) })]);
 }
 
-/** Where the save dialog for pictures first opens: a Tavora folder in the player's Pictures (tests point Pictures elsewhere, unpackaged only). */
+/** Where the save dialog for pictures first opens: a Tavora folder in the user's Pictures (tests point Pictures elsewhere, unpackaged only). */
 export function picturesFolder(): string {
   const pictures = !app.isPackaged && process.env.TAVORA_PICTURES_DIR ? path.resolve(process.env.TAVORA_PICTURES_DIR) : app.getPath("pictures");
   return path.join(pictures, "Tavora");
 }
 
-/** Where the save and open dialogs for a module's files first open: a Tavora folder in the player's Documents (tests point Documents elsewhere, unpackaged only). */
+/** Where the save and open dialogs for a module's files first open: a Tavora folder in the user's Documents (tests point Documents elsewhere, unpackaged only). */
 export function documentsFolder(): string {
   const documents = !app.isPackaged && process.env.TAVORA_DOCUMENTS_DIR ? path.resolve(process.env.TAVORA_DOCUMENTS_DIR) : app.getPath("documents");
   return path.join(documents, "Tavora");
@@ -308,7 +308,7 @@ export class ModuleView {
   revealed = false;
   private revealTimers: ReturnType<typeof setTimeout>[] = [];
   private settleTimer: ReturnType<typeof setTimeout> | undefined;
-  /** When the player last clicked or typed in this panel, or when it opened; panels.open switches the one used last. */
+  /** When the user last clicked or typed in this panel, or when it opened; panels.open switches the one used last. */
   usedAt = Date.now();
   private nextNavigation = 1;
   /** panel.navigate requests waiting for the page's answer. */
@@ -420,7 +420,7 @@ export class ModuleView {
     });
   }
 
-  /** When the player last clicked or pressed a key in the page (reported by the preload from real input only). */
+  /** When the user last clicked or pressed a key in the page (reported by the preload from real input only). */
   private gestureAt = 0;
   private pointer:{x:number;y:number;at:number}|null=null;
   notePointer(raw:unknown):void{
@@ -442,7 +442,7 @@ export class ModuleView {
   private readonly gestureWaiters = new Set<() => void>();
 
   noteGesture(): void {
-    // Over the game the window takes input only while the layer is open; any report at another time is not the player's.
+    // Over the game the window takes input only while the layer is open; any report at another time is not the user's.
     if (!gestureCounts(this.overGame !== null, this.overGame?.arranging() ?? false)) return;
     this.gestureAt = Date.now();
     this.usedAt = this.gestureAt;
@@ -457,10 +457,10 @@ export class ModuleView {
    * Something only a click or key press in the page may do, once per click. Waits a moment first for a click
    * whose report has not arrived yet.
    */
-  /** The press whose refusal the player was told about, so one press shows the notice once. */
+  /** The press whose refusal the user was told about, so one press shows the notice once. */
   private toldAt = 0;
 
-  /** Tells the player once per press that the panel has to come back first. */
+  /** Tells the user once per press that the panel has to come back first. */
   private needsTavora(): void {
     if (this.toldAt === this.gestureAt && this.gestureAt !== 0) return;
     this.toldAt = this.gestureAt;
@@ -490,7 +490,7 @@ export class ModuleView {
     this.gestureAt = 0;
   }
 
-  /** links.open: only a web address, and only right after the player did something in the page. */
+  /** links.open: only a web address, and only right after the user did something in the page. */
   private async openLink(url: string): Promise<void> {
     if (!isWebUrl(url)) throw new HostError("INVALID_PARAMS", "params.url must be an http or https address");
     // One click opens one link, so a script cannot open a pile of them.
@@ -692,7 +692,7 @@ export class ModuleView {
     this.view.webContents.postMessage("tavora:port", null, [port2]);
   }
 
-  /** What the player has granted now (grants.ts): `network` with any granted host, `aiUsage`, `systemInfo`, `media`, `discord` and `overlay` with their connectors. */
+  /** What the user has granted now (grants.ts): `network` with any granted host, `aiUsage`, `systemInfo`, `media`, `discord` and `overlay` with their connectors. */
   private capabilities(): ReadonlySet<Capability> {
     const granted = new Set<Capability>();
     if (this.options.networkHosts().size > 0) granted.add("network");
@@ -787,7 +787,7 @@ export class ModuleView {
    * The discord connector as this panel uses it. Any call but image() makes the panel a user, which
    * keeps the connection running until the page goes; what the connector tells reaches only the page
    * that asked, and only while the grant lasts. Signing in, joining or leaving a channel, and muting or
-   * deafening the player need a click or key press in the page first, one per click.
+   * deafening the user need a click or key press in the page first, one per click.
    */
   private discordFor(bridge: () => BridgeSession): BridgeContext["discord"] {
     const connector = this.options.discord;
@@ -814,9 +814,9 @@ export class ModuleView {
         await connector.allowControl();
       },
       command: async (command, args) => {
-        // Joining or leaving, and muting or deafening the player (which can switch their microphone back on),
+        // Joining or leaving, and muting or deafening the user (which can switch their microphone back on),
         // only follow a click or key press (D8). A person's volume streams while a slider is dragged, and only
-        // changes what the player hears, so it needs none.
+        // changes what the user hears, so it needs none.
         if (command === "SELECT_VOICE_CHANNEL" || command === "SET_VOICE_SETTINGS") await this.takeGesture(command);
         await use();
         return connector.command(command, args);
@@ -830,13 +830,13 @@ export class ModuleView {
     };
   }
 
-  /** The player pressed a hotkey set for this module in this workspace. */
+  /** The user pressed a hotkey set for this module in this workspace. */
   hotkeyPressed(binding: HotkeyBinding): void {
     this.hotkeyAt = Date.now();
     this.bridge?.emit("hotkeys.pressed", { ...binding });
   }
 
-  /** The player changed the AI accounts; a module granted the connector hears it. */
+  /** The user changed the AI accounts; a module granted the connector hears it. */
   notifyAiUsageAccounts(): void {
     if (this.capabilities().has("aiUsage")) this.bridge?.emit("aiUsage.accountsChanged", null);
   }
@@ -934,8 +934,8 @@ export class ModuleView {
 
   /**
    * The panel is over its game, in a window of Tavora's own (game-overlay-window.ts). It is this same view and page,
-   * with the same bridge; only the look changes (see through, as the player set it) and clicks and keys count as the
-   * player's while `arranging()` is true.
+   * with the same bridge; only the look changes (see through, as the user set it) and clicks and keys count as the
+   * user's while `arranging()` is true.
    */
   private overGame: { arranging(): boolean; opacity: Opacity; zoom: number; css: string | undefined } | null = null;
 
@@ -945,7 +945,7 @@ export class ModuleView {
 
   enterGame(arranging: () => boolean): void {
     this.overGame = { arranging, opacity: 100, zoom: 1, css: undefined };
-    // Without a colour of its own, so the opacity the player chose lets the game show through.
+    // Without a colour of its own, so the opacity the user chose lets the game show through.
     this.view.setBackgroundColor("#00000000");
   }
 
@@ -1016,7 +1016,7 @@ export class ModuleView {
     this.bridge?.emit("ui.theme", theme);
   }
 
-  /** Tells the module the player changed the language, so it can word itself anew through ui.onLanguageChange. */
+  /** Tells the module the user changed the language, so it can word itself anew through ui.onLanguageChange. */
   applyLanguage(language: string): void {
     this.bridge?.emit("ui.language", language);
   }
@@ -1073,7 +1073,7 @@ export class ModuleView {
     }, HEARTBEAT_MS);
   }
 
-  /** Measures the module's browser storage now and then; a module cannot be left to fill the player's disk. */
+  /** Measures the module's browser storage now and then; a module cannot be left to fill the user's disk. */
   private startStorageWatch(): void {
     this.stopStorageWatch();
     const limit = this.options.storageLimit ?? MODULE_STORAGE_LIMIT;

@@ -1,4 +1,4 @@
-// Module grants (the decision log, module grants row of 2026-10-16): the player's stored yes to
+// Module grants (the decision log, module grants row of 2026-10-16): the user's stored yes to
 // what a module asks for in `permissions`. Kept in grants.json in the data folder, outside every
 // module's own folder, for the module's owner (publisher) and id, with the version that was granted.
 // A grant only covers what the module's current manifest still asks for, and every gated call
@@ -21,9 +21,9 @@ export interface Permissions {
 }
 
 export interface Grant extends Permissions {
-  /** The module version the player last answered for. */
+  /** The module version the user last answered for. */
   version: string;
-  /** When the player last granted something to it. */
+  /** When the user last granted something to it. */
   grantedAt: string;
 }
 
@@ -110,13 +110,13 @@ export class GrantStore {
     return effectivePermissions(subject.manifest, this.get(subject.owner, subject.manifest.id));
   }
 
-  /** What the module asks for and the player has not granted. */
+  /** What the module asks for and the user has not granted. */
   missing(subject: GrantSubject): Permissions {
     return missingPermissions(subject.manifest, this.get(subject.owner, subject.manifest.id));
   }
 
   /**
-   * Records the player's yes to some of what the module asks for (all of it when `what` is left out).
+   * Records the user's yes to some of what the module asks for (all of it when `what` is left out).
    * Only what the manifest asks for can be granted; what was granted before stays.
    */
   grant(subject: GrantSubject, what: Permissions = asked(subject.manifest)): Promise<void> {

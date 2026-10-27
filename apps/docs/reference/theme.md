@@ -1,6 +1,6 @@
 # Theme packages (`tavora.theme.json`)
 
-**Status:** first version, 2026-10-15. Themes are local only for now: Tavora's own ship with the app, and players can add their own to their themes folder. Publishing themes comes with the catalog.
+**Status:** first version, 2026-10-15. Themes are local only for now: Tavora's own ship with the app, and users can add their own to their themes folder. Publishing themes comes with the catalog.
 
 A theme recolours Tavora and every module in it. It is data only: one `tavora.theme.json` with colour tokens and a corner radius. Tavora reads nothing else from the folder, so a theme cannot run code, add CSS or reach the app. Fonts and other assets are not supported yet.
 
@@ -42,27 +42,27 @@ Unknown fields are refused, so a typo fails loudly rather than being ignored.
 | Field | Required | Rules |
 | --- | --- | --- |
 | `$schema` | no | Any string. Ignored. |
-| `id` | yes | `publisher.theme-name`, with the same rules as a [module id](./manifest). The player's choice is saved under it. |
+| `id` | yes | `publisher.theme-name`, with the same rules as a [module id](./manifest). The user's choice is saved under it. |
 | `name` | yes | 1 to 40 characters. |
 | `description` | no | At most 200 characters. |
 | `author` | no | At most 60 characters. |
 | `version` | yes | `major.minor.patch`. |
-| `variations` | yes | 1 to 4 variations. Players switch between them in Settings. |
+| `variations` | yes | 1 to 4 variations. Users switch between them in Settings. |
 
 Each variation:
 
 | Field | Required | Rules |
 | --- | --- | --- |
-| `id` | yes | Lowercase letters, digits and `-`, at most 32 characters, unique in the theme. When a player switches themes, a variation with the same id (say `light`) is kept. |
+| `id` | yes | Lowercase letters, digits and `-`, at most 32 characters, unique in the theme. When a user switches themes, a variation with the same id (say `light`) is kept. |
 | `name` | yes | 1 to 24 characters, shown in a segmented control. |
-| `mode` | yes | `"dark"` or `"light"`. Native menus, scrollbars and form controls follow it. Players can follow the system (the default): Tavora then shows the variation whose mode matches the system's light or dark setting, so a theme that comes in Dark and Light works with it unchanged. |
+| `mode` | yes | `"dark"` or `"light"`. Native menus, scrollbars and form controls follow it. Users can follow the system (the default): Tavora then shows the variation whose mode matches the system's light or dark setting, so a theme that comes in Dark and Light works with it unchanged. |
 | `contrast` | no | `"normal"` (default) or `"high"`. High-contrast variations need 7:1 for text instead of 4.5:1. |
 | `radius` | no | Corner radius in px, a whole number from 4 to 12. Default 8. |
 | `colors` | yes | Every token below, each as `#rrggbb`. No transparency. |
 
 ## Tokens
 
-The names are shadcn-vue's semantic tokens plus four of Tavora's. Modules get the same values as `--tavora-<name>` properties and through `ui.getTheme`, and `ui.onThemeChange` tells them when the player picks another theme.
+The names are shadcn-vue's semantic tokens plus four of Tavora's. Modules get the same values as `--tavora-<name>` properties and through `ui.getTheme`, and `ui.onThemeChange` tells them when the user picks another theme.
 
 `background`, `foreground`, `card`, `card-foreground`, `popover`, `popover-foreground`, `primary`, `primary-hover`, `primary-foreground`, `secondary`, `secondary-foreground`, `muted`, `muted-foreground`, `accent`, `accent-foreground`, `destructive`, `border`, `input`, `ring`, `rail`, `success`, `warning`, `info`.
 

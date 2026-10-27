@@ -14,7 +14,7 @@ import ModuleIcon from "../ModuleIcon.vue";
 const props = defineProps<{ module: NonNullable<typeof state.value>["modules"][number]; hideOrigin?: boolean }>();
 // Where this copy came from (shared/module-tag.ts). Local and Release sit side by side in Settings > Development,
 // so each has its own color and icon: blue for work in progress, green for the copy that gets published. Official
-// keeps the gold; Catalog and From file, what players install, stay quiet.
+// keeps the gold; Catalog and From file, what users install, stay quiet.
 const kind = computed(() => moduleTag(props.module));
 // A release copy that the catalog does not have yet, or has only in an older version, says so; unknown (offline) says nothing.
 const pending = computed(() => {

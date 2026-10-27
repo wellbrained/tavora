@@ -76,7 +76,7 @@ jobs:
 
   # e2e runs Tavora unpackaged, so code that only runs packaged was never started before a
   # release (0.17.3 quit on every start). This builds the real installer, installs it the way
-  # a player does and passes only once the installed Tavora shows its window. `pnpm release`
+  # a user does and passes only once the installed Tavora shows its window. `pnpm release`
   # requires the whole Checks run, so this job too.
   packaged-start:
     runs-on: windows-2025
@@ -99,7 +99,7 @@ jobs:
         run: |
           pnpm --filter @tavora/desktop package --win nsis --publish never
           if (-not (Test-Path apps/desktop/release/win-unpacked/resources/media-helper/tavora-media.exe)) { throw "tavora-media.exe is missing from the package." }
-      - name: Install like a player (silent, for this user)
+      - name: Install like a user (silent, per-user)
         shell: pwsh
         run: |
           $setup = Get-ChildItem apps/desktop/release -Filter 'Tavora-Setup-*.exe' | Select-Object -First 1

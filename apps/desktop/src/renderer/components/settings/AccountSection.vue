@@ -81,7 +81,7 @@ function deviceLabel(device: AccountDevice): string {
   return device.name ?? osName(device);
 }
 
-/** The devices list is folded away until the player opens it. */
+/** The devices list is folded away until the user opens it. */
 const devicesOpen = ref(false);
 
 function renameDevice(device: AccountDevice) {

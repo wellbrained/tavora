@@ -26,7 +26,7 @@ export interface Revocation {
   allow: string[];
 }
 
-/** A zip (SHA-256) that Tavora stopped, and why, in words a player can read (C14). */
+/** A zip (SHA-256) that Tavora stopped, and why, in words a user can read (C14). */
 export interface Block {
   sha256: string;
   reason: string;

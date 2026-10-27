@@ -25,7 +25,7 @@ export function partitionDirName(partition: string): string {
 /**
  * The folders modules keep data in, each laid out `<owner>/<module>/<workspace>`:
  * settings and documents, and files (pictures, see blobs.ts). The files can
- * sit in a folder the player chose (module-files.ts); callers pass it.
+ * sit in a folder the user chose (module-files.ts); callers pass it.
  */
 function dataRoots(userData: string, blobRoot = defaultFilesRoot(userData)): string[] {
   return [path.join(userData, "module-data"), blobRoot];

@@ -49,7 +49,7 @@ describe("serveJsonSave", () => {
     expect((await save(post("{}"), value)).status).toBe(403);
   });
 
-  it("answers null when the player closed the save dialog", async () => {
+  it("answers null when the user closed the save dialog", async () => {
     const response = await save(post("[]"), deps(true, true).value);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ fileName: null });
@@ -95,7 +95,7 @@ describe("serveJsonOpen", () => {
     expect((await serveJsonOpen(post(), value)).status).toBe(403);
   });
 
-  it("answers null when the player closed the dialog", async () => {
+  it("answers null when the user closed the dialog", async () => {
     const response = await serveJsonOpen(post(), deps(null).value);
     expect(response.status).toBe(200);
     expect(await response.json()).toBeNull();

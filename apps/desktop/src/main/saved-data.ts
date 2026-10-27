@@ -11,7 +11,7 @@ import { loadWorkspace, saveWorkspace, type WorkspaceState } from "./workspace";
 
 // The files the host keeps in the data folder: the library, the workspaces, the profile and the
 // window. This module is the only one that knows their names. It reads them, writes them one after
-// another, and says which are the player's own (backed up and in the cloud copy) and which library
+// another, and says which are the user's own (backed up and in the cloud copy) and which library
 // settings belong to this PC. Grants keep their own file (grants.ts); only their version is listed here.
 
 export const LIBRARY_FILE = "library.json";
@@ -20,7 +20,7 @@ export const PROFILE_FILE = "profile.json";
 /** Where the window was; this PC's own, so it is neither backed up nor copied. */
 export const WINDOW_FILE = "window.json";
 
-/** The player's own data files: backed up every day and part of the cloud copy. */
+/** The user's own data files: backed up every day and part of the cloud copy. */
 export const DATA_FILES = [LIBRARY_FILE, WORKSPACE_FILE, PROFILE_FILE] as const;
 
 /**

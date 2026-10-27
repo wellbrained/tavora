@@ -42,7 +42,7 @@ if (!takedownContact) console.log("[tavora-api] No TAKEDOWN_CONTACT: hosted icon
 // Who hears by email when the module catalog is full; without it only the admin page shows it.
 const maintainerEmail = process.env.MAINTAINER_EMAIL?.trim();
 
-// The one writable thing: icons offered by players, approved ones and takedowns.
+// The one writable thing: icons offered by users, approved ones and takedowns.
 const stateDir = process.env.TAVORA_STATE_DIR ?? "data/state";
 mkdirSync(stateDir, { recursive: true });
 const state = new IconState(path.join(stateDir, "icons.sqlite"));
@@ -94,7 +94,7 @@ const catalog = new CatalogStore(path.join(stateDir, "catalog"));
 // Ratings and reviews of catalog modules, keyed by account: their own file, in the daily backup.
 const reviews = accountStore ? new ReviewStore(path.join(stateDir, "reviews.sqlite")) : undefined;
 console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
-// Plain daily totals (stats.ts): nothing about a player. Once a day the account numbers are written down too.
+// Plain daily totals (stats.ts): nothing about a user. Once a day the account numbers are written down too.
 const stats = new StatsStore(path.join(stateDir, "stats.sqlite"));
 const activity = new ActivityLog(path.join(stateDir, "activity.sqlite"));
 const snapshotAccounts = () => {

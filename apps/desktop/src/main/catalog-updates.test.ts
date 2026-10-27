@@ -51,7 +51,7 @@ function listing(version: string, zip: Buffer, owner: string, fields: Partial<Ca
   };
 }
 
-/** A player with Tracker 1.0.0 installed from the catalog, and an updater over a fake catalog. */
+/** A user with Tracker 1.0.0 installed from the catalog, and an updater over a fake catalog. */
 async function setup(key: KeyObject, network: string[] = [], safety?: SafetyCheck) {
   const userData = await realpath(await mkdtemp(path.join(tmpdir(), "tavora-updates-")));
   const userModules = path.join(userData, "modules");
@@ -67,7 +67,7 @@ async function setup(key: KeyObject, network: string[] = [], safety?: SafetyChec
     catalog.index = [entry];
     catalog.zips.set(entry.zip.sha256, zip);
   };
-  // The player's setting "Update modules automatically"; on here, so most tests see updates install.
+  // The user's setting "Update modules automatically"; on here, so most tests see updates install.
   const auto = { on: true };
   const updater = new CatalogUpdater({
     autoInstall: () => auto.on,
@@ -184,7 +184,7 @@ describe("CatalogUpdater", () => {
     expect(updater.pending(ID)).toBeUndefined();
   });
 
-  it("applies a waiting update that asks for nothing new when the player presses Update", async () => {
+  it("applies a waiting update that asks for nothing new when the user presses Update", async () => {
     const key = generateKeyPairSync("ed25519").privateKey;
     const { updater, publish, page, auto } = await setup(key);
     auto.on = false;
@@ -243,7 +243,7 @@ describe("CatalogUpdater", () => {
     expect(await readdir(userModules)).toEqual([ID]);
   });
 
-  it("keeps an update that asks for a new network host waiting, with nothing written, until the player says yes (C4)", async () => {
+  it("keeps an update that asks for a new network host waiting, with nothing written, until the user says yes (C4)", async () => {
     const key = generateKeyPairSync("ed25519").privateKey;
     const { updater, publish, catalog, page, modules } = await setup(key);
     const zip = zipOf("1.1.0", key, ["api.example.com"]);
@@ -262,7 +262,7 @@ describe("CatalogUpdater", () => {
     await updater.check();
     expect(catalog.downloads).toHaveLength(1);
 
-    // Only the version the player was shown is installed.
+    // Only the version the user was shown is installed.
     await expect(updater.apply(ID, "1.2.0")).rejects.toThrow();
     const { installed, asks } = await updater.apply(ID, "1.1.0");
     expect(installed.manifest.version).toBe("1.1.0");

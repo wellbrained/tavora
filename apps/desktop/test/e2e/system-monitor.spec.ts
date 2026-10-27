@@ -48,7 +48,7 @@ test("Traffic in the menu shows this week and the last months, as Windows counts
     await openModule(page, SYSTEM_MONITOR);
     await page.getByTestId("grant-allow").click();
     await expect.poll(() => inModule(app, SYSTEM_MONITOR, `!!${q("connection-section")}`).catch(() => false)).toBe(true);
-    // Off until the player turns it on.
+    // Off until the user turns it on.
     expect(await inModule(app, SYSTEM_MONITOR, `!!${q("connection-traffic")}`)).toBe(false);
     // The menu opens from a real key press, as Tavora wants for ui.showMenu.
     await inModule(app, SYSTEM_MONITOR, `${q("menu")}.focus()`);

@@ -1,6 +1,6 @@
 ## 0.2.12
 
-From Tavora 0.21.42 every item on its rail is a workspace: a game workspace, linked to a game, or a personal workspace.
+From Tavora 0.21.43 every item on its rail is a workspace: a game workspace, linked to a game, or a personal workspace.
 
 - `workspace.getCurrent()` answers the `TavoraWorkspace` the panel is in: `{ id, displayName, kind }`, with `kind` `"game"` (its id is the game's, the one your manifest's `games` lists) or `"personal"`. It works on every Tavora the SDK supports (Tavora 0.19.32): an older one is asked `game.getCurrent` instead and answered in the new words, so `MIN_TAVORA` stays.
 - `game.getCurrent()` and `TavoraGame` are deprecated: they still answer, with `kind` `"workspace"` for a personal workspace, until Tavora's 1.0 preparation.

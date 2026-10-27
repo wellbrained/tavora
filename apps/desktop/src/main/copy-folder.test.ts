@@ -16,7 +16,7 @@ afterEach(async () => {
   for (const dir of folders.splice(0)) await rm(dir, { recursive: true, force: true });
 });
 
-/** A folder the player picked, like their OneDrive. */
+/** A folder the user picked, like their OneDrive. */
 async function folder(): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), "tavora-onedrive-"));
   folders.push(dir);

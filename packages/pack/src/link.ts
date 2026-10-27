@@ -1,4 +1,4 @@
-// Links a publisher key to a Tavora account, so players see the account's developer name instead
+// Links a publisher key to a Tavora account, so users see the account's developer name instead
 // of the key's fingerprint. The developer gets a one-time code in Tavora (Settings > Development,
 // signed in); this signs the code with the key and sends the signature and the key's public half to
 // Tavora's service. The secret key never leaves this PC.
@@ -37,7 +37,7 @@ const MESSAGES: Record<string, string> = {
   unavailable: "Linking keys is not available right now.",
 };
 
-/** Links the key with the code. Resolves with the key's fingerprint and the developer name players will see. */
+/** Links the key with the code. Resolves with the key's fingerprint and the developer name users will see. */
 export async function linkKey(options: { key: KeyObject; code: string; apiUrl?: string; fetch?: typeof fetch }): Promise<{ fingerprint: string; name: string | null }> {
   const code = cleanLinkCode(options.code);
   if (!code) throw new LinkError("That is not a link code. It looks like ABCD-EFGH, from Tavora: Settings > Development > Publisher keys and CI > Get a link code.");

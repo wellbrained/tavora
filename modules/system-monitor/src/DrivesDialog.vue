@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Which drives to watch. Lists every drive Tavora sees (internal, removable, network) plus any picked drive that is
-// unplugged now. Saving stores the player's choice, so a drive that shows up later is not added on its own.
+// unplugged now. Saving stores the user's choice, so a drive that shows up later is not added on its own.
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";

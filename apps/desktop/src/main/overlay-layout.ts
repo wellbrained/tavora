@@ -1,4 +1,4 @@
-// The Overlay layout: the state behind the window where the player arranges the overlays and panels in game on a
+// The Overlay layout: the state behind the window where the user arranges the overlays and panels in game on a
 // canvas shaped like the game's window (overlay-layout-window.ts is the window, the renderer's LayoutApp the pages).
 // This file holds what the window shows (the game, the selection, the grid, undo, the picture) and does what its
 // messages ask: it moves nothing itself, it writes the new position into the overlays (LayoutSource) so the game shows
@@ -50,7 +50,7 @@ export interface OverlayLayoutOptions {
   openWindow(request: { closed(): void }): LayoutWindow;
   /** The picture of the window with this handle (physical pixels at most `size`), as PNG bytes; null when it can't be taken. */
   capture(handle: string, size: { width: number; height: number }): Promise<Buffer | null>;
-  /** The picture the player picks from a file, as PNG bytes; "cancelled" when they closed the dialog, "bad" when the file isn't a picture. */
+  /** The picture the user picks from a file, as PNG bytes; "cancelled" when they closed the dialog, "bad" when the file isn't a picture. */
   choose(): Promise<Buffer | "cancelled" | "bad">;
 }
 
@@ -107,7 +107,7 @@ export class OverlayLayout {
     this.refresh();
   }
 
-  /** The window was closed (by the player, or Tavora is quitting). */
+  /** The window was closed (by the user, or Tavora is quitting). */
   private closed(): void {
     this.window = null;
     this.bounds = null;

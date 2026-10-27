@@ -60,7 +60,7 @@ function bump(by: number) {
         </Specimen>
       </DemoSection>
 
-<DemoSection v-if="visible.has('progress')" id="progress" :title="title('progress')" description="Show progress the player started. Nothing loops on its own.">
+<DemoSection v-if="visible.has('progress')" id="progress" :title="title('progress')" description="Show progress the user started. Nothing loops on its own.">
         <Specimen label="Progress bar" column>
           <div class="flex items-center gap-3">
             <Progress :model-value="progress" class="max-w-64" aria-label="Import progress" />

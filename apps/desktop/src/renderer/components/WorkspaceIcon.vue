@@ -8,7 +8,7 @@ const props = withDefaults(defineProps<{ workspace: WorkspaceView; size?: number
 
 // Tone and pattern come from the id, so a workspace keeps its look when renamed.
 const look = computed(() => badgeLook(props.workspace.id));
-// An image the player picked always wins; then its game's own icon (from the installed game or Steam); then the badge.
+// An image the user picked always wins; then its game's own icon (from the installed game or Steam); then the badge.
 const steamIcon = computed(() => (props.workspace.icon.kind === "monogram" ? props.workspace.steamIcon : null));
 // An icon that cannot be shown falls back to the badge instead of a broken image.
 const iconFailed = ref(false);

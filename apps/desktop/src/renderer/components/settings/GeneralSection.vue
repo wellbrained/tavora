@@ -23,7 +23,7 @@ const gameStart = computed({
   get: () => library.value.gameStart,
   set: (value: GameStart) => void act({ type: "set-game-start", gameStart: value }),
 });
-/** Not a workspace id, so it can stand for staying where the player is. */
+/** Not a workspace id, so it can stand for staying where the user is. */
 const STAY = ":stay";
 const gameEnd = computed({
   get: () => library.value.gameEndWorkspaceId ?? STAY,

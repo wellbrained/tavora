@@ -6,7 +6,7 @@ import { fingerprint, readZip, verifyFiles } from "@tavora/pack";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PrefixState, PublishView } from "../shared/host-api";
 import { translate } from "../shared/i18n";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 import { ModulePublisher, nextVersions, writeVersion } from "./module-publish";
 
 const dirs: string[] = [];
@@ -32,7 +32,7 @@ async function project(manifest: Record<string, unknown> = MANIFEST, { built = t
   return dir;
 }
 
-function publisher(options: { listed?: { version: string; owner: string } | null | "offline"; prefix?: PrefixState; refuse?: PlayerError; noKey?: boolean; waits?: boolean } = {}) {
+function publisher(options: { listed?: { version: string; owner: string } | null | "offline"; prefix?: PrefixState; refuse?: UserError; noKey?: boolean; waits?: boolean } = {}) {
   const { privateKey } = generateKeyPairSync("ed25519");
   const uploads: Buffer[] = [];
   const views: (PublishView | null)[] = [];
@@ -146,7 +146,7 @@ describe("ModulePublisher", () => {
 
   it("shows why an upload was refused and stays ready", async () => {
     const dir = await project();
-    const { publisher: reviewer } = publisher({ refuse: new PlayerError("publish.error.dailyLimit") });
+    const { publisher: reviewer } = publisher({ refuse: new UserError("publish.error.dailyLimit") });
     await reviewer.open(dir);
     await reviewer.publish();
     expect(reviewer.view()).toMatchObject({ status: "ready", error: translate("en", "publish.error.dailyLimit"), published: null });

@@ -66,7 +66,7 @@ function onKeydown(event: KeyboardEvent) {
   event.preventDefault();
 }
 
-// Downloads are refused in the main process; the player is told each time.
+// Downloads are refused in the main process; the user is told each time.
 watch(
   () => props.browser.downloadsRefused,
   (count, previous) => {

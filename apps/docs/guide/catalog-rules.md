@@ -4,7 +4,7 @@ Tavora's [module catalog](./publishing.md) is open to everyone who makes modules
 
 ## Not allowed
 
-- **Malware, or tricking players.** Modules that steal logins, tokens or files, hide what they do, load code from somewhere else to change what they do later, mine coins, or pretend to be another module or developer.
+- **Malware, or tricking users.** Modules that steal logins, tokens or files, hide what they do, load code from somewhere else to change what they do later, mine coins, or pretend to be another module or developer.
 - **Hate and harassment.** Slurs, content that attacks people for who they are, threats, or modules made to bother a person or group.
 - **Adult content (18+).** Pornography, sexual content and anything else meant only for adults. The catalog has no age check, so it is banned: in a module's name, descriptions, patch notes, readme, pictures or what it shows.
 - **Cheats that break a game's rules.** Modules that give an unfair edge in online play, bypass anti-cheat, or read or change a game's memory or files. Helpers that work with what the game shows you, like timers, notes and trackers, are fine.
@@ -34,8 +34,8 @@ You get an email with a reason: *Unsafe or harmful*, *Hateful content*, *Adult c
 
 ## When a developer is banned
 
-The account and all its publisher keys can't publish any more, and all its modules leave the catalog. Players who already installed them keep them. The email names the reason. If you think it's a mistake, write to [tavora.app@gmail.com](mailto:tavora.app@gmail.com).
+The account and all its publisher keys can't publish any more, and all its modules leave the catalog. Users who already installed them keep them. The email names the reason. If you think it's a mistake, write to [tavora.app@gmail.com](mailto:tavora.app@gmail.com).
 
 ## Reporting a module
 
-Players can report a module from its page in Browse. A person at Tavora looks at every report and can take the module out of the catalog.
+Users can report a module from its page in Browse. A person at Tavora looks at every report and can take the module out of the catalog.

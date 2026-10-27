@@ -73,7 +73,7 @@ describe("Timings", () => {
 });
 
 describe("buildReport", () => {
-  it("lists versions, timings, updates and errors without the player's folders", () => {
+  it("lists versions, timings, updates and errors without the user's folders", () => {
     const timings = new Timings();
     timings.record("startup", 900);
     const report = buildReport({

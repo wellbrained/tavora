@@ -1,14 +1,14 @@
 # Publishing to the catalog
 
-Tavora's module catalog is where players find community modules: under **Browse** in the module library. Browse lists every module, those for the workspace they have open first (a game workspace gets the modules for its game, a personal workspace those for any game); the others show which game they are for and can't be installed there. Publishing puts your module there, and every player who installs it from the catalog is told when you publish an update.
+Tavora's module catalog is where users find community modules: under **Browse** in the module library. Browse lists every module, those for the workspace they have open first (a game workspace gets the modules for its game, a personal workspace those for any game); the others show which game they are for and can't be installed there. Publishing puts your module there, and every user who installs it from the catalog is told when you publish an update.
 
 ## Before the first upload
 
-1. **Set up once.** Under **Settings > Development**, the **Want to make modules?** card walks you through signing in (email or Discord) and choosing a developer name. Saving the name makes your publisher key, links it to your account and claims your name as your prefix. Players see your name as "by *your name*" next to your module. Pressing Publish before that opens the same steps.
+1. **Set up once.** Under **Settings > Development**, the **Want to make modules?** card walks you through signing in (email or Discord) and choosing a developer name. Saving the name makes your publisher key, links it to your account and claims your name as your prefix. Users see your name as "by *your name*" next to your module. Pressing Publish before that opens the same steps.
 2. **Use an id with your own prefix.** The part of your module id before the first dot is your prefix, such as `wellbrained` in `wellbrained.timer`. Once it's yours, nobody else can publish under it. An account holds up to 3 prefixes: **Add another** under Module developer checks one and claims it. Words a developer name couldn't be are refused, such as `tavora`, `official` and `local`, so an id from the starter (`local.…`) needs your prefix; the review screen lets you change the id before the first publish. Prefixes stay taken when an account is deleted.
 3. **Say where the module belongs.** `games` lists the games it is made for, or stays empty for any game. A module for any game is offered in personal workspaces too, unless you set `personalWorkspaces` to `false`. See the [manifest reference](../reference/manifest.md).
 4. **Write a description and patch notes.** The listing shows your manifest's `name`, `description`, `version` and what it asks for (`permissions.network` and `connectors`) and the zip's size. Each version's lines from [`changelog.json`](./getting-started.md#patch-notes) show up as its patch notes. It is shown as plain text, never HTML.
-5. **Fill your module's page** if you like. `readme` names a `README.md` (or `.txt`) that becomes the module's description (see [Writing the description](#writing-the-description)), `screenshots` up to 5 PNG or WebP pictures, `homepage` your module's web page, and `support` an `https` address or an email address for feedback (it shows as a **Send feedback** button; leave it out for no button). Your `icon` shows on the catalog card. Players see all of it when they open your module in the catalog. Set `minTavora` to at least `0.20.39` when you use `support`, `0.18.19` when you use `readme`, and `0.18.17` for the others.
+5. **Fill your module's page** if you like. `readme` names a `README.md` (or `.txt`) that becomes the module's description (see [Writing the description](#writing-the-description)), `screenshots` up to 5 PNG or WebP pictures, `homepage` your module's web page, and `support` an `https` address or an email address for feedback (it shows as a **Send feedback** button; leave it out for no button). Your `icon` shows on the catalog card. Users see all of it when they open your module in the catalog. Set `minTavora` to at least `0.20.39` when you use `support`, `0.18.19` when you use `readme`, and `0.18.17` for the others.
 6. **Set `minTavora`** if the module uses something from a newer SDK. The [SDK changelog](../reference/changelog.md) says which Tavora each feature needs.
 
 ## Writing the description
@@ -20,7 +20,7 @@ The page sorts your readme into the same sections every module has, so pages rea
 | *(no heading)* | | Overview: one or two sentences on what the module does |
 | `## Features` | Funktionen | What it can do |
 | `## How to use` | Bedienung | The first steps |
-| `## Settings` | Einstellungen | What players can change |
+| `## Settings` | Einstellungen | What users can change |
 | `## Requirements` | Voraussetzungen | A game, an account, the internet |
 | `## Known issues` | Bekannte Probleme | What doesn't work yet |
 
@@ -61,26 +61,26 @@ Tavora's Publish screen says the version is waiting for review, and `tavora-pack
 
 To take a waiting version back, run `TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pack withdraw <zip or sha256>`. An account can have 5 versions waiting at once.
 
-## What players see
+## What users see
 
-- **Browse** lists your module with its name, version, "by *your name*", its description, whether it works where the player is, how many times it was installed from Browse, and its rating: the average, stars and how many rated, with a New badge by its name below 3 ratings. Players can sort by name, rating or newest. Installs are counted per module only, with nothing about who installed it; updates don't count.
-- **Your module's page** opens from its card: your icon, readme, screenshots and homepage, this version's patch notes, when it was updated and what it can reach. The description shows your readme as text: headings, paragraphs, lists, code, bold, italic and links to web pages (a click opens them in a Browser panel); pictures and HTML are never shown. Below it are this version's patch notes and a collapsed list of every version. The page also shows the network hosts and connectors it wants, so players see them before they install.
-- **Ratings and reviews** are on your module's page: 1 to 5 stars from signed-in players, with an optional review of up to 500 characters. Every version's ratings count, and each review shows the version it was given on. You can't rate your own module, but you can post one reply under each review (Reply, signed in with the account that publishes the module). Reviews with slurs, links or email addresses wait until Tavora checks them; players can report a review, and Tavora can hide its text. Its stars still count. To keep ratings honest, an account can rate only once it is a day old and at most 10 modules a day, and a module's ratings beyond 20 new ones in a day wait for Tavora before they count.
-- **Install** downloads the zip, checks it against the listing and your key's signature, and installs it like Install from zip. Installing grants nothing: players are asked for your network hosts and connectors when they add the module, as with any zip.
+- **Browse** lists your module with its name, version, "by *your name*", its description, whether it works where the user is, how many times it was installed from Browse, and its rating: the average, stars and how many rated, with a New badge by its name below 3 ratings. Users can sort by name, rating or newest. Installs are counted per module only, with nothing about who installed it; updates don't count.
+- **Your module's page** opens from its card: your icon, readme, screenshots and homepage, this version's patch notes, when it was updated and what it can reach. The description shows your readme as text: headings, paragraphs, lists, code, bold, italic and links to web pages (a click opens them in a Browser panel); pictures and HTML are never shown. Below it are this version's patch notes and a collapsed list of every version. The page also shows the network hosts and connectors it wants, so users see them before they install.
+- **Ratings and reviews** are on your module's page: 1 to 5 stars from signed-in users, with an optional review of up to 500 characters. Every version's ratings count, and each review shows the version it was given on. You can't rate your own module, but you can post one reply under each review (Reply, signed in with the account that publishes the module). Reviews with slurs, links or email addresses wait until Tavora checks them; users can report a review, and Tavora can hide its text. Its stars still count. To keep ratings honest, an account can rate only once it is a day old and at most 10 modules a day, and a module's ratings beyond 20 new ones in a day wait for Tavora before they count.
+- **Install** downloads the zip, checks it against the listing and your key's signature, and installs it like Install from zip. Installing grants nothing: users are asked for your network hosts and connectors when they add the module, as with any zip.
 - Their data and permissions belong to your module id and your key, as [Your publisher key](./publisher-key.md#what-the-key-decides) explains.
 
 ## Updates
 
 Build, then press **Publish** again. If you haven't raised `version` yet, the review screen offers the next one and a box for its patch notes. Each new version must be higher than the last one you published, and it's signed with the same key.
 
-While online features are on, players' Tavora looks for updates a little after start, every few hours after that, and when they press **Check for updates** in Settings > Modules:
+While online features are on, users' Tavora looks for updates a little after start, every few hours after that, and when they press **Check for updates** in Settings > Modules:
 
-- Updates wait for the player. A button in the workspace header (for example "2 updates") opens the module library on **Updates**, with your patch notes for each new version and an **Update** button. Open panels reload when they update.
-- Players who turn on **Update modules automatically** in Settings > Modules get an update that asks for nothing new at once, with a notice pointing to your patch notes.
-- An update that asks for a network host or connector the installed version didn't ask for always waits for the player's yes, even with that setting on. The installed version keeps running until they allow it, and the patch notes show in the dialog.
-- Every player gets the latest version. There's no way to pin an older one, and an older or equal version can't be published.
+- Updates wait for the user. A button in the workspace header (for example "2 updates") opens the module library on **Updates**, with your patch notes for each new version and an **Update** button. Open panels reload when they update.
+- Users who turn on **Update modules automatically** in Settings > Modules get an update that asks for nothing new at once, with a notice pointing to your patch notes.
+- An update that asks for a network host or connector the installed version didn't ask for always waits for the user's yes, even with that setting on. The installed version keeps running until they allow it, and the patch notes show in the dialog.
+- Every user gets the latest version. There's no way to pin an older one, and an older or equal version can't be published.
 
-A zip a player installed by hand with Install from zip isn't updated from the catalog. Once they install your module from Browse, it is.
+A zip a user installed by hand with Install from zip isn't updated from the catalog. Once they install your module from Browse, it is.
 
 ## Limits
 
@@ -122,23 +122,23 @@ A token publishes only under id prefixes your account already holds, so publish 
 
 ## Reports and takedowns
 
-Players can report a module from its page in Browse, or from Settings > Modules once it is installed. A report names only the module, your key and the zip, never the player, and hides nothing by itself: a person at Tavora looks at it. When your account has an email address, you get an email at most once a day saying your module was reported. Reports carry no sender, so there's nobody to answer.
+Users can report a module from its page in Browse, or from Settings > Modules once it is installed. A report names only the module, your key and the zip, never the user, and hides nothing by itself: a person at Tavora looks at it. When your account has an email address, you get an email at most once a day saying your module was reported. Reports carry no sender, so there's nobody to answer.
 
-If the module breaks the rules, Tavora can take it out of the catalog (players who installed it keep it), block a zip so it stops on every player's PC with their data kept, or revoke a key. A blocked module comes back only with a new version whose zip isn't blocked.
+If the module breaks the rules, Tavora can take it out of the catalog (users who installed it keep it), block a zip so it stops on every user's PC with their data kept, or revoke a key. A blocked module comes back only with a new version whose zip isn't blocked.
 
 ## A lost or leaked key
 
-Tavora can hand your modules to a new key, but only if the old key was linked to your account. It signs a statement, offline with its own key, that the new key replaces the old one. Players' Tavora then takes updates signed by the new key for the old key's modules, and their data stays where it was.
+Tavora can hand your modules to a new key, but only if the old key was linked to your account. It signs a statement, offline with its own key, that the new key replaces the old one. Users' Tavora then takes updates signed by the new key for the old key's modules, and their data stays where it was.
 
 Ask in the app: Settings > Development > Publisher keys and CI (press **Show**), then **Lost it?** next to the key.
 
 - **I lost it:** your modules move to your newest key that Tavora keeps and that is linked to your account. If there is none, Tavora makes one and links it. Keys Tavora keeps are lost only with your recovery key.
-- **It was leaked:** the same, and Tavora also revokes the old key. From the moment you ask, the catalog takes nothing new signed by it. Once revoked, it can't publish or install anything new. Modules players already have keep running, and so do the zips Tavora lists as published before the revocation.
+- **It was leaked:** the same, and Tavora also revokes the old key. From the moment you ask, the catalog takes nothing new signed by it. Once revoked, it can't publish or install anything new. Modules users already have keep running, and so do the zips Tavora lists as published before the revocation.
 
 Your account's email address gets a note that you asked. The key shows **Waiting for Tavora** until a person at Tavora has checked the request and signed it, then **Done**. Both keys stay linked while it waits. If something can't be done in the app, write to [tavora.app@gmail.com](mailto:tavora.app@gmail.com).
 
 **A publish token leaked?** Remove it under Settings > Development > Publisher keys and CI. It stops working at once. A token alone can't publish; it needs your key too.
 
-Once Tavora has signed the statement, publish new versions of your modules with the new key as usual. The catalog takes them because the statement names your account, and players' Tavora updates to them and keeps their data.
+Once Tavora has signed the statement, publish new versions of your modules with the new key as usual. The catalog takes them because the statement names your account, and users' Tavora updates to them and keeps their data.
 
 A key that was never linked can't be replaced. That's one more reason to [link yours now](./publisher-key.md#show-your-name).

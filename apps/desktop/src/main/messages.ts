@@ -1,10 +1,10 @@
 import { translate, type MessageKey, type Params } from "../shared/i18n";
 
 /**
- * An error the player reads. It carries the key of its text, so the host can
- * word it in the player's language; `message` is English, for logs and tests.
+ * An error the user reads. It carries the key of its text, so the host can
+ * word it in the user's language; `message` is English, for logs and tests.
  */
-export class PlayerError extends Error {
+export class UserError extends Error {
   readonly key: MessageKey;
   readonly params: Params | undefined;
 

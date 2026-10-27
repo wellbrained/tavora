@@ -34,7 +34,7 @@ describe("a library saved by 0.1.0", () => {
   // As Tavora reads it: moved to the workspace names at start (workspace-move.ts), then cleaned up.
   const library = sanitizeLibrary(moveLibrary(structuredClone(LIBRARY_0_1_0)));
 
-  it("keeps every workspace, folder, favorite and the player's choices", () => {
+  it("keeps every workspace, folder, favorite and the user's choices", () => {
     expect(Object.keys(library.workspaces).sort()).toEqual(["elden-ring", "local-my-game", "poe2"]);
     expect(library.workspaces["elden-ring"]!.trashedAt).toBe("2026-10-14T12:00:00.000Z");
     expect(library.workspaces["local-my-game"]!.icon).toEqual({ kind: "image", file: "local-my-game-1a2b3c4d.png" });

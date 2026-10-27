@@ -14,7 +14,7 @@ export { errorMessage, readDocument, serial, updateDocument, type UpdateOptions,
 
 /**
  * Connects to Tavora and keeps the page's CSS tokens in step with the host theme.
- * `onLanguage` gets the language Tavora shows its texts in now and whenever the player changes it.
+ * `onLanguage` gets the language Tavora shows its texts in now and whenever the user changes it.
  */
 export async function connectModule(onLanguage?: (language: string) => void): Promise<TavoraSDK> {
   const sdk = await connect();

@@ -467,7 +467,7 @@ describe("Discord login", () => {
   it("does not connect Discord on a day without mail, when no code can reach the owner", async () => {
     const { call, signIn, store, clock } = setup({ discord: pretend({ codewellbrained: ALEX }), mailDailyLimit: 21 });
     const token = await signIn("me@example.com");
-    // The rest of the day's allowance goes to other players.
+    // The rest of the day's allowance goes to other users.
     for (let i = 0; i < 20; i++) store.countMail(new Date(clock.now).toISOString().slice(0, 10));
     expect(await (await call("POST", "/discord/code", {}, token)).json()).toMatchObject({ reason: "daily-limit" });
   });

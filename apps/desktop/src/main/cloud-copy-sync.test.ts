@@ -83,7 +83,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(atB.sync.view().on).toBe(false);
 
     await atB.sync.enterKey(key.toLowerCase().replace(/-/g, " "));
-    // B has data of its own: the player keeps one side.
+    // B has data of its own: the user keeps one side.
     expect(atB.sync.view()).toMatchObject({ on: true, askKey: false, conflict: true });
     await atB.sync.keep("cloud");
     expect(atB.events.restarts).toBe(1);
@@ -151,7 +151,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     await writeFile(path.join(b.userData, "library.json"), "b2!");
     const atB = tavora(cloud, b);
     await atB.sync.beforeLoad();
-    // Neither side is lost: B's change stays until the player picks.
+    // Neither side is lost: B's change stays until the user picks.
     expect(await read(b.userData, "library.json")).toBe("b2!");
     expect(atB.sync.view().conflict).toBe(true);
     // Nothing goes up while the question is open.
@@ -353,7 +353,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     await fromA.lookForRequests();
     await fromA.decide(fromA.view().approve!.id, true);
     await toB.lookForAnswer();
-    // B has the key and takes up the copy: it has data of its own, so the player keeps one side.
+    // B has the key and takes up the copy: it has data of its own, so the user keeps one side.
     expect(atB.sync.view()).toMatchObject({ on: true, askKey: false, conflict: true, folder: onedrive });
     fromA.dispose();
     toB.dispose();

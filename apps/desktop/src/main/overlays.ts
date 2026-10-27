@@ -1,4 +1,4 @@
-// Stream overlays: pages a module ships for streaming software such as OBS (the manifest's `overlay`). The player
+// Stream overlays: pages a module ships for streaming software such as OBS (the manifest's `overlay`). The user
 // adds an overlay's link as a Browser Source; Tavora serves the page and its files from this PC only, and passes on
 // what the module published for it (overlay.publish) as server-sent events. Each link belongs to one key of one
 // module in one workspace and carries a random token, which is the only thing that makes it reachable: the server
@@ -15,7 +15,7 @@ import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { isJsonValue, readJsonOrSetAside } from "./json";
 
 export const OVERLAYS_FILE = "overlays.json";
-/** Where Stream overlays listen unless the player picks another port. */
+/** Where Stream overlays listen unless the user picks another port. */
 export const DEFAULT_OVERLAY_PORT = 47820;
 export const MIN_OVERLAY_PORT = 1024;
 export const MAX_OVERLAY_PORT = 65535;
@@ -244,7 +244,7 @@ export function overlayUrl(port: number, token: string): string {
   return `http://127.0.0.1:${port}/overlay/${token}/`;
 }
 
-/** The HTTP server behind Stream overlays; runs only while the player has them on. */
+/** The HTTP server behind Stream overlays; runs only while the user has them on. */
 export class OverlayServer {
   private server: Server | null = null;
   private listening: number | null = null;

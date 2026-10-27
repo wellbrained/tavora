@@ -33,7 +33,7 @@ const connected = computed(() => view.value?.status === "connected" || view.valu
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 
-/** Modules the player allowed to use Tavora's Discord sign-in. */
+/** Modules the user allowed to use Tavora's Discord sign-in. */
 const users = computed(() => (state.value?.modules ?? []).filter((module) => module.permissions.granted.connectors.includes("discord")));
 
 function revoke(module: ModuleView) {

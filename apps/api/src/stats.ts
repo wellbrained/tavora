@@ -5,8 +5,8 @@ import { DatabaseSync } from "node:sqlite";
 /**
  * Plain daily totals (decided 2026-10-26): how often an installer was downloaded, the app and modules
  * were updated and modules installed, per version or module and per UTC day, and once a day how many
- * accounts there are and how many were active. Nothing about a player is kept: no address, no id, no
- * request log, and a player without an account is never counted as a person. A count is a number that
+ * accounts there are and how many were active. Nothing about a user is kept: no address, no id, no
+ * request log, and a user without an account is never counted as a person. A count is a number that
  * goes up by one.
  */
 

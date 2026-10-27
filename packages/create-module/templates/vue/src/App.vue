@@ -4,7 +4,7 @@
 import { connect, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 import { computed, onMounted, ref, shallowRef } from "vue";
 
-/** Your texts in English and German; Tavora says which language the player uses. */
+/** Your texts in English and German; Tavora says which language the user uses. */
 const TEXTS = {
   en: { connecting: "Connecting to Tavora…", here: "You're in {workspace}.", clicked: "Clicked {count} times here." },
   de: { connecting: "Verbinde mit Tavora …", here: "Du bist in {workspace}.", clicked: "{count}-mal hier geklickt." },

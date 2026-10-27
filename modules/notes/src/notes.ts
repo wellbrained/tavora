@@ -7,7 +7,7 @@ import { BLOB_ID, type JsonValue } from "@tavora/sdk";
 /** The one note every workspace has. It cannot be deleted, only cleared. */
 export const SCRATCHPAD_ID = "scratchpad";
 export const SCRATCHPAD_TITLE = "Scratchpad";
-/** The document that remembers the order the player put the notes in. It is not a note. */
+/** The document that remembers the order the user put the notes in. It is not a note. */
 export const ORDER_ID = "order";
 export const UNTITLED = "Untitled note";
 /** Titles are shown in one line; the host allows up to 200 characters. */
@@ -147,7 +147,7 @@ export interface NoteSections {
 
 /**
  * Splits notes for the list: the scratchpad first, then pinned notes, then
- * the rest. Notes the player has put in an order (`order`) come first in that
+ * the rest. Notes the user has put in an order (`order`) come first in that
  * order; the others follow in the order they were made, so a new note comes
  * last and editing never moves one. The scratchpad is always there, saved or not.
  */

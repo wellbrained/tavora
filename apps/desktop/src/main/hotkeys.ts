@@ -1,4 +1,4 @@
-// Hotkeys for module actions (the manifest's `actions`, hotkeys.set). The player picks each key in Tavora's own
+// Hotkeys for module actions (the manifest's `actions`, hotkeys.set). The user picks each key in Tavora's own
 // dialog, for one workspace; the module only hears which action fired for which target. Keys are registered with the
 // system only for the workspace shown now, and only for modules with a panel in it, so a key does nothing
 // (and is not taken from other programs) anywhere else. Kept in hotkeys.json in the data folder.

@@ -1,4 +1,4 @@
-// The player's named values, newest first, kept in the workspace's module storage so every panel of the workspace has them.
+// The user's named values, newest first, kept in the workspace's module storage so every panel of the workspace has them.
 // A sum holds a value by its name and looks up its number when it is worked out.
 import type { JsonValue } from "@tavora/sdk";
 import type { Lookup } from "./calc";

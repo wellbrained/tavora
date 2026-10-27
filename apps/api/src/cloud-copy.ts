@@ -5,8 +5,8 @@ import type { Account, AccountStore } from "./account-store.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 
 /**
- * The cloud copy (decided 2026-10-19): one copy of a player's Tavora data per account, which only the
- * player can read. The PC encrypts everything before it leaves; the service sees opaque **parts** (named
+ * The cloud copy (decided 2026-10-19): one copy of a user's Tavora data per account, which only the
+ * user can read. The PC encrypts everything before it leaves; the service sees opaque **parts** (named
  * by an id the PC derives with its own key, so equal content is stored once and nothing links an id to a
  * file) and an encrypted **manifest** that says which parts make up the copy. A new version replaces the
  * manifest only when the PC started from the current one, so a PC that missed an update never
@@ -17,7 +17,7 @@ import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 export const COPY_LIMIT = 100 * 1024 * 1024;
 /** Parts stored while a new version is uploaded, before the old one's are dropped. */
 export const STORED_LIMIT = 2 * COPY_LIMIT;
-/** One part: 4 MB of the player's data plus its encryption. */
+/** One part: 4 MB of the user's data plus its encryption. */
 export const MAX_PART_BYTES = 4 * 1024 * 1024 + 1024;
 /** One upload or one download: about 8 MB of parts. */
 export const BATCH_BYTES = 8 * 1024 * 1024;

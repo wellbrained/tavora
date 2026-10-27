@@ -10,9 +10,9 @@ import { SavedData } from "./saved-data";
 import { BEFORE_WORKSPACES_DIR, MOVED_VERSIONS, moveToWorkspaces } from "./workspace-move";
 
 // A folder a dialog last opened in: absolute on the system the tests run on, as Tavora only keeps absolute ones.
-const PICTURES = process.platform === "win32" ? "C:\\Users\\Player\\Pictures" : "/home/player/Pictures";
+const PICTURES = process.platform === "win32" ? "C:\\Users\\User\\Pictures" : "/home/user/Pictures";
 
-// What Tavora 0.21.41 (the last before the Game → Workspace rename) wrote, field for field.
+// What Tavora 0.21.42 (the last before the Game → Workspace rename) wrote, field for field.
 const NOTES = "aaaaaaaa-0000-4000-8000-000000000001";
 const PLANNER = "aaaaaaaa-0000-4000-8000-000000000002";
 const BOARD = "aaaaaaaa-0000-4000-8000-000000000003";
@@ -190,7 +190,7 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-/** Writes the files as Tavora 0.21.41 did: library and workspace without a final newline, the others with one. */
+/** Writes the files as Tavora 0.21.42 did: library and workspace without a final newline, the others with one. */
 async function writeOld(files: Record<string, unknown> = OLD_FILES): Promise<void> {
   for (const [name, value] of Object.entries(files)) {
     const body = JSON.stringify(value, null, 2);

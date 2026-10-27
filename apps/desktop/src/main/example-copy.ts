@@ -3,7 +3,7 @@ import path from "node:path";
 import { validateManifest } from "@tavora/module-schema";
 import sdkPackage from "@tavora/sdk/package.json" with { type: "json" };
 import { MANIFEST } from "./registry";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 
 // Make a copy (decided 2026-10-21, "Dev modules and project folders"): an example that ships with Tavora
 // becomes the developer's own project. Tavora copies the example's sources (never node_modules or a
@@ -73,7 +73,7 @@ export async function copyExample(source: string, target: string, copy: ExampleC
   try {
     await mkdir(target);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new PlayerError("error.copyExists", { folder: path.basename(target) });
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new UserError("error.copyExists", { folder: path.basename(target) });
     throw error;
   }
   try {
@@ -103,12 +103,12 @@ async function exampleFiles(source: string): Promise<string[]> {
       else if (entry.isFile()) {
         bytes += (await stat(path.join(dir, entry.name))).size;
         files.push(relative);
-        if (files.length > MAX_FILES || bytes > MAX_BYTES) throw new PlayerError("error.copyTooBig");
+        if (files.length > MAX_FILES || bytes > MAX_BYTES) throw new UserError("error.copyTooBig");
       }
     }
   };
   await walk(source, "");
-  if (!files.includes(MANIFEST)) throw new PlayerError("error.copyNoExample");
+  if (!files.includes(MANIFEST)) throw new UserError("error.copyNoExample");
   return files.sort();
 }
 
@@ -126,7 +126,7 @@ function parse(text: string, file: string): Json {
   } catch {
     // Said below.
   }
-  throw new PlayerError("publish.error.badFile", { file });
+  throw new UserError("publish.error.badFile", { file });
 }
 
 const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
@@ -135,7 +135,7 @@ const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
 const REWRITES: Record<string, (text: string, copy: Context) => string> = {
   [MANIFEST]: (text, copy) => {
     const manifest = { ...parse(text, MANIFEST), $schema: SCHEMA_URL, id: copy.id, name: copy.name, version: "0.1.0" };
-    if (!validateManifest(manifest).ok) throw new PlayerError("publish.error.badId");
+    if (!validateManifest(manifest).ok) throw new UserError("publish.error.badId");
     // $schema first, as in a new project.
     const { $schema, ...rest } = manifest;
     return json({ $schema, ...rest });
@@ -166,7 +166,7 @@ function fromNpm(value: unknown): Record<string, string> {
   for (const [name, range] of Object.entries((value ?? {}) as Record<string, string>)) {
     if (!range.startsWith("workspace:")) dependencies[name] = range;
     else if (name === "@tavora/sdk") dependencies[name] = SDK_RANGE;
-    else throw new PlayerError("error.copyWorkspace", { name });
+    else throw new UserError("error.copyWorkspace", { name });
   }
   return dependencies;
 }

@@ -7,7 +7,7 @@ import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 
 /**
  * The Report button (Milestone E, step 7; C12). The app sends exactly the module id, the key
- * fingerprint and the zip hash, and only after the player pressed Report; nothing about the player
+ * fingerprint and the zip hash, and only after the user pressed Report; nothing about the user
  * is sent or kept. A report hides nothing by itself: it waits on the admin page, where a person can
  * delist the module, or block the zip or revoke the key in the signed lists. The publisher is told
  * by email at most once a day, when their account has an address.
@@ -29,9 +29,9 @@ export interface ReportOptions {
 export function reportMail(to: string, module: { id: string; name: string }): Mail {
   return {
     to,
-    subject: `A player reported ${module.name} in Tavora's module catalog`,
+    subject: `A user reported ${module.name} in Tavora's module catalog`,
     text:
-      `A player pressed Report on your module ${module.name} (${module.id}) in Tavora's module catalog.\n\n` +
+      `A user pressed Report on your module ${module.name} (${module.id}) in Tavora's module catalog.\n\n` +
       "It stays listed while a person at Tavora looks at it. Reports say nothing about who sent them, so there is nothing to answer. " +
       "If Tavora takes the module down, you hear from us.\n\n" +
       "You get this email at most once a day.\n\nTavora\n",
@@ -75,7 +75,7 @@ export function reportHandlers({ catalog, accounts, clientKey, rateLimiter, now 
     } catch {
       body = null;
     }
-    // Exactly these three fields, so nothing else about the player can ride along.
+    // Exactly these three fields, so nothing else about the user can ride along.
     const input = body as Record<string, unknown> | null;
     if (
       !input ||

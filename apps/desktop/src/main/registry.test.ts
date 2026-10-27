@@ -236,7 +236,7 @@ describe("development folders", () => {
 });
 
 describe("describeModules", () => {
-  it("lets Settings remove only direct children of the player's own modules folder", async () => {
+  it("lets Settings remove only direct children of the user's own modules folder", async () => {
     const official = await mkdtemp(path.join(tmpdir(), "tavora-official-"));
     const dev = await mkdtemp(path.join(tmpdir(), "tavora-dev-"));
     const own = await mkdtemp(path.join(tmpdir(), "tavora-own-"));

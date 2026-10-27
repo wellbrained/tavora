@@ -128,7 +128,7 @@ describe("the hotkey dialog", () => {
     expect(hotkeys.list()).toEqual([]);
   });
 
-  it("closes when the player leaves the workspace", async () => {
+  it("closes when the user leaves the workspace", async () => {
     const { streaming, world, hotkeys } = await setup();
     const asked = hotkeys.set("start-pause", "item-1", "Boss timer");
     world.workspaceId = "elden-ring";

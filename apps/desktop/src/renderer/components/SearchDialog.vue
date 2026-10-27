@@ -52,7 +52,7 @@ watch(searchOpen, (open) => {
   }
 });
 
-// Games Tavora knows but the player has not added yet: the built-in list at
+// Games Tavora knows but the user has not added yet: the built-in list at
 // once, the Tavora service a moment after typing stops.
 const ONLINE_DELAY_MS = 250;
 const MAX_ADD_ITEMS = 5;
@@ -222,7 +222,7 @@ const shown = computed<Group[]>(() => {
   const ranked = groups.value
     .map((group) => ({ ...group, items: rank(group.items, text, (item) => ({ name: item.label, extra: item.keywords })) }))
     .filter((group) => group.items.length > 0);
-  // Already ranked by the search itself, and placed after the player's own workspaces.
+  // Already ranked by the search itself, and placed after the user's own workspaces.
   if (addItems.value.length) ranked.splice(ranked[0]?.id === "workspaces" ? 1 : 0, 0, { id: "add", label: t("addGame.title"), items: addItems.value });
   return ranked;
 });

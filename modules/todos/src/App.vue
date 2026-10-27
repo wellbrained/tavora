@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// To-Dos: a toolbar, current objectives, then the player's own groups. Every
+// To-Dos: a toolbar, current objectives, then the user's own groups. Every
 // To-Dos panel of a workspace shows the same list; what is folded, hidden or being
 // edited is each panel's own state.
 import { Check, ChevronsDownUp, ChevronsUpDown, Eye, ListChecks } from "@lucide/vue";

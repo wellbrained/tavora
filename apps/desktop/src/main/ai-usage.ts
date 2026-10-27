@@ -7,15 +7,15 @@ import { claudeAccessToken, claudePlan, codexPlan, parseEmail } from "./ai-usage
 import { CodexMissingError, type CodexReading } from "./ai-usage-codex";
 import { HostError } from "./errors";
 import { isJsonValue } from "./json";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 
 // The AI Usage connector (the decision log, AI Usage rows of 2026-10-17): the Claude and Codex
-// accounts the player set up in Settings > Integrations, and their usage read for a granted module.
+// accounts the user set up in Settings > Integrations, and their usage read for a granted module.
 // Claude: one request to Anthropic's usage address with the access token of the profile's login,
 // held in memory for that request only. Codex: its own command line (ai-usage-codex.ts). Tokens
 // never leave this process: a module gets the provider's answer, the plan and the email, nothing
 // else. ai-usage.json holds only account names and folders. Each account is read at most once a
-// minute for every module together, so no module can flood a provider with the player's login.
+// minute for every module together, so no module can flood a provider with the user's login.
 
 export const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 export const MAX_ACCOUNTS = 20;
@@ -166,7 +166,7 @@ export class AiUsageConnector {
 
   /**
    * Loads the saved accounts once, when a module or Settings first asks (never at start, so a
-   * player without the AI Usage module has nothing read); the first time ever, offers the profile
+   * user without the AI Usage module has nothing read); the first time ever, offers the profile
    * folders found on this PC.
    */
   private load(): Promise<void> {
@@ -227,7 +227,7 @@ export class AiUsageConnector {
 
   // ── For granted modules ──────────────────────────────────────────────
 
-  /** The accounts, in the player's order, with no folders: a module never learns where a login lives. */
+  /** The accounts, in the user's order, with no folders: a module never learns where a login lives. */
   async accountInfos(): Promise<AiUsageAccountInfo[]> {
     await this.load();
     return this.accounts.map((account) => ({ id: account.id, provider: account.provider, label: account.label, plan: this.plans.get(account.id) ?? null }));
@@ -343,16 +343,16 @@ export class AiUsageConnector {
   private async checkAccount(label: string, directory: string, provider: AiProvider, except?: string): Promise<{ label: string; directory: string }> {
     const name = label.trim();
     // eslint-disable-next-line no-control-regex
-    if (name === "" || name.length > MAX_LABEL || /[\u0000-\u001f\u007f]/.test(name)) throw new PlayerError("aiUsage.error.label");
-    if (!path.isAbsolute(directory) || directory.length > 500 || !(await this.deps.isDirectory(directory))) throw new PlayerError("aiUsage.error.directory");
+    if (name === "" || name.length > MAX_LABEL || /[\u0000-\u001f\u007f]/.test(name)) throw new UserError("aiUsage.error.label");
+    if (!path.isAbsolute(directory) || directory.length > 500 || !(await this.deps.isDirectory(directory))) throw new UserError("aiUsage.error.directory");
     const normalized = path.resolve(directory);
-    if (this.accounts.some((item) => item.id !== except && item.provider === provider && sameFolder(item.directory, normalized))) throw new PlayerError("aiUsage.error.duplicate");
+    if (this.accounts.some((item) => item.id !== except && item.provider === provider && sameFolder(item.directory, normalized))) throw new UserError("aiUsage.error.duplicate");
     return { label: name, directory: normalized };
   }
 
   async add(provider: AiProvider, label: string, directory: string): Promise<void> {
     await this.load();
-    if (this.accounts.length >= MAX_ACCOUNTS) throw new PlayerError("aiUsage.error.limit");
+    if (this.accounts.length >= MAX_ACCOUNTS) throw new UserError("aiUsage.error.limit");
     const checked = await this.checkAccount(label, directory, provider);
     const account: StoredAccount = { id: randomUUID(), provider, ...checked };
     this.accounts.push(account);
@@ -364,7 +364,7 @@ export class AiUsageConnector {
   async update(id: string, label: string, directory: string): Promise<void> {
     await this.load();
     const account = this.accounts.find((item) => item.id === id);
-    if (!account) throw new PlayerError("aiUsage.error.unknown");
+    if (!account) throw new UserError("aiUsage.error.unknown");
     const checked = await this.checkAccount(label, directory, account.provider, id);
     const moved = !sameFolder(account.directory, checked.directory);
     account.label = checked.label;
@@ -382,7 +382,7 @@ export class AiUsageConnector {
     await this.load();
     const before = this.accounts.length;
     this.accounts = this.accounts.filter((item) => item.id !== id);
-    if (this.accounts.length === before) throw new PlayerError("aiUsage.error.unknown");
+    if (this.accounts.length === before) throw new UserError("aiUsage.error.unknown");
     this.states.delete(id);
     this.plans.delete(id);
     await this.save();

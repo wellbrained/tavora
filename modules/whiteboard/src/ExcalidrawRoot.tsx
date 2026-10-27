@@ -16,9 +16,9 @@ export interface RootProps {
   langCode: string;
   theme: "light" | "dark";
   saveState: "idle" | "saving" | "saved" | "error";
-  /** What the footer says about the save, already in the player's language. */
+  /** What the footer says about the save, already in the user's language. */
   saveText: string;
-  /** The main menu item that moves the toolbar, already in the player's language. */
+  /** The main menu item that moves the toolbar, already in the user's language. */
   toolbarText: string;
   onToolbarMove(): void;
   onApi(api: ExcalidrawImperativeAPI): void;

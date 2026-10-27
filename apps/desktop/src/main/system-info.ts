@@ -1,5 +1,5 @@
 /**
- * The system-info connector: this PC's hardware and how busy it is, for modules the player granted it. One
+ * The system-info connector: this PC's hardware and how busy it is, for modules the user granted it. One
  * SystemMonitor serves every panel, in a worker thread of its own (system-info-thread.ts) so a slow look never holds
  * up Tavora. It reads the PC only while at least one panel that is shown watches something; with none there is no
  * timer and no open counter, so it costs nothing. Counters are opened only for the parts somebody watches. The

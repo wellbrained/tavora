@@ -129,7 +129,7 @@ describe("a panel over the game", () => {
     await vi.waitFor(() => expect(state.removed).toEqual(["key-1"]));
   });
 
-  it("refuses calls that need Tavora's window while over the game, and tells the player once per press", () => {
+  it("refuses calls that need Tavora's window while over the game, and tells the user once per press", () => {
     const told = vi.fn();
     const view = make({ onNeedsTavora: told });
     const refuse = (what: string) => (view as unknown as { refuseOverGame(what: string): void }).refuseOverGame(what);

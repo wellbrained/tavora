@@ -132,7 +132,7 @@ function openCount(moduleId: string, panelType?: string): number {
 
 /**
  * Adds it, or asks for what it needs first (the consent dialog takes this dialog's place). A module
- * with panel types keeps the library open, so the player can add several of its panels in a row.
+ * with panel types keeps the library open, so the user can add several of its panels in a row.
  */
 function add(moduleId: string, panelTypes: string[] = []) {
   addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null, panelTypes, { stay: panelTypes.length > 0 });

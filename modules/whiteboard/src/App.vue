@@ -69,7 +69,7 @@ const cleanup: (() => void)[] = [];
 
 const level = computed(() => sizeLevel(bytes.value));
 
-/** A short message to the player, such as a picture that cannot be kept. */
+/** A short message to the user, such as a picture that cannot be kept. */
 function notify(message: string) {
   toast({ title: message, duration: NOTICE_MS });
 }
@@ -222,7 +222,7 @@ async function pictureAction(run: (board: Controls) => Promise<void>, failed: (r
   }
 }
 
-/** What went wrong with a picture, in words for the player. */
+/** What went wrong with a picture, in words for the user. */
 function pictureProblem(reason: unknown, fallback: "copy.failed" | "savePicture.failed"): string {
   const code = reason instanceof TavoraError ? reason.code : undefined;
   if (code === "PERMISSION_DENIED") return t("copy.slow");

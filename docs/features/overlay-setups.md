@@ -10,7 +10,7 @@ An overlay setup is a saved overlay layout: which items show, where, and how eac
 |---|---|---|
 | Everywhere | always | always, over any app, except while Tavora's own window is in front |
 | All games | always | a game is in front that has no setup of its own |
-| One per game workspace | added by the player | that game is in front |
+| One per game workspace | added by the user | that game is in front |
 
 - On screen: Everywhere, plus either the game's own setup or All games. Game setups stand alone; they never stack with All games.
 - A game setup is added by right-clicking the workspace on the rail ("Add overlay" / "Overlay hinzufügen") or with "Add overlay for…" in the Overlay page's dropdown; removed with "Remove overlay" / "Overlay entfernen". Removing a workspace removes its setup.

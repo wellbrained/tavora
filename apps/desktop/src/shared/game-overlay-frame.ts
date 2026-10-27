@@ -1,5 +1,5 @@
 /**
- * The frame Tavora draws over a game overlay while the player arranges overlays: an outline to grab, edges to resize
+ * The frame Tavora draws over a game overlay while the user arranges overlays: an outline to grab, edges to resize
  * and a close button. Static host markup only; the preload (preload/game-overlay.ts) adds the handles and the module's
  * name through the DOM, so no text from a module is ever parsed as markup.
  */

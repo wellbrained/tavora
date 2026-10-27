@@ -30,7 +30,7 @@ const reason = (check: CheckName, text: string, detail?: string): ReviewReason =
 
 // ── 1. Words ──────────────────────────────────────────────────────────────
 
-/** Every text a player can read about a module, with where it came from. */
+/** Every text a user can read about a module, with where it came from. */
 function moduleTexts(checked: CheckedZip): { where: string; text: string }[] {
   const { manifest } = checked;
   const texts: { where: string; text: string }[] = [{ where: "name", text: manifest.name }];

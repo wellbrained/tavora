@@ -11,7 +11,7 @@ import WorkspaceIcon from "./WorkspaceIcon.vue";
 const props = defineProps<{
   /** The folder's workspaces in order; only the first four are drawn. */
   workspaces: WorkspaceView[];
-  /** Letters the player chose for the folder, shown instead of its workspaces. */
+  /** Letters the user chose for the folder, shown instead of its workspaces. */
   label: string | null;
   open: boolean;
 }>();

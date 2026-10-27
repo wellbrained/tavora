@@ -26,7 +26,7 @@ export function isWebUrl(raw: string): boolean {
 const HOST_LIKE = /^(?:\[[0-9a-f:.]+\]|[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.?)(?::\d{1,5})?(?:[/?#]\S*)?$/iu;
 
 /**
- * What the address bar opens for what the player typed: the address itself
+ * What the address bar opens for what the user typed: the address itself
  * when it is http or https, `https://` plus the text when it looks like a
  * host name (http for a local address, which rarely has a certificate), and a
  * search otherwise. Never anything but an http or https address.
@@ -113,7 +113,7 @@ export function isPrivateUrl(raw: string): boolean {
 }
 
 /**
- * The site a host belongs to, as the player marks it for shared sign-in or
+ * The site a host belongs to, as the user marks it for shared sign-in or
  * ad blocking: its registrable domain (`wiki.example.co.uk` is
  * `example.co.uk`), or the host itself for addresses and local names.
  */

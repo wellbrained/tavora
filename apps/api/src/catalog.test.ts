@@ -47,7 +47,7 @@ function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], wo
     entry: "dist/index.html",
     games,
     ...(workspaces === undefined ? {} : { workspaces }),
-    ...(personalWorkspaces === undefined ? {} : { minTavora: "0.21.42", personalWorkspaces }),
+    ...(personalWorkspaces === undefined ? {} : { minTavora: "0.21.43", personalWorkspaces }),
     ...(changelog === undefined ? {} : { changelog: "changelog.json" }),
     ...(homepage === undefined ? {} : { homepage }),
     ...(support === undefined ? {} : { support }),
@@ -253,7 +253,7 @@ describe("adding to the catalog", () => {
     expect(ids({ game: "elden-ring" })).toEqual(["wellbrained.map", "wellbrained.notes", "wellbrained.overlay", "wellbrained.radar"]);
     expect(ids({ game: "satisfactory" })).toEqual(["wellbrained.notes", "wellbrained.overlay", "wellbrained.radar"]);
     expect(ids({ personal: true })).toEqual(["wellbrained.notes"]);
-    // Tavora 0.21.41 and older read the old name.
+    // Tavora 0.21.42 and older read the old name.
     expect(catalog.index({}).map((entry) => [entry.id, entry.personalWorkspaces, entry.workspaces])).toContainEqual(["wellbrained.radar", false, false]);
 
     expect(catalog.setListed("wellbrained.notes", false)).toBe(true);

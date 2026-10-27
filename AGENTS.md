@@ -9,10 +9,10 @@
 
 ## Writing
 
-Texts in the app are short and friendly, talking to the player as "you" (German: "du").
+Texts in the app are short and friendly, talking to the user as "you" (German: "du").
 
 - Titles, labels and buttons are a few words. Descriptions are one short sentence, two at most.
-- Keep only what the player needs to decide or act. Leave out how things work inside, unless it is about privacy or safety.
+- Keep only what the user needs to decide or act. Leave out how things work inside, unless it is about privacy or safety.
 - Plain, casual words ("Can't find this folder", "Thanks!"), never stiff or technical ones.
 - Write English and German together; both follow these rules.
 

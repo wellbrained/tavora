@@ -19,7 +19,7 @@ import {
 import type { AccountKey } from "./account-key";
 import { checkFolder, FolderStorage } from "./copy-folder";
 import { writeFileAtomic } from "./fsutil";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 import { LIBRARY_FILE, libraryFile, PC_SETTINGS } from "./saved-data";
 
 // When the cloud copy syncs (decided 2026-10-19), using the engine in cloud-copy.ts:
@@ -27,11 +27,11 @@ import { LIBRARY_FILE, libraryFile, PC_SETTINGS } from "./saved-data";
 //   not changed since it last synced. It may take a few seconds; a copy that takes
 //   longer finishes in the background and waits for a restart.
 // - While Tavora runs, what changed goes up every few minutes.
-// - At close, what is left goes up first; after a few seconds the player sees it and
+// - At close, what is left goes up first; after a few seconds the user sees it and
 //   may close anyway.
-// - When both this PC and the copy changed, the player keeps one side; the other is
+// - When both this PC and the copy changed, the user keeps one side; the other is
 //   kept as a local backup. Settings can also upload or restore by hand.
-// - The copy is kept on Tavora's service (needs a sign-in) or in a folder the player
+// - The copy is kept on Tavora's service (needs a sign-in) or in a folder the user
 //   picks (decided 2026-10-20; works signed out too). Signing out turns off only the first,
 //   and a folder's copy keeps the key on this PC.
 
@@ -50,7 +50,7 @@ interface Staged {
   version: number;
   pictures: boolean;
   files: Record<string, Omit<SyncedFile, "mtimeMs">>;
-  /** The player chose it (restore, or keeping the copy's side): taken even though this PC changed. */
+  /** The user chose it (restore, or keeping the copy's side): taken even though this PC changed. */
   take: boolean;
 }
 
@@ -64,7 +64,7 @@ export interface CopySyncOptions {
   moduleFiles: () => string;
   /** The copy on Tavora's service. */
   service: CopyStorage;
-  /** The copy in a folder the player picked; FolderStorage unless a test says otherwise. */
+  /** The copy in a folder the user picked; FolderStorage unless a test says otherwise. */
   folderStorage?: (folder: string) => CopyStorage;
   /** The account's key, which seals the copy; this PC may have it with the copy off. */
   accountKey: AccountKey;
@@ -95,7 +95,7 @@ export class CopySync {
   /** One thing at a time: an upload, a download, a check. */
   private running: Promise<unknown> = Promise.resolve();
   private timer: ReturnType<typeof setInterval> | undefined;
-  /** Closing may go on: the last upload is done, or the player closed anyway. */
+  /** Closing may go on: the last upload is done, or the user closed anyway. */
   private mayClose = false;
   private closeStarted = false;
 
@@ -212,8 +212,8 @@ export class CopySync {
     return this.problem;
   }
 
-  private static playerError(problem: CloudCopyProblem): PlayerError {
-    return new PlayerError(`cloudCopy.error.${problem}`);
+  private static userError(problem: CloudCopyProblem): UserError {
+    return new UserError(`cloudCopy.error.${problem}`);
   }
 
   // ── Start ──────────────────────────────────────────────────────────
@@ -265,7 +265,7 @@ export class CopySync {
     }
     this.copy = { size: remote.size, savedAt: remote.updatedAt };
     if (remote.version === this.state.version) return false;
-    // Changed here, or this PC's last save lost against another PC's (in a synced folder): the player chooses.
+    // Changed here, or this PC's last save lost against another PC's (in a synced folder): the user chooses.
     if (remote.follows === false || (await hasLocalChanges(this.roots(), this.state))) {
       this.conflict = true;
       this.changed();
@@ -313,7 +313,7 @@ export class CopySync {
     }
   }
 
-  /** Swaps a staged copy in: when the player chose it, or when this PC has not changed since it last synced. */
+  /** Swaps a staged copy in: when the user chose it, or when this PC has not changed since it last synced. */
   private async takeStaged(): Promise<boolean> {
     const staged = await this.readStaged();
     if (!staged) return false;
@@ -378,7 +378,7 @@ export class CopySync {
     clearInterval(this.timer);
   }
 
-  /** Whether syncing waits on the player (a question, or a restart). */
+  /** Whether syncing waits on the user (a question, or a restart). */
   private get waiting(): boolean {
     return this.conflict || this.restartToTake || this.askKey;
   }
@@ -386,7 +386,7 @@ export class CopySync {
   /** Uploads what changed. Quiet: problems show in Settings. `loud` throws them for a button. */
   async sync(loud = false): Promise<void> {
     if (!this.on || (this.waiting && !loud)) return;
-    if (this.conflict) throw new PlayerError("cloudCopy.error.conflict");
+    if (this.conflict) throw new UserError("cloudCopy.error.conflict");
     await this.exclusive("uploading", async () => {
       // What ran before (a download at start) may have left a question.
       if (!this.on || (this.waiting && !loud)) return;
@@ -412,10 +412,10 @@ export class CopySync {
         }
       } catch (error) {
         const problem = this.noteProblem(error);
-        if (loud) throw CopySync.playerError(problem);
+        if (loud) throw CopySync.userError(problem);
         return;
       }
-      if (loud && this.problem) throw CopySync.playerError(this.problem);
+      if (loud && this.problem) throw CopySync.userError(this.problem);
     });
   }
 
@@ -424,11 +424,11 @@ export class CopySync {
   /**
    * Turns the copy on, on the service or in `folder`. The account's key comes first: made here when the account has none (its recovery
    * key is shown then), or asked for when another PC made it. Then a copy that exists is downloaded and
-   * the player keeps one side; without one, this PC's data goes up as the first version.
+   * the user keeps one side; without one, this PC's data goes up as the first version.
    */
   async turnOn(folder: string | null = null): Promise<void> {
     if (this.on) return;
-    if (!this.options.accountKey.canKeep) throw new PlayerError("cloudCopy.error.cantKeep");
+    if (!this.options.accountKey.canKeep) throw new UserError("cloudCopy.error.cantKeep");
     this.use(folder);
     const setUp = await this.exclusive("checking", async () => {
       if (folder !== null) await checkFolder(folder);
@@ -436,8 +436,8 @@ export class CopySync {
       return this.keyHere ? this.options.accountKey.setUpHere((await this.cloud.remote()) !== null) : this.options.accountKey.setUp();
     }).catch((error: unknown) => {
       this.use(null);
-      if (error instanceof PlayerError) throw error;
-      throw CopySync.playerError(this.noteProblem(error));
+      if (error instanceof UserError) throw error;
+      throw CopySync.userError(this.noteProblem(error));
     });
     if (setUp.status === "ask") {
       this.askKey = true;
@@ -452,8 +452,8 @@ export class CopySync {
   async enterKey(text: string): Promise<void> {
     const here = this.keyHere;
     await this.exclusive("checking", () => (here ? this.options.accountKey.enterHere(text) : this.options.accountKey.enter(text))).catch((error: unknown) => {
-      if (error instanceof PlayerError) throw error;
-      throw CopySync.playerError(this.noteProblem(error));
+      if (error instanceof UserError) throw error;
+      throw CopySync.userError(this.noteProblem(error));
     });
     await this.goOnWithKey(here);
   }
@@ -469,7 +469,7 @@ export class CopySync {
       await this.startCopy();
     } catch (error) {
       // Signed out, the folder's copy is the only check: a key that doesn't open it is not kept.
-      if (here && error instanceof PlayerError && error.key === "cloudCopy.error.wrongKey") {
+      if (here && error instanceof UserError && error.key === "cloudCopy.error.wrongKey") {
         await this.options.accountKey.forget();
         this.askKey = true;
         this.changed();
@@ -489,8 +489,8 @@ export class CopySync {
       await (this.keyHere ? this.options.accountKey.startOverHere() : this.options.accountKey.startOver());
       return remote?.version ?? 0;
     }).catch((error: unknown) => {
-      if (error instanceof PlayerError) throw error;
-      throw CopySync.playerError(this.noteProblem(error));
+      if (error instanceof UserError) throw error;
+      throw CopySync.userError(this.noteProblem(error));
     });
     const folder = this.folder;
     await this.forget(null);
@@ -505,7 +505,7 @@ export class CopySync {
     await this.sync(true);
   }
 
-  /** With the account's key here: takes up a copy that exists (the player keeps one side), or starts a new one. */
+  /** With the account's key here: takes up a copy that exists (the user keeps one side), or starts a new one. */
   private async startCopy(): Promise<void> {
     let staged: Staged | null = null;
     try {
@@ -517,8 +517,8 @@ export class CopySync {
       });
     } catch (error) {
       // Sealed with another key: a copy from before the account had its key.
-      if (error instanceof CopyError && error.reason === "damaged") throw new PlayerError("cloudCopy.error.wrongKey");
-      throw CopySync.playerError(this.noteProblem(error));
+      if (error instanceof CopyError && error.reason === "damaged") throw new UserError("cloudCopy.error.wrongKey");
+      throw CopySync.userError(this.noteProblem(error));
     }
     this.copyOn = true;
     this.state = EMPTY_STATE;
@@ -526,7 +526,7 @@ export class CopySync {
     await savePlace(this.placeFile, this.folder);
     this.problem = null;
     if (staged) {
-      // This PC has its own data too: the player keeps one side.
+      // This PC has its own data too: the user keeps one side.
       this.conflict = true;
       this.changed();
       return;
@@ -560,7 +560,7 @@ export class CopySync {
    */
   async move(folder: string | null): Promise<void> {
     if (!this.on || folder === this.folder) return;
-    if (this.waiting) throw new PlayerError("cloudCopy.error.conflict");
+    if (this.waiting) throw new UserError("cloudCopy.error.conflict");
     const from = this.cloud;
     const problem = this.problem;
     await this.exclusive("uploading", async () => {
@@ -568,13 +568,13 @@ export class CopySync {
         await this.options.flush();
         if (folder !== null) await checkFolder(folder);
         const to = new CloudCopy(this.storageFor(folder));
-        if (await to.remote()) throw new PlayerError("cloudCopy.error.moveTaken");
+        if (await to.remote()) throw new UserError("cloudCopy.error.moveTaken");
         const result = await to.upload(this.key!, this.roots(), EMPTY_STATE, (done, total) => {
           this.progress = { done, total };
           this.changed();
         });
-        if (result.status === "too-big") throw new PlayerError("cloudCopy.error.too-big");
-        if (result.status !== "uploaded") throw new PlayerError("cloudCopy.error.moveTaken");
+        if (result.status === "too-big") throw new UserError("cloudCopy.error.too-big");
+        if (result.status !== "uploaded") throw new UserError("cloudCopy.error.moveTaken");
         await savePlace(this.placeFile, folder);
         this.use(folder);
         this.state = result.state;
@@ -582,11 +582,11 @@ export class CopySync {
         this.copy = { size: result.size, savedAt: this.now().toISOString() };
         this.problem = null;
       } catch (error) {
-        if (error instanceof PlayerError) throw error;
+        if (error instanceof UserError) throw error;
         const failed = this.noteProblem(error);
         // The copy where it is now is fine: this was only the move.
         this.problem = problem;
-        throw CopySync.playerError(failed);
+        throw CopySync.userError(failed);
       }
     });
     await from.remove().catch((error: unknown) => this.log(`cloud copy: the old copy was not deleted: ${error instanceof Error ? error.message : String(error)}`));
@@ -615,7 +615,7 @@ export class CopySync {
         await rm(this.stagingDir, { recursive: true, force: true });
         await saveCopyState(this.stateFile, this.state);
       } catch (error) {
-        throw CopySync.playerError(this.noteProblem(error));
+        throw CopySync.userError(this.noteProblem(error));
       }
     });
     this.conflict = false;
@@ -626,11 +626,11 @@ export class CopySync {
   private async takeCopy(): Promise<void> {
     await this.exclusive("downloading", async () => {
       try {
-        if (!(await this.stageCurrent(true))) throw new PlayerError("cloudCopy.error.noCopy");
+        if (!(await this.stageCurrent(true))) throw new UserError("cloudCopy.error.noCopy");
       } catch (error) {
-        if (error instanceof KeyChanged) throw CopySync.playerError(this.noteProblem(error));
-        if (error instanceof PlayerError) throw error;
-        throw CopySync.playerError(this.noteProblem(error));
+        if (error instanceof KeyChanged) throw CopySync.userError(this.noteProblem(error));
+        if (error instanceof UserError) throw error;
+        throw CopySync.userError(this.noteProblem(error));
       }
     });
     this.restart();
@@ -650,7 +650,7 @@ export class CopySync {
   /** Deletes the copy on the service and turns it off here. */
   async remove(): Promise<void> {
     await this.exclusive("checking", () => this.cloud.remove()).catch((error: unknown) => {
-      throw CopySync.playerError(this.noteProblem(error));
+      throw CopySync.userError(this.noteProblem(error));
     });
     await this.forget(null);
     this.copy = null;
@@ -662,7 +662,7 @@ export class CopySync {
    * until signed in again. A copy in a folder stays on.
    */
   async signedOut(): Promise<void> {
-    // A copy in the player's own folder needs no account: it stays on, with its key.
+    // A copy in the user's own folder needs no account: it stays on, with its key.
     if (this.folder !== null && (this.copyOn || this.askKey)) return;
     if (this.copyOn || this.askKey) await this.forget(null);
     await this.options.accountKey.forget();
@@ -688,7 +688,7 @@ export class CopySync {
 
   /**
    * Called when the window is about to close. True while the last upload runs: the close waits, and
-   * `close` is called once it is done (or the player closes anyway).
+   * `close` is called once it is done (or the user closes anyway).
    */
   holdClose(close: () => void): boolean {
     if (this.mayClose || !this.on || this.waiting) return false;

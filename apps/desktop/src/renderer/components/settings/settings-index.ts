@@ -115,7 +115,7 @@ export interface SettingEntry {
   section: SettingsSection;
   label: string;
   description: string;
-  /** Other words players might search for, in the current language. */
+  /** Other words users might search for, in the current language. */
   keywords: string[];
 }
 

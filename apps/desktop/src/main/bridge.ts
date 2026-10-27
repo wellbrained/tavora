@@ -132,7 +132,7 @@ export interface BridgeContext {
     image(url: string): Promise<string | null>;
   };
   panelState: PanelStateStore;
-  /** What the player has granted this module right now; asked on every gated call, so a revoke takes effect at once. */
+  /** What the user has granted this module right now; asked on every gated call, so a revoke takes effect at once. */
   capabilities(): ReadonlySet<Capability>;
   getViewport(): TavoraViewport;
   getTheme(): TavoraTheme;
@@ -199,7 +199,7 @@ function required(params: Record<string, unknown>, name: string): unknown {
   return params[name];
 }
 
-/** Refuses a gated method when the player has not granted its capability (G9), before anything else is looked at. */
+/** Refuses a gated method when the user has not granted its capability (G9), before anything else is looked at. */
 function needs(s: BridgeSession, capability: Capability, method: string): void {
   if (!s.context.capabilities().has(capability)) throw new HostError("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
 }
@@ -238,7 +238,7 @@ const handlers = new Map<string, Handler>([
     await s.context.readOnlyFiles.forget(id); return null;
   }],
   ["workspace.getCurrent", (s, params) => (noParams(params), { ...s.context.workspace })],
-  // Deprecated: the same in the words of Tavora before 0.21.42 (a personal workspace's kind was "workspace"). Answered
+  // Deprecated: the same in the words of Tavora before 0.21.43 (a personal workspace's kind was "workspace"). Answered
   // until the 1.0 preparation, so modules made before it keep working.
   ["game.getCurrent", (s, params) => (noParams(params), legacyGame(s.context.workspace))],
 
@@ -427,14 +427,14 @@ const handlers = new Map<string, Handler>([
     },
   ],
   ["overlay.remove", (s, params) => (s.context.overlay.remove(moduleKey(object(params), "key")), null)],
-  // Needs no capability either: a window of Tavora's own shows the page, only after a click, and the player can turn it off.
+  // Needs no capability either: a window of Tavora's own shows the page, only after a click, and the user can turn it off.
   ["overlay.showOverGame", (s, params) => s.context.overlay.showOverGame(moduleKey(object(params), "key"))],
   // Needs neither a capability nor a click: it only takes this module's own overlay away, or lists it.
   ["overlay.hideOverGame", (s, params) => (s.context.overlay.hideOverGame(moduleKey(object(params), "key")), null)],
   ["overlay.overGame", (s) => s.context.overlay.overGame()],
   // Needs no capability: a window of Tavora's own shows the page, only after a click.
   ["overlay.preview", async (s, params) => (await s.context.overlay.preview(moduleKey(object(params), "key")), null)],
-  // A module that asks for the connector on request may call it without the grant: Tavora asks the player then.
+  // A module that asks for the connector on request may call it without the grant: Tavora asks the user then.
   ["overlay.copyLink", (s, params) => s.context.overlay.copyLink(moduleKey(object(params), "key"))],
   ["overlay.resetLink", (s, params) => (needs(s, "overlay", "overlay.resetLink"), s.context.overlay.resetLink(moduleKey(object(params), "key")), null)],
 

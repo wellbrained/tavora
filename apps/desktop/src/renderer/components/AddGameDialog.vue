@@ -7,7 +7,7 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
-/** How long the player has to stop typing before the Tavora service is asked. */
+/** How long the user has to stop typing before the Tavora service is asked. */
 const ONLINE_DELAY_MS = 250;
 
 const query = ref("");
@@ -74,7 +74,7 @@ async function add(input: { catalogId: string } | { name: string } | { online: O
   const added = await act({ type: "add-workspace", ...input }, { quiet: true });
   if (added.ok && added.id) {
     dialog.value = null;
-    // A new workspace starts empty; take the player there,
+    // A new workspace starts empty; take the user there,
     // unless they are still in the first-run welcome, which lists it.
     if (state.value?.library.onboarded) await act({ type: "open-workspace", workspaceId: added.id });
   } else if (!added.ok) {

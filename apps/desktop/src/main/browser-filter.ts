@@ -75,7 +75,7 @@ export function adBlocker(engine: FiltersEngine): AdBlocker {
 }
 
 /**
- * Decides one request. The page the player asked for (the main frame) is
+ * Decides one request. The page the user asked for (the main frame) is
  * never blocked as an ad and never for being local: the address bar and
  * the navigation checks in browser-view.ts decide those.
  */

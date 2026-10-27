@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // A quiet marker at the bottom of the rail while a new version of Tavora is on
 // its way. It never interrupts: the update installs when Tavora is closed, or
-// the player presses it to restart now.
+// the user presses it to restart now.
 import { ArrowDownToLine, Loader, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
 import { cn } from "@/lib/utils";

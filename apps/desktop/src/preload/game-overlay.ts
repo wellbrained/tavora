@@ -1,4 +1,4 @@
-// The preload of the frame shown over a game overlay while the player arranges overlays (game-overlay-window.ts).
+// The preload of the frame shown over a game overlay while the user arranges overlays (game-overlay-window.ts).
 // It builds the handles and reports drags and the close button; the main process moves the window, reading the
 // pointer itself, so nothing here decides where the overlay goes.
 import { ipcRenderer } from "electron";

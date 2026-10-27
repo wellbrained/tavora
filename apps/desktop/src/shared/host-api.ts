@@ -44,17 +44,17 @@ export interface WorkspaceView {
   icon: IconView;
   /**
    * The game's own icon (a file kept on this PC, from the installed game or Steam, as an address in the
-   * host's own protocol), or null. Shown only while the player has not picked
+   * host's own protocol), or null. Shown only while the user has not picked
    * an image and the setting is on; the host UI sets it on a tile.
    */
   steamIcon: string | null;
   /** How that icon sits in its tile: filling it, or on a light or dark backdrop (see shared/icon-tone.ts). Null without an icon. */
   steamIconTone: IconTone | null;
-  /** What the player chose: its game's own icon, their letters, or their own image. */
+  /** What the user chose: its game's own icon, their letters, or their own image. */
   iconChoice: "original" | "letters" | "image";
   /**
    * The game's own icon from this PC or Steam, as an address, when Tavora does not have an icon for the game
-   * yet and the player could offer this one; otherwise null. Never the player's own picture.
+   * yet and the user could offer this one; otherwise null. Never the user's own picture.
    */
   shareIcon: string | null;
   /** Picked from the built-in list rather than added by name. */
@@ -89,7 +89,7 @@ export interface PanelView {
   overGame?: boolean;
   /** The panel's type may be shown in the game (the manifest's `inGame`); its menu offers Show in game. */
   canInGame?: boolean;
-  /** The player shows this panel in their game (it appears when the in-game layer opens). */
+  /** The user shows this panel in their game (it appears when the in-game layer opens). */
   inGame?: boolean;
   /** The tab shows the Live badge: the panel is in the game, or its module has an overlay that shows over the game. */
   live?: boolean;
@@ -141,7 +141,7 @@ export interface BrowserState {
 
 /**
  * The Discord connector's connection. off: no module panel uses it. signed-out:
- * Tavora was never approved, or the player signed out. not-running: the Discord
+ * Tavora was never approved, or the user signed out. not-running: the Discord
  * app was not found (Tavora keeps looking). approving: Discord shows its pop-up.
  * error: `error` says what went wrong.
  */
@@ -164,7 +164,7 @@ export interface AccountDevice {
 /** Where a code is waiting: signing in (and, for a new address, asking to create the account), changing the email, deleting. */
 export type AccountPending =
   | { kind: "sign-in"; email: string; step: "code" | "create" }
-  /** A Discord login with no account yet: the player is asked before one is made. */
+  /** A Discord login with no account yet: the user is asked before one is made. */
   | { kind: "discord-create"; name: string }
   | { kind: "change-email"; email: string }
   /** Removing the email waits for the code sent to it. */
@@ -187,9 +187,9 @@ export interface AccountView {
   /** Null until read from the service. */
   devices: AccountDevice[] | null;
   pending: AccountPending | null;
-  /** On a first sign-in here, the account's profile when it differs from this PC's: the player picks one, once. */
+  /** On a first sign-in here, the account's profile when it differs from this PC's: the user picks one, once. */
   profileChoice: { name: string; initials: string; picture: boolean } | null;
-  /** The public name players see on modules signed with the account's linked keys, and when it can change again; null without one. */
+  /** The public name users see on modules signed with the account's linked keys, and when it can change again; null without one. */
   developer: { name: string; nextChangeAt: string } | null;
   /** Publisher keys linked to the account (fingerprints only); null until read from the service. */
   publisherKeys: { fingerprint: string; linkedAt: string }[] | null;
@@ -253,7 +253,7 @@ export interface DeveloperKeysView {
   keys: { fingerprint: string }[];
   /** Whether this PC has the account's key (the recovery key opens it). */
   hasKey: boolean;
-  /** The account's recovery key, while the player looks at it (made just now, or asked to see). */
+  /** The account's recovery key, while the user looks at it (made just now, or asked to see). */
   recoveryKey: string | null;
 }
 
@@ -311,7 +311,7 @@ export interface PairingView {
   asking: {
     /** Through Tavora's service (signed in), or the cloud copy's folder (signed out), which can take minutes. */
     via: "service" | "folder";
-    /** "code": another PC answered; both show `code`. The rest end it: the player starts again or types the key in. */
+    /** "code": another PC answered; both show `code`. The rest end it: the user starts again or types the key in. */
     step: "waiting" | "code" | "declined" | "expired" | "failed";
     code: string | null;
     /** The name of the PC that answered. */
@@ -326,7 +326,7 @@ export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" |
 
 /**
  * Settings > Account > Cloud copy, and the questions it asks over the app. Sent on its own channel;
- * the copy key stays in the main process, except as the recovery key the player asks to see.
+ * the copy key stays in the main process, except as the recovery key the user asks to see.
  */
 export interface CloudCopyView {
   /** False where this PC can't keep the key encrypted: the copy can't be turned on here. */
@@ -346,11 +346,11 @@ export interface CloudCopyView {
   limit: number | null;
   /** False when the last copy left the pictures out to fit. */
   pictures: boolean;
-  /** The recovery key, while the player looks at it (right after turning on, or when asked for). */
+  /** The recovery key, while the user looks at it (right after turning on, or when asked for). */
   recoveryKey: string | null;
   /** Turning on found a copy from another PC: its recovery key is asked for. */
   askKey: boolean;
-  /** This PC and the copy both changed since they last matched: the player keeps one side. */
+  /** This PC and the copy both changed since they last matched: the user keeps one side. */
   conflict: boolean;
   /** A newer copy from another PC is downloaded; a restart takes it. */
   restartToTake: boolean;
@@ -428,7 +428,7 @@ export interface LayoutGroup {
 
 export type LayoutNode = LayoutSplit | LayoutGroup;
 
-/** A named layout the player saved for a workspace. */
+/** A named layout the user saved for a workspace. */
 export interface SnapshotView {
   id: string;
   name: string;
@@ -449,7 +449,7 @@ export interface PanelBounds {
 /** What the host UI renders. Contains no module data. */
 /**
  * Idle: nothing new (when it was last checked, and whether that check failed). Available: found,
- * waiting for the player (automatic download off).
+ * waiting for the user (automatic download off).
  */
 export type UpdateState =
   | { status: "idle"; checkedAt: string | null; failed: boolean }
@@ -473,7 +473,7 @@ export interface ThemeView {
   name: string;
   description: string | null;
   author: string | null;
-  /** Official themes ship with Tavora; local ones are in the player's themes folder. */
+  /** Official themes ship with Tavora; local ones are in the user's themes folder. */
   provenance: "official" | "local";
   variations: ThemeVariationView[];
 }
@@ -520,12 +520,12 @@ export interface HostViewState {
     steamIcons: boolean;
     /** Whether panel tabs show an icon before the module name. */
     moduleIcons: boolean;
-    /** The Steam profile the player asked Tavora to remember for the import, or null. */
+    /** The Steam profile the user asked Tavora to remember for the import, or null. */
     steamProfile: string | null;
-    /** False until the player finished or skipped the first-run welcome. */
+    /** False until the user finished or skipped the first-run welcome. */
     onboarded: boolean;
     rail: { expanded: boolean; width: number };
-    /** Sites the player marked: signed in for all workspaces, and ad blocking off. */
+    /** Sites the user marked: signed in for all workspaces, and ad blocking off. */
     browser: { sharedSites: string[]; adblockOff: string[] };
   };
   modules: {
@@ -545,9 +545,9 @@ export interface HostViewState {
     /** Loaded from a project folder (Settings > Development), so it can be published or saved as a zip. */
     project: boolean;
     version: string;
-    /** Where it was found, without a full path: Tavora itself, an example, the player's modules folder or a development folder. */
+    /** Where it was found, without a full path: Tavora itself, an example, the user's modules folder or a development folder. */
     origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
-    /** Only a module in the player's own modules folder can be removed from Settings. */
+    /** Only a module in the user's own modules folder can be removed from Settings. */
     removable: boolean;
     /** Installed from Tavora's module catalog, so it can be reported from Settings. */
     fromCatalog: boolean;
@@ -561,14 +561,14 @@ export interface HostViewState {
     localDataWaiting: boolean;
     /** The icon from the module's manifest as a data address (PNG or WebP), or null. */
     icon: string | null;
-    /** What the module may do: what its manifest asks for (`asks`), what the player granted of it, and what is still to answer. */
+    /** What the module may do: what its manifest asks for (`asks`), what the user granted of it, and what is still to answer. */
     permissions: { asks: ModulePermissions; granted: ModulePermissions; missing: ModulePermissions };
     /** Workspaces (ids in the library) with a panel of this module, for the dialogs that remove them. */
     usedIn: string[];
-    /** The newest version the module's patch notes cover (null without any), and whether some are new to the player. */
+    /** The newest version the module's patch notes cover (null without any), and whether some are new to the user. */
     notes: { latest: string | null; unseen: boolean };
     /**
-     * A catalog update that asks for more than the installed version and waits for the player's yes;
+     * A catalog update that asks for more than the installed version and waits for the user's yes;
      * the installed version keeps running until then. Null when none is waiting.
      */
     update: { version: string; asks: ModulePermissions; notes: ModuleNote[] } | null;
@@ -613,11 +613,11 @@ export interface HostViewState {
    * the game of the workspace open now. Its id is its game workspace's. Null when none, or while "When a game starts" is off.
    */
   runningGameId: string | null;
-  /** A game that just started, while the player chose to be asked; the host UI asks whether to switch to it (game-switch). */
+  /** A game that just started, while the user chose to be asked; the host UI asks whether to switch to it (game-switch). */
   pendingGameSwitch: string | null;
   snapshots: SnapshotView[];
   notice: string | null;
-  /** The player's local profile. */
+  /** The user's local profile. */
   profile: { name: string; initials: string; pictureUrl: string | null };
   /** A setting that only applies on start was changed since Tavora started. */
   restartPending: boolean;
@@ -630,7 +630,7 @@ export interface HostViewState {
   language: { setting: LanguageSetting; resolved: Language };
   /** Settings > Streaming: Stream overlays and the hotkeys set for module actions. */
   streaming: StreamingView;
-  /** Settings > Overlays: Game overlays over the player's games. */
+  /** Settings > Overlays: Game overlays over the user's games. */
   gameOverlays: GameOverlaysView;
   /** Tavora's hotkey dialog, opened by a module's hotkeys.set; null while it is closed. */
   hotkeyRequest: HotkeyRequestView | null;
@@ -669,9 +669,9 @@ export interface OverlayKeyView {
 export interface GameOverlaysView {
   supported: boolean;
   enabled: boolean;
-  /** Overlays stay over the game's spot when the player switches to another window. */
+  /** Overlays stay over the game's spot when the user switches to another window. */
   stay: boolean;
-  /** "Hide all for now" is on: nothing shows until Tavora starts again or the player shows it again. */
+  /** "Hide all for now" is on: nothing shows until Tavora starts again or the user shows it again. */
   hidden: boolean;
   layerKey: OverlayKeyView | null;
 }
@@ -697,7 +697,7 @@ export interface HotkeyRequestView {
   actionName: string;
   label: string;
   current: string | null;
-  /** Why the last key was refused, in the player's language. */
+  /** Why the last key was refused, in the user's language. */
   error: string | null;
 }
 
@@ -758,7 +758,7 @@ export interface OnlineGame {
 
 /**
  * `unreachable` means the service did not answer in time, so the list falls
- * back to the built-in games; `off` means the player turned online search off.
+ * back to the built-in games; `off` means the user turned online search off.
  */
 export interface OnlineSearchResult {
   status: "ok" | "unreachable" | "off";
@@ -772,7 +772,7 @@ export interface SteamImportGame {
   id: string | null;
 }
 
-/** `status` says whether the player already has the game (`trash`: removed, not deleted yet). */
+/** `status` says whether the user already has the game (`trash`: removed, not deleted yet). */
 export interface SteamGameView extends SteamImportGame {
   status: "new" | "owned" | "trash";
 }
@@ -795,7 +795,7 @@ export interface CatalogModuleView {
   description: string | null;
   version: string;
   minTavora: string | null;
-  /** What its manifest asks for; the player is asked again when it is added. */
+  /** What its manifest asks for; the user is asked again when it is added. */
   permissions: ModulePermissions;
   /** The fingerprint of the publisher key that signed it. */
   owner: string;
@@ -805,14 +805,14 @@ export interface CatalogModuleView {
   size: number;
   /** How many times it was installed from Browse, as the catalog counts it. */
   installs: number;
-  /** Whether it may go where the player is (the open workspace); Browse lists the rest too. */
+  /** Whether it may go where the user is (the open workspace); Browse lists the rest too. */
   fits: boolean;
   /** The games it is made for, by name; empty for any game. */
   forGames: string[];
   publishedAt: string;
   /** The module's web page, http or https, shown as plain text; open-catalog-homepage opens it. */
   homepage: string | null;
-  /** Where players send feedback: an https address or an email address, shown only as a Send feedback button; open-module-support opens it. */
+  /** Where users send feedback: an https address or an email address, shown only as a Send feedback button; open-module-support opens it. */
   support: string | null;
   /** How many screenshots the listing has; catalogPage fetches them. */
   screenshots: number;
@@ -847,7 +847,7 @@ export interface CatalogReviewView {
   reply: { text: string; date: string } | null;
 }
 
-/** The player's own rating of a module. `hidden`: Tavora hid its text after a report; its stars still count. */
+/** The user's own rating of a module. `hidden`: Tavora hid its text after a report; its stars still count. */
 export interface CatalogOwnReview {
   stars: number;
   text: string | null;
@@ -857,16 +857,16 @@ export interface CatalogOwnReview {
   held: boolean;
 }
 
-/** A catalog module's ratings and reviews, and what the player can do there. */
+/** A catalog module's ratings and reviews, and what the user can do there. */
 export interface CatalogReviews {
   rating: CatalogRating | null;
   /** The newest reviews with text, newest first. */
   reviews: CatalogReviewView[];
-  /** The player's own rating; null without one, or signed out. */
+  /** The user's own rating; null without one, or signed out. */
   mine: CatalogOwnReview | null;
   /**
    * `rate`: signed in. `sign-in`: signed out.
-   * `own`: the player's own module, which they can't rate but can reply under its reviews.
+   * `own`: the user's own module, which they can't rate but can reply under its reviews.
    */
   can: "rate" | "sign-in" | "own";
   /** The installed version a new rating is given on; null when it isn't installed. */
@@ -926,7 +926,7 @@ export type ModulePageResult = { status: "ok"; readme: ReadmeBlock[]; screenshot
 export type CatalogPageResult = ({ status: "ok" } & CatalogPage) | { status: "off" | "unavailable" | "busy" | "unreachable" | "gone" };
 
 /**
- * `off`: the player turned the online features off. `unavailable`: the catalog is switched off on the
+ * `off`: the user turned the online features off. `unavailable`: the catalog is switched off on the
  * service. `busy`: too many requests, try later. `unreachable`: no usable answer.
  */
 export type CatalogListResult = { status: "ok"; modules: CatalogModuleView[] } | { status: "off" | "unavailable" | "busy" | "unreachable" };
@@ -952,7 +952,7 @@ export interface TavoraHostApi {
   modulePage(moduleId: string): Promise<ModulePageResult>;
   /** The icon of a module from the last catalog list, as a checked data address, or null. Never rejects. */
   catalogIcon(moduleId: string): Promise<string | null>;
-  /** A catalog module's ratings and reviews, and the player's own rating. Never rejects. */
+  /** A catalog module's ratings and reviews, and the user's own rating. Never rejects. */
   catalogReviews(moduleId: string): Promise<CatalogReviewsResult>;
   /** Of these release copies, which still need publishing, from one look at the catalog; null when it can't be reached. Never rejects. */
   releaseStatuses(copies: ReleaseCopy[]): Promise<Record<string, ReleaseStatus> | null>;
@@ -1001,7 +1001,7 @@ export interface TavoraHostApi {
   onPairing(listener: (view: PairingView) => void): void;
   /** A module asked for a menu (or null: close the one shown). */
   onModuleMenu(listener: (menu: ModuleMenu | null) => void): void;
-  /** The player chose an item of the module menu, or closed it (null). */
+  /** The user chose an item of the module menu, or closed it (null). */
   answerModuleMenu(requestId: number, id: string | null): void;
 }
 

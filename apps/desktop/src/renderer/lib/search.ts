@@ -1,5 +1,5 @@
 // Matching for the search box (Ctrl+K) and the Settings search. Every word
-// the player types has to appear somewhere in an item; items where words
+// the user types has to appear somewhere in an item; items where words
 // start the name rank first.
 
 /** Lower case without accents, so "pokemon" finds "Pokémon". */

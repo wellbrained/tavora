@@ -1,8 +1,8 @@
 // The module address for saving a picture as a file (see png.ts): POST /_pictures/?name=… with a PNG as the body.
-// Like the clipboard, it works only right after the player clicked or pressed a key in the module (one picture per
-// click), and only for a complete, well-formed PNG within the size limits. Tavora's save dialog asks the player where
+// Like the clipboard, it works only right after the user clicked or pressed a key in the module (one picture per
+// click), and only for a complete, well-formed PNG within the size limits. Tavora's save dialog asks the user where
 // it goes (host.ts); the module only suggests its name and learns the name it was saved under, or null when the
-// player closed the dialog, never where the folder is.
+// user closed the dialog, never where the folder is.
 
 import { LIMITS } from "@tavora/sdk/protocol";
 import { CLIPBOARD_PNG_LIMITS, json, readBody, STATUS } from "./clipboard-http";
@@ -12,7 +12,7 @@ import { checkPng } from "./png";
 export interface PictureSaveDeps {
   allowed(): boolean;
   consume(): void;
-  /** Writes the checked PNG under a name made from `name`, and returns the file name used, or null when the player did not save it. */
+  /** Writes the checked PNG under a name made from `name`, and returns the file name used, or null when the user did not save it. */
   save(png: Buffer, name: string): Promise<string | null>;
 }
 

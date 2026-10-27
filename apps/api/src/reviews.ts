@@ -268,7 +268,7 @@ export class ReviewStore {
     return Number(this.db.prepare("delete from reviews where id = ?").run(reviewId).changes) > 0;
   }
 
-  /** Records that a player pressed Report on a shown review. Nothing about who pressed it is kept. */
+  /** Records that a user pressed Report on a shown review. Nothing about who pressed it is kept. */
   report(reviewId: string, now: number): boolean {
     const review = this.review(reviewId);
     if (!review || review.text === null || review.hidden) return false;
@@ -312,6 +312,25 @@ export class ReviewStore {
   /** The account is unsuspended: the reviews the suspension hid show again; ones a person hid stay hidden. Returns how many. */
   showAfterSuspension(accountId: string): number {
     return Number(this.db.prepare("update reviews set hidden = 0, hidden_by_suspend = 0 where account_id = ? and hidden_by_suspend = 1").run(accountId).changes);
+  }
+
+  /** Every rating an account gave, newest first, for the maintainer's per-author view (decided 2026-10-27). */
+  byAccount(accountId: string): StoredReview[] {
+    return (this.db.prepare(`select ${REVIEW_COLUMNS} from ${REVIEW_FROM} where r.account_id = ? order by r.updated_at desc, r.rowid desc`).all(accountId) as unknown as ReviewSql[]).map((row) => toReview(row)!);
+  }
+
+  /**
+   * The maintainer hides every review text the account wrote (the stars still count), as Hide does one by one: a person's
+   * choice, so unsuspending later leaves them hidden. Their open reports close. Returns how many were hidden now.
+   */
+  hideAllOf(accountId: string): number {
+    this.db.prepare("delete from review_reports where review_id in (select id from reviews where account_id = ?)").run(accountId);
+    return Number(this.db.prepare("update reviews set hidden = 1, hidden_by_suspend = 0 where account_id = ? and text is not null and (hidden = 0 or hidden_by_suspend = 1)").run(accountId).changes);
+  }
+
+  /** The maintainer removes every rating the account gave: texts, replies, reports and stars. Returns how many. */
+  removeAllOf(accountId: string): number {
+    return Number(this.db.prepare("delete from reviews where account_id = ?").run(accountId).changes);
   }
 
   /** How many reviews (ratings) an account wrote, and how many of them are hidden. */
@@ -363,7 +382,7 @@ export interface ReviewOptions {
 
 type Env = { Variables: { account: Account } };
 
-/** The answer for a review: what a player sees, never the account id. */
+/** The answer for a review: what a user sees, never the account id. */
 function reviewAnswer(review: StoredReview, accounts: AccountStore) {
   const profile = accounts.profile(review.accountId);
   // A name the filter would refuse is not shown on a review.

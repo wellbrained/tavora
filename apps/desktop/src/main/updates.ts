@@ -22,8 +22,8 @@ export interface Timers {
 }
 
 /**
- * Tells the feed's web server a request is the updater's, not a player downloading the installer, so
- * installer downloads and updates are counted apart. It carries no value about the player.
+ * Tells the feed's web server a request is the updater's, not a user downloading the installer, so
+ * installer downloads and updates are counted apart. It carries no value about the user.
  */
 export const UPDATER_HEADER = "X-Tavora-Update";
 
@@ -47,7 +47,7 @@ export interface UpdateManagerOptions {
 /**
  * Looks for a new Tavora version shortly after start and every few hours,
  * downloads it in the background and installs it when Tavora quits or the
- * player presses "Restart now" - never in the middle of a session. Errors
+ * user presses "Restart now" - never in the middle of a session. Errors
  * (offline, server down) are logged and ignored; the next check tries again.
  */
 export class UpdateManager {

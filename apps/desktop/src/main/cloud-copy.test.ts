@@ -78,7 +78,7 @@ describe("the cloud copy", () => {
     expect(await read(b.moduleFiles, `${OWNER}/notes/picture.webp`)).toBe("webp");
     // The installed modules come along, so the layout's panels have them.
     expect(await read(b.userData, "modules/dice/manifest.json")).toBe('{"id":"dice"}');
-    // The player's own files in that folder stay where they are, and never went up.
+    // The user's own files in that folder stay where they are, and never went up.
     expect(await read(b.moduleFiles, "holiday.jpg")).toBe("mine");
     // What B had is kept aside.
     expect(await read(kept, "library.json")).toBe('{"version":1,"games":[]}');

@@ -1,6 +1,6 @@
 # Security policy
 
-Tavora runs community modules on players' machines, so isolation bugs matter.
+Tavora runs community modules on users' machines, so isolation bugs matter.
 
 **Please do not open a public issue for a security problem.** Report it privately by email to [tavora.app@gmail.com](mailto:tavora.app@gmail.com).
 

@@ -23,7 +23,7 @@ Keep the key file secret: whoever has it can sign updates in your name. A token 
 
 ## Publish
 
-`tavora-pack publish <file.zip> --key <key file>` lists the zip in Tavora's module catalog, where players find it under **Browse** in the module library. It needs a publish token in `TAVORA_PUBLISH_TOKEN`, and the key must be linked to your account (Tavora links the keys it makes).
+`tavora-pack publish <file.zip> --key <key file>` lists the zip in Tavora's module catalog, where users find it under **Browse** in the module library. It needs a publish token in `TAVORA_PUBLISH_TOKEN`, and the key must be linked to your account (Tavora links the keys it makes).
 
 The upload carries the signature over the zip's SHA-256 by the key that packed it, so only you can publish what you packed. Your account's email address gets a mail for every upload.
 
@@ -32,11 +32,11 @@ Every new version is checked automatically. If all is well it is listed at once.
 - The part of the module id before the first dot (`wellbrained` in `wellbrained.timer`) is your prefix. An account holds at most 3; prefixes with `tavora` and a few other reserved words are refused.
 - A module stays with the key that published its first version. Every new version must be newer.
 - An account can publish 10 versions a day and store 200 MB of zips.
-- The catalog checks each zip the way Tavora's installer does, and Tavora checks it again on the player's PC.
+- The catalog checks each zip the way Tavora's installer does, and Tavora checks it again on the user's PC.
 
 ## Link a key file
 
-`tavora-pack link <code> --key <key file>` links a key that Tavora didn't make, so players see your developer name. In Tavora, press **Get a link code** under **Settings > Development > Publisher keys and CI**. The code works once for 10 minutes. The command signs it with your key and sends the key's public half; the private key never leaves your PC.
+`tavora-pack link <code> --key <key file>` links a key that Tavora didn't make, so users see your developer name. In Tavora, press **Get a link code** under **Settings > Development > Publisher keys and CI**. The code works once for 10 minutes. The command signs it with your key and sends the key's public half; the private key never leaves your PC.
 
 ## From code
 

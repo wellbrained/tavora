@@ -1,6 +1,6 @@
 # Several panels
 
-A module can offer more than one tool, each as a panel of its own. A build planner for an action RPG might have a Passive tree, a Skills list and a Gear panel. Players add each from the module library, dock them wherever they like and open copies side by side. This guide walks through such a module. Every field and call is in the [manifest](../reference/manifest.md#panel-types) and [protocol](../reference/protocol.md#content-per-panel) references. The Panel Types Example in Tavora's examples folder runs all of it.
+A module can offer more than one tool, each as a panel of its own. A build planner for an action RPG might have a Passive tree, a Skills list and a Gear panel. Users add each from the module library, dock them wherever they like and open copies side by side. This guide walks through such a module. Every field and call is in the [manifest](../reference/manifest.md#panel-types) and [protocol](../reference/protocol.md#content-per-panel) references. The Panel Types Example in Tavora's examples folder runs all of it.
 
 Needs Tavora 0.17.18 or newer for everything here, so set `minTavora` to at least `0.17.18`.
 
@@ -19,8 +19,8 @@ Needs Tavora 0.17.18 or newer for everything here, so set `minTavora` to at leas
 
 - `id` is how Tavora remembers every open panel and saved layout. Never change it after release. `name` is only the tab's label and may change.
 - A type takes the module's `entry`, `icon` and `viewport` unless it sets its own. One page can serve all types: ask `tavora.panel.type` and show the right tool. Separate pages per type work just as well.
-- Adding a `panels` list to a module that had none? Mark the type its old panels should become with `"continues": true`, so players keep their layout and panel state.
-- When an update removes a type, its open panels stay where they are and say so, until the player removes them or picks another type. Prefer keeping a type over removing it.
+- Adding a `panels` list to a module that had none? Mark the type its old panels should become with `"continues": true`, so users keep their layout and panel state.
+- When an update removes a type, its open panels stay where they are and say so, until the user removes them or picks another type. Prefer keeping a type over removing it.
 
 ```ts
 const tavora = await connect();
@@ -31,7 +31,7 @@ else showGear();
 
 ## Share data between the panels
 
-All panels of a module, of every type, share its `storage`, `documents` and `blobs` in the current workspace. Keep the player's work in documents, one per build, and every panel sees the same build:
+All panels of a module, of every type, share its `storage`, `documents` and `blobs` in the current workspace. Keep the user's work in documents, one per build, and every panel sees the same build:
 
 ```ts
 const build = await tavora.documents.get<Build>(buildId);
@@ -45,7 +45,7 @@ When the Skills panel saves a new gem, the Passive tree and Gear panels hear abo
 
 ## Let each panel show its own build
 
-A player may want two Gear panels, one per build, side by side. Each panel then keeps its own choice and tells Tavora what it shows.
+A user may want two Gear panels, one per build, side by side. Each panel then keeps its own choice and tells Tavora what it shows.
 
 ```ts
 const launch = await tavora.panel.getLaunch();
@@ -70,7 +70,7 @@ async function show(id: string | null) {
 }
 ```
 
-- Call `panel.setContent` every time the selection changes. Tavora keeps it with the panel and shows the title when the player hovers the tab, so two Gear tabs can be told apart.
+- Call `panel.setContent` every time the selection changes. Tavora keeps it with the panel and shows the title when the user hovers the tab, so two Gear tabs can be told apart.
 - Put a build selector in the panel's toolbar. Shorten long titles there and show the full name on hover.
 - When a panel's build is deleted, keep the panel open: say so where the build was and keep the selector. Never switch to another build by yourself.
 
@@ -89,7 +89,7 @@ gearButton.addEventListener("click", async () => {
 Tavora picks the panel, in this order:
 
 1. A Gear panel that already shows this build comes to the front.
-2. Else the Gear panel the player used last is asked to switch to it.
+2. Else the Gear panel the user used last is asked to switch to it.
 3. Else, or when that panel's page has no `onNavigate` handler, a new Gear panel opens. Its `panel.getLaunch()` answers `{ reason: "open", content }`.
 
 Every page that can switch builds handles the request:
@@ -101,14 +101,14 @@ tavora.panel.onNavigate(async (content) => {
 });
 ```
 
-The handler has 5 seconds. When it throws or runs out of time, the panel stays as it was, and Tavora offers the player the build in a new panel instead. Without a handler, Tavora always opens a new panel. Save before you switch, never lose an edit.
+The handler has 5 seconds. When it throws or runs out of time, the panel stays as it was, and Tavora offers the user the build in a new panel instead. Without a handler, Tavora always opens a new panel. Save before you switch, never lose an edit.
 
 `panels.open` only works right after a click or key press in the panel, once per click, and only opens your own module's panel types in the current workspace. Called on its own, it fails with `PERMISSION_DENIED`.
 
 ## Checklist
 
 - Every type has an `id` you will keep forever.
-- The player's work lives in documents, and each panel redraws on `documents.onChange`.
+- The user's work lives in documents, and each panel redraws on `documents.onChange`.
 - Each panel keeps its own selection in `panel` state and reports it with `panel.setContent`.
 - Every page handles all three `getLaunch` reasons.
 - Pages that switch content have an `onNavigate` handler that saves first.

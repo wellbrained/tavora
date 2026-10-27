@@ -8,7 +8,7 @@ What changed in `@tavora/create-module`, newest first.
 
 ## 0.1.9
 
-- New projects have a `README.md` that is the module's description in the catalog, with the headings players expect (Features, How to use, Settings, Requirements, Known issues), and the manifest names it as `readme`. The notes for developing the module moved to `DEVELOP.md`.
+- New projects have a `README.md` that is the module's description in the catalog, with the headings users expect (Features, How to use, Settings, Requirements, Known issues), and the manifest names it as `readme`. The notes for developing the module moved to `DEVELOP.md`.
 
 ## 0.1.8
 

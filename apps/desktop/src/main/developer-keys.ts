@@ -3,7 +3,7 @@ import { fingerprint, rawPublicKey, type Published } from "@tavora/pack";
 import type { DeveloperKeysView } from "../shared/host-api";
 import type { AccountKey } from "./account-key";
 import { CopyError } from "./cloud-copy";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 
 // The developer's publisher keys, kept in the account's key vault (decided 2026-10-20, "one recovery key").
 // Tavora makes a key or takes one from a file, links it to the account, and signs with it when the
@@ -109,9 +109,9 @@ export class DeveloperKeys {
     try {
       key = createPrivateKey(text);
     } catch {
-      throw new PlayerError("developerKeys.error.notKey");
+      throw new UserError("developerKeys.error.notKey");
     }
-    if (key.asymmetricKeyType !== "ed25519") throw new PlayerError("developerKeys.error.notKey");
+    if (key.asymmetricKeyType !== "ed25519") throw new UserError("developerKeys.error.notKey");
     return this.keep(key.export({ format: "pem", type: "pkcs8" }).toString());
   }
 
@@ -123,7 +123,7 @@ export class DeveloperKeys {
       this.options.accountKey.change((content) => {
         const current = parseKeys(content.publisherKeys ?? []);
         if (current.some((kept) => kept.fingerprint === added.fingerprint)) return content;
-        if (current.length >= MAX_KEYS) throw new PlayerError("developerKeys.error.tooMany");
+        if (current.length >= MAX_KEYS) throw new UserError("developerKeys.error.tooMany");
         return { ...content, publisherKeys: [...current.map((kept) => kept.pem), pem] };
       }),
     );
@@ -136,7 +136,7 @@ export class DeveloperKeys {
   /** Links a kept key that isn't linked yet (linking failed when it was made). */
   async link(fingerprint: string): Promise<void> {
     const kept = this.keys.find((key) => key.fingerprint === fingerprint);
-    if (!kept) throw new PlayerError("account.error.keyGone");
+    if (!kept) throw new UserError("account.error.keyGone");
     await this.options.account.link(kept.key);
   }
 
@@ -153,7 +153,7 @@ export class DeveloperKeys {
   /** The key as a file's text, for publishing from CI. */
   exportKey(fingerprint: string): string {
     const kept = this.keys.find((key) => key.fingerprint === fingerprint);
-    if (!kept) throw new PlayerError("account.error.keyGone");
+    if (!kept) throw new UserError("account.error.keyGone");
     return kept.pem;
   }
 
@@ -186,13 +186,13 @@ export class DeveloperKeys {
   private async ensureAccountKey(): Promise<void> {
     const accountKey = this.options.accountKey;
     if (accountKey.get()) return;
-    if (!this.options.account.signedIn()) throw new PlayerError("account.error.signedOut");
-    if (!accountKey.canKeep) throw new PlayerError("cloudCopy.error.cantKeep");
+    if (!this.options.account.signedIn()) throw new UserError("account.error.signedOut");
+    if (!accountKey.canKeep) throw new UserError("cloudCopy.error.cantKeep");
     const setUp = await guard(() => accountKey.setUp());
     if (setUp.status === "ask") {
       this.set("ask", []);
       this.changed();
-      throw new PlayerError("developerKeys.error.needRecoveryKey");
+      throw new UserError("developerKeys.error.needRecoveryKey");
     }
     if (setUp.created) this.recoveryKey = accountKey.recoveryKey();
   }
@@ -214,15 +214,15 @@ function parseKeys(pems: readonly string[]): Kept[] {
   });
 }
 
-/** The account key's service errors as messages for the player. */
+/** The account key's service errors as messages for the user. */
 async function guard<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (error) {
     if (!(error instanceof CopyError)) throw error;
-    if (error.reason === "signed-out") throw new PlayerError("account.error.signedOut");
-    if (error.reason === "unreachable") throw new PlayerError("account.error.unreachable");
-    if (error.reason === "unavailable") throw new PlayerError("account.error.unavailable");
-    throw new PlayerError("error.generic");
+    if (error.reason === "signed-out") throw new UserError("account.error.signedOut");
+    if (error.reason === "unreachable") throw new UserError("account.error.unreachable");
+    if (error.reason === "unavailable") throw new UserError("account.error.unavailable");
+    throw new UserError("error.generic");
   }
 }

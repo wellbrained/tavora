@@ -11,7 +11,7 @@ import SettingGroup from "./SettingGroup.vue";
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 
-/** Modules the player allowed to see what plays on this PC. */
+/** Modules the user allowed to see what plays on this PC. */
 const users = computed(() => (state.value?.modules ?? []).filter((module) => module.permissions.granted.connectors.includes("media")));
 
 function revoke(module: ModuleView) {

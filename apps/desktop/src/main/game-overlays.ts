@@ -1,6 +1,6 @@
-// Game overlays: a module's overlay page (the manifest's `overlay`) shown over the player's game in a Tavora window
-// (game-overlay-window.ts), only while that game is in front, plus the panels the player chose to show in their game,
-// which appear over it only while the in-game layer is open. This file holds what the player set for each one, kept in
+// Game overlays: a module's overlay page (the manifest's `overlay`) shown over the user's game in a Tavora window
+// (game-overlay-window.ts), only while that game is in front, plus the panels the user chose to show in their game,
+// which appear over it only while the in-game layer is open. This file holds what the user set for each one, kept in
 // game-overlays.json in the data folder, and the rules that don't need Windows: where an overlay sits relative to the
 // game's window, and when it is shown. The one key that opens the layer lives in hotkeys.json with the other hotkeys
 // (hotkeys.ts), under the action below; so do the keys that toggle overlays.
@@ -113,7 +113,7 @@ export interface GameOverlay extends GameOverlaySubject {
   legacy?: LegacyRect;
 }
 
-/** A panel the player chose to show in their game (by its instance id). It is over the game only while the layer is open. */
+/** A panel the user chose to show in their game (by its instance id). It is over the game only while the layer is open. */
 export interface InGamePanel {
   owner: string;
   moduleId: string;
@@ -168,7 +168,7 @@ type GameOverlayFile = {
   panels: unknown[];
 };
 
-/** What the player can change on an existing overlay. */
+/** What the user can change on an existing overlay. */
 export type GameOverlayChange = Partial<Pick<GameOverlay, "mode" | "opacity" | "hideFromCapture" | "rect">>;
 
 /** The most games whose window size is kept. */
@@ -185,7 +185,7 @@ export const panelWindowId = (instanceId: string) => `panel\n${instanceId}`;
 /** One text for an in-game panel's live view window. */
 export const liveWindowId = (instanceId: string) => `live\n${instanceId}`;
 
-/** What the player can change on an in-game panel's live view. */
+/** What the user can change on an in-game panel's live view. */
 export type InGamePanelChange = Partial<Pick<InGamePanel, "mode" | "opacity" | "hideFromCapture">>;
 
 /** Whether something (an overlay or an in-game panel) shows over `gameId`: the game of its workspace, or any game for a general one. */
@@ -235,8 +235,8 @@ export function panelBounds(size: { width: number; height: number }, arranging: 
 }
 
 /**
- * Whether a click or key press in a panel counts as the player's (links.open, pictures.save and the like need one).
- * A panel in the game takes input only while the layer is open, so nothing else is the player's.
+ * Whether a click or key press in a panel counts as the user's (links.open, pictures.save and the like need one).
+ * A panel in the game takes input only while the layer is open, so nothing else is the user's.
  */
 export const gestureCounts = (overGame: boolean, layerOpen: boolean) => !overGame || layerOpen;
 
@@ -461,7 +461,7 @@ export class GameOverlayStore {
     return "added";
   }
 
-  /** Changes what the player set for an overlay; false when there is no such overlay. */
+  /** Changes what the user set for an overlay; false when there is no such overlay. */
   update(subject: GameOverlaySubject, change: GameOverlayChange): boolean {
     const overlay = this.find(subject);
     if (!overlay) return false;
@@ -500,7 +500,7 @@ export class GameOverlayStore {
     return true;
   }
 
-  /** Removes the overlays matching `test` (the player's remove, a deleted game, a module that is gone); whether any went. */
+  /** Removes the overlays matching `test` (the user's remove, a deleted game, a module that is gone); whether any went. */
   forget(test: (overlay: GameOverlay) => boolean): boolean {
     const kept = this.overlays.filter((overlay) => !test(overlay));
     if (kept.length === this.overlays.length) return false;

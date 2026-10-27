@@ -164,7 +164,7 @@ describe("compareModuleVersions", () => {
 });
 
 describe("applyOwners", () => {
-  it("gives a module in the player's folder its recorded owner, and nothing else", async () => {
+  it("gives a module in the user's folder its recorded owner, and nothing else", async () => {
     const { userData, userModules } = await setup();
     const owner = "0123456789abcdef0123456789abcdef";
     const modules = new Map([

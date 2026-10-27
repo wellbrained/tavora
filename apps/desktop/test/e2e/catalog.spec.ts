@@ -113,7 +113,7 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
   return { url: `http://127.0.0.1:${address.port}`, server, asked, reports };
 }
 
-test("a player browses the catalog for a game, sees who publishes a module and installs it", async () => {
+test("a user browses the catalog for a game, sees who publishes a module and installs it", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const tracker = await packed("wellbrained.tracker", "Tracker", key);
@@ -156,7 +156,7 @@ test("a player browses the catalog for a game, sees who publishes a module and i
   }
 });
 
-test("a player opens a module's page with its readme, screenshots, access and homepage before installing", async () => {
+test("a user opens a module's page with its readme, screenshots, access and homepage before installing", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const tracker = await packed("wellbrained.tracker", "Tracker", key);
@@ -210,7 +210,7 @@ test("a player opens a module's page with its readme, screenshots, access and ho
     expect(asked).toContain(`/v1/catalog/pictures/${hash(picture)}.png`);
     expect(await readdir(path.join(userData, "modules")).catch(() => [])).toEqual([]);
 
-    // The game has no Browser panel yet, so the player picks where the homepage opens.
+    // The game has no Browser panel yet, so the user picks where the homepage opens.
     await expect(info.getByTestId("catalog-info-homepage")).toHaveText("example.com/tracker");
     await info.getByTestId("catalog-info-homepage").click();
     await expect(page.getByTestId("link-choice-url")).toHaveText("https://example.com/tracker");
@@ -239,7 +239,7 @@ test("a player opens a module's page with its readme, screenshots, access and ho
   }
 });
 
-test("a player sees a module's rating on its card, how many gave each star, and its reviews on its page", async () => {
+test("a user sees a module's rating on its card, how many gave each star, and its reviews on its page", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const tracker = await packed("wellbrained.tracker", "Tracker", key);
@@ -381,7 +381,7 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
   }
 });
 
-test("catalog module updates wait for the player, install from the Updates view without a restart, and one adding a network host waits for consent while the old version keeps working", async () => {
+test("catalog module updates wait for the user, install from the Updates view without a restart, and one adding a network host waits for consent while the old version keeps working", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const id = "wellbrained.tracker";
@@ -410,7 +410,7 @@ test("catalog module updates wait for the player, install from the Updates view 
     await expect(panels(page, id)).toHaveCount(1);
     await expectModuleText(app, id, "version", "1.0.0");
 
-    // Modules do not update by themselves unless the player turns that on: an update that asks for
+    // Modules do not update by themselves unless the user turns that on: an update that asks for
     // nothing new is only found, and the old version keeps running.
     modules[0] = await release("1.1.0", [], ["Faster."]);
     await checkForUpdates("Found 1 update. It is ready when you are.");
@@ -439,7 +439,7 @@ test("catalog module updates wait for the player, install from the Updates view 
     await expectModuleText(app, id, "version", "1.1.0");
     await expect(page.getByTestId("module-updates-button")).toHaveCount(0);
     await page.keyboard.press("Escape");
-    // The update check asked for the whole catalog, never for the modules this player has (C11).
+    // The update check asked for the whole catalog, never for the modules this user has (C11).
     expect(asked.filter((request) => request.startsWith("/v1/catalog?") || request === "/v1/catalog")).toContain("/v1/catalog");
     expect(asked.some((request) => request.startsWith("/v1/catalog?") && request.includes(id))).toBe(false);
 
@@ -508,7 +508,7 @@ test("catalog module updates wait for the player, install from the Updates view 
   }
 });
 
-test("a player reports a module from Browse and from Settings, and only its id, key and zip are sent", async () => {
+test("a user reports a module from Browse and from Settings, and only its id, key and zip are sent", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const tracker = await packed("wellbrained.tracker", "Tracker", key);
@@ -520,7 +520,7 @@ test("a player reports a module from Browse and from Settings, and only its id, 
     await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
-    // Nothing is sent until the player says yes.
+    // Nothing is sent until the user says yes.
     // Report is only on the module's page, not on its card.
     await expect(page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-report-wellbrained.tracker")).toHaveCount(0);
     await page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-name").click();

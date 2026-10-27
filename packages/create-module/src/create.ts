@@ -17,7 +17,7 @@ export interface ModuleOptions {
   dir: string;
   /** The module id, publisher.module-name. */
   id: string;
-  /** The name players see. */
+  /** The name users see. */
   name: string;
   template: Template;
   /** The game the module is made for (its id, such as poe2), or none for any game. */

@@ -26,7 +26,7 @@ describe("validateManifest", () => {
   });
 
   it("takes personalWorkspaces like workspaces, from a minTavora that knows it, and never both", () => {
-    const anyGame = { ...valid, games: [], minTavora: "0.21.42" };
+    const anyGame = { ...valid, games: [], minTavora: "0.21.43" };
     expect(validateManifest({ ...anyGame, personalWorkspaces: false }).ok).toBe(true);
     expect(validateManifest({ ...anyGame, personalWorkspaces: "no" })).toEqual({ ok: false, errors: ["personalWorkspaces must be true or false"] });
     expect(validateManifest({ ...anyGame, games: ["poe2"], personalWorkspaces: true })).toEqual({ ok: false, errors: ["personalWorkspaces can only be true for a module made for any game (games is empty)"] });

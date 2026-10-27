@@ -204,14 +204,14 @@ export interface TavoraSDK {
     getState<T = JsonValue>(): Promise<T | null>;
     setState(value: JsonValue | null): Promise<void>;
     /**
-     * Why this page is loading: `{ reason: "add" }` for a panel the player just added (pick its content
+     * Why this page is loading: `{ reason: "add" }` for a panel the user just added (pick its content
      * yourself, such as the last one used, or show a picker), or `{ reason: "restore", content }` for a panel
      * that was open before, with what it last showed. Needs Tavora 0.17.17 or newer.
      */
     getLaunch(): Promise<PanelLaunch>;
     /**
      * Tells Tavora what this panel shows now, such as the build picked in your toolbar's selector, or null for
-     * nothing. Tavora keeps it with the panel, shows the title when the player hovers the tab, and gives it
+     * nothing. Tavora keeps it with the panel, shows the title when the user hovers the tab, and gives it
      * back through getLaunch after a restart. Needs Tavora 0.17.17 or newer.
      */
     setContent(content: PanelContent | null): Promise<void>;
@@ -233,7 +233,7 @@ export interface TavoraSDK {
     /** Fires when this panel starts or stops filling the workspace, whoever did it. Needs Tavora 0.20.20 or newer. */
     onMaximizedChange(fn: (maximized: boolean) => void): Unsubscribe;
     /**
-     * What this panel's live view shows: while the player shows the panel in their game and the in-game layer is closed,
+     * What this panel's live view shows: while the user shows the panel in their game and the in-game layer is closed,
      * Tavora shows the module's overlay page (the manifest's `overlay`) read-only and click-through in the panel's spot,
      * with this state. Any JSON up to LIMITS.maxOverlayStateBytes; null shows nothing. Tavora keeps showing the last
      * state while the panel isn't running, e.g. while you look at another workspace in Tavora; after a restart nothing shows
@@ -254,7 +254,7 @@ export interface TavoraSDK {
   workspace: {
     /**
      * The workspace this panel is in: a game workspace (`kind` "game", its id is the game's) or a personal one. On a
-     * Tavora older than 0.21.42 this asks `game.getCurrent` and puts its answer in the new words.
+     * Tavora older than 0.21.43 this asks `game.getCurrent` and puts its answer in the new words.
      */
     getCurrent(): Promise<TavoraWorkspace>;
     getViewport(): Promise<TavoraViewport>;
@@ -265,12 +265,12 @@ export interface TavoraSDK {
     onThemeChange(fn: (theme: TavoraTheme) => void): Unsubscribe;
     /** The language Tavora shows its own texts in, as a code such as "en" or "de". Show yours in it, or in English when you have no translation. */
     getLanguage(): Promise<string>;
-    /** Fires when the player changes the language. */
+    /** Fires when the user changes the language. */
     onLanguageChange(fn: (language: string) => void): Unsubscribe;
     /**
      * Shows a menu that Tavora draws above every panel, so it is never cut off at the panel's edge. Call it from
      * the click, right-click or key press that asked for it: the host refuses it otherwise (PERMISSION_DENIED).
-     * Resolves with the chosen item's id, or null when the player closed the menu without choosing.
+     * Resolves with the chosen item's id, or null when the user closed the menu without choosing.
      */
     showMenu(request: MenuRequest): Promise<string | null>;
     /** One shared tooltip above the workspace (Tavora 0.19.3+). A pin needs a real click/key press. */
@@ -300,7 +300,7 @@ export interface TavoraSDK {
   };
   clipboard: {
     /**
-     * Puts a picture on the system clipboard, so the player can paste it anywhere. Call it from the click or key
+     * Puts a picture on the system clipboard, so the user can paste it anywhere. Call it from the click or key
      * press that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and one press copies one
      * picture. PNG only, a complete one, at most 20 MB and 16384 pixels on a side (INVALID_PARAMS, QUOTA_EXCEEDED).
      */
@@ -311,7 +311,7 @@ export interface TavoraSDK {
     pickReadOnly(options: { extensions: string[] }): Promise<ReadOnlyFile | null>;
     /** Rereads only a file previously picked by this module in this workspace. At most 32 MiB. */
     read(id: string): Promise<Uint8Array>;
-    /** Revokes a remembered file reference; never deletes the player's file. */
+    /** Revokes a remembered file reference; never deletes the user's file. */
     forget(id: string): Promise<void>;
     /**
      * Saves JSON (up to 8 MiB) in Downloads/Tavora after a click or key press, without asking. Never replaces a file. Tavora 0.19.17+.
@@ -319,18 +319,18 @@ export interface TavoraSDK {
      */
     exportJson(value: JsonValue, name?: string): Promise<{ fileName: string }>;
     /**
-     * Saves JSON (up to 8 MiB) as a .json file where the player says: Tavora's save dialog opens in the folder they
+     * Saves JSON (up to 8 MiB) as a .json file where the user says: Tavora's save dialog opens in the folder they
      * last saved a file to or opened one from for this module, at first Documents\Tavora. `name` suggests the file
      * name: Tavora makes it safe and adds " (2)" and so on when it is taken. Resolves with the name it was saved
-     * under, or null when the player closed the dialog; the module never learns the folder. Replacing a file needs
-     * the player's OK in the dialog.
+     * under, or null when the user closed the dialog; the module never learns the folder. Replacing a file needs
+     * the user's OK in the dialog.
      * Call it from the click or key press that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and
      * one press saves one file.
      */
     saveJson(value: JsonValue, name?: string): Promise<{ fileName: string } | null>;
     /**
-     * Opens a .json file the player picks in Tavora's open dialog, which starts in the same folder as saveJson.
-     * Resolves with the file's name and its parsed content (at most 8 MiB), or null when the player closed the dialog;
+     * Opens a .json file the user picks in Tavora's open dialog, which starts in the same folder as saveJson.
+     * Resolves with the file's name and its parsed content (at most 8 MiB), or null when the user closed the dialog;
      * a file that is not JSON is INVALID_PARAMS. The module never learns the folder.
      * Call it from the click or key press that asked for it (PERMISSION_DENIED otherwise); one press opens one file.
      */
@@ -338,9 +338,9 @@ export interface TavoraSDK {
   };
   pictures: {
     /**
-     * Saves a picture as a .png file where the player says: Tavora's save dialog opens in the folder they last saved a
+     * Saves a picture as a .png file where the user says: Tavora's save dialog opens in the folder they last saved a
      * picture to, at first Pictures\Tavora. `name` suggests the file name: Tavora makes it safe and adds " (2)" and so
-     * on when it is taken. Resolves with the name it was saved under, or null when the player closed the dialog; the
+     * on when it is taken. Resolves with the name it was saved under, or null when the user closed the dialog; the
      * module never learns the folder. Tavora 0.20.16 and older save in Pictures\Tavora without asking.
      * Call it from the click or key press that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and
      * one press saves one picture. The same PNG limits as clipboard.writeImage apply.
@@ -357,7 +357,7 @@ export interface TavoraSDK {
   };
   network: {
     /**
-     * Makes a web request through Tavora, to a host listed in `permissions.network` that the player
+     * Makes a web request through Tavora, to a host listed in `permissions.network` that the user
      * granted (PERMISSION_DENIED otherwise). HTTPS only, no cookies, at most 5 MB back and 15 seconds.
      * Error statuses such as 404 are answers, not errors; NETWORK_ERROR means no answer came.
      */
@@ -367,14 +367,14 @@ export interface TavoraSDK {
      * Requires Tavora 0.19.3. Login and verification pages fail with NETWORK_ERROR. */
     readPage(url: string): Promise<PageResponse>;
   };
-  /** Parts of Tavora that hold a sign-in, used without seeing it. Each needs its connector in `permissions.connectors` and the player's grant (PERMISSION_DENIED otherwise). */
+  /** Parts of Tavora that hold a sign-in, used without seeing it. Each needs its connector in `permissions.connectors` and the user's grant (PERMISSION_DENIED otherwise). */
   connectors: {
-    /** `ai-usage`: the usage of the Claude and Codex accounts the player set up in Settings > Integrations > AI usage. */
+    /** `ai-usage`: the usage of the Claude and Codex accounts the user set up in Settings > Integrations > AI usage. */
     aiUsage: {
       accounts(): Promise<AiUsageAccountInfo[]>;
       /** Reads one account. Tavora reads each account at most once a minute; asking sooner gives the last reading. */
       read(accountId: string): Promise<AiUsageReading>;
-      /** Fires when the player adds, renames or removes an account. */
+      /** Fires when the user adds, renames or removes an account. */
       onAccountsChange(fn: () => void): Unsubscribe;
     };
     /**
@@ -459,7 +459,7 @@ export interface TavoraSDK {
   };
   /**
    * Pages for streaming software such as OBS (the manifest's `overlay`), one per key: an item, a scoreboard, whatever
-   * the module shows on stream. Needs `"stream-overlay"` in `permissions.connectors` and the player's grant
+   * the module shows on stream. Needs `"stream-overlay"` in `permissions.connectors` and the user's grant
    * (PERMISSION_DENIED otherwise). Tavora 0.19.26 and newer.
    */
   overlay: {
@@ -468,7 +468,7 @@ export interface TavoraSDK {
     /** The overlay for `key` shows nothing until it is published again. Its link stays the same. */
     remove(key: string): Promise<void>;
     /**
-     * Puts the overlay's link on the clipboard, for the player to paste into OBS as a Browser Source. Call it from
+     * Puts the overlay's link on the clipboard, for the user to paste into OBS as a Browser Source. Call it from
      * the click or key press that asked for it. Resolves with `"off"` when Stream overlays are off in Tavora: Tavora
      * then opens that setting.
      */
@@ -476,7 +476,7 @@ export interface TavoraSDK {
     /** Gives the overlay a new link; the old one stops working. */
     resetLink(key: string): Promise<void>;
     /**
-     * Shows the overlay for `key` over the player's game, in a Tavora window above it, only while that game is in
+     * Shows the overlay for `key` over the user's game, in a Tavora window above it, only while that game is in
      * front. Call it from the click or key press that asked for it; it needs no permission. Resolves with `"off"` when
      * Game overlays are off in Tavora (Tavora then opens that setting) and `"full"` when the game has no room for
      * another. Tavora 0.20.51 and newer.
@@ -488,14 +488,14 @@ export interface TavoraSDK {
     overGame(): Promise<string[]>;
     /**
      * Opens a small Tavora window with the overlay for `key` at its real size, on a dark, light or checkered background,
-     * so the player can see what it looks like. Call it from the click or key press that asked for it; it needs no
+     * so the user can see what it looks like. Call it from the click or key press that asked for it; it needs no
      * permission, but the module needs an `overlay` in its manifest. It works whether or not Game overlays and Stream
      * overlays are on. Tavora 0.21.3 and newer.
      */
     preview(key: string): Promise<void>;
   };
   /**
-   * Hotkeys for the manifest's `actions`. The player picks the keys in a Tavora dialog, for this workspace; the module
+   * Hotkeys for the manifest's `actions`. The user picks the keys in a Tavora dialog, for this workspace; the module
    * only hears which action fired, for which target, in its panel used last in the workspace shown now. Tavora 0.19.26 and newer.
    */
   hotkeys: {
@@ -738,7 +738,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       getCurrent: () =>
         call("workspace.getCurrent").catch(async (error: unknown) => {
           if (!(error instanceof TavoraError) || error.code !== "UNKNOWN_METHOD") throw error;
-          // A Tavora older than 0.21.42 knows the workspace by its old name.
+          // A Tavora older than 0.21.43 knows the workspace by its old name.
           const game = await call("game.getCurrent");
           return { id: game.id, displayName: game.displayName, kind: game.kind === "workspace" ? "personal" : "game" } satisfies TavoraWorkspace;
         }),
@@ -750,7 +750,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       onThemeChange: (fn) => on("ui.theme", fn),
       getLanguage: () => call("ui.getLanguage"),
       onLanguageChange: (fn) => on("ui.language", fn),
-      // The player may take their time choosing.
+      // The user may take their time choosing.
       showMenu: (request) => call("ui.showMenu", request, MENU_TIMEOUT_MS),
       tooltip: {
         show: request => call("ui.tooltip.show",request),
@@ -946,7 +946,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     },
     hotkeys: {
       list: () => call("hotkeys.list"),
-      // The player may take their time pressing a key.
+      // The user may take their time pressing a key.
       set: (action, target, label) => call("hotkeys.set", { action, target, label }, MENU_TIMEOUT_MS),
       remove: async (target, action) => {
         await call("hotkeys.remove", action === undefined ? { target } : { target, action });

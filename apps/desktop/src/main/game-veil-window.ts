@@ -1,5 +1,5 @@
 // The veil of the in-game layer: a frameless Tavora window over the game window, black at about 30 % opacity, that
-// takes clicks and does nothing with them, so the game under it isn't played by accident while the player arranges
+// takes clicks and does nothing with them, so the game under it isn't played by accident while the user arranges
 // overlays and works in panels. It loads one tiny page of its own (no files, no network, no bridge) that paints the
 // veil only while Tavora's main process keeps telling it so (a beat every BEAT_MS); with no beat for EXPIRE_MS the
 // page turns fully transparent, so a Tavora that stopped responding doesn't leave the game under a dark sheet.
@@ -65,7 +65,7 @@ export class GameVeilWindow implements VeilWindow {
     }));
     window.removeMenu();
     window.setAlwaysOnTop(true, "screen-saver");
-    // Nothing for the player to close: only the layer (or quitting) ends it.
+    // Nothing for the user to close: only the layer (or quitting) ends it.
     window.on("close", (event) => {
       if (!this.destroyed && !this.quitting) event.preventDefault();
     });

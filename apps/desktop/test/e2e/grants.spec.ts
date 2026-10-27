@@ -120,7 +120,7 @@ test("an update that asks for more keeps working and shows a Review bar", async 
   await writeFile(manifestFile, JSON.stringify({ ...manifest, version: "0.1.0", permissions: { network: ["api.tavora.test", "cdn.tavora.test"] } }));
   await page.evaluate(() => (window as unknown as { tavoraHost: { act(action: unknown): Promise<unknown> } }).tavoraHost.act({ type: "reload-modules" }));
 
-  // What was granted keeps working; the new host waits for the player.
+  // What was granted keeps working; the new host waits for the user.
   const bar = page.locator('[data-testid^="grant-review-open-"]');
   await expect(bar).toBeVisible();
   expect(await fetchFrom(app, "api.tavora.test")).toMatchObject({ ok: true });

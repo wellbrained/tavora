@@ -1,4 +1,4 @@
-// Data saved before the Game → Workspace rename (Tavora 0.21.41 and older) opens as it was: the move at start
+// Data saved before the Game → Workspace rename (Tavora 0.21.42 and older) opens as it was: the move at start
 // renames it (main/workspace-move.ts) and keeps the files as they were in backups/before-workspaces.
 
 import { readdir, readFile, writeFile } from "node:fs/promises";

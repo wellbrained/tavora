@@ -12,10 +12,10 @@ import { copyStoredFiles, defaultFilesRoot, filesTarget, listStoredFiles, remove
 /** What the folder needs from the host around it. */
 export interface ModuleFilesFolderHost {
   userData: string;
-  /** Where the pictures go unless the player chose another folder: Pictures\Tavora. */
+  /** Where the pictures go unless the user chose another folder: Pictures\Tavora. */
   defaultFolder: string;
   language(): Language;
-  /** The folder the player chose, or null for the default one. */
+  /** The folder the user chose, or null for the default one. */
   chosenFolder(): string | null;
   /** Remembers the chosen folder (null for the default) and saves the library. */
   setChosenFolder(folder: string | null): void;
@@ -23,7 +23,7 @@ export interface ModuleFilesFolderHost {
   pick(options: OpenDialogOptions): Promise<string | undefined>;
   /** Opens the dialog next to `picked` from now on. */
   remember(picked: string): void;
-  /** Shows the player a message. */
+  /** Shows the user a message. */
   notify(message: string): void;
   /** Tells the host UI that something here changed. */
   changed(): void;
@@ -37,7 +37,7 @@ export class ModuleFilesFolder {
 
   constructor(private readonly host: ModuleFilesFolderHost) {}
 
-  /** Where modules keep their pictures: the folder the player chose, or the default one. */
+  /** Where modules keep their pictures: the folder the user chose, or the default one. */
   root(): string {
     return this.host.chosenFolder() ?? this.host.defaultFolder;
   }
@@ -51,14 +51,14 @@ export class ModuleFilesFolder {
     return !this.custom || (await stat(this.root()).then((info) => info.isDirectory(), () => false));
   }
 
-  /** Looks whether the folder is there, and tells the player when a folder they chose is gone. */
+  /** Looks whether the folder is there, and tells the user when a folder they chose is gone. */
   async check(): Promise<void> {
     this.available = await this.isThere();
     if (!this.available) this.host.notify(translate(this.host.language(), "notice.moduleFilesMissing", { folder: this.root() }));
     this.host.changed();
   }
 
-  /** The player picks a place in the system dialog. */
+  /** The user picks a place in the system dialog. */
   async change(): Promise<void> {
     const folder = await this.host.pick({
       title: translate(this.host.language(), "dialog.chooseModuleFiles"),
@@ -81,7 +81,7 @@ export class ModuleFilesFolder {
 
   /**
    * Pictures still in the old default folder, inside the app's data, move to the default folder. Runs at start
-   * before any module opens. If copying fails, the old folder stays in use as if the player had chosen it.
+   * before any module opens. If copying fails, the old folder stays in use as if the user had chosen it.
    */
   async moveFromOldDefault(log: (line: string) => void): Promise<void> {
     const old = defaultFilesRoot(this.host.userData);
@@ -134,7 +134,7 @@ export class ModuleFilesFolder {
     if (error) throw new LibraryError("error.openModuleFiles", { problem: error });
   }
 
-  /** Called with a workspace that is being deleted: tells the player where its pictures may remain when the folder they chose is gone. */
+  /** Called with a workspace that is being deleted: tells the user where its pictures may remain when the folder they chose is gone. */
   async noteWorkspaceDeleted(workspaceName: string, deleteFiles: (root: string) => Promise<void>): Promise<void> {
     const root = this.root();
     const gone = !(await this.isThere());

@@ -119,7 +119,7 @@ function setup(ownerEmail?: string) {
       body: new Uint8Array(zip),
     });
   };
-  const player = (email: string, name = "Mara") => {
+  const user = (email: string, name = "Mara") => {
     const created = store.createAccount({ email }, clock.now - 86_400_000); // a day old, old enough to rate
     if (name) store.setProfile(created.id, { name, initials: name.slice(0, 2).toUpperCase(), picture: null, updatedAt: clock.now });
     return { account: created, token: store.createSession(created.id, "linux", clock.now, "Mara's PC").token };
@@ -129,7 +129,7 @@ function setup(ownerEmail?: string) {
     const code = /\n {4}(\d{6})\n/.exec(inbox.mails().at(-1)?.text ?? "")?.[1] ?? "";
     return account("/verify", "POST", { email, code, os: "windows", create: false });
   };
-  return { activity, store, reviews, copies, catalog, inbox, clock, adminCall, get, post, account, catalogCall, developer, devSession, publishToken, publish, player, signIn };
+  return { activity, store, reviews, copies, catalog, inbox, clock, adminCall, get, post, account, catalogCall, developer, devSession, publishToken, publish, user, signIn };
 }
 
 describe("the account list", () => {
@@ -149,8 +149,8 @@ describe("the account list", () => {
   });
 
   it("lists every account with what the panel shows, and no secret", async () => {
-    const { get, player, developer } = setup();
-    player("mara@example.com");
+    const { get, user, developer } = setup();
+    user("mara@example.com");
     const { status, body } = await get("/api/accounts/list");
     expect(status).toBe(200);
     expect(body).toMatchObject({ total: 2, counts: { developers: 1, banned: 0, suspended: 0 } });
@@ -176,8 +176,8 @@ describe("the account list", () => {
   });
 
   it("searches email, Discord name, profile, developer name, id, key, prefix and module id; and filters", async () => {
-    const { get, player, developer, store, post } = setup();
-    const mara = player("mara@example.com");
+    const { get, user, developer, store, post } = setup();
+    const mara = user("mara@example.com");
     store.setDiscord(mara.account.id, ALEX);
     const fingerprint = store.keys(developer.id)[0]!.fingerprint;
     const find = async (q: string, filter = "all") => ((await get(`/api/accounts/list?q=${encodeURIComponent(q)}&filter=${filter}`)).body.accounts as { id: string }[]).map((row) => row.id);
@@ -203,8 +203,8 @@ describe("the account list", () => {
 
 describe("one account's details", () => {
   it("shows everything the service keeps, and no secret", async () => {
-    const { get, developer, store, copies, catalogCall, player, clock } = setup();
-    const mara = player("mara@example.com");
+    const { get, developer, store, copies, catalogCall, user, clock } = setup();
+    const mara = user("mara@example.com");
     store.setDiscord(developer.id, ALEX);
     store.putVault(developer.id, 0, new Uint8Array([1, 2, 3, 4]), clock.now);
     copies.swap(developer.id, 0, new Uint8Array(12), [], clock.now);
@@ -238,8 +238,8 @@ describe("one account's details", () => {
   });
 
   it("serves the picture as a PNG, 404 without one, and 404 for an unknown or odd id", async () => {
-    const { adminCall, developer, player, get } = setup();
-    const mara = player("mara@example.com");
+    const { adminCall, developer, user, get } = setup();
+    const mara = user("mara@example.com");
     const picture = await adminCall("GET", `/api/accounts/${developer.id}/picture.png`);
     expect(picture.status).toBe(200);
     expect(picture.headers.get("content-type")).toBe("image/png");
@@ -295,8 +295,8 @@ describe("Suspend account", () => {
   });
 
   it("refuses sign-in with Discord, for a known login and for a new account's ticket", async () => {
-    const { post, player, account, store } = setup();
-    const mara = player("mara@example.com");
+    const { post, user, account, store } = setup();
+    const mara = user("mara@example.com");
     store.setDiscord(mara.account.id, ALEX);
     await post("/api/accounts/suspend", { id: mara.account.id, reason: "adult" });
     const refused = await account("/discord/sign-in", "POST", { code: "codealexalex", verifier: VERIFIER, os: "windows" });
@@ -341,9 +341,9 @@ describe("Suspend account", () => {
   });
 
   it("hides the account's reviews and replies, keeps their stars, and shows them again on Unsuspend", async () => {
-    const { post, player, catalogCall, reviews, clock } = setup();
-    const mara = player("mara@example.com");
-    const other = player("other@example.com", "Otto");
+    const { post, user, catalogCall, reviews, clock } = setup();
+    const mara = user("mara@example.com");
+    const other = user("other@example.com", "Otto");
     await catalogCall("PUT", "/modules/wellbrained.timer/review", mara.token, { stars: 2, text: "Meh.", version: "1.0.0" });
     await catalogCall("PUT", "/modules/wellbrained.timer/review", other.token, { stars: 5, text: "Great!", version: "1.0.0" });
     const own = reviews.own(mara.account.id, "wellbrained.timer")!;
@@ -375,8 +375,8 @@ describe("Suspend account", () => {
   });
 
   it("emails the reason in the person's language (English by default, German when their last version used it)", async () => {
-    const { post, player, inbox } = setup();
-    const mara = player("mara@example.com");
+    const { post, user, inbox } = setup();
+    const mara = user("mara@example.com");
     expect((await post("/api/accounts/suspend", { id: mara.account.id, reason: "spam", note: "Same text everywhere." })).body.mailed).toBe(true);
     const mail = inbox.mails().at(-1)!;
     expect(mail).toMatchObject({ to: "mara@example.com", subject: "Your Tavora account is suspended" });
@@ -413,6 +413,36 @@ describe("Suspend account", () => {
     expect((await post("/api/accounts/suspend", { id: developer.id, reason: "spam" })).status).toBe(200);
     expect((await post("/api/accounts/unsuspend", {})).status).toBe(400);
     expect((await post("/api/accounts/unsuspend", { id: "nobody" })).status).toBe(404);
+  });
+});
+
+describe("everything one person wrote", () => {
+  it("lists the account's ratings, hides every text at once (stars stay), and removes them all", async () => {
+    const { get, post, user, catalogCall, reviews, activity } = setup();
+    const mara = user("mara@example.com");
+    const other = user("other@example.com", "Otto");
+    await catalogCall("PUT", "/modules/wellbrained.timer/review", mara.token, { stars: 1, text: "Awful.", version: "1.0.0" });
+    await catalogCall("PUT", "/modules/wellbrained.timer/review", other.token, { stars: 5, text: "Great!", version: "1.0.0" });
+    reviews.report(reviews.own(mara.account.id, "wellbrained.timer")!.id, Date.now());
+
+    const listed = await get(`/api/accounts/${mara.account.id}/reviews`);
+    expect(listed.body.reviews).toEqual([expect.objectContaining({ moduleId: "wellbrained.timer", moduleName: "Timer", stars: 1, text: "Awful.", hidden: false, held: false })]);
+    expect((await get("/api/accounts/nobody/reviews")).status).toBe(404);
+
+    expect(await post("/api/accounts/hide-reviews", { id: mara.account.id })).toMatchObject({ status: 200, body: { hiddenReviews: 1 } });
+    expect(reviews.reports()).toEqual([]);
+    const page = (await (await catalogCall("GET", "/modules/wellbrained.timer/reviews")).json()) as { summary: { count: number }; reviews: { text: string }[] };
+    expect(page.reviews.map((review) => review.text)).toEqual(["Great!"]);
+    expect(page.summary.count).toBe(2);
+    // A person's choice: unsuspending later doesn't bring them back.
+    expect(reviews.own(mara.account.id, "wellbrained.timer")).toMatchObject({ hidden: true });
+
+    expect(await post("/api/accounts/remove-reviews", { id: mara.account.id })).toMatchObject({ status: 200, body: { removedReviews: 1 } });
+    expect(reviews.summary("wellbrained.timer")?.count).toBe(1);
+    expect(activity.list({ kind: "accounts" }).entries.map((entry) => [entry.kind, entry.target?.id])).toEqual([
+      ["accounts/remove-reviews", mara.account.id],
+      ["accounts/hide-reviews", mara.account.id],
+    ]);
   });
 });
 
@@ -485,8 +515,8 @@ describe("deleting a suspended account", () => {
   const codeOf = (inbox: ReturnType<typeof setup>["inbox"]) => /\n {4}(\d{6})\n/.exec(inbox.mails().at(-1)!.text)![1]!;
 
   it("works with a code to its address, never makes a sign-in, and deletes everything", async () => {
-    const { post, account, inbox, store, reviews, player, catalogCall } = setup();
-    const mara = player("mara@example.com");
+    const { post, account, inbox, store, reviews, user, catalogCall } = setup();
+    const mara = user("mara@example.com");
     await catalogCall("PUT", "/modules/wellbrained.timer/review", mara.token, { stars: 3, text: "ok", version: "1.0.0" });
     await post("/api/accounts/suspend", { id: mara.account.id, reason: "spam" });
     inbox.clear();
@@ -547,8 +577,8 @@ describe("Suspend and the codes already sent", () => {
 
 describe("retrying Suspend and Unsuspend", () => {
   it("finishes hiding the reviews when the account is suspended already, without a second email", async () => {
-    const { post, player, catalogCall, reviews, store, inbox } = setup();
-    const mara = player("mara@example.com");
+    const { post, user, catalogCall, reviews, store, inbox } = setup();
+    const mara = user("mara@example.com");
     await catalogCall("PUT", "/modules/wellbrained.timer/review", mara.token, { stars: 3, text: "ok", version: "1.0.0" });
     // A first try that died after the account was suspended, before the reviews were hidden.
     store.suspend(mara.account.id, "spam", null, Date.now());
@@ -561,8 +591,8 @@ describe("retrying Suspend and Unsuspend", () => {
   });
 
   it("finishes showing the reviews when the suspension is lifted already", async () => {
-    const { post, player, catalogCall, reviews, store } = setup();
-    const mara = player("mara@example.com");
+    const { post, user, catalogCall, reviews, store } = setup();
+    const mara = user("mara@example.com");
     await catalogCall("PUT", "/modules/wellbrained.timer/review", mara.token, { stars: 3, text: "ok", version: "1.0.0" });
     await post("/api/accounts/suspend", { id: mara.account.id, reason: "spam" });
     store.unsuspend(mara.account.id);

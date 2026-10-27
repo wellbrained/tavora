@@ -2,7 +2,7 @@
 // The traffic card of the Connection section: what this PC downloaded and uploaded this week, this month and in the 3
 // months before, as Windows counts it (Tavora reads Windows' record, so it counts while Tavora is closed too). Big is
 // both together, as a data plan counts it; below are the two parts. A month Windows' record only partly covers says
-// from when it counts. Shown only when the player ticked Traffic in the menu.
+// from when it counts. Shown only when the user ticked Traffic in the menu.
 import { ArrowDown, ArrowUp } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import type { SystemTrafficPeriod } from "@tavora/sdk";

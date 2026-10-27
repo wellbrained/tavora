@@ -1,5 +1,5 @@
 // Language: Tavora follows the system's language (German, or English for
-// anything else), the player can pick one from a list with a search field,
+// anything else), the user can pick one from a list with a search field,
 // the pick is kept, and the official modules follow it.
 import { readFile } from "node:fs/promises";
 import path from "node:path";

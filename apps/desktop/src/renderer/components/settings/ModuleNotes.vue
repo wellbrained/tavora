@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // A module's patch notes (ModuleNotesDialog.vue), newest first, as plain text from its changelog file.
 // Opening them tells the host they were seen, so the New mark goes away. Given `entries` (the notes
-// of a catalog update that waits for the player), it shows those instead and marks nothing seen.
+// of a catalog update that waits for the user), it shows those instead and marks nothing seen.
 // Notes that can't be read say so, and stay unseen.
 import { onMounted, ref } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";

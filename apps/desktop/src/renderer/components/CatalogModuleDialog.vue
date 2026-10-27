@@ -98,7 +98,7 @@ async function openHomepage() {
   const outcome = await act({ type: "open-catalog-homepage", moduleId: module.value.id }, { quiet: true });
   opening.value = false;
   if (!outcome.ok) homepageError.value = outcome.error;
-  // Opened in a Browser panel: close the library so the player sees it. Asking where to open replaces it already.
+  // Opened in a Browser panel: close the library so the user sees it. Asking where to open replaces it already.
   else if (dialog.value === library) dialog.value = null;
 }
 </script>
