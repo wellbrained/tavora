@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.49",
+    date: "2026-10-27",
+    title: "In review",
+    notes: [
+      "A release copy whose new version waits for a check by Tavora now says In review in Settings > Development.",
+      "Publish stays off for it until the check is done.",
+    ],
+    prs: [
+      { number: 414, title: "Release copies say In review while a version waits for a check" },
+    ],
+    tags: ["accounts", "settings"],
+  },
+  {
     version: "0.21.48",
     date: "2026-10-27",
     title: "Write to developers",
