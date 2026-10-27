@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.51",
+    date: "2026-10-27",
+    title: "Tidy project folders",
+    notes: [
+      "Close a project folder in Settings > Development to show just its name. It stays closed.",
+      "Drag a folder by its grip to put the folders in your order.",
+    ],
+    prs: [
+      { number: 417, title: "Project folders: close them and put them in your own order" },
+    ],
+    tags: ["games", "settings"],
+  },
+  {
     version: "0.21.50",
     date: "2026-10-27",
     title: "Overlay keys fixed",
