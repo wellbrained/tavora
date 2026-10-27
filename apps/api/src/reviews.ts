@@ -329,6 +329,11 @@ export class ReviewStore {
     return Number(this.db.prepare("update reviews set hidden = 0, hidden_by_suspend = 0 where account_id = ? and hidden_by_suspend = 1").run(accountId).changes);
   }
 
+  /** Every rating of a module, held and hidden ones too, newest first, for the maintainer's module detail view (#345). */
+  byModule(moduleId: string): StoredReview[] {
+    return (this.db.prepare(`select ${REVIEW_COLUMNS} from ${REVIEW_FROM} where r.module_id = ? order by r.created_at desc, r.rowid desc`).all(moduleId) as unknown as ReviewSql[]).map((row) => toReview(row)!);
+  }
+
   /** Every rating an account gave, newest first, for the maintainer's per-author view (decided 2026-10-27). */
   byAccount(accountId: string): StoredReview[] {
     return (this.db.prepare(`select ${REVIEW_COLUMNS} from ${REVIEW_FROM} where r.account_id = ? order by r.updated_at desc, r.rowid desc`).all(accountId) as unknown as ReviewSql[]).map((row) => toReview(row)!);

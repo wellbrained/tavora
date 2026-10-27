@@ -416,6 +416,29 @@ describe("Suspend account", () => {
   });
 });
 
+describe("one module's ratings", () => {
+  it("lists every rating of a module, hidden and reported ones too, with the author and the summary", async () => {
+    const { get, user, catalogCall, reviews } = setup();
+    const mara = user("mara@example.com");
+    const other = user("other@example.com", "Otto");
+    await catalogCall("PUT", "/modules/wellbrained.timer/review", mara.token, { stars: 1, text: "Awful.", version: "1.0.0" });
+    await catalogCall("PUT", "/modules/wellbrained.timer/review", other.token, { stars: 5, text: "Great!", version: "1.0.0" });
+    const awful = reviews.own(mara.account.id, "wellbrained.timer")!;
+    reviews.report(awful.id, other.account.id, Date.now());
+    reviews.setHidden(awful.id, true);
+
+    const listed = await get("/api/modules/wellbrained.timer/reviews");
+    expect(listed.status).toBe(200);
+    expect(listed.body.module).toEqual({ id: "wellbrained.timer", name: "Timer" });
+    expect(listed.body.summary).toMatchObject({ count: 2, stars: [1, 0, 0, 0, 1] });
+    const byText = Object.fromEntries((listed.body.reviews as { text: string }[]).map((review) => [review.text, review]));
+    expect(byText["Awful."]).toMatchObject({ stars: 1, hidden: true, held: false, authorId: mara.account.id, reply: null });
+    expect(byText["Great!"]).toMatchObject({ stars: 5, hidden: false, reports: 0, author: "Otto", authorId: other.account.id });
+    expect(listed.body.reviews).toHaveLength(2);
+    expect((await get("/api/modules/nobody.nothing/reviews")).status).toBe(404);
+  });
+});
+
 describe("everything one person wrote", () => {
   it("lists the account's ratings, hides every text at once (stars stay), and removes them all", async () => {
     const { get, post, user, catalogCall, reviews, activity } = setup();
