@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.41",
+    date: "2026-10-27",
+    title: "Calculator options",
+    notes: [
+      "A ⚙ menu in the Calculator: decimal places, short numbers like 1.5M, and how many results the history keeps.",
+    ],
+    prs: [
+      { number: 403, title: "Calculator 0.1.6: options menu for decimals, short numbers and history length" },
+    ],
+    tags: ["calculator"],
+  },
+  {
     version: "0.21.40",
     date: "2026-10-27",
     title: "Calculator values",
