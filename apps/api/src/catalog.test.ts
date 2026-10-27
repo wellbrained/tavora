@@ -89,6 +89,16 @@ const store = () => new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-cat
 const sha = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
 describe("adding to the catalog", () => {
+  it("hands the admin panel every version's notes, empty when the changelog has none", () => {
+    const catalog = store();
+    catalog.add(moduleZip({ changelog: [{ version: "1.0.0", notes: ["First version."] }] }), new Date("2026-10-18T10:00:00Z"));
+    catalog.add(moduleZip({ version: "1.1.0" }), new Date("2026-10-19T10:00:00Z"));
+    expect(catalog.adminModules()[0]?.versions.map((version) => [version.version, version.notes])).toEqual([
+      ["1.1.0", []],
+      ["1.0.0", ["First version."]],
+    ]);
+  });
+
   it("stores a signed zip under its hash with this version's notes", () => {
     const catalog = store();
     const zip = moduleZip({ changelog: [{ version: "1.0.0", notes: ["First version."] }] });
