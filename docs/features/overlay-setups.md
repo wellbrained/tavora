@@ -1,6 +1,6 @@
-# Overlay setups (planned)
+# Overlay setups (step 1 built)
 
-Decided with the owner on 2026-10-27. Replaces the Overlay layout window and the per-game overrides described in [overlay-layout.md](overlay-layout.md) once built. It uses the names from the [Game → Workspace rename](workspace-rename.md), which is done.
+Decided with the owner on 2026-10-27. Replaces the Overlay layout window described in [overlay-layout.md](overlay-layout.md) once step 2 is built; the per-game overrides are gone since step 1. It uses the names from the [Game → Workspace rename](workspace-rename.md), which is done.
 
 ## Setups
 
@@ -58,11 +58,24 @@ The button is hidden while overlays are off in Settings. Main sends a new live s
 - Customized per-game positions of general items are lost; the patch note says so.
 - Nothing starts showing in a new place after the update.
 
+Built in step 1 (decided with the owner on 2026-10-27 while building): each new game setup also gets copies of the general items at their All games place, up to 8 with the game's own items first, so nothing stops showing over a game that had both. Only the customized per-game places are lost.
+
+## How step 1 is built
+
+`game-overlays.json` version 5 holds `setups` (`$everywhere`, `$all`, and one per game workspace id, in `game-overlays.ts`). Choices made while building, not covered above:
+
+- **The move.** A file of version 4 or older is read with its old limits, moved in memory and written at start. The old file is first copied to `backups/before-overlay-setups/`; if that copy fails, the store goes read-only for the session and never writes over the old file. Until the first write, a restart redoes the same move from the same file. Older Tavora versions can't read version 5 and set the file aside.
+- **Hotkeys stay per item.** One toggle key per overlay or panel, working in every setup it is in; `hotkeys.json` is unchanged.
+- **One window per item.** An item in Everywhere and in the game-side setup on screen shows once, as the game-side setup has it.
+- **Everywhere sits on the main screen**, in units of its height, like game-side items on the game window.
+- **Tavora in front** means one of Tavora's own windows (not an overlay or the veil) has the focus.
+- **A new game setup starts with copies of All games' items**, leaving one slot for the item that made it, so the game shows what it showed before. A setup made by a failed show is removed again. An empty game setup is kept until its workspace or Remove overlay removes it.
+- **Where things land.** `overlay.showOverGame` and Show in game land in the item's game setup or All games (`landingSetup`); "exists" when the item is in any setup already. Putting personal items into Everywhere comes with the Overlay page (step 2).
 ## Steps
 
 0. [Game → Workspace rename](workspace-rename.md) (done).
-1. Setups in the data, the which-setup-shows rule, the source rules, the limit, showing outside games, the data move, the security page.
+1. Setups in the data, the which-setup-shows rule, the source rules, the limit, showing outside games, the data move, the security page (done).
 2. The Overlay page; Add overlay / Remove overlay on the workspace.
-3. The header button and the live state; Settings trimmed.
+3. The header button and the live state; Settings trimmed (done, built before step 1 and 2).
 
 Each step adds a patch note; the last one raises the minor version once the owner calls the feature complete.

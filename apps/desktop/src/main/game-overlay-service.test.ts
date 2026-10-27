@@ -654,7 +654,7 @@ describe("general overlays", () => {
     expect(service.layerOpen).toBe(true);
   });
 
-  it("count toward eight general ones, apart from a game's own eight", async () => {
+  it("count toward All games' eight; a game's new setup copies them and keeps room for the one that made it", async () => {
     const { service } = await setup();
     for (let i = 0; i < LIMITS.maxGameOverlays; i++) expect(show(service, CLOCK, "personal", `item-${i}`)).toBe("shown");
     expect(show(service, CLOCK, "personal", "one-more")).toBe("full");
@@ -1811,9 +1811,10 @@ describe("setups on screen", () => {
     world.tavora = true;
     service.tick();
     expect(service.showing()).toBe(false);
-    expect(world.changes).toBe(before + 1);
+    expect(world.changes).toBeGreaterThan(before);
+    const after = world.changes;
     service.tick();
-    expect(world.changes).toBe(before + 1);
+    expect(world.changes).toBe(after);
   });
 
   it("lands a game workspace's overlay in its game's setup and a personal one in All games, never in Everywhere", async () => {

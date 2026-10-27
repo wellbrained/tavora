@@ -492,6 +492,8 @@ describe("the move to setups", () => {
         store.convertLegacy("poe2", { width, height });
         const game = { x: 120, y: 40, width, height };
         expect(placeItem(store.find(subject("a"))!, game), `${width}x${height}`).toEqual(placeLegacy(normalizeLegacy(rel)!, game));
+        // Its save lands now, not over the next old file.
+        await store.save();
         await rm(path.join(dir, "backups"), { recursive: true, force: true });
       }
     }

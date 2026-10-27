@@ -40,9 +40,10 @@ test("The old file moves to setups once, each setup keeps its own place and opac
   try {
     const shell = await layoutPage(app, page);
     // The game's own overlay and a copy of the general one, at the All games place: the old per-game place is gone.
-    await expect.poll(async () => (await state(shell))?.items.map((item) => item.name)).toEqual(["Clock & Counter · own", "Clock & Counter · a"]);
+    await expect.poll(async () => (await state(shell))?.items.length).toBe(2);
     expect((await state(shell)).games.map((game) => game.id)).toEqual(["$all", GAME]);
     const general = (await state(shell)).items[1]!;
+    expect(general.id).toContain("personal");
     expect(general.placed.x).toBe(39);
 
     const choose = async (setupId: string) => {

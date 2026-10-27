@@ -602,8 +602,9 @@ export type OverlayLinkResult = "copied" | "off" | "denied";
 
 /**
  * What overlay.showOverGame did. `shown`: the overlay is over the game now (or already was). `off`: Game overlays are
- * off in Tavora; Tavora opened the setting so the user can turn them on. `full`: this game already has the most game
- * overlays it may have (LIMITS.maxGameOverlays); the user can remove one in Settings > Overlays.
+ * off in Tavora; Tavora opened the setting so the user can turn them on. `full`: the overlay setup it lands in (its
+ * game's, or All games from a personal workspace) already has the most items it may have (LIMITS.maxGameOverlays); the
+ * user can remove one in the Overlay layout.
  */
 export type GameOverlayResult = "shown" | "off" | "full";
 

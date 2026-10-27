@@ -1,17 +1,14 @@
 # Overlay layout
 
-The layout window applies changes immediately. Done closes it; undo and redo last until the window closes or the selected game changes.
+The layout window applies changes immediately. Done closes it; undo and redo last until the window closes or the selected setup changes. Step 2 of [overlay setups](overlay-setups.md) replaces this window with the Overlay page.
 
-## Shared and game-specific positions
+## Setups
 
-- All games contains only general overlays and panels, from personal workspaces.
-- A game contains its own items plus the general ones. General items follow All games until moved or resized there.
-- Customize for this game snapshots every general item's current position and size. General items added later also receive independent positions in customized games.
-- Follow All games again removes either one item's override or the whole game's overrides. Following one item returns the game to per-item customization; its other overrides remain.
-- Mode, opacity, hotkeys and Hide from capture belong to the item, not the game layout.
-- Moving a general item in the in-game layer writes the same per-game override as moving it on the canvas.
+The window edits one [overlay setup](overlay-setups.md) at a time; its Game dropdown lists All games, Everywhere (only while it has items) and every game setup. The per-game overrides of general positions (Customize for this game, Follow All games) are gone: an item in several setups has its own position and settings in each, so editing one setup never changes another. Hotkeys stay per item, one key for every setup it is in.
 
-`GameOverlayStore` keeps shared positions on the original items and game-specific positions in `game-overlays.json` under `layout.games`. The existing version-3 base positions remain readable by older versions; older versions do not understand or preserve the per-game overrides. Removing an item prunes its overrides; removing a game removes its layout. Undo restores inheritance as well as coordinates.
+- Game setups and All games are drawn in the game window's shape; Everywhere in the main screen's.
+- Moving an item in the in-game layer writes to the setup it shows from.
+- Removing an item takes it out of the chosen setup only; closing its panel or hiding the overlay from its module takes it out of every setup.
 
 ## Canvas and capture
 
@@ -26,5 +23,5 @@ Take picture requires both a running-game report and a window handle observed si
 ## Checks
 
 - Unit coverage: `game-overlays.test.ts`, `game-overlay-service.test.ts`, `overlay-layout.test.ts` and `layout-view.test.ts`.
-- Electron coverage: `pnpm --filter @tavora/desktop exec playwright test overlay-layout.spec.ts` exercises shared/per-game controls, opacity stills, mouse dragging/resizing, reset buttons and Done.
+- Electron coverage: `pnpm --filter @tavora/desktop exec playwright test overlay-layout.spec.ts` exercises the move from a version-4 file, per-setup places and opacity, opacity stills, mouse dragging/resizing, reset buttons and Done.
 - Real-game screenshot capture still needs a live-game check; hidden Electron tests cannot verify it.
