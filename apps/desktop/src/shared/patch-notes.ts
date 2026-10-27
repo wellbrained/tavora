@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.40",
+    date: "2026-10-27",
+    title: "Calculator values",
+    notes: [
+      "Save a result under a name with Save as… and tap it into your sums from the Values tab.",
+      "New keys in Plus: k, m and b for big numbers and ⌈x⌉ to round up.",
+    ],
+    prs: [
+      { number: 402, title: "Calculator 0.1.5: named values, k m b and round up" },
+    ],
+    tags: ["calculator"],
+  },
+  {
     version: "0.21.39",
     date: "2026-10-27",
     title: "Fairer ratings",
