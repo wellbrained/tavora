@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addGame, emptyLibrary, trashGame } from "./library";
+import { addWorkspace, emptyLibrary, trashWorkspace } from "./library";
 import { fetchSteamLibrary, importSteamGames, parseSteamGame, steamGameStatus } from "./steam-import";
 
 const day = new Date("2026-10-15T10:00:00Z");
@@ -21,15 +21,15 @@ describe("parseSteamGame", () => {
 describe("steamGameStatus", () => {
   it("finds a game by id, by appid and by name, and tells Trash apart", () => {
     const library = emptyLibrary();
-    addGame(library, { online: { id: "elden-ring", name: "Elden Ring", steamAppId: 1245620 } }, day);
-    addGame(library, { name: "Portal 2" }, day);
-    const hades = addGame(library, { name: "Hades", steamAppId: 1145360 }, day);
+    addWorkspace(library, { online: { id: "elden-ring", name: "Elden Ring", steamAppId: 1245620 } }, day);
+    addWorkspace(library, { name: "Portal 2" }, day);
+    const hades = addWorkspace(library, { name: "Hades", steamAppId: 1145360 }, day);
     expect(steamGameStatus(library, { appid: 1245620, name: "Elden Ring", id: "elden-ring" })).toBe("owned");
     expect(steamGameStatus(library, { appid: 1, name: "Whatever", id: "elden-ring" })).toBe("owned");
     expect(steamGameStatus(library, { appid: 620, name: "Portal® 2", id: null })).toBe("owned");
     expect(steamGameStatus(library, { appid: 1145360, name: "Hades (Steam)", id: null })).toBe("owned");
     expect(steamGameStatus(library, { appid: 7, name: "Celeste", id: "celeste" })).toBe("new");
-    trashGame(library, hades, day);
+    trashWorkspace(library, hades, day);
     expect(steamGameStatus(library, { appid: 1145360, name: "Hades", id: null })).toBe("trash");
   });
 });
@@ -37,7 +37,7 @@ describe("steamGameStatus", () => {
 describe("importSteamGames", () => {
   it("adds new games with their appid, skips owned ones and never adds twice", () => {
     const library = emptyLibrary();
-    addGame(library, { name: "Portal 2" }, day);
+    addWorkspace(library, { name: "Portal 2" }, day);
     const games = [
       { appid: 1245620, name: "Elden Ring", id: "elden-ring" },
       { appid: 620, name: "Portal 2", id: null },
@@ -46,8 +46,8 @@ describe("importSteamGames", () => {
     ];
     const added = importSteamGames(library, games, day);
     expect(added).toHaveLength(2);
-    expect(library.games["elden-ring"]).toMatchObject({ name: "Elden Ring", steamAppId: 1245620 });
-    const custom = library.games[added[1]!]!;
+    expect(library.workspaces["elden-ring"]).toMatchObject({ name: "Elden Ring", steamAppId: 1245620 });
+    const custom = library.workspaces[added[1]!]!;
     expect(custom).toMatchObject({ name: "Obscure Game", steamAppId: 999, catalogId: null });
     expect(custom.id.startsWith("local-")).toBe(true);
     expect(importSteamGames(library, games, day)).toEqual([]);

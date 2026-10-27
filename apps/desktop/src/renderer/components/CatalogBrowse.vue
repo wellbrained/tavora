@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The Catalog view of the module library: every module in Tavora's catalog, those for this game or personal
-// workspace first, the rest with the game they are for and Install greyed out. Cards like the installed
+// The Catalog view of the module library: every module in Tavora's catalog, those for this workspace
+// first, the rest with the game they are for and Install greyed out. Cards like the installed
 // ones; the main process fetches and checks the list and does the install (catalog-client.ts);
 // every text here is shown as plain text, and "by <name>" is only the developer name the service gave.
 // Report is on the module's page: it asks once more, then sends only the module id, its key and its zip's hash (C12).
@@ -77,12 +77,12 @@ watch(
 /** Why a module that doesn't fit here can't be installed or added, or null when it fits. */
 function whereFits(module: CatalogModuleView): string | null {
   if (module.fits) return null;
-  return module.forGames.length ? t("catalog.onlyFor", { games: module.forGames.join(", ") }) : t("catalog.notInWorkspaces");
+  return module.forGames.length ? t("catalog.onlyFor", { games: module.forGames.join(", ") }) : t("catalog.notInPersonal");
 }
 
 function fitLabel(module: CatalogModuleView): string {
   if (module.fits) return t("catalog.fits");
-  return module.forGames.length ? t("catalog.forGames", { games: module.forGames.join(", ") }) : t("catalog.notForWorkspaces");
+  return module.forGames.length ? t("catalog.forGames", { games: module.forGames.join(", ") }) : t("catalog.notForPersonal");
 }
 
 /** New until enough players rated it to show its stars. */

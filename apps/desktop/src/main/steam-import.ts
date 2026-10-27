@@ -2,7 +2,7 @@ import { isGameId } from "@tavora/module-schema";
 import type { SteamGameView, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { translate, type Language, type MessageKey } from "../shared/i18n";
 import { normalizeName } from "./launcher-games";
-import { addGame, type Library } from "./library";
+import { addWorkspace, type Library } from "./library";
 import { isSteamAppId } from "./steam-icons";
 
 export const MAX_PROFILE_LENGTH = 200;
@@ -17,9 +17,9 @@ const IMPORT_TIMEOUT_MS = 20_000;
  */
 export function steamGameStatus(library: Library, game: SteamImportGame): "new" | "owned" | "trash" {
   const name = normalizeName(game.name);
-  let found: Library["games"][string] | undefined = game.id ? library.games[game.id] : undefined;
+  let found: Library["workspaces"][string] | undefined = game.id ? library.workspaces[game.id] : undefined;
   if (!found) {
-    found = Object.values(library.games).find(
+    found = Object.values(library.workspaces).find(
       (own) => own.steamAppId === game.appid || (name !== "" && normalizeName(own.name) === name),
     );
   }
@@ -34,7 +34,7 @@ export function importSteamGames(library: Library, games: SteamImportGame[], now
     if (steamGameStatus(library, game) !== "new") continue;
     try {
       added.push(
-        addGame(library, game.id ? { online: { id: game.id, name: game.name, steamAppId: game.appid } } : { name: game.name, steamAppId: game.appid }, now),
+        addWorkspace(library, game.id ? { online: { id: game.id, name: game.name, steamAppId: game.appid } } : { name: game.name, steamAppId: game.appid }, now),
       );
     } catch {
       // A name that cannot be used is skipped; the rest still go in.

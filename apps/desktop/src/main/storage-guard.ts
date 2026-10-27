@@ -9,7 +9,7 @@ import path from "node:path";
 // while the panel is open and clears it when it grows past the limit. A module
 // can write for up to one check interval before it is stopped.
 
-/** How much a module may keep in its browser storage, per game. */
+/** How much a module may keep in its browser storage, per workspace. */
 export const MODULE_STORAGE_LIMIT = 256 * 1024 * 1024;
 /** How often an open module's storage is measured. */
 export const STORAGE_CHECK_MS = 1_000;

@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, readFile, rm, mkdir, open, symlink } from 'node:fs/
 import path from 'node:path';import { tmpdir } from 'node:os';
 import { ReadOnlyFiles,MAX_READ_ONLY_BYTES } from './read-only-files';
 import { serveReadOnlyFile } from './read-only-files-http';
-import { deleteModuleData,deleteModuleDataOf,listModuleData } from './gamedata';
+import { deleteModuleData,deleteModuleDataOf,listModuleData } from './module-data';
 const roots:string[]=[];
 afterEach(async()=>{for(const root of roots.splice(0))await rm(root,{recursive:true,force:true});});
 async function setup(){const root=await mkdtemp(path.join(tmpdir(),'tavora-picked-'));roots.push(root);const file=path.join(root,'world0.ksd');await writeFile(file,'first');const files=new ReadOnlyFiles(root,'local','local.test.map','enshrouded');return{root,file,files};}

@@ -1,4 +1,4 @@
-// The last results, newest first, kept in the game's module storage so every panel of the game shows them.
+// The last results, newest first, kept in the workspace's module storage so every panel of the workspace shows them.
 import type { JsonValue } from "@tavora/sdk";
 
 export type Calculation = {

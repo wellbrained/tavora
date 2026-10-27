@@ -4,9 +4,9 @@ import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
-import type { Capability, GameOverlayResult, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraGame, TavoraTheme, TavoraViewport } from "@tavora/sdk/protocol";
+import type { Capability, GameOverlayResult, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
-import { modulePartition } from "./gamedata";
+import { modulePartition } from "./module-data";
 import { gestureCounts, type Opacity } from "./game-overlays";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
@@ -44,7 +44,7 @@ export interface ModuleViewOptions {
   module: InstalledModule;
   /** The panel type this panel shows (its page comes from it), or null for a module without types. */
   panelType: ResolvedPanelType | null;
-  game: TavoraGame;
+  workspace: TavoraWorkspace;
   data: ModuleData;
   panelState: PanelStateStore;
   hostVersion: string;
@@ -95,7 +95,7 @@ export interface ModuleViewOptions {
   networkHosts(): ReadonlySet<string>;
   /** Connectors the player granted this module, as installed now; asked on every call. */
   connectors(): ReadonlySet<string>;
-  /** The module's settings shared by every game (storage.app). */
+  /** The module's settings shared by every workspace (storage.app). */
   appSettings: ModuleStore;
   /** The ai-usage connector, for a module granted it. */
   aiUsage: BridgeContext["aiUsage"];
@@ -107,7 +107,7 @@ export interface ModuleViewOptions {
   media: Pick<MediaConnector, "subscribe">;
   /** The discord connector, shared by every panel; this view uses it under its own instance id. */
   discord: Pick<DiscordConnector, "use" | "release" | "state" | "connectNow" | "allowControl" | "command" | "subscribe" | "unsubscribe" | "image">;
-  /** Overlays of this module in this game: Stream overlay links (granted the stream-overlay connector) and game overlays. */
+  /** Overlays of this module in this workspace: Stream overlay links (granted the stream-overlay connector) and game overlays. */
   overlay: {
     publish(key: string, state: JsonValue): void;
     remove(key: string): void;
@@ -121,7 +121,7 @@ export interface ModuleViewOptions {
     /** Opens the preview window of the overlay for `key`; throws INVALID_PARAMS for a module without an overlay page. */
     preview(key: string): Promise<void>;
   };
-  /** Hotkeys of this module in this game; `set` opens Tavora's hotkey dialog. */
+  /** Hotkeys of this module in this workspace; `set` opens Tavora's hotkey dialog. */
   hotkeys: { list(): HotkeyBinding[]; set(action: string, target: string, label: string): Promise<HotkeySetResult>; remove(target: string, action: string | null): void };
   /** Test runs only: hosts mapped to a local server (network.ts). */
   testHosts?: TestHosts;
@@ -139,7 +139,7 @@ export function moduleOrigin(moduleId: string): string {
 const hardened = new WeakSet<Session>();
 
 /**
- * When the player last clicked or pressed a key in a page of this session (one module in one game). The clipboard
+ * When the player last clicked or pressed a key in a page of this session (one module in one workspace). The clipboard
  * address is answered by the session, which cannot tell its panels apart, so this is kept per session; all of its
  * panels are the same module.
  */
@@ -186,11 +186,11 @@ export function documentsFolder(): string {
 }
 
 /**
- * Every module gets its own session per game: separate cookies, web storage,
+ * Every module gets its own session per workspace: separate cookies, web storage,
  * cache and a separate renderer process from the host and other modules.
  */
-function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobStore, files: Pick<ModuleViewOptions, "savePicture" | "saveJson" | "openJson">): Session {
-  const ses = session.fromPartition(modulePartition(module.owner, module.manifest.id, game.id));
+function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blobs: BlobStore, files: Pick<ModuleViewOptions, "savePicture" | "saveJson" | "openJson">): Session {
+  const ses = session.fromPartition(modulePartition(module.owner, module.manifest.id, workspace.id));
   if (hardened.has(ses)) return ses;
   hardened.add(ses);
 
@@ -202,7 +202,7 @@ function moduleSession(module: InstalledModule, game: TavoraGame, blobs: BlobSto
     // URL.origin is "null" for custom schemes in Node, so compare the host.
     const url = new URL(request.url);
     if (url.host !== module.manifest.id) return new Response("Not found", { status: 404 });
-    if (url.pathname.startsWith(READ_ONLY_FILE_PATH)) return serveReadOnlyFile(request,url.pathname.slice(READ_ONLY_FILE_PATH.length),new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,game.id));
+    if (url.pathname.startsWith(READ_ONLY_FILE_PATH)) return serveReadOnlyFile(request,url.pathname.slice(READ_ONLY_FILE_PATH.length),new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id));
     if (url.pathname.startsWith(BLOB_PATH)) return serveBlobs(blobs, request, url);
     if (url.pathname === CLIPBOARD_PATH) {
       const gesture = gestureOf(ses);
@@ -283,7 +283,7 @@ const GESTURE_LATE_MS = 250;
 /** Corner radius of a panel card in the host UI (dock.css), in px. */
 const PANEL_RADIUS = 10;
 
-/** One panel instance of a module, bound to one game. */
+/** One panel instance of a module, bound to one workspace. */
 export class ModuleView {
   readonly view: WebContentsView;
   private bridge: BridgeSession | undefined;
@@ -315,10 +315,10 @@ export class ModuleView {
   private readonly navigations = new Map<number, (outcome: NavigateOutcome) => void>();
 
   constructor(private readonly options: ModuleViewOptions) {
-    const { module, game } = options;
+    const { module, workspace } = options;
     this.view = new WebContentsView({
       webPreferences: {
-        session: moduleSession(module, game, options.data.blobs, {
+        session: moduleSession(module, workspace, options.data.blobs, {
           savePicture: (png, name) => options.savePicture(png, name),
           saveJson: (data, name) => options.saveJson(data, name),
           openJson: () => options.openJson(),
@@ -555,7 +555,7 @@ export class ModuleView {
   connect(): void {
     this.disconnect();
     const { port1, port2 } = new MessageChannelMain();
-    const { module, game, instanceId, data, panelState, hostVersion } = this.options;
+    const { module, workspace, instanceId, data, panelState, hostVersion } = this.options;
     const pageImports = new AbortController();
     const bridge: BridgeSession = new BridgeSession(
       port1,
@@ -586,7 +586,7 @@ export class ModuleView {
           this.options.setMaximized(maximized);
         },
         setLive: (state) => this.options.setLive(state),
-        game,
+        workspace,
         data,
         panelState,
         appSettings: this.options.appSettings,
@@ -631,9 +631,9 @@ export class ModuleView {
             await this.takeGesture('files.pickReadOnly');
             const selected = await this.options.pickReadOnlyFile?.(extensions);
             if (!selected || this.bridge !== bridge) return null;
-            return new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,game.id).remember(selected,()=>this.bridge===bridge);
+            return new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).remember(selected,()=>this.bridge===bridge);
           },
-          forget: id => new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,game.id).forget(id),
+          forget: id => new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).forget(id),
         },
         showMenu: async (menu) => {
           // One click opens one menu, so a page cannot keep menus coming on its own.
@@ -830,7 +830,7 @@ export class ModuleView {
     };
   }
 
-  /** The player pressed a hotkey set for this module in this game. */
+  /** The player pressed a hotkey set for this module in this workspace. */
   hotkeyPressed(binding: HotkeyBinding): void {
     this.hotkeyAt = Date.now();
     this.bridge?.emit("hotkeys.pressed", { ...binding });
@@ -897,7 +897,7 @@ export class ModuleView {
         }
         resolve();
       };
-      // Shows up in Settings > Diagnostic info, so a panel that keeps a game's cover up that long can be found.
+      // Shows up in Settings > Diagnostic info, so a panel that keeps a workspace's cover up that long can be found.
       const timer = setTimeout(() => {
         if (!contents.isDestroyed()) {
           const { width, height } = this.view.getBounds();
@@ -906,7 +906,7 @@ export class ModuleView {
         done();
       }, DRAW_CAP_MS);
       this.frameWaiters.set(requestId, done);
-      // Chromium counts a page under another view (the game's loading cover) as hidden, and a hidden page does not
+      // Chromium counts a page under another view (the workspace's loading cover) as hidden, and a hidden page does not
       // draw: until this frame, the page counts as shown wherever it lies.
       contents.setBackgroundThrottling(false);
       contents.send("tavora:frame", requestId);
@@ -972,7 +972,7 @@ export class ModuleView {
     void this.applyGameOpacity();
   }
 
-  /** Scales the panel with the game window's height. A style, not the page's zoom: that is shared with the module's other panels of this game. */
+  /** Scales the panel with the game window's height. A style, not the page's zoom: that is shared with the module's other panels of this workspace. */
   setGameZoom(factor: number): void {
     const away = this.overGame;
     if (!away || away.zoom === factor) return;

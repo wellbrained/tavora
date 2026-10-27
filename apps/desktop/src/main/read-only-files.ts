@@ -25,7 +25,7 @@ export class ReadOnlyFiles {
     try {
       const value = JSON.parse(await readFile(path.join(path.dirname(this.file), 'picker.json'), 'utf8'));
       if (typeof value.directory === 'string' && path.isAbsolute(value.directory) && (await stat(value.directory)).isDirectory()) return value.directory;
-    } catch { /* Missing or stale hints fall back to the game folder. */ }
+    } catch { /* Missing or stale hints fall back to the folders of this workspace's files. */ }
     const entries = await this.entries().catch(() => ({} as Record<string, Entry>));
     for (const entry of Object.values(entries).reverse()) {
       const directory = path.dirname(entry.path);

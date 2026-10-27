@@ -8,7 +8,7 @@ import {
   launch,
   newUserData,
   noteText,
-  openGame,
+  openWorkspace,
   openModule,
   panels,
   setContentSize,
@@ -23,7 +23,7 @@ const exists = (file: string) =>
   );
 
 async function fromMenu(page: Page, gameId: string, ...items: string[]) {
-  await page.getByTestId(`rail-game-${gameId}`).click({ button: "right" });
+  await page.getByTestId(`rail-workspace-${gameId}`).click({ button: "right" });
   // Closed menus can linger while they animate out, so only look in open ones.
   for (const item of items) await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
 }
@@ -37,7 +37,7 @@ async function answerPrompt(page: Page, value: string) {
 /** Opens a game, adds the vanilla module and saves a note in it. */
 async function noteIn(running: Awaited<ReturnType<typeof launch>>, gameId: string, text: string) {
   const { app, page } = running;
-  await openGame(page, gameId);
+  await openWorkspace(page, gameId);
   await openModule(page, VANILLA);
   await expectModuleText(app, VANILLA, "status", "Connected");
   await saveNote(app, VANILLA, text);
@@ -78,7 +78,7 @@ test("players add games from the built-in list or by name", async () => {
   await page.getByTestId("game-search").fill("elden");
   await page.getByTestId("catalog-elden-ring").click();
   // A new game opens straight away, with an empty workspace.
-  await expect(page.getByTestId("rail-game-elden-ring")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("rail-workspace-elden-ring")).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("workspace")).toContainText("Elden Ring");
   await expect(page.getByTestId("empty-workspace")).toBeVisible();
 
@@ -88,27 +88,27 @@ test("players add games from the built-in list or by name", async () => {
   await expect(page.getByTestId("catalog-elden-ring")).toHaveCount(0);
   await page.getByTestId("game-search").fill("My Indie Game");
   await page.getByTestId("add-custom").click();
-  await expect(page.getByTestId("rail-game-local-my-indie-game")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByTestId("rail-game-local-my-indie-game")).toContainText("MIG");
+  await expect(page.getByTestId("rail-workspace-local-my-indie-game")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("rail-workspace-local-my-indie-game")).toContainText("MIG");
   await running.app.close();
 
   const again = await launch(userData);
   // Starts on the last game played.
-  await expect(again.page.getByTestId("rail-game-local-my-indie-game")).toHaveAttribute("aria-current", "page");
-  await expect(again.page.getByTestId("rail-game-elden-ring")).toBeVisible();
+  await expect(again.page.getByTestId("rail-workspace-local-my-indie-game")).toHaveAttribute("aria-current", "page");
+  await expect(again.page.getByTestId("rail-workspace-elden-ring")).toBeVisible();
   await again.app.close();
 });
 
-test("games are renamed, favorited and put in folders from their menu", async () => {
+test("workspaces are renamed, favorited and put in folders from their menu", async () => {
   const { app, page, userData } = await launch();
 
   await fromMenu(page, "satisfactory", "menu-rename");
   await answerPrompt(page, "Satisfactory 1.0");
-  await expect(page.getByTestId("rail-game-satisfactory")).toHaveAttribute("aria-label", "Satisfactory 1.0");
+  await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveAttribute("aria-label", "Satisfactory 1.0");
 
   await fromMenu(page, "satisfactory", "menu-icon", "menu-icon-label");
   await answerPrompt(page, "SF");
-  await expect(page.getByTestId("rail-game-satisfactory")).toContainText("SF");
+  await expect(page.getByTestId("rail-workspace-satisfactory")).toContainText("SF");
 
   await fromMenu(page, "poe2", "menu-favorite");
   await expect(page.getByTestId("rail-favorite-poe2")).toBeVisible();
@@ -123,25 +123,25 @@ test("games are renamed, favorited and put in folders from their menu", async ()
   const folder = page.locator('[data-testid^="rail-folder-"][data-testid$="-toggle"]');
   await expect(folder).toHaveAttribute("aria-label", "Folder Builders");
   // Folders start closed; their games show when opened.
-  await expect(page.getByTestId("rail-game-satisfactory")).toHaveCount(0);
+  await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveCount(0);
   await folder.click();
-  await expect(page.getByTestId("rail-game-satisfactory")).toBeVisible();
+  await expect(page.getByTestId("rail-workspace-satisfactory")).toBeVisible();
   await app.close();
 
   // All of it is saved.
   const again = await launch(userData);
   await expect(again.page.getByTestId("rail-favorite-poe2")).toBeVisible();
   await again.page.locator('[data-testid^="rail-folder-"][data-testid$="-toggle"]').click();
-  await expect(again.page.getByTestId("rail-game-satisfactory")).toHaveAttribute("aria-label", "Satisfactory 1.0");
+  await expect(again.page.getByTestId("rail-workspace-satisfactory")).toHaveAttribute("aria-label", "Satisfactory 1.0");
 
   await fromMenu(again.page, "satisfactory", "menu-unfolder");
   // The folder stays, now empty.
   await expect(again.page.locator('[data-testid^="rail-folder-"][data-testid$="-toggle"]')).toHaveCount(1);
-  await expect(again.page.getByTestId("rail-game-satisfactory")).toBeVisible();
+  await expect(again.page.getByTestId("rail-workspace-satisfactory")).toBeVisible();
   await again.app.close();
 });
 
-test("dropping a game on a folder leaves the folder open or closed as it was", async () => {
+test("dropping a workspace on a folder leaves the folder open or closed as it was", async () => {
   const { app, page } = await launch();
   await fromMenu(page, "satisfactory", "menu-move-to-folder", "menu-new-folder");
   await answerPrompt(page, "Builders");
@@ -153,7 +153,7 @@ test("dropping a game on a folder leaves the folder open or closed as it was", a
     const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
     // The folder's draggable row takes the drops, not the button inside it.
     const row = folder.locator("xpath=ancestor::div[@draggable='true'][1]");
-    await page.getByTestId(`rail-game-${gameId}`).dispatchEvent("dragstart", { dataTransfer });
+    await page.getByTestId(`rail-workspace-${gameId}`).dispatchEvent("dragstart", { dataTransfer });
     // The rail shifts once a drag starts, so the folder is measured after that.
     await page.waitForTimeout(100);
     const box = (await row.boundingBox())!;
@@ -178,37 +178,37 @@ test("dropping a game on a folder leaves the folder open or closed as it was", a
   await folder.click();
   await expect(folder).toHaveAttribute("aria-expanded", "true");
   const inside = page.getByRole("group", { name: "Builders" });
-  await expect(inside.getByTestId("rail-game-poe2")).toBeVisible();
-  await expect(inside.getByTestId("rail-game-satisfactory")).toBeVisible();
+  await expect(inside.getByTestId("rail-workspace-poe2")).toBeVisible();
+  await expect(inside.getByTestId("rail-workspace-satisfactory")).toBeVisible();
   await app.close();
 });
 
-test("games can be reordered by dragging them on the rail", async () => {
+test("workspaces can be reordered by dragging them on the rail", async () => {
   const { app, page } = await launch();
   const order = () =>
-    page.locator('[data-testid="rail"] [data-testid^="rail-game-"]').evaluateAll((items) => items.map((item) => item.getAttribute("data-testid")));
-  expect(await order()).toEqual(["rail-game-poe2", "rail-game-satisfactory"]);
+    page.locator('[data-testid="rail"] [data-testid^="rail-workspace-"]').evaluateAll((items) => items.map((item) => item.getAttribute("data-testid")));
+  expect(await order()).toEqual(["rail-workspace-poe2", "rail-workspace-satisfactory"]);
   // Playwright's mouse drag does not drive HTML drag and drop in Electron,
   // so the drag events are sent directly, as the browser would.
   const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
-  const target = (await page.getByTestId("rail-game-poe2").boundingBox())!;
+  const target = (await page.getByTestId("rail-workspace-poe2").boundingBox())!;
   const at = { dataTransfer, clientX: target.x + 24, clientY: target.y + 2 };
-  await page.getByTestId("rail-game-satisfactory").dispatchEvent("dragstart", { dataTransfer });
-  await page.getByTestId("rail-game-poe2").dispatchEvent("dragover", at);
-  await page.getByTestId("rail-game-poe2").dispatchEvent("drop", at);
-  await page.getByTestId("rail-game-satisfactory").dispatchEvent("dragend", { dataTransfer });
-  await expect.poll(order).toEqual(["rail-game-satisfactory", "rail-game-poe2"]);
+  await page.getByTestId("rail-workspace-satisfactory").dispatchEvent("dragstart", { dataTransfer });
+  await page.getByTestId("rail-workspace-poe2").dispatchEvent("dragover", at);
+  await page.getByTestId("rail-workspace-poe2").dispatchEvent("drop", at);
+  await page.getByTestId("rail-workspace-satisfactory").dispatchEvent("dragend", { dataTransfer });
+  await expect.poll(order).toEqual(["rail-workspace-satisfactory", "rail-workspace-poe2"]);
   await app.close();
 });
 
-test("a removed game keeps its data in Trash and comes back when restored", async () => {
+test("a removed workspace keeps its data in Trash and comes back when restored", async () => {
   const running = await launch();
   const { app, page } = running;
   await noteIn(running, "satisfactory", "factory plans");
 
   await fromMenu(page, "satisfactory", "menu-remove");
   await page.getByTestId("confirm-submit").click();
-  await expect(page.getByTestId("rail-game-satisfactory")).toHaveCount(0);
+  await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveCount(0);
   await expect(page.getByTestId("welcome")).toBeVisible();
   await expect(panels(page)).toHaveCount(0);
 
@@ -221,36 +221,36 @@ test("a removed game keeps its data in Trash and comes back when restored", asyn
   await expect(page.getByTestId("settings")).toHaveCount(0);
 
   // Its workspace and module data are back as they were.
-  await openGame(page, "satisfactory");
+  await openWorkspace(page, "satisfactory");
   await expect(panels(page, VANILLA)).toHaveCount(1);
   await expectModuleText(app, VANILLA, "status", "Connected");
   await expect.poll(() => noteText(app, VANILLA)).toBe("factory plans");
   await app.close();
 });
 
-test("many games are moved to Trash, restored and deleted together from Settings", async () => {
+test("many workspaces are moved to Trash, restored and deleted together from Settings", async () => {
   const { app, page } = await launch();
-  await fromMenu(page, "poe2", "menu-manage-games");
-  await expect(page.getByTestId("settings-heading")).toHaveText("Games");
+  await fromMenu(page, "poe2", "menu-manage-workspaces");
+  await expect(page.getByTestId("settings-heading")).toHaveText("Workspaces");
 
   // A filter narrows what Select all ticks.
-  await page.getByTestId("games-filter").fill("path");
-  await page.getByTestId("games-select-all").check();
-  await expect(page.getByTestId("games-selected")).toHaveText("1 selected");
-  await page.getByTestId("games-filter").fill("");
-  await page.getByTestId("games-select-all").check();
-  await expect(page.getByTestId("games-selected")).toHaveText("2 selected");
-  await page.getByTestId("games-remove").click();
+  await page.getByTestId("workspaces-filter").fill("path");
+  await page.getByTestId("workspaces-select-all").check();
+  await expect(page.getByTestId("workspaces-selected")).toHaveText("1 selected");
+  await page.getByTestId("workspaces-filter").fill("");
+  await page.getByTestId("workspaces-select-all").check();
+  await expect(page.getByTestId("workspaces-selected")).toHaveText("2 selected");
+  await page.getByTestId("workspaces-remove").click();
   await page.getByTestId("confirm-submit").click();
-  await expect(page.getByTestId("games-empty")).toBeVisible();
-  await expect(page.getByTestId("rail-game-poe2")).toHaveCount(0);
-  await expect(page.getByTestId("rail-game-satisfactory")).toHaveCount(0);
+  await expect(page.getByTestId("workspaces-empty")).toBeVisible();
+  await expect(page.getByTestId("rail-workspace-poe2")).toHaveCount(0);
+  await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveCount(0);
 
   await page.getByTestId("settings-nav-trash").click();
   await page.getByTestId("trash-tick-poe2").check();
   await page.getByTestId("trash-restore-selected").click();
   await expect(page.getByTestId("trash-poe2")).toHaveCount(0);
-  await expect(page.getByTestId("rail-game-poe2")).toHaveCount(1);
+  await expect(page.getByTestId("rail-workspace-poe2")).toHaveCount(1);
 
   await page.getByTestId("trash-select-all").check();
   await page.getByTestId("trash-delete-selected").click();
@@ -259,7 +259,7 @@ test("many games are moved to Trash, restored and deleted together from Settings
   await app.close();
 });
 
-test("a game in Trash is deleted for good after 30 days or when the player says so", async () => {
+test("a workspace in Trash is deleted for good after 30 days or when the player says so", async () => {
   const userData = await newUserData();
   const running = await launch(userData);
   const { page } = running;
@@ -290,7 +290,7 @@ test("a game in Trash is deleted for good after 30 days or when the player says 
   // Thirty-one days later.
   const libraryFile = path.join(userData, "library.json");
   const library = JSON.parse(await readFile(libraryFile, "utf8"));
-  library.games.satisfactory.trashedAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+  library.workspaces.satisfactory.trashedAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
   await writeFile(libraryFile, JSON.stringify(library));
 
   const again = await launch(userData);
@@ -320,7 +320,7 @@ test("the rail remembers whether it is expanded and how wide it is", async () =>
 
   await page.getByTestId("rail-toggle").click();
   await expect(rail).toHaveAttribute("data-expanded", "true");
-  await expect(page.getByTestId("rail-game-poe2")).toContainText("Path of Exile 2");
+  await expect(page.getByTestId("rail-workspace-poe2")).toContainText("Path of Exile 2");
   await page.getByTestId("rail-resize").focus();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
@@ -356,9 +356,9 @@ test("an expanded rail turns compact in a narrow window and comes back when it w
   expect(saved.rail.expanded).toBe(true);
 });
 
-test("Tavora starts on Home or on the last game, as chosen in Settings", async () => {
+test("Tavora starts on Home or on the last workspace, as chosen in Settings", async () => {
   const { app, page, userData } = await launch();
-  await expect(page.getByTestId("rail-game-poe2")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("rail-workspace-poe2")).toHaveAttribute("aria-current", "page");
 
   // Settings opens over the game, which stays where it was.
   await page.getByTestId("rail-settings").click();
@@ -366,7 +366,7 @@ test("Tavora starts on Home or on the last game, as chosen in Settings", async (
   await expect(page.getByTestId("startup-welcome")).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("settings")).toHaveCount(0);
-  await expect(page.getByTestId("rail-game-poe2")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("rail-workspace-poe2")).toHaveAttribute("aria-current", "page");
   await app.close();
 
   const again = await launch(userData);

@@ -1,19 +1,20 @@
 import { mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { isGameId, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
+import { isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
+import { isWorkspaceId } from "./workspace-id";
 import { writeFileAtomic } from "./fsutil";
 import { defaultFilesRoot } from "./module-files";
 import { OFFICIAL_PREFIX } from "./registry";
 import { APP_DATA_DIR } from "./storage";
 
 /**
- * The browser session of one module in one game. The owner is part of the
+ * The browser session of one module in one workspace. The owner is part of the
  * name, so a module from another publisher with the same id gets storage of
  * its own (S5). Electron names the directory after the partition with ":"
  * escaped, so no "/" may appear in it (that would nest directories).
  */
-export function modulePartition(owner: string, moduleId: string, gameId: string): string {
-  return `persist:module:${owner}:${moduleId}@${gameId}`;
+export function modulePartition(owner: string, moduleId: string, workspaceId: string): string {
+  return `persist:module:${owner}:${moduleId}@${workspaceId}`;
 }
 
 /** Electron's directory name for a `persist:` partition, as it writes it on disk. */
@@ -22,7 +23,7 @@ export function partitionDirName(partition: string): string {
 }
 
 /**
- * The folders modules keep data in, each laid out `<owner>/<module>/<game>`:
+ * The folders modules keep data in, each laid out `<owner>/<module>/<workspace>`:
  * settings and documents, and files (pictures, see blobs.ts). The files can
  * sit in a folder the player chose (module-files.ts); callers pass it.
  */
@@ -31,25 +32,25 @@ function dataRoots(userData: string, blobRoot = defaultFilesRoot(userData)): str
 }
 
 /**
- * Deletes what modules stored on disk for one game: settings, documents and
+ * Deletes what modules stored on disk for one workspace: settings, documents and
  * files of every module of every owner, installed or not. Web storage in each
  * module's browser session is cleared separately by the host.
  */
-export async function deleteModuleData(userData: string, gameId: string, blobRoot?: string): Promise<void> {
-  if (!isGameId(gameId)) throw new Error("invalid game id");
+export async function deleteModuleData(userData: string, workspaceId: string, blobRoot?: string): Promise<void> {
+  if (!isWorkspaceId(workspaceId)) throw new Error("invalid workspace id");
   for (const root of [...dataRoots(userData, blobRoot), path.join(userData, 'read-only-files')]) {
     for (const owner of await readdir(root).catch(() => [] as string[])) {
       const modules = await readdir(path.join(root, owner)).catch(() => [] as string[]);
-      await Promise.all(modules.map((module) => rm(path.join(root, owner, module, gameId), { recursive: true, force: true })));
+      await Promise.all(modules.map((module) => rm(path.join(root, owner, module, workspaceId), { recursive: true, force: true })));
     }
   }
 }
 
 /**
  * Electron keeps each module's browser storage in a partition directory
- * named after `persist:module:<owner>:<module>@<game>` (in older versions
- * `persist:module:<module>@<game>`, see migrateModuleData), and each game's Browser storage in
- * `persist:browser@<game>`. Returns the partition directories whose game is
+ * named after `persist:module:<owner>:<module>@<workspace>` (in older versions
+ * `persist:module:<module>@<workspace>`, see migrateModuleData), and each workspace's Browser storage in
+ * `persist:browser@<workspace>`. Returns the partition directories whose workspace is
  * not in `keep`, so they can be deleted at startup before any session for
  * them is opened.
  */
@@ -99,18 +100,18 @@ export async function migrateModuleData(userData: string, log: (line: string) =>
   const partitions = path.join(userData, "Partitions");
   for (const name of await readdir(partitions).catch(() => [] as string[])) {
     const match = /^module:([a-z0-9.-]+)@([a-z0-9-]+)$/.exec(safeDecode(name));
-    if (!match || !isModuleId(match[1]) || !isGameId(match[2])) continue;
-    const [, moduleId, gameId] = match as unknown as [string, string, string];
-    const target = path.join(partitions, partitionDirName(modulePartition(ownerOf(moduleId), moduleId, gameId)));
+    if (!match || !isModuleId(match[1]) || !isWorkspaceId(match[2])) continue;
+    const [, moduleId, workspaceId] = match as unknown as [string, string, string];
+    const target = path.join(partitions, partitionDirName(modulePartition(ownerOf(moduleId), moduleId, workspaceId)));
     if (await exists(target)) {
-      log(`browser storage of ${moduleId} in ${gameId} is already under its owner; the old one stays`);
+      log(`browser storage of ${moduleId} in ${workspaceId} is already under its owner; the old one stays`);
       continue;
     }
     await rename(path.join(partitions, name), target);
   }
 }
 
-/** Every (owner, module) that has settings, documents or files saved, in any game. */
+/** Every (owner, module) that has settings, documents or files saved, in any workspace. */
 export async function listModuleData(userData: string, blobRoot?: string): Promise<{ owner: string; moduleId: string }[]> {
   const found = new Map<string, { owner: string; moduleId: string }>();
   for (const root of [...dataRoots(userData, blobRoot), path.join(userData, 'read-only-files')]) {
@@ -125,7 +126,7 @@ export async function listModuleData(userData: string, blobRoot?: string): Promi
 }
 
 /**
- * Deletes the settings, documents and files one owner's module saved, in every game,
+ * Deletes the settings, documents and files one owner's module saved, in every workspace,
  * and answers with the browser sessions it had, for the host to clear (their
  * folders go with the next start's cleanup, see applyPending).
  */
@@ -183,7 +184,7 @@ export async function queueLocalDataMove(userData: string, moduleId: string, to:
 
 /**
  * Carries out what was queued, before any module session or store opens:
- * local data moves to the signed owner game by game (a game where the signed
+ * local data moves to the signed owner workspace by workspace (a workspace where the signed
  * module already saved something keeps its own data, and the local copy stays),
  * and deleted modules' browser storage folders go.
  */
@@ -193,23 +194,23 @@ async function applyPending(userData: string, log: (line: string) => void, blobR
   for (const { moduleId, to } of pending.moves ?? []) {
     for (const root of dataRoots(userData, blobRoot)) {
       const from = path.join(root, LOCAL_OWNER, moduleId);
-      for (const game of await readdir(from).catch(() => [] as string[])) {
-        // The settings shared by every game (storage.app) move like a game's.
-        if (!isGameId(game) && game !== APP_DATA_DIR) continue;
-        const target = path.join(root, to, moduleId, game);
+      for (const workspace of await readdir(from).catch(() => [] as string[])) {
+        // The settings shared by every workspace (storage.app) move like a workspace's.
+        if (!isWorkspaceId(workspace) && workspace !== APP_DATA_DIR) continue;
+        const target = path.join(root, to, moduleId, workspace);
         if (await exists(target)) {
-          log(`${moduleId} already has data in ${game}; its local data there stays`);
+          log(`${moduleId} already has data in ${workspace}; its local data there stays`);
           continue;
         }
         await mkdir(path.dirname(target), { recursive: true });
-        await rename(path.join(from, game), target);
+        await rename(path.join(from, workspace), target);
       }
-      // Gone unless a game kept its local data.
+      // Gone unless a workspace kept its local data.
       await rmdir(from).catch(() => undefined);
     }
     for (const name of await readdir(partitions).catch(() => [] as string[])) {
       const match = /^module:local:([a-z0-9.-]+)@([a-z0-9-]+)$/.exec(safeDecode(name));
-      if (!match || match[1] !== moduleId || !isGameId(match[2])) continue;
+      if (!match || match[1] !== moduleId || !isWorkspaceId(match[2])) continue;
       const target = path.join(partitions, partitionDirName(modulePartition(to, moduleId, match[2])));
       if (!(await exists(target))) await rename(path.join(partitions, name), target);
     }

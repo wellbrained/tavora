@@ -28,6 +28,9 @@ export type Field<T> = (value: unknown) => T | Bad;
 
 /** The checks only the main process can make. */
 export interface HostChecks {
+  /** A workspace's id (a game workspace's is its game's). */
+  workspaceId: Field<string>;
+  /** A game's id, as the built-in list or the Tavora service gives it. */
   gameId: Field<string>;
   moduleId: Field<string>;
   ownerId: Field<string>;
@@ -121,9 +124,9 @@ type Spec = Shape | readonly Shape[];
 const variants = <const S extends readonly Shape[]>(...shapes: S): S => shapes;
 
 export function hostActionTable(c: HostChecks) {
-  const games = (max: number) => list(c.gameId, { min: 1, max, unique: true });
-  /** Most games one action may move to Trash, restore or delete; as many as a Steam import adds. */
-  const bulkGames = games(c.maxImportGames);
+  const workspaces = (max: number) => list(c.workspaceId, { min: 1, max, unique: true });
+  /** Most workspaces one action may move to Trash, restore or delete; as many as a Steam import adds. */
+  const bulkWorkspaces = workspaces(c.maxImportGames);
   const onlineGame: Field<OnlineGame> = (value) => {
     if (typeof value !== "object" || value === null) return BAD;
     const game = value as Record<string, unknown>;
@@ -159,7 +162,7 @@ export function hostActionTable(c: HostChecks) {
     "restart-to-update": {},
     /** How long the screen took to show something the player asked for, measured where it is drawn. */
     "record-timing": {
-      name: oneOf("game-switch"),
+      name: oneOf("workspace-switch"),
       ms: check<number>((value) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 600_000),
     },
     /** Puts the version, system, timings, update log and last errors on the clipboard, to paste to whoever is helping. */
@@ -168,34 +171,36 @@ export function hostActionTable(c: HostChecks) {
     "open-backups": {},
 
     // Library
-    "open-game": { gameId: c.gameId },
-    "add-game": variants(
+    "open-workspace": { workspaceId: c.workspaceId },
+    /** A game workspace (a built-in game, a game added by name, or one found online), or a personal workspace. */
+    "add-workspace": variants(
       { catalogId: c.gameId },
       { name: text() },
-      { workspace: text() },
+      { personal: text() },
       /** A game found by the online search. */
       { online: onlineGame },
     ),
-    "rename-game": { gameId: c.gameId, name: text() },
-    "set-game-label": { gameId: c.gameId, label },
-    "choose-game-image": { gameId: c.gameId },
-    "use-original-icon": { gameId: c.gameId },
-    "share-icons": { gameIds: games(MAX_SHARE_BATCH) },
+    "rename-workspace": { workspaceId: c.workspaceId, name: text() },
+    "set-workspace-label": { workspaceId: c.workspaceId, label },
+    "choose-workspace-image": { workspaceId: c.workspaceId },
+    "use-original-icon": { workspaceId: c.workspaceId },
+    /** Offers the icons of these game workspaces' games. */
+    "share-icons": { workspaceIds: workspaces(MAX_SHARE_BATCH) },
     /** Offers the icons of games from the last Steam import look-up that are not in the library (prepared by steamShareIcons). */
     "share-steam-icons": { appids: list(c.steamAppId, { min: 1, max: MAX_SHARE_BATCH, unique: true }) },
     /** Adds the chosen games of a Steam library that the player does not have yet. */
     "import-steam-games": { games: list(c.steamGame, { min: 1, max: c.maxImportGames }) },
-    "trash-game": { gameId: c.gameId },
-    "restore-game": { gameId: c.gameId },
-    "delete-game": { gameId: c.gameId },
-    /** The same for many games at once, from Settings > Games and Trash. */
-    "trash-games": { gameIds: bulkGames },
-    "restore-games": { gameIds: bulkGames },
-    "delete-games": { gameIds: bulkGames },
-    favorite: { gameId: c.gameId, index: optional(position) },
-    unfavorite: { gameId: c.gameId },
-    "move-game": { gameId: c.gameId, folderId: nullable(c.uuid), index: optional(position) },
-    "create-folder": { name: text(), gameIds: list(c.gameId, { max: 1000 }) },
+    "trash-workspace": { workspaceId: c.workspaceId },
+    "restore-workspace": { workspaceId: c.workspaceId },
+    "delete-workspace": { workspaceId: c.workspaceId },
+    /** The same for many workspaces at once, from Settings > Workspaces and Trash. */
+    "trash-workspaces": { workspaceIds: bulkWorkspaces },
+    "restore-workspaces": { workspaceIds: bulkWorkspaces },
+    "delete-workspaces": { workspaceIds: bulkWorkspaces },
+    favorite: { workspaceId: c.workspaceId, index: optional(position) },
+    unfavorite: { workspaceId: c.workspaceId },
+    "move-workspace": { workspaceId: c.workspaceId, folderId: nullable(c.uuid), index: optional(position) },
+    "create-folder": { name: text(), workspaceIds: list(c.workspaceId, { max: 1000 }) },
     "rename-folder": { folderId: c.uuid, name: text() },
     "set-folder-label": { folderId: c.uuid, label },
     "delete-folder": { folderId: c.uuid },
@@ -203,10 +208,10 @@ export function hostActionTable(c: HostChecks) {
 
     // Settings
     "set-sort": { sort: oneOf("recent", "manual") },
-    "set-startup": { startup: oneOf("welcome", "last-game") },
+    "set-startup": { startup: oneOf("welcome", "last-workspace") },
     "set-game-start": { gameStart: c.gameStart },
-    /** A personal workspace's id, or null to stay on the game. */
-    "set-game-end": { workspaceId: nullable(c.gameId) },
+    /** A personal workspace's id, or null to stay where the player is. */
+    "set-game-end": { workspaceId: nullable(c.workspaceId) },
     "set-grayscale-text": { enabled: bool },
     "set-online-search": { enabled: bool },
     "set-auto-update": { enabled: bool },
@@ -234,7 +239,7 @@ export function hostActionTable(c: HostChecks) {
     "set-game-overlay": {
       owner: c.ownerId,
       moduleId: c.moduleId,
-      gameId: c.gameId,
+      workspaceId: c.workspaceId,
       key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/),
       mode: optional(oneOf("always", "toggle")),
       opacity: optional(check<100 | 75 | 50 | 25>((value) => value === 100 || value === 75 || value === 50 || value === 25)),
@@ -248,19 +253,19 @@ export function hostActionTable(c: HostChecks) {
       hideFromCapture: optional(bool),
     },
     /** Removes one game overlay, and its key. */
-    "remove-game-overlay": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
-    /** Opens the hotkey dialog for the layer key (without gameId, owner, moduleId and key) or for one overlay's toggle key. */
-    "set-overlay-key": { gameId: optional(c.gameId), owner: optional(c.ownerId), moduleId: optional(c.moduleId), key: optional(matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)) },
+    "remove-game-overlay": { owner: c.ownerId, moduleId: c.moduleId, workspaceId: c.workspaceId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
+    /** Opens the hotkey dialog for the layer key (without workspaceId, owner, moduleId and key) or for one overlay's toggle key. */
+    "set-overlay-key": { workspaceId: optional(c.workspaceId), owner: optional(c.ownerId), moduleId: optional(c.moduleId), key: optional(matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)) },
     /** Opens the Overlay layout window (Settings > Overlays, a panel's menu), on a game when it is given, else on the last one. */
     "open-overlay-layout": { gameId: optional(c.gameId) },
     /** "Hide all for now" in Settings > Overlays, and "Show again": until Tavora starts again. */
     "set-game-overlays-hidden": { hidden: bool },
     /** Opens the preview window of an overlay (Settings > Overlays, Settings > Streaming). */
-    "preview-overlay": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
+    "preview-overlay": { owner: c.ownerId, moduleId: c.moduleId, workspaceId: c.workspaceId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     /** The answer in the consent dialog for a connector a module asks for on request (HostViewState.pendingConnector). */
     "connector-answer": { id: check<number>((value) => Number.isSafeInteger(value)), allow: bool },
     /** Removes one hotkey from Settings > Streaming. */
-    "remove-hotkey": { owner: c.ownerId, moduleId: c.moduleId, gameId: c.gameId, action: matching(/^[a-z][a-z0-9-]{0,31}$/), target: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
+    "remove-hotkey": { owner: c.ownerId, moduleId: c.moduleId, workspaceId: c.workspaceId, action: matching(/^[a-z][a-z0-9-]{0,31}$/), target: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     "set-language": { language: check<LanguageSetting>(isLanguageSetting) },
     /** Remembers the Steam profile for the import on this PC; null forgets it. */
     "set-steam-profile": { profile: nullable((value) => (typeof value === "string" && value.length <= 200 && value.trim() !== "" ? value.trim() : BAD)) },
@@ -305,11 +310,11 @@ export function hostActionTable(c: HostChecks) {
     "open-developer-link": { link: oneOf(...DEVELOPER_LINKS) },
     /** Looks for modules again, after the player changed their modules folder. */
     "reload-modules": {},
-    /** Moves a module from the player's modules folder to the recycle bin, after removing its panels in every game; its data stays. */
+    /** Moves a module from the player's modules folder to the recycle bin, after removing its panels in every workspace; its data stays. */
     "remove-module": { moduleId: c.moduleId },
     /** The player's yes in the consent dialog: exactly what it showed (only what the module still asks for is granted). */
     "grant-module": { moduleId: c.moduleId, network: c.networkHosts, connectors: list(c.connector, { max: Infinity, unique: true }) },
-    /** Takes back everything granted to a module, after removing its panels in every game; its data stays. */
+    /** Takes back everything granted to a module, after removing its panels in every workspace; its data stays. */
     "revoke-module": { moduleId: c.moduleId },
     /** Asks for a module zip and installs it into the player's modules folder; answers with the module's id. */
     "install-module": {},
@@ -360,8 +365,8 @@ export function hostActionTable(c: HostChecks) {
     /** Gives a panel whose type an update removed another type of the same module. */
     "choose-panel-type": { instanceId: c.uuid, panelType: c.panelType },
     "close-panel": { instanceId: c.uuid },
-    /** Closes all of a module's panels in the current game, leaving empty slots; it stays installed. */
-    "remove-module-from-game": { moduleId: c.moduleId },
+    /** Closes all of a module's panels in the current workspace, leaving empty slots; it stays installed. */
+    "remove-module-from-workspace": { moduleId: c.moduleId },
     "reload-panel": { instanceId: c.uuid },
     "stop-panel": { instanceId: c.uuid },
     /** Panel menu > Show in game: the panel appears over the game while the in-game layer is open (Settings > Overlays). */
@@ -386,13 +391,13 @@ export function hostActionTable(c: HostChecks) {
     /** What the player typed in a Browser panel's address bar. */
     "browser-navigate": { instanceId: c.uuid, address: c.address },
     "browser-command": { instanceId: c.uuid, command: oneOf(...BROWSER_COMMANDS) },
-    /** Signs the page's site in for all games (true) or for each game on its own. */
+    /** Signs the page's site in for all workspaces (true) or for each workspace on its own. */
     "browser-set-shared": { instanceId: c.uuid, shared: bool },
     "browser-set-adblock": { instanceId: c.uuid, enabled: bool },
     /** Removes a site from one of the lists in Settings > Browser. */
     "browser-forget-site": { list: oneOf("shared", "adblock-off"), site: c.site },
-    /** Deletes cookies, logins and caches: the current game's, or the ones shared by all games. */
-    "clear-browser-data": { scope: oneOf("game", "shared") },
+    /** Deletes cookies, logins and caches: the current workspace's, or the ones shared by all workspaces. */
+    "clear-browser-data": { scope: oneOf("workspace", "shared") },
 
     // Discord and AI usage
     /** Connects to the Discord app, asking for approval in Discord if Tavora was never approved. */

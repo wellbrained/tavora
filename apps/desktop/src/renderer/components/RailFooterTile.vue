@@ -2,7 +2,7 @@
 import { cn } from "@/lib/utils";
 
 // The tile every item at the bottom of the rail sits on: one size, one shape, and a status dot
-// in the same corner. The 48 px slot keeps it on the same centre line as the game tiles.
+// in the same corner. The 48 px slot keeps it on the same centre line as the workspace tiles.
 defineProps<{ dot?: "success" | "primary" }>();
 // Classes from the outside go on the tile itself, not on the slot around it.
 defineOptions({ inheritAttrs: false });

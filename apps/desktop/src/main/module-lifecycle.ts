@@ -18,7 +18,7 @@ import type { SafetyCheck } from "./safety-lists";
 export interface ModulePanels {
   /** Starts a module's open panels again, so they load a new version or connect with a new grant. */
   reload(moduleId: string): void;
-  /** Closes a module's panels in every game, leaving their slots empty. */
+  /** Closes a module's panels in every workspace, leaving their slots empty. */
   close(moduleId: string): void;
 }
 
@@ -158,7 +158,7 @@ export class ModuleLifecycle {
     this.options.panels.reload(moduleId);
   }
 
-  /** Takes back everything granted to a module, after its panels are removed in every game. Its data stays. */
+  /** Takes back everything granted to a module, after its panels are removed in every workspace. Its data stays. */
   async revoke(moduleId: string): Promise<void> {
     const module = this.options.modules().get(moduleId);
     if (!module) throw new LibraryError("error.moduleMissing");

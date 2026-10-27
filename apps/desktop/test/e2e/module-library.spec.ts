@@ -28,13 +28,13 @@ test("80 modules distinguish ten game modules from duplicate panels", async () =
     await expect.poll(async () => Math.round((await library.boundingBox())!.height)).toBe(852);
     await page.getByTestId("module-search").fill("Library module");
     await expect(page.getByTestId("module-results").locator("li")).toHaveCount(80);
-    await expect(page.getByTestId("module-category-inGame")).toHaveText(/In this game\s*10/);
-    await expect(page.getByTestId("in-game-local.test.library-000")).toHaveText("2 open");
+    await expect(page.getByTestId("module-category-inWorkspace")).toHaveText(/In this workspace\s*10/);
+    await expect(page.getByTestId("in-workspace-local.test.library-000")).toHaveText("2 open");
     await expect(page.getByTestId("open-local.test.library-000")).toHaveText("Add another");
     const names = await page.getByTestId("module-results").locator("li").allTextContents();
     expect(names[0]).toContain("Library module 000");
     expect(names[79]).toContain("Library module 079");
-    await page.getByTestId("module-category-inGame").click();
+    await page.getByTestId("module-category-inWorkspace").click();
     await expect(page.getByTestId("module-results").locator("li")).toHaveCount(10);
     await expect(page.getByTestId("open-local.test.library-079")).toHaveCount(0);
     await page.getByTestId("module-category-all").click();

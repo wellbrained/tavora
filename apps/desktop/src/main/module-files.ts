@@ -70,7 +70,7 @@ export interface StoredFile {
   bytes: number;
 }
 
-/** The pictures under a files folder: `<owner>/<module>/<game>/<id>.<ext>`, nothing else. */
+/** The pictures under a files folder: `<owner>/<module>/<workspace>/<id>.<ext>`, nothing else. */
 export async function listStoredFiles(root: string): Promise<StoredFile[]> {
   const files: StoredFile[] = [];
   const names = async (dir: string) => readdir(dir).catch(() => [] as string[]);

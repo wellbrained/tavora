@@ -31,7 +31,7 @@ else showGear();
 
 ## Share data between the panels
 
-All panels of a module, of every type, share its `storage`, `documents` and `blobs` in the current game. Keep the player's work in documents, one per build, and every panel sees the same build:
+All panels of a module, of every type, share its `storage`, `documents` and `blobs` in the current workspace. Keep the player's work in documents, one per build, and every panel sees the same build:
 
 ```ts
 const build = await tavora.documents.get<Build>(buildId);
@@ -50,7 +50,7 @@ A player may want two Gear panels, one per build, side by side. Each panel then 
 ```ts
 const launch = await tavora.panel.getLaunch();
 if (launch.reason === "restore") {
-  // Open before (a restart, a game switch, a reload): show what it showed.
+  // Open before (a restart, a workspace switch, a reload): show what it showed.
   buildId = (await tavora.panel.getState<{ build: string }>())?.build ?? launch.content?.id ?? null;
 } else if (launch.reason === "open") {
   // Another panel opened this one on a build (see below).
@@ -103,7 +103,7 @@ tavora.panel.onNavigate(async (content) => {
 
 The handler has 5 seconds. When it throws or runs out of time, the panel stays as it was, and Tavora offers the player the build in a new panel instead. Without a handler, Tavora always opens a new panel. Save before you switch, never lose an edit.
 
-`panels.open` only works right after a click or key press in the panel, once per click, and only opens your own module's panel types in the current game. Called on its own, it fails with `PERMISSION_DENIED`.
+`panels.open` only works right after a click or key press in the panel, once per click, and only opens your own module's panel types in the current workspace. Called on its own, it fails with `PERMISSION_DENIED`.
 
 ## Checklist
 

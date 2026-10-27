@@ -257,8 +257,8 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     await next();
   });
   catalogApp.get("/", (context) => {
-    const filter = catalogFilter(context.req.query("game"), context.req.query("workspace"));
-    if (!filter) return context.json({ error: "Ask for ?game=<game id>, ?workspace=1 or neither." }, 400);
+    const filter = catalogFilter(context.req.query("game"), context.req.query("personal"), context.req.query("workspace"));
+    if (!filter) return context.json({ error: "Ask for ?game=<game id>, ?personal=1 or neither." }, 400);
     context.header("Cache-Control", "public, max-age=300");
     const summaries = ratings?.summaries();
     return context.json({ modules: catalog!.index(filter).map((entry) => listed(entry, summaries ?? new Map())) });

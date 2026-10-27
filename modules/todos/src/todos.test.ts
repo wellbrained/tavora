@@ -61,7 +61,7 @@ function nested(): TodoList {
 }
 
 describe("parseList", () => {
-  it("gives an empty list for a new game or damaged data", () => {
+  it("gives an empty list for a new workspace or damaged data", () => {
     expect(parseList(null)).toEqual({ version: 2, groups: [] });
     expect(parseList({ groups: "no" })).toEqual({ version: 2, groups: [] });
   });

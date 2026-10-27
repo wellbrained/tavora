@@ -77,7 +77,7 @@ async function runImport() {
 /** Offers the selected games' icons without adding them: the share dialog finds which ones this PC has. */
 function shareOnly() {
   const appids = fresh.value.filter((game) => ticked.value.has(game.appid)).map((game) => game.appid);
-  dialog.value = { kind: "share-icons", gameIds: [], steam: appids };
+  dialog.value = { kind: "share-icons", workspaceIds: [], steam: appids };
 }
 
 const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImport.trash") : t("steamImport.owned"));

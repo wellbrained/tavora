@@ -7,12 +7,12 @@ import { judgeRequest, type AdBlocker } from "./browser-filter";
 import { addressToUrl, displayHost, isPrivateUrl, isWebUrl, parseUrl, siteOfUrl } from "./browser-url";
 import { BROWSER_MODULE_ID } from "./registry";
 
-/** Logins in a game's own session, or in the one shared by every game. */
-export type BrowserKind = "game" | "shared";
+/** Logins in a workspace's own session, or in the one shared by every workspace. */
+export type BrowserKind = "workspace" | "shared";
 
-/** The partition of a game's browser session; the shared one has no game. */
-export function browserPartition(kind: BrowserKind, gameId: string): string {
-  return kind === "shared" ? "persist:browser" : `persist:browser@${gameId}`;
+/** The partition of a workspace's browser session; the shared one has no workspace. */
+export function browserPartition(kind: BrowserKind, workspaceId: string): string {
+  return kind === "shared" ? "persist:browser" : `persist:browser@${workspaceId}`;
 }
 
 /** How long after a click or key press a page may open a link in a new window. */
@@ -48,8 +48,8 @@ const hardened = new WeakSet<Session>();
 /**
  * A browser session, made safe once: only web requests, nothing local from
  * a public page, ads blocked, every permission but two denied, no downloads,
- * and no Tavora protocol. Sessions are shared by the panels of one game (or
- * by all games for the shared one), so hooks look the panel up by contents.
+ * and no Tavora protocol. Sessions are shared by the panels of one workspace (or
+ * by all workspaces for the shared one), so hooks look the panel up by contents.
  */
 export function browserSession(partition: string, hooks: BrowserSessionHooks): Session {
   const ses = session.fromPartition(partition);
@@ -95,7 +95,7 @@ export interface BrowserPanelOptions {
   devTools: boolean;
   background(): string;
   sessionFor(kind: BrowserKind): Session;
-  /** Whether a page address belongs to a site the player signs in to for all games. */
+  /** Whether a page address belongs to a site the player signs in to for all workspaces. */
   isSharedSite(url: string): boolean;
   adblockOn(url: string): boolean;
   /** Puts a new view in the window in place of the old one (null when the panel opens). */
@@ -114,12 +114,12 @@ export interface BrowserPanelOptions {
 /** Corner radius of a panel card in the host UI (dock.css), in px; the page sits below the toolbar. */
 const PAGE_RADIUS = 9;
 
-/** One Browser panel. Its page view is replaced when it moves between a game's and the shared session. */
+/** One Browser panel. Its page view is replaced when it moves between a workspace's and the shared session. */
 export class BrowserPanel {
   readonly moduleId = BROWSER_MODULE_ID;
   view: WebContentsView;
   status: InstanceStatus = "ready";
-  private kind: BrowserKind = "game";
+  private kind: BrowserKind = "workspace";
   private bounds: { x: number; y: number; width: number; height: number } | null = null;
   private visible = false;
   /** The page's address once it committed; requests of the page are judged against it. */
@@ -302,7 +302,7 @@ export class BrowserPanel {
   }
 
   private kindFor(url: string): BrowserKind {
-    return this.options.isSharedSite(url) ? "shared" : "game";
+    return this.options.isSharedSite(url) ? "shared" : "workspace";
   }
 
   /** Whether the page may take the panel to an address: web only, and not from a public page to a local one. */
@@ -342,7 +342,7 @@ export class BrowserPanel {
     this.changed();
   }
 
-  /** The player changed whether this site signs in for all games: the page reloads in the right session. */
+  /** The player changed whether this site signs in for all workspaces: the page reloads in the right session. */
   siteSettingsChanged(): void {
     const url = this.committedUrl ?? this.requestedUrl;
     if (!url || !isWebUrl(url)) return this.changed();

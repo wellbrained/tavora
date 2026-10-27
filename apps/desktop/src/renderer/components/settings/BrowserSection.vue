@@ -13,9 +13,9 @@ import SettingRow from "./SettingRow.vue";
 defineProps<{ highlight: string | null }>();
 
 const browser = computed(() => state.value!.library.browser);
-const game = computed(() => {
+const workspace = computed(() => {
   const view = state.value!;
-  return view.currentGameId ? view.library.games[view.currentGameId] : undefined;
+  return view.currentWorkspaceId ? view.library.workspaces[view.currentWorkspaceId] : undefined;
 });
 
 const LISTS = [
@@ -37,10 +37,10 @@ const LISTS = [
   },
 ];
 
-function clear(scope: "game" | "shared") {
+function clear(scope: "workspace" | "shared") {
   confirmAction({
-    title: scope === "game" ? (game.value ? t("settings.browser.clearGameTitle", { name: game.value.name }) : t("settings.browser.clearGameTitleFallback")) : t("settings.browser.clearSharedTitle"),
-    message: scope === "game" ? t("settings.browser.clearGameMessage") : t("settings.browser.clearSharedMessage"),
+    title: scope === "workspace" ? (workspace.value ? t("settings.browser.clearWorkspaceTitle", { name: workspace.value.name }) : t("settings.browser.clearWorkspaceTitleFallback")) : t("settings.browser.clearSharedTitle"),
+    message: scope === "workspace" ? t("settings.browser.clearWorkspaceMessage") : t("settings.browser.clearSharedMessage"),
     confirm: t("settings.browser.clearConfirm"),
     danger: true,
     run: () => submitAction({ type: "clear-browser-data", scope }),
@@ -75,12 +75,12 @@ function clear(scope: "game" | "shared") {
   </SettingGroup>
   <SettingGroup :title="t('settings.heading.browserData')">
     <SettingRow
-      :label="t('settings.browser-clear-game.label')"
-      :description="t('settings.browser-clear-game.description')"
-      setting="browser-clear-game"
-      :highlighted="highlight === 'browser-clear-game'"
+      :label="t('settings.browser-clear-workspace.label')"
+      :description="t('settings.browser-clear-workspace.description')"
+      setting="browser-clear-workspace"
+      :highlighted="highlight === 'browser-clear-workspace'"
     >
-      <Button variant="secondary" :disabled="!game" data-testid="browser-clear-game" @click="clear('game')">{{ t("common.clear") }}</Button>
+      <Button variant="secondary" :disabled="!workspace" data-testid="browser-clear-workspace" @click="clear('workspace')">{{ t("common.clear") }}</Button>
     </SettingRow>
     <SettingRow
       :label="t('settings.browser-clear-shared.label')"

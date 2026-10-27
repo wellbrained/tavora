@@ -1,4 +1,4 @@
-// Files (pictures) a module keeps for one game: one folder per module and game, files named by
+// Files (pictures) a module keeps for one workspace: one folder per module and workspace, files named by
 // the host (32 hex characters and an extension from what the file turned out to be). A module
 // never gives a name or a path; it gets an id back. Reading and writing go through the module's
 // own address (see module-view.ts), so a file is never held in memory whole.
@@ -188,7 +188,7 @@ export class BlobStore {
   }
 
   private tooMuch(): HostError {
-    return new HostError("QUOTA_EXCEEDED", `files are limited to ${this.limits.maxTotalBytes} bytes per module and game`);
+    return new HostError("QUOTA_EXCEEDED", `files are limited to ${this.limits.maxTotalBytes} bytes per module and workspace`);
   }
 
   private notAccepted(): HostError {

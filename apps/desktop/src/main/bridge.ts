@@ -34,6 +34,7 @@ import {
   type TavoraGame,
   type TavoraTheme,
   type TavoraViewport,
+  type TavoraWorkspace,
 } from "@tavora/sdk/protocol";
 import { isActionId, isPanelTypeId } from "@tavora/module-schema";
 import { HostError } from "./errors";
@@ -74,7 +75,7 @@ export interface BridgeContext {
   setContent(content: PanelContent | null): void;
   /**
    * panels.open with a checked panel type id and content: opens or switches one of this module's own panels in the
-   * current game. Throws PERMISSION_DENIED unless the panel just got a click or key press, INVALID_PARAMS for a type
+   * current workspace. Throws PERMISSION_DENIED unless the panel just got a click or key press, INVALID_PARAMS for a type
    * the module does not have.
    */
   openPanel(type: string, content: PanelContent | null): Promise<PanelOpenResult>;
@@ -86,9 +87,10 @@ export interface BridgeContext {
   setMaximized(maximized: boolean): Promise<void>;
   /** panel.setLive: what the panel's live view shows over the game (already size-checked); null shows nothing. Needs no click. */
   setLive(state: JsonValue | null): void;
-  game: TavoraGame;
+  /** The workspace the panel is in. */
+  workspace: TavoraWorkspace;
   data: ModuleData;
-  /** The module's settings shared by every game (storage.app). */
+  /** The module's settings shared by every workspace (storage.app). */
   appSettings: ModuleStore;
   /** The ai-usage connector (ai-usage.ts); only reached with the `aiUsage` capability. */
   aiUsage: { accounts(): Promise<AiUsageAccountInfo[]>; read(accountId: string): Promise<AiUsageReading> };
@@ -146,7 +148,7 @@ export interface BridgeContext {
     move(anchor:TooltipAnchor):void;
     close(id:string,hoverOnly:boolean):void;
   };
-  /** Overlays of this module in this game (overlays.ts, game-overlays.ts); keys already checked, and the `overlay` capability for copyLink and resetLink. */
+  /** Overlays of this module in this workspace (overlays.ts, game-overlays.ts); keys already checked, and the `overlay` capability for copyLink and resetLink. */
   overlay: {
     publish(key: string, state: JsonValue): void;
     remove(key: string): void;
@@ -162,7 +164,7 @@ export interface BridgeContext {
     /** Throws PERMISSION_DENIED unless the panel just got a click or key press, and INVALID_PARAMS without an overlay in the manifest. */
     preview(key: string): Promise<void>;
   };
-  /** Hotkeys of this module in this game (hotkeys.ts); actions and targets already checked. */
+  /** Hotkeys of this module in this workspace (hotkeys.ts); actions and targets already checked. */
   hotkeys: {
     list(): HotkeyBinding[];
     /** Opens Tavora's hotkey dialog. Throws PERMISSION_DENIED unless the panel just got a click or key press. */
@@ -217,6 +219,11 @@ function actionId(value: unknown): string {
   return value;
 }
 
+/** A workspace as game.getCurrent says it. */
+function legacyGame({ id, displayName, kind }: TavoraWorkspace): TavoraGame {
+  return { id, displayName, kind: kind === "personal" ? "workspace" : "game" };
+}
+
 const handlers = new Map<string, Handler>([
   ['files.pickReadOnly', async (s,params) => {
     const extensions = object(params).extensions;
@@ -230,7 +237,10 @@ const handlers = new Map<string, Handler>([
     if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to remember files.');
     await s.context.readOnlyFiles.forget(id); return null;
   }],
-  ["game.getCurrent", (s, params) => (noParams(params), { ...s.context.game })],
+  ["workspace.getCurrent", (s, params) => (noParams(params), { ...s.context.workspace })],
+  // Deprecated: the same in the words of Tavora before 0.21.42 (a personal workspace's kind was "workspace"). Answered
+  // until the 1.0 preparation, so modules made before it keep working.
+  ["game.getCurrent", (s, params) => (noParams(params), legacyGame(s.context.workspace))],
 
   ["storage.get", (s, params) => s.context.data.settings.get(object(params).key)],
   ["storage.keys", (s, params) => (noParams(params), s.context.data.settings.keys())],

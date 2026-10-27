@@ -1,6 +1,6 @@
 # {{name}}: developing it
 
-A [Tavora](https://mytavora.app) module, made with `@tavora/create-module`. Tavora shows it in a panel next to a game; it talks to Tavora through [`@tavora/sdk`](https://docs.mytavora.app/api/).
+A [Tavora](https://mytavora.app) module, made with `@tavora/create-module`. Tavora shows it in a panel of a workspace, next to a game or on its own; it talks to Tavora through [`@tavora/sdk`](https://docs.mytavora.app/api/).
 
 ## Develop
 
@@ -9,7 +9,7 @@ A [Tavora](https://mytavora.app) module, made with `@tavora/create-module`. Tavo
 {{run}} dev
 ```
 
-`dev` builds the module into `dist/` and builds it again on every change. Leave it running. In Tavora, open **Settings > Development > Add a development folder…** and choose this folder, or the folder you keep all your module projects in. Add the module to a game with **Add module**; its panels reload by themselves after every build.
+`dev` builds the module into `dist/` and builds it again on every change. Leave it running. In Tavora, open **Settings > Development > Add a development folder…** and choose this folder, or the folder you keep all your module projects in. Add the module to a workspace with **Add module**; its panels reload by themselves after every build.
 
 - `tavora.module.json` is the manifest: its id, name, the panel's smallest size, and what it asks the player for (websites to reach, connectors). See the [manifest reference](https://docs.mytavora.app/reference/manifest).
 - `README.md` is your module's description in the catalog. Keep its headings (Features, How to use, Settings, Requirements, Known issues) so pages read alike; see [Publishing](https://docs.mytavora.app/guide/publishing).

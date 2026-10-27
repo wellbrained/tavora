@@ -15,7 +15,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { act, confirmAction, dialog, gamesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
+import { act, confirmAction, dialog, workspacesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
 import { problemText } from "../../../shared/module-problem";
 import { t } from "../../i18n";
 import ModuleGrantsSection from "./ModuleGrantsSection.vue";
@@ -48,7 +48,7 @@ function openLibrary() {
   dialog.value = { kind: "add-module", view: "catalog" };
 }
 
-/** Panels of a module that are open in the current game, so Remove can say what closes. */
+/** Panels of a module that are open in the current workspace, so Remove can say what closes. */
 function openCount(moduleId: string): number {
   return state.value!.panels.filter((panel) => panel.moduleId === moduleId).length;
 }
@@ -123,10 +123,10 @@ function report(module: ModuleView) {
 }
 
 function remove(module: ModuleView) {
-  const games = gamesUsing(module);
+  const workspaces = workspacesUsing(module);
   confirmAction({
     title: t("settings.modules.removeTitle", { name: module.name }),
-    message: games.length ? t("settings.modules.removeMessageUsed", { games: listOf(games) }) : t("settings.modules.removeMessage"),
+    message: workspaces.length ? t("settings.modules.removeMessageUsed", { workspaces: listOf(workspaces) }) : t("settings.modules.removeMessage"),
     confirm: t("common.remove"),
     danger: true,
     run: () => submitAction({ type: "remove-module", moduleId: module.id }),

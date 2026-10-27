@@ -121,7 +121,7 @@ describe("isJsonValue", () => {
 });
 
 describe("DataRegistry", () => {
-  it("keeps modules and games apart on disk", async () => {
+  it("keeps modules and workspaces apart on disk", async () => {
     const registry = new DataRegistry(dir);
     await registry.get("local", "local.example.a", "poe2").settings.set("count", 1);
     await registry.get("local", "local.example.b", "poe2").settings.set("count", 2);
@@ -150,7 +150,7 @@ describe("DataRegistry", () => {
     expect(await registry.get(other, "local.example.a", "poe2").settings.get("secret")).toBeNull();
   });
 
-  it("keeps the settings shared by every game next to the games, apart from each game's own", async () => {
+  it("keeps the settings shared by every workspace next to the workspaces, apart from each workspace's own", async () => {
     const registry = new DataRegistry(dir);
     await registry.appSettings("local", "local.example.a").set("style", "used");
     expect(await registry.get("local", "local.example.a", "poe2").settings.get("style")).toBeNull();

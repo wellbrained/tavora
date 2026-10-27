@@ -4,7 +4,7 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import { SETTING_SECTIONS, type SettingsSection } from "./components/settings/settings-index";
-import { numberedGames } from "./shortcuts";
+import { numberedWorkspaces } from "./shortcuts";
 import { setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 import { developerSetup } from "./developer-setup";
@@ -180,15 +180,15 @@ export async function act(action: HostAction, { quiet = false } = {}): Promise<A
   const started = performance.now();
   const result = await api.act(action);
   if (!result.ok && !quiet) showToast(result.error);
-  if (result.ok && action.type === "open-game") void measureSwitch(started);
+  if (result.ok && action.type === "open-workspace") void measureSwitch(started);
   return result;
 }
 
-/** How long a game switch took until the new screen was drawn, for Settings > Diagnostic info. */
+/** How long a workspace switch took until the new screen was drawn, for Settings > Diagnostic info. */
 async function measureSwitch(started: number): Promise<void> {
   await nextTick();
   await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-  void api.act({ type: "record-timing", name: "game-switch", ms: performance.now() - started });
+  void api.act({ type: "record-timing", name: "workspace-switch", ms: performance.now() - started });
 }
 
 // ── Menus and dialogs ──────────────────────────────────────────────────
@@ -232,12 +232,12 @@ export interface ConfirmRequest {
 }
 
 /**
- * Offering icons to Tavora: the games ticked at first, or none. With `steam`, the games of the
+ * Offering icons to Tavora: the games of these game workspaces ticked at first, or none. With `steam`, the games of the
  * last Steam import look-up with these appids instead, without adding them to the library.
  */
 export interface ShareIconsRequest {
   kind: "share-icons";
-  gameIds: string[];
+  workspaceIds: string[];
   steam?: number[];
 }
 
@@ -419,8 +419,8 @@ function runShortcut(shortcut: HostShortcut): void {
   else if (shortcut === "home") void act({ type: "show-welcome" });
   else {
     const library = state.value?.library;
-    const gameId = library ? numberedGames(library)[Number(shortcut.slice("game-".length)) - 1] : undefined;
-    if (gameId) void act({ type: "open-game", gameId });
+    const workspaceId = library ? numberedWorkspaces(library)[Number(shortcut.slice("workspace-".length)) - 1] : undefined;
+    if (workspaceId) void act({ type: "open-workspace", workspaceId });
   }
 }
 
@@ -477,7 +477,7 @@ export function needsGrant(module: ModuleState): boolean {
 }
 
 /**
- * Adds a module to the current game, into `slot` if given; `panelTypes` picks which of its panel
+ * Adds a module to the current workspace, into `slot` if given; `panelTypes` picks which of its panel
  * types to open, one panel each (its continuing type when left out). A module that asks for something
  * not granted yet goes through the consent dialog first; once granted, it is added without asking.
  * `stay` keeps the module library open afterwards, so more panels can be added from it.
@@ -495,7 +495,7 @@ export function addModule(moduleId: string, slot: string | null = null, panelTyp
 
 /**
  * One of a module's panel types (null: a module without types) from the modules menu or Ctrl+K: a panel of it
- * already open in this game comes to the front (the one used last), else one is added.
+ * already open in this workspace comes to the front (the one used last), else one is added.
  */
 export function showOrAddPanel(moduleId: string, panelType: string | null): void {
   const open = state.value?.panels.some((panel) => panel.moduleId === moduleId && panel.panelType === panelType);
@@ -517,10 +517,10 @@ export function listOf(names: string[]): string {
   return new Intl.ListFormat(state.value?.language.resolved ?? "en", { type: "conjunction" }).format(names);
 }
 
-/** The names of the games a module is used in, for the dialogs that remove its panels. */
-export function gamesUsing(module: ModuleState): string[] {
-  const games = state.value?.library.games ?? {};
-  return module.usedIn.flatMap((gameId) => (games[gameId] ? [games[gameId].name] : []));
+/** The names of the workspaces a module is used in, for the dialogs that remove its panels. */
+export function workspacesUsing(module: ModuleState): string[] {
+  const workspaces = state.value?.library.workspaces ?? {};
+  return module.usedIn.flatMap((workspaceId) => (workspaces[workspaceId] ? [workspaces[workspaceId].name] : []));
 }
 
 /** Prompt submit helper: runs the action and reports its error inline. */

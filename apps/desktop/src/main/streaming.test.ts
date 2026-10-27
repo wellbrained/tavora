@@ -42,7 +42,7 @@ async function setup({ held = [] as string[] } = {}) {
   };
   const heard: HotkeyBinding[] = [];
   const panel: HotkeyListener = { moduleId: MODULE.manifest.id, usedAt: 1, hotkeyPressed: (binding) => heard.push(binding) };
-  const world = { gameId: "poe2" as string | null, panels: [panel], clipboard: "", opened: [] as string[], settings: { streamOverlays: false, overlayPort: 47820 }, granted: true, asked: 0, answer: true };
+  const world = { workspaceId: "poe2" as string | null, panels: [panel], clipboard: "", opened: [] as string[], settings: { streamOverlays: false, overlayPort: 47820 }, granted: true, asked: 0, answer: true };
   const streaming = await Streaming.create({
     userData: dir,
     settings: () => world.settings,
@@ -54,8 +54,8 @@ async function setup({ held = [] as string[] } = {}) {
       world.granted = world.answer;
       return world.answer;
     },
-    gameId: () => world.gameId,
-    gameName: (id) => (id === "poe2" ? "Path of Exile 2" : null),
+    workspaceId: () => world.workspaceId,
+    workspaceName: (id) => (id === "poe2" ? "Path of Exile 2" : null),
     panels: () => world.panels,
     shortcuts,
     writeClipboard: (text) => (world.clipboard = text),
@@ -68,7 +68,7 @@ async function setup({ held = [] as string[] } = {}) {
 }
 
 describe("the hotkey dialog", () => {
-  it("sets a key, which then reaches the module's panels in that game", async () => {
+  it("sets a key, which then reaches the module's panels in that workspace", async () => {
     const { streaming, registered, heard, hotkeys } = await setup();
     const asked = hotkeys.set("start-pause", "item-1", "Boss timer");
     const request = streaming.request()!;
@@ -95,7 +95,7 @@ describe("the hotkey dialog", () => {
     expect(heard).toEqual([]);
   });
 
-  it("refuses a key used in the same game and keeps the dialog open", async () => {
+  it("refuses a key used in the same workspace and keeps the dialog open", async () => {
     const { streaming, hotkeys } = await setup();
     const first = hotkeys.set("start-pause", "item-1", "Boss timer");
     streaming.answer(streaming.request()!.id, "set", "F9");
@@ -103,7 +103,7 @@ describe("the hotkey dialog", () => {
     void hotkeys.set("reset", "item-2", "Deaths");
     const { id } = streaming.request()!;
     streaming.answer(id, "set", "F9");
-    expect(streaming.request()).toMatchObject({ id, error: "Already used for Boss timer (Start/Pause) in this game." });
+    expect(streaming.request()).toMatchObject({ id, error: "Already used for Boss timer (Start/Pause) in this workspace." });
   });
 
   it("refuses a key another program holds", async () => {
@@ -128,23 +128,23 @@ describe("the hotkey dialog", () => {
     expect(hotkeys.list()).toEqual([]);
   });
 
-  it("closes when the player leaves the game", async () => {
+  it("closes when the player leaves the workspace", async () => {
     const { streaming, world, hotkeys } = await setup();
     const asked = hotkeys.set("start-pause", "item-1", "Boss timer");
-    world.gameId = "elden-ring";
+    world.workspaceId = "elden-ring";
     streaming.sync();
     expect(await asked).toBe("cancelled");
   });
 
-  it("only opens for the game shown now", async () => {
+  it("only opens for the workspace shown now", async () => {
     const { streaming, world } = await setup();
-    world.gameId = "elden-ring";
+    world.workspaceId = "elden-ring";
     expect(() => streaming.hotkeysFor(MODULE, "poe2").set("reset", "item-1", "X")).toThrow(expect.objectContaining({ code: "PERMISSION_DENIED" }));
   });
 });
 
 describe("which hotkeys work", () => {
-  it("only the game shown now's, while the module has a panel there", async () => {
+  it("only the workspace shown now's, while the module has a panel there", async () => {
     const { streaming, registered, world, hotkeys } = await setup();
     const asked = hotkeys.set("start-pause", "item-1", "Boss timer");
     streaming.answer(streaming.request()!.id, "set", "F9");
@@ -155,17 +155,17 @@ describe("which hotkeys work", () => {
     streaming.sync();
     expect(registered.has("F9")).toBe(false);
     world.panels = [{ moduleId: MODULE.manifest.id, usedAt: 2, hotkeyPressed: () => {} }];
-    world.gameId = "elden-ring";
+    world.workspaceId = "elden-ring";
     streaming.sync();
     expect(registered.has("F9")).toBe(false);
   });
 
-  it("go with their game", async () => {
+  it("go with their workspace", async () => {
     const { streaming, hotkeys } = await setup();
     const asked = hotkeys.set("start-pause", "item-1", "Boss timer");
     streaming.answer(streaming.request()!.id, "set", "F9");
     await asked;
-    streaming.forgetGame("poe2");
+    streaming.forgetWorkspace("poe2");
     expect(hotkeys.list()).toEqual([]);
   });
 });
@@ -207,7 +207,7 @@ describe("overlay links", () => {
 });
 
 describe("publishing without the connector", () => {
-  const stored = (streaming: Streaming, key: string) => streaming.overlayStore.peek({ owner: "official", moduleId: MODULE.manifest.id, gameId: "poe2", key });
+  const stored = (streaming: Streaming, key: string) => streaming.overlayStore.peek({ owner: "official", moduleId: MODULE.manifest.id, workspaceId: "poe2", key });
 
   it("stores nothing for a key without a game overlay or a link, and resolves", async () => {
     const { streaming, overlay, world } = await setup();
@@ -223,7 +223,7 @@ describe("publishing without the connector", () => {
     streaming.useOverlayKeys({ frontGame: () => null, wants: () => false, has: (subject) => subject.key === "item-2", pressed: () => {}, general: () => false });
     overlay.publish("item-2", { value: 2 });
     expect(stored(streaming, "item-2")?.state).toEqual({ value: 2 });
-    streaming.overlayStore.link({ owner: "official", moduleId: MODULE.manifest.id, gameId: "poe2", key: "item-3" });
+    streaming.overlayStore.link({ owner: "official", moduleId: MODULE.manifest.id, workspaceId: "poe2", key: "item-3" });
     overlay.publish("item-3", { value: 3 });
     expect(stored(streaming, "item-3")?.state).toEqual({ value: 3 });
   });
@@ -246,8 +246,8 @@ describe("publishing without the connector", () => {
 });
 
 describe("keys of game overlays", () => {
-  const toggle = { owner: "official", moduleId: MODULE.manifest.id, gameId: "elden", action: "$overlay", target: "item-1" };
-  const layer = { owner: "tavora", moduleId: "tavora", gameId: "$all", action: "$layer", target: "layer" };
+  const toggle = { owner: "official", moduleId: MODULE.manifest.id, workspaceId: "elden", action: "$overlay", target: "item-1" };
+  const layer = { owner: "tavora", moduleId: "tavora", workspaceId: "$all", action: "$layer", target: "layer" };
   const words = { module: "Elden Ring", action: "Show or hide" };
 
   async function withKeys() {
@@ -255,11 +255,11 @@ describe("keys of game overlays", () => {
     const heard: string[] = [];
     let front: string | null = null;
     // As the service decides: the layer key works over any game in front, a toggle key over its own.
-    made.streaming.useOverlayKeys({ frontGame: () => front, wants: (record) => record.gameId === "$all" || record.gameId === front, has: () => false, pressed: (record) => void heard.push(`${record.action}:${record.target}`), general: (binding) => binding.gameId === "$all" });
+    made.streaming.useOverlayKeys({ frontGame: () => front, wants: (record) => record.workspaceId === "$all" || record.workspaceId === front, has: () => false, pressed: (record) => void heard.push(`${record.action}:${record.target}`), general: (binding) => binding.workspaceId === "$all" });
     return { ...made, heard, front: (id: string | null) => (front = id) };
   }
 
-  it("opens the dialog for a game that isn't the one shown, with the words of overlays", async () => {
+  it("opens the dialog for a workspace that isn't the one shown, with the words of overlays", async () => {
     const { streaming } = await withKeys();
     const asked = streaming.askOverlayKey(toggle, "Clock & Counter", words);
     expect(streaming.request()).toMatchObject({ moduleName: "Elden Ring", actionName: "Show or hide", label: "Clock & Counter", current: null });
@@ -268,10 +268,10 @@ describe("keys of game overlays", () => {
     expect(streaming.keyOf(toggle)).toEqual({ accelerator: "F8", taken: false });
   });
 
-  it("stays open when the game shown changes, unlike a module's own dialog", async () => {
+  it("stays open when the workspace shown changes, unlike a module's own dialog", async () => {
     const { streaming, world } = await withKeys();
     void streaming.askOverlayKey(layer, "Tavora over game", words);
-    world.gameId = "elsewhere";
+    world.workspaceId = "elsewhere";
     world.panels.length = 0;
     streaming.sync();
     expect(streaming.request()).not.toBeNull();
@@ -293,9 +293,9 @@ describe("keys of game overlays", () => {
     expect(registered.has("F8")).toBe(false);
   });
 
-  it("shares the game's keys with module hotkeys, so one key can't do both", async () => {
+  it("shares the keys of game overlays with module hotkeys, so one key can't do both", async () => {
     const { streaming, world } = await withKeys();
-    world.gameId = "elden";
+    world.workspaceId = "elden";
     const asked = streaming.askOverlayKey(layer, "Tavora over game", { module: "Tavora", action: "Open or close" });
     streaming.answer(streaming.request()!.id, "set", "F9");
     await asked;
@@ -308,8 +308,8 @@ describe("keys of game overlays", () => {
 
   it("lets a general overlay's key collide with the keys of every game", async () => {
     const made = await setup();
-    made.streaming.useOverlayKeys({ frontGame: () => null, wants: () => false, has: () => false, pressed: () => {}, general: (binding) => binding.gameId === "personal" || binding.gameId === "$all" });
-    const wide = { ...toggle, gameId: "personal" };
+    made.streaming.useOverlayKeys({ frontGame: () => null, wants: () => false, has: () => false, pressed: () => {}, general: (binding) => binding.workspaceId === "personal" || binding.workspaceId === "$all" });
+    const wide = { ...toggle, workspaceId: "personal" };
     const asked = made.streaming.askOverlayKey(wide, "Clock", words);
     made.streaming.answer(made.streaming.request()!.id, "set", "F6");
     await asked;
@@ -322,9 +322,9 @@ describe("keys of game overlays", () => {
 
   it("moves the key set last to the layer key, and drops the rest", async () => {
     const { streaming } = await withKeys();
-    const arrange = (gameId: string) => ({ owner: "tavora", moduleId: "tavora", gameId, action: "$arrange", target: "arrange" });
-    for (const [gameId, accelerator] of [["elden", "F3"], ["other", "F4"]] as const) {
-      const asked = streaming.askOverlayKey(arrange(gameId), "Arrange", words);
+    const arrange = (workspaceId: string) => ({ owner: "tavora", moduleId: "tavora", workspaceId, action: "$arrange", target: "arrange" });
+    for (const [workspaceId, accelerator] of [["elden", "F3"], ["other", "F4"]] as const) {
+      const asked = streaming.askOverlayKey(arrange(workspaceId), "Arrange", words);
       streaming.answer(streaming.request()!.id, "set", accelerator);
       await asked;
     }
@@ -358,7 +358,7 @@ describe("keys of game overlays", () => {
       streaming.answer(streaming.request()!.id, "set", binding === layer ? "F7" : "F8");
       await asked;
     }
-    streaming.forgetGame("elden");
+    streaming.forgetWorkspace("elden");
     expect(streaming.keyOf(toggle)).toBeNull();
     expect(streaming.keyOf(layer)).toEqual({ accelerator: "F7", taken: false });
   });

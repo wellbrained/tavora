@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, launch, newUserData, openGame, panels, seedLibrary } from "./harness";
+import { expectModuleText, launch, newUserData, openWorkspace, panels, seedLibrary } from "./harness";
 
 interface Listed {
   entry: Record<string, unknown>;
@@ -45,6 +45,7 @@ function listing(id: string, name: string, zip: Buffer, owner: string, fields: R
     version: "1.0.0",
     minTavora: null,
     games: [],
+    personalWorkspaces: true,
     workspaces: true,
     permissions: { network: [], connectors: [] },
     owner,
@@ -75,10 +76,10 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
     }
     if (url.pathname === "/v1/catalog") {
       const game = url.searchParams.get("game");
-      const workspace = url.searchParams.get("workspace") === "1";
+      const personal = url.searchParams.get("personal") === "1";
       const fits = (entry: Record<string, unknown>) => {
         const games = entry.games as string[];
-        return workspace ? games.length === 0 && entry.workspaces !== false : !game || games.length === 0 || games.includes(game);
+        return personal ? games.length === 0 && entry.personalWorkspaces !== false : !game || games.length === 0 || games.includes(game);
       };
       return send(200, { modules: modules.map((item) => item.entry).filter(fits) });
     }
@@ -120,11 +121,11 @@ test("a player browses the catalog for a game, sees who publishes a module and i
   const { url, server, asked } = await catalogServer([
     { entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { publisher: "wellbrained", description: "<b>Tracks</b> your runs" }), body: tracker },
     // Made for another game: listed, but it says which game and Install stays greyed out.
-    { entry: listing("wellbrained.factory", "Factory", other, owner, { games: ["satisfactory"], workspaces: false }), body: other },
+    { entry: listing("wellbrained.factory", "Factory", other, owner, { games: ["satisfactory"], personalWorkspaces: false, workspaces: false }), body: other },
   ]);
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     const row = page.getByTestId("catalog-wellbrained.tracker");
@@ -186,7 +187,7 @@ test("a player opens a module's page with its readme, screenshots, access and ho
   ]);
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     await page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-name").click();
@@ -270,7 +271,7 @@ test("a player sees a module's rating on its card, how many gave each star, and 
   ]);
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     const card = page.getByTestId("catalog-wellbrained.tracker");
@@ -331,7 +332,7 @@ test("a zip that is not the listed one, or not from the listed key, writes nothi
   ]);
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     await page.getByTestId("catalog-install-wellbrained.swapped").click();
@@ -355,8 +356,8 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
   try {
     await page.getByTestId("rail-add-game").click();
     await page.getByTestId("game-search").fill("Personal");
-    await page.getByTestId("open-add-workspace").click();
-    await page.getByTestId("create-workspace").click();
+    await page.getByTestId("open-add-personal").click();
+    await page.getByTestId("create-personal").click();
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     await expect(page.getByTestId("catalog-wellbrained.notes")).toBeVisible();
@@ -369,7 +370,7 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), onlineSearch: false }));
   const offline = await launch(userData, [], { env: { TAVORA_API_URL: url } });
   try {
-    await openGame(offline.page, "poe2");
+    await openWorkspace(offline.page, "poe2");
     await offline.page.getByTestId("add-module").click();
     await offline.page.getByTestId("module-tab-browse").click();
     await expect(offline.page.getByTestId("catalog-off")).toBeVisible();
@@ -401,7 +402,7 @@ test("catalog module updates wait for the player, install from the Updates view 
     await expect(page.getByTestId("toast")).toHaveText(toast);
   };
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     await page.getByTestId(`catalog-install-${id}`).click();
@@ -516,7 +517,7 @@ test("a player reports a module from Browse and from Settings, and only its id, 
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   const sent = { headers: { cookie: null, referer: null }, body: { id: "wellbrained.tracker", owner, sha256 } };
   try {
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     // Nothing is sent until the player says yes.

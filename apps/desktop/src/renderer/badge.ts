@@ -1,4 +1,4 @@
-// The look of a game's badge when it has no image: a tone and a quiet pattern
+// The look of a workspace's badge when it has no image: a tone and a quiet pattern
 // derived from its id. Pure, so the same id looks the same on every PC and
 // after a rename.
 
@@ -36,7 +36,7 @@ function hash(id: string, seed: number): number {
   return value;
 }
 
-export interface GameBadgeLook {
+export interface BadgeLook {
   /** Background colour. */
   color: string;
   /** Overlay as CSS `background-image`. */
@@ -45,8 +45,8 @@ export interface GameBadgeLook {
   size: string;
 }
 
-export function gameBadgeLook(id: string): GameBadgeLook {
-  // The tone keeps the hash it always had, so existing games keep their colour.
+export function badgeLook(id: string): BadgeLook {
+  // The tone keeps the hash it always had, so existing workspaces keep their colour.
   const tone = TONES[hash(id, 0) % TONES.length]!;
   // A second hash picks the pattern, so tone and pattern vary independently.
   const pattern = PATTERNS[(hash(id, 7) >>> 3) % PATTERNS.length]!;

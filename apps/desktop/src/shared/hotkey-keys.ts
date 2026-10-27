@@ -1,6 +1,6 @@
 /**
  * Hotkeys the player sets for module actions (hotkeys.set): Electron accelerators such as `Ctrl+Alt+K` or `num5`,
- * registered system-wide while their game is shown. Keys are taken by where they are on the keyboard (`event.code`),
+ * registered system-wide while their workspace is shown. Keys are taken by where they are on the keyboard (`event.code`),
  * so they stay the same whatever the layout. A key needs Ctrl, Alt or the Windows key, except F-keys and the number
  * pad, so a hotkey never takes a key the player types with.
  */

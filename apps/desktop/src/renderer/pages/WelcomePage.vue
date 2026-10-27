@@ -2,13 +2,13 @@
 import { Plus } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import GameIcon from "../components/GameIcon.vue";
+import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import { act, dialog, state } from "../host";
 import { t } from "../i18n";
 
 const library = computed(() => state.value!.library);
-const recent = computed(() => library.value.recent.map((id) => library.value.games[id]!).filter(Boolean));
-const empty = computed(() => Object.keys(library.value.games).length === 0);
+const recent = computed(() => library.value.recent.map((id) => library.value.workspaces[id]!).filter(Boolean));
+const empty = computed(() => Object.keys(library.value.workspaces).length === 0);
 </script>
 
 <template>
@@ -27,15 +27,15 @@ const empty = computed(() => Object.keys(library.value.games).length === 0);
     <section v-else class="w-full max-w-[720px]" aria-labelledby="recent-title">
       <h2 id="recent-title" class="text-muted-foreground mb-4 text-sm font-medium">{{ t("welcome.recent") }}</h2>
       <ul class="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-2">
-        <li v-for="game in recent" :key="game.id">
+        <li v-for="workspace in recent" :key="workspace.id">
           <button
             type="button"
             class="hover:bg-card flex w-full flex-col items-center gap-2 rounded-lg px-2 py-3"
-            :data-testid="`recent-${game.id}`"
-            @click="act({ type: 'open-game', gameId: game.id })"
+            :data-testid="`recent-${workspace.id}`"
+            @click="act({ type: 'open-workspace', workspaceId: workspace.id })"
           >
-            <GameIcon :game="game" :size="64" />
-            <span class="max-w-full truncate text-sm">{{ game.name }}</span>
+            <WorkspaceIcon :workspace="workspace" :size="64" />
+            <span class="max-w-full truncate text-sm">{{ workspace.name }}</span>
           </button>
         </li>
         <li>

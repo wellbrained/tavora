@@ -33,46 +33,47 @@ export const FIXTURES = path.join(desktopDir, "test/fixtures");
 
 /** Content size the harness gives the window, so layouts do not depend on the test display. */
 export const WINDOW = { width: 1400, height: 900 } as const;
-/** Width of the collapsed game rail. */
+/** Width of the collapsed rail. */
 export const RAIL_WIDTH = 72;
 
-function seedGame(id: string, name: string, text: string, addedAt: string) {
+function seedWorkspace(id: string, name: string, text: string, addedAt: string) {
   return {
     id,
+    kind: "game",
     catalogId: id,
     name,
     icon: { kind: "monogram", text },
     showNews: true,
     addedAt,
-    lastPlayedAt: id === "poe2" ? addedAt : null,
+    lastOpenedAt: id === "poe2" ? addedAt : null,
     trashedAt: null,
   };
 }
 
-/** A library with Path of Exile 2 and Satisfactory that opens on Path of Exile 2. */
+/** A library with the game workspaces of Path of Exile 2 and Satisfactory that opens on Path of Exile 2. */
 export function seedLibrary() {
   const at = "2026-10-01T12:00:00.000Z";
   return {
-    version: 1,
-    games: {
-      poe2: seedGame("poe2", "Path of Exile 2", "PE2", at),
-      satisfactory: seedGame("satisfactory", "Satisfactory", "S", at),
+    version: 2,
+    workspaces: {
+      poe2: seedWorkspace("poe2", "Path of Exile 2", "PE2", at),
+      satisfactory: seedWorkspace("satisfactory", "Satisfactory", "S", at),
     },
     folders: {},
     root: [
-      { kind: "game", id: "poe2" },
-      { kind: "game", id: "satisfactory" },
+      { kind: "workspace", id: "poe2" },
+      { kind: "workspace", id: "satisfactory" },
     ],
     favorites: [],
     sort: "manual",
     rail: { expanded: false, width: 256 },
-    startup: "last-game",
-    lastGameId: "poe2",
+    startup: "last-workspace",
+    lastWorkspaceId: "poe2",
   };
 }
 
 export interface LaunchOptions {
-  /** Write the two-game library before the first start (default true). */
+  /** Write the two-workspace library before the first start (default true). */
   seed?: boolean;
   /** What the system pretends to be (default dark), so the theme tests do not depend on the PC. */
   systemTheme?: "dark" | "light";
@@ -165,10 +166,10 @@ export async function expectModuleText(
     .toBe(expected);
 }
 
-/** Opens a game from the rail and waits for its workspace. */
-export async function openGame(page: Page, gameId: string): Promise<void> {
-  await page.getByTestId(`rail-game-${gameId}`).click();
-  await expect(page.getByTestId(`rail-game-${gameId}`)).toHaveAttribute("aria-current", "page");
+/** Opens a workspace from the rail and waits for it. */
+export async function openWorkspace(page: Page, workspaceId: string): Promise<void> {
+  await page.getByTestId(`rail-workspace-${workspaceId}`).click();
+  await expect(page.getByTestId(`rail-workspace-${workspaceId}`)).toHaveAttribute("aria-current", "page");
 }
 
 /** Sets the window's content size. */

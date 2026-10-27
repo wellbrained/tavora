@@ -14,7 +14,7 @@ defineProps<{ expanded: boolean }>();
 
 const game = computed(() => {
   const id = state.value!.runningGameId;
-  return id ? (state.value!.library.games[id] ?? null) : null;
+  return id ? (state.value!.library.workspaces[id] ?? null) : null;
 });
 const label = computed(() => (game.value ? t("rail.running", { name: game.value.name }) : ""));
 </script>
@@ -27,7 +27,7 @@ const label = computed(() => (game.value ? t("rail.running", { name: game.value.
       data-rail-item
       data-testid="rail-running"
       :aria-label="`${label}. ${t('rail.runningSwitch')}`"
-      @click="act({ type: 'open-game', gameId: game.id })"
+      @click="act({ type: 'open-workspace', workspaceId: game.id })"
     >
       <RailFooterTile dot="success" class="running-tile text-success">
         <Gamepad2 class="running-glyph size-5" :stroke-width="1.5" />

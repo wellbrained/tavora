@@ -1,4 +1,4 @@
-// The data side of To-Dos: one document per game holds every group and
+// The data side of To-Dos: one document per workspace holds every group and
 // task, and each change is a pure function on it. Changes take their new ids
 // as arguments, so re-applying one after another panel saved first gives the
 // same result.
@@ -10,7 +10,7 @@
 
 import type { JsonValue } from "@tavora/sdk";
 
-/** The document every To-Dos panel of a game shares. */
+/** The document every To-Dos panel of a workspace shares. */
 export const LIST_ID = "todos";
 export const LIST_TITLE = "To-Dos";
 /** The group a first to-do goes into when there is none yet. */
@@ -90,7 +90,7 @@ function unique<T extends { id: string }>(items: T[]): T[] {
   return items.filter((item) => item.id !== "" && !seen.has(item.id) && seen.add(item.id));
 }
 
-/** Turns stored data, or null for a new game, into a valid list. */
+/** Turns stored data, or null for a new workspace, into a valid list. */
 export function parseList(raw: JsonValue | null): TodoList {
   const groups = isObject(raw ?? null) ? list((raw as JsonObject).groups) : [];
   return {

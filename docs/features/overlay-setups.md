@@ -1,6 +1,6 @@
 # Overlay setups (planned)
 
-Decided with the owner on 2026-10-27. Replaces the Overlay layout window and the per-game overrides described in [overlay-layout.md](overlay-layout.md) once built. The [Game → Workspace rename](workspace-rename.md) comes first, so this work uses the new names.
+Decided with the owner on 2026-10-27. Replaces the Overlay layout window and the per-game overrides described in [overlay-layout.md](overlay-layout.md) once built. It uses the names from the [Game → Workspace rename](workspace-rename.md), which is done.
 
 ## Setups
 
@@ -60,7 +60,7 @@ The button is hidden while overlays are off in Settings. Main sends a new live s
 
 ## Steps
 
-0. [Game → Workspace rename](workspace-rename.md).
+0. [Game → Workspace rename](workspace-rename.md) (done).
 1. Setups in the data, the which-setup-shows rule, the source rules, the limit, showing outside games, the data move, the security page.
 2. The Overlay page; Add overlay / Remove overlay on the workspace.
 3. The header button and the live state; Settings trimmed.

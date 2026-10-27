@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The module library: every installed module, to open in the current game. The list on the left
-// picks what is shown: all modules, the ones already in this game, one kind of module, or Tavora's
+// The module library: every installed module, to open in the current workspace. The list on the left
+// picks what is shown: all modules, the ones already in this workspace, one kind of module, or Tavora's
 // catalog (CatalogBrowse.vue). Each module is a card with its Add; a module with panel types lists
 // them in a list that drops over the card below, each with its own Add (the decision log, named
 // panels round 1), next to an Add all that opens one of each; adding one of those panels keeps the
@@ -17,7 +17,7 @@ import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-li
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
 import { t } from "../i18n";
-import { Blocks, ChevronDown, CloudDownload, Code, Download, Gamepad2, Search, Settings2, ShieldCheck, Store, X } from "@lucide/vue";
+import { Blocks, ChevronDown, CloudDownload, Code, Download, LayoutGrid, Search, Settings2, ShieldCheck, Store, X } from "@lucide/vue";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
@@ -29,13 +29,13 @@ import { MODULE_TAG_TEXT, moduleTag, type TaggedModule } from "../../shared/modu
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 type Kind = "official" | "local" | "development";
-/** What the library shows: installed modules (all, the ones in this game, or one kind), or the catalog. */
-type View = "all" | "inGame" | Kind | "catalog" | "updates";
+/** What the library shows: installed modules (all, the ones in this workspace, or one kind), or the catalog. */
+type View = "all" | "inWorkspace" | Kind | "catalog" | "updates";
 
 const KINDS: Kind[] = ["official", "local", "development"];
 const VIEWS = [
   { id: "all", icon: Blocks },
-  { id: "inGame", icon: Gamepad2 },
+  { id: "inWorkspace", icon: LayoutGrid },
   { id: "official", icon: ShieldCheck },
   { id: "local", icon: Download },
   { id: "development", icon: Code },
@@ -59,7 +59,7 @@ const query = ref("");
 /** How many modules the catalog lists for the search, once it has loaded. */
 const catalogCount = ref<number | null>(null);
 
-// Count modules, not panels: a module can have several panels in this game.
+// Count modules, not panels: a module can have several panels in this workspace.
 const panelCounts = computed(() => {
   const counts = new Map<string, number>();
   for (const panel of state.value!.panels) counts.set(panel.moduleId, (counts.get(panel.moduleId) ?? 0) + 1);
@@ -76,7 +76,7 @@ const searched = computed(() => {
 
 function inView(module: ModuleView, id: View): boolean {
   if (id === "all") return true;
-  if (id === "inGame") return openCount(module.id) > 0;
+  if (id === "inWorkspace") return openCount(module.id) > 0;
   return kindOf(module) === id;
 }
 
@@ -117,14 +117,14 @@ const groups = computed(() => {
 });
 const resultCount = computed(() => groups.value.reduce((total, group) => total + group.items.length, 0));
 /** Headings only where the list mixes kinds. */
-const showHeadings = computed(() => view.value === "all" || view.value === "inGame");
+const showHeadings = computed(() => view.value === "all" || view.value === "inWorkspace");
 
 const title = computed(() => (view.value === "catalog" ? t("addModule.tab.browse") : t(`addModule.category.${view.value}`)));
 /** The header's icon: the chosen view's own from the list on the left. */
 const viewIcon = computed(() => (view.value === "catalog" ? Store : view.value === "updates" ? CloudDownload : (VIEWS.find((item) => item.id === view.value)?.icon ?? Blocks)));
 const shownCount = computed(() => (view.value === "catalog" ? catalogCount.value : view.value === "updates" ? updateCount.value : resultCount.value));
 
-/** How many panels of a module (of one of its panel types, if given) are already open in this game. */
+/** How many panels of a module (of one of its panel types, if given) are already open in this workspace. */
 function openCount(moduleId: string, panelType?: string): number {
   if (panelType === undefined) return panelCounts.value.get(moduleId) ?? 0;
   return state.value!.panels.filter((panel) => panel.moduleId === moduleId && panel.panelType === panelType).length;
@@ -314,7 +314,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                     >
                       {{ t("addModule.panelCount", { count: module.panels.length }) }}
                       <template v-if="openCount(module.id)">
-                        · <span class="text-primary" :data-testid="`in-game-${module.id}`">{{ t("addModule.inGame", { count: openCount(module.id) }) }}</span>
+                        · <span class="text-primary" :data-testid="`in-workspace-${module.id}`">{{ t("addModule.inWorkspace", { count: openCount(module.id) }) }}</span>
                       </template>
                     </button>
                     <ButtonGroup class="shrink-0">
@@ -341,7 +341,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                     </ButtonGroup>
                   </template>
                   <template v-else>
-                    <span v-if="openCount(module.id)" class="text-primary text-xs" :data-testid="`in-game-${module.id}`">{{ t("addModule.inGame", { count: openCount(module.id) }) }}</span>
+                    <span v-if="openCount(module.id)" class="text-primary text-xs" :data-testid="`in-workspace-${module.id}`">{{ t("addModule.inWorkspace", { count: openCount(module.id) }) }}</span>
                     <Button
                       size="sm"
                       variant="outline"

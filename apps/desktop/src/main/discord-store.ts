@@ -9,7 +9,7 @@ import { writeFileAtomic } from "./fsutil";
 // not available nothing is saved. Before 0.6.1 the file also held a Client
 // Secret; it is dropped when the file is read and the file is written again.
 // Before 0.16.11 it also held the voice channel last joined and the server each
-// game remembers; Tavora moves those into the Discord module once (host.ts).
+// workspace remembers; Tavora moves those into the Discord module once (host.ts).
 
 export interface Encryptor {
   isAvailable(): boolean;
@@ -32,7 +32,7 @@ export interface DiscordLast {
   serverName: string | null;
 }
 
-/** Before 0.16.11: the server a game remembered, and the channel the player was last in there. */
+/** Before 0.16.11: the server a workspace remembered, and the channel the player was last in there. */
 export interface DiscordGame {
   guildId: string | null;
   serverName: string | null;
@@ -44,7 +44,7 @@ export interface DiscordSecrets {
   token: DiscordToken | null;
   /** Left by Discord panels before 0.16.11, until moved into the module. */
   last?: DiscordLast | null;
-  /** Left by Discord panels before 0.16.11, by game id, until moved into the module. */
+  /** Left by Discord panels before 0.16.11, by workspace id, until moved into the module. */
   games?: Record<string, DiscordGame>;
 }
 

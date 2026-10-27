@@ -30,11 +30,11 @@ function canSplit(group: DockviewGroupPanel, side: "right" | "below", info: Dock
 }
 
 /**
- * The modules in this game, A–Z, each with all its panel types (a module without types is one row). An open
+ * The modules in this workspace, A–Z, each with all its panel types (a module without types is one row). An open
  * type is checked and picking it brings that panel to the front; any other is added, placed from `from`, the
  * group whose menu was used (else the active one). New modules come from Add module.
  */
-export function gameModulesMenu(from?: DockviewGroupPanel): MenuItem[] {
+export function workspaceModulesMenu(from?: DockviewGroupPanel): MenuItem[] {
   const view = state.value;
   if (!view) return [];
   const inGame = new Set(view.panels.map((panel) => panel.moduleId));
@@ -46,7 +46,7 @@ export function gameModulesMenu(from?: DockviewGroupPanel): MenuItem[] {
       label,
       icon: { moduleId: module.id, panelType },
       checked: view.panels.some((panel) => panel.moduleId === module.id && panel.panelType === panelType),
-      testid: `in-game-${module.id}${panelType ? `-${panelType}` : ""}`,
+      testid: `in-workspace-${module.id}${panelType ? `-${panelType}` : ""}`,
       run: () => {
         from?.api.setActive();
         showOrAddPanel(module.id, panelType);
@@ -59,7 +59,7 @@ export function gameModulesMenu(from?: DockviewGroupPanel): MenuItem[] {
       items.push({ ...row(null, module.name), separator });
       continue;
     }
-    items.push({ label: module.name, heading: true, icon: { moduleId: module.id }, separator, testid: `in-game-heading-${module.id}` });
+    items.push({ label: module.name, heading: true, icon: { moduleId: module.id }, separator, testid: `in-workspace-heading-${module.id}` });
     for (const type of module.panels) items.push(row(type.id, type.name));
   }
   return items;
@@ -84,7 +84,7 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
   const module = info(panel.id)?.module;
   const entry = state.value?.panels.find((item) => item.instanceId === panel.id);
   return [
-    { label: t("workspace.inGame"), testid: "panel-in-game", submenu: () => gameModulesMenu(group) },
+    { label: t("workspace.inWorkspace"), testid: "panel-in-game", submenu: () => workspaceModulesMenu(group) },
     {
       label: t("dock.splitRight"),
       testid: "panel-split-right",
@@ -143,7 +143,7 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
             label: t("dock.removeModule", { name: module.name }),
             testid: "panel-remove-module",
             danger: true,
-            run: () => act({ type: "remove-module-from-game", moduleId: module.id }),
+            run: () => act({ type: "remove-module-from-workspace", moduleId: module.id }),
           },
         ]
       : []),

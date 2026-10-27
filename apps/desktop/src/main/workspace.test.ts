@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 import { gridTemplate } from "../shared/layout-templates";
 import { LAYOUT_LIMITS, layoutPanels, type SavedLayout } from "./layout";
 import {
-  emptyWorkspace,
-  GameWorkspaces,
+  emptyWorkspaces,
+  Workspaces,
   loadWorkspace,
   MAX_SNAPSHOTS,
   planSnapshot,
@@ -41,18 +41,18 @@ const tempFile = async () => path.join(await mkdtemp(path.join(tmpdir(), "tavora
 describe("loadWorkspace", () => {
   it("returns an empty workspace when nothing is saved", async () => {
     expect(await loadWorkspace(await tempFile(), ["poe2", "satisfactory"], () => true)).toEqual(
-      emptyWorkspace(["poe2", "satisfactory"]),
+      emptyWorkspaces(["poe2", "satisfactory"]),
     );
   });
 
   it("reads a version 1 file, which has panels but no layout", async () => {
     const file = await tempFile();
-    await writeFile(file, JSON.stringify({ version: 1, games: { poe2: { instances: [{ instanceId: A, moduleId: "local.example.a" }] } } }));
+    await writeFile(file, JSON.stringify({ version: 1, workspaces: { poe2: { instances: [{ instanceId: A, moduleId: "local.example.a" }] } } }));
     const state = await loadWorkspace(file, ["poe2"], () => true);
-    expect(state.games.poe2).toEqual({ instances: [{ instanceId: A, moduleId: "local.example.a" }], layout: null, snapshots: [] });
+    expect(state.workspaces.poe2).toEqual({ instances: [{ instanceId: A, moduleId: "local.example.a" }], layout: null, snapshots: [] });
   });
 
-  it("round-trips and drops unknown games, missing modules and bad records", async () => {
+  it("round-trips and drops unknown workspaces, missing modules and bad records", async () => {
     const file = await tempFile();
     const snapshot: Snapshot = {
       id: S,
@@ -62,8 +62,8 @@ describe("loadWorkspace", () => {
       modules: { [A]: "local.example.a", [C]: "local.example.gone" },
     };
     await saveWorkspace(file, {
-      version: 2,
-      games: {
+      version: 3,
+      workspaces: {
         poe2: {
           instances: [
             { instanceId: A, moduleId: "local.example.a" },
@@ -77,15 +77,15 @@ describe("loadWorkspace", () => {
       },
     });
     const state = await loadWorkspace(file, ["poe2", "satisfactory"], (id) => id === "local.example.a");
-    expect(Object.keys(state.games)).toEqual(["poe2", "satisfactory"]);
-    const poe2 = state.games.poe2!;
+    expect(Object.keys(state.workspaces)).toEqual(["poe2", "satisfactory"]);
+    const poe2 = state.workspaces.poe2!;
     expect(poe2.instances).toEqual([{ instanceId: A, moduleId: "local.example.a" }]);
     // The panel of the missing module leaves the layout.
     expect(poe2.layout!.root.children).toEqual([{ kind: "group", size: 500, panels: [A], active: A }]);
     // So does the snapshot's placeholder for it; the broken snapshot is dropped.
     expect(poe2.snapshots).toHaveLength(1);
     expect(poe2.snapshots[0]!.modules).toEqual({ [A]: "local.example.a" });
-    expect(state.games.satisfactory!.instances).toEqual([]);
+    expect(state.workspaces.satisfactory!.instances).toEqual([]);
   });
 
   it("keeps a panel's type, and drops one that is not a type id", async () => {
@@ -94,11 +94,11 @@ describe("loadWorkspace", () => {
     await writeFile(
       file,
       JSON.stringify({
-        version: 2,
-        games: { poe2: { instances: [{ instanceId: A, moduleId: "m.a", panelType: "planner" }, { instanceId: B, moduleId: "m.a", panelType: "Bad Type" }], layout: null, snapshots: [snapshot] } },
+        version: 3,
+        workspaces: { poe2: { instances: [{ instanceId: A, moduleId: "m.a", panelType: "planner" }, { instanceId: B, moduleId: "m.a", panelType: "Bad Type" }], layout: null, snapshots: [snapshot] } },
       }),
     );
-    const poe2 = (await loadWorkspace(file, ["poe2"], () => true)).games.poe2!;
+    const poe2 = (await loadWorkspace(file, ["poe2"], () => true)).workspaces.poe2!;
     expect(poe2.instances).toEqual([{ instanceId: A, moduleId: "m.a", panelType: "planner" }, { instanceId: B, moduleId: "m.a" }]);
     expect(poe2.snapshots[0]!.panelTypes).toEqual({ [A]: "planner" });
   });
@@ -109,18 +109,18 @@ describe("loadWorkspace", () => {
     await writeFile(
       file,
       JSON.stringify({
-        version: 2,
-        games: { poe2: { instances: [{ instanceId: A, moduleId: "m.a", content }, { instanceId: B, moduleId: "m.a", content: { id: 7, title: "x" } }], layout: null, snapshots: [] } },
+        version: 3,
+        workspaces: { poe2: { instances: [{ instanceId: A, moduleId: "m.a", content }, { instanceId: B, moduleId: "m.a", content: { id: 7, title: "x" } }], layout: null, snapshots: [] } },
       }),
     );
-    const poe2 = (await loadWorkspace(file, ["poe2"], () => true)).games.poe2!;
+    const poe2 = (await loadWorkspace(file, ["poe2"], () => true)).workspaces.poe2!;
     expect(poe2.instances).toEqual([{ instanceId: A, moduleId: "m.a", content }, { instanceId: B, moduleId: "m.a" }]);
   });
 
   it("ignores an unreadable file", async () => {
     const file = await tempFile();
     await writeFile(file, "{oops");
-    expect(await loadWorkspace(file, ["poe2"], () => true)).toEqual(emptyWorkspace(["poe2"]));
+    expect(await loadWorkspace(file, ["poe2"], () => true)).toEqual(emptyWorkspaces(["poe2"]));
   });
 });
 
@@ -184,42 +184,42 @@ describe("panel types", () => {
   });
 
   it("gives older panels the continuing type, keeps removed types and clears types of modules without them", () => {
-    const state = emptyWorkspace(["poe2"]);
-    state.games.poe2!.instances = [
+    const state = emptyWorkspaces(["poe2"]);
+    state.workspaces.poe2!.instances = [
       { instanceId: A, moduleId: "m.typed" },
       { instanceId: B, moduleId: "m.typed", panelType: "removed" },
       { instanceId: C, moduleId: "m.plain", panelType: "planner" },
     ];
-    state.games.poe2!.snapshots = [{ ...snapshot, modules: { [A]: "m.typed", [B]: "m.plain" }, panelTypes: { [B]: "planner" } }];
+    state.workspaces.poe2!.snapshots = [{ ...snapshot, modules: { [A]: "m.typed", [B]: "m.plain" }, panelTypes: { [B]: "planner" } }];
     settlePanelTypes(state, (id) => (id === "m.typed" ? { ids: ["inventory", "planner"], continuing: "planner" } : { ids: [], continuing: null }));
-    expect(state.games.poe2!.instances).toEqual([
+    expect(state.workspaces.poe2!.instances).toEqual([
       { instanceId: A, moduleId: "m.typed", panelType: "planner" },
       { instanceId: B, moduleId: "m.typed", panelType: "removed" },
       { instanceId: C, moduleId: "m.plain" },
     ]);
-    expect(state.games.poe2!.snapshots[0]!.panelTypes).toEqual({ [A]: "planner" });
+    expect(state.workspaces.poe2!.snapshots[0]!.panelTypes).toEqual({ [A]: "planner" });
   });
 
   it("keeps the types of a module it can't see right now, so a rebuild doesn't turn every panel into the first type", () => {
-    const state = emptyWorkspace(["poe2"]);
-    state.games.poe2!.instances = [
+    const state = emptyWorkspaces(["poe2"]);
+    state.workspaces.poe2!.instances = [
       { instanceId: A, moduleId: "m.typed", panelType: "planner" },
       { instanceId: B, moduleId: "m.typed", panelType: "inventory" },
     ];
-    state.games.poe2!.snapshots = [{ ...snapshot, modules: { [A]: "m.typed" }, panelTypes: { [A]: "planner" } }];
+    state.workspaces.poe2!.snapshots = [{ ...snapshot, modules: { [A]: "m.typed" }, panelTypes: { [A]: "planner" } }];
     settlePanelTypes(state, () => undefined);
     settlePanelTypes(state, () => ({ ids: ["inventory", "planner"], continuing: "inventory" }));
-    expect(state.games.poe2!.instances.map((record) => record.panelType)).toEqual(["planner", "inventory"]);
-    expect(state.games.poe2!.snapshots[0]!.panelTypes).toEqual({ [A]: "planner" });
+    expect(state.workspaces.poe2!.instances.map((record) => record.panelType)).toEqual(["planner", "inventory"]);
+    expect(state.workspaces.poe2!.snapshots[0]!.panelTypes).toEqual({ [A]: "planner" });
   });
 });
 
-describe("GameWorkspaces", () => {
+describe("Workspaces", () => {
   const D = "00000000-0000-4000-8000-00000000000d";
   /** poe2 shows notes (A) beside todos (B); satisfactory has a notes panel (C). */
   const setup = () => {
-    const state: WorkspaceState = emptyWorkspace(["poe2", "satisfactory"]);
-    state.games.poe2 = {
+    const state: WorkspaceState = emptyWorkspaces(["poe2", "satisfactory"]);
+    state.workspaces.poe2 = {
       instances: [
         { instanceId: A, moduleId: "notes" },
         { instanceId: B, moduleId: "todos" },
@@ -227,10 +227,10 @@ describe("GameWorkspaces", () => {
       layout: twoColumns(A, B),
       snapshots: [],
     };
-    state.games.satisfactory!.instances = [{ instanceId: C, moduleId: "notes" }];
+    state.workspaces.satisfactory!.instances = [{ instanceId: C, moduleId: "notes" }];
     const saved: WorkspaceState[] = [];
     let next = 0;
-    const workspaces = new GameWorkspaces(state, {
+    const workspaces = new Workspaces(state, {
       save: (copy) => saved.push(copy),
       newId: () => `00000000-0000-4000-8000-${String(++next).padStart(12, "0")}`,
       now: () => new Date("2026-10-20T12:00:00.000Z"),
@@ -249,14 +249,14 @@ describe("GameWorkspaces", () => {
   it("keeps only open panels in a saved layout, without bumping the epoch", () => {
     const { state, workspaces } = setup();
     workspaces.saveLayout("poe2", twoColumns(A, D));
-    expect(layoutPanels(state.games.poe2!.layout)).toEqual([A]);
+    expect(layoutPanels(state.workspaces.poe2!.layout)).toEqual([A]);
     expect(workspaces.epoch).toBe(0);
   });
 
   it("saves, renames, updates and deletes a snapshot", () => {
     const { state, workspaces } = setup();
     const id = workspaces.saveSnapshot("poe2", "  Mapping ");
-    const [snapshot] = state.games.poe2!.snapshots;
+    const [snapshot] = state.workspaces.poe2!.snapshots;
     expect(snapshot).toEqual({
       id,
       name: "Mapping",
@@ -268,9 +268,9 @@ describe("GameWorkspaces", () => {
     workspaces.renameSnapshot("poe2", id, "Bossing");
     workspaces.saveLayout("poe2", twoColumns(B, A));
     workspaces.updateSnapshot("poe2", id);
-    expect(state.games.poe2!.snapshots[0]).toMatchObject({ name: "Bossing", layout: twoColumns(B, A) });
+    expect(state.workspaces.poe2!.snapshots[0]).toMatchObject({ name: "Bossing", layout: twoColumns(B, A) });
     workspaces.deleteSnapshot("poe2", id);
-    expect(state.games.poe2!.snapshots).toEqual([]);
+    expect(state.workspaces.poe2!.snapshots).toEqual([]);
   });
 
   it("refuses an empty name, a name taken in any case, a missing snapshot and an empty layout", () => {
@@ -284,7 +284,7 @@ describe("GameWorkspaces", () => {
     expect(() => workspaces.saveSnapshot("satisfactory", "Empty")).toThrow(WorkspaceError);
   });
 
-  it("holds at most MAX_SNAPSHOTS snapshots a game", () => {
+  it("holds at most MAX_SNAPSHOTS snapshots a workspace", () => {
     const { workspaces } = setup();
     for (let i = 0; i < MAX_SNAPSHOTS; i++) workspaces.saveSnapshot("poe2", `Layout ${i}`);
     expect(() => workspaces.saveSnapshot("poe2", "One more")).toThrow(WorkspaceError);
@@ -299,15 +299,15 @@ describe("GameWorkspaces", () => {
     const fresh = "00000000-0000-4000-8000-000000000002";
     expect(opened).toEqual([{ instanceId: fresh, moduleId: "notes" }]);
     expect(closed).toEqual([]);
-    expect(state.games.poe2!.instances.map((record) => record.instanceId)).toEqual([fresh, B]);
+    expect(state.workspaces.poe2!.instances.map((record) => record.instanceId)).toEqual([fresh, B]);
     expect(workspaces.epoch).toBe(before + 1);
   });
 
-  it("vacates a module in one game or in all, leaving empty slots", () => {
+  it("vacates a module in one workspace or in all, leaving empty slots", () => {
     const { state, workspaces } = setup();
     expect(workspaces.vacate("notes", "poe2")).toEqual([A]);
-    expect(state.games.poe2!.layout?.root.kind === "split" && state.games.poe2!.layout.root.children[0]).toMatchObject({ panels: [], active: null });
-    expect(state.games.satisfactory!.instances).toHaveLength(1);
+    expect(state.workspaces.poe2!.layout?.root.kind === "split" && state.workspaces.poe2!.layout.root.children[0]).toMatchObject({ panels: [], active: null });
+    expect(state.workspaces.satisfactory!.instances).toHaveLength(1);
     expect(workspaces.vacate("notes")).toEqual([C]);
     expect(workspaces.vacate("notes")).toEqual([]);
     expect(workspaces.epoch).toBe(2);
@@ -316,7 +316,7 @@ describe("GameWorkspaces", () => {
   it("drops panels of modules that are gone, slot and all", () => {
     const { state, saved, workspaces } = setup();
     expect(workspaces.dropMissingModules((moduleId) => moduleId !== "todos")).toEqual([B]);
-    expect(layoutPanels(state.games.poe2!.layout)).toEqual([A]);
+    expect(layoutPanels(state.workspaces.poe2!.layout)).toEqual([A]);
     expect(workspaces.dropMissingModules(() => true)).toEqual([]);
     expect(saved).toHaveLength(1);
   });
@@ -331,24 +331,24 @@ describe("GameWorkspaces", () => {
     expect(() => workspaces.openPanel("satisfactory", { instanceId: D, moduleId: "notes" })).toThrow(WorkspaceError);
     expect(workspaces.closePanel("poe2", B)).toBe(true);
     expect(workspaces.closePanel("poe2", B)).toBe(false);
-    expect(layoutPanels(state.games.poe2!.layout)).toEqual([A]);
+    expect(layoutPanels(state.workspaces.poe2!.layout)).toEqual([A]);
   });
 
   it("lays the open panels out in a template, unplaced ones last", () => {
     const { state, workspaces } = setup();
     workspaces.openPanel("poe2", { instanceId: D, moduleId: "map" });
     workspaces.applyTemplate("poe2", gridTemplate(3, 1));
-    expect(layoutPanels(state.games.poe2!.layout)).toEqual([A, B, D]);
+    expect(layoutPanels(state.workspaces.poe2!.layout)).toEqual([A, B, D]);
     expect(workspaces.epoch).toBe(1);
     expect(() => workspaces.applyTemplate("poe2", undefined)).toThrow(WorkspaceError);
   });
 
-  it("adds and forgets games", () => {
+  it("adds and forgets workspaces", () => {
     const { state, workspaces } = setup();
-    workspaces.addGames(["enshrouded"]);
-    expect(state.games.enshrouded).toEqual({ instances: [], layout: null, snapshots: [] });
-    expect(workspaces.forgetGame("poe2").map((record) => record.instanceId)).toEqual([A, B]);
-    expect(state.games.poe2).toBeUndefined();
-    expect(workspaces.gamesUsing("notes")).toEqual(["satisfactory"]);
+    workspaces.addWorkspaces(["enshrouded"]);
+    expect(state.workspaces.enshrouded).toEqual({ instances: [], layout: null, snapshots: [] });
+    expect(workspaces.forgetWorkspace("poe2").map((record) => record.instanceId)).toEqual([A, B]);
+    expect(state.workspaces.poe2).toBeUndefined();
+    expect(workspaces.workspacesUsing("notes")).toEqual(["satisfactory"]);
   });
 });

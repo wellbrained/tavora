@@ -36,7 +36,7 @@ export const OVERLAY_LAYER_ACTION = "$layer";
 export const LEGACY_ARRANGE_ACTION = "$arrange";
 /** Who owns the layer key: Tavora itself. */
 export const LAYER_OWNER = "tavora";
-/** The "game" of the layer key: it works over every game. */
+/** The "workspace" of the layer key: it belongs to none and works over every game. */
 export const ALL_GAMES = "$all";
 
 /**
@@ -52,10 +52,10 @@ export type Opacity = (typeof OPACITIES)[number];
 /** `always`: shown whenever the game is in front. `toggle`: shown or hidden by the overlay's key. */
 export type OverlayMode = "always" | "toggle";
 
-/** `game`: only over the game it was made in. `all`: made in a workspace that is no game; over every library game in front. */
+/** `game`: only over the game of the game workspace it was made in. `all`: made in a personal workspace; over every library game in front. */
 export type OverlayScope = "game" | "all";
 
-/** The scope for something made in a library entry of this kind. */
+/** The scope for something made in a workspace of this kind. */
 export const scopeForKind = (kind: string | undefined): OverlayScope => (kind === "game" ? "game" : "all");
 
 /**
@@ -94,7 +94,8 @@ export function startRect(preferred: { width?: number | undefined; height?: numb
 export interface GameOverlaySubject {
   owner: string;
   moduleId: string;
-  gameId: string;
+  /** The workspace it was made in. A game workspace's id is its game's, so a game's own overlay names its game here. */
+  workspaceId: string;
   key: string;
 }
 
@@ -117,7 +118,7 @@ export interface InGamePanel {
   owner: string;
   moduleId: string;
   /** The workspace the panel is in. */
-  gameId: string;
+  workspaceId: string;
   scope: OverlayScope;
   instanceId: string;
   rect: AnchoredRect;
@@ -132,9 +133,10 @@ export interface InGamePanel {
 /**
  * The file's version now. Version 3 keeps each position twice: `anchor` (an AnchoredRect) and `rect` (fractions of the
  * window, as versions 1 and 2 kept them, computed on the last window size seen), so an older Tavora still places things
- * right. An item without `anchor` is not converted yet. A file of a higher version is never overwritten.
+ * right. An item without `anchor` is not converted yet. Version 4 is version 3 with the workspace names (workspace-move.ts); a
+ * file moved from version 1 or 2 says so in `formerVersion` until it is written again. A file of a higher version is never overwritten.
  */
-export const FILE_VERSION = 3;
+export const FILE_VERSION = 4;
 
 /** Where an item sits: placed the old way until it is converted, else anchored to the game window. */
 export function placeItem(item: { rect: AnchoredRect; legacy?: LegacyRect }, game: Rect, min?: number): Rect {
@@ -157,6 +159,8 @@ export interface GameLayoutState {
 
 type GameOverlayFile = {
   version?: number;
+  /** The version a file had before the workspace names, when it was 1 or 2. */
+  formerVersion?: number;
   exclusiveHintShown?: boolean;
   /** The Overlay layout: the grid setting, the window's place and the last window size seen per game. */
   layout?: { grid?: GridSetting; window?: WindowState; seen?: Record<string, SeenSize>; games?: Record<string, GameLayoutState> };
@@ -170,10 +174,10 @@ export type GameOverlayChange = Partial<Pick<GameOverlay, "mode" | "opacity" | "
 /** The most games whose window size is kept. */
 const MAX_SEEN = 200;
 
-export const sameOverlay = (a: GameOverlaySubject, b: GameOverlaySubject) => a.owner === b.owner && a.moduleId === b.moduleId && a.gameId === b.gameId && a.key === b.key;
+export const sameOverlay = (a: GameOverlaySubject, b: GameOverlaySubject) => a.owner === b.owner && a.moduleId === b.moduleId && a.workspaceId === b.workspaceId && a.key === b.key;
 
 /** One text for an overlay, to key maps and windows by. */
-export const overlayId = (subject: GameOverlaySubject) => [subject.owner, subject.moduleId, subject.gameId, subject.key].join("\n");
+export const overlayId = (subject: GameOverlaySubject) => [subject.owner, subject.moduleId, subject.workspaceId, subject.key].join("\n");
 
 /** One text for an in-game panel's window. */
 export const panelWindowId = (instanceId: string) => `panel\n${instanceId}`;
@@ -184,11 +188,11 @@ export const liveWindowId = (instanceId: string) => `live\n${instanceId}`;
 /** What the player can change on an in-game panel's live view. */
 export type InGamePanelChange = Partial<Pick<InGamePanel, "mode" | "opacity" | "hideFromCapture">>;
 
-/** Whether something (an overlay or an in-game panel) shows over `gameId`: its own game, or any game for a general one. */
-export const appliesTo = (item: { scope: OverlayScope; gameId: string }, gameId: string) => item.scope === "all" || item.gameId === gameId;
+/** Whether something (an overlay or an in-game panel) shows over `gameId`: the game of its workspace, or any game for a general one. */
+export const appliesTo = (item: { scope: OverlayScope; workspaceId: string }, gameId: string) => item.scope === "all" || item.workspaceId === gameId;
 
 /** What limits count together: a game's own, and the general ones. */
-const bucketOf = (item: { scope: OverlayScope; gameId: string }) => (item.scope === "all" ? ALL_GAMES : item.gameId);
+const bucketOf = (item: { scope: OverlayScope; workspaceId: string }) => (item.scope === "all" ? ALL_GAMES : item.workspaceId);
 
 /** The rule of the Live badge on a panel's tab: the panel is in the game, or its module has an overlay that shows over the game. */
 export const isLive = (panelInGame: boolean, moduleOverlays: number) => panelInGame || moduleOverlays > 0;
@@ -294,7 +298,7 @@ function validSize(value: unknown): SeenSize | null {
 export class GameOverlayStore {
   /** The file was of version 1 (Tavora 0.21.0 and before); it is written as the current version from now on. */
   migrated = false;
-  /** The file was of version 2 or 1: its positions convert as the games' windows are seen, and it is written as version 3 from now on. */
+  /** The file was of version 2 or 1: its positions convert as the games' windows are seen, and it is written as the current version from now on. */
   upgraded = false;
   /** The Overlay layout's grid, its window's place and the last window size seen per game. */
   private gridSetting: GridSetting = DEFAULT_GRID;
@@ -318,7 +322,7 @@ export class GameOverlayStore {
    * game window and stay so (`legacy`) until the game's real window is seen (convertLegacy), because older Tavoras never
    * kept its size. `upgraded` says so. A file of a higher version (a newer Tavora wrote it) is set aside, not read.
    */
-  static async load(userData: string, scopeOf: (gameId: string) => OverlayScope = () => "game"): Promise<GameOverlayStore> {
+  static async load(userData: string, scopeOf: (workspaceId: string) => OverlayScope = () => "game"): Promise<GameOverlayStore> {
     const file = path.join(userData, GAME_OVERLAYS_FILE);
     const read = await readJsonOrSetAside<Partial<GameOverlayFile>>(file);
     const newer = typeof read?.version === "number" && read.version > FILE_VERSION;
@@ -327,8 +331,10 @@ export class GameOverlayStore {
     const raw = newer ? null : read;
     const store = new GameOverlayStore(file, [], [], raw?.exclusiveHintShown === true);
     const known = raw !== null && raw !== undefined;
-    store.migrated = known && raw.version !== 2 && raw.version !== FILE_VERSION;
-    store.upgraded = known && raw.version !== FILE_VERSION;
+    // A file moved to the workspace names keeps what version it was until it is written again.
+    const version = raw?.version === FILE_VERSION && (raw.formerVersion === 1 || raw.formerVersion === 2) ? raw.formerVersion : raw?.version;
+    store.migrated = known && version !== 2 && version !== 3 && version !== FILE_VERSION;
+    store.upgraded = known && version !== 3 && version !== FILE_VERSION;
     const layout = typeof raw?.layout === "object" && raw.layout !== null ? raw.layout : {};
     if (isGridSetting(layout.grid)) store.gridSetting = layout.grid;
     store.windowState = layout.window && typeof layout.window === "object" ? layout.window : null;
@@ -347,16 +353,16 @@ export class GameOverlayStore {
     };
     for (const entry of Array.isArray(raw?.overlays) ? raw.overlays : []) {
       if (typeof entry !== "object" || entry === null) continue;
-      const { owner, moduleId, gameId, key, scope, mode, opacity, hideFromCapture } = entry as Partial<Record<keyof GameOverlay, unknown>>;
-      if (![owner, moduleId, gameId].every(validField)) continue;
+      const { owner, moduleId, workspaceId, key, scope, mode, opacity, hideFromCapture } = entry as Partial<Record<keyof GameOverlay, unknown>>;
+      if (![owner, moduleId, workspaceId].every(validField)) continue;
       const position = positionOf(entry);
       if (typeof key !== "string" || !OVERLAY_KEY.test(key) || (store.migrated && key.startsWith(RESERVED_KEY_PREFIX)) || !position) continue;
       const overlay: GameOverlay = {
         owner: owner as string,
         moduleId: moduleId as string,
-        gameId: gameId as string,
+        workspaceId: workspaceId as string,
         key,
-        scope: scope === "all" || scope === "game" ? scope : scopeOf(gameId as string),
+        scope: scope === "all" || scope === "game" ? scope : scopeOf(workspaceId as string),
         mode: mode === "toggle" ? "toggle" : "always",
         opacity: OPACITIES.find((value) => value === opacity) ?? 100,
         hideFromCapture: hideFromCapture === true,
@@ -367,15 +373,15 @@ export class GameOverlayStore {
     }
     for (const entry of Array.isArray(raw?.panels) ? raw.panels : []) {
       if (typeof entry !== "object" || entry === null) continue;
-      const { owner, moduleId, gameId, scope, instanceId, mode, opacity, hideFromCapture } = entry as Partial<Record<keyof InGamePanel, unknown>>;
-      if (![owner, moduleId, gameId].every(validField)) continue;
+      const { owner, moduleId, workspaceId, scope, instanceId, mode, opacity, hideFromCapture } = entry as Partial<Record<keyof InGamePanel, unknown>>;
+      if (![owner, moduleId, workspaceId].every(validField)) continue;
       const position = positionOf(entry);
       if (typeof instanceId !== "string" || !INSTANCE_ID.test(instanceId) || !position) continue;
       const panel: InGamePanel = {
         owner: owner as string,
         moduleId: moduleId as string,
-        gameId: gameId as string,
-        scope: scope === "all" || scope === "game" ? scope : scopeOf(gameId as string),
+        workspaceId: workspaceId as string,
+        scope: scope === "all" || scope === "game" ? scope : scopeOf(workspaceId as string),
         instanceId,
         ...position,
         mode: mode === "toggle" ? "toggle" : "always",
@@ -438,7 +444,7 @@ export class GameOverlayStore {
   /** Adds an overlay with the usual settings, in the corner of the game's window; a game (and the general ones) may have `LIMITS.maxGameOverlays`. */
   add(subject: GameOverlaySubject, scope: OverlayScope, first: AnchoredRect = DEFAULT_RECT): AddResult {
     if (this.find(subject)) return "exists";
-    const bucket = bucketOf({ scope, gameId: subject.gameId });
+    const bucket = bucketOf({ scope, workspaceId: subject.workspaceId });
     if (this.count(bucket) >= LIMITS.maxGameOverlays) return "full";
     this.overlays.push({ ...subject, scope, mode: "always", opacity: 100, hideFromCapture: false, rect: this.startRect(first, bucket) });
     this.saveSoon();
@@ -652,9 +658,9 @@ export class GameOverlayStore {
   }
 
   /** A position as the file keeps it: the anchor, and the fractions of the window for older Tavoras. */
-  private stored(item: { gameId: string; rect: AnchoredRect; legacy?: LegacyRect }): StoredPosition {
+  private stored(item: { workspaceId: string; rect: AnchoredRect; legacy?: LegacyRect }): StoredPosition {
     if (item.legacy) return { rect: item.legacy };
-    const size = this.seen.get(item.gameId) ?? DEFAULT_GAME_SIZE;
+    const size = this.seen.get(item.workspaceId) ?? DEFAULT_GAME_SIZE;
     const placed = placeAnchored(item.rect, { x: 0, y: 0, ...size });
     const fractions = normalizeLegacy({ x: placed.x / size.width, y: placed.y / size.height, width: placed.width / size.width, height: placed.height / size.height });
     return { rect: fractions ?? { x: 0, y: 0, width: 1, height: 1 }, anchor: item.rect };
@@ -684,8 +690,8 @@ export class GameOverlayStore {
       version: FILE_VERSION,
       exclusiveHintShown: this.hintShown,
       layout: { grid: this.gridSetting, ...(this.windowState ? { window: this.windowState } : {}), seen: Object.fromEntries(this.seen), games: Object.fromEntries(this.layouts) },
-      overlays: this.overlays.map(({ rect, legacy, ...item }) => ({ ...item, ...this.stored({ gameId: item.gameId, rect, ...(legacy ? { legacy } : {}) }) })),
-      panels: this.inGame.map(({ rect, legacy, ...item }) => ({ ...item, ...this.stored({ gameId: item.gameId, rect, ...(legacy ? { legacy } : {}) }) })),
+      overlays: this.overlays.map(({ rect, legacy, ...item }) => ({ ...item, ...this.stored({ workspaceId: item.workspaceId, rect, ...(legacy ? { legacy } : {}) }) })),
+      panels: this.inGame.map(({ rect, legacy, ...item }) => ({ ...item, ...this.stored({ workspaceId: item.workspaceId, rect, ...(legacy ? { legacy } : {}) }) })),
     };
     const text = `${JSON.stringify(body, null, 2)}\n`;
     return this.queue.run(() => writeFileAtomic(this.file, text)).catch((error: unknown) => console.error("[tavora] saving game overlays failed", error));

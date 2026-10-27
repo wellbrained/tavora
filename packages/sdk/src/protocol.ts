@@ -1,7 +1,7 @@
 // Wire protocol v1 between a module and the Tavora host, carried over a
 // MessagePort. Specified in apps/docs/reference/protocol.md.
 //
-// Identity (which module, which game, which panel) is never part of a
+// Identity (which module, which workspace, which panel) is never part of a
 // message. The host binds it to the port when it creates the channel.
 
 /** Major protocol version. Every message carries it as `v`. */
@@ -12,12 +12,26 @@ export const HELLO_MESSAGE = "tavora:hello";
 /** Posted by the host preload on the module window, carrying the port. */
 export const PORT_MESSAGE = "tavora:port";
 
+/** The workspace a panel is in: an item on Tavora's rail. */
+export interface TavoraWorkspace {
+  id: string;
+  displayName: string;
+  /**
+   * `"game"`: a game workspace, linked to a game; its id is the game's id, the one a manifest's `games` lists.
+   * `"personal"`: a personal workspace the player made for modules that belong to no game, such as notes.
+   */
+  kind: "game" | "personal";
+}
+
+/**
+ * What `game.getCurrent` answers: the workspace, in the words Tavora used before 0.21.42.
+ * @deprecated Use `TavoraWorkspace` and `workspace.getCurrent`. Tavora answers `game.getCurrent` until its 1.0 preparation.
+ */
 export interface TavoraGame {
   id: string;
   displayName: string;
   /**
-   * A game, or a personal workspace the player made for modules that belong to no game, such as notes.
-   * Tavora older than 0.18.1 leaves it out, which means a game.
+   * A game workspace, or `"workspace"` for a personal workspace. Tavora older than 0.18.1 leaves it out, which means a game.
    */
   kind?: "game" | "workspace";
 }
@@ -105,7 +119,7 @@ export interface PanelContent {
 /**
  * Why this page of the panel is loading.
  * - `add`: the player just added the panel. Pick the content yourself, such as the last one used, or show a picker.
- * - `restore`: the panel was open before (a restart, a game switch back, a reload). `content` is what it last
+ * - `restore`: the panel was open before (a restart, a switch back to its workspace, a reload). `content` is what it last
  *   showed through `panel.setContent`, or null.
  * - `open`: another panel of this module opened it with `panels.open`. Show `content`, or pick yourself when it is null.
  */
@@ -429,7 +443,7 @@ export type SystemOutageKind = "offline" | "no-router" | "no-internet";
 
 /**
  * How the internet connection is doing, as the system-info connector watches it. Tavora pings the router and one
- * address on the internet every 5 seconds while a System Monitor panel exists in any game or workspace, whether
+ * address on the internet every 5 seconds while a System Monitor panel exists in any workspace, whether
  * or not it is shown, so drops are logged. Nothing but those pings is sent.
  */
 export interface SystemConnection {
@@ -593,7 +607,7 @@ export type OverlayLinkResult = "copied" | "off" | "denied";
  */
 export type GameOverlayResult = "shown" | "off" | "full";
 
-/** A hotkey the player set for this module in the current game: which action, for what. Never the key itself. */
+/** A hotkey the player set for this module in the current workspace: which action, for what. Never the key itself. */
 export interface HotkeyBinding {
   /** One of the manifest's `actions` ids. */
   action: string;
@@ -611,12 +625,15 @@ export interface Methods {
   "files.pickReadOnly": { params: { extensions: string[] }; result: ReadOnlyFile | null };
   "files.forget": { params: { id: string }; result: null };
   "bridge.handshake": { params: { protocol: number; sdkVersion: string }; result: HandshakeResult };
+  /** The workspace the panel is in. Tavora 0.21.42 and newer. */
+  "workspace.getCurrent": { params: undefined; result: TavoraWorkspace };
+  /** @deprecated The same in the old words (`TavoraGame`); use workspace.getCurrent. Answered until Tavora's 1.0 preparation. */
   "game.getCurrent": { params: undefined; result: TavoraGame };
   "storage.get": { params: { key: string }; result: JsonValue | null };
   "storage.set": { params: { key: string; value: JsonValue }; result: null };
   "storage.delete": { params: { key: string }; result: null };
   "storage.keys": { params: undefined; result: string[] };
-  /** The same calls for settings shared by every game: this module's own, in all games. */
+  /** The same calls for settings shared by every workspace: this module's own, in all workspaces. */
   "storage.app.get": { params: { key: string }; result: JsonValue | null };
   "storage.app.set": { params: { key: string; value: JsonValue }; result: null };
   "storage.app.delete": { params: { key: string }; result: null };
@@ -646,7 +663,7 @@ export interface Methods {
   /** What this panel's live view (the overlay page shown in its spot over the game) shows; null shows nothing. At most LIMITS.maxOverlayStateBytes. Tavora 0.21.11 and newer. */
   "panel.setLive": { params: { state: JsonValue | null }; result: null };
   /**
-   * Opens one of this module's own panel types in the current game, optionally on some content. Only right after a
+   * Opens one of this module's own panel types in the current workspace, optionally on some content. Only right after a
    * click or key press in the panel, once per click. Tavora 0.17.18 and newer.
    */
   "panels.open": { params: { type: string; content?: PanelContent }; result: PanelOpenResult };
@@ -660,7 +677,7 @@ export interface Methods {
   "ui.tooltip.move": { params: TooltipAnchor; result: null };
   "ui.tooltip.hide": { params: { id: string }; result: null };
   "ui.tooltip.close": { params: { id: string }; result: null };
-  /** Opens a web address in the game's Browser panel. Only right after a click or key press in the panel; http and https only. */
+  /** Opens a web address in the workspace's Browser panel. Only right after a click or key press in the panel; http and https only. */
   "links.open": { params: { url: string }; result: null };
   "blobs.list": { params: undefined; result: BlobInfo[] };
   "blobs.usage": { params: undefined; result: BlobUsage };
@@ -756,7 +773,7 @@ export interface Methods {
    * have an `overlay` in its manifest. Tavora 0.21.3 and newer.
    */
   "overlay.preview": { params: { key: string }; result: null };
-  /** The hotkeys the player set for this module in the current game. Tavora 0.19.26 and newer. */
+  /** The hotkeys the player set for this module in the current workspace. Tavora 0.19.26 and newer. */
   "hotkeys.list": { params: undefined; result: HotkeyBinding[] };
   /**
    * Opens Tavora's dialog to set the key for one of the manifest's `actions` on `target`; `label` names the target
@@ -808,7 +825,7 @@ export interface Events {
   "panel.navigate": PanelNavigateRequest;
   /** The panel started or stopped filling the workspace (Maximize and Restore, by the player or panel.setMaximized). */
   "panel.maximized": { maximized: boolean };
-  /** The player pressed a hotkey set for this module (hotkeys.set). Sent to one panel of the module in the game shown now, the one used last. */
+  /** The player pressed a hotkey set for this module (hotkeys.set). Sent to one panel of the module in the workspace shown now, the one used last. */
   "hotkeys.pressed": HotkeyBinding;
   "lifecycle.suspend": null;
   "lifecycle.resume": null;
@@ -878,11 +895,11 @@ export const LIMITS = {
   /** Requests a module may have waiting at once. */
   maxInFlight: 64,
   maxKeyLength: 256,
-  /** Settings storage per module and game. */
+  /** Settings storage per module and workspace. */
   maxStoreBytes: 5 * 1024 * 1024,
   /** One document's data. */
   maxDocumentBytes: 4 * 1024 * 1024,
-  /** All documents of one module in one game. */
+  /** All documents of one module in one workspace. */
   maxDocumentsBytes: 50 * 1024 * 1024,
   maxDocuments: 1000,
   maxTitleLength: 200,
@@ -894,7 +911,7 @@ export const LIMITS = {
   maxPanelStateBytes: 256 * 1024,
   /** One stored file (see Blobs). */
   maxBlobBytes: 50 * 1024 * 1024,
-  /** All stored files of one module in one game. */
+  /** All stored files of one module in one workspace. */
   maxBlobsBytes: 500 * 1024 * 1024,
   /** A PNG a module puts on the clipboard. */
   maxClipboardImageBytes: 20 * 1024 * 1024,
@@ -926,11 +943,11 @@ export const LIMITS = {
   maxMenuHint: 30,
   /** What one overlay shows (overlay.publish), as JSON. */
   maxOverlayStateBytes: 16 * 1024,
-  /** Overlays one module may have in one game; publishing more fails with QUOTA_EXCEEDED. */
+  /** Overlays one module may have in one workspace; publishing more fails with QUOTA_EXCEEDED. */
   maxOverlays: 200,
   /** Game overlays (overlay.showOverGame) one game may have at once. */
   maxGameOverlays: 8,
-  /** Hotkeys one module may have in one game. */
+  /** Hotkeys one module may have in one workspace. */
   maxHotkeys: 100,
   /** Characters of the label hotkeys.set shows for its target. */
   maxHotkeyLabel: 60,
@@ -1008,7 +1025,7 @@ export interface BlobInfo {
   createdAt: string;
 }
 
-/** How much of the limits a module's files in the current game use. */
+/** How much of the limits a module's files in the current workspace use. */
 export interface BlobUsage {
   bytes: number;
   count: number;

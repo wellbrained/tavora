@@ -1,36 +1,36 @@
 import { describe, expect, it } from "vitest";
 import {
-  addGame,
+  addWorkspace,
   iconFileShared,
   createFolder,
   deleteFolder,
-  deleteTrashedGame,
+  deleteTrashedWorkspace,
   emptyLibrary,
   markIconOffered,
-  gamesNeedingIcon,
+  workspacesNeedingIcon,
   LibraryError,
   markIconShared,
-  markPlayed,
-  playedTimes,
+  markOpened,
+  openedTimes,
   monogram,
   moveFolder,
-  moveGame,
+  moveWorkspace,
   placeFavorite,
   purgeExpired,
   RAIL,
-  recentGames,
+  recentWorkspaces,
   recordIcon,
   removeFavorite,
-  renameGame,
-  restoreGame,
+  renameWorkspace,
+  restoreWorkspace,
   sanitizeLibrary,
   searchCatalog,
-  setGameLabel,
+  setWorkspaceLabel,
   setRail,
   sortedRoot,
-  trashGame,
-  useOriginalGameIcon,
-  setGameImage,
+  trashWorkspace,
+  useOriginalWorkspaceIcon,
+  setWorkspaceImage,
   type Library,
   MAX_SITES,
   setSiteListed,
@@ -40,7 +40,7 @@ const day = (n: number) => new Date(Date.UTC(2026, 9, n, 12));
 
 function libraryWith(...names: string[]): Library {
   const library = emptyLibrary();
-  names.forEach((name, index) => addGame(library, { name }, day(1 + index)));
+  names.forEach((name, index) => addWorkspace(library, { name }, day(1 + index)));
   return library;
 }
 
@@ -49,68 +49,68 @@ const rootIds = (library: Library) => library.root.map((item) => `${item.kind}:$
 describe("adding games", () => {
   it("adds a built-in game under its canonical id with an empty placement at the end", () => {
     const library = libraryWith("Custom One");
-    expect(addGame(library, { catalogId: "poe2" }, day(3))).toBe("poe2");
-    expect(library.games.poe2).toMatchObject({
+    expect(addWorkspace(library, { catalogId: "poe2" }, day(3))).toBe("poe2");
+    expect(library.workspaces.poe2).toMatchObject({
       id: "poe2",
       catalogId: "poe2",
       name: "Path of Exile 2",
       icon: { kind: "monogram", text: "PE2" },
       trashedAt: null,
-      lastPlayedAt: null,
+      lastOpenedAt: null,
     });
-    expect(rootIds(library)).toEqual(["game:local-custom-one", "game:poe2"]);
+    expect(rootIds(library)).toEqual(["workspace:local-custom-one", "workspace:poe2"]);
   });
 
   it("gives custom games a path-safe local- id that never collides", () => {
     const library = emptyLibrary();
-    expect(addGame(library, { name: "  My  Game!! " }, day(1))).toBe("local-my-game");
-    expect(addGame(library, { name: "my game" }, day(1))).toBe("local-my-game-2");
-    expect(addGame(library, { name: "日本語" }, day(1))).toBe("local-game");
-    expect(addGame(library, { name: "x".repeat(80) }, day(1))).toMatch(/^local-x{48}$/);
-    expect(library.games["local-my-game"]!.name).toBe("My Game!!");
+    expect(addWorkspace(library, { name: "  My  Game!! " }, day(1))).toBe("local-my-game");
+    expect(addWorkspace(library, { name: "my game" }, day(1))).toBe("local-my-game-2");
+    expect(addWorkspace(library, { name: "日本語" }, day(1))).toBe("local-workspace");
+    expect(addWorkspace(library, { name: "x".repeat(80) }, day(1))).toMatch(/^local-x{48}$/);
+    expect(library.workspaces["local-my-game"]!.name).toBe("My Game!!");
   });
 
   it("refuses a built-in game that is already there, pointing at Trash when it is trashed", () => {
     const library = emptyLibrary();
-    addGame(library, { catalogId: "elden-ring" }, day(1));
-    expect(() => addGame(library, { catalogId: "elden-ring" }, day(2))).toThrow("already in your library");
-    trashGame(library, "elden-ring", day(2));
-    expect(() => addGame(library, { catalogId: "elden-ring" }, day(3))).toThrow("is in Trash");
-    expect(() => addGame(library, { catalogId: "not-a-game" }, day(3))).toThrow(LibraryError);
+    addWorkspace(library, { catalogId: "elden-ring" }, day(1));
+    expect(() => addWorkspace(library, { catalogId: "elden-ring" }, day(2))).toThrow("already in your library");
+    trashWorkspace(library, "elden-ring", day(2));
+    expect(() => addWorkspace(library, { catalogId: "elden-ring" }, day(3))).toThrow("is in Trash");
+    expect(() => addWorkspace(library, { catalogId: "not-a-game" }, day(3))).toThrow(LibraryError);
   });
 
   it.each([[""], ["   "], ["x".repeat(81)], [42]])("refuses the name %j", (name) => {
-    expect(() => addGame(emptyLibrary(), { name } as { name: string }, day(1))).toThrow(LibraryError);
+    expect(() => addWorkspace(emptyLibrary(), { name } as { name: string }, day(1))).toThrow(LibraryError);
   });
 
   it("adds an online game under the service's id", () => {
     const library = emptyLibrary();
     const online = { id: "hades", name: " Hades  Remastered " };
-    expect(addGame(library, { online }, day(1))).toBe("hades");
-    expect(library.games.hades).toMatchObject({
+    expect(addWorkspace(library, { online }, day(1))).toBe("hades");
+    expect(library.workspaces.hades).toMatchObject({
       id: "hades",
       catalogId: null,
       name: "Hades Remastered",
       icon: { kind: "monogram", text: "HR" },
     });
-    expect(rootIds(library)).toEqual(["game:hades"]);
+    expect(rootIds(library)).toEqual(["workspace:hades"]);
   });
 
   it("treats a built-in game found online as that built-in game", () => {
     const library = emptyLibrary();
-    addGame(library, { online: { id: "elden-ring", name: "ELDEN RING" } }, day(1));
-    expect(library.games["elden-ring"]).toMatchObject({ catalogId: "elden-ring", name: "Elden Ring" });
+    addWorkspace(library, { online: { id: "elden-ring", name: "ELDEN RING" } }, day(1));
+    expect(library.workspaces["elden-ring"]).toMatchObject({ catalogId: "elden-ring", name: "Elden Ring" });
   });
 
   it("refuses an online game that is already there, an unsafe id and a local- id", () => {
     const library = emptyLibrary();
     const online = { id: "doom-2016", name: "Doom" };
-    addGame(library, { online }, day(1));
-    expect(() => addGame(library, { online }, day(2))).toThrow("already in your library");
-    trashGame(library, "doom-2016", day(2));
-    expect(() => addGame(library, { online }, day(3))).toThrow("is in Trash");
-    expect(() => addGame(library, { online: { ...online, id: "../x" } }, day(3))).toThrow(LibraryError);
-    expect(() => addGame(library, { online: { id: "local-doom", name: "Doom" } }, day(3))).toThrow(LibraryError);
+    addWorkspace(library, { online }, day(1));
+    expect(() => addWorkspace(library, { online }, day(2))).toThrow("already in your library");
+    trashWorkspace(library, "doom-2016", day(2));
+    expect(() => addWorkspace(library, { online }, day(3))).toThrow("is in Trash");
+    expect(() => addWorkspace(library, { online: { ...online, id: "../x" } }, day(3))).toThrow(LibraryError);
+    expect(() => addWorkspace(library, { online: { id: "local-doom", name: "Doom" } }, day(3))).toThrow(LibraryError);
   });
 
   it("has automatic updates on by default and keeps only a real setting", () => {
@@ -130,14 +130,14 @@ describe("adding games", () => {
 
   it("keeps the workspace to go back to only while it is a live personal workspace", () => {
     const library = emptyLibrary();
-    const notes = addGame(library, { workspace: "Notes" }, day(1));
-    addGame(library, { catalogId: "poe2" }, day(1));
+    const notes = addWorkspace(library, { personal: "Notes" }, day(1));
+    addWorkspace(library, { catalogId: "poe2" }, day(1));
     const saved = JSON.parse(JSON.stringify(library)) as Record<string, unknown>;
-    expect(sanitizeLibrary({ ...saved, gameEndWorkspace: notes }).gameEndWorkspace).toBe(notes);
-    expect(sanitizeLibrary({ ...saved, gameEndWorkspace: "poe2" }).gameEndWorkspace).toBeNull();
-    expect(sanitizeLibrary({ ...saved, gameEndWorkspace: "gone" }).gameEndWorkspace).toBeNull();
-    trashGame(library, notes, day(2));
-    expect(sanitizeLibrary({ ...JSON.parse(JSON.stringify(library)), gameEndWorkspace: notes }).gameEndWorkspace).toBeNull();
+    expect(sanitizeLibrary({ ...saved, gameEndWorkspaceId: notes }).gameEndWorkspaceId).toBe(notes);
+    expect(sanitizeLibrary({ ...saved, gameEndWorkspaceId: "poe2" }).gameEndWorkspaceId).toBeNull();
+    expect(sanitizeLibrary({ ...saved, gameEndWorkspaceId: "gone" }).gameEndWorkspaceId).toBeNull();
+    trashWorkspace(library, notes, day(2));
+    expect(sanitizeLibrary({ ...JSON.parse(JSON.stringify(library)), gameEndWorkspaceId: notes }).gameEndWorkspaceId).toBeNull();
   });
 
   it("has online search on by default and keeps only a real setting", () => {
@@ -149,51 +149,51 @@ describe("adding games", () => {
 describe("personal workspaces", () => {
   it("adds a workspace by name, never linked to a built-in game", () => {
     const library = emptyLibrary();
-    expect(addGame(library, { workspace: "Path of Exile 2" }, day(1))).toBe("local-path-of-exile-2");
-    expect(library.games["local-path-of-exile-2"]).toMatchObject({
-      kind: "workspace",
+    expect(addWorkspace(library, { personal: "Path of Exile 2" }, day(1))).toBe("local-path-of-exile-2");
+    expect(library.workspaces["local-path-of-exile-2"]).toMatchObject({
+      kind: "personal",
       catalogId: null,
       steamAppId: null,
       useOriginalIcon: false,
       showNews: false,
       icon: { kind: "monogram" },
     });
-    expect(rootIds(library)).toEqual(["game:local-path-of-exile-2"]);
+    expect(rootIds(library)).toEqual(["workspace:local-path-of-exile-2"]);
   });
 
   it("looks up no icon for a workspace and keeps it on letters", () => {
     const library = emptyLibrary();
-    const id = addGame(library, { workspace: "Notes" }, day(1));
-    addGame(library, { name: "Notes" }, day(1));
-    expect(gamesNeedingIcon(library, day(2)).map((game) => game.id)).toEqual(["local-notes-2"]);
-    useOriginalGameIcon(library, id);
-    expect(library.games[id]!.useOriginalIcon).toBe(false);
+    const id = addWorkspace(library, { personal: "Notes" }, day(1));
+    addWorkspace(library, { name: "Notes" }, day(1));
+    expect(workspacesNeedingIcon(library, day(2)).map((game) => game.id)).toEqual(["local-notes-2"]);
+    useOriginalWorkspaceIcon(library, id);
+    expect(library.workspaces[id]!.useOriginalIcon).toBe(false);
   });
 
   it("keeps a workspace through saving, and never makes a built-in game one", () => {
     const library = emptyLibrary();
-    const id = addGame(library, { workspace: "Personal" }, day(1));
-    addGame(library, { catalogId: "poe2" }, day(1));
+    const id = addWorkspace(library, { personal: "Personal" }, day(1));
+    addWorkspace(library, { catalogId: "poe2" }, day(1));
     const saved = JSON.parse(JSON.stringify(library));
-    saved.games.poe2.kind = "workspace";
-    saved.games[id].steamAppId = 570;
+    saved.workspaces.poe2.kind = "personal";
+    saved.workspaces[id].steamAppId = 570;
     const loaded = sanitizeLibrary(saved);
-    expect(loaded.games[id]).toMatchObject({ kind: "workspace", steamAppId: null, catalogId: null });
-    expect(loaded.games.poe2).toMatchObject({ kind: "game", catalogId: "poe2" });
+    expect(loaded.workspaces[id]).toMatchObject({ kind: "personal", steamAppId: null, catalogId: null });
+    expect(loaded.workspaces.poe2).toMatchObject({ kind: "game", catalogId: "poe2" });
   });
 });
 
 describe("Steam icons", () => {
   it("takes a game's Steam id from the built-in list, the service, or leaves it empty", () => {
     const library = emptyLibrary();
-    addGame(library, { catalogId: "elden-ring" }, day(1));
-    addGame(library, { online: { id: "hades", name: "Hades", steamAppId: 1145360 } }, day(1));
+    addWorkspace(library, { catalogId: "elden-ring" }, day(1));
+    addWorkspace(library, { online: { id: "hades", name: "Hades", steamAppId: 1145360 } }, day(1));
     // The service had no appid for a built-in game: the built-in list's is used.
-    addGame(library, { online: { id: "factorio", name: "Factorio", steamAppId: null } }, day(1));
-    addGame(library, { online: { id: "obscure-game", name: "Obscure Game" } }, day(1));
-    addGame(library, { name: "My Own Game" }, day(1));
-    addGame(library, { catalogId: "fortnite" }, day(1));
-    expect(Object.fromEntries(Object.values(library.games).map((game) => [game.id, game.steamAppId]))).toEqual({
+    addWorkspace(library, { online: { id: "factorio", name: "Factorio", steamAppId: null } }, day(1));
+    addWorkspace(library, { online: { id: "obscure-game", name: "Obscure Game" } }, day(1));
+    addWorkspace(library, { name: "My Own Game" }, day(1));
+    addWorkspace(library, { catalogId: "fortnite" }, day(1));
+    expect(Object.fromEntries(Object.values(library.workspaces).map((game) => [game.id, game.steamAppId]))).toEqual({
       "elden-ring": 1245620,
       hades: 1145360,
       factorio: 427520,
@@ -201,13 +201,13 @@ describe("Steam icons", () => {
       "local-my-own-game": null,
       fortnite: null,
     });
-    expect(library.games.hades).toMatchObject({ iconFile: null, iconCheckedAt: null });
+    expect(library.workspaces.hades).toMatchObject({ iconFile: null, iconCheckedAt: null });
   });
 
   it("ignores a service appid that is not a real Steam id", () => {
     const library = emptyLibrary();
-    addGame(library, { online: { id: "odd-game", name: "Odd Game", steamAppId: -4 } }, day(1));
-    expect(library.games["odd-game"]!.steamAppId).toBeNull();
+    addWorkspace(library, { online: { id: "odd-game", name: "Odd Game", steamAppId: -4 } }, day(1));
+    expect(library.workspaces["odd-game"]!.steamAppId).toBeNull();
   });
 
   it("starts on the default theme and keeps a saved theme even if it is not installed", () => {
@@ -219,10 +219,10 @@ describe("Steam icons", () => {
 
   it("corrects the Steam id Diablo IV was once saved with, and looks for its icon again", () => {
     const saved = (steamAppId: number) => ({
-      games: { "diablo-4": { id: "diablo-4", catalogId: "diablo-4", name: "Diablo IV", addedAt: "2026-10-14T23:17:34.035Z", steamAppId, iconFile: null, iconCheckedAt: "2026-10-15T12:14:18.118Z" } },
+      workspaces: { "diablo-4": { id: "diablo-4", catalogId: "diablo-4", name: "Diablo IV", addedAt: "2026-10-14T23:17:34.035Z", steamAppId, iconFile: null, iconCheckedAt: "2026-10-15T12:14:18.118Z" } },
     });
-    expect(sanitizeLibrary(saved(358090)).games["diablo-4"]).toMatchObject({ steamAppId: 2344520, iconCheckedAt: null });
-    expect(sanitizeLibrary(saved(2344520)).games["diablo-4"]).toMatchObject({ steamAppId: 2344520, iconCheckedAt: "2026-10-15T12:14:18.118Z" });
+    expect(sanitizeLibrary(saved(358090)).workspaces["diablo-4"]).toMatchObject({ steamAppId: 2344520, iconCheckedAt: null });
+    expect(sanitizeLibrary(saved(2344520)).workspaces["diablo-4"]).toMatchObject({ steamAppId: 2344520, iconCheckedAt: "2026-10-15T12:14:18.118Z" });
   });
 
   it("has fetching on by default and keeps only a real setting", () => {
@@ -264,15 +264,15 @@ describe("Steam icons", () => {
 
   it("asks for every game that has no icon, and not again soon after a miss", () => {
     const library = emptyLibrary();
-    addGame(library, { catalogId: "elden-ring" }, day(1));
-    addGame(library, { catalogId: "fortnite" }, day(1));
-    addGame(library, { name: "My Own Game" }, day(1));
-    expect(gamesNeedingIcon(library, day(2)).map((game) => game.id)).toEqual(["elden-ring", "fortnite", "local-my-own-game"]);
+    addWorkspace(library, { catalogId: "elden-ring" }, day(1));
+    addWorkspace(library, { catalogId: "fortnite" }, day(1));
+    addWorkspace(library, { name: "My Own Game" }, day(1));
+    expect(workspacesNeedingIcon(library, day(2)).map((game) => game.id)).toEqual(["elden-ring", "fortnite", "local-my-own-game"]);
 
     recordIcon(library, "elden-ring", { none: day(2) });
     recordIcon(library, "local-my-own-game", { none: day(2) });
-    expect(gamesNeedingIcon(library, day(3)).map((game) => game.id)).toEqual(["fortnite"]);
-    expect(gamesNeedingIcon(library, new Date(Date.UTC(2026, 11, 1))).map((game) => game.id)).toEqual([
+    expect(workspacesNeedingIcon(library, day(3)).map((game) => game.id)).toEqual(["fortnite"]);
+    expect(workspacesNeedingIcon(library, new Date(Date.UTC(2026, 11, 1))).map((game) => game.id)).toEqual([
       "elden-ring",
       "fortnite",
       "local-my-own-game",
@@ -281,55 +281,55 @@ describe("Steam icons", () => {
 
   it("does not ask for games in Trash", () => {
     const library = emptyLibrary();
-    addGame(library, { catalogId: "elden-ring" }, day(1));
-    trashGame(library, "elden-ring", day(2));
-    expect(gamesNeedingIcon(library, day(3))).toEqual([]);
+    addWorkspace(library, { catalogId: "elden-ring" }, day(1));
+    trashWorkspace(library, "elden-ring", day(2));
+    expect(workspacesNeedingIcon(library, day(3))).toEqual([]);
   });
 
   it("records a saved icon, and refuses a file that does not belong to the game", () => {
     const library = emptyLibrary();
-    addGame(library, { catalogId: "elden-ring" }, day(1));
+    addWorkspace(library, { catalogId: "elden-ring" }, day(1));
     recordIcon(library, "elden-ring", { file: "999.ico" });
-    expect(library.games["elden-ring"]!.iconFile).toBeNull();
+    expect(library.workspaces["elden-ring"]!.iconFile).toBeNull();
     recordIcon(library, "elden-ring", { file: "1245620.ico" });
-    expect(library.games["elden-ring"]).toMatchObject({ iconFile: "1245620.ico", iconCheckedAt: null });
-    expect(gamesNeedingIcon(library, day(2))).toEqual([]);
+    expect(library.workspaces["elden-ring"]).toMatchObject({ iconFile: "1245620.ico", iconCheckedAt: null });
+    expect(workspacesNeedingIcon(library, day(2))).toEqual([]);
     recordIcon(library, "no-such-game", { file: "1.ico" });
   });
 
   it("records an icon read from the installed game, and the small Steam icon, but only under the game's own names", () => {
     const library = emptyLibrary();
-    addGame(library, { catalogId: "elden-ring" }, day(1));
-    addGame(library, { name: "My Own Game" }, day(1));
+    addWorkspace(library, { catalogId: "elden-ring" }, day(1));
+    addWorkspace(library, { name: "My Own Game" }, day(1));
     recordIcon(library, "elden-ring", { file: "exe-someone-else.ico" });
     recordIcon(library, "local-my-own-game", { file: "1245620.ico" });
-    expect(library.games["elden-ring"]!.iconFile).toBeNull();
-    expect(library.games["local-my-own-game"]!.iconFile).toBeNull();
+    expect(library.workspaces["elden-ring"]!.iconFile).toBeNull();
+    expect(library.workspaces["local-my-own-game"]!.iconFile).toBeNull();
 
     recordIcon(library, "elden-ring", { file: "1245620.jpg" });
-    expect(library.games["elden-ring"]!.iconFile).toBe("1245620.jpg");
+    expect(library.workspaces["elden-ring"]!.iconFile).toBe("1245620.jpg");
     recordIcon(library, "local-my-own-game", { file: "exe-local-my-own-game.ico" });
-    expect(library.games["local-my-own-game"]).toMatchObject({ iconFile: "exe-local-my-own-game.ico", iconCheckedAt: null });
+    expect(library.workspaces["local-my-own-game"]).toMatchObject({ iconFile: "exe-local-my-own-game.ico", iconCheckedAt: null });
     recordIcon(library, "local-my-own-game", { file: "hosted-elden-ring.png" });
-    expect(library.games["local-my-own-game"]!.iconFile).toBe("exe-local-my-own-game.ico");
+    expect(library.workspaces["local-my-own-game"]!.iconFile).toBe("exe-local-my-own-game.ico");
     recordIcon(library, "elden-ring", { file: "hosted-elden-ring.png" });
-    expect(library.games["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
+    expect(library.workspaces["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
   });
 
   it("knows when another game shares an icon file", () => {
     const library = emptyLibrary();
-    addGame(library, { catalogId: "elden-ring" }, day(1));
-    addGame(library, { online: { id: "elden-ring-again", name: "Elden Ring Again", steamAppId: 1245620 } }, day(1));
+    addWorkspace(library, { catalogId: "elden-ring" }, day(1));
+    addWorkspace(library, { online: { id: "elden-ring-again", name: "Elden Ring Again", steamAppId: 1245620 } }, day(1));
     recordIcon(library, "elden-ring", { file: "1245620.ico" });
     recordIcon(library, "elden-ring-again", { file: "1245620.ico" });
     expect(iconFileShared(library, "1245620.ico", "elden-ring")).toBe(true);
-    deleteTrashedGame(trashed(library, "elden-ring-again"), "elden-ring-again");
+    deleteTrashedWorkspace(trashed(library, "elden-ring-again"), "elden-ring-again");
     expect(iconFileShared(library, "1245620.ico", "elden-ring")).toBe(false);
   });
 
   it("loads icons from a saved library, gives old games their Steam id and drops a forged file name", () => {
     const saved = (extra: Record<string, unknown>) => ({
-      games: {
+      workspaces: {
         "elden-ring": {
           id: "elden-ring",
           catalogId: "elden-ring",
@@ -337,30 +337,30 @@ describe("Steam icons", () => {
           icon: { kind: "monogram", text: "ER" },
           showNews: true,
           addedAt: "2026-10-01T10:00:00.000Z",
-          lastPlayedAt: null,
+          lastOpenedAt: null,
           trashedAt: null,
           ...extra,
         },
       },
     });
     // Saved before Steam icons existed: the built-in list supplies the Steam id.
-    expect(sanitizeLibrary(saved({})).games["elden-ring"]).toMatchObject({ steamAppId: 1245620, iconFile: null, iconCheckedAt: null });
-    expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile: "1245620.ico" })).games["elden-ring"]!.iconFile).toBe("1245620.ico");
-    expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile: "1245620.jpg" })).games["elden-ring"]!.iconFile).toBe("1245620.jpg");
-    expect(sanitizeLibrary(saved({ iconFile: "exe-elden-ring.ico" })).games["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
-    expect(sanitizeLibrary(saved({ iconFile: "hosted-elden-ring.png" })).games["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
+    expect(sanitizeLibrary(saved({})).workspaces["elden-ring"]).toMatchObject({ steamAppId: 1245620, iconFile: null, iconCheckedAt: null });
+    expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile: "1245620.ico" })).workspaces["elden-ring"]!.iconFile).toBe("1245620.ico");
+    expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile: "1245620.jpg" })).workspaces["elden-ring"]!.iconFile).toBe("1245620.jpg");
+    expect(sanitizeLibrary(saved({ iconFile: "exe-elden-ring.ico" })).workspaces["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
+    expect(sanitizeLibrary(saved({ iconFile: "hosted-elden-ring.png" })).workspaces["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
     for (const iconFile of ["../1245620.ico", "999.ico", "1245620.png", "exe-other.ico", "hosted-other.png", "hosted-../elden-ring.png", "exe-../elden-ring.ico", 7, null]) {
-      expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile })).games["elden-ring"]!.iconFile).toBeNull();
+      expect(sanitizeLibrary(saved({ steamAppId: 1245620, iconFile })).workspaces["elden-ring"]!.iconFile).toBeNull();
     }
-    expect(sanitizeLibrary(saved({ steamAppId: "5" })).games["elden-ring"]!.steamAppId).toBe(1245620);
-    expect(sanitizeLibrary(saved({ iconCheckedAt: "yesterday" })).games["elden-ring"]!.iconCheckedAt).toBeNull();
-    expect(sanitizeLibrary(saved({ iconCheckedAt: "2026-10-02T10:00:00.000Z" })).games["elden-ring"]!.iconCheckedAt).toBe("2026-10-02T10:00:00.000Z");
+    expect(sanitizeLibrary(saved({ steamAppId: "5" })).workspaces["elden-ring"]!.steamAppId).toBe(1245620);
+    expect(sanitizeLibrary(saved({ iconCheckedAt: "yesterday" })).workspaces["elden-ring"]!.iconCheckedAt).toBeNull();
+    expect(sanitizeLibrary(saved({ iconCheckedAt: "2026-10-02T10:00:00.000Z" })).workspaces["elden-ring"]!.iconCheckedAt).toBe("2026-10-02T10:00:00.000Z");
   });
 });
 
-/** Puts a game in Trash so it can be deleted for good, and returns the library. */
+/** Puts a workspace in Trash so it can be deleted for good, and returns the library. */
 function trashed(library: Library, id: string): Library {
-  trashGame(library, id, day(5));
+  trashWorkspace(library, id, day(5));
   return library;
 }
 
@@ -378,142 +378,142 @@ describe("monogram", () => {
 describe("renaming and labels", () => {
   it("changes the display name, never the id", () => {
     const library = libraryWith("Old");
-    renameGame(library, "local-old", "New name");
-    expect(library.games["local-old"]!.name).toBe("New name");
-    expect(() => renameGame(library, "local-old", " ")).toThrow(LibraryError);
+    renameWorkspace(library, "local-old", "New name");
+    expect(library.workspaces["local-old"]!.name).toBe("New name");
+    expect(() => renameWorkspace(library, "local-old", " ")).toThrow(LibraryError);
   });
 
   it("sets and resets the monogram", () => {
     const library = libraryWith("Hollow Knight");
-    setGameLabel(library, "local-hollow-knight", "HK");
-    expect(library.games["local-hollow-knight"]!.icon).toEqual({ kind: "monogram", text: "HK" });
-    setGameLabel(library, "local-hollow-knight", null);
-    expect(library.games["local-hollow-knight"]!.icon).toEqual({ kind: "monogram", text: "HK" });
-    expect(() => setGameLabel(library, "local-hollow-knight", "LONG")).toThrow(LibraryError);
+    setWorkspaceLabel(library, "local-hollow-knight", "HK");
+    expect(library.workspaces["local-hollow-knight"]!.icon).toEqual({ kind: "monogram", text: "HK" });
+    setWorkspaceLabel(library, "local-hollow-knight", null);
+    expect(library.workspaces["local-hollow-knight"]!.icon).toEqual({ kind: "monogram", text: "HK" });
+    expect(() => setWorkspaceLabel(library, "local-hollow-knight", "LONG")).toThrow(LibraryError);
   });
 });
 
 describe("Trash", () => {
-  it("takes a game out of the rail and favorites, and restores it at the end", () => {
+  it("takes a workspace out of the rail and favorites, and restores it at the end", () => {
     const library = libraryWith("A", "B", "C");
     placeFavorite(library, "local-a");
-    markPlayed(library, "local-a", day(5));
-    trashGame(library, "local-a", day(6));
-    expect(rootIds(library)).toEqual(["game:local-b", "game:local-c"]);
+    markOpened(library, "local-a", day(5));
+    trashWorkspace(library, "local-a", day(6));
+    expect(rootIds(library)).toEqual(["workspace:local-b", "workspace:local-c"]);
     expect(library.favorites).toEqual([]);
-    expect(library.lastGameId).toBeNull();
-    expect(() => markPlayed(library, "local-a", day(7))).toThrow(LibraryError);
+    expect(library.lastWorkspaceId).toBeNull();
+    expect(() => markOpened(library, "local-a", day(7))).toThrow(LibraryError);
 
-    restoreGame(library, "local-a");
-    expect(rootIds(library)).toEqual(["game:local-b", "game:local-c", "game:local-a"]);
-    expect(library.games["local-a"]!.trashedAt).toBeNull();
+    restoreWorkspace(library, "local-a");
+    expect(rootIds(library)).toEqual(["workspace:local-b", "workspace:local-c", "workspace:local-a"]);
+    expect(library.workspaces["local-a"]!.trashedAt).toBeNull();
   });
 
-  it("purges games after 30 days, not before", () => {
+  it("purges workspaces after 30 days, not before", () => {
     const library = libraryWith("A", "B");
-    trashGame(library, "local-a", day(1));
-    trashGame(library, "local-b", day(10));
+    trashWorkspace(library, "local-a", day(1));
+    trashWorkspace(library, "local-b", day(10));
     expect(purgeExpired(library, new Date(Date.UTC(2026, 9, 31, 11)))).toEqual([]);
     expect(purgeExpired(library, new Date(Date.UTC(2026, 9, 31, 12))).map((game) => game.id)).toEqual(["local-a"]);
-    expect(library.games["local-a"]).toBeUndefined();
-    expect(library.games["local-b"]).toBeDefined();
+    expect(library.workspaces["local-a"]).toBeUndefined();
+    expect(library.workspaces["local-b"]).toBeDefined();
   });
 
-  it("deletes a trashed game on request, and only a trashed one", () => {
+  it("deletes a trashed workspace on request, and only a trashed one", () => {
     const library = libraryWith("A");
-    expect(() => deleteTrashedGame(library, "local-a")).toThrow(LibraryError);
-    trashGame(library, "local-a", day(2));
-    expect(deleteTrashedGame(library, "local-a").id).toBe("local-a");
-    expect(library.games).toEqual({});
+    expect(() => deleteTrashedWorkspace(library, "local-a")).toThrow(LibraryError);
+    trashWorkspace(library, "local-a", day(2));
+    expect(deleteTrashedWorkspace(library, "local-a").id).toBe("local-a");
+    expect(library.workspaces).toEqual({});
   });
 });
 
 describe("favorites", () => {
-  it("are ordered shortcuts; the game keeps its own place", () => {
+  it("are ordered shortcuts; the workspace keeps its own place", () => {
     const library = libraryWith("A", "B", "C");
     placeFavorite(library, "local-c");
     placeFavorite(library, "local-a", 0);
     expect(library.favorites).toEqual(["local-a", "local-c"]);
     placeFavorite(library, "local-a", 5);
     expect(library.favorites).toEqual(["local-c", "local-a"]);
-    expect(rootIds(library)).toEqual(["game:local-a", "game:local-b", "game:local-c"]);
+    expect(rootIds(library)).toEqual(["workspace:local-a", "workspace:local-b", "workspace:local-c"]);
     removeFavorite(library, "local-c");
     expect(library.favorites).toEqual(["local-a"]);
   });
 
-  it("stay favorites when the game moves", () => {
+  it("stay favorites when the workspace moves", () => {
     const library = libraryWith("A", "B");
     placeFavorite(library, "local-b");
     placeFavorite(library, "local-a");
     const folderId = createFolder(library, "ARPGs", ["local-b"]);
     expect(library.favorites).toEqual(["local-b", "local-a"]);
-    expect(library.folders[folderId]!.games).toEqual(["local-b"]);
+    expect(library.folders[folderId]!.workspaces).toEqual(["local-b"]);
   });
 });
 
 describe("folders and placement", () => {
-  it("creates a folder where its first game was and moves games in", () => {
+  it("creates a folder where its first workspace was and moves workspaces in", () => {
     const library = libraryWith("A", "B", "C");
     const id = createFolder(library, "Survival", ["local-b", "local-c"]);
-    expect(rootIds(library)).toEqual(["game:local-a", `folder:${id}`]);
-    expect(library.folders[id]).toMatchObject({ name: "Survival", games: ["local-b", "local-c"] });
+    expect(rootIds(library)).toEqual(["workspace:local-a", `folder:${id}`]);
+    expect(library.folders[id]).toMatchObject({ name: "Survival", workspaces: ["local-b", "local-c"] });
   });
 
-  it("keeps each game in exactly one place", () => {
+  it("keeps each workspace in exactly one place", () => {
     const library = libraryWith("A", "B");
     const one = createFolder(library, "One", ["local-a"]);
     const two = createFolder(library, "Two");
-    moveGame(library, "local-a", { folderId: two });
-    expect(library.folders[one]!.games).toEqual([]);
-    expect(library.folders[two]!.games).toEqual(["local-a"]);
-    moveGame(library, "local-a", { folderId: null, index: 0 });
-    expect(rootIds(library)).toEqual(["game:local-a", `folder:${one}`, "game:local-b", `folder:${two}`]);
-    expect(library.folders[two]!.games).toEqual([]);
+    moveWorkspace(library, "local-a", { folderId: two });
+    expect(library.folders[one]!.workspaces).toEqual([]);
+    expect(library.folders[two]!.workspaces).toEqual(["local-a"]);
+    moveWorkspace(library, "local-a", { folderId: null, index: 0 });
+    expect(rootIds(library)).toEqual(["workspace:local-a", `folder:${one}`, "workspace:local-b", `folder:${two}`]);
+    expect(library.folders[two]!.workspaces).toEqual([]);
   });
 
   it("reorders within a list", () => {
     const library = libraryWith("A", "B", "C");
-    moveGame(library, "local-a", { folderId: null, index: 2 });
-    expect(rootIds(library)).toEqual(["game:local-b", "game:local-c", "game:local-a"]);
+    moveWorkspace(library, "local-a", { folderId: null, index: 2 });
+    expect(rootIds(library)).toEqual(["workspace:local-b", "workspace:local-c", "workspace:local-a"]);
     const id = createFolder(library, "F");
     moveFolder(library, id, 0);
     expect(rootIds(library)[0]).toBe(`folder:${id}`);
   });
 
-  it("returns a deleted folder's games to its place without touching them", () => {
+  it("returns a deleted folder's workspaces to its place without touching them", () => {
     const library = libraryWith("A", "B", "C");
     const id = createFolder(library, "F", ["local-b", "local-c"]);
     deleteFolder(library, id);
-    expect(rootIds(library)).toEqual(["game:local-a", "game:local-b", "game:local-c"]);
-    expect(Object.keys(library.games)).toHaveLength(3);
+    expect(rootIds(library)).toEqual(["workspace:local-a", "workspace:local-b", "workspace:local-c"]);
+    expect(Object.keys(library.workspaces)).toHaveLength(3);
   });
 });
 
 describe("sorting", () => {
-  it("sorts the top level by most recently played, folders by their latest game", () => {
+  it("sorts the top level by most recently played, folders by their latest workspace", () => {
     const library = libraryWith("A", "B", "C", "D");
     const folder = createFolder(library, "F", ["local-c", "local-d"]);
-    markPlayed(library, "local-a", day(10));
-    markPlayed(library, "local-d", day(12));
+    markOpened(library, "local-a", day(10));
+    markOpened(library, "local-d", day(12));
     expect(sortedRoot(library).map((item) => item.id)).toEqual([folder, "local-a", "local-b"]);
     library.sort = "manual";
     expect(sortedRoot(library).map((item) => item.id)).toEqual(["local-a", "local-b", folder]);
   });
 
-  it("keeps the order from startup when a game is played mid-session", () => {
+  it("keeps the order from startup when a workspace is played mid-session", () => {
     const library = libraryWith("A", "B", "C");
-    markPlayed(library, "local-a", day(10));
-    const atStart = playedTimes(library);
-    markPlayed(library, "local-c", day(11));
+    markOpened(library, "local-a", day(10));
+    const atStart = openedTimes(library);
+    markOpened(library, "local-c", day(11));
     expect(sortedRoot(library, atStart).map((item) => item.id)).toEqual(["local-a", "local-b", "local-c"]);
     // The next start sorts by the new times.
-    expect(sortedRoot(library, playedTimes(library)).map((item) => item.id)).toEqual(["local-c", "local-a", "local-b"]);
+    expect(sortedRoot(library, openedTimes(library)).map((item) => item.id)).toEqual(["local-c", "local-a", "local-b"]);
   });
 
-  it("lists recent games for the Welcome page", () => {
+  it("lists recent workspaces for the Welcome page", () => {
     const library = libraryWith("A", "B", "C");
-    markPlayed(library, "local-b", day(10));
-    expect(recentGames(library, 2).map((game) => game.id)).toEqual(["local-b", "local-c"]);
+    markOpened(library, "local-b", day(10));
+    expect(recentWorkspaces(library, 2).map((game) => game.id)).toEqual(["local-b", "local-c"]);
   });
 });
 
@@ -521,7 +521,7 @@ describe("catalog search", () => {
   it("matches names and aliases and hides games already in the library", () => {
     const library = emptyLibrary();
     expect(searchCatalog(library, "poe").map((game) => game.id)).toEqual(["path-of-exile", "poe2"]);
-    addGame(library, { catalogId: "poe2" }, day(1));
+    addWorkspace(library, { catalogId: "poe2" }, day(1));
     expect(searchCatalog(library, "path").map((game) => game.id)).toEqual(["path-of-exile"]);
     expect(searchCatalog(library, "witcher").map((game) => game.id)).toEqual(["the-witcher-3"]);
     expect(searchCatalog(library, "zzzz")).toEqual([]);
@@ -545,34 +545,34 @@ describe("sanitizeLibrary", () => {
     const library = libraryWith("A", "B", "C");
     createFolder(library, "F", ["local-c"]);
     placeFavorite(library, "local-b");
-    trashGame(library, "local-a", day(9));
+    trashWorkspace(library, "local-a", day(9));
     expect(sanitizeLibrary(JSON.parse(JSON.stringify(library)))).toEqual(library);
   });
 
-  it("drops broken entries and places every live game exactly once", () => {
+  it("drops broken entries and places every live workspace exactly once", () => {
     const library = sanitizeLibrary({
-      games: {
+      workspaces: {
         a: { id: "a", name: "A", addedAt: "2026-10-01T00:00:00.000Z", icon: { kind: "image", file: "../x.png" } },
         b: { id: "b", name: "B", addedAt: "2026-10-02T00:00:00.000Z" },
         bad: { id: "../bad", name: "Bad", addedAt: "2026-10-01T00:00:00.000Z" },
         noname: { id: "noname", name: " ", addedAt: "2026-10-01T00:00:00.000Z" },
         t: { id: "t", name: "T", addedAt: "2026-10-01T00:00:00.000Z", trashedAt: "2026-10-05T00:00:00.000Z" },
       },
-      folders: { f: { id: "f", name: "F", games: ["a", "a", "t", "ghost"] } },
-      root: [{ kind: "folder", id: "f" }, { kind: "game", id: "a" }, { kind: "game", id: "t" }, "junk"],
+      folders: { f: { id: "f", name: "F", workspaces: ["a", "a", "t", "ghost"] } },
+      root: [{ kind: "folder", id: "f" }, { kind: "workspace", id: "a" }, { kind: "workspace", id: "t" }, "junk"],
       favorites: ["b", "b", "t", "ghost"],
       sort: "bogus",
       rail: { width: 5 },
-      lastGameId: "t",
+      lastWorkspaceId: "t",
     });
-    expect(Object.keys(library.games).sort()).toEqual(["a", "b", "t"]);
-    expect(library.games.a!.icon).toEqual({ kind: "monogram", text: "A" });
-    expect(library.folders.f!.games).toEqual(["a"]);
-    expect(rootIds(library)).toEqual(["folder:f", "game:b"]);
+    expect(Object.keys(library.workspaces).sort()).toEqual(["a", "b", "t"]);
+    expect(library.workspaces.a!.icon).toEqual({ kind: "monogram", text: "A" });
+    expect(library.folders.f!.workspaces).toEqual(["a"]);
+    expect(rootIds(library)).toEqual(["folder:f", "workspace:b"]);
     expect(library.favorites).toEqual(["b"]);
     expect(library.sort).toBe("recent");
     expect(library.rail.width).toBe(RAIL.minWidth);
-    expect(library.lastGameId).toBeNull();
+    expect(library.lastWorkspaceId).toBeNull();
   });
 
   it("gives an empty library for anything else", () => {
@@ -583,56 +583,56 @@ describe("sanitizeLibrary", () => {
 
 
 describe("which icon a game shows", () => {
-  const picked = (library: Library, id: string) => setGameImage(library, id, "pick.png");
+  const picked = (library: Library, id: string) => setWorkspaceImage(library, id, "pick.png");
 
   it("starts with the game's own icon", () => {
     const library = libraryWith("Diablo IV");
-    expect(library.games["local-diablo-iv"]).toMatchObject({ useOriginalIcon: true, iconSharedAt: null });
+    expect(library.workspaces["local-diablo-iv"]).toMatchObject({ useOriginalIcon: true, iconSharedAt: null });
   });
 
   it("stops showing the game's own icon when the player chooses letters, so their letters are what shows", () => {
     const library = libraryWith("Diablo IV");
-    setGameLabel(library, "local-diablo-iv", "D4");
-    expect(library.games["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "D4" }, useOriginalIcon: false });
-    setGameLabel(library, "local-diablo-iv", null);
-    expect(library.games["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "DI" }, useOriginalIcon: false });
+    setWorkspaceLabel(library, "local-diablo-iv", "D4");
+    expect(library.workspaces["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "D4" }, useOriginalIcon: false });
+    setWorkspaceLabel(library, "local-diablo-iv", null);
+    expect(library.workspaces["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "DI" }, useOriginalIcon: false });
   });
 
   it("goes back to the game's own icon from letters or from a picked image, and returns what was replaced", () => {
     const library = libraryWith("Diablo IV");
-    setGameLabel(library, "local-diablo-iv", "D4");
-    expect(useOriginalGameIcon(library, "local-diablo-iv")).toEqual({ kind: "monogram", text: "D4" });
-    expect(library.games["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "DI" }, useOriginalIcon: true });
+    setWorkspaceLabel(library, "local-diablo-iv", "D4");
+    expect(useOriginalWorkspaceIcon(library, "local-diablo-iv")).toEqual({ kind: "monogram", text: "D4" });
+    expect(library.workspaces["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "DI" }, useOriginalIcon: true });
 
     picked(library, "local-diablo-iv");
-    expect(useOriginalGameIcon(library, "local-diablo-iv")).toEqual({ kind: "image", file: "pick.png" });
-    expect(library.games["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "DI" }, useOriginalIcon: true });
+    expect(useOriginalWorkspaceIcon(library, "local-diablo-iv")).toEqual({ kind: "image", file: "pick.png" });
+    expect(library.workspaces["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "DI" }, useOriginalIcon: true });
   });
 
   it("keeps the choice of letters when an image is picked and then dropped for letters again", () => {
     const library = libraryWith("Diablo IV");
-    setGameLabel(library, "local-diablo-iv", "D4");
+    setWorkspaceLabel(library, "local-diablo-iv", "D4");
     picked(library, "local-diablo-iv");
-    expect(library.games["local-diablo-iv"]!.icon.kind).toBe("image");
-    setGameLabel(library, "local-diablo-iv", "XY");
-    expect(library.games["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "XY" }, useOriginalIcon: false });
+    expect(library.workspaces["local-diablo-iv"]!.icon.kind).toBe("image");
+    setWorkspaceLabel(library, "local-diablo-iv", "XY");
+    expect(library.workspaces["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "XY" }, useOriginalIcon: false });
   });
 
   it("refuses a game that is not there", () => {
     const library = libraryWith("Diablo IV");
-    expect(() => useOriginalGameIcon(library, "nope")).toThrow(LibraryError);
+    expect(() => useOriginalWorkspaceIcon(library, "nope")).toThrow(LibraryError);
   });
 
   it("notes that an icon was offered, once per game, and ignores a game that is gone", () => {
     const library = libraryWith("Diablo IV");
     markIconShared(library, "local-diablo-iv", day(5));
-    expect(library.games["local-diablo-iv"]!.iconSharedAt).toBe(day(5).toISOString());
+    expect(library.workspaces["local-diablo-iv"]!.iconSharedAt).toBe(day(5).toISOString());
     markIconShared(library, "nope", day(5));
   });
 
   it("loads the choice and the offer from a saved library, with the original icon as the default", () => {
     const saved = (extra: Record<string, unknown>) => ({
-      games: {
+      workspaces: {
         "elden-ring": {
           id: "elden-ring",
           catalogId: "elden-ring",
@@ -640,13 +640,13 @@ describe("which icon a game shows", () => {
           icon: { kind: "monogram", text: "ER" },
           showNews: true,
           addedAt: "2026-10-01T10:00:00.000Z",
-          lastPlayedAt: null,
+          lastOpenedAt: null,
           trashedAt: null,
           ...extra,
         },
       },
     });
-    const game = (extra: Record<string, unknown>) => sanitizeLibrary(saved(extra)).games["elden-ring"]!;
+    const game = (extra: Record<string, unknown>) => sanitizeLibrary(saved(extra)).workspaces["elden-ring"]!;
     expect(game({})).toMatchObject({ useOriginalIcon: true, iconSharedAt: null });
     expect(game({ useOriginalIcon: false })).toMatchObject({ useOriginalIcon: false });
     expect(game({ useOriginalIcon: "no" }).useOriginalIcon).toBe(true);

@@ -63,9 +63,9 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     sizedOn: [] as { width: number; height: number }[],
   };
   const info = (item: Item): LayoutItemInfo => {
-    const subject = { owner: "official", moduleId: "tavora.clock-counter", gameId: item.gameId, key: item.key };
+    const subject = { owner: "official", moduleId: "tavora.clock-counter", workspaceId: item.gameId, key: item.key };
     return {
-      id: item.panel ? `panel\n${item.key}` : [subject.owner, subject.moduleId, subject.gameId, subject.key].join("\n"),
+      id: item.panel ? `panel\n${item.key}` : [subject.owner, subject.moduleId, subject.workspaceId, subject.key].join("\n"),
       ref: item.panel ? { kind: "panel", instanceId: item.key } : { kind: "overlay", subject },
       name: item.key,
       moduleId: "tavora.clock-counter",
@@ -81,7 +81,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
       keyTarget: subject,
     };
   };
-  const find = (ref: LayoutItemRef) => world.items.find((item) => (ref.kind === "panel" ? item.panel && item.key === ref.instanceId : !item.panel && item.key === ref.subject.key && item.gameId === ref.subject.gameId));
+  const find = (ref: LayoutItemRef) => world.items.find((item) => (ref.kind === "panel" ? item.panel && item.key === ref.instanceId : !item.panel && item.key === ref.subject.key && item.gameId === ref.subject.workspaceId));
   const source: LayoutSource = {
     items: (gameId) => world.items.filter((item) => item.scope === "all" || item.gameId === gameId).map((item) => {
       const result = info(item);
@@ -864,7 +864,7 @@ describe("the game picture", () => {
     layout.open("elden");
     layout.handle({ type: "choose-picture" }, true);
     await flush();
-    layout.forgetGame("elden");
+    layout.forgetWorkspace("elden");
     await flush();
     expect(await pictures.has("elden")).toBe(false);
   });

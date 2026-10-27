@@ -29,17 +29,18 @@ export function shareSource(file: string): "installed" | "steam" {
   return file.startsWith("exe-") ? "installed" : "steam";
 }
 
+/** A workspace of the library, as far as sharing its game's icon needs it. */
 export interface ShareGame {
   id: string;
   name: string;
-  kind: "game" | "workspace";
+  kind: "game" | "personal";
   catalogId: string | null;
   trashedAt: string | null;
   iconFile: string | null;
   iconSharedAt: string | null;
 }
 
-/** A game that could be offered at all: a game (not a personal workspace), not in Trash, not offered before, with an icon of its own. */
+/** A game that could be offered at all: the game of a game workspace (not a personal one), not in Trash, not offered before, with an icon of its own. */
 export function isShareCandidate(game: ShareGame): boolean {
   return game.kind === "game" && game.trashedAt === null && game.iconSharedAt === null && isOriginalIconFile(game.iconFile);
 }

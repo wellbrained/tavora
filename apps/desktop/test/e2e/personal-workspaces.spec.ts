@@ -27,11 +27,11 @@ test("a personal workspace offers only modules for any game, and is worded as a 
   try {
     await page.getByTestId("rail-add-game").click();
     await page.getByTestId("game-search").fill("Personal");
-    await page.getByTestId("open-add-workspace").click();
+    await page.getByTestId("open-add-personal").click();
     // What was typed for a game carries over as the workspace's name.
-    await expect(page.getByTestId("workspace-name")).toHaveValue("Personal");
-    await page.getByTestId("create-workspace").click();
-    await expect(page.getByTestId("rail-game-local-personal")).toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("personal-name")).toHaveValue("Personal");
+    await page.getByTestId("create-personal").click();
+    await expect(page.getByTestId("rail-workspace-local-personal")).toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("empty-workspace")).toBeVisible();
 
     // Notes is for any game, so it is offered; the module for one game and the one that opted out are not.
@@ -44,13 +44,13 @@ test("a personal workspace offers only modules for any game, and is worded as a 
     await expect(panels(page, "tavora.notes")).toHaveCount(1);
 
     // A workspace has no icon of its own to go back to, and its removal says what goes.
-    await page.getByTestId("rail-game-local-personal").click({ button: "right" });
+    await page.getByTestId("rail-workspace-local-personal").click({ button: "right" });
     await page.locator('[role="menu"][data-state="open"] [data-testid="menu-icon"]').click();
     await expect(page.locator('[role="menu"][data-state="open"] [data-testid="menu-icon-label"]')).toBeVisible();
     await expect(page.locator('[data-testid="menu-icon-original"]')).toHaveCount(0);
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
-    await page.getByTestId("rail-game-local-personal").click({ button: "right" });
+    await page.getByTestId("rail-workspace-local-personal").click({ button: "right" });
     await expect(page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove"]')).toHaveText("Remove workspace…");
   } finally {
     await app.close();

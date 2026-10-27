@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, rename, rmdir, stat } from "node:fs/promises"
 import path from "node:path";
 import { isGameId, OFFICIAL_OWNER } from "@tavora/module-schema";
 import { writeFileAtomic } from "./fsutil";
-import { modulePartition, partitionDirName } from "./gamedata";
+import { modulePartition, partitionDirName } from "./module-data";
 import { GAME_OVERLAYS_FILE } from "./game-overlays";
 import { HOTKEYS_FILE } from "./hotkeys";
 import { defaultFilesRoot } from "./module-files";
@@ -33,7 +33,7 @@ export function movedModule(moduleId: string): (typeof MOVED_MODULES)[number] | 
 
 /**
  * Runs at every start, before any module session or store is opened. What the official copies
- * saved goes to their catalog modules: settings, documents and files game by game (a game where
+ * saved goes to their catalog modules: settings, documents and files workspace by workspace (a workspace where
  * the catalog module saved something already keeps its own), browser storage, and the panels,
  * overlays, stream links and hotkeys that name them. Grants stay behind: the catalog module asks
  * for its connectors itself. A player who never installs it finds the data in Settings > Modules.

@@ -6,7 +6,7 @@ import { DEFAULT_API_URL } from "./online";
 import { icoFramesAgree, readIcoFromFile } from "./pe-icon";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
 import { readShortcutIcons, saveShortcutIcon, shortcutFolders } from "./steam-shortcuts";
-import { gamesNeedingIcon, liveGames, recordIcon, type GameEntry, type Library } from "./library";
+import { workspacesNeedingIcon, liveWorkspaces, recordIcon, type WorkspaceEntry, type Library } from "./library";
 import {
   fetchPublicIconHash,
   loadAppInfo,
@@ -86,7 +86,7 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
 
   // The launchers' own games come first. A game Steam installed is only a last resort: its folder holds
   // several programs, and Steam's own icon for the game is the better one when Steam has it.
-  const fromInstalledGame = async (game: GameEntry, viaSteam = false): Promise<IconResult> => {
+  const fromInstalledGame = async (game: WorkspaceEntry, viaSteam = false): Promise<IconResult> => {
     const list = (await installedGames()).filter((item) => (item.source === "steam") === viaSteam);
     const found = matchInstalled(game.name, list, game.steamAppId);
     const bytes = found ? await readIcon(found.file, found.index).catch(() => null) : null;
@@ -130,7 +130,7 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
   };
   let hostedList: HostedList | null | undefined;
   const hosted = async () => (hostedList ??= await (options.loadHostedList ?? (() => fetchHostedList(serviceOptions)))());
-  const fromHosted = async (game: GameEntry): Promise<IconResult> => {
+  const fromHosted = async (game: WorkspaceEntry): Promise<IconResult> => {
     // Online features off: the service is never contacted.
     if (!library.onlineSearch) return { status: "none" };
     const list = await hosted();
@@ -154,7 +154,7 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
 
   // An icon an earlier version saved from a program can have frames that disagree with their entries, which shows as
   // nothing. Such a file is removed and the game looked up again.
-  for (const game of liveGames(library)) {
+  for (const game of liveWorkspaces(library)) {
     if (!game.iconFile?.startsWith("exe-")) continue;
     const bytes = await readFile(path.join(iconDir, game.iconFile)).catch(() => null);
     if (bytes && !icoFramesAgree(bytes)) {
@@ -167,7 +167,7 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
   // A Steam game that only has the icon of its program (the last resort) or Steam's small public icon takes
   // the icon Steam itself shows once that is on this PC: the one its shortcut names, else the small one in its library cache.
   if (steamDir !== null && library.steamIcons) {
-    for (const game of liveGames(library)) {
+    for (const game of liveWorkspaces(library)) {
       const appid = game.steamAppId;
       if (!game.iconFile || appid === null) continue;
       const ofProgram = game.iconFile.startsWith("exe-");
@@ -185,7 +185,7 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
 
   // A game that found no icon waits a week before it is looked up again. When the service has an icon
   // for it by now, or it is installed on this PC, it need not wait.
-  const waiting = liveGames(library).filter((game) => game.iconFile === null && game.iconCheckedAt !== null && !needsIcon(game, now()));
+  const waiting = liveWorkspaces(library).filter((game) => game.iconFile === null && game.iconCheckedAt !== null && !needsIcon(game, now()));
   if (waiting.length > 0 && library.steamIcons && shouldRun()) {
     const list = library.onlineSearch ? await hosted() : null;
     const onThisPc = await installedGames();
@@ -197,7 +197,7 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
   let saved = 0;
   for (;;) {
     if (!shouldRun() || !library.steamIcons) return saved;
-    const game = gamesNeedingIcon(library, now())[0];
+    const game = workspacesNeedingIcon(library, now())[0];
     if (!game) return saved;
 
     let result = await fromInstalledGame(game);
@@ -210,7 +210,7 @@ export async function syncIcons(options: IconSyncOptions): Promise<number> {
     if (result.status === "none") result = await fromInstalledGame(game, true);
     if (result.status === "failed") return saved;
 
-    if (result.status === "saved" && !library.games[game.id]) {
+    if (result.status === "saved" && !library.workspaces[game.id]) {
       // The game was deleted while its icon was on the way.
       await removeSteamIcon(iconDir, result.file);
       continue;

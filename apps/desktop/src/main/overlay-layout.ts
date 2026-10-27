@@ -186,7 +186,7 @@ export class OverlayLayout {
     const items: LayoutItemView[] = infos.map((info) => ({
       id: info.id,
       target: info.ref.kind === "panel" ? { kind: "panel", instanceId: info.ref.instanceId } : { kind: "overlay", ...info.ref.subject },
-      keyTarget: { owner: info.keyTarget.owner, moduleId: info.keyTarget.moduleId, gameId: info.keyTarget.gameId, key: info.keyTarget.key },
+      keyTarget: { owner: info.keyTarget.owner, moduleId: info.keyTarget.moduleId, workspaceId: info.keyTarget.workspaceId, key: info.keyTarget.key },
       name: info.name,
       moduleId: info.moduleId,
       kind: info.ref.kind,
@@ -517,8 +517,8 @@ export class OverlayLayout {
     this.refresh();
   }
 
-  /** A game left the library: its picture goes. */
-  forgetGame(gameId: string): void {
-    void this.options.pictures.remove(gameId);
+  /** A workspace left the library: the picture of its game goes. */
+  forgetWorkspace(workspaceId: string): void {
+    void this.options.pictures.remove(workspaceId);
   }
 }

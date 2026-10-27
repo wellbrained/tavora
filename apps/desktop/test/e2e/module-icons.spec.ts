@@ -5,7 +5,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { launch, newUserData, NOTES, openGame, openModule, panels, PLAYGROUND } from "./harness";
+import { launch, newUserData, NOTES, openWorkspace, openModule, panels, PLAYGROUND } from "./harness";
 
 const OWN = "local.test.pictured";
 const PLAIN = "local.test.plain";
@@ -35,7 +35,7 @@ async function addModule(userData: string, folder: string, id: string, name: str
 
 test("the icons show on tabs and in the module lists, and the switch only hides them on the tabs", async () => {
   const { app, page } = await launch();
-  await openGame(page, "poe2");
+  await openWorkspace(page, "poe2");
   await openModule(page, NOTES);
 
   // On by default: a tab has its icon.
@@ -72,7 +72,7 @@ test("a module's own icon is shown, and a module without one gets a puzzle piece
   await addModule(userData, "pictured", OWN, "Pictured", "icon.png");
   await addModule(userData, "plain", PLAIN, "Plain");
   const { app, page } = await launch(userData);
-  await openGame(page, "poe2");
+  await openWorkspace(page, "poe2");
 
   // Add module: the manifest icon is a picture, the plain module's is a drawn icon.
   await page.getByTestId("add-module").click();

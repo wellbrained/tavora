@@ -8,8 +8,8 @@ const counter = document.querySelector<HTMLButtonElement>("#counter")!;
 
 /** Your texts in English and German; Tavora says which language the player uses. */
 const TEXTS = {
-  en: { playing: "Playing {game}.", clicked: "Clicked {count} times in this game." },
-  de: { playing: "Du spielst {game}.", clicked: "{count}-mal in diesem Spiel geklickt." },
+  en: { here: "You're in {workspace}.", clicked: "Clicked {count} times here." },
+  de: { here: "Du bist in {workspace}.", clicked: "{count}-mal hier geklickt." },
 };
 let language: keyof typeof TEXTS = "en";
 const text = (key: keyof (typeof TEXTS)["en"], params: Record<string, string | number>) =>
@@ -29,11 +29,11 @@ async function start(tavora: TavoraSDK) {
   const setLanguage = (code: string) => (language = code.startsWith("de") ? "de" : "en");
   setLanguage(await tavora.ui.getLanguage());
 
-  const game = await tavora.game.getCurrent();
-  // storage keeps small settings for this module in the current game.
+  const workspace = await tavora.workspace.getCurrent();
+  // storage keeps small settings for this module in the current workspace.
   let count = (await tavora.storage.get<number>("count")) ?? 0;
   const render = () => {
-    status.textContent = `${text("playing", { game: game.displayName })} ${text("clicked", { count })}`;
+    status.textContent = `${text("here", { workspace: workspace.displayName })} ${text("clicked", { count })}`;
   };
   tavora.ui.onLanguageChange((code) => {
     setLanguage(code);

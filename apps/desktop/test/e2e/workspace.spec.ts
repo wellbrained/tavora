@@ -7,7 +7,7 @@ import {
   expectModuleText,
   inModule,
   launch,
-  openGame,
+  openWorkspace,
   openModule,
   panels,
   RAIL_WIDTH,
@@ -43,7 +43,7 @@ test("a layout or a grid chosen on the empty workspace fills it with panes that 
   await grid.app.close();
 });
 
-test("React and vanilla modules load, get trusted game context and persist data", async () => {
+test("React and vanilla modules load, get trusted workspace context and persist data", async () => {
   const { app, page, userData } = await launch();
 
   await openModule(page, VANILLA);
@@ -52,7 +52,7 @@ test("React and vanilla modules load, get trusted game context and persist data"
 
   for (const moduleId of [VANILLA, REACT]) {
     await expectModuleText(app, moduleId, "status", "Connected");
-    await expectModuleText(app, moduleId, "game", "Path of Exile 2");
+    await expectModuleText(app, moduleId, "workspace", "Path of Exile 2");
   }
 
   for (let i = 0; i < 3; i++) await clickInModule(app, VANILLA, "increment");
@@ -67,13 +67,13 @@ test("React and vanilla modules load, get trusted game context and persist data"
   await expectModuleText(app, VANILLA, "count", "3");
 
   // Each game has its own workspace and its own module data.
-  await openGame(page, "satisfactory");
+  await openWorkspace(page, "satisfactory");
   await expect(page.getByTestId("empty-workspace")).toBeVisible();
   await openModule(page, VANILLA);
-  await expectModuleText(app, VANILLA, "game", "Satisfactory");
+  await expectModuleText(app, VANILLA, "workspace", "Satisfactory");
   await expectModuleText(app, VANILLA, "count", "0");
 
-  await openGame(page, "poe2");
+  await openWorkspace(page, "poe2");
   await expect(panels(page)).toHaveCount(2);
   await expectModuleText(app, VANILLA, "count", "3");
   await expectModuleText(app, REACT, "count", "1");
@@ -103,7 +103,7 @@ test("modules receive resize events matching their panel size", async () => {
   await app.close();
 });
 
-test("a game opens with all its panels at once, behind one loader until the slowest has loaded", async () => {
+test("a workspace opens with all its panels at once, behind one loader until the slowest has loaded", async () => {
   // Two modules for any game: one page loads at once, the other keeps its page busy for most of the time a page
   // may be held back (REVEAL_CAP_MS), well after the workspace has placed its panels.
   const root = await mkdtemp(path.join(tmpdir(), "tavora-modules-"));
@@ -125,7 +125,7 @@ test("a game opens with all its panels at once, behind one loader until the slow
     await openModule(page, "devtest.quick");
     await openModule(page, "devtest.slow");
     await waitForShown(app, "devtest.slow");
-    await openGame(page, "satisfactory");
+    await openWorkspace(page, "satisfactory");
 
     // Notes, every few milliseconds, which of the two pages are shown.
     await app.evaluate(({ BrowserWindow }) => {
@@ -144,7 +144,7 @@ test("a game opens with all its panels at once, behind one loader until the slow
       new MutationObserver(() => (seen.loaders ||= !!document.querySelector('[data-testid="workspace-loading"]'))).observe(document.body, { childList: true, subtree: true });
       Object.assign(window, { switchSeen: seen });
     });
-    await openGame(page, "poe2");
+    await openWorkspace(page, "poe2");
     // Off the rail, whose tooltip would hide every panel while it shows.
     await page.mouse.move(700, 28);
     await waitForShown(app, "devtest.slow");

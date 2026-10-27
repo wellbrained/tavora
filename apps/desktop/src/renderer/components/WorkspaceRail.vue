@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { ChevronDown, ChevronLeft, ChevronRight, Plus, Settings } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import type { FolderView, GameView, RootItem } from "../../shared/host-api";
+import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
 import { act, dialog, openSettings, prompt, railToggles, state, submitAction } from "../host";
 import { t } from "../i18n";
-import { numberedGames } from "../shortcuts";
-import { folderMenu, gameMenu } from "../rail-actions";
+import { numberedWorkspaces } from "../shortcuts";
+import { folderMenu, workspaceMenu } from "../rail-actions";
 import MenuArea from "./menus/MenuArea.vue";
 import MenuButton from "./menus/MenuButton.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
 import RailFooterTile from "./RailFooterTile.vue";
 import RunningGameButton from "./RunningGameButton.vue";
 import UpdateMarker from "./UpdateMarker.vue";
-import RailGame from "./RailGame.vue";
+import RailWorkspace from "./RailWorkspace.vue";
 import FolderTile from "./FolderTile.vue";
 import RailTooltip from "./RailTooltip.vue";
 
@@ -45,7 +45,7 @@ function toggleRail() {
 }
 watch(railToggles, toggleRail);
 
-// While Ctrl is held, the expanded rail shows which game Ctrl+1 to 9 opens.
+// While Ctrl is held, the expanded rail shows which workspace Ctrl+1 to 9 opens.
 const ctrlHeld = ref(false);
 const onCtrl = (event: KeyboardEvent) => (ctrlHeld.value = event.ctrlKey || event.metaKey);
 const releaseCtrl = () => (ctrlHeld.value = false);
@@ -57,28 +57,28 @@ onBeforeUnmount(() => {
   removeEventListener("keyup", onCtrl);
   removeEventListener("blur", releaseCtrl);
 });
-const numbers = computed(() => new Map(numberedGames(library.value).map((id, index) => [id, index + 1])));
+const numbers = computed(() => new Map(numberedWorkspaces(library.value).map((id, index) => [id, index + 1])));
 const shortcutOf = (id: string) => (ctrlHeld.value && expanded.value ? numbers.value.get(id) : undefined);
 const manual = computed(() => library.value.sort === "manual");
-const favorites = computed(() => library.value.favorites.map((id) => library.value.games[id]).filter(isGame));
-// A game lives in one place: favorited games leave the main list (and its folders) until unfavorited.
+const favorites = computed(() => library.value.favorites.map((id) => library.value.workspaces[id]).filter(isWorkspace));
+// A workspace lives in one place: favorited workspaces leave the main list (and its folders) until unfavorited.
 const favoriteIds = computed(() => new Set<string>(library.value.favorites));
 const rootEntries = computed(() => library.value.root.filter((entry) => entry.kind === "folder" || !favoriteIds.value.has(entry.id)));
-/** How many game names the tooltip of a folder lists. */
-const FOLDER_TIP_GAMES = 8;
-const folderGames = (id: string) => folder(id).games.filter((gameId) => !favoriteIds.value.has(gameId));
+/** How many workspace names the tooltip of a folder lists. */
+const FOLDER_TIP_NAMES = 8;
+const folderWorkspaces = (id: string) => folder(id).workspaces.filter((workspaceId) => !favoriteIds.value.has(workspaceId));
 const openFolders = reactive(new Set<string>());
 
-function isGame(game: GameView | undefined): game is GameView {
-  return game !== undefined;
+function isWorkspace(workspace: WorkspaceView | undefined): workspace is WorkspaceView {
+  return workspace !== undefined;
 }
 
-function isActive(gameId: string): boolean {
-  return state.value!.screen === "game" && state.value!.currentGameId === gameId;
+function isActive(workspaceId: string): boolean {
+  return state.value!.screen === "workspace" && state.value!.currentWorkspaceId === workspaceId;
 }
 
-function game(id: string): GameView {
-  return library.value.games[id]!;
+function workspace(id: string): WorkspaceView {
+  return library.value.workspaces[id]!;
 }
 
 function folder(id: string): FolderView {
@@ -90,8 +90,8 @@ function toggleFolder(id: string) {
   else openFolders.add(id);
 }
 
-const open = (gameId: string) => act({ type: "open-game", gameId });
-const menuFor = (id: string, inFavorites = false) => () => gameMenu(game(id), { inFavorites });
+const open = (workspaceId: string) => act({ type: "open-workspace", workspaceId });
+const menuFor = (id: string, inFavorites = false) => () => workspaceMenu(workspace(id), { inFavorites });
 const folderMenuFor = (id: string) => () => folderMenu(folder(id));
 
 // ── Width ──────────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ function resizeByKey(event: KeyboardEvent) {
 
 const nav = ref<HTMLElement | null>(null);
 
-// The list of games scrolls without a scrollbar; a fade and an arrow at the
+// The list of workspaces scrolls without a scrollbar; a fade and an arrow at the
 // edge say that there is more, and go away at the end of the list.
 const scroller = ref<HTMLElement | null>(null);
 const listContent = ref<HTMLElement | null>(null);
@@ -142,7 +142,7 @@ function updateScrollHints() {
 }
 let sizeWatcher: ResizeObserver | undefined;
 onMounted(() => {
-  // The list grows and shrinks with the games and folders, and with the window.
+  // The list grows and shrinks with the workspaces and folders, and with the window.
   sizeWatcher = new ResizeObserver(updateScrollHints);
   if (scroller.value) sizeWatcher.observe(scroller.value);
   if (listContent.value) sizeWatcher.observe(listContent.value);
@@ -169,11 +169,11 @@ function onNavKey(event: KeyboardEvent) {
 type Zone = "before" | "after" | "into";
 type Place = { list: "favorites" } | { list: "root" } | { list: "folder"; folderId: string };
 interface Dragged {
-  kind: "game" | "folder";
+  kind: "workspace" | "folder";
   id: string;
 }
 interface Target {
-  kind: "game" | "folder";
+  kind: "workspace" | "folder";
   id: string;
   place: Place;
 }
@@ -261,34 +261,34 @@ async function onDrop(event: DragEvent, target: Target) {
     return;
   }
   if (target.place.list === "favorites") {
-    await act({ type: "favorite", gameId: item.id, index: indexIn(library.value.favorites, target.id, zone) });
+    await act({ type: "favorite", workspaceId: item.id, index: indexIn(library.value.favorites, target.id, zone) });
     return;
   }
   // Dropping a favorite back into the main list takes it out of Favorites, since it can't be in both.
-  if (favoriteIds.value.has(item.id)) await act({ type: "unfavorite", gameId: item.id });
+  if (favoriteIds.value.has(item.id)) await act({ type: "unfavorite", workspaceId: item.id });
   if (target.kind === "folder" && zone === "into") {
     // The folder stays as the player left it: closed folders do not pop open.
-    await act({ type: "move-game", gameId: item.id, folderId: target.id });
+    await act({ type: "move-workspace", workspaceId: item.id, folderId: target.id });
   } else if (target.place.list === "root" && zone === "into") {
-    const gameIds = [target.id, item.id];
+    const workspaceIds = [target.id, item.id];
     prompt({
       title: t("rail.newFolder.title"),
       label: t("rail.folderName"),
       confirm: t("rail.newFolder.confirm"),
-      submit: (name) => submitAction({ type: "create-folder", name, gameIds }),
+      submit: (name) => submitAction({ type: "create-folder", name, workspaceIds }),
     });
   } else if (target.place.list === "folder") {
-    const ids = folder(target.place.folderId).games;
-    await act({ type: "move-game", gameId: item.id, folderId: target.place.folderId, index: indexIn(ids, target.id, zone) });
+    const ids = folder(target.place.folderId).workspaces;
+    await act({ type: "move-workspace", workspaceId: item.id, folderId: target.place.folderId, index: indexIn(ids, target.id, zone) });
   } else {
-    await act({ type: "move-game", gameId: item.id, folderId: null, index: indexIn(rootKeys(), target.id, zone) });
+    await act({ type: "move-workspace", workspaceId: item.id, folderId: null, index: indexIn(rootKeys(), target.id, zone) });
   }
 }
 
-// The favorites area itself accepts a game, for when the list is empty.
+// The favorites area itself accepts a workspace, for when the list is empty.
 const favoriteZoneActive = ref(false);
 function onFavoritesOver(event: DragEvent) {
-  if (dragged.value?.kind !== "game") return;
+  if (dragged.value?.kind !== "workspace") return;
   event.preventDefault();
   favoriteZoneActive.value = true;
 }
@@ -296,9 +296,9 @@ async function onFavoritesDrop(event: DragEvent) {
   const item = dragged.value;
   favoriteZoneActive.value = false;
   onDragEnd();
-  if (item?.kind !== "game") return;
+  if (item?.kind !== "workspace") return;
   event.preventDefault();
-  await act({ type: "favorite", gameId: item.id });
+  await act({ type: "favorite", workspaceId: item.id });
 }
 
 /** Drag handlers for one rail item, bound with v-on. */
@@ -323,7 +323,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     ref="nav"
     class="bg-rail relative flex h-full flex-none flex-col border-r"
     :style="{ width: `${width}px` }"
-    :aria-label="t('rail.games')"
+    :aria-label="t('rail.workspaces')"
     data-testid="rail"
     :data-expanded="expanded"
     @keydown="onNavKey"
@@ -349,7 +349,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     <div ref="scroller" class="size-full overflow-x-hidden overflow-y-auto py-2 [scrollbar-width:none]" @scroll.passive="updateScrollHints">
     <div ref="listContent">
       <section
-        v-if="favorites.length || dragged?.kind === 'game'"
+        v-if="favorites.length || dragged?.kind === 'workspace'"
         :class="cn('mb-2 flex flex-col gap-1 border-b pb-2', favoriteZoneActive && 'bg-primary/15')"
         :aria-label="t('rail.favorites')"
         data-testid="rail-favorites"
@@ -358,17 +358,17 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         @drop="onFavoritesDrop"
       >
         <h2 v-if="expanded" class="text-muted-foreground mx-4 my-1 text-xs font-medium">{{ t("rail.favorites") }}</h2>
-        <RailGame
+        <RailWorkspace
           v-for="item in favorites"
           :key="item.id"
-          :game="item"
+          :workspace="item"
           :testid="`rail-favorite-${item.id}`"
           :active="isActive(item.id)"
           :expanded="expanded"
           :shortcut="shortcutOf(item.id)"
           :menu="menuFor(item.id, true)"
-          :hint="hintFor({ kind: 'game', id: item.id, place: { list: 'favorites' } })"
-          v-on="dnd({ kind: 'game', id: item.id, place: { list: 'favorites' } })"
+          :hint="hintFor({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
+          v-on="dnd({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
           @open="open(item.id)"
         />
         <p v-if="!favorites.length" class="text-muted-foreground border-input mx-2 rounded-lg border border-dashed p-2 text-center text-xs">
@@ -378,16 +378,16 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
 
       <section class="flex flex-col gap-1" :aria-label="t('rail.all')">
         <template v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`">
-          <RailGame
-            v-if="entry.kind === 'game'"
-            :game="game(entry.id)"
-            :testid="`rail-game-${entry.id}`"
+          <RailWorkspace
+            v-if="entry.kind === 'workspace'"
+            :workspace="workspace(entry.id)"
+            :testid="`rail-workspace-${entry.id}`"
             :active="isActive(entry.id)"
             :expanded="expanded"
             :shortcut="shortcutOf(entry.id)"
             :menu="menuFor(entry.id)"
-            :hint="hintFor({ kind: 'game', id: entry.id, place: { list: 'root' } })"
-            v-on="dnd({ kind: 'game', id: entry.id, place: { list: 'root' } })"
+            :hint="hintFor({ kind: 'workspace', id: entry.id, place: { list: 'root' } })"
+            v-on="dnd({ kind: 'workspace', id: entry.id, place: { list: 'root' } })"
             @open="open(entry.id)"
           />
           <div
@@ -405,8 +405,8 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                   :text="folder(entry.id).name"
                   :disabled="expanded"
                   folder
-                  :lines="folderGames(entry.id).slice(0, FOLDER_TIP_GAMES).map((id) => game(id).name)"
-                  :more="Math.max(0, folderGames(entry.id).length - FOLDER_TIP_GAMES)"
+                  :lines="folderWorkspaces(entry.id).slice(0, FOLDER_TIP_NAMES).map((id) => workspace(id).name)"
+                  :more="Math.max(0, folderWorkspaces(entry.id).length - FOLDER_TIP_NAMES)"
                 >
                 <button
                   type="button"
@@ -418,7 +418,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                   @click="toggleFolder(entry.id)"
                 >
                   <FolderTile
-                    :games="folderGames(entry.id).slice(0, 4).map(game)"
+                    :workspaces="folderWorkspaces(entry.id).slice(0, 4).map(workspace)"
                     :label="folder(entry.id).label"
                     :open="openFolders.has(entry.id)"
                   />
@@ -441,32 +441,32 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 </div>
               </div>
             </MenuArea>
-            <!-- An open folder and its games sit in one tinted panel. The games keep the size and the place of the rest of the rail. -->
+            <!-- An open folder and its workspaces sit in one tinted panel. The workspaces keep the size and the place of the rest of the rail. -->
             <div
               v-if="openFolders.has(entry.id)"
               class="mt-1 flex flex-col gap-1 [&>div]:px-1"
               role="group"
               :aria-label="folder(entry.id).name"
-              data-testid="folder-games"
+              data-testid="folder-workspaces"
             >
-              <RailGame
-                v-for="id in folderGames(entry.id)"
+              <RailWorkspace
+                v-for="id in folderWorkspaces(entry.id)"
                 :key="id"
-                :game="game(id)"
-                :testid="`rail-game-${id}`"
+                :workspace="workspace(id)"
+                :testid="`rail-workspace-${id}`"
                 :active="isActive(id)"
                 :expanded="expanded"
                 :shortcut="shortcutOf(id)"
                 :menu="menuFor(id)"
-                :hint="hintFor({ kind: 'game', id, place: { list: 'folder', folderId: entry.id } })"
-                v-on="dnd({ kind: 'game', id, place: { list: 'folder', folderId: entry.id } })"
+                :hint="hintFor({ kind: 'workspace', id, place: { list: 'folder', folderId: entry.id } })"
+                v-on="dnd({ kind: 'workspace', id, place: { list: 'folder', folderId: entry.id } })"
                 @open="open(id)"
               />
-              <p v-if="!folder(entry.id).games.length" class="text-muted-foreground p-2 text-center text-xs">{{ t("rail.emptyFolder") }}</p>
+              <p v-if="!folder(entry.id).workspaces.length" class="text-muted-foreground p-2 text-center text-xs">{{ t("rail.emptyFolder") }}</p>
             </div>
           </div>
         </template>
-        <!-- Add game is a tile under the last game, like one more entry in the list. -->
+        <!-- Add game is a tile under the last workspace, like one more entry in the list. -->
         <div class="rail-entry group relative mt-1 flex items-center px-2">
           <button
             type="button"

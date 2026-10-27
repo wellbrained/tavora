@@ -14,12 +14,12 @@ import type { LayoutMessage, LayoutStills, LayoutView } from "./layout-view";
 /** `unavailable`: the module no longer offers this panel's type, so nothing runs in it. */
 export type InstanceStatus = "loading" | "ready" | "failed" | "unresponsive" | "crashed" | "unavailable";
 
-export type Screen = "welcome" | "game";
+export type Screen = "welcome" | "workspace";
 export type RootSort = "recent" | "manual";
-export type Startup = "welcome" | "last-game";
+export type Startup = "welcome" | "last-workspace";
 /** What Tavora does when a game of the library starts: switch to it, ask, only mark it on the rail, or not look at all. */
 export type GameStart = "switch" | "ask" | "show" | "off";
-export type RootItem = { kind: "game"; id: string } | { kind: "folder"; id: string };
+export type RootItem = { kind: "workspace"; id: string } | { kind: "folder"; id: string };
 
 export type IconView = { kind: "monogram"; text: string } | { kind: "image"; url: string };
 
@@ -36,10 +36,10 @@ export interface ModuleNote {
   notes: string[];
 }
 
-export interface GameView {
+export interface WorkspaceView {
   id: string;
-  /** A game, or a personal workspace that belongs to no game. */
-  kind: "game" | "workspace";
+  /** A game workspace, linked to a game, or a personal workspace that belongs to no game. */
+  kind: "game" | "personal";
   name: string;
   icon: IconView;
   /**
@@ -50,7 +50,7 @@ export interface GameView {
   steamIcon: string | null;
   /** How that icon sits in its tile: filling it, or on a light or dark backdrop (see shared/icon-tone.ts). Null without an icon. */
   steamIconTone: IconTone | null;
-  /** What the player chose: the game's own icon, their letters, or their own image. */
+  /** What the player chose: its game's own icon, their letters, or their own image. */
   iconChoice: "original" | "letters" | "image";
   /**
    * The game's own icon from this PC or Steam, as an address, when Tavora does not have an icon for the game
@@ -60,7 +60,7 @@ export interface GameView {
   /** Picked from the built-in list rather than added by name. */
   builtIn: boolean;
   addedAt: string;
-  lastPlayedAt: string | null;
+  lastOpenedAt: string | null;
 }
 
 export interface FolderView {
@@ -68,7 +68,7 @@ export interface FolderView {
   name: string;
   /** Up to three characters shown instead of the icon collage. */
   label: string | null;
-  games: string[];
+  workspaces: string[];
 }
 
 export interface PanelView {
@@ -123,7 +123,7 @@ export interface BrowserState {
   canGoForward: boolean;
   /** The site the page belongs to (its registrable domain), or null. */
   site: string | null;
-  /** The page uses the sign-in shared by all games, rather than this game's own. */
+  /** The page uses the sign-in shared by all workspaces, rather than this workspace's own. */
   shared: boolean;
   /** Ad blocking is on for this site. */
   adblock: boolean;
@@ -428,7 +428,7 @@ export interface LayoutGroup {
 
 export type LayoutNode = LayoutSplit | LayoutGroup;
 
-/** A named layout the player saved for a game. */
+/** A named layout the player saved for a workspace. */
 export interface SnapshotView {
   id: string;
   name: string;
@@ -493,22 +493,22 @@ export interface AppearanceView {
 
 export interface HostViewState {
   screen: Screen;
-  currentGameId: string | null;
+  currentWorkspaceId: string | null;
   library: {
-    /** Games not in Trash. */
-    games: Record<string, GameView>;
+    /** Workspaces not in Trash. */
+    workspaces: Record<string, WorkspaceView>;
     folders: Record<string, FolderView>;
     /** Top level of the rail in display order. */
     root: RootItem[];
     favorites: string[];
-    /** Most recently played first, for the Welcome page. */
+    /** Most recently opened first, for the Welcome page. */
     recent: string[];
-    trash: { game: GameView; trashedAt: string; purgeAt: string }[];
+    trash: { workspace: WorkspaceView; trashedAt: string; purgeAt: string }[];
     sort: RootSort;
     startup: Startup;
     gameStart: GameStart;
-    /** The personal workspace to go back to when the open game closes, or null to stay. */
-    gameEndWorkspace: string | null;
+    /** The personal workspace to go back to when the open workspace's game closes, or null to stay. */
+    gameEndWorkspaceId: string | null;
     grayscaleText: boolean;
     /** Whether search may ask the Tavora service online. */
     onlineSearch: boolean;
@@ -525,7 +525,7 @@ export interface HostViewState {
     /** False until the player finished or skipped the first-run welcome. */
     onboarded: boolean;
     rail: { expanded: boolean; width: number };
-    /** Sites the player marked: signed in for all games, and ad blocking off. */
+    /** Sites the player marked: signed in for all workspaces, and ad blocking off. */
     browser: { sharedSites: string[]; adblockOff: string[] };
   };
   modules: {
@@ -563,7 +563,7 @@ export interface HostViewState {
     icon: string | null;
     /** What the module may do: what its manifest asks for (`asks`), what the player granted of it, and what is still to answer. */
     permissions: { asks: ModulePermissions; granted: ModulePermissions; missing: ModulePermissions };
-    /** Games (ids in the library) with a panel of this module, for the dialogs that remove them. */
+    /** Workspaces (ids in the library) with a panel of this module, for the dialogs that remove them. */
     usedIn: string[];
     /** The newest version the module's patch notes cover (null without any), and whether some are new to the player. */
     notes: { latest: string | null; unseen: boolean };
@@ -591,17 +591,17 @@ export interface HostViewState {
   }[];
   /** Saved data of modules that are not installed (or of another publisher than the installed one), kept until deleted. */
   leftoverModuleData: { owner: string; moduleId: string; publisher: string | null }[];
-  /** Panels of the current game, in the order they were opened. */
+  /** Panels of the current workspace, in the order they were opened. */
   panels: PanelView[];
-  /** The current game's saved layout; panels missing from it are placed by the host UI. */
+  /** The current workspace's saved layout; panels missing from it are placed by the host UI. */
   layout: SavedLayout | null;
   /** Changes whenever `layout` was replaced by the main process, e.g. by applying a snapshot. */
   layoutEpoch: number;
-  /** The game was just opened and its panels are still loading; the host UI covers them, and they are shown together once all have their data. */
+  /** The workspace was just opened and its panels are still loading; the host UI covers them, and they are shown together once all have their data. */
   opening: boolean;
   /** Where modules keep their pictures, and how that stands. */
   moduleFiles: { folder: string; custom: boolean; /** The folder is there (a custom one on a drive that is unplugged is not). */ available: boolean; moving: boolean };
-  /** A web address a module asked to open while the game has no Browser panel; the host UI asks where it should open (link-choice). */
+  /** A web address a module asked to open while the workspace has no Browser panel; the host UI asks where it should open (link-choice). */
   pendingLink: string | null;
   /**
    * A panel of a module could not switch to content another of its panels asked for (panels.open); the host UI asks
@@ -610,7 +610,7 @@ export interface HostViewState {
   pendingNavigation: { panel: string; content: string } | null;
   /**
    * The running game the rail offers to switch to (main/game-watch.ts): the one that started last, other than
-   * the game open now. Null when none, or while "When a game starts" is off.
+   * the game of the workspace open now. Its id is its game workspace's. Null when none, or while "When a game starts" is off.
    */
   runningGameId: string | null;
   /** A game that just started, while the player chose to be asked; the host UI asks whether to switch to it (game-switch). */
@@ -648,8 +648,8 @@ export interface HostViewState {
 export interface StreamingView {
   overlays: { enabled: boolean; port: number; status: "off" | "running" | "in-use" | "failed" };
   /** The overlay links OBS can use, for the Preview buttons. */
-  links: { owner: string; moduleId: string; moduleName: string; gameId: string; gameName: string; key: string }[];
-  /** Every hotkey set for a module action, in every game (main/hotkeys.ts). `taken`: another program holds the key right now. */
+  links: { owner: string; moduleId: string; moduleName: string; workspaceId: string; workspaceName: string; key: string }[];
+  /** Every hotkey set for a module action, in every workspace (main/hotkeys.ts). `taken`: another program holds the key right now. */
   hotkeys: HotkeyView[];
 }
 
@@ -678,8 +678,8 @@ export interface GameOverlaysView {
 
 export interface HotkeyView {
   owner: string;
-  gameId: string;
-  gameName: string;
+  workspaceId: string;
+  workspaceName: string;
   moduleId: string;
   moduleName: string;
   action: string;
@@ -714,7 +714,7 @@ export type ModuleConnector = "ai-usage" | "discord" | "media" | "stream-overlay
 /** Everything the host UI can ask the main process to do: the table in host-actions.ts. */
 export type { HostAction, HostActionType } from "./host-actions";
 
-/** `id` is set when the action created something (a game, a folder). */
+/** `id` is set when the action created something (a workspace, a folder). */
 /** One entry of a module's menu, as the main process checked it (the SDK's MenuEntry). */
 export type ModuleMenuEntry =
   | { type: "item"; id: string; label: string; hint?: string; color?: string; checked?: boolean; radio?: boolean; disabled?: boolean; danger?: boolean }
@@ -805,7 +805,7 @@ export interface CatalogModuleView {
   size: number;
   /** How many times it was installed from Browse, as the catalog counts it. */
   installs: number;
-  /** Whether it may go where the player is (the open game or personal workspace); Browse lists the rest too. */
+  /** Whether it may go where the player is (the open workspace); Browse lists the rest too. */
   fits: boolean;
   /** The games it is made for, by name; empty for any game. */
   forGames: string[];
@@ -944,7 +944,7 @@ export interface TavoraHostApi {
   steamLibrary(profile: string): Promise<SteamLibraryResult>;
   /** Of these games from the last steamLibrary answer, the ones not added whose icon this PC has and Tavora lacks. Never rejects. */
   steamShareIcons(appids: number[]): Promise<SteamShareResult>;
-  /** The catalog modules for the current game or personal workspace. Never rejects. */
+  /** The catalog modules for the current workspace. Never rejects. */
   browseCatalog(): Promise<CatalogListResult>;
   /** A catalog module's page: its readme, screenshots and versions. Never rejects. */
   catalogPage(moduleId: string): Promise<CatalogPageResult>;
@@ -958,7 +958,7 @@ export interface TavoraHostApi {
   releaseStatuses(copies: ReleaseCopy[]): Promise<Record<string, ReleaseStatus> | null>;
   /** Where the visible panels are. Panels not listed are hidden. */
   setPanelBounds(bounds: PanelBounds[]): void;
-  /** Where the workspace is (the card that covers it while a game opens), or null when it is not on screen. */
+  /** Where the workspace is (the card that covers it while a workspace opens), or null when it is not on screen. */
   setWorkspaceBounds(bounds: { x: number; y: number; width: number; height: number } | null): void;
   /**
    * Hides module panels while a menu, dialog or drag would be drawn under
@@ -1009,4 +1009,4 @@ export interface TavoraHostApi {
  * `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). `maximize:<instance id>` and
  * `restore:<instance id>` make that panel's group fill the workspace or put it back (panel.setMaximized).
  */
-export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `game-${number}` | `address:${string}` | `panel:${string}` | `maximize:${string}` | `restore:${string}` | `setting:${string}`;
+export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `workspace-${number}` | `address:${string}` | `panel:${string}` | `maximize:${string}` | `restore:${string}` | `setting:${string}`;

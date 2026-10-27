@@ -7,13 +7,13 @@ Module authors normally use `@tavora/sdk` and never see these messages. This pag
 ## Connecting
 
 1. The module posts `{ type: "tavora:hello", v: 1 }` to its own window (`window.postMessage(..., location.origin)`).
-2. The host's preload sees it and asks the main process for a channel. The main process creates a `MessagePort` pair and binds it to the panel that asked: its module id, game and panel instance. Only the panel's top frame can ask; iframes are ignored.
+2. The host's preload sees it and asks the main process for a channel. The main process creates a `MessagePort` pair and binds it to the panel that asked: its module id, workspace and panel instance. Only the panel's top frame can ask; iframes are ignored.
 3. The preload posts `{ type: "tavora:port", v: 1 }` back to the window with the port attached.
 4. The module sends `bridge.handshake` on the port. Every other request before a successful handshake fails with `BAD_REQUEST`, and the host sends no events until then.
 
 Asking again (a new hello) closes the old port and creates a new one. A reload or navigation inside the module also closes the port; the new page connects again.
 
-Identity is never part of a message. Fields such as `moduleId` or `gameId` in params are rejected or ignored: the host only uses what it bound to the port.
+Identity is never part of a message. Fields such as `moduleId` or `workspaceId` in params are rejected or ignored: the host only uses what it bound to the port.
 
 ## Messages
 
@@ -31,7 +31,7 @@ All messages are plain JSON-compatible objects (structured clone of JSON values)
 
 ```json
 { "v": 1, "id": 7, "ok": true, "result": null }
-{ "v": 1, "id": 7, "ok": false, "error": { "code": "QUOTA_EXCEEDED", "message": "settings are limited to 5242880 bytes per module and game" } }
+{ "v": 1, "id": 7, "ok": false, "error": { "code": "QUOTA_EXCEEDED", "message": "settings are limited to 5242880 bytes per module and workspace" } }
 ```
 
 **Event**, host to module, after the handshake:
@@ -49,12 +49,13 @@ Methods without params must be sent with `params` left out.
 | Method | Params | Result |
 | --- | --- | --- |
 | `bridge.handshake` | `{ protocol: 1, sdkVersion: string }` | `{ protocol: 1, host: { name: "tavora-desktop", version }, module: { id, version }, capabilities, panel: { type } }`: `capabilities` lists what the player has granted, such as `["network"]`; `panel.type` is the [panel type](./manifest.md#panel-types) this panel shows, or `null` for a module without panel types (Tavora 0.17.12 and newer) |
-| `game.getCurrent` | none | `{ id, displayName, kind }` of the game this panel belongs to; `kind` is `"game"`, or `"workspace"` for a personal workspace that belongs to no game (Tavora 0.18.1 and newer; an older Tavora leaves it out, which means a game) |
+| `workspace.getCurrent` | none | `{ id, displayName, kind }` of the workspace this panel is in; `kind` is `"game"` for a game workspace (its `id` is the game's id, the one a manifest's `games` lists) or `"personal"` for a personal workspace that belongs to no game (Tavora 0.21.42 and newer; the SDK asks `game.getCurrent` on an older Tavora) |
+| `game.getCurrent` | none | Deprecated: the same in the old words, `{ id, displayName, kind }` with `kind` `"game"`, or `"workspace"` for a personal workspace (Tavora 0.18.1 and newer; an older Tavora leaves `kind` out, which means a game). Answered until Tavora 1.0; use `workspace.getCurrent` |
 | `storage.get` | `{ key }` | the stored JSON value, or `null` |
 | `storage.set` | `{ key, value }` | `null` |
 | `storage.delete` | `{ key }` | `null` |
 | `storage.keys` | none | sorted array of keys |
-| `storage.app.get`, `storage.app.set`, `storage.app.delete`, `storage.app.keys` | as `storage.*` | the same calls for settings shared by every game, see [Where data lives](#where-data-lives) |
+| `storage.app.get`, `storage.app.set`, `storage.app.delete`, `storage.app.keys` | as `storage.*` | the same calls for settings shared by every workspace, see [Where data lives](#where-data-lives) |
 | `documents.list` | none | `DocumentSummary[]`, newest first |
 | `documents.get` | `{ id }` | `{ id, title, revision, updatedAt, bytes, data }` or `null` |
 | `documents.put` | `{ id?, title, data, ifRevision? }` | `DocumentSummary` of the saved document |
@@ -62,7 +63,7 @@ Methods without params must be sent with `params` left out.
 | `panel.getState` | none | this panel's state, or `null` |
 | `panel.setState` | `{ value }` | `null`; `value: null` removes the state |
 | `panel.getLaunch` | none | why this page is loading, the same on every call until it loads again: `{ reason: "add" }` for a panel the player just added, `{ reason: "restore", content }` for one that was open before, with what it last showed through `panel.setContent` (or `null`), or `{ reason: "open", content }` for one another panel opened with `panels.open` (Tavora 0.17.18 and newer). See [Content per panel](#content-per-panel) (Tavora 0.17.17 and newer) |
-| `panels.open` | `{ type, content? }` | `"shown"`, `"switched"`, `"opened"` or `"failed"`: opens one of this module's own panel types in the current game, on `content` (`{ id, title }`) when given. See [Opening another panel](#opening-another-panel). Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for a type the module does not have (Tavora 0.17.18 and newer) |
+| `panels.open` | `{ type, content? }` | `"shown"`, `"switched"`, `"opened"` or `"failed"`: opens one of this module's own panel types in the current workspace, on `content` (`{ id, title }`) when given. See [Opening another panel](#opening-another-panel). Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for a type the module does not have (Tavora 0.17.18 and newer) |
 | `panel.navigated` | `{ requestId, handled, ok }` | `null`; the answer to a `panel.navigate` event. The SDK sends it for you from `panel.onNavigate` (Tavora 0.17.18 and newer) |
 | `panel.setContent` | `{ content }` | `null`; `content` is `{ id, title }` or `null`: what the panel shows now. `id` is your own, 1 to 200 characters; `title` is its full name, 1 to 200 characters, kept on one line. `INVALID_PARAMS` otherwise (Tavora 0.17.17 and newer) |
 | `panel.isMaximized` | none | `true` while the panel fills the workspace (Maximize in its menu, or `panel.setMaximized`) (Tavora 0.20.20 and newer) |
@@ -71,9 +72,9 @@ Methods without params must be sent with `params` left out.
 | `workspace.getViewport` | none | `{ width, height }` of the panel in CSS pixels |
 | `ui.getLanguage` | none | the language of Tavora's own texts as a code, `"en"` or `"de"` for now; show your module in it, or in English when you have no translation |
 | `ui.showMenu` | `{ items, at, side?, align? }` | the chosen item's `id`, or `null` when the player closed the menu; see [Menus](#menus) |
-| `links.open` | `{ url }` | `null`; opens the web address (http or https, at most 2048 characters) as a new tab in the game's Browser panel, or in a new Browser panel. Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for anything but a web address. You learn nothing about the page |
+| `links.open` | `{ url }` | `null`; opens the web address (http or https, at most 2048 characters) as a new tab in the workspace's Browser panel, or in a new Browser panel. Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for anything but a web address. You learn nothing about the page |
 | `blobs.list` | none | `BlobInfo[]` (`{ id, bytes, type, createdAt }`), oldest first |
-| `blobs.usage` | none | `{ bytes, count, maxBytes, maxFileBytes }` for this module and game |
+| `blobs.usage` | none | `{ bytes, count, maxBytes, maxFileBytes }` for this module and workspace |
 | `blobs.delete` | `{ id }` | `null` (also when the file did not exist); `INVALID_PARAMS` for an id the host did not make |
 | `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`), `radius` is in CSS pixels |
 | `network.fetch` | `{ url, method?, headers?, body?, responseType? }` | `{ status, url, headers, body }`; needs the `network` capability, see [Network](#network) |
@@ -100,10 +101,10 @@ Methods without params must be sent with `params` left out.
 | `overlay.copyLink` | `{ key }` | `"copied"`: the link is on the clipboard; `"off"`: Stream overlays are off, and Tavora opened that setting. `"denied"`: the module asks for the connector on request and the player said no in Tavora's dialog (Tavora 0.19.32 and newer). Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise) |
 | `overlay.resetLink` | `{ key }` | `null`; the overlay gets a new link and the old one stops working. Needs the `overlay` capability |
 | `overlay.showOverGame` | `{ key }` | `"shown"`: the overlay is over the game now, or already was; `"off"`: Game overlays are off, and Tavora opened Settings > Overlays; `"full"`: the game already has 8. Needs no capability. Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for a module without an `overlay` page. See [Game overlays](#game-overlays) (Tavora 0.20.51 and newer) |
-| `overlay.hideOverGame` | `{ key }` | `null`; takes this module's game overlay for `key` away in the panel's workspace scope (a game, or the general ones). Needs no click and no capability; nothing happens when there is none (Tavora 0.21.3 and newer) |
-| `overlay.overGame` | none | `string[]`; the keys of this module's game overlays in the panel's workspace scope. Needs no capability (Tavora 0.21.3 and newer) |
+| `overlay.hideOverGame` | `{ key }` | `null`; takes this module's game overlay for `key` away in the panel's scope (its game, or the general ones). Needs no click and no capability; nothing happens when there is none (Tavora 0.21.3 and newer) |
+| `overlay.overGame` | none | `string[]`; the keys of this module's game overlays in the panel's scope (its game, or the general ones). Needs no capability (Tavora 0.21.3 and newer) |
 | `overlay.preview` | `{ key }` | `null`; opens a small Tavora window showing the overlay for `key` at its real size, on a dark, light or checkered background, so the player can see how it looks. One window per overlay; a second call brings it forward. Needs no capability and works whether Game overlays and Stream overlays are on or off. Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for a module without an `overlay` page. See [Overlay preview](#overlay-preview) (Tavora 0.21.3 and newer) |
-| `hotkeys.list` | none | `{ action, target }[]`: the hotkeys the player set for this module in the current game, never the keys. See [Hotkeys](#hotkeys) (Tavora 0.19.26 and newer) |
+| `hotkeys.list` | none | `{ action, target }[]`: the hotkeys the player set for this module in the current workspace, never the keys. See [Hotkeys](#hotkeys) (Tavora 0.19.26 and newer) |
 | `hotkeys.set` | `{ action, target, label }` | `"set"`, `"removed"` or `"cancelled"`: what the player did in Tavora's hotkey dialog. Only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for an action the manifest does not list |
 | `hotkeys.remove` | `{ target, action? }` | `null`; removes the target's hotkeys, or only the one for `action` |
 
@@ -111,18 +112,18 @@ Methods without params must be sent with `params` left out.
 
 | Kind | Scope | Removed when |
 | --- | --- | --- |
-| `storage` | module + game, shared by all its panels | never by closing panels; later by uninstalling (Milestone C) |
-| `storage.app` | module, shared by all its panels in every game | never by closing panels or deleting a game; with the module's data in Settings > Modules |
-| `documents` | module + game, shared by all its panels | as above |
-| `blobs` (pictures) | module + game, shared by all its panels | the game is deleted from the Trash; never by closing panels |
+| `storage` | module + workspace, shared by all its panels | never by closing panels; later by uninstalling (Milestone C) |
+| `storage.app` | module, shared by all its panels in every workspace | never by closing panels or deleting a workspace; with the module's data in Settings > Modules |
+| `documents` | module + workspace, shared by all its panels | as above |
+| `blobs` (pictures) | module + workspace, shared by all its panels | the workspace is deleted from the Trash; never by closing panels |
 | `panel` state | one panel instance | the panel is closed |
 | panel content (`panel.setContent`) | one panel instance | the panel is closed |
 
-A module never sees another module's data, or its own data for another game (except what it keeps in `storage.app` for every game). `storage.app` has the same limits as a game's `storage`; use it for settings the player expects to stay the same from game to game. Data belongs to the module's id together with who published it (the key that signed its zip, or "local" for an unsigned folder), so a module from another publisher with the same id starts with nothing.
+A module never sees another module's data, or its own data for another workspace (except what it keeps in `storage.app` for every workspace). `storage.app` has the same limits as a workspace's `storage`; use it for settings the player expects to stay the same from workspace to workspace. Data belongs to the module's id together with who published it (the key that signed its zip, or "local" for an unsigned folder), so a module from another publisher with the same id starts with nothing.
 
 ### Files (blobs)
 
-A module can keep pictures that are too big for a document: up to 50 MB each and 500 MB together per module and game. They live in a folder Tavora manages (`module-blobs` in its data folder by default; the player can move it in Settings > Modules), shared by all of the module's panels, and are removed with the game.
+A module can keep pictures that are too big for a document: up to 50 MB each and 500 MB together per module and workspace. They live in a folder Tavora manages (`module-blobs` in its data folder by default; the player can move it in Settings > Modules), shared by all of the module's panels, and are removed with the workspace.
 
 - **Storing:** `sdk.blobs.put(file)` sends the file to the module's own address, `POST /_blobs/`, as the request body, so it is streamed to disk and never held in memory whole. The answer is a `BlobInfo`: `id` (32 lowercase hex characters chosen by the host), `bytes`, `type` and `createdAt`. A module never names a file.
 - **Showing:** `sdk.blobs.url(id)` is the address to use as an image source (`GET /_blobs/<id>`). It only works from the module's own page.
@@ -149,7 +150,7 @@ A module can keep pictures that are too big for a document: up to 50 MB each and
 
 `sdk.ui.showMenu(request)` shows a menu that Tavora draws above every panel, in its own style and theme. A menu inside your page is cut off at the panel's edge; this one is not.
 
-- **Only after the player did something:** call it from the click, right-click or key press that asked for it (within 2 seconds); each press opens one menu, otherwise `PERMISSION_DENIED`. One menu shows at a time: a new one closes the last, and Esc, a click elsewhere or switching games closes it too. It resolves with the chosen item's `id`, or `null`.
+- **Only after the player did something:** call it from the click, right-click or key press that asked for it (within 2 seconds); each press opens one menu, otherwise `PERMISSION_DENIED`. One menu shows at a time: a new one closes the last, and Esc, a click elsewhere or switching workspaces closes it too. It resolves with the chosen item's `id`, or `null`.
 - **Where:** `at` is in your panel's CSS pixels from its top left corner (`getBoundingClientRect()` values). Give the pointer's `{ x, y }` for a context menu, or a button's `{ x, y, width, height }` for a dropdown next to it. `side` (`"bottom"`, `"top"`, `"right"`, `"left"`; default bottom) and `align` (`"start"`, `"center"`, `"end"`; default start) say where it opens when there is room; Tavora keeps it inside the window.
 - **What:** `items` is a list of entries:
   - `{ type: "item", id, label, hint?, color?, checked?, radio?, disabled?, danger? }`: `id` is what you get back (unique in the menu, up to 64 letters, digits, `.`, `_`, `:` or `-`). `hint` is small text on the right, such as a shortcut. `color` adds a dot: `#rgb`/`#rrggbb`, a colour function of numbers such as `oklch(0.7 0.17 150)`, or `transparent` for an empty ring. `checked` shows a check mark (a dot with `radio`); in a list where any item sets it, the others keep the column so labels line up. `danger` makes it red.
@@ -218,7 +219,7 @@ A connector is a part of Tavora that reaches outside the module's panel, such as
 - `systemInfo.traffic` (Tavora 0.21.31+) is only for Tavora's own System Monitor; every other module gets `PERMISSION_DENIED`, with the grant or without. It gives `{ week, months }`: this week (from Monday, local time) and this month with the 3 months before it, newest first, each `{ start, end, downBytes, upBytes, countedFrom }`. The numbers are Windows' own, the record behind Settings > Network > Data usage, which Windows keeps whether Tavora runs or not: every network the PC used (wired, Wi-Fi, mobile), not VPNs and other virtual adapters, whose traffic already goes through a real one. Windows keeps the record for 60 days, so Tavora keeps each month's totals in its data folder once the month is over. `countedFrom` is where the record of a period begins: `start`, a later time when it begins inside the period, or `null` with `null` bytes when there is none. Tavora reads Windows' record only when asked, at most every 5 minutes; outside Windows the bytes are `null`.
 - Outside Windows the connector answers with the processor and memory only: no graphics cards, no drives and no `cpu`, `gpus` or `drives` in snapshots.
 - **The connection** (Tavora 0.21.22+). Add `connection: true` to `blocks` and each `systemInfo.snapshot` carries `connection`: `{ state, routerMs, internetMs, routerFound, lossPercent, downMbit, upMbit, target, since }`. `state` is `online`; `offline` (Windows says there is no network); `no-router` (the router answered before and has lost 3 pings in a row, and the internet is down too); `no-internet` (3 pings in a row to `target` were lost, and the router answers, is not found or never answers pings); or `off` (the watcher is switched off, so there are no readings). A drop keeps the worst of these it had, so it does not flip back and forth. `routerMs` and `internetMs` are the last ping in milliseconds, `null` when lost; `routerFound` is `false` when Tavora found no router. `lossPercent` is the share of the last 100 pings lost, the worse of the router and the internet, 0 to 100 with one decimal. `downMbit` and `upMbit` are the megabits per second through the network adapter in use since the last check (not a speed test), `null` before the second check. `target` is the address pinged on the internet and `since` when the current drop began (`null` while online).
-- **The watcher runs by itself.** While a System Monitor panel exists in any game or workspace and the player granted it System info, Tavora pings the router and `target` every 5 seconds, shown or not, and logs drops. That is one ICMP echo to each (the router is the next hop on the way to the internet, found by Tavora), one question to Windows whether it is online, and one read of the adapter's counters; it starts no program and sends nothing else (a `target` that is a name is also looked up with the PC's name server, at most every 5 minutes, and only a public address is pinged). A drop begins when Windows says there is no network or 3 pings to `target` in a row are lost; single losses only count towards `lossPercent`. It ends with the first answer. `connection` is only in snapshots when the panel asks, and the watcher costs nothing when the module is not there. `systemInfo.connectionChanged` carries the same `connection` when the state changes (a drop begins, changes kind or ends); it comes only while the panel watches `connection` and is shown, and is the moment to ask `systemInfo.connectionLog` again.
+- **The watcher runs by itself.** While a System Monitor panel exists in any workspace and the player granted it System info, Tavora pings the router and `target` every 5 seconds, shown or not, and logs drops. That is one ICMP echo to each (the router is the next hop on the way to the internet, found by Tavora), one question to Windows whether it is online, and one read of the adapter's counters; it starts no program and sends nothing else (a `target` that is a name is also looked up with the PC's name server, at most every 5 minutes, and only a public address is pinged). A drop begins when Windows says there is no network or 3 pings to `target` in a row are lost; single losses only count towards `lossPercent`. It ends with the first answer. `connection` is only in snapshots when the panel asks, and the watcher costs nothing when the module is not there. `systemInfo.connectionChanged` carries the same `connection` when the state changes (a drop begins, changes kind or ends); it comes only while the panel watches `connection` and is shown, and is the moment to ask `systemInfo.connectionLog` again.
 - `systemInfo.connectionLog` gives `{ outages: [{ start, end, kind, durationMs }] }`, newest first. `start` and `end` are milliseconds since 1970 (`end` is `null` while the drop goes on), `kind` is `offline`, `no-router` or `no-internet`, and `durationMs` is how long it lasted so far. Tavora keeps drops for 30 days, per PC, and `systemInfo.clearConnectionLog` empties the list (a drop that still goes on stays). `systemInfo.setConnectionSettings` is for the whole PC, not one panel, and for Tavora's own System Monitor alone: `enabled: false` stops the watcher, `target` is a public IPv4 address or a name with a dot such as `example.com` (default `1.1.1.1`). Addresses on this PC or the local network, names without a dot, local endings such as `.lan` and router names such as `fritz.box` are `INVALID_PARAMS`. Other modules granted System info can read the log and the settings, not change them.
 
 **`media`** (capability `media`, `sdk.connectors.media`, Tavora 0.21.18+): what plays on this PC, as Windows' media controls (the volume flyout) show it, and play/pause, next and previous. Tavora reads it with a small helper program of its own that waits for Windows' change events; nothing polls and nothing leaves the PC.
@@ -258,7 +259,7 @@ The same [`overlay`](./manifest.md#overlay) page can also be shown over the play
 
 - The call gives `"off"` while the player has Game overlays off (they are off at first); Tavora then opens Settings > Overlays. It gives `"full"` when the game already has 8 game overlays; the player can remove one in the Overlay layout. Otherwise it gives `"shown"`, also when the overlay was already added.
 - The overlay shows only while its game is running and in front, and hides when the player switches to another window, Tavora included. The player picks per overlay whether it is always shown or toggled by a key, how see-through it is, and whether it hides from screen capture (it shows in capture at first). They place and resize it in the Overlay layout, or in the game by holding the in-game layer open with the "Tavora over game" key. Its place sticks to the nearest corner or edge of the game window and scales with the window's height, and the page is scaled the same way: it is laid out as in a 1080 px high window, and shown bigger or smaller with the game window.
-- An overlay asked for from a game's workspace shows only over that game. One asked for from a workspace that is no game, such as Personal, is general: it shows over every library game in front. A game has room for 8, and the general ones for another 8.
+- An overlay asked for from a game workspace shows only over that game. One asked for from a personal workspace is general: it shows over every library game in front. A game has room for 8, and the general ones for another 8.
 - Tavora draws its own window above the game. It does not touch the game: nothing is injected into it or drawn by it. Games that run in exclusive full screen hide it; the player is told to switch the game to borderless. Windows only; elsewhere the call gives `"off"`.
 - The page has no bridge and runs under the same policy as a Stream overlay page, with no network. Clicks go through it to the game, so it can't take input.
 - Theme and language don't reach the page, and its size is the player's choice, so lay it out for any size and keep its background transparent.
@@ -279,9 +280,9 @@ When the player shows a panel in game (the [`inGame`](./manifest.md#panel-types)
 
 ### Hotkeys
 
-A module lists what it can do on a key press in the manifest's [`actions`](./manifest.md#actions), such as Start/Pause. `hotkeys.set` opens Tavora's own dialog, where the player presses the keys for one action on one target (an item id, say); `label` names the target there. The binding belongs to the current game. A module never learns which key it is.
+A module lists what it can do on a key press in the manifest's [`actions`](./manifest.md#actions), such as Start/Pause. `hotkeys.set` opens Tavora's own dialog, where the player presses the keys for one action on one target (an item id, say); `label` names the target there. The binding belongs to the current workspace. A module never learns which key it is.
 
-When the player presses it, one panel of the module in the game shown now, the one used last, gets the `hotkeys.pressed` event with `{ action, target }`, so one press is one action however many panels are open. Hotkeys work system-wide, also while the game has the focus, but only while their game is shown in Tavora and the module has a panel in its workspace. The game doesn't get a key that is a hotkey. Settings > Streaming lists every hotkey, and the player can remove them there.
+When the player presses it, one panel of the module in the workspace shown now, the one used last, gets the `hotkeys.pressed` event with `{ action, target }`, so one press is one action however many panels are open. Hotkeys work system-wide, also while the game has the focus, but only while their workspace is shown in Tavora and the module has a panel in it. The game doesn't get a key that is a hotkey. Settings > Streaming lists every hotkey, and the player can remove them there.
 
 ### Documents
 
@@ -290,7 +291,7 @@ A document is a named JSON value with a title and a revision. `DocumentSummary` 
 - `id`: 1 to 64 characters from `A-Z a-z 0-9 _ -`, starting with a letter or digit. Leave it out of `documents.put` to get a new random id.
 - `revision` starts at 1 and goes up by one on every put.
 - `ifRevision` makes a put or delete conditional: it fails with `CONFLICT` (and `error.revision` set to the current revision) unless the stored revision equals it. `ifRevision: 0` means "only if it does not exist yet".
-- After a successful put or delete, every **other** connected panel of the same module and game gets a `documents.changed` event. The panel that made the change does not.
+- After a successful put or delete, every **other** connected panel of the same module and workspace gets a `documents.changed` event. The panel that made the change does not.
 
 Writes are atomic: a crash leaves either the old or the new document, never a mix.
 
@@ -298,14 +299,14 @@ Writes are atomic: a crash leaves either the old or the new document, never a mi
 
 Each panel of a module can show something different: one build, character, run or document of your own, picked in a selector in your panel's toolbar. Tavora has no model of its own for it; it only needs to know what each panel shows. Needs Tavora 0.17.17 or newer.
 
-- When the page loads, ask `panel.getLaunch()`. `{ reason: "add" }` means the player just added the panel: pick the content yourself, such as the one used last, or show a picker. `{ reason: "restore", content }` means the panel was open before (a restart, a switch back to this game, a reload); `content` is what it last showed, or `null`. Keep the panel's own choice in its `panel` state too, so each copy keeps its own.
+- When the page loads, ask `panel.getLaunch()`. `{ reason: "add" }` means the player just added the panel: pick the content yourself, such as the one used last, or show a picker. `{ reason: "restore", content }` means the panel was open before (a restart, a switch back to this workspace, a reload); `content` is what it last showed, or `null`. Keep the panel's own choice in its `panel` state too, so each copy keeps its own.
 - Whenever the selection changes, call `panel.setContent({ id, title })`, or `panel.setContent(null)` for nothing. Tavora keeps it with the panel and shows `title` when the player hovers the tab, below the panel's and the module's names. Tabs stay short, so copies of one panel type look the same; the hover text and your toolbar tell them apart.
 - Show long titles shortened in your toolbar, with the full name on hover.
 - When the content a panel shows is deleted, keep the panel open: say so where the content was, keep the selector, and never switch to other content by yourself.
 
 #### Opening another panel
 
-A panel can open the module's other panel types on what it shows, such as the gear for the build in the planner: `panels.open(type, { content })`. Needs Tavora 0.17.18 or newer. Only right after a click or key press in the panel, once per click, and only the module's own types in the game shown now. Tavora picks the panel:
+A panel can open the module's other panel types on what it shows, such as the gear for the build in the planner: `panels.open(type, { content })`. Needs Tavora 0.17.18 or newer. Only right after a click or key press in the panel, once per click, and only the module's own types in the workspace shown now. Tavora picks the panel:
 
 1. A panel of that type that already shows `content` (by `id`, as its `panel.setContent` said) comes to the front: `"shown"`. Without `content`, the panel of that type used last comes to the front.
 2. Else the panel of that type the player used last is asked to switch: it gets a `panel.navigate` event, which the SDK hands to your `panel.onNavigate` handler. Save any pending edits there, switch, and resolve: `"switched"`, and it comes to the front. Other copies keep what they show.
@@ -330,7 +331,7 @@ The Panel Types Example in Tavora's examples folder does all of this.
 | `media.changed` | `MediaState` | what plays on the PC changed; only with the `media` capability, while the panel watches (also while hidden) |
 | `discord.state` | `DiscordState` | the connection to the Discord app changed; only with the `discord` capability, after `discord.state` was asked |
 | `discord.event` | `{ event, data }` | a Discord event the panel subscribed to; only with the `discord` capability |
-| `hotkeys.pressed` | `{ action, target }` | the player pressed a hotkey set for this module in the game shown now; sent to one panel of the module there, the one used last |
+| `hotkeys.pressed` | `{ action, target }` | the player pressed a hotkey set for this module in the workspace shown now; sent to one panel of the module there, the one used last |
 | `panel.navigate` | `{ requestId, content }` | another panel of this module asked this one to show `content` (`panels.open`); answer with `panel.navigated` within 5 seconds. The SDK does it for you: use `panel.onNavigate` (Tavora 0.17.18 and newer) |
 | `panel.maximized` | `{ maximized }` | the panel started or stopped filling the workspace, by the player or `panel.setMaximized`. The SDK hands it to `panel.onMaximizedChange` (Tavora 0.20.20 and newer) |
 | `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
@@ -408,13 +409,13 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | Requests in flight per panel | 64 |
 | Bytes of requests in flight per panel | 16 MiB |
 | Storage key length | 256 characters |
-| Storage per module and game | 5 MiB (keys + serialized values); the same again for `storage.app` |
+| Storage per module and workspace | 5 MiB (keys + serialized values); the same again for `storage.app` |
 | One document's `data` | 4 MiB |
-| All documents per module and game | 50 MiB, at most 1000 documents |
+| All documents per module and workspace | 50 MiB, at most 1000 documents |
 | Document title | 200 characters |
 | Panel content (`panel.setContent`) | `id` 200 characters, `title` 200 characters |
 | `panels.open` | one per click or key press; the panel asked to switch has 5 s |
-| Stored files (`blobs`) | 50 MB each, 500 MB per module and game; PNG, JPEG, GIF and WebP only |
+| Stored files (`blobs`) | 50 MB each, 500 MB per module and workspace; PNG, JPEG, GIF and WebP only |
 | `clipboard.writeImage` | one PNG per click or key press, at most 20 MB, 16384 pixels on a side and 100 million pixels |
 | `pictures.save` | the same as `clipboard.writeImage`; names up to 80 characters |
 | `files.saveJson`, `files.openJson` | one file per click or key press, JSON up to 8 MiB; names up to 80 characters |
@@ -427,8 +428,8 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | `media.control` | one per press; an app gets 5 s to answer |
 | `discord.command` | 15 s, answers and events up to 512 KB; 32 subscriptions per panel |
 | `ui.showMenu` | one menu per click or key press, 100 entries, labels 80 characters, hints 30 |
-| `overlay.publish` | 16 KB of state per overlay, 200 overlays per module and game; keys up to 64 letters, digits, `-` and `_` |
-| `hotkeys` | 100 per module and game; labels 60 characters on one line; targets like overlay keys |
+| `overlay.publish` | 16 KB of state per overlay, 200 overlays per module and workspace; keys up to 64 letters, digits, `-` and `_` |
+| `hotkeys` | 100 per module and workspace; labels 60 characters on one line; targets like overlay keys |
 
 These limits are checked first inside your own page, by the preload Tavora gives it, before a message reaches the host. A request over a limit is answered with `BAD_REQUEST` (`INVALID_PARAMS` for data that is not plain JSON) and never sent on, so a module that sends something huge can only slow itself down. A request id cannot be reused while its answer is pending.
 
@@ -482,8 +483,8 @@ They go through module addresses rather than bridge calls so a document up to 8 
 
 ### Remembered read-only files
 
-The native picker is opened with `files.pickReadOnly({ extensions: ["ksd"] })` after a real click/key press. Cancellation returns null; selection returns `{ id, name, size }`. File names are basenames; references are opaque 128-bit values scoped by publisher, module and game. No path or folder is accepted from module code. The SDK allows time for the player to use the dialog.
+The native picker is opened with `files.pickReadOnly({ extensions: ["ksd"] })` after a real click/key press. Cancellation returns null; selection returns `{ id, name, size }`. File names are basenames; references are opaque 128-bit values scoped by publisher, module and workspace. No path or folder is accepted from module code. The SDK allows time for the player to use the dialog.
 
 `files.read(id)` POSTs to `/_read-only-files/<id>` in the module origin and returns a Uint8Array, up to 32 MiB. The selected file can be reread after restart without another picker. Two concurrent reads are allowed per scope, four across the host, including reference lookups; errors use the protocol error envelope. `files.forget(id)` revokes access without deleting the selected file. These calls do not enable the reserved `files.open` or `files.save` methods.
 
-References stay on the current PC outside backups/cloud copies and are cleared with module/game data. Data copied to another PC may contain an inert reference and must relink files. The page receives no arbitrary filesystem or write access. See [Security](../guide/security.md#remembered-read-only-files).
+References stay on the current PC outside backups/cloud copies and are cleared with module/workspace data. Data copied to another PC may contain an inert reference and must relink files. The page receives no arbitrary filesystem or write access. See [Security](../guide/security.md#remembered-read-only-files).

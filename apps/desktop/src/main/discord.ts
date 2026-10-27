@@ -243,7 +243,7 @@ export class DiscordConnector {
   }
 
   /**
-   * What Discord panels before 0.16.11 kept with the sign-in: the channel to rejoin and each game's
+   * What Discord panels before 0.16.11 kept with the sign-in: the channel to rejoin and each workspace's
    * server. The host moves it into the Discord module once.
    */
   async legacyPanelData(): Promise<{ last: DiscordLast | null; games: Record<string, DiscordGame> } | null> {

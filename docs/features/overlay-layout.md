@@ -4,7 +4,7 @@ The layout window applies changes immediately. Done closes it; undo and redo las
 
 ## Shared and game-specific positions
 
-- All games contains only general overlays and panels, from workspaces such as Personal.
+- All games contains only general overlays and panels, from personal workspaces.
 - A game contains its own items plus the general ones. General items follow All games until moved or resized there.
 - Customize for this game snapshots every general item's current position and size. General items added later also receive independent positions in customized games.
 - Follow All games again removes either one item's override or the whole game's overrides. Following one item returns the game to per-item customization; its other overrides remain.

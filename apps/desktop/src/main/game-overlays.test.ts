@@ -24,8 +24,10 @@ import {
   overlayId,
   panelWindowId,
   type GameOverlaySubject,
+  type OverlayScope,
   type VisibilityInput,
 } from "./game-overlays";
+import { moveToWorkspaces } from "./workspace-move";
 
 let dir: string;
 
@@ -42,11 +44,19 @@ afterEach(async () => {
 /** A rectangle anchored to the top left corner, in units of the game window's height. */
 const at = (x: number, y: number, width: number, height: number): AnchoredRect => ({ h: "left", v: "top", x, y, width, height });
 
-const subject = (key = "item-1", gameId = "poe2"): GameOverlaySubject => ({ owner: "official", moduleId: "tavora.clock-counter", gameId, key });
+const subject = (key = "item-1", workspaceId = "poe2"): GameOverlaySubject => ({ owner: "official", moduleId: "tavora.clock-counter", workspaceId, key });
+/** An overlay's subject as a file of version 3 or older kept it, before the workspace names. */
+const oldSubject = (key = "item-1", gameId = "poe2") => ({ owner: "official", moduleId: "tavora.clock-counter", gameId, key });
+
+/** Loads the file as Tavora does at start: moved to the workspace names first (workspace-move.ts). */
+async function loadStore(userData: string, scopeOf?: (workspaceId: string) => OverlayScope): Promise<GameOverlayStore> {
+  await moveToWorkspaces(userData);
+  return GameOverlayStore.load(userData, scopeOf);
+}
 
 describe("GameOverlayStore", () => {
   it("overrides one general item per game, while settings stay shared across a restart", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     const timer = subject("timer", "personal");
     const clock = subject("clock", "personal");
     store.add(timer, "all");
@@ -59,7 +69,7 @@ describe("GameOverlayStore", () => {
     expect(store.of("elden").find((item) => item.key === "timer")!.rect).toEqual(store.find(timer)!.rect);
     expect(store.ownPosition("poe2", overlayId(clock))).toBe(false);
     await store.save();
-    const loaded = await GameOverlayStore.load(dir);
+    const loaded = await loadStore(dir);
     expect(loaded.of("poe2").find((item) => item.key === "timer")!.rect).toEqual(own);
     loaded.follow("poe2", overlayId(timer));
     expect(loaded.of("poe2").find((item) => item.key === "timer")!.rect).toEqual(loaded.find(timer)!.rect);
@@ -67,7 +77,7 @@ describe("GameOverlayStore", () => {
   });
 
   it("detaches a whole layout, includes later general items, and can follow All games again", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     const timer = subject("timer", "personal");
     const clock = subject("clock", "personal");
     store.add(timer, "all");
@@ -80,7 +90,7 @@ describe("GameOverlayStore", () => {
     store.setRect(clock, at(0.5, 0.1, 0.3, 0.2));
     expect(store.of("poe2").find((item) => item.key === "clock")!.rect).toEqual(clockBefore);
     await store.save();
-    const loaded = await GameOverlayStore.load(dir);
+    const loaded = await loadStore(dir);
     expect(loaded.layoutState("poe2").detached).toBe(true);
     loaded.follow("poe2");
     expect(loaded.of("poe2").map((item) => item.rect)).toEqual(loaded.of("elden").map((item) => item.rect));
@@ -88,7 +98,7 @@ describe("GameOverlayStore", () => {
   });
 
   it("overrides panels too, leaves game-owned items local, and prunes removed items and games", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     const instanceId = "11111111-1111-4111-8111-111111111111";
     store.addPanel({ ...subject(), instanceId, scope: "all" });
     store.add(subject("own"), "game");
@@ -107,7 +117,7 @@ describe("GameOverlayStore", () => {
   });
 
   it("ignores invalid saved overrides without losing the shared layout", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     const item = subject("timer", "personal");
     store.add(item, "all");
     await store.save();
@@ -115,13 +125,13 @@ describe("GameOverlayStore", () => {
     const body = JSON.parse(await readFile(file, "utf8"));
     body.layout.games = { poe2: { detached: false, positions: { [overlayId(item)]: { x: "bad" }, missing: DEFAULT_RECT } }, elden: null };
     await writeFile(file, JSON.stringify(body));
-    const loaded = await GameOverlayStore.load(dir);
+    const loaded = await loadStore(dir);
     expect(loaded.layoutState("poe2").positions).toEqual({});
     expect(loaded.of("poe2")[0]!.rect).toEqual(store.find(item)!.rect);
     await loaded.save();
   });
   it("adds an overlay with the usual settings once, and keeps it across a restart", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     expect(store.add(subject(), "game")).toBe("added");
     expect(store.add(subject(), "game")).toBe("exists");
     expect(store.find(subject())).toMatchObject({ mode: "always", opacity: 100, hideFromCapture: false });
@@ -129,13 +139,13 @@ describe("GameOverlayStore", () => {
     store.markExclusiveHintShown();
     await store.save();
 
-    const again = await GameOverlayStore.load(dir);
+    const again = await loadStore(dir);
     expect(again.find(subject())).toEqual({ ...subject(), scope: "game", mode: "toggle", opacity: 50, hideFromCapture: true, rect: at(0.5, 0.25, 0.1, 0.1) });
     expect(again.exclusiveHintShown).toBe(true);
   });
 
   it("lets a game have at most LIMITS.maxGameOverlays, and each game its own", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     for (let i = 0; i < LIMITS.maxGameOverlays; i++) expect(store.add(subject(`item-${i}`), "game")).toBe("added");
     expect(store.add(subject("one-more"), "game")).toBe("full");
     expect(store.add(subject("item-0", "other-game"), "game")).toBe("added");
@@ -144,14 +154,14 @@ describe("GameOverlayStore", () => {
   });
 
   it("starts a second overlay of a game below the first, so it doesn't hide it", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     store.add(subject("a"), "game");
     store.add(subject("b"), "game");
     expect(store.find(subject("b"))!.rect.y).toBeGreaterThan(store.find(subject("a"))!.rect.y);
   });
 
   it("ignores values it doesn't take when changing an overlay", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     store.add(subject(), "game");
     store.update(subject(), { opacity: 33 as never, rect: { ...at(0, 0, 1, 1), x: Number.NaN } });
     expect(store.find(subject())).toMatchObject({ opacity: 100, rect: DEFAULT_RECT });
@@ -159,20 +169,20 @@ describe("GameOverlayStore", () => {
   });
 
   it("forgets what matches, and says whether anything went", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     store.add(subject("a"), "game");
     store.add(subject("b", "other-game"), "game");
-    expect(store.forget((overlay) => overlay.gameId === "poe2")).toBe(true);
-    expect(store.forget((overlay) => overlay.gameId === "poe2")).toBe(false);
+    expect(store.forget((overlay) => overlay.workspaceId === "poe2")).toBe(true);
+    expect(store.forget((overlay) => overlay.workspaceId === "poe2")).toBe(false);
     expect(store.all().map((overlay) => overlay.key)).toEqual(["b"]);
   });
 
   it("sets a bad file aside and starts empty, and skips entries it can't use", async () => {
     await writeFile(path.join(dir, GAME_OVERLAYS_FILE), "{ not json");
-    expect((await GameOverlayStore.load(dir)).all()).toEqual([]);
+    expect((await loadStore(dir)).all()).toEqual([]);
     expect((await readdir(dir)).some((name) => name.startsWith(GAME_OVERLAYS_FILE) && name !== GAME_OVERLAYS_FILE)).toBe(true);
 
-    const good = { ...subject(), mode: "toggle", opacity: 75, hideFromCapture: false, rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } };
+    const good = { ...oldSubject(), mode: "toggle", opacity: 75, hideFromCapture: false, rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } };
     await writeFile(
       path.join(dir, GAME_OVERLAYS_FILE),
       JSON.stringify({
@@ -180,25 +190,25 @@ describe("GameOverlayStore", () => {
         overlays: [good, good, { ...good, key: "bad key!" }, { ...good, key: "no-rect", rect: null }, { ...good, key: "odd", mode: "sideways", opacity: 33, hideFromCapture: "yes" }, "nonsense", null],
       }),
     );
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     expect(store.all().map((overlay) => overlay.key)).toEqual(["item-1", "odd"]);
     expect(store.find(subject("odd"))).toMatchObject({ mode: "always", opacity: 100, hideFromCapture: false });
   });
 
   it("starts every stored overlay with capture hiding off, whatever the old Show on stream said", async () => {
-    const old = { ...subject(), mode: "always", opacity: 100, showOnStream: true, rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } };
+    const old = { ...oldSubject(), mode: "always", opacity: 100, showOnStream: true, rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } };
     await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 1, overlays: [old, { ...old, key: "item-2", showOnStream: false, hideFromCapture: true }] }));
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     expect(store.find(subject("item-1"))?.hideFromCapture).toBe(false);
     expect(store.find(subject("item-2"))?.hideFromCapture).toBe(true);
     expect(store.find(subject("item-1"))).not.toHaveProperty("showOnStream");
   });
 
   it("writes the file whole, so a crash leaves the old one or the new one", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     store.add(subject(), "game");
     await store.save();
-    expect(JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8"))).toMatchObject({ version: 3, overlays: [{ key: "item-1" }], panels: [] });
+    expect(JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8"))).toMatchObject({ version: 4, overlays: [{ key: "item-1" }], panels: [] });
     expect((await readdir(dir)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 });
@@ -206,12 +216,12 @@ describe("GameOverlayStore", () => {
 describe("version 3: where an overlay sits", () => {
   const legacy = { x: 0.7, y: 0.6, width: 0.25, height: 0.3 };
   const file = (version: number, overlays: unknown[], extra: object = {}) => writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version, overlays, panels: [], ...extra }));
-  const old = { ...subject("a"), scope: "game", mode: "always", opacity: 100, hideFromCapture: false, rect: legacy };
+  const old = { ...oldSubject("a"), scope: "game", mode: "always", opacity: 100, hideFromCapture: false, rect: legacy };
 
   it("keeps a version 2 file's fractions as they are, placing them the old way, until the game's real window is seen", async () => {
     // Older Tavoras never wrote a window size, so a real version 2 file has none.
     await file(2, [old]);
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     expect(store.upgraded).toBe(true);
     expect(store.migrated).toBe(false);
     const item = store.find(subject("a"))!;
@@ -221,14 +231,14 @@ describe("version 3: where an overlay sits", () => {
     // Saved like that, the file still has the fractions, and no anchor.
     await store.save();
     const saved = JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8"));
-    expect(saved.version).toBe(3);
+    expect(saved.version).toBe(4);
     expect(saved.overlays[0]).toMatchObject({ rect: legacy });
     expect(saved.overlays[0]).not.toHaveProperty("anchor");
   });
 
   it("converts them on the first real window size of the game, onto the very same pixels", async () => {
     await file(2, [old, { ...old, key: "b", gameId: "elden" }]);
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     const wide = { x: 0, y: 0, width: 3440, height: 1440 };
     // A launcher's or splash screen's window is no size to go by.
     expect(store.convertLegacy("poe2", { width: 639, height: 480 })).toBe(false);
@@ -253,7 +263,7 @@ describe("version 3: where an overlay sits", () => {
     for (const [width, height] of [[1920, 1080], [2560, 1440], [3440, 1440], [1280, 1024], [1366, 768], [5120, 1440], [800, 600]] as const) {
       for (const rel of [legacy, { x: 0, y: 0, width: 1, height: 1 }, { x: 0.4, y: 0.4, width: 0.2, height: 0.2 }, { x: 0.001, y: 0.9, width: 0.05, height: 0.02 }]) {
         await file(2, [{ ...old, rect: rel }]);
-        const store = await GameOverlayStore.load(dir);
+        const store = await loadStore(dir);
         store.convertLegacy("poe2", { width, height });
         const game = { x: 120, y: 40, width, height };
         expect(placeItem(store.find(subject("a"))!, game), `${width}x${height}`).toEqual(placeLegacy(normalizeLegacy(rel)!, game));
@@ -267,9 +277,9 @@ describe("version 3: where an overlay sits", () => {
     const general = "0a1b2c3d-0000-4000-8000-000000000009";
     await writeFile(
       path.join(dir, GAME_OVERLAYS_FILE),
-      JSON.stringify({ version: 2, overlays: [{ ...old, gameId: "personal", scope: "all" }], panels: [{ ...panel(general, "personal"), scope: "all", rect: legacy }, { ...panel(), rect: legacy }] }),
+      JSON.stringify({ version: 2, overlays: [{ ...old, gameId: "personal", scope: "all" }], panels: [{ ...oldPanel(general, "personal"), scope: "all", rect: legacy }, { ...oldPanel(), rect: legacy }] }),
     );
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     expect(store.convertLegacy("elden", { width: 2560, height: 1440 })).toBe(true);
     expect(store.find(subject("a", "personal"))!.legacy).toBeUndefined();
     expect(store.panelOf(general)!.legacy).toBeUndefined();
@@ -278,8 +288,8 @@ describe("version 3: where an overlay sits", () => {
   });
 
   it("converts the panels in game of an older file the same way", async () => {
-    await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 2, overlays: [], panels: [{ ...panel(), rect: legacy }] }));
-    const store = await GameOverlayStore.load(dir);
+    await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 2, overlays: [], panels: [{ ...oldPanel(), rect: legacy }] }));
+    const store = await loadStore(dir);
     const game = { x: 0, y: 0, width: 2560, height: 1440 };
     expect(placeItem(store.panelOf(ID)!, game)).toEqual(placeLegacy(legacy, game));
     store.convertLegacy("poe2", game);
@@ -289,7 +299,7 @@ describe("version 3: where an overlay sits", () => {
 
   it("moving an unconverted one anchors it at once", async () => {
     await file(2, [old, { ...old, key: "b" }, { ...old, key: "c" }]);
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     store.update(subject("a"), { rect: at(0.1, 0.1, 0.2, 0.2) });
     expect(store.setRect(subject("b"), at(0.2, 0.2, 0.2, 0.2))).toBe(true);
     expect(store.find(subject("a"))!.legacy).toBeUndefined();
@@ -299,7 +309,7 @@ describe("version 3: where an overlay sits", () => {
 
   it("keeps the fractions of the window next to the anchor, so an older Tavora still places things right", async () => {
     await file(2, [old]);
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     store.setSeen("poe2", { width: 3440, height: 1440 });
     store.convertLegacy("poe2", { width: 3440, height: 1440 });
     store.add(subject("n", "elden"), "game");
@@ -313,7 +323,7 @@ describe("version 3: where an overlay sits", () => {
     expect(saved.overlays[1].key).toBe("n");
     expect(placeLegacy(saved.overlays[1].rect, full)).toEqual(placeAnchored(saved.overlays[1].anchor, full));
     // Loading it again keeps the anchor (and no longer waits for a window).
-    const again = await GameOverlayStore.load(dir);
+    const again = await loadStore(dir);
     expect(again.find(subject("a"))!.rect).toEqual(saved.overlays[0].anchor);
     expect(again.find(subject("a"))!.legacy).toBeUndefined();
     expect(again.upgraded).toBe(false);
@@ -327,7 +337,7 @@ describe("version 3: where an overlay sits", () => {
       { ...old, key: "c", anchor: { ...good, h: "diagonal" } },
       { ...old, key: "d", rect: null, anchor: { ...good, v: "nowhere" } },
     ]);
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     expect(store.upgraded).toBe(false);
     expect(store.all().map((overlay) => overlay.key)).toEqual(["a", "b", "c"]);
     expect(store.find(subject("a"))!.rect).toEqual(good);
@@ -337,9 +347,9 @@ describe("version 3: where an overlay sits", () => {
   });
 
   it("sets a file of a newer version aside, starts empty, and never writes over it", async () => {
-    const future = JSON.stringify({ version: 4, overlays: [{ ...old, anchor: { h: "left", v: "top", x: 0, y: 0, width: 0.1, height: 0.1 } }], panels: [], somethingNew: true });
+    const future = JSON.stringify({ version: 5, overlays: [{ ...old, anchor: { h: "left", v: "top", x: 0, y: 0, width: 0.1, height: 0.1 } }], panels: [], somethingNew: true });
     await writeFile(path.join(dir, GAME_OVERLAYS_FILE), future);
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     expect(store.all()).toEqual([]);
     expect(store.migrated).toBe(false);
     const aside = (await readdir(dir)).filter((name) => name.startsWith(`${GAME_OVERLAYS_FILE}.corrupt-`));
@@ -348,27 +358,27 @@ describe("version 3: where an overlay sits", () => {
     // The new file is its own: saving it leaves the set-aside copy alone.
     store.add(subject("n"), "game");
     await store.save();
-    expect(JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8")).version).toBe(3);
+    expect(JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8")).version).toBe(4);
     expect(await readFile(path.join(dir, aside[0]!), "utf8")).toBe(future);
   });
 
-  it("treats only versions 1 and 2 as old: version 3 is current", async () => {
+  it("treats only versions 1 and 2 as old: version 3 (moved to version 4) is current", async () => {
     for (const [version, upgraded] of [[1, true], [2, true], [3, false]] as const) {
       await file(version, [old]);
-      expect((await GameOverlayStore.load(dir)).upgraded).toBe(upgraded);
+      expect((await loadStore(dir)).upgraded).toBe(upgraded);
     }
   });
 
   it("converts a version 1 file too, with the clean-up of its old keys", async () => {
     await file(1, [old, { ...old, key: `panel-${ID}` }]);
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     expect(store.migrated).toBe(true);
     expect(store.upgraded).toBe(true);
     expect(store.all().map((overlay) => overlay.key)).toEqual(["a"]);
   });
 
   it("keeps the grid, the layout window's place and the window size last seen for each game", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     expect(store.grid).toBe("normal");
     expect(store.seenSize("poe2")).toBeUndefined();
     store.setGrid("fine");
@@ -379,7 +389,7 @@ describe("version 3: where an overlay sits", () => {
     expect(store.setSeen("poe2", { width: 20, height: 20 })).toBe(false);
     expect(store.setSeen("poe2", { width: Number.NaN, height: 1080 })).toBe(false);
     await store.save();
-    const again = await GameOverlayStore.load(dir);
+    const again = await loadStore(dir);
     expect(again.grid).toBe("fine");
     expect(again.layoutWindow).toEqual({ bounds: { x: 10, y: 20, width: 900, height: 600 }, maximized: false });
     expect(again.seenSize("poe2")).toEqual({ width: 2560, height: 1440 });
@@ -388,7 +398,7 @@ describe("version 3: where an overlay sits", () => {
   });
 
   it("resets one position, for an overlay or a panel", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     store.add(subject("a"), "game");
     store.addPanel(panel());
     store.update(subject("a"), { rect: at(0.5, 0.5, 0.1, 0.1) });
@@ -477,41 +487,41 @@ describe("the game in front", () => {
 describe("scope", () => {
   it("is general for anything made outside a game", () => {
     expect(scopeForKind("game")).toBe("game");
-    expect(scopeForKind("workspace")).toBe("all");
+    expect(scopeForKind("personal")).toBe("all");
     expect(scopeForKind(undefined)).toBe("all");
   });
 
   it("matches a game's own things to that game, and general ones to every game", () => {
-    expect(appliesTo({ scope: "game", gameId: "a" }, "a")).toBe(true);
-    expect(appliesTo({ scope: "game", gameId: "a" }, "b")).toBe(false);
-    expect(appliesTo({ scope: "all", gameId: "personal" }, "b")).toBe(true);
+    expect(appliesTo({ scope: "game", workspaceId: "a" }, "a")).toBe(true);
+    expect(appliesTo({ scope: "game", workspaceId: "a" }, "b")).toBe(false);
+    expect(appliesTo({ scope: "all", workspaceId: "personal" }, "b")).toBe(true);
   });
 
   it("keeps the scope across a restart, and takes it from the workspace's kind for files without one", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     store.add(subject("a", "personal"), "all");
     store.add(subject("b", "poe2"), "game");
     await store.save();
-    const again = await GameOverlayStore.load(dir);
+    const again = await loadStore(dir);
     expect(again.find(subject("a", "personal"))?.scope).toBe("all");
     expect(again.find(subject("b", "poe2"))?.scope).toBe("game");
     expect(again.of("elden").map((overlay) => overlay.key)).toEqual(["a"]);
     expect(again.of("poe2").map((overlay) => overlay.key)).toEqual(["a", "b"]);
 
-    const old = { ...subject("c", "personal"), mode: "always", opacity: 100, hideFromCapture: false, rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } };
+    const old = { ...oldSubject("c", "personal"), mode: "always", opacity: 100, hideFromCapture: false, rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } };
     await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 1, overlays: [old, { ...old, key: "d", gameId: "poe2" }] }));
-    const migrated = await GameOverlayStore.load(dir, (gameId) => (gameId === "personal" ? "all" : "game"));
+    const migrated = await loadStore(dir, (workspaceId) => (workspaceId === "personal" ? "all" : "game"));
     expect(migrated.all().map((overlay) => [overlay.key, overlay.scope])).toEqual([["c", "all"], ["d", "game"]]);
   });
 
   it("allows eight of a game's own and eight general ones, panels counted with overlays", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     for (let i = 0; i < LIMITS.maxGameOverlays; i++) expect(store.add(subject(`item-${i}`, "poe2"), "game")).toBe("added");
     expect(store.add(subject("more", "poe2"), "game")).toBe("full");
-    expect(store.addPanel({ owner: "official", moduleId: "m", gameId: "poe2", scope: "game", instanceId: ID })).toBe("full");
+    expect(store.addPanel({ owner: "official", moduleId: "m", workspaceId: "poe2", scope: "game", instanceId: ID })).toBe("full");
     // The general ones have their own eight, whichever workspace they were made in.
     for (let i = 0; i < LIMITS.maxGameOverlays - 1; i++) expect(store.add(subject(`g-${i}`, "personal"), "all")).toBe("added");
-    expect(store.addPanel({ owner: "official", moduleId: "m", gameId: "personal", scope: "all", instanceId: ID })).toBe("added");
+    expect(store.addPanel({ owner: "official", moduleId: "m", workspaceId: "personal", scope: "all", instanceId: ID })).toBe("added");
     expect(store.add(subject("g-more", "other-workspace"), "all")).toBe("full");
     // Another game still has room.
     expect(store.add(subject("x", "elden"), "game")).toBe("added");
@@ -520,7 +530,9 @@ describe("scope", () => {
 
 const ID = "0a1b2c3d-0000-4000-8000-000000000001";
 const ID2 = "0a1b2c3d-0000-4000-8000-000000000002";
-const panel = (instanceId = ID, gameId = "poe2") => ({ owner: "official", moduleId: "tavora.todos", gameId, scope: "game" as const, instanceId });
+const panel = (instanceId = ID, workspaceId = "poe2") => ({ owner: "official", moduleId: "tavora.todos", workspaceId, scope: "game" as const, instanceId });
+/** A panel in game as a file of version 3 or older kept it. */
+const oldPanel = (instanceId = ID, gameId = "poe2") => ({ owner: "official", moduleId: "tavora.todos", gameId, scope: "game" as const, instanceId });
 
 describe("startRect", () => {
   const screen = { x: 0, y: 0, width: 1920, height: 1080 };
@@ -561,30 +573,30 @@ describe("startRect", () => {
 
 describe("panels in the game", () => {
   it("are kept by instance id across a restart, with where the player put them", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     expect(store.addPanel(panel())).toBe("added");
     expect(store.addPanel(panel())).toBe("exists");
     expect(store.panelOf(ID)!.rect.height).toBeGreaterThanOrEqual(DEFAULT_PANEL_ANCHORED.height);
     store.updatePanel(ID, at(0.5, 0.25, 0.2, 0.3));
     await store.save();
-    const again = await GameOverlayStore.load(dir);
+    const again = await loadStore(dir);
     expect(again.panels()).toEqual([{ ...panel(), mode: "always", opacity: 100, hideFromCapture: false, rect: at(0.5, 0.25, 0.2, 0.3) }]);
     expect(again.panelsOf("poe2")).toHaveLength(1);
     expect(again.panelsOf("elden")).toHaveLength(0);
   });
 
   it("keeps the live view's mode, opacity and Hide from capture, and gives old records the defaults", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     store.addPanel(panel());
     expect(store.panelOf(ID)).toMatchObject({ mode: "always", opacity: 100, hideFromCapture: false });
     expect(store.updatePanelView(ID, { mode: "toggle", opacity: 25, hideFromCapture: true })).toBe(true);
     expect(store.updatePanelView(ID, { opacity: 33 as never })).toBe(true);
     expect(store.updatePanelView(ID2, { mode: "toggle" })).toBe(false);
     await store.save();
-    expect((await GameOverlayStore.load(dir)).panelOf(ID)).toMatchObject({ mode: "toggle", opacity: 25, hideFromCapture: true });
+    expect((await loadStore(dir)).panelOf(ID)).toMatchObject({ mode: "toggle", opacity: 25, hideFromCapture: true });
     const rect = { x: 0.1, y: 0.1, width: 0.2, height: 0.2 };
-    await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 2, overlays: [], panels: [{ ...panel(), rect }, { ...panel(ID2), rect, mode: "hold", opacity: 12, hideFromCapture: "yes" }] }));
-    const old = await GameOverlayStore.load(dir);
+    await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 2, overlays: [], panels: [{ ...oldPanel(), rect }, { ...oldPanel(ID2), rect, mode: "hold", opacity: 12, hideFromCapture: "yes" }] }));
+    const old = await loadStore(dir);
     expect(old.panels().map(({ mode, opacity, hideFromCapture }) => ({ mode, opacity, hideFromCapture }))).toEqual([
       { mode: "always", opacity: 100, hideFromCapture: false },
       { mode: "always", opacity: 100, hideFromCapture: false },
@@ -592,7 +604,7 @@ describe("panels in the game", () => {
   });
 
   it("forgets the ones that match", async () => {
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     store.addPanel(panel(ID));
     store.addPanel(panel(ID2));
     expect(store.forgetPanels((item) => item.instanceId === ID)).toBe(true);
@@ -602,16 +614,16 @@ describe("panels in the game", () => {
 
   it("skips entries it can't use, and drops the permanent panel overlays of 0.20.54", async () => {
     const rect = { x: 0.1, y: 0.1, width: 0.2, height: 0.2 };
-    const overlay = { ...subject("item-1"), mode: "always", opacity: 100, hideFromCapture: false, rect };
+    const overlay = { ...oldSubject("item-1"), mode: "always", opacity: 100, hideFromCapture: false, rect };
     await writeFile(
       path.join(dir, GAME_OVERLAYS_FILE),
       JSON.stringify({
         version: 1,
         overlays: [overlay, { ...overlay, key: `panel-${ID}` }],
-        panels: [{ ...panel(), rect }, { ...panel("not-an-id"), rect }, { ...panel(ID2), rect: null }, "nonsense"],
+        panels: [{ ...oldPanel(), rect }, { ...oldPanel("not-an-id"), rect }, { ...oldPanel(ID2), rect: null }, "nonsense"],
       }),
     );
-    const store = await GameOverlayStore.load(dir);
+    const store = await loadStore(dir);
     expect(store.all().map((item) => item.key)).toEqual(["item-1"]);
     expect(store.panels().map((item) => item.instanceId)).toEqual([ID]);
     expect(store.migrated).toBe(true);
@@ -619,20 +631,20 @@ describe("panels in the game", () => {
 
   it("cleans the panel- keys out of a file of version 1 only, and a new file is not a migration", async () => {
     const rect = { x: 0.1, y: 0.1, width: 0.2, height: 0.2 };
-    const overlay = { ...subject("item-1"), scope: "game", mode: "always", opacity: 100, hideFromCapture: false, rect };
-    expect((await GameOverlayStore.load(dir)).migrated).toBe(false);
+    const overlay = { ...oldSubject("item-1"), scope: "game", mode: "always", opacity: 100, hideFromCapture: false, rect };
+    expect((await loadStore(dir)).migrated).toBe(false);
     await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 2, overlays: [overlay, { ...overlay, key: `panel-${ID}` }], panels: [] }));
-    const current = await GameOverlayStore.load(dir);
+    const current = await loadStore(dir);
     expect(current.migrated).toBe(false);
     expect(current.all().map((item) => item.key)).toEqual(["item-1", `panel-${ID}`]);
   });
 
   it("gives an old overlay the scope scopeOf says", async () => {
     const rect = { x: 0.1, y: 0.1, width: 0.2, height: 0.2 };
-    const overlay = { ...subject("item-1"), mode: "always", opacity: 100, hideFromCapture: false, rect };
+    const overlay = { ...oldSubject("item-1"), mode: "always", opacity: 100, hideFromCapture: false, rect };
     await writeFile(path.join(dir, GAME_OVERLAYS_FILE), JSON.stringify({ version: 1, overlays: [overlay, { ...overlay, gameId: "personal" }] }));
-    const store = await GameOverlayStore.load(dir, (gameId) => (gameId === "personal" ? "all" : "game"));
-    expect(store.all().map((item) => [item.gameId, item.scope])).toEqual([[overlay.gameId, "game"], ["personal", "all"]]);
+    const store = await loadStore(dir, (workspaceId) => (workspaceId === "personal" ? "all" : "game"));
+    expect(store.all().map((item) => [item.workspaceId, item.scope])).toEqual([[overlay.gameId, "game"], ["personal", "all"]]);
   });
 
   it("take the keyboard and the player's clicks only while the layer is open", () => {

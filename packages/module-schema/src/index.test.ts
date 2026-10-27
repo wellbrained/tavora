@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_TRANSLATIONS, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -16,13 +16,31 @@ const valid = {
 };
 
 describe("validateManifest", () => {
-  it("takes workspaces only as a boolean, and true only for a module for any game", () => {
+  it("takes workspaces (the old name of personalWorkspaces) only as a boolean, and true only for a module for any game", () => {
     const anyGame = { ...valid, games: [] };
     expect(validateManifest({ ...anyGame, workspaces: false }).ok).toBe(true);
     expect(validateManifest({ ...anyGame, workspaces: true }).ok).toBe(true);
     expect(validateManifest({ ...valid, workspaces: false }).ok).toBe(true);
     expect(validateManifest({ ...anyGame, workspaces: "yes" })).toEqual({ ok: false, errors: ["workspaces must be true or false"] });
     expect(validateManifest({ ...valid, workspaces: true })).toEqual({ ok: false, errors: ["workspaces can only be true for a module made for any game (games is empty)"] });
+  });
+
+  it("takes personalWorkspaces like workspaces, from a minTavora that knows it, and never both", () => {
+    const anyGame = { ...valid, games: [], minTavora: "0.21.42" };
+    expect(validateManifest({ ...anyGame, personalWorkspaces: false }).ok).toBe(true);
+    expect(validateManifest({ ...anyGame, personalWorkspaces: "no" })).toEqual({ ok: false, errors: ["personalWorkspaces must be true or false"] });
+    expect(validateManifest({ ...anyGame, games: ["poe2"], personalWorkspaces: true })).toEqual({ ok: false, errors: ["personalWorkspaces can only be true for a module made for any game (games is empty)"] });
+    expect(validateManifest({ ...anyGame, personalWorkspaces: false, workspaces: false })).toEqual({ ok: false, errors: ["use personalWorkspaces only: workspaces is its old name"] });
+    expect(validateManifest({ ...anyGame, minTavora: LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, personalWorkspaces: false }).ok).toBe(false);
+    expect(validateManifest({ ...anyGame, minTavora: undefined, id: "tavora.notes", personalWorkspaces: false }).ok).toBe(true);
+  });
+
+  it("lets a module into personal workspaces when it is for any game and did not opt out, under either name", () => {
+    expect(allowsPersonalWorkspaces({ games: [] })).toBe(true);
+    expect(allowsPersonalWorkspaces({ games: ["poe2"] })).toBe(false);
+    expect(allowsPersonalWorkspaces({ games: [], personalWorkspaces: false })).toBe(false);
+    expect(allowsPersonalWorkspaces({ games: [], workspaces: false })).toBe(false);
+    expect(allowsPersonalWorkspaces({ games: [], personalWorkspaces: true })).toBe(true);
   });
 
   it("accepts a valid manifest", () => {

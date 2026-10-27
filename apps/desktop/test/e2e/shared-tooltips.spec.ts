@@ -73,10 +73,10 @@ test('the host shows its own hints and rail labels with the shared tooltip', asy
     await expect(tooltip).toHaveCount(0);
 
     // A rail label: the game's name as the heading, beside its icon.
-    await page.getByTestId('rail-game-poe2').hover();
+    await page.getByTestId('rail-workspace-poe2').hover();
     await expect(tooltip.locator('h2')).toHaveText('Path of Exile 2');
     expect(await tooltip.evaluate(e => getComputedStyle(e.querySelector('h2')!).fontSize)).toBe('18px');
-    const icon = (await page.getByTestId('rail-game-poe2').boundingBox())!, card = (await tooltip.boundingBox())!;
+    const icon = (await page.getByTestId('rail-workspace-poe2').boundingBox())!, card = (await tooltip.boundingBox())!;
     expect(card.x).toBeGreaterThan(icon.x + icon.width - 8);
     await page.keyboard.press('Escape');
     await expect(tooltip).toHaveCount(0);

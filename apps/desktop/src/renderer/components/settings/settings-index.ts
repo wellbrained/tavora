@@ -1,4 +1,4 @@
-import { Blocks, Cloud, FolderCode, Gamepad2, Globe, Info, Keyboard, Palette, PictureInPicture2, Plug, Radio, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
+import { Blocks, Cloud, FolderCode, Globe, Info, Keyboard, LayoutGrid, Palette, PictureInPicture2, Plug, Radio, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
 import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 
@@ -31,7 +31,7 @@ export const GROUPS = [
   {
     id: "library",
     sections: [
-      { id: "games", icon: Gamepad2 },
+      { id: "workspaces", icon: LayoutGrid },
       { id: "trash", icon: Trash2 },
     ],
   },
@@ -85,7 +85,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["module-grants", "modules"],
   ["module-files", "modules"],
   ["discord-connection", "integrations"],
-  ["steam-import", "games"],
+  ["steam-import", "workspaces"],
   ["ai-usage-accounts", "integrations"],
   ["stream-overlays", "streaming"],
   ["overlay-port", "streaming"],
@@ -98,7 +98,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["overlay-layout", "overlays"],
   ["browser-shared-sites", "browser"],
   ["browser-adblock-off", "browser"],
-  ["browser-clear-game", "browser"],
+  ["browser-clear-workspace", "browser"],
   ["browser-clear-shared", "browser"],
   ["development-folders", "development"],
   ["development-examples", "development"],
@@ -106,7 +106,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["publish-ci", "development"],
   ["developer-docs", "development"],
   ["shortcuts", "shortcuts"],
-  ["games", "games"],
+  ["workspaces", "workspaces"],
   ["trash", "trash"],
 ];
 

@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { syncIcons } from "./icon-sync";
 import type { InstalledGame } from "./launcher-games";
-import { addGame, emptyLibrary, recordIcon, trashGame, type Library } from "./library";
+import { addWorkspace, emptyLibrary, recordIcon, trashWorkspace, type Library } from "./library";
 import { appInfo } from "./steam-appinfo.fixture";
 
 const day = (n: number) => new Date(Date.UTC(2026, 9, n, 12));
@@ -111,7 +111,7 @@ function fakeSteam(net: Net = {}) {
 function libraryWith(...catalogIds: string[]): Library {
   const library = emptyLibrary();
   library.onlineSearch = false;
-  catalogIds.forEach((catalogId, index) => addGame(library, { catalogId }, day(1 + index)));
+  catalogIds.forEach((catalogId, index) => addWorkspace(library, { catalogId }, day(1 + index)));
   return library;
 }
 
@@ -141,10 +141,10 @@ describe("syncIcons: Steam", () => {
     const job = run(library, net);
     expect(await job.done).toBe(2);
     expect(net.asked).toEqual([`ico:${hashOf("b")}`]);
-    expect(library.games["elden-ring"]!.iconFile).toBe("1245620.ico");
-    expect(library.games.factorio!.iconFile).toBe("427520.ico");
+    expect(library.workspaces["elden-ring"]!.iconFile).toBe("1245620.ico");
+    expect(library.workspaces.factorio!.iconFile).toBe("427520.ico");
     // Fortnite has no Steam id and is not installed: noted, with nothing asked.
-    expect(library.games.fortnite).toMatchObject({ iconFile: null, steamAppId: null, iconCheckedAt: day(10).toISOString() });
+    expect(library.workspaces.fortnite).toMatchObject({ iconFile: null, steamAppId: null, iconCheckedAt: day(10).toISOString() });
     expect((await readdir(icons)).sort()).toEqual(["1245620.ico", "427520.ico"]);
     expect(job.changes()).toBe(3);
   });
@@ -154,19 +154,19 @@ describe("syncIcons: Steam", () => {
     const net = fakeSteam({ api: { 1145350: hashOf("c") }, jpg: { [hashOf("c")]: 200 } });
     expect(await run(library, net).done).toBe(1);
     expect(net.asked).toEqual(["api:1145350", `jpg:${hashOf("c")}`]);
-    expect(library.games["hades-2"]!.iconFile).toBe("1145350.jpg");
+    expect(library.workspaces["hades-2"]!.iconFile).toBe("1145350.jpg");
 
     const missing = libraryWith("hades-2");
     const none = fakeSteam({});
     expect(await run(missing, none).done).toBe(0);
-    expect(missing.games["hades-2"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
+    expect(missing.workspaces["hades-2"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
     const again = fakeSteam({});
     await run(missing, again).done;
     expect(again.asked).toEqual([]);
     // A week later it looks again.
     await run(missing, again, { now: () => day(20) }).done;
     expect(again.asked).toEqual(["api:1145350"]);
-    expect(missing.games["hades-2"]!.iconCheckedAt).toBe(day(20).toISOString());
+    expect(missing.workspaces["hades-2"]!.iconCheckedAt).toBe(day(20).toISOString());
   });
 
   it("falls back to the small public icon when Steam's address does not have the client icon", async () => {
@@ -174,13 +174,13 @@ describe("syncIcons: Steam", () => {
     const net = fakeSteam({ api: { 1245620: hashOf("d") }, jpg: { [hashOf("d")]: 200 } });
     expect(await run(library, net).done).toBe(1);
     expect(net.asked).toEqual([`ico:${hashOf("a")}`, "api:1245620", `jpg:${hashOf("d")}`]);
-    expect(library.games["elden-ring"]!.iconFile).toBe("1245620.jpg");
+    expect(library.workspaces["elden-ring"]!.iconFile).toBe("1245620.jpg");
   });
 
   it("notes a game that no source has an icon for", async () => {
     const library = libraryWith("elden-ring");
     expect(await run(library, fakeSteam({})).done).toBe(0);
-    expect(library.games["elden-ring"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
+    expect(library.workspaces["elden-ring"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
   });
 
   it("still finds the small public icon when Steam is not installed or its cache cannot be read", async () => {
@@ -200,7 +200,7 @@ describe("syncIcons: Steam", () => {
     const job = run(library, net);
     expect(await job.done).toBe(0);
     expect(net.asked).toEqual([`ico:${hashOf("a")}`]);
-    expect(library.games["elden-ring"]).toMatchObject({ iconFile: null, iconCheckedAt: null });
+    expect(library.workspaces["elden-ring"]).toMatchObject({ iconFile: null, iconCheckedAt: null });
     expect(job.changes()).toBe(0);
     expect(await run(library, fakeSteam({ ico: { [hashOf("a")]: 200, [hashOf("b")]: 200 } })).done).toBe(2);
   });
@@ -209,7 +209,7 @@ describe("syncIcons: Steam", () => {
     const library = libraryWith("hades-2");
     const net = fakeSteam({ api: { 1145350: "network" } });
     expect(await run(library, net).done).toBe(0);
-    expect(library.games["hades-2"]).toMatchObject({ iconFile: null, iconCheckedAt: null });
+    expect(library.workspaces["hades-2"]).toMatchObject({ iconFile: null, iconCheckedAt: null });
   });
 });
 
@@ -219,7 +219,7 @@ describe("syncIcons: the installed game", () => {
 
   it("takes the icon from the installed game first, with nothing asked of Steam", async () => {
     const library = libraryWith("elden-ring");
-    addGame(library, { name: "Diablo IV" }, day(5));
+    addWorkspace(library, { name: "Diablo IV" }, day(5));
     const net = fakeSteam({});
     const read: Array<[string, number]> = [];
     const job = run(library, net, {
@@ -233,14 +233,14 @@ describe("syncIcons: the installed game", () => {
       ["G:\\D4\\d4.exe", 2],
     ]);
     // A game with a Steam id keeps its place on the Steam name only when the file is the game's own.
-    expect(library.games["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
-    expect(library.games["local-diablo-iv"]!.iconFile).toBe("exe-local-diablo-iv.ico");
+    expect(library.workspaces["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
+    expect(library.workspaces["local-diablo-iv"]!.iconFile).toBe("exe-local-diablo-iv.ico");
     expect((await readdir(icons)).sort()).toEqual(["exe-elden-ring.ico", "exe-local-diablo-iv.ico"]);
   });
 
   it("prefers Battle.net when two launchers know the same game", async () => {
     const library = emptyLibrary();
-    addGame(library, { name: "StarCraft II" }, day(1));
+    addWorkspace(library, { name: "StarCraft II" }, day(1));
     const read: string[] = [];
     await run(library, fakeSteam({}), {
       installedGames: async () =>
@@ -258,7 +258,7 @@ describe("syncIcons: the installed game", () => {
       readIcon: async () => new Uint8Array(40),
     });
     expect(await job.done).toBe(1);
-    expect(library.games["elden-ring"]!.iconFile).toBe("1245620.ico");
+    expect(library.workspaces["elden-ring"]!.iconFile).toBe("1245620.ico");
 
     const other = libraryWith("elden-ring");
     expect(
@@ -306,8 +306,8 @@ describe("syncIcons: housekeeping", () => {
 
   it("does not ask for games in Trash, or for ones that already have their icon", async () => {
     const library = libraryWith("elden-ring", "factorio");
-    trashGame(library, "factorio", day(2));
-    library.games["elden-ring"]!.iconFile = "1245620.ico";
+    trashWorkspace(library, "factorio", day(2));
+    library.workspaces["elden-ring"]!.iconFile = "1245620.ico";
     const net = fakeSteam({ ico: { [hashOf("a")]: 200, [hashOf("b")]: 200 } });
     expect(await run(library, net).done).toBe(0);
     expect(net.asked).toEqual([]);
@@ -316,7 +316,7 @@ describe("syncIcons: housekeeping", () => {
   it("removes an icon that arrives for a game deleted in the meantime", async () => {
     const library = libraryWith("elden-ring");
     const fetchImpl = (async () => {
-      delete library.games["elden-ring"];
+      delete library.workspaces["elden-ring"];
       return new Response(ICON as BodyInit);
     }) as unknown as typeof fetch;
     expect(await run(library, { fetchImpl, asked: [] }).done).toBe(0);
@@ -325,10 +325,10 @@ describe("syncIcons: housekeeping", () => {
 
   it("removes an icon read from a game that was deleted in the meantime", async () => {
     const library = emptyLibrary();
-    addGame(library, { name: "Diablo IV" }, day(1));
+    addWorkspace(library, { name: "Diablo IV" }, day(1));
     await run(library, fakeSteam({}), {
       installedGames: async () => [{ source: "battlenet", name: "Diablo IV", file: "G:\\d4.exe", index: 0 }],
-      readIcon: async () => (delete library.games["local-diablo-iv"], ICON),
+      readIcon: async () => (delete library.workspaces["local-diablo-iv"], ICON),
     }).done;
     expect(await readdir(icons)).toEqual([]);
   });
@@ -342,7 +342,7 @@ describe("syncIcons: the Tavora service's hosted icons", () => {
   const withGame = (name: string) => {
     const library = emptyLibrary();
     library.onlineSearch = true;
-    addGame(library, { name }, day(1));
+    addWorkspace(library, { name }, day(1));
     return library;
   };
 
@@ -351,7 +351,7 @@ describe("syncIcons: the Tavora service's hosted icons", () => {
     const net = fakeSteam({ hosted: { "diablo-iv": diablo, "other-game": { names: ["Other"], bytes: pngOf(9) } } });
     expect(await run(library, net).done).toBe(1);
     expect(net.asked).toEqual(["service:list", "service:diablo-iv"]);
-    expect(library.games["local-diablo-4"]!.iconFile).toBe("hosted-local-diablo-4.png");
+    expect(library.workspaces["local-diablo-4"]!.iconFile).toBe("hosted-local-diablo-4.png");
     expect(new Uint8Array(await readFile(path.join(icons, "hosted-local-diablo-4.png")))).toEqual(diablo.bytes);
   });
 
@@ -360,18 +360,18 @@ describe("syncIcons: the Tavora service's hosted icons", () => {
     library.onlineSearch = true;
     const net = fakeSteam({ hosted: { "elden-ring": { names: ["Something else entirely"], bytes: pngOf(4) } } });
     await run(library, net, { loadAppInfoImpl: async () => null }).done;
-    expect(library.games["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
+    expect(library.workspaces["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
     expect(net.asked).toEqual(["service:list", "service:elden-ring"]);
   });
 
   it("asks for the list once per run, however many games need an icon", async () => {
     const library = withGame("Diablo IV");
-    addGame(library, { name: "Nothing Hosted" }, day(2));
-    addGame(library, { name: "Nor This" }, day(3));
+    addWorkspace(library, { name: "Nothing Hosted" }, day(2));
+    addWorkspace(library, { name: "Nor This" }, day(3));
     const net = fakeSteam({ hosted: { "diablo-iv": diablo } });
     await run(library, net).done;
     expect(net.asked.filter((entry) => entry === "service:list")).toHaveLength(1);
-    expect(library.games["local-nothing-hosted"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
+    expect(library.workspaces["local-nothing-hosted"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
   });
 
   it("prefers the installed game and Steam's client icon, and prefers itself to Steam's small icon", async () => {
@@ -380,21 +380,21 @@ describe("syncIcons: the Tavora service's hosted icons", () => {
     installed.onlineSearch = true;
     const a = fakeSteam(hosted);
     await run(installed, a, { installedGames: async () => [{ source: "windows", name: "Elden Ring", file: "C:\\er.exe", index: 0 }], readIcon: async () => ICON }).done;
-    expect(installed.games["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
+    expect(installed.workspaces["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
     expect(a.asked).toEqual([]);
 
     const client = libraryWith("elden-ring");
     client.onlineSearch = true;
     const b = fakeSteam({ ...hosted, ico: { [hashOf("a")]: 200 } });
     await run(client, b).done;
-    expect(client.games["elden-ring"]!.iconFile).toBe("1245620.ico");
+    expect(client.workspaces["elden-ring"]!.iconFile).toBe("1245620.ico");
     expect(b.asked).toEqual([`ico:${hashOf("a")}`]);
 
     const small = libraryWith("elden-ring");
     small.onlineSearch = true;
     const c = fakeSteam({ ...hosted, api: { 1245620: hashOf("d") }, jpg: { [hashOf("d")]: 200 } });
     await run(small, c).done;
-    expect(small.games["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
+    expect(small.workspaces["elden-ring"]!.iconFile).toBe("hosted-elden-ring.png");
     expect(c.asked.some((entry) => entry.startsWith("api:") || entry.startsWith("jpg:"))).toBe(false);
   });
 
@@ -403,7 +403,7 @@ describe("syncIcons: the Tavora service's hosted icons", () => {
     library.onlineSearch = true;
     const net = fakeSteam({ hosted: { "diablo-iv": diablo }, api: { 1145350: hashOf("c") }, jpg: { [hashOf("c")]: 200 } });
     await run(library, net).done;
-    expect(library.games["hades-2"]!.iconFile).toBe("1145350.jpg");
+    expect(library.workspaces["hades-2"]!.iconFile).toBe("1145350.jpg");
     expect(net.asked).toEqual(["service:list", "api:1145350", `jpg:${hashOf("c")}`]);
   });
 
@@ -413,13 +413,13 @@ describe("syncIcons: the Tavora service's hosted icons", () => {
     const net = fakeSteam({ hosted: { "diablo-iv": diablo } });
     expect(await run(library, net).done).toBe(0);
     expect(net.asked).toEqual([]);
-    expect(library.games["local-diablo-iv"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
+    expect(library.workspaces["local-diablo-iv"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
   });
 
   it("stops without marking anything when the service cannot be reached, and finds the icon next time", async () => {
     const library = withGame("Diablo IV");
     expect(await run(library, fakeSteam({ serviceDown: true })).done).toBe(0);
-    expect(library.games["local-diablo-iv"]).toMatchObject({ iconFile: null, iconCheckedAt: null });
+    expect(library.workspaces["local-diablo-iv"]).toMatchObject({ iconFile: null, iconCheckedAt: null });
     expect(await run(library, fakeSteam({ hosted: { "diablo-iv": diablo } })).done).toBe(1);
   });
 
@@ -427,7 +427,7 @@ describe("syncIcons: the Tavora service's hosted icons", () => {
     const library = withGame("Diablo IV");
     const net = fakeSteam({ hosted: { "diablo-iv": { ...diablo, listedHash: "0".repeat(64) } } });
     expect(await run(library, net).done).toBe(0);
-    expect(library.games["local-diablo-iv"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
+    expect(library.workspaces["local-diablo-iv"]).toMatchObject({ iconFile: null, iconCheckedAt: day(10).toISOString() });
     expect(await readdir(icons).catch(() => [])).toEqual([]);
   });
 });
@@ -435,12 +435,12 @@ describe("syncIcons: a game that is waiting for its next look", () => {
   it("looks again at once when the service has its icon by now", async () => {
     const library = emptyLibrary();
     library.onlineSearch = true;
-    addGame(library, { name: "Diablo IV" }, day(1));
+    addWorkspace(library, { name: "Diablo IV" }, day(1));
     // Looked at yesterday and found nothing: it would wait a week.
     recordIcon(library, "local-diablo-iv", { none: day(9) });
     const net = fakeSteam({ hosted: { "diablo-iv": { names: ["Diablo IV"], bytes: pngOf(3) } } });
     expect(await run(library, net).done).toBe(1);
-    expect(library.games["local-diablo-iv"]!.iconFile).toBe("hosted-local-diablo-iv.png");
+    expect(library.workspaces["local-diablo-iv"]!.iconFile).toBe("hosted-local-diablo-iv.png");
   });
 
   it("looks again at once when the game is installed on this PC, and keeps waiting when it is not", async () => {
@@ -452,8 +452,8 @@ describe("syncIcons: a game that is waiting for its next look", () => {
       readIcon: async () => ICON,
     });
     expect(await job.done).toBe(1);
-    expect(library.games["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
-    expect(library.games["factorio"]).toMatchObject({ iconFile: null, iconCheckedAt: day(9).toISOString() });
+    expect(library.workspaces["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
+    expect(library.workspaces["factorio"]).toMatchObject({ iconFile: null, iconCheckedAt: day(9).toISOString() });
   });
 });
 
@@ -498,7 +498,7 @@ describe("syncIcons: the small icon in Steam's library cache", () => {
     const net = fakeSteam({});
     expect(await run(library, net).done).toBe(1);
     expect(net.asked).toEqual([]);
-    expect(library.games["hades-2"]!.iconFile).toBe("1145350.jpg");
+    expect(library.workspaces["hades-2"]!.iconFile).toBe("1145350.jpg");
     expect(new Uint8Array(await readFile(path.join(icons, "1145350.jpg")))).toEqual(JPEG);
   });
 
@@ -518,8 +518,8 @@ describe("syncIcons: the small icon in Steam's library cache", () => {
       ],
     });
     await job.done;
-    expect(library.games["hades-2"]!.iconFile).toBe("1145350.jpg");
-    expect(library.games["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
+    expect(library.workspaces["hades-2"]!.iconFile).toBe("1145350.jpg");
+    expect(library.workspaces["elden-ring"]!.iconFile).toBe("exe-elden-ring.ico");
     expect((await readdir(icons)).sort()).toEqual(["1145350.jpg", "exe-elden-ring.ico"]);
   });
 });
@@ -541,7 +541,7 @@ describe("syncIcons: the icon a Steam shortcut names", () => {
     const net = fakeSteam({});
     expect(await run(library, net, { shortcutDirs: [shortcuts] }).done).toBe(1);
     expect(net.asked).toEqual([]);
-    expect(library.games["hades-2"]!.iconFile).toBe("1145350.ico");
+    expect(library.workspaces["hades-2"]!.iconFile).toBe("1145350.ico");
   });
 
   it("replaces a Steam game's program icon and its small public icon, but not a launcher's own icon", async () => {
@@ -560,9 +560,9 @@ describe("syncIcons: the icon a Steam shortcut names", () => {
       shortcutDirs: [shortcuts],
       installedGames: async () => [{ source: "battlenet", name: "Factorio", file: "G:/f.exe", index: 0 }],
     }).done;
-    expect(library.games["hades-2"]!.iconFile).toBe("1145350.ico");
-    expect(library.games["elden-ring"]!.iconFile).toBe("1245620.ico");
-    expect(library.games["factorio"]!.iconFile).toBe("exe-factorio.ico");
+    expect(library.workspaces["hades-2"]!.iconFile).toBe("1145350.ico");
+    expect(library.workspaces["elden-ring"]!.iconFile).toBe("1245620.ico");
+    expect(library.workspaces["factorio"]!.iconFile).toBe("exe-factorio.ico");
     expect((await readdir(icons)).sort()).toEqual(["1145350.ico", "1245620.ico", "exe-factorio.ico"]);
   });
 });
@@ -579,6 +579,6 @@ describe("syncIcons: two shortcuts name different icons", () => {
     await writeFile(path.join(steam, "steam", "games", `${hashOf("6")}.ico`), ICON);
     const library = libraryWith("hades-2");
     expect(await run(library, fakeSteam({}), { shortcutDirs: [desktop, shortcuts] }).done).toBe(1);
-    expect(library.games["hades-2"]!.iconFile).toBe("1145350.ico");
+    expect(library.workspaces["hades-2"]!.iconFile).toBe("1145350.ico");
   });
 });

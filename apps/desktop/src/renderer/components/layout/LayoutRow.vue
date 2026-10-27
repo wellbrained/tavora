@@ -25,12 +25,12 @@ type Change = { mode?: "always" | "toggle"; opacity?: 100 | 75 | 50 | 25; hideFr
 
 function change(next: Change) {
   const target = props.item.target;
-  void act(target.kind === "panel" ? { type: "set-panel-view", instanceId: target.instanceId, ...next } : { type: "set-game-overlay", owner: target.owner, moduleId: target.moduleId, gameId: target.gameId, key: target.key, ...next });
+  void act(target.kind === "panel" ? { type: "set-panel-view", instanceId: target.instanceId, ...next } : { type: "set-game-overlay", owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key, ...next });
 }
 
 function remove() {
   const target = props.item.target;
-  void act(target.kind === "panel" ? { type: "stop-panel-in-game", instanceId: target.instanceId } : { type: "remove-game-overlay", owner: target.owner, moduleId: target.moduleId, gameId: target.gameId, key: target.key });
+  void act(target.kind === "panel" ? { type: "stop-panel-in-game", instanceId: target.instanceId } : { type: "remove-game-overlay", owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key });
 }
 
 function askKey() {
@@ -39,7 +39,7 @@ function askKey() {
 
 function preview() {
   const target = props.item.target;
-  if (target.kind === "overlay") void act({ type: "preview-overlay", owner: target.owner, moduleId: target.moduleId, gameId: target.gameId, key: target.key });
+  if (target.kind === "overlay") void act({ type: "preview-overlay", owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key });
 }
 
 const modes = computed(() => [

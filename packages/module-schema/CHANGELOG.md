@@ -2,6 +2,10 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.1.4
+
+- `personalWorkspaces`: whether a module for any game may be added to a personal workspace, which belongs to no game. It replaces `workspaces`, its name from before Tavora called every item on the rail a workspace (Tavora 0.21.42). `workspaces` is still read until Tavora's 1.0 preparation; never set both. A manifest with `personalWorkspaces` needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES` (0.21.41), except Tavora's own modules. `allowsPersonalWorkspaces(manifest)` tells under either name.
+
 ## 0.1.3
 
 - Connector permissions include `stream-overlay`, `system-info` and `media`, with the matching host-version checks. `permissions.onRequest` lets a module ask for supported access when the player uses it.

@@ -1,7 +1,7 @@
 // What "Copy diagnostic info" puts on the clipboard, so a tester can paste it to
 // whoever is helping. Nothing here is sent anywhere: it is text the player
 // copies and shares on purpose. It holds versions, counts, timings and the
-// last errors, never game or module names, notes or the player's folders.
+// last errors, never workspace or module names, notes or the player's folders.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -118,7 +118,7 @@ export interface ReportInput {
   locale: string;
   osName?: string;
   /** Counts only. */
-  games: number;
+  workspaces: number;
   panels: number;
   /** The update log's last lines, oldest first. */
   updateLog: string[];
@@ -135,7 +135,7 @@ export function buildReport(input: ReportInput): string {
     `Version: ${input.version}${input.packaged ? "" : " (development run)"}`,
     `System: ${input.osName ?? `${os.version()} ${os.release()}`} (${os.arch()}), language ${input.locale}`,
     `Electron ${input.electron}, Chrome ${input.chrome}`,
-    `Games: ${input.games}, panels open: ${input.panels}, running for ${Math.round(input.uptimeSeconds)} s`,
+    `Workspaces: ${input.workspaces}, panels open: ${input.panels}, running for ${Math.round(input.uptimeSeconds)} s`,
     "",
     "Timings in ms (median, latest, slowest, count):",
     ...(input.timings.length ? input.timings.map((t) => `  ${t.name}: ${t.median}, ${t.last}, ${t.max}, ${t.count}x`) : ["  none yet"]),

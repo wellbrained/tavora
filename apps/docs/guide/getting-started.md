@@ -1,6 +1,6 @@
 # Getting started
 
-A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
+A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game or any other workspace. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
 
 ::: warning Preview
 `@tavora/sdk` speaks [bridge protocol v1](../reference/protocol.md). Until Tavora's first public release it can still change in ways that break modules; the [changelog](../reference/changelog.md) marks each such change and says which Tavora a version needs.
@@ -30,13 +30,13 @@ To add the SDK to a project of your own instead: `npm install @tavora/sdk`, and 
 import { connect, TavoraError } from "@tavora/sdk";
 
 const tavora = await connect();
-const game = await tavora.game.getCurrent(); // { id: "poe2", displayName: "Path of Exile 2" }
+const workspace = await tavora.workspace.getCurrent(); // { id: "poe2", displayName: "Path of Exile 2", kind: "game" }
 
-// Small settings, private to this module in this game.
+// Small settings, private to this module in this workspace.
 const count = (await tavora.storage.get<number>("count")) ?? 0;
 await tavora.storage.set("count", count + 1);
 
-// Documents are shared by all panels of this module in this game.
+// Documents are shared by all panels of this module in this workspace.
 const plan = await tavora.documents.get<{ steps: string[] }>("plan");
 try {
   await tavora.documents.put({ id: "plan", title: "Plan", data: { steps: ["Act 1"] }, ifRevision: plan?.revision ?? 0 });
@@ -71,9 +71,9 @@ Settings go in `tavora.storage`, the player's work in `tavora.documents`, pictur
 | API | What it does |
 | --- | --- |
 | `tavora.ui.getLanguage()`, `onLanguageChange` | The language of Tavora's own texts (`"en"`, `"de"`). Show your module in it, or in English when you have no translation. |
-| `tavora.blobs` | Pictures too big for a document: up to 50 MB each and 500 MB per module and game. `put` a file, show it with `url(id)`. See [Files](../reference/protocol.md#files-blobs). |
+| `tavora.blobs` | Pictures too big for a document: up to 50 MB each and 500 MB per module and workspace. `put` a file, show it with `url(id)`. See [Files](../reference/protocol.md#files-blobs). |
 | `tavora.clipboard.writeImage(png)` | Puts a PNG on the system clipboard. Call it from the click or key press that asked for it. See [Clipboard](../reference/protocol.md#clipboard). |
-| `tavora.links.open(url)` | Opens a web address in the game's Browser panel, from a click or key press. |
+| `tavora.links.open(url)` | Opens a web address in the workspace's Browser panel, from a click or key press. |
 | `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the player granted it. See [Network](../reference/protocol.md#network). |
 | `tavora.connectors.aiUsage` | The usage of the player's Claude and Codex accounts, with the `ai-usage` connector. |
 | `tavora.connectors.systemInfo` | Your PC's hardware, how busy it is (CPU, graphics card, memory, drives) and how its connection is doing (ping, lost pings, drops), with the `system-info` connector. |
@@ -90,9 +90,9 @@ A module made for one game, such as a build planner for Path of Exile 2, lists t
 "games": ["poe2"]
 ```
 
-Tavora then offers it only in that game: in any other game it is not in Add module at all. `"games": []` means any game. The starter asks which game the module is for and fills this in. The ids of Tavora's built-in games are in the [manifest reference](../reference/manifest.md#game-ids).
+Tavora then offers it only in workspaces of that game: anywhere else it is not in Add module at all. `"games": []` means any game. The starter asks which game the module is for and fills this in. The ids of Tavora's built-in games are in the [manifest reference](../reference/manifest.md#game-ids).
 
-Players can also make personal workspaces, which belong to no game, for modules such as notes or a whiteboard. A module for any game is offered there too. If yours only makes sense in a game, add `"workspaces": false` (Tavora 0.18.1 or newer). `tavora.game.getCurrent()` says which one a panel is in: its `kind` is `"game"` or `"workspace"`.
+Every item on Tavora's rail is a workspace: a game workspace, linked to a game, or a personal workspace, which belongs to no game, for modules such as notes or a whiteboard. A module for any game is offered in personal workspaces too. If yours only makes sense in a game, add `"personalWorkspaces": false` (Tavora 0.21.42 or newer; set `minTavora` to at least `0.21.42`). `tavora.workspace.getCurrent()` says which one a panel is in: its `kind` is `"game"` or `"personal"`, and for a game workspace the `id` is the game's. `tavora.game.getCurrent()` and the manifest's `workspaces` field still work, but they are deprecated and go away before 1.0.
 
 ## Build the module
 

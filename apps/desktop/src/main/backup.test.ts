@@ -34,7 +34,7 @@ async function seed() {
 }
 
 describe("backupData", () => {
-  it("copies games, layouts, profile, module data and pictures into today's folder", async () => {
+  it("copies workspaces, layouts, profile, module data and pictures into today's folder", async () => {
     await seed();
     const result = await backupData({ userData: dir, now: at(2026, 10, 15) });
     expect(result).toMatchObject({ status: "made", withPictures: true });

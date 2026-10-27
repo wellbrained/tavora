@@ -7,8 +7,8 @@ import { createRoot } from "react-dom/client";
 
 /** Your texts in English and German; Tavora says which language the player uses. */
 const TEXTS = {
-  en: { connecting: "Connecting to Tavora…", playing: "Playing {game}.", clicked: "Clicked {count} times in this game." },
-  de: { connecting: "Verbinde mit Tavora …", playing: "Du spielst {game}.", clicked: "{count}-mal in diesem Spiel geklickt." },
+  en: { connecting: "Connecting to Tavora…", here: "You're in {workspace}.", clicked: "Clicked {count} times here." },
+  de: { connecting: "Verbinde mit Tavora …", here: "Du bist in {workspace}.", clicked: "{count}-mal hier geklickt." },
 };
 type Language = keyof typeof TEXTS;
 const text = (language: Language, key: keyof (typeof TEXTS)["en"], params: Record<string, string | number> = {}) =>
@@ -25,7 +25,7 @@ function applyTheme(theme: TavoraTheme) {
 function App() {
   const [tavora, setTavora] = useState<TavoraSDK | null>(null);
   const [language, setLanguage] = useState<Language>("en");
-  const [game, setGame] = useState("");
+  const [workspace, setWorkspace] = useState("");
   const [count, setCount] = useState(0);
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -37,8 +37,8 @@ function App() {
         sdk.ui.onThemeChange(applyTheme);
         setLanguage(pick(await sdk.ui.getLanguage()));
         sdk.ui.onLanguageChange((code) => setLanguage(pick(code)));
-        setGame((await sdk.game.getCurrent()).displayName);
-        // storage keeps small settings for this module in the current game.
+        setWorkspace((await sdk.workspace.getCurrent()).displayName);
+        // storage keeps small settings for this module in the current workspace.
         setCount((await sdk.storage.get<number>("count")) ?? 0);
         setTavora(sdk);
       },
@@ -52,7 +52,7 @@ function App() {
     void tavora?.storage.set("count", next);
   };
 
-  const status = failed ?? (tavora ? `${text(language, "playing", { game })} ${text(language, "clicked", { count })}` : text(language, "connecting"));
+  const status = failed ?? (tavora ? `${text(language, "here", { workspace })} ${text(language, "clicked", { count })}` : text(language, "connecting"));
   return (
     <main>
       <h1>{document.title}</h1>

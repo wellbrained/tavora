@@ -72,10 +72,10 @@ describe("what can be shared", () => {
   });
 
   it("offers nothing for a personal workspace, a game in Trash or one already offered", () => {
-    expect(shareableIconFile(game({ id: "local-notes", kind: "workspace" }), on, list)).toBeNull();
+    expect(shareableIconFile(game({ id: "local-notes", kind: "personal" }), on, list)).toBeNull();
     expect(shareableIconFile(game({ trashedAt: "2026-10-15T00:00:00.000Z" }), on, list)).toBeNull();
     expect(shareableIconFile(game({ iconSharedAt: "2026-10-15T00:00:00.000Z" }), on, list)).toBeNull();
-    expect(isShareCandidate(game({ kind: "workspace" }))).toBe(false);
+    expect(isShareCandidate(game({ kind: "personal" }))).toBe(false);
     expect(isShareCandidate(game({ id: "local-x" }))).toBe(true);
     expect(isShareCandidate(game())).toBe(true);
   });

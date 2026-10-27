@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { isGameId, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, isGameId, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, SIGNATURE_FILE, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
 
@@ -223,6 +223,8 @@ export interface CatalogEntry {
   /** Empty: for any game. */
   games: string[];
   /** Whether it may be added to a personal workspace (only modules for any game can be). */
+  personalWorkspaces: boolean;
+  /** @deprecated The same, for Tavora 0.21.41 and older, which read it under this name. Sent until Tavora's 1.0 preparation. */
   workspaces: boolean;
   permissions: { network: string[]; connectors: string[] };
   /** The fingerprint of the publisher key that signed this version: the module's first key, or its successor. */
@@ -246,7 +248,7 @@ export interface CatalogVersion {
   notes: string[];
 }
 
-export type CatalogFilter = { game: string } | { workspace: true } | Record<string, never>;
+export type CatalogFilter = { game: string } | { personal: true } | Record<string, never>;
 
 export interface CatalogReport {
   sha256: string;
@@ -336,7 +338,8 @@ function entryOf(row: VersionSql): CatalogEntry {
     version: row.version,
     minTavora: manifest.minTavora ?? null,
     games: manifest.games,
-    workspaces: manifest.games.length === 0 && manifest.workspaces !== false,
+    personalWorkspaces: allowsPersonalWorkspaces(manifest),
+    workspaces: allowsPersonalWorkspaces(manifest),
     permissions: { network: manifest.permissions.network, connectors: manifest.permissions.connectors ?? [] },
     owner: row.owner,
     zip: { sha256: row.sha256, size: row.size },
@@ -945,7 +948,7 @@ export class CatalogStore {
   index(filter: CatalogFilter = {}): CatalogEntry[] {
     const entries = (this.db.prepare(`${LATEST} order by m.id`).all() as unknown as VersionSql[]).map(entryOf);
     if ("game" in filter) return entries.filter((entry) => entry.games.length === 0 || entry.games.includes(filter.game));
-    if ("workspace" in filter) return entries.filter((entry) => entry.workspaces);
+    if ("personal" in filter) return entries.filter((entry) => entry.personalWorkspaces);
     return entries;
   }
 
@@ -1038,10 +1041,14 @@ export class CatalogStore {
   }
 }
 
-/** The filter a request asks for: `?game=<id>`, `?workspace=1`, or neither for the whole catalog. */
-export function catalogFilter(game: string | undefined, workspace: string | undefined): CatalogFilter | null {
-  if (game !== undefined && workspace !== undefined) return null;
+/**
+ * The filter a request asks for: `?game=<id>`, `?personal=1` (modules for a personal workspace), or neither for the
+ * whole catalog. Tavora 0.21.41 and older ask for the personal ones as `?workspace=1`; that is answered until its 1.0 preparation.
+ */
+export function catalogFilter(game: string | undefined, personal: string | undefined, oldPersonal?: string): CatalogFilter | null {
+  if ([game, personal, oldPersonal].filter((value) => value !== undefined).length > 1) return null;
   if (game !== undefined) return isGameId(game) ? { game } : null;
-  if (workspace !== undefined) return workspace === "1" ? { workspace: true } : null;
+  const asked = personal ?? oldPersonal;
+  if (asked !== undefined) return asked === "1" ? { personal: true } : null;
   return {};
 }

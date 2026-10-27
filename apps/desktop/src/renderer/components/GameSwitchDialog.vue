@@ -7,7 +7,7 @@ import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
 const props = defineProps<{ gameId: string }>();
-const name = computed(() => state.value?.library.games[props.gameId]?.name ?? "");
+const name = computed(() => state.value?.library.workspaces[props.gameId]?.name ?? "");
 
 async function choose(choice: "switch" | "cancel") {
   dialog.value = null;

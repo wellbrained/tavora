@@ -393,7 +393,7 @@ test("whiteboard: the style palette can be moved and folded away, and stays so f
   await app.close();
 });
 
-test("whiteboard: the toolbar can sit at the bottom, chosen once for every game", async () => {
+test("whiteboard: the toolbar can sit at the bottom, chosen once for every workspace", async () => {
   const { app, page, userData } = await launch();
   await openModule(page, WHITEBOARD);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");

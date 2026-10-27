@@ -20,14 +20,14 @@ test("panels of the old Discord and AI Usage modules say they moved, and their s
   await first.app.close();
   const file = path.join(userData, "workspace.json");
   const saved = JSON.parse(await readFile(file, "utf8"));
-  const records = saved.games.poe2.instances as { moduleId: string; panelType?: string }[];
+  const records = saved.workspaces.poe2.instances as { moduleId: string; panelType?: string }[];
   expect(records).toHaveLength(2);
   records[0]!.moduleId = "tavora.discord";
   records[1]!.moduleId = "tavora.ai-usage";
   for (const record of records) delete record.panelType;
   // The second panel is left out of the layout, as when Tavora closed before the layout was saved: it is docked
   // again at start, though its module isn't installed (this used to stop Tavora from starting).
-  const left = (saved.games.poe2.instances as { instanceId: string }[])[1]!.instanceId;
+  const left = (saved.workspaces.poe2.instances as { instanceId: string }[])[1]!.instanceId;
   const strip = (node: { panels?: string[]; active?: string | null; children?: unknown[] }): void => {
     if (node.panels) {
       node.panels = node.panels.filter((id) => id !== left);
@@ -35,7 +35,7 @@ test("panels of the old Discord and AI Usage modules say they moved, and their s
     }
     for (const child of node.children ?? []) strip(child as typeof node);
   };
-  strip(saved.games.poe2.layout.root);
+  strip(saved.workspaces.poe2.layout.root);
   await writeFile(file, JSON.stringify(saved));
 
   const { app, page } = await launch(userData);
@@ -46,7 +46,7 @@ test("panels of the old Discord and AI Usage modules say they moved, and their s
     await expect(moved.first()).toContainText("Discord");
     await expect(moved.nth(1)).toContainText("AI Usage");
     await expect(page.getByTestId("install-moved-module")).toHaveCount(2);
-    const kept = JSON.parse(await readFile(file, "utf8")).games.poe2.instances as { moduleId: string }[];
+    const kept = JSON.parse(await readFile(file, "utf8")).workspaces.poe2.instances as { moduleId: string }[];
     expect(kept.map((record) => record.moduleId).sort()).toEqual(["wellbrained.ai-usage", "wellbrained.discord"]);
 
     // No installed module asks for Discord or AI usage, so Settings > Integrations leaves them out.

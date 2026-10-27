@@ -16,9 +16,9 @@ const online = ref<OnlineGame[]>([]);
 const onlineStatus = ref<OnlineSearchResult["status"]>("ok");
 const error = ref<string | null>(null);
 const busy = ref(false);
-/** Adding a game, or making a personal workspace, which belongs to no game. */
-const mode = ref<"game" | "workspace">("game");
-const workspaceName = ref("");
+/** Adding a game (its game workspace), or making a personal workspace, which belongs to no game. */
+const mode = ref<"game" | "personal">("game");
+const personalName = ref("");
 const name = computed(() => query.value.replace(/\s+/g, " ").trim());
 
 let searchId = 0;
@@ -68,32 +68,32 @@ function addRow(row: Row) {
   return add({ online: online.value.find((game) => game.id === row.id) ?? { id: row.id, name: row.name, steamAppId: null } });
 }
 
-async function add(input: { catalogId: string } | { name: string } | { online: OnlineGame } | { workspace: string }) {
+async function add(input: { catalogId: string } | { name: string } | { online: OnlineGame } | { personal: string }) {
   busy.value = true;
   error.value = null;
-  const added = await act({ type: "add-game", ...input }, { quiet: true });
+  const added = await act({ type: "add-workspace", ...input }, { quiet: true });
   if (added.ok && added.id) {
     dialog.value = null;
-    // A new game starts with an empty workspace; take the player there,
+    // A new workspace starts empty; take the player there,
     // unless they are still in the first-run welcome, which lists it.
-    if (state.value?.library.onboarded) await act({ type: "open-game", gameId: added.id });
+    if (state.value?.library.onboarded) await act({ type: "open-workspace", workspaceId: added.id });
   } else if (!added.ok) {
     error.value = added.error;
   }
   busy.value = false;
 }
 
-function switchMode(to: "game" | "workspace") {
-  // What was typed as a game's name is a fair start for the workspace's, and back.
-  if (to === "workspace") workspaceName.value = name.value;
-  else query.value = workspaceName.value.trim();
+function switchMode(to: "game" | "personal") {
+  // What was typed as a game's name is a fair start for the personal workspace's, and back.
+  if (to === "personal") personalName.value = name.value;
+  else query.value = personalName.value.trim();
   error.value = null;
   mode.value = to;
 }
 
-function submitWorkspace() {
-  const value = workspaceName.value.replace(/\s+/g, " ").trim();
-  if (value) void add({ workspace: value });
+function submitPersonal() {
+  const value = personalName.value.replace(/\s+/g, " ").trim();
+  if (value) void add({ personal: value });
 }
 
 function submit() {
@@ -105,22 +105,22 @@ function submit() {
 </script>
 
 <template>
-  <ModalDialog v-if="mode === 'workspace'" :title="t('addWorkspace.title')" testid="add-workspace-dialog" @close="dialog = null">
-    <form class="flex flex-col gap-3" @submit.prevent="submitWorkspace">
-      <label class="text-sm font-medium" for="workspace-name">{{ t("addWorkspace.name") }}</label>
+  <ModalDialog v-if="mode === 'personal'" :title="t('addPersonal.title')" testid="add-personal-dialog" @close="dialog = null">
+    <form class="flex flex-col gap-3" @submit.prevent="submitPersonal">
+      <label class="text-sm font-medium" for="personal-name">{{ t("addPersonal.name") }}</label>
       <Input
-        id="workspace-name"
-        v-model="workspaceName"
-        :placeholder="t('addWorkspace.placeholder')"
+        id="personal-name"
+        v-model="personalName"
+        :placeholder="t('addPersonal.placeholder')"
         autocomplete="off"
         maxlength="80"
-        data-testid="workspace-name"
+        data-testid="personal-name"
         autofocus
       />
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="add-game-error">{{ error }}</p>
-      <p class="text-muted-foreground text-xs">{{ t("addWorkspace.hint") }}</p>
-      <Button type="submit" class="w-fit" data-testid="create-workspace" :disabled="busy || !workspaceName.trim()">
-        {{ t("addWorkspace.create") }}
+      <p class="text-muted-foreground text-xs">{{ t("addPersonal.hint") }}</p>
+      <Button type="submit" class="w-fit" data-testid="create-personal" :disabled="busy || !personalName.trim()">
+        {{ t("addPersonal.create") }}
       </Button>
     </form>
     <button
@@ -129,7 +129,7 @@ function submit() {
       data-testid="add-game-instead"
       @click="switchMode('game')"
     >
-      {{ t("addWorkspace.toGame") }}
+      {{ t("addPersonal.toGame") }}
     </button>
   </ModalDialog>
   <ModalDialog v-else :title="t('addGame.title')" testid="add-game-dialog" @close="dialog = null">
@@ -185,10 +185,10 @@ function submit() {
     <button
       type="button"
       class="text-primary w-fit text-xs underline-offset-2 hover:underline"
-      data-testid="open-add-workspace"
-      @click="switchMode('workspace')"
+      data-testid="open-add-personal"
+      @click="switchMode('personal')"
     >
-      {{ t("addGame.toWorkspace") }}
+      {{ t("addGame.toPersonal") }}
     </button>
   </ModalDialog>
 </template>

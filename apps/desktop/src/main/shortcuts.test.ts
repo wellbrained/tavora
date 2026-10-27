@@ -25,8 +25,8 @@ describe("shortcutFor", () => {
     expect(shortcutFor(key({ key: "\\", alt: true }))).toBe("toggle-rail"); // AltGr
     expect(shortcutFor(key({ key: "," }))).toBe("settings");
     expect(shortcutFor(key({ key: "h" }))).toBe("home");
-    expect(shortcutFor(key({ key: "1" }))).toBe("game-1");
-    expect(shortcutFor(key({ key: "9" }))).toBe("game-9");
+    expect(shortcutFor(key({ key: "1" }))).toBe("workspace-1");
+    expect(shortcutFor(key({ key: "9" }))).toBe("workspace-9");
   });
 
   it("leaves keys editors need alone", () => {

@@ -1,5 +1,5 @@
 // Reads and writes boards through the SDK. Each board is one document, shared by every Whiteboard panel of
-// the game; its title is the board's name, so the list needs no board to be opened.
+// the workspace; its title is the board's name, so the list needs no board to be opened.
 
 import { TavoraError, type TavoraSDK } from "@tavora/sdk";
 import { emptyBoard, isBoardId, newBoardId, parseBoard, sortBoards, type BoardData, type BoardSummary } from "./boards";

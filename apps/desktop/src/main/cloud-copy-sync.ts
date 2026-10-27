@@ -37,7 +37,7 @@ import { LIBRARY_FILE, libraryFile, PC_SETTINGS } from "./saved-data";
 
 /** How often changes are looked for and uploaded while Tavora runs. */
 export const SYNC_EVERY_MS = 3 * 60_000;
-/** How long the start waits for a newer copy before the games load without it. */
+/** How long the start waits for a newer copy before the workspaces load without it. */
 export const START_BUDGET_MS = 6_000;
 /** How long closing waits quietly before it shows that it is still uploading. */
 export const CLOSE_QUIET_MS = 3_000;
@@ -238,7 +238,7 @@ export class CopySync {
       const check = this.fetchNewer().then(async (staged) => {
         if (!staged) return;
         if (!late && (await this.takeStaged())) return;
-        // Finished after the games loaded: it waits for a restart.
+        // Finished after the workspaces loaded: it waits for a restart.
         this.restartToTake = true;
         this.changed();
       });

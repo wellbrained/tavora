@@ -37,7 +37,8 @@ export interface CatalogScreenshot {
 /** A listed module with the zip it comes as; only the main process sees the hash. */
 export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots" | "icon" | "fits" | "forGames"> {
   games: string[];
-  workspaces: boolean;
+  /** Whether it may be added to a personal workspace. */
+  personalWorkspaces: boolean;
   zip: { sha256: string; size: number };
   /** This version's patch notes, plain text. */
   notes: string[];
@@ -72,8 +73,8 @@ export interface CatalogVersion {
 const MAX_NOTES = 50;
 const MAX_VERSIONS = 200;
 
-/** Where the player is: a game (its catalog id) or a personal workspace. */
-export type CatalogScope = { game: string } | { workspace: true };
+/** Where the player is: a game workspace (its game's catalog id) or a personal workspace. */
+export type CatalogScope = { game: string } | { personal: true };
 
 export class CatalogError extends PlayerError {}
 
@@ -214,7 +215,7 @@ export function parseCatalogVersion(raw: unknown): CatalogVersion | null {
 export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
   if (typeof raw !== "object" || raw === null) return null;
   const entry = raw as Record<string, unknown>;
-  const { id, version, minTavora, games, workspaces, permissions, owner, publisher, zip, publishedAt } = entry;
+  const { id, version, minTavora, games, personalWorkspaces, workspaces, permissions, owner, publisher, zip, publishedAt } = entry;
   if (!isModuleId(id) || typeof version !== "string" || !SEMVER.test(version) || version.length > 64) return null;
   const name = plain(entry.name, 100);
   if (!name) return null;
@@ -236,7 +237,8 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     version,
     minTavora: typeof minTavora === "string" ? minTavora : null,
     games: [...games],
-    workspaces: workspaces !== false,
+    // A service deployed before the Game → Workspace rename sends it as `workspaces` only.
+    personalWorkspaces: (typeof personalWorkspaces === "boolean" ? personalWorkspaces : workspaces) !== false,
     permissions: { network: [...new Set(network as string[])], connectors: [...new Set(connectors as Connector[])] },
     owner,
     // Only the name the service gives for the key's account, never a name the listing claims elsewhere.
@@ -258,8 +260,8 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
 }
 
 /** Whether a module may go where the player is; the service filters too, but it is not trusted to. */
-export function fitsScope(entry: Pick<CatalogEntry, "games" | "workspaces">, scope: CatalogScope): boolean {
-  if ("workspace" in scope) return entry.games.length === 0 && entry.workspaces;
+export function fitsScope(entry: Pick<CatalogEntry, "games" | "personalWorkspaces">, scope: CatalogScope): boolean {
+  if ("personal" in scope) return entry.games.length === 0 && entry.personalWorkspaces;
   return entry.games.length === 0 || entry.games.includes(scope.game);
 }
 
@@ -273,8 +275,8 @@ export function shownTexts(entry: Pick<CatalogEntry, "name" | "description" | "t
  * The view the host UI gets: no hash, the name and description in `language`, the games by name, whether it fits
  * where the player is, and only whether there are pictures.
  */
-export function catalogView({ games, workspaces, zip: _zip, notes: _notes, shots, icon, translations, ...view }: CatalogEntry, language: string, scope?: CatalogScope): CatalogModuleView {
-  const fits = scope ? fitsScope({ games, workspaces }, scope) : true;
+export function catalogView({ games, personalWorkspaces, zip: _zip, notes: _notes, shots, icon, translations, ...view }: CatalogEntry, language: string, scope?: CatalogScope): CatalogModuleView {
+  const fits = scope ? fitsScope({ games, personalWorkspaces }, scope) : true;
   return { ...view, ...shownTexts({ ...view, translations }, language), fits, forGames: games.map((id) => catalogGame(id)?.name ?? id), screenshots: shots.length, icon: icon !== null };
 }
 
@@ -305,8 +307,8 @@ export class CatalogClient {
   }
 
   /**
-   * Every listed module, in `language`: those that fit the game or personal workspace first, then the rest, each by
-   * name. The whole index is asked for, so the service doesn't learn which game is open. Never throws.
+   * Every listed module, in `language`: those that fit the workspace first, then the rest, each by
+   * name. The whole index is asked for, so the service doesn't learn which workspace is open. Never throws.
    */
   async list(scope: CatalogScope, language: string): Promise<CatalogListResult> {
     try {

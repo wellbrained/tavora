@@ -4,14 +4,14 @@ import type { TavoraTheme } from "@tavora/sdk/protocol";
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 
-// While a game opens, its panels are shown under a cover: a tiny page of Tavora's own in the theme's background,
+// While a workspace opens, its panels are shown under a cover: a tiny page of Tavora's own in the theme's background,
 // over the whole workspace. Pages only draw while they are shown, and a heavy one takes a few hundred ms for its
 // first frame; under the cover they all draw, and the cover goes once every one has, so they appear in one frame.
-// The cover is plain. Tavora's fire (the Campfire loader) shows on it only when the game is expected to take long:
+// The cover is plain. Tavora's fire (the Campfire loader) shows on it only when the workspace is expected to take long:
 // from the start when it took long last time, else once it runs past FIRE_AFTER_MS. Once shown, the fire stays at
 // least FIRE_MIN_MS, so it never flashes. The cover never stays longer than DRAW_CAP_MS after the panels were shown.
 
-/** Opening a game that is expected to take longer than this shows the fire from the start; any other shows it this late. */
+/** Opening a workspace that is expected to take longer than this shows the fire from the start; any other shows it this late. */
 export const FIRE_AFTER_MS = 500;
 /** How long the fire stays at least once it showed. */
 export const FIRE_MIN_MS = 300;
@@ -27,7 +27,7 @@ const COVER_PARTITION = "tavora-cover";
 /** How long the fire takes to fade in, in the cover page. */
 const FIRE_FADE_MS = 200;
 
-/** When the fire shows, in ms after the cover appeared: at once when the game took long last time, else FIRE_AFTER_MS. */
+/** When the fire shows, in ms after the cover appeared: at once when the workspace took long last time, else FIRE_AFTER_MS. */
 export function fireDelay(estimateMs: number | undefined): number {
   return estimateMs !== undefined && estimateMs > FIRE_AFTER_MS ? 0 : FIRE_AFTER_MS;
 }
@@ -38,7 +38,7 @@ export function holdFor(elapsed: number, fireAt: number): number {
   return Math.max(0, fireAt + FIRE_MIN_MS - elapsed);
 }
 
-/** The panels a game opens with, by module and type: its times are kept per game and per such layout. */
+/** The panels a workspace opens with, by module and type: its times are kept per workspace and per such layout. */
 export function layoutKey(gameId: string, panels: readonly { moduleId: string; panelType?: string | null | undefined }[]): string {
   const types = panels.map((panel) => `${panel.moduleId}/${panel.panelType ?? ""}`).sort();
   return createHash("sha256").update(JSON.stringify([gameId, types])).digest("hex").slice(0, 24);
@@ -56,7 +56,7 @@ interface Times {
 }
 
 /**
- * How long each game (with its layout of panels) took to open the last few times, kept on this PC in
+ * How long each workspace (with its layout of panels) took to open the last few times, kept on this PC in
  * open-times.json. Not part of backups or the cloud copy: it says how fast this PC is.
  */
 export class OpenTimes {
@@ -104,7 +104,7 @@ export class OpenTimes {
 
 export interface CoverPageOptions {
   theme: TavoraTheme;
-  /** "Loading {game}…" under the fire. */
+  /** "Loading {workspace}…" under the fire. */
   label: string;
   /** Wall-clock time (Date.now) at which the fire fades in. */
   fireAtEpoch: number;
@@ -182,7 +182,7 @@ export interface PanelCoverOptions {
 }
 
 /**
- * The cover itself: one view over the workspace, kept between games. start() shows it (over every panel, also ones
+ * The cover itself: one view over the workspace, kept between workspaces. start() shows it (over every panel, also ones
  * added since), finish() takes it away once the fire had its minimum, cancel() at once.
  */
 export class PanelCover {
@@ -209,7 +209,7 @@ export class PanelCover {
     return this.active && this.now() - this.shownAt >= this.fireAt;
   }
 
-  /** Covers the workspace now. `estimateMs` is how long this game took to open last time (undefined when never). */
+  /** Covers the workspace now. `estimateMs` is how long this workspace took to open last time (undefined when never). */
   start(theme: TavoraTheme, label: string, estimateMs: number | undefined): void {
     clearTimeout(this.holdTimer);
     const view = (this.view ??= this.createView());
@@ -241,7 +241,7 @@ export class PanelCover {
     else this.cancel();
   }
 
-  /** Takes the cover away at once (a dialog opens over the workspace, the game is left). */
+  /** Takes the cover away at once (a dialog opens over the workspace, the workspace is left). */
   cancel(): void {
     clearTimeout(this.holdTimer);
     this.active = false;

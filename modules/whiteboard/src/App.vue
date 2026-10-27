@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The Whiteboard: a header with the board menu and the picture buttons, and the board below. Every Whiteboard panel
-// of a game shows the same boards; which board a panel shows, its views and where its palette sits are its own state.
+// of a workspace shows the same boards; which board a panel shows, its views and where its palette sits are its own state.
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
@@ -130,7 +130,7 @@ onMounted(async () => {
     const store = createBoards(connected);
     boards.value = store;
     sdk.value = connected;
-    // Where the toolbar goes is one choice for every game.
+    // Where the toolbar goes is one choice for every workspace.
     toolbar.value = toolbarPlace(await connected.storage.app.get("toolbar").catch(() => null));
 
     const [state, existing] = await Promise.all([connected.panel.getState<PanelState>(), refreshList()]);
