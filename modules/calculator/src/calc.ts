@@ -133,6 +133,27 @@ export function format(value: number): string {
   return Object.is(rounded, -0) ? "0" : String(rounded);
 }
 
+const SHORT = [
+  [1e12, "T"],
+  [1e9, "B"],
+  [1e6, "M"],
+] as const;
+
+/** How a result shows with the player's choices: rounded to the decimal places picked ("auto" keeps what format
+ * writes), and with `short` from a million on as 1.5M, 2B or 3T (two places at most on auto). Only for showing:
+ * Copy, sums and saved values keep the full number. */
+export function rounded(text: string, decimals: "auto" | number, short: boolean): string {
+  const value = Number(text);
+  if (!text || !Number.isFinite(value)) return text;
+  const scale = short ? SHORT.find(([size]) => Math.abs(value) >= size) : undefined;
+  const number = scale ? value / scale[0] : value;
+  const places = decimals === "auto" ? (scale ? 2 : null) : decimals;
+  let shown = places === null ? format(number) : number.toFixed(places);
+  if (decimals === "auto" && scale) shown = format(Number(shown));
+  if (Number(shown) === 0) shown = shown.replace(/^-/, "");
+  return shown + (scale?.[1] ?? "");
+}
+
 /** A piece of an expression as the panel shows it; `name` is set when it is a saved value. */
 export interface Segment {
   text: string;

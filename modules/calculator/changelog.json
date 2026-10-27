@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.1.6",
+    "date": "2026-10-27",
+    "notes": [
+      "A ⚙ menu in the toolbar: pick how many decimal places results show, and how many results the history keeps (10, 25 or 50).",
+      "Short numbers: results from a million on can show as 1.5M, 2B or 3T.",
+      "Copy and your sums always use the full number."
+    ]
+  },
+  {
     "version": "0.1.5",
     "date": "2026-10-27",
     "notes": [
