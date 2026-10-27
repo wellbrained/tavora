@@ -210,7 +210,7 @@ export class ReviewStore {
   /** What waits for the maintainer: held reviews, and live ones with text that nobody has looked at yet. Newest first. */
   queue(): StoredReview[] {
     return (
-      this.db.prepare(`select ${REVIEW_COLUMNS} from ${REVIEW_FROM} where r.held = 1 or (r.reviewed = 0 and r.text is not null) order by r.updated_at desc, r.id`).all() as unknown as ReviewSql[]
+      this.db.prepare(`select ${REVIEW_COLUMNS} from ${REVIEW_FROM} where r.held = 1 or (r.reviewed = 0 and r.text is not null) order by r.updated_at desc, r.rowid desc`).all() as unknown as ReviewSql[]
     ).map((row) => toReview(row)!);
   }
 
