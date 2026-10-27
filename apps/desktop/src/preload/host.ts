@@ -2,6 +2,7 @@
 // process still checks that every call comes from the host window.
 import { contextBridge, ipcRenderer } from "electron";
 import type { LayoutStills, LayoutView } from "../shared/layout-view";
+import type { ContactDraft, ConversationDetailResult, InboxView } from "../shared/conversations";
 import type { AccountView, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, PairingView, PublishView, HostShortcut, HostViewState, ModuleMenu, TavoraHostApi } from "../shared/host-api";
 
 const api: TavoraHostApi = {
@@ -67,6 +68,12 @@ const api: TavoraHostApi = {
   onPublish: (listener) => {
     ipcRenderer.on("host:publish", (_event, view: PublishView | null) => listener(view));
   },
+  getInbox: () => ipcRenderer.invoke("host:get-inbox"),
+  onInbox: (listener) => {
+    ipcRenderer.on("host:inbox", (_event, view: InboxView) => listener(view));
+  },
+  conversation: (id): Promise<ConversationDetailResult> => ipcRenderer.invoke("host:conversation", id),
+  contactDraft: (moduleId): Promise<ContactDraft> => ipcRenderer.invoke("host:contact-draft", moduleId),
   getPairing: () => ipcRenderer.invoke("host:get-pairing"),
   onPairing: (listener) => {
     ipcRenderer.on("host:pairing", (_event, view: PairingView) => listener(view));

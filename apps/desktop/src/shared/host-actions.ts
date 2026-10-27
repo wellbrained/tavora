@@ -17,6 +17,7 @@ import type {
   SavedLayout,
   SteamImportGame,
 } from "./host-api";
+import { CONVERSATION_REPORT_REASONS, MODULE_REPORT_REASONS, OUTCOMES, REQUEST_TYPES } from "./conversations";
 import { isLanguageSetting, type LanguageSetting } from "./i18n";
 import { GRID_LIMITS, layoutTemplate, type LayoutTemplateId } from "./layout-templates";
 
@@ -108,6 +109,14 @@ const deviceId = matching(/^[A-Za-z0-9_-]{1,40}$/);
 /** A review or reply: at most 500 characters, which the service counts; here only a cap on its length. Null for none. */
 const reviewText = nullable(text(2000));
 const reviewId = matching(/^[A-Za-z0-9_-]{16}$/);
+const conversationId = matching(/^[A-Za-z0-9_-]{16}$/);
+const conversationReport: Field<{ reason: (typeof CONVERSATION_REPORT_REASONS)[number]; note: string | null }> = (value) => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return BAD;
+  const { reason, note, ...rest } = value as Record<string, unknown>;
+  if (Object.keys(rest).length || !(CONVERSATION_REPORT_REASONS as readonly unknown[]).includes(reason)) return BAD;
+  const checked = nullable(text(1000))(note ?? null);
+  return checked === BAD ? BAD : { reason: reason as (typeof CONVERSATION_REPORT_REASONS)[number], note: checked };
+};
 
 /** Most icons offered in one action; the dialog sends more in turns. */
 export const MAX_SHARE_BATCH = 50;
@@ -330,7 +339,7 @@ export function hostActionTable(c: HostChecks) {
      * Reports a catalog module to Tavora after the user pressed Report: the installed zip when it came
      * from the catalog, otherwise the listed one. Sends only the module id, its key and the zip's hash.
      */
-    "report-catalog-module": { moduleId: c.moduleId },
+    "report-catalog-module": { moduleId: c.moduleId, reason: oneOf(...MODULE_REPORT_REASONS), note: nullable(text(1000)) },
     /** Opens a catalog module's homepage like a module link: the address is the one the main process reads from the listing again. */
     "open-catalog-homepage": { moduleId: c.moduleId },
     /**
@@ -359,6 +368,29 @@ export function hostActionTable(c: HostChecks) {
     "move-local-data": { moduleId: c.moduleId },
     /** The user opened a module's patch notes: none of them are new any more. */
     "seen-module-notes": { moduleId: c.moduleId },
+
+    // Messages (conversations with developers and Tavora)
+    /** Sends a developer a request about a module; answers with the new conversation's id. The versions are added by the main process. */
+    "inbox-send-request": { moduleId: c.moduleId, requestType: oneOf(...REQUEST_TYPES), text: text(4000), previousId: optional(conversationId) },
+    "inbox-reply": { id: conversationId, text: text(4000) },
+    /** The user closes their own; the developer closes with an outcome. */
+    "inbox-close": { id: conversationId, outcome: optional(oneOf(...OUTCOMES)) },
+    /** Blocks (closes for both), with a report when `report` is given. */
+    "inbox-block": { id: conversationId, report: nullable(conversationReport) },
+    "inbox-report": { id: conversationId, report: conversationReport },
+    /** Deletes a conversation for this account only. */
+    "inbox-delete": { id: conversationId },
+    /** The email copy switch (Settings > Account > Messages). */
+    "inbox-email-copies": { on: bool },
+    /** A module's contact on or off, with an optional public https link. */
+    "inbox-contact": { moduleId: c.moduleId, enabled: bool, link: nullable(text(200)) },
+    /** Opens a developer's public contact link (the address is read from the service again). It leaves Tavora. */
+    "open-contact-link": { moduleId: c.moduleId },
+    /** The user read the note about the inbox icon, or the developer note. */
+    "inbox-note-seen": {},
+    "inbox-developer-note-seen": {},
+    /** Reads the conversations from the service again. */
+    "inbox-refresh": {},
 
     // Panels and workspace
     /**

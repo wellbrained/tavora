@@ -29,9 +29,6 @@ const emit = defineEmits<{ count: [number | null] }>();
 const result = ref<CatalogListResult | null>(null);
 const installing = ref<string | null>(null);
 const errors = ref<Record<string, string>>({});
-/** The module whose report is being sent from its page, and those sent. */
-const reporting = ref<string | null>(null);
-const reported = ref<Set<string>>(new Set());
 /** The module whose info is open, and whether it opened at its reviews. */
 const info = ref<CatalogModuleView | null>(null);
 const infoAtReviews = ref(false);
@@ -95,14 +92,6 @@ async function install(module: CatalogModuleView) {
   const outcome = await act({ type: "install-catalog-module", moduleId: module.id }, { quiet: true });
   installing.value = null;
   if (!outcome.ok) errors.value = { ...errors.value, [module.id]: outcome.error };
-}
-
-async function report(module: CatalogModuleView) {
-  reporting.value = module.id;
-  const outcome = await act({ type: "report-catalog-module", moduleId: module.id }, { quiet: true });
-  reporting.value = null;
-  if (outcome.ok) reported.value = new Set([...reported.value, module.id]);
-  else errors.value = { ...errors.value, [module.id]: outcome.error };
 }
 
 function add(moduleId: string) {
@@ -185,8 +174,8 @@ function settings() {
       </p>
     </template>
     <CatalogModuleDialog v-if="info" :module="info" :at-reviews="infoAtReviews" :installed="installed.has(info.id)" :installing="installing === info.id" :size="formatSize(info.size)"
-      :error="errors[info.id]" :reporting="reporting === info.id" :reported="reported.has(info.id)"
-      @close="info = null" @install="install(info)" @add="add(info.id)" @report="report(info)"
+      :error="errors[info.id]"
+      @close="info = null" @install="install(info)" @add="add(info.id)"
     />
   </div>
 </template>

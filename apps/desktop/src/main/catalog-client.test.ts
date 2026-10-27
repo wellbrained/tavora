@@ -242,7 +242,13 @@ describe("CatalogClient.report", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]!.url).toBe("https://catalog.test/v1/catalog/report");
     expect(calls[0]!.init).toMatchObject({ method: "POST", credentials: "omit", referrerPolicy: "no-referrer", redirect: "error" });
-    expect(JSON.parse(String(calls[0]!.init!.body))).toEqual(report);
+    expect(JSON.parse(String(calls[0]!.init!.body))).toEqual({ ...report, reason: "other" });
+  });
+
+  it("sends the reason and a trimmed note with a report", async () => {
+    const { impl, calls } = fakeFetch(() => json({ status: "received" }, 202));
+    await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).report(report, "t".repeat(30), { reason: "broken", note: "  It crashes.  " });
+    expect(JSON.parse(String(calls[0]!.init!.body))).toEqual({ ...report, reason: "broken", note: "It crashes." });
   });
 
   it("sends the sign-in with a report, and maps a 401 to Sign in to report", async () => {

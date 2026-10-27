@@ -21,6 +21,7 @@ import SearchDialog from "./components/SearchDialog.vue";
 import ShareIconsDialog from "./components/ShareIconsDialog.vue";
 import SteamImportDialog from "./components/SteamImportDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
+import InboxDialogs from "./components/messages/InboxDialogs.vue";
 import { dialog, state, toast } from "./host";
 import WorkspacePage from "./pages/WorkspacePage.vue";
 import OnboardingPage from "./pages/OnboardingPage.vue";
@@ -57,6 +58,7 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <DeveloperStartDialog v-else-if="dialog?.kind === 'developer-start'" :then="dialog.then" />
     <RecoveryAskDialog v-else-if="dialog?.kind === 'recovery-ask'" />
     <CopyExampleDialog v-else-if="dialog?.kind === 'copy-example'" :key="dialog.moduleId" :module-id="dialog.moduleId" />
+    <InboxDialogs />
     <ModuleMenu />
     <CloudCopyDialog />
     <HotkeyDialog />

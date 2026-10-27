@@ -3,6 +3,7 @@ import type { Language, LanguageSetting, MessageKey } from "./i18n";
 // Types only: imported by both sides, so it must not import Electron or Node.
 import type { IconTone } from "./icon-tone";
 import type { ModuleProblemKind, ModuleProblemValues } from "./module-problem";
+import type { ContactDraft, ConversationDetailResult, InboxView } from "./conversations";
 import type { HostAction } from "./host-actions";
 import type { LayoutMessage, LayoutStills, LayoutView } from "./layout-view";
 
@@ -999,6 +1000,13 @@ export interface TavoraHostApi {
   onDeveloperKeys(listener: (view: DeveloperKeysView) => void): void;
   getPublish(): Promise<PublishView | null>;
   onPublish(listener: (view: PublishView | null) => void): void;
+  /** The header's inbox icon, the conversations and the notes about them (main/inbox.ts). */
+  getInbox(): Promise<InboxView | null>;
+  onInbox(listener: (view: InboxView) => void): void;
+  /** One conversation with its messages; reading it marks it read. Never rejects. */
+  conversation(id: string): Promise<ConversationDetailResult>;
+  /** Before Contact the developer opens: whether the developer takes messages, and the versions that go with a request. Never rejects. */
+  contactDraft(moduleId: string): Promise<ContactDraft>;
   getPairing(): Promise<PairingView | null>;
   onPairing(listener: (view: PairingView) => void): void;
   /** A module asked for a menu (or null: close the one shown). */

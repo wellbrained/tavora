@@ -515,7 +515,7 @@ test("a user reports a module from Browse and from Settings, and only its id, ke
   const sha256 = createHash("sha256").update(tracker).digest("hex");
   const { url, server, reports } = await catalogServer([{ entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { publisher: "wellbrained" }), body: tracker }]);
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
-  const sent = { headers: { cookie: null, referer: null }, body: { id: "wellbrained.tracker", owner, sha256 } };
+  const sent = { headers: { cookie: null, referer: null }, body: { id: "wellbrained.tracker", owner, sha256, reason: "unsafe" } };
   try {
     await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
@@ -529,9 +529,10 @@ test("a user reports a module from Browse and from Settings, and only its id, ke
     await expect(page.getByTestId("catalog-report-wellbrained.tracker")).toHaveText("Report to Tavora");
     await expect(page.getByTestId("catalog-info-report")).toContainText("Harmful, or breaks the rules.");
     await page.getByTestId("catalog-report-wellbrained.tracker").click();
-    await expect(page.getByTestId("catalog-report-ask-wellbrained.tracker")).toContainText("nothing about you");
+    // A dialog asks for the reason first; the first one is picked.
+    await expect(page.getByTestId("report-module-dialog")).toBeVisible();
     expect(reports).toEqual([]);
-    await page.getByTestId("catalog-report-send-wellbrained.tracker").click();
+    await page.getByTestId("report-send").click();
     await expect(page.getByTestId("catalog-reported-wellbrained.tracker")).toBeVisible();
     expect(reports).toEqual([sent]);
     await page.keyboard.press("Escape");
@@ -545,7 +546,7 @@ test("a user reports a module from Browse and from Settings, and only its id, ke
     await page.getByTestId("module-more-wellbrained.tracker").click();
     await expect(page.getByTestId("report-module-wellbrained.tracker")).toHaveText("Report to Tavora");
     await page.getByTestId("report-module-wellbrained.tracker").click();
-    await page.getByTestId("confirm-submit").click();
+    await page.getByTestId("report-send").click();
     await expect(page.getByTestId("toast")).toHaveText("Reported Tracker. Thanks!");
     expect(reports).toEqual([sent, sent]);
   } finally {

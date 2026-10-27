@@ -1,6 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import { SETTING_SECTIONS, type SettingsSection } from "./components/settings/settings-index";
@@ -87,6 +88,19 @@ api.onAccount((next) => (account.value = next));
 void api.getAccount().then((initial) => {
   if (initial && !account.value) account.value = initial;
 });
+
+/** The header's inbox icon, the conversations and the notes about them. */
+export const inbox = shallowRef<InboxView>(EMPTY_INBOX);
+api.onInbox((next) => (inbox.value = next));
+void api.getInbox().then((initial) => {
+  if (initial && inbox.value === EMPTY_INBOX) inbox.value = initial;
+});
+/** The inbox is its own dialog (like Settings), so a confirmation can open on top of it. `id` is the conversation to show; `module` starts a new request. */
+export const inboxOpen = shallowRef<{ id?: string } | null>(null);
+export function openInbox(id?: string): void {
+  inboxOpen.value = id ? { id } : {};
+  void act({ type: "inbox-refresh" }, { quiet: true });
+}
 
 /** Settings > Account > Cloud copy, and the questions it asks over the app. */
 export const cloudCopy = shallowRef<CloudCopyView | null>(null);
@@ -307,7 +321,9 @@ export type DialogRequest =
   /** Signed in on a PC without the account's recovery key: unlock the cloud copy and publisher keys here. */
   | { kind: "recovery-ask" }
   /** Make a copy of an example that ships with Tavora (Settings > Development). */
-  | { kind: "copy-example"; moduleId: string };
+  | { kind: "copy-example"; moduleId: string }
+  /** Report a catalog module to Tavora (Settings > Modules). */
+  | { kind: "report-module"; moduleId: string; name: string };
 
 export const dialog = shallowRef<DialogRequest | null>(null);
 
@@ -591,9 +607,14 @@ export function setHintFloating(open: boolean): void {
   else hintRelease = setTimeout(() => set(false), 400);
 }
 
+/** A note about the inbox (or the developer note) waits and nothing else is open, so InboxNotes.vue shows it. */
+export const noteShown = computed(() => (inbox.value.note !== null || inbox.value.developerNote) && dialog.value === null && !settingsOpen.value && inboxOpen.value === null);
+
 export const overlayOpen = computed(
   () =>
     openMenus.value > 0 ||
+    inboxOpen.value !== null ||
+    noteShown.value ||
     dialog.value !== null ||
     copyQuestion.value !== null ||
     state.value?.hotkeyRequest != null ||

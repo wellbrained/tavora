@@ -160,6 +160,7 @@ import { ModulePublisher } from "./module-publish";
 import { FolderPairing, Pairing, ServicePairing } from "./pairing";
 import { ServiceStorage } from "./cloud-copy";
 import { CopySync } from "./cloud-copy-sync";
+import { Inbox } from "./inbox";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { discordLogin } from "./discord-login";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
@@ -369,6 +370,9 @@ export class Host {
   );
   /** The user's Tavora account; the sign-in never leaves the main process. */
   private readonly account: AccountClient;
+  /** The user's messages with developers and Tavora (inbox.ts). */
+  private inbox!: Inbox;
+  private inboxSignedIn = false;
   /** The cloud copy: made before the data is read, since a newer copy is taken before anything reads it. */
   private copySync!: CopySync;
   /** The publisher keys the account's vault keeps (developer-keys.ts). */
@@ -537,7 +541,29 @@ export class Host {
     });
     this.account = Host.accountClient(options, () => this.language, { get: () => this.profileData(), apply: (remote) => this.applyProfile(remote) }, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
+      if (this.inbox && this.inboxSignedIn !== (view.account !== null)) {
+        this.inboxSignedIn = view.account !== null;
+        this.inbox.accountChanged(view.account !== null);
+      }
       this.developerKeys?.accountChanged(view.account !== null);
+    });
+    this.inbox = new Inbox({
+      baseUrl: (options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, ""),
+      fetch: (input, init) => fetch(input, init),
+      token: () => (this.library.onlineSearch ? this.account.token() : null),
+      language: () => this.language,
+      tavoraVersion: app.getVersion(),
+      file: path.join(options.userData, "inbox.json"),
+      installedVersion: (moduleId) => this.modules.get(moduleId)?.manifest.version,
+      isDeveloper: () => this.account.view().developer !== null,
+      ownModules: async () => {
+        const linked = new Set((this.account.view().publisherKeys ?? []).map((key) => key.fingerprint));
+        return ((await this.catalog.index()) ?? []).filter((entry) => linked.has(entry.owner)).map((entry) => ({ id: entry.id, name: entry.name }));
+      },
+      onChange: (view) => {
+        if (!this.window.isDestroyed()) this.window.webContents.send("host:inbox", view);
+      },
+      openLink: (url) => this.openLinkFromModule(url),
     });
     this.publisherNames = new PublisherNames({
       file: path.join(options.userData, "publisher-names.json"),
@@ -738,6 +764,7 @@ export class Host {
     host.fetchIconsSoon();
     host.backupSoon();
     host.checkCatalogSoon();
+    if (options.accounts === true) void host.inbox.init();
     host.copySync.start();
     if (options.accounts === true) {
       void host.developerKeys.refresh();
@@ -1243,18 +1270,18 @@ export class Host {
    * is installed, the one the user has seen; any other id as the version the catalog lists now.
    * Only the id, the key and the zip's hash are sent, and only because the user pressed Report.
    */
-  private async reportCatalogModule(moduleId: string): Promise<void> {
+  private async reportCatalogModule(moduleId: string, why: { reason: string; note: string | null }): Promise<void> {
     if (!this.library.onlineSearch) throw new UserError("error.reportOff");
     const token = this.account.token();
     if (!token) throw new UserError("error.reportSignIn");
     const module = this.catalogModules.has(moduleId) ? (this.modules.get(moduleId) ?? this.blockedModules.get(moduleId)) : undefined;
     const record = module ? (await readOwnerRecords(this.options.userData))[path.basename(module.root)] : undefined;
     if (module && record?.id === moduleId && record.sha256) {
-      await this.catalog.report({ id: moduleId, owner: module.owner, sha256: record.sha256 }, token);
+      await this.catalog.report({ id: moduleId, owner: module.owner, sha256: record.sha256 }, token, why);
       return;
     }
     const entry = await this.catalog.module(moduleId);
-    await this.catalog.report({ id: entry.id, owner: entry.owner, sha256: entry.zip.sha256 }, token);
+    await this.catalog.report({ id: entry.id, owner: entry.owner, sha256: entry.zip.sha256 }, token, why);
   }
 
   /**
@@ -1374,6 +1401,13 @@ export class Host {
     const version = installed ?? versions.map((published) => published.version).sort(compareModuleVersions).at(-1);
     if (!version || !versions.some((published) => published.version === version)) throw new UserError("error.reviewVersion");
     await this.catalog.rate(moduleId, token, { stars, text: text?.trim() || null, version });
+  }
+
+  /** A messages action: online features must be on, and the user needs a sign-in. */
+  private async inboxAction<T>(run: () => Promise<T>): Promise<T> {
+    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
+    if (!this.account.token()) throw new UserError("account.error.signedOut");
+    return run();
   }
 
   private async catalogReviewAction(run: (token: string) => Promise<void>): Promise<void> {
@@ -1615,6 +1649,11 @@ export class Host {
     ipcMain.handle("host:get-cloud-copy", (event) => (fromHost(event) ? this.copySync.view() : null));
     ipcMain.handle("host:get-developer-keys", (event) => (fromHost(event) ? this.developerKeys.view() : null));
     ipcMain.handle("host:get-publish", (event) => (fromHost(event) ? this.publisher.view() : null));
+    ipcMain.handle("host:get-inbox", (event) => (fromHost(event) ? this.inbox.view() : null));
+    ipcMain.handle("host:conversation", (event, id: unknown) => (fromHost(event) && typeof id === "string" ? this.inbox.conversation(id) : { status: "error", error: translate(this.language, "error.notUnderstood") }));
+    ipcMain.handle("host:contact-draft", (event, moduleId: unknown) =>
+      fromHost(event) && isModuleId(moduleId) ? this.inbox.contactDraft(moduleId) : { status: "error", error: translate(this.language, "error.notUnderstood") },
+    );
     ipcMain.handle("host:get-pairing", (event) => (fromHost(event) ? this.pairing.view() : null));
     ipcMain.handle("host:module-notes", (event, moduleId: unknown) => {
       const module = fromHost(event) && typeof moduleId === "string" ? this.modules.get(moduleId) : undefined;
@@ -1738,6 +1777,7 @@ export class Host {
       this.copySync.dispose();
       this.pairing.dispose();
       clearInterval(this.catalogTimer);
+      this.inbox.dispose();
     });
   }
 
@@ -2103,7 +2143,22 @@ export class Host {
         if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
         return { ok: true, ...(await this.checkCatalogUpdates()) };
       },
-      "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId),
+      "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId, { reason: action.reason, note: action.note }),
+      "inbox-send-request": (action) => this.inboxAction(() => this.inbox.sendRequest(action.moduleId, action.requestType, action.text, action.previousId)),
+      "inbox-reply": (action) => this.inboxAction(() => this.inbox.reply(action.id, action.text)),
+      "inbox-close": (action) => this.inboxAction(() => this.inbox.close(action.id, action.outcome)),
+      "inbox-block": (action) => this.inboxAction(() => this.inbox.block(action.id, action.report)),
+      "inbox-report": (action) => this.inboxAction(() => this.inbox.report(action.id, action.report)),
+      "inbox-delete": (action) => this.inboxAction(() => this.inbox.delete(action.id)),
+      "inbox-email-copies": (action) => this.inboxAction(() => this.inbox.setEmailCopies(action.on)),
+      "inbox-contact": (action) => this.inboxAction(() => this.inbox.setContact(action.moduleId, action.enabled, action.link)),
+      "open-contact-link": (action) => this.inboxAction(() => this.inbox.openContactLink(action.moduleId)),
+      "inbox-note-seen": () => this.inbox.noteSeen(),
+      "inbox-developer-note-seen": () => this.inbox.developerNoteSeen(),
+      "inbox-refresh": async () => {
+        await this.inbox.refresh();
+        await this.inbox.loadContacts();
+      },
       "open-catalog-homepage": (action) => this.openCatalogHomepage(action.moduleId),
       "open-module-support": (action) => this.openModuleSupport(action.moduleId, action.source),
       "open-readme-link": (action) => this.openReadmeLink(action.moduleId, action.url),
