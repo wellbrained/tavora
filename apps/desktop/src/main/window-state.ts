@@ -17,30 +17,6 @@ function overlap(a: Rectangle, b: Rectangle): { width: number; height: number } 
   };
 }
 
-const center = (rect: Rectangle) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
-const holds = (area: Rectangle, point: { x: number; y: number }) => point.x >= area.x && point.x < area.x + area.width && point.y >= area.y && point.y < area.y + area.height;
-
-/** Whether saved bounds would be reused by initialBounds. */
-export function reusable(saved: unknown, workAreas: Rectangle[]): boolean {
-  const b = (saved as Partial<WindowState> | null | undefined)?.bounds;
-  if (b === undefined || ![b.x, b.y, b.width, b.height].every((n) => Number.isInteger(n)) || b.width < MIN_SIZE.width || b.height < MIN_SIZE.height) return false;
-  return workAreas.some((area) => {
-    const o = overlap({ x: b.x, y: b.y, width: b.width, height: MIN_VISIBLE.height }, area);
-    return o.width >= MIN_VISIBLE.width && o.height >= MIN_VISIBLE.height / 2;
-  });
-}
-
-/**
- * Bounds for the Overlay layout window. Where the user left it while that screen is there; else on a screen the game
- * is not on (so the window doesn't cover it), when there is one, else on the main screen. `game` is the game
- * window's place on screen, when it is known.
- */
-export function initialLayoutBounds(saved: unknown, workAreas: Rectangle[], primary: Rectangle, game: Rectangle | null): WindowState {
-  if (reusable(saved, workAreas)) return initialBounds(saved, workAreas, primary);
-  const away = game ? workAreas.find((area) => !holds(area, center(game))) : undefined;
-  return initialBounds(null, [], away ?? primary);
-}
-
 /**
  * Bounds for the window at startup. Saved bounds are reused while enough of
  * the window's top edge is on a connected display; otherwise (a monitor was

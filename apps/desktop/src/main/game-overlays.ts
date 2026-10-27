@@ -25,7 +25,6 @@ import {
 import { backupsDir } from "./backup";
 import { SerialQueue, keepCopy, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside, setAside } from "./json";
-import type { WindowState } from "./window-state";
 
 export { MIN_OVERLAY_SIZE, type Rect };
 
@@ -190,8 +189,8 @@ type GameOverlayFile = {
   /** The version a file had before the workspace names, when it was 1 or 2. Kept until the moves of start() ran. */
   formerVersion?: number;
   exclusiveHintShown?: boolean;
-  /** The Overlay layout: the grid setting, the window's place and the last window size seen per game. Versions 4 and before also had `games`. */
-  layout?: { grid?: GridSetting; window?: WindowState; seen?: Record<string, SeenSize>; games?: unknown };
+  /** The Overlay page: the grid setting and the last window size seen per game. Versions 4 and before also had `games`. */
+  layout?: { grid?: GridSetting; seen?: Record<string, SeenSize>; games?: unknown };
   setups?: StoredSetup[];
   /** Versions 4 and before. */
   overlays?: unknown[];
@@ -414,7 +413,6 @@ export class GameOverlayStore {
   moved = false;
   /** The Overlay layout's grid, its window's place and the last window size seen per game. */
   private gridSetting: GridSetting = DEFAULT_GRID;
-  private windowState: WindowState | null = null;
   private seen = new Map<string, SeenSize>();
   private readonly queue = new SerialQueue();
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -454,7 +452,6 @@ export class GameOverlayStore {
     store.moved = old;
     const layout = isObject(raw?.layout) ? raw.layout : {};
     if (isGridSetting(layout.grid)) store.gridSetting = layout.grid;
-    store.windowState = isObject(layout.window) ? (layout.window as unknown as WindowState) : null;
     for (const [gameId, size] of Object.entries(isObject(layout.seen) ? layout.seen : {}).slice(0, MAX_SEEN)) {
       const valid = validSize(size);
       if (valid && validField(gameId)) store.seen.set(gameId, valid);
@@ -656,6 +653,34 @@ export class GameOverlayStore {
     return "added";
   }
 
+  /**
+   * Moves an item from one setup to another with its place and settings (Everywhere and All games, for items of a
+   * personal workspace). "exists": it is in the other setup already, which keeps its own, and it leaves this one.
+   */
+  moveItem(ref: ItemRef, from: string, to: string): AddResult | "missing" {
+    const source = this.setup(from);
+    const workspaceId = ref.kind === "panel" ? this.panelOf(ref.instanceId, from)?.workspaceId : this.find(ref.subject, from)?.workspaceId;
+    if (!source || workspaceId === undefined) return "missing";
+    const setup = this.target(to, workspaceId);
+    if (!setup || from === to) return "refused";
+    if (ref.kind === "panel") {
+      const panel = source.panels.find((item) => item.instanceId === ref.instanceId)!;
+      const there = setup.panels.some((item) => item.instanceId === ref.instanceId);
+      if (!there && this.count(to) >= LIMITS.maxGameOverlays) return "full";
+      if (!there) setup.panels.push(copyItem(panel));
+      source.panels = source.panels.filter((item) => item !== panel);
+      this.saveSoon();
+      return there ? "exists" : "added";
+    }
+    const overlay = source.overlays.find((item) => sameOverlay(item, ref.subject))!;
+    const there = setup.overlays.some((item) => sameOverlay(item, ref.subject));
+    if (!there && this.count(to) >= LIMITS.maxGameOverlays) return "full";
+    if (!there) setup.overlays.push(copyItem(overlay));
+    source.overlays = source.overlays.filter((item) => item !== overlay);
+    this.saveSoon();
+    return there ? "exists" : "added";
+  }
+
   /** The items a change is for: the one of `setupId`, or without one, the item in every setup that has it. */
   private targets<T>(list: (setupId: string) => readonly T[], match: (item: T) => boolean, setupId?: string): T[] {
     const ids = setupId === undefined ? this.setupIds() : [setupId];
@@ -746,16 +771,6 @@ export class GameOverlayStore {
     this.saveSoon();
   }
 
-  /** The Overlay layout window's size and place as last saved, or null. */
-  get layoutWindow(): WindowState | null {
-    return this.windowState;
-  }
-
-  setLayoutWindow(state: WindowState): void {
-    this.windowState = state;
-    this.saveSoon();
-  }
-
   /** The size of the game's window as last seen (DIPs), or undefined when none was. */
   seenSize(gameId: string): SeenSize | undefined {
     return this.seen.get(gameId);
@@ -810,7 +825,7 @@ export class GameOverlayStore {
     const body: GameOverlayFile = {
       version: FILE_VERSION,
       exclusiveHintShown: this.hintShown,
-      layout: { grid: this.gridSetting, ...(this.windowState ? { window: this.windowState } : {}), seen: Object.fromEntries(this.seen) },
+      layout: { grid: this.gridSetting, seen: Object.fromEntries(this.seen) },
       setups: this.setupList.map((setup) => ({
         id: setup.id,
         overlays: setup.overlays.map(({ rect, legacy, ...item }) => ({ ...item, ...stored({ rect, ...(legacy ? { legacy } : {}) }) })),

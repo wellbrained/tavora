@@ -17,7 +17,7 @@ const tint = { live: "text-success", ready: "", paused: "text-muted-foreground" 
 
 <template>
   <ButtonGroup v-if="overlays.supported && overlays.enabled" data-testid="overlay-button">
-    <Button size="sm" variant="secondary" data-testid="overlay-open" @click="act({ type: 'open-overlay-layout' })">{{ t("overlays.button.open") }}</Button>
+    <Button size="sm" variant="secondary" data-testid="overlay-open" @click="act({ type: 'open-overlay-page' })">{{ t("overlays.button.open") }}</Button>
     <Button
       size="sm"
       variant="secondary"

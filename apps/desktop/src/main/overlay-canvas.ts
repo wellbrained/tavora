@@ -1,13 +1,12 @@
-// The Overlay layout window: a normal, resizable Tavora window (not on top, in the taskbar, with the focus like any
-// other) where the user arranges what shows over their game. It is three layers:
-//   1. the shell, the window's own page: the toolbar, the list and the canvas background (grid, game picture);
+// The canvas of the Overlay page: the views that sit over the page's canvas area in the main window while the page
+// is shown. It is three layers:
+//   1. the page itself (Tavora's main window): the toolbar, the sidebar and the canvas background (grid, game picture);
 //   2. one live page per overlay or panel with an overlay page, sized to its rectangle on the canvas. They are served
 //      exactly like a game overlay's page (game-overlay-page.ts): from a Tavora-internal address, no bridge, no
 //      network, a session of their own that reaches nothing else. They cannot take the mouse: the layer above covers them;
 //   3. the layer, a transparent page of Tavora's own over the canvas that takes the mouse and the keys: outlines, handles,
 //      guide lines, and the dragging itself.
-// Nothing here touches the game. The window never shows in test runs (`hidden`): it is made, loaded and driven, but
-// not put on screen.
+// Nothing here touches the game. The views leave the window when the page is left.
 import { BrowserWindow, WebContentsView } from "electron";
 import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
@@ -15,30 +14,22 @@ import { GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from ".
 import { lockedSession } from "./game-overlay-window";
 import type { LayoutFrame, LayoutWindow } from "./overlay-layout";
 import type { Rect } from "./game-overlays";
-import type { WindowState } from "./window-state";
 import type { LayoutStills, LayoutView } from "../shared/layout-view";
 import { pageZoom } from "../shared/overlay-anchor";
 
-export interface OverlayLayoutWindowOptions {
-  /** Tavora's host preload: the pages talk to the main process through it. */
+export interface OverlayCanvasOptions {
+  /** Tavora's main window: the page is its host UI, and the views are added to it. */
+  window: BrowserWindow;
+  /** Tavora's host preload: the layer talks to the main process through it. */
   preload: string;
-  /** Test runs: the window is never shown. */
-  hidden: boolean;
-  title: string;
-  icon?: string | undefined;
-  background: string;
   devTools: boolean;
-  bounds: WindowState;
-  /** The page of the shell and of the layer. */
-  address(part: "shell" | "layer"): string;
-  /** The window was moved or resized: where it is now, to keep. */
-  boundsChanged(state: WindowState): void;
-  closed(): void;
+  /** The address of the layer's page. */
+  address(): string;
 }
 
-/** How long a page gets to give its still picture before the window goes on without it. */
+/** How long a page gets to give its still picture before the canvas goes on without it. */
 const STILL_TIMEOUT_MS = 250;
-/** How long the shell waits to say its stills are on screen before the pages step aside anyway. */
+/** How long the page is waited for to say its stills are on screen before the pages step aside anyway. */
 const STILLS_SHOWN_CAP_MS = 300;
 /** How long the stills stay under the pages when they come back, so a page that has not drawn yet never shows empty. */
 const STILLS_LINGER_MS = 80;
@@ -58,77 +49,38 @@ interface ItemView {
 
 const LOCKED = { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, devTools: false } as const;
 
-export class OverlayLayoutWindow implements LayoutWindow {
+export class OverlayCanvas implements LayoutWindow {
   private readonly window: BrowserWindow;
   private readonly layer: WebContentsView;
   private readonly items = new Map<string, ItemView>();
   private destroyed = false;
-  /** A list or menu of the shell is open over the canvas. */
+  /** A list or menu of the page is open over the canvas. */
   private covered = false;
-  /** The live pages and the layer are out of the way because the shell shows still pictures of them. */
+  /** The live pages and the layer are out of the way because the page shows still pictures of them. */
   private frozen = false;
   /** Counts the opening and closing of lists, so a slow freeze never hides the pages after the list closed. */
   private coverChanges = 0;
   private stillsOnScreen: (() => void) | null = null;
   private layerWanted = false;
-  private saveTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(private readonly options: OverlayLayoutWindowOptions) {
+  constructor(private readonly options: OverlayCanvasOptions) {
+    this.window = options.window;
     const web = { preload: options.preload, sandbox: true, contextIsolation: true, nodeIntegration: false, webviewTag: false, spellcheck: false, devTools: options.devTools };
-    this.window = new BrowserWindow({
-      ...options.bounds.bounds,
-      minWidth: 900,
-      minHeight: 480,
-      title: options.title,
-      ...(options.icon ? { icon: options.icon } : {}),
-      autoHideMenuBar: true,
-      backgroundColor: options.background,
-      show: false,
-      webPreferences: web,
-    });
-    const window = this.window;
-    window.removeMenu();
-    // The title stays Tavora's, whatever the page calls itself.
-    window.on("page-title-updated", (event) => event.preventDefault());
-    if (options.bounds.maximized) window.maximize();
-    window.on("resize", () => this.saveSoon());
-    window.on("move", () => this.saveSoon());
-    // Where the window was, kept before it goes (the timer would find it destroyed).
-    window.on("close", () => this.flushSave());
-    window.once("closed", () => {
-      clearTimeout(this.saveTimer);
-      const wasDestroyed = this.destroyed;
-      this.destroyed = true;
-      // The pages of the layer and of the items are views of the window; they don't close by themselves.
-      for (const entry of this.items.values()) if (!entry.view.webContents.isDestroyed()) entry.view.webContents.close();
-      this.items.clear();
-      if (!this.layer.webContents.isDestroyed()) this.layer.webContents.close();
-      if (!wasDestroyed) options.closed();
-    });
-
     this.layer = new WebContentsView({ webPreferences: web });
     this.layer.setBackgroundColor("#00000000");
     this.layer.setVisible(false);
-    for (const contents of [window.webContents, this.layer.webContents]) {
-      contents.setWindowOpenHandler(() => ({ action: "deny" }));
-      contents.on("will-navigate", (event) => event.preventDefault());
-    }
-    window.contentView.addChildView(this.layer);
-    void window.loadURL(options.address("shell")).catch(() => {});
-    void this.layer.webContents.loadURL(options.address("layer")).catch(() => {});
-    if (!options.hidden) window.once("ready-to-show", () => window.show());
-  }
-
-  /** For dialogs that belong to this window. */
-  get browserWindow(): BrowserWindow {
-    return this.window;
+    const contents = this.layer.webContents;
+    contents.setWindowOpenHandler(() => ({ action: "deny" }));
+    contents.on("will-navigate", (event) => event.preventDefault());
+    this.window.contentView.addChildView(this.layer);
+    void contents.loadURL(options.address()).catch(() => {});
   }
 
   get isDestroyed(): boolean {
     return this.destroyed || this.window.isDestroyed();
   }
 
-  /** Which of the two pages sent something, by its web contents; null for anything else. */
+  /** Which page sent something, by its web contents: the main window's page ("shell") or the layer; null for anything else. */
   kindOf(contentsId: number, mainFrame: boolean): "shell" | "layer" | null {
     if (this.isDestroyed || !mainFrame) return null;
     if (contentsId === this.window.webContents.id) return "shell";
@@ -136,36 +88,15 @@ export class OverlayLayoutWindow implements LayoutWindow {
     return null;
   }
 
-  private saveSoon(): void {
-    clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.flushSave(), 800);
-  }
-
-  /** Keeps the window's place now, if a change is waiting to be kept. */
-  private flushSave(): void {
-    if (this.saveTimer === undefined) return;
-    clearTimeout(this.saveTimer);
-    this.saveTimer = undefined;
-    if (this.window.isDestroyed()) return;
-    this.options.boundsChanged({ bounds: this.window.getNormalBounds(), maximized: this.window.isMaximized() });
-  }
-
-  focus(): void {
-    if (this.isDestroyed || this.options.hidden) return;
-    if (this.window.isMinimized()) this.window.restore();
-    this.window.show();
-    this.window.focus();
-  }
-
   send(view: LayoutView): void {
     if (this.isDestroyed) return;
     for (const contents of [this.window.webContents, this.layer.webContents]) if (!contents.isDestroyed()) contents.send("layout:state", view);
   }
 
-  /** The host's state (language, theme, the hotkey dialog) for the shell. */
+  /** The host's state (language, theme) for the layer; the main window's page gets its own. */
   sendHostState(state: unknown): void {
     if (this.isDestroyed) return;
-    for (const contents of [this.window.webContents, this.layer.webContents]) if (!contents.isDestroyed()) contents.send("host:state", state);
+    if (!this.layer.webContents.isDestroyed()) this.layer.webContents.send("host:state", state);
   }
 
   place(frames: LayoutFrame[], layer: Rect | null, covered: boolean): void {
@@ -334,17 +265,20 @@ export class OverlayLayoutWindow implements LayoutWindow {
     });
   }
 
+  /** The page is left: every view of the canvas goes out of the window. */
   destroy(): void {
     if (this.destroyed) return;
-    this.flushSave();
     this.destroyed = true;
-    clearTimeout(this.saveTimer);
-    for (const entry of this.items.values()) if (!entry.view.webContents.isDestroyed()) entry.view.webContents.close();
-    this.items.clear();
-    if (!this.layer.webContents.isDestroyed()) this.layer.webContents.close();
-    if (!this.window.isDestroyed()) {
-      if (!this.window.webContents.isDestroyed()) this.window.webContents.close();
-      this.window.destroy();
+    this.coverChanges++;
+    this.stillsOnScreen?.();
+    const alive = !this.window.isDestroyed();
+    for (const entry of this.items.values()) {
+      if (alive) this.window.contentView.removeChildView(entry.view);
+      if (!entry.view.webContents.isDestroyed()) entry.view.webContents.close();
     }
+    this.items.clear();
+    if (alive) this.window.contentView.removeChildView(this.layer);
+    if (!this.layer.webContents.isDestroyed()) this.layer.webContents.close();
+    if (alive && !this.window.webContents.isDestroyed()) this.window.webContents.send("layout:stills", NO_STILLS);
   }
 }

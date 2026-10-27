@@ -1,6 +1,6 @@
-// What the Overlay layout window shows and what it may ask the main process to do. The window is two pages of Tavora's
-// own (the shell with the list and the toolbar, and the layer on the canvas that takes the mouse); both get the same
-// LayoutView and answer with LayoutMessages, which the main process checks (parseLayoutMessage) before it acts.
+// What the Overlay page shows and what it may ask the main process to do. The page is two pieces of Tavora's own (the
+// page in the main window with the sidebar and the toolbar, and the layer on the canvas that takes the mouse); both get
+// the same LayoutView and answer with LayoutMessages, which the main process checks (parseLayoutMessage) before it acts.
 import { GRID_SETTINGS, isGridSetting, type Canvas, type GridSetting } from "./layout-math";
 import type { AnchoredRect, Rect } from "./overlay-anchor";
 
@@ -21,8 +21,12 @@ export interface LayoutItemView {
   keyTarget: { owner: string; moduleId: string; workspaceId: string; key: string };
   /** The module's name with the key, or the panel's name. */
   name: string;
+  /** The workspace it comes from ("Notes · Satisfactory" is the name and this). */
+  from: string;
   moduleId: string;
   kind: "overlay" | "panel";
+  /** A personal workspace's item can move between Everywhere and All games: the setup it can move to, else null. */
+  moveTo: "$everywhere" | "$all" | null;
   /** The position as saved: an anchor and offsets and a size in units of the game window's height. */
   rect: AnchoredRect;
   /** Where it sits on the canvas, in canvas units (1080 high). */
@@ -48,9 +52,31 @@ export interface LayoutStills {
   layer: { bounds: Rect; url: string } | null;
 }
 
+/** Why a source can't be added to the setup shown (null: it can). */
+export type SourceBlock = "in-setup" | "game-only" | "not-in-game" | "full";
+
+/** One panel of some workspace, listed in the Sources. */
+export interface LayoutSourceView {
+  /** The panel's instance id. */
+  id: string;
+  name: string;
+  moduleId: string;
+  /** The workspace it is in. */
+  from: string;
+  /** For a game workspace's panel, that game's name (it can only go into that game's setup). */
+  game: string | null;
+  block: SourceBlock | null;
+}
+
 export interface LayoutView {
-  /** The overlay setups: All games first, Everywhere while it has something, then the games that have one, in name order. */
+  /** The overlay setups: Everywhere, All games, then the games that have one, in name order. */
   games: { id: string; name: string }[];
+  /** The game workspaces that have no setup yet ("Add overlay for…"), in name order. */
+  addable: { id: string; name: string }[];
+  /** Every panel from every workspace. */
+  sources: LayoutSourceView[];
+  /** Items one setup may hold. */
+  limit: number;
   /** The setup shown. */
   gameId: string;
   /** Canvas units: 1080 high, as wide as the game window's shape. */
@@ -80,6 +106,12 @@ export interface LayoutView {
 
 export type LayoutMessage =
   | { type: "game"; gameId: string }
+  /** Add overlay for a game workspace (the dropdown), and show it. */
+  | { type: "add-setup"; gameId: string }
+  /** A panel from the Sources goes into the setup shown. */
+  | { type: "add-source"; id: string }
+  /** A personal item moves to the other of Everywhere and All games. */
+  | { type: "move"; id: string }
   | { type: "grid"; grid: GridSetting }
   | { type: "select"; id: string | null }
   /** The canvas area in the window (shell only), in DIPs from the window's top left; null while it can't be drawn. */
@@ -99,6 +131,7 @@ export type LayoutMessage =
   | { type: "reset"; id: string }
   /** Reset size: back to the size a new item gets, where it is. */
   | { type: "reset-size"; id: string }
+  /** Back to the workspace. */
   | { type: "done" }
   | { type: "take-picture" }
   | { type: "choose-picture" }
@@ -123,6 +156,11 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
   switch (raw.type) {
     case "game":
       return text(raw.gameId, 128) ? { type: "game", gameId: raw.gameId } : null;
+    case "add-setup":
+      return text(raw.gameId, 128) ? { type: "add-setup", gameId: raw.gameId } : null;
+    case "add-source":
+    case "move":
+      return text(raw.id) ? { type: raw.type, id: raw.id } : null;
     case "grid":
       return isGridSetting(raw.grid) ? { type: "grid", grid: raw.grid } : null;
     case "select":
@@ -158,17 +196,5 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
   }
 }
 
-/**
- * The hotkey dialog's request as one window may see it: the dialog shows only in the window that asked for it, the
- * Overlay layout (`layoutAsked` is its request id) or the main window (every other request).
- */
-export function requestForWindow<T extends { id: number }>(request: T | null, layoutAsked: number | null, target: "main" | "layout"): T | null {
-  if (!request) return null;
-  return (request.id === layoutAsked) === (target === "layout") ? request : null;
-}
-
 /** The labels of the grid menu, in order. */
 export const GRID_CHOICES = GRID_SETTINGS;
-
-/** The host actions the layout window may ask for (the rest of the host's actions are the main window's alone). */
-export const LAYOUT_ACTIONS: ReadonlySet<string> = new Set(["hotkey-answer", "set-overlay-key", "set-game-overlay", "set-panel-view", "remove-game-overlay", "stop-panel-in-game", "preview-overlay"]);

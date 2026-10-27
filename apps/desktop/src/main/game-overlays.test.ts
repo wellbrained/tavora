@@ -146,6 +146,45 @@ describe("setups", () => {
     expect(store.addSetup(EVERYWHERE)).toBe(false);
   });
 
+  it("move a personal item between Everywhere and All games with its place and settings", async () => {
+    const store = await loadStore(dir);
+    store.addPanel(EVERYWHERE, panel(ID, "personal"));
+    store.setRect(EVERYWHERE, { kind: "panel", instanceId: ID }, at(0.1, 0.1, 0.3, 0.3));
+    store.updatePanelView(ID, { mode: "toggle", opacity: 25 }, EVERYWHERE);
+    expect(store.moveItem({ kind: "panel", instanceId: ID }, EVERYWHERE, ALL_GAMES)).toBe("added");
+    expect(panelIds(store, EVERYWHERE)).toEqual([]);
+    expect(store.panelOf(ID, ALL_GAMES)).toMatchObject({ mode: "toggle", opacity: 25, rect: at(0.1, 0.1, 0.3, 0.3) });
+    store.add(ALL_GAMES, subject("clock", "personal"));
+    expect(store.moveItem({ kind: "overlay", subject: subject("clock", "personal") }, ALL_GAMES, EVERYWHERE)).toBe("added");
+    expect(keys(store, ALL_GAMES)).toEqual([]);
+    expect(keys(store, EVERYWHERE)).toEqual(["personal/clock"]);
+  });
+
+  it("move nothing that is missing, may not go there, or has no room, and let the one already there be", async () => {
+    const store = await loadStore(dir);
+    const ref = { kind: "panel" as const, instanceId: ID };
+    expect(store.moveItem(ref, EVERYWHERE, ALL_GAMES)).toBe("missing");
+    store.addPanel("poe2", panel(ID, "poe2"));
+    // A game workspace's panel stays in its game's setup.
+    expect(store.moveItem(ref, "poe2", ALL_GAMES)).toBe("refused");
+    expect(store.moveItem(ref, "poe2", "poe2")).toBe("refused");
+    expect(panelIds(store, "poe2")).toEqual([ID]);
+    store.addPanel(EVERYWHERE, panel(ID2, "personal"));
+    for (let i = 0; i < LIMITS.maxGameOverlays; i++) store.add(ALL_GAMES, subject(`g-${i}`, "personal"));
+    expect(store.moveItem({ kind: "panel", instanceId: ID2 }, EVERYWHERE, ALL_GAMES)).toBe("full");
+    expect(panelIds(store, EVERYWHERE)).toEqual([ID2]);
+  });
+
+  it("let an item that is in both setups already keep the other one's place", async () => {
+    const store = await loadStore(dir);
+    store.add(EVERYWHERE, subject("twice", "personal"));
+    store.add(ALL_GAMES, subject("twice", "personal"));
+    store.update(subject("twice", "personal"), { opacity: 50 }, ALL_GAMES);
+    expect(store.moveItem({ kind: "overlay", subject: subject("twice", "personal") }, EVERYWHERE, ALL_GAMES)).toBe("exists");
+    expect(keys(store, EVERYWHERE)).toEqual([]);
+    expect(store.find(subject("twice", "personal"), ALL_GAMES)!.opacity).toBe(50);
+  });
+
   it("keep their own place and settings for one panel in several setups", async () => {
     const store = await loadStore(dir);
     store.addPanel(EVERYWHERE, panel(ID, "personal"));
@@ -269,13 +308,12 @@ describe("setups", () => {
     expect(await readFile(path.join(dir, aside[0]!), "utf8")).toBe(future);
   });
 
-  it("keep the grid, the layout window's place and the window size last seen for each game", async () => {
+  it("keep the grid and the window size last seen for each game", async () => {
     const store = await loadStore(dir);
     expect(store.grid).toBe("normal");
     expect(store.seenSize("poe2")).toBeUndefined();
     store.setGrid("fine");
     store.setGrid("huge" as never);
-    store.setLayoutWindow({ bounds: { x: 10, y: 20, width: 900, height: 600 }, maximized: false });
     expect(store.setSeen("poe2", { width: 2560.4, height: 1440 })).toBe(true);
     expect(store.setSeen("poe2", { width: 2560, height: 1440 })).toBe(false);
     expect(store.setSeen("poe2", { width: 20, height: 20 })).toBe(false);
@@ -283,7 +321,6 @@ describe("setups", () => {
     await store.save();
     const again = await loadStore(dir);
     expect(again.grid).toBe("fine");
-    expect(again.layoutWindow).toEqual({ bounds: { x: 10, y: 20, width: 900, height: 600 }, maximized: false });
     expect(again.seenSize("poe2")).toEqual({ width: 2560, height: 1440 });
     again.forgetSeen("poe2");
     expect(again.seenSize("poe2")).toBeUndefined();
@@ -353,7 +390,6 @@ describe("the move to setups", () => {
     expect(store.panelOf(MAP, "satisfactory")!.legacy).toEqual(fractions);
     expect(store.exclusiveHintShown).toBe(true);
     expect(store.grid).toBe("fine");
-    expect(store.layoutWindow).toEqual(VERSION_4.layout.window);
     expect(store.seenSize("elden-ring")).toEqual({ width: 2560, height: 1440 });
   });
 

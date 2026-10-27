@@ -15,7 +15,7 @@ import type { LayoutMessage, LayoutStills, LayoutView } from "./layout-view";
 /** `unavailable`: the module no longer offers this panel's type, so nothing runs in it. */
 export type InstanceStatus = "loading" | "ready" | "failed" | "unresponsive" | "crashed" | "unavailable";
 
-export type Screen = "welcome" | "workspace";
+export type Screen = "welcome" | "workspace" | "overlay";
 export type RootSort = "recent" | "manual";
 export type Startup = "welcome" | "last-workspace";
 /** What Tavora does when a game of the library starts: switch to it, ask, only mark it on the rail, or not look at all. */
@@ -678,6 +678,8 @@ export interface GameOverlaysView {
   hidden: boolean;
   /** Something shows over a game right now (the header button's Live look). */
   showing: boolean;
+  /** The game workspaces that have an overlay setup of their own (Add overlay / Remove overlay on the rail). */
+  gameSetups: string[];
   layerKey: OverlayKeyView | null;
 }
 

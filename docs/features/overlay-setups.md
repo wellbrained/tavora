@@ -1,6 +1,6 @@
-# Overlay setups (step 1 built)
+# Overlay setups (steps 1 to 3 built)
 
-Decided with the owner on 2026-10-27. Replaces the Overlay layout window described in [overlay-layout.md](overlay-layout.md) once step 2 is built; the per-game overrides are gone since step 1. It uses the names from the [Game → Workspace rename](workspace-rename.md), which is done.
+Decided with the owner on 2026-10-27. Replaces the separate Overlay layout window (see [overlay-layout.md](overlay-layout.md) for how the page works now); the per-game overrides are gone since step 1. It uses the names from the [Game → Workspace rename](workspace-rename.md), which is done.
 
 ## Setups
 
@@ -33,7 +33,7 @@ A page in the main window; the separate Overlay layout window goes away.
 - Above the canvas: the setup dropdown. It opens on the running game's setup, else All games while a game runs, else Everywhere.
 - Canvas: game setups keep Take picture from the running game; Everywhere and All games use a plain screen-sized area.
 - Sidebar, two stacked panels:
-  - Sources, with search: every panel from every workspace, its source named ("Notes · Satisfactory"). Ones that can't go into the chosen setup are greyed out with the reason.
+  - Sources, with search: every panel from every workspace, its source named ("Notes · Satisfactory"). Ones that can't go into the chosen setup are greyed out with the reason. A click adds one; a click on one already in the setup selects it.
   - Settings of the selected item (picked in the list or on the canvas), sized to its content; a short hint when nothing is selected.
 
 ## Header
@@ -71,11 +71,23 @@ Built in step 1 (decided with the owner on 2026-10-27 while building): each new 
 - **Tavora in front** means one of Tavora's own windows (not an overlay or the veil) has the focus.
 - **A new game setup starts with copies of All games' items**, leaving one slot for the item that made it, so the game shows what it showed before. A setup made by a failed show is removed again. An empty game setup is kept until its workspace or Remove overlay removes it.
 - **Where things land.** `overlay.showOverGame` and Show in game land in the item's game setup or All games (`landingSetup`); "exists" when the item is in any setup already. Putting personal items into Everywhere comes with the Overlay page (step 2).
+## How step 2 is built
+
+The Overlay page is `renderer/pages/OverlayPage.vue`, shown by a third screen (`Screen = "overlay"`) in the main window, opened by the `open-overlay-page` action. Choices made while building, not covered above:
+
+- **No window of its own.** The live pages and the layer sit as native views over the page's canvas area (`main/overlay-canvas.ts`, the old window's code without the window); leaving the page (the back button, a workspace on the rail, Home) takes them away. The state stays `overlay-layout.ts`; the saved window place is gone from `game-overlays.json` (an older file's is ignored).
+- **Opens on** the setup asked for, else the running game's own, else All games while a game runs, else Everywhere. The dropdown always lists Everywhere and All games, then the games with a setup; its last entries are "Add overlay for …" for game workspaces without one (they make the setup and open it). Remove overlay is on the rail only.
+- **Sources list.** Besides every panel of every workspace, it lists the module overlays the setup already holds (they have no other place in the list, and the user selects and hides them there). Reasons shown for a panel that can't be added: only for its game, can't show over a game (its type isn't `inGame`), no room left (8 items). The eye still hides an item on the canvas only.
+- **Moving between Everywhere and All games** is a button in the Settings panel for items from personal workspaces: the item goes with its place and settings; if the other setup has it already, that one stays and this one is dropped.
+- **Hotkey dialog** is the main window's one now (the old window asked for its own).
+- Back goes to the last workspace, else Home.
+- **Rail menu** of a game workspace: Add overlay / Remove overlay (hidden while overlays are off in Settings); removing the setup closes its windows at once.
+
 ## Steps
 
 0. [Game → Workspace rename](workspace-rename.md) (done).
 1. Setups in the data, the which-setup-shows rule, the source rules, the limit, showing outside games, the data move, the security page (done).
-2. The Overlay page; Add overlay / Remove overlay on the workspace.
+2. The Overlay page; Add overlay / Remove overlay on the workspace (done).
 3. The header button and the live state; Settings trimmed (done, built before step 1 and 2).
 
 Each step adds a patch note; the last one raises the minor version once the owner calls the feature complete.

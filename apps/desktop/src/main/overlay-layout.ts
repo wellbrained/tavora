@@ -1,16 +1,18 @@
-// The Overlay layout: the state behind the window where the user arranges the items of one overlay setup on a canvas
-// shaped like the game's window (a plain screen-sized one for Everywhere and All games) (overlay-layout-window.ts is the window, the renderer's LayoutApp the pages).
-// This file holds what the window shows (the game, the selection, the grid, undo, the picture) and does what its
-// messages ask: it moves nothing itself, it writes the new position into the overlays (LayoutSource) so the game shows
-// exactly what the canvas shows at once, and it tells the window where to put the live pages.
+// The Overlay page: the state behind the page in the main window where the user arranges the items of one overlay setup
+// on a canvas shaped like the game's window (a plain screen-sized one for Everywhere and All games)
+// (overlay-canvas.ts puts the live pages on the canvas, the renderer's OverlayPage is the page).
+// This file holds what the page shows (the setup, the selection, the grid, undo, the picture, the sources) and does what
+// its messages ask: it moves nothing itself, it writes the new position into the overlays (LayoutSource) so the game
+// shows exactly what the canvas shows at once, and it tells the canvas where to put the live pages.
+import { LIMITS } from "@tavora/sdk/protocol";
 import { translate, type Language, type MessageKey } from "../shared/i18n";
 import { UndoStack } from "../shared/layout-history";
 import { canvasFor, gridCell, type Canvas } from "../shared/layout-math";
-import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, type LayoutItemView, type LayoutMessage, type LayoutView } from "../shared/layout-view";
+import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, type LayoutItemView, type LayoutMessage, type LayoutSourceView, type LayoutView, type SourceBlock } from "../shared/layout-view";
 import { DEFAULT_RECT, MIN_OVERLAY_SIZE, REFERENCE_HEIGHT, anchorOf, contentScale, placeLegacy, type AnchoredRect, type Rect } from "../shared/overlay-anchor";
 import type { GameOverlaySource } from "./game-overlay-page";
 import type { LayoutItemInfo, LayoutSource } from "./game-overlay-service";
-import { DEFAULT_GAME_SIZE, isGameSetup, placeItem } from "./game-overlays";
+import { DEFAULT_GAME_SIZE, allowedIn, isGameSetup, panelWindowId, placeItem, type OverlayScope } from "./game-overlays";
 import { captureSize, type LayoutPictures } from "./layout-pictures";
 
 /** A live page on the canvas, as the window puts it: where, how big the content is drawn, how faded, and whether it shows. */
@@ -25,15 +27,27 @@ export interface LayoutFrame {
   visible: boolean;
 }
 
-/** The part of the layout window the controller drives (a test stands in for Electron). */
+/** One panel of some workspace, as the Sources list gets it. */
+export interface SourcePanel {
+  instanceId: string;
+  name: string;
+  owner: string;
+  moduleId: string;
+  workspaceId: string;
+  workspaceName: string;
+  scope: OverlayScope;
+  /** Its type allows being shown over a game (`inGame`). */
+  inGame: boolean;
+}
+
+/** The part of the canvas the controller drives (a test stands in for Electron). */
 export interface LayoutWindow {
-  focus(): void;
   destroy(): void;
   /** Hands the pages their new view. */
   send(view: LayoutView): void;
   /**
    * Puts the live pages and the layer on the canvas where they belong. `layer` is the canvas area in the window;
-   * `covered`: a list or menu is open over it, so the window shows still pictures of them and they step aside.
+   * `covered`: a list or menu is open over it, so the page shows still pictures of them and they step aside.
    */
   place(frames: LayoutFrame[], layer: Rect | null, covered: boolean): void;
 }
@@ -41,13 +55,20 @@ export interface LayoutWindow {
 export interface OverlayLayoutOptions {
   source: LayoutSource;
   pictures: LayoutPictures;
+  /** A workspace's name; null once it is gone. */
   gameName(gameId: string): string | null;
+  /** The game workspaces, by their ids (a game workspace's id is its game's). */
+  games(): { id: string; name: string }[];
   /** The main screen's work area (DIPs): the canvas takes its shape for a game whose window was never seen. */
   screen(): Rect;
   /** Game overlays are on. */
   enabled(): boolean;
   language(): Language;
+  /** Every panel from every workspace. */
+  sources(): SourcePanel[];
   openWindow(request: { closed(): void }): LayoutWindow;
+  /** The page asked to go back to the workspace. */
+  leave(): void;
   /** The picture of the window with this handle (physical pixels at most `size`), as PNG bytes; null when it can't be taken. */
   capture(handle: string, size: { width: number; height: number }): Promise<Buffer | null>;
   /** The picture the user picks from a file, as PNG bytes; "cancelled" when they closed the dialog, "bad" when the file isn't a picture. */
@@ -89,11 +110,15 @@ export class OverlayLayout {
     return this.window !== null;
   }
 
-  /** Opens the window on a setup (or a workspace: its game's setup, else All games; or the one it showed), or brings it forward. */
-  open(gameId?: string | null): void {
-    if (gameId) this.switchTo(gameId);
+  /**
+   * Shows the page on a setup, else on the running game's setup, else on All games while a game runs, else on Everywhere.
+   * Already open, it only changes the setup it shows.
+   */
+  open(setupId?: string | null): void {
+    const first = !this.window;
+    if (setupId) this.switchTo(setupId);
+    else if (first) this.switchTo(this.startSetup());
     if (this.window) {
-      this.window.focus();
       this.refresh();
       return;
     }
@@ -116,7 +141,15 @@ export class OverlayLayout {
     this.dragging.clear();
   }
 
-  /** The window was closed (by the user, or Tavora is quitting). */
+
+  /** The setup the page opens on: the running game's, else All games while a game runs, else Everywhere. */
+  private startSetup(): string {
+    const running = this.options.source.running();
+    if (running.length === 0) return LAYOUT_EVERYWHERE;
+    return running.find((id) => this.options.source.setups().includes(id)) ?? LAYOUT_ALL_GAMES;
+  }
+
+  /** The page was left (by the user, or Tavora is quitting). */
   private closed(): void {
     this.window = null;
     this.bounds = null;
@@ -131,13 +164,34 @@ export class OverlayLayout {
 
   // ── What is shown ───────────────────────────────────────────────────
 
-  /** The setups: All games, Everywhere while it has something, then the games that have one, in name order. */
+  /** The setups: Everywhere and All games, then the games that have one, in name order. */
   private games(): { id: string; name: string }[] {
-    const setups = this.options.source.setups();
-    const list = setups.filter(isGameSetup).map((id) => ({ id, name: this.options.gameName(id) ?? id })).sort((a, b) => a.name.localeCompare(b.name));
-    if (setups.includes(LAYOUT_EVERYWHERE) && this.itemsOf(LAYOUT_EVERYWHERE).length > 0) list.unshift({ id: LAYOUT_EVERYWHERE, name: this.text("overlays.everywhere") });
-    list.unshift({ id: LAYOUT_ALL_GAMES, name: this.text("overlays.allGames") });
-    return list;
+    const list = this.options.source.setups().filter(isGameSetup).map((id) => ({ id, name: this.options.gameName(id) ?? id })).sort((a, b) => a.name.localeCompare(b.name));
+    return [{ id: LAYOUT_EVERYWHERE, name: this.text("overlays.everywhere") }, { id: LAYOUT_ALL_GAMES, name: this.text("overlays.allGames") }, ...list];
+  }
+
+  /** The game workspaces without a setup of their own: "Add overlay for…". */
+  private addable(): { id: string; name: string }[] {
+    const have = new Set(this.options.source.setups());
+    return this.options.games().filter((game) => !have.has(game.id)).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** Every panel of every workspace, with why it can't go into the setup shown (if it can't). */
+  private sources(setupId: string, items: readonly LayoutItemInfo[]): LayoutSourceView[] {
+    const inSetup = new Set(items.flatMap((info) => (info.ref.kind === "panel" ? [info.ref.instanceId] : [])));
+    const full = items.length >= LIMITS.maxGameOverlays;
+    return this.options.sources().map((panel) => {
+      const block: SourceBlock | null = inSetup.has(panel.instanceId)
+        ? "in-setup"
+        : !allowedIn(setupId, panel.workspaceId, panel.scope)
+          ? "game-only"
+          : !panel.inGame
+            ? "not-in-game"
+            : full
+              ? "full"
+              : null;
+      return { id: panel.instanceId, name: panel.name, moduleId: panel.moduleId, from: panel.workspaceName, game: panel.scope === "game" ? panel.workspaceName : null, block };
+    });
   }
 
   private text(key: MessageKey): string {
@@ -147,6 +201,12 @@ export class OverlayLayout {
   /** The setup shown: the one asked for if the picker has it, else All games (what shows over a game without its own). */
   private current(games: { id: string }[]): string {
     return games.some((game) => game.id === this.gameId) ? this.gameId : LAYOUT_ALL_GAMES;
+  }
+
+  /** A personal workspace's item can move between Everywhere and All games. */
+  private moveTarget(info: LayoutItemInfo, setupId: string): "$everywhere" | "$all" | null {
+    if (info.scope !== "all") return null;
+    return setupId === LAYOUT_EVERYWHERE ? LAYOUT_ALL_GAMES : setupId === LAYOUT_ALL_GAMES ? LAYOUT_EVERYWHERE : null;
   }
 
   /** A game's setup takes the shape of the game's window; Everywhere and All games the main screen's. */
@@ -196,8 +256,10 @@ export class OverlayLayout {
       target: info.ref.kind === "panel" ? { kind: "panel", instanceId: info.ref.instanceId } : { kind: "overlay", ...info.ref.subject },
       keyTarget: { owner: info.keyTarget.owner, moduleId: info.keyTarget.moduleId, workspaceId: info.keyTarget.workspaceId, key: info.keyTarget.key },
       name: info.name,
+      from: this.options.gameName(info.keyTarget.workspaceId) ?? "",
       moduleId: info.moduleId,
       kind: info.ref.kind,
+      moveTo: this.moveTarget(info, gameId),
       rect: this.rectOf(info, shape),
       placed: this.dragging.get(info.id) ?? this.placed(info, shape),
       mode: info.mode,
@@ -210,6 +272,9 @@ export class OverlayLayout {
     }));
     return {
       games,
+      addable: this.addable(),
+      sources: this.sources(gameId, infos),
+      limit: LIMITS.maxGameOverlays,
       gameId,
       canvas: shape.canvas,
       seen: shape.seen,
@@ -296,11 +361,24 @@ export class OverlayLayout {
     if (!this.window) return;
     switch (message.type) {
       case "done":
-        if (fromShell) this.close();
+        if (fromShell) this.options.leave();
         return;
       case "game":
         if (!fromShell || message.gameId === this.gameId) return;
         this.switchTo(message.gameId);
+        break;
+      case "add-setup":
+        if (!fromShell || !this.addable().some((game) => game.id === message.gameId)) return;
+        this.options.source.addSetup(message.gameId);
+        this.switchTo(message.gameId);
+        break;
+      case "add-source":
+        if (!fromShell) return;
+        this.addSource(message.id);
+        break;
+      case "move":
+        if (!fromShell) return;
+        this.moveItem(message.id);
         break;
       case "grid":
         this.options.source.setGrid(message.grid);
@@ -362,6 +440,31 @@ export class OverlayLayout {
         break;
     }
     this.refresh();
+  }
+
+  /** A panel from the Sources goes into the setup shown, if it may, and is selected. */
+  private addSource(instanceId: string): void {
+    const setupId = this.current(this.games());
+    const view = this.sources(setupId, this.itemsOf(setupId)).find((source) => source.id === instanceId);
+    const panel = this.options.sources().find((source) => source.instanceId === instanceId);
+    if (!view || !panel || view.block !== null) {
+      if (view?.block === "full") this.say("overlays.full");
+      return;
+    }
+    const added = this.options.source.addPanel(setupId, { owner: panel.owner, moduleId: panel.moduleId, workspaceId: panel.workspaceId, instanceId });
+    if (added === "full") this.say("overlays.full");
+    else if (added === "added") this.selection = panelWindowId(instanceId);
+  }
+
+  /** A personal item moves to the other of Everywhere and All games. */
+  private moveItem(id: string): void {
+    const setupId = this.current(this.games());
+    const info = this.info(id);
+    const to = info && this.moveTarget(info, setupId);
+    if (!info || !to) return;
+    const moved = this.options.source.move(info.ref, setupId, to);
+    if (moved === "full") this.say("overlays.full");
+    else if (moved === "added" || moved === "exists") this.selection = null;
   }
 
   /** Moves the live pages to the dragged rectangles without a new view. */

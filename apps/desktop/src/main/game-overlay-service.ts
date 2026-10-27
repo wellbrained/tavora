@@ -44,6 +44,7 @@ import {
   placeItem,
   sameOverlay,
   setupsOnScreen,
+  type AddResult,
   type GameOverlay,
   type GameOverlayChange,
   type GameOverlaySubject,
@@ -55,7 +56,6 @@ import {
   type Rect,
   type SeenSize,
 } from "./game-overlays";
-import type { WindowState } from "./window-state";
 import type { GameOverlaySource } from "./game-overlay-page";
 import type { VeilWindow } from "./game-veil-window";
 import type { HotkeyRecord, ShortcutRegistry } from "./hotkeys";
@@ -106,10 +106,16 @@ export interface LayoutSource {
   gameRunning(gameId: string): boolean;
   /** Where the game's window is on screen now or was last seen (DIPs), or null. */
   gameWindow(): Rect | null;
+  /** The games running now, the one in front first. */
+  running(): string[];
   grid(): GridSetting;
   setGrid(grid: GridSetting): void;
-  window(): WindowState | null;
-  setWindow(state: WindowState): void;
+  /** Add overlay: a game workspace gets a setup of its own. */
+  addSetup(gameId: string): boolean;
+  /** A panel goes into a setup, at the size its module prefers; "refused" when it may not go there. */
+  addPanel(setupId: string, panel: { owner: string; moduleId: string; workspaceId: string; instanceId: string }): AddResult;
+  /** An item of a personal workspace moves between Everywhere and All games with its place and settings. */
+  move(ref: LayoutItemRef, from: string, to: string): AddResult | "missing";
   setRect(setupId: string, ref: LayoutItemRef, rect: AnchoredRect): boolean;
   /** The size a new item of this kind starts with in a window of this size (Reset size), in units of the window's height. */
   startSize(ref: LayoutItemRef, window: { width: number; height: number }): { width: number; height: number };
@@ -183,7 +189,7 @@ export interface GameOverlayServiceOptions {
   shortcuts: ShortcutRegistry;
   /** Opens Settings at one of its settings. */
   openSetting(setting: string): void;
-  /** Opens the Overlay layout window on a setup (the button on the in-game layer's frames). */
+  /** Opens the Overlay page on a setup (the button on the in-game layer's frames). */
   openLayout?(setupId: string | null): void;
   /** Tells the user something (Tavora's notice and a system notification). */
   notify(message: string): void;
@@ -1147,8 +1153,10 @@ export class GameOverlays {
         this.store.setGrid(grid);
         this.options.changed();
       },
-      window: () => this.store.layoutWindow,
-      setWindow: (state) => this.store.setLayoutWindow(state),
+      running: () => [...this.running].sort((a, b) => Number(b === this.front) - Number(a === this.front)),
+      addSetup: (gameId) => this.addSetup(gameId),
+      addPanel: (setupId, panel) => this.addPanelTo(setupId, panel),
+      move: (ref, from, to) => this.moveItem(ref, from, to),
       setRect: (setupId, ref, rect) => {
         const done = this.store.setRect(setupId, ref, rect);
         // On screen at once: the windows take their new place on this look.
@@ -1169,6 +1177,53 @@ export class GameOverlays {
       remove: (setupId, ref) => (ref.kind === "panel" ? this.stopPanel(ref.instanceId, setupId) : this.remove(ref.subject, setupId)),
       layerOpen: () => this.layer !== null,
     };
+  }
+
+  /** A panel the user put into a setup on the Overlay page. */
+  private addPanelTo(setupId: string, panel: { owner: string; moduleId: string; workspaceId: string; instanceId: string }): AddResult {
+    const preferred = this.options.panels?.preferred?.(panel.workspaceId, panel.instanceId) ?? null;
+    const added = this.store.addPanel(setupId, panel, startRect(preferred, this.startArea()));
+    if (added === "added") {
+      this.revive(liveWindowId(panel.instanceId));
+      this.options.changed();
+      this.tick();
+    }
+    return added;
+  }
+
+  private moveItem(ref: LayoutItemRef, from: string, to: string): AddResult | "missing" {
+    const moved = this.store.moveItem(ref, from, to);
+    if (moved === "added" || moved === "exists") {
+      this.options.changed();
+      this.tick();
+    }
+    return moved;
+  }
+
+  /** Add overlay: a game workspace gets a setup of its own, starting with copies of what All games has. */
+  addSetup(gameId: string): boolean {
+    const added = this.store.addSetup(gameId);
+    if (added) {
+      this.options.changed();
+      this.tick();
+    }
+    return added;
+  }
+
+  /** Remove overlay: the game's setup goes with what it holds; over the game, All games shows again. */
+  removeSetup(gameId: string): boolean {
+    if (!isGameSetup(gameId) || !this.store.hasSetup(gameId)) return false;
+    // What only this setup held loses its key, as when its workspace goes.
+    this.forget((_overlay, setupId) => setupId === gameId);
+    this.forgetPanels((_panel, setupId) => setupId === gameId);
+    this.store.removeSetup(gameId);
+    this.options.changed();
+    this.tick();
+    return true;
+  }
+
+  hasSetup(gameId: string): boolean {
+    return this.store.hasSetup(gameId);
   }
 
   /** The overlays and panels of a setup, in the order the user added them. */
@@ -1272,6 +1327,7 @@ export class GameOverlays {
       stay: this.options.stay?.() ?? false,
       hidden: this.suspended,
       showing: this.windowsShown,
+      gameSetups: this.store.gameSetups(),
       layerKey: this.options.keyOf(layerBinding()),
     };
   }
