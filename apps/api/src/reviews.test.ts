@@ -165,7 +165,7 @@ describe("rating a catalog module", () => {
     const signedOut = await call("POST", `/reviews/${review.id}/report`);
     expect(signedOut.status).toBe(401);
     expect(await signedOut.json()).toEqual({ error: "Sign in to report.", reason: "signed-out" });
-    const otto = player("otto@example.com", "Otto");
+    const otto = user("otto@example.com", "Otto");
     expect((await call("POST", `/reviews/${review.id}/report`, otto.token)).status).toBe(202);
     expect((await call("POST", "/reviews/AAAAAAAAAAAAAAAA/report", otto.token)).status).toBe(404);
     expect(reviews.reports()).toEqual([expect.objectContaining({ count: 1 })]);
@@ -183,9 +183,9 @@ describe("rating a catalog module", () => {
   });
 
   it("deletes who reported with the reporter's account, keeping the count", async () => {
-    const { player, rate, call, reviews } = setup();
-    const mara = player("mara@example.com");
-    const otto = player("otto@example.com", "Otto");
+    const { user, rate, call, reviews } = setup();
+    const mara = user("mara@example.com");
+    const otto = user("otto@example.com", "Otto");
     const { review } = (await (await rate(mara.token, { stars: 1, text: "Mean words", version: "1.0.0" })).json()) as { review: { id: string } };
     await call("POST", `/reviews/${review.id}/report`, otto.token);
     reviews.forget(otto.account.id);
