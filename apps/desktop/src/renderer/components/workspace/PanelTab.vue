@@ -36,7 +36,7 @@ const hover = computed(() => (panel.value?.content ? `${title.value}\n${panel.va
 
 /** The Live badge opens the Overlay layout, where the panel's place (or the module's overlays) can be arranged. */
 function openLive() {
-  void act({ type: "open-overlay-layout" });
+  void act({ type: "open-overlay-page" });
 }
 
 function items() {

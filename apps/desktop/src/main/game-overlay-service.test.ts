@@ -461,7 +461,7 @@ describe("modes and settings", () => {
     const { service } = await setup();
     show(service);
     show(service, CLOCK, "elden", "item-2");
-    expect(service.view()).toEqual({ supported: true, enabled: true, stay: false, hidden: false, showing: true, layerKey: null });
+    expect(service.view()).toEqual({ supported: true, enabled: true, stay: false, hidden: false, showing: true, gameSetups: ["elden"], layerKey: null });
     expect(service.layout.setups()).toEqual(["$everywhere", "$all", "elden"]);
     expect(service.layout.items("elden")).toMatchObject([
       { name: "Clock & Counter · item-1", mode: "always", scope: "game", source: expect.anything() },
@@ -1076,7 +1076,7 @@ describe("a panel in the game", () => {
     const { service, world, key } = await setup();
     add(service);
     service.pressed(layerKey(key));
-    expect(panelWindows(world)[0]!.request.frameText()).toEqual({ name: "To-Dos", closeLabel: "Stop showing this panel in game", layoutLabel: "Open the Overlay layout" });
+    expect(panelWindows(world)[0]!.request.frameText()).toEqual({ name: "To-Dos", closeLabel: "Stop showing this panel in game", layoutLabel: "Open the Overlay page" });
   });
 
   it("stopPanel keeps it in its slot, forgets it in the game", async () => {
@@ -1911,5 +1911,72 @@ describe("setups on screen", () => {
     service.layout.setOverlay("elden", subject, { opacity: 50 });
     expect(live()[0]!.opacity).toBe(50);
     expect(service.layout.items("$everywhere")[0]!.opacity).toBe(25);
+  });
+});
+
+describe("the Overlay page", () => {
+  const OTHER = "0a1b2c3d-0000-4000-8000-000000000002";
+
+  it("gives a game a setup of its own with Add overlay, and takes it away with Remove overlay", async () => {
+    const { service, world } = await setup();
+    expect(service.view().gameSetups).toEqual([]);
+    expect(service.addSetup("elden")).toBe(true);
+    expect(service.addSetup("elden")).toBe(false);
+    expect(service.view().gameSetups).toEqual(["elden"]);
+    expect(service.layout.setups()).toContain("elden");
+    expect(world.changes).toBeGreaterThan(0);
+    expect(service.removeSetup("elden")).toBe(true);
+    expect(service.removeSetup("elden")).toBe(false);
+    expect(service.view().gameSetups).toEqual([]);
+  });
+
+  it("starts a new game setup with copies of the items All games has", async () => {
+    const { service } = await setup();
+    service.layout.addPanel("$all", { owner: "official", moduleId: TODOS.manifest.id, workspaceId: "personal", instanceId: PANEL });
+    service.addSetup("elden");
+    expect(service.layout.items("elden").map((item) => item.id)).toEqual([`panel\n${PANEL}`]);
+  });
+
+  it("puts a panel into a setup at the size its module prefers, once", async () => {
+    const { service, world } = await setup();
+    world.preferred.set(PANEL, { width: 360, height: 200 });
+    const panel = { owner: "official", moduleId: TODOS.manifest.id, workspaceId: "personal", instanceId: PANEL };
+    expect(service.layout.addPanel("$everywhere", panel)).toBe("added");
+    expect(service.layout.addPanel("$everywhere", panel)).toBe("exists");
+    expect(service.layout.items("$everywhere").map((item) => item.ref)).toEqual([{ kind: "panel", instanceId: PANEL }]);
+    const sized = service.layout.items("$everywhere")[0]!.rect;
+    expect(sized.width).toBeCloseTo(360 / 1080, 3);
+    expect(world.changes).toBeGreaterThan(0);
+  });
+
+  it("refuses a game's panel in a setup that is not its game's", async () => {
+    const { service } = await setup();
+    const panel = { owner: "official", moduleId: TODOS.manifest.id, workspaceId: "elden", instanceId: PANEL };
+    expect(service.layout.addPanel("$everywhere", panel)).toBe("refused");
+    expect(service.layout.addPanel("$all", panel)).toBe("refused");
+    expect(service.layout.addPanel("elden", panel)).toBe("added");
+  });
+
+  it("moves a personal item between Everywhere and All games with its place and settings, and never into a game's own setup", async () => {
+    const { service } = await setup();
+    const panel = { owner: "official", moduleId: TODOS.manifest.id, workspaceId: "personal", instanceId: PANEL };
+    const ref = { kind: "panel" as const, instanceId: PANEL };
+    service.layout.addPanel("$everywhere", panel);
+    service.layout.setRect("$everywhere", ref, { h: "right", v: "bottom", x: 0.1, y: 0.1, width: 0.3, height: 0.2 });
+    service.layout.setPanel("$everywhere", PANEL, { opacity: 50 });
+    expect(service.layout.move(ref, "$everywhere", "$all")).toBe("added");
+    expect(service.layout.items("$everywhere")).toEqual([]);
+    expect(service.layout.items("$all")[0]).toMatchObject({ opacity: 50, rect: { h: "right", v: "bottom", x: 0.1, y: 0.1, width: 0.3, height: 0.2 } });
+    expect(service.layout.move(ref, "$everywhere", "$all")).toBe("missing");
+    expect(service.layout.move({ kind: "panel", instanceId: OTHER }, "$all", "$everywhere")).toBe("missing");
+  });
+
+  it("lists the games running, the one in front first", async () => {
+    const { service } = await setup();
+    show(service);
+    service.gamesRunning(new Set(["other", "elden"]));
+    expect(service.layout.running().sort()).toEqual(["elden", "other"]);
+    service.tick();
+    expect(service.layout.running()).toEqual(["elden", "other"]);
   });
 });

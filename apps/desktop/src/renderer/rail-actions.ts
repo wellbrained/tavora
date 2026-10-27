@@ -108,6 +108,15 @@ function placeItems(items: MenuItem[], workspace: WorkspaceView): void {
   }
 }
 
+/** Add overlay / Remove overlay: a game workspace's own overlay setup (docs/features/overlay-setups.md). */
+function overlayItems(workspace: WorkspaceView): MenuItem[] {
+  const overlays = state.value!.gameOverlays;
+  if (workspace.kind !== "game" || !overlays.supported || !overlays.enabled) return [];
+  return overlays.gameSetups.includes(workspace.id)
+    ? [{ label: t("menu.removeOverlay"), testid: "menu-remove-overlay", run: () => act({ type: "remove-game-setup", workspaceId: workspace.id }) }]
+    : [{ label: t("menu.addOverlay"), testid: "menu-add-overlay", run: () => act({ type: "add-game-overlay", workspaceId: workspace.id }) }];
+}
+
 /** What belongs to the workspace itself, wherever it sits on the rail (favorites included). */
 function ownItems(workspace: WorkspaceView): MenuItem[] {
   return [
@@ -161,6 +170,8 @@ function ownItems(workspace: WorkspaceView): MenuItem[] {
         },
       ],
     },
+    // Overlay setups are for games, while overlays are on in Settings (and on Windows).
+    ...overlayItems(workspace),
     // Only for a game workspace whose game's icon Tavora does not have yet: the whole item is the offer.
     ...(workspace.shareIcon
       ? [{ label: t("menu.shareIcon"), testid: "menu-share-icon", run: () => (dialog.value = { kind: "share-icons", workspaceIds: [workspace.id] }) } satisfies MenuItem]

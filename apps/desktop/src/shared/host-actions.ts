@@ -269,8 +269,12 @@ export function hostActionTable(c: HostChecks) {
     "remove-game-overlay": { setup: optional(setup), owner: c.ownerId, moduleId: c.moduleId, workspaceId: c.workspaceId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     /** Opens the hotkey dialog for the layer key (without workspaceId, owner, moduleId and key) or for one overlay's toggle key. */
     "set-overlay-key": { workspaceId: optional(c.workspaceId), owner: optional(c.ownerId), moduleId: optional(c.moduleId), key: optional(matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)) },
-    /** Opens the Overlay layout window (Settings > Overlays, a panel's menu), on a setup when it is given, else on the current workspace's or the last one. */
-    "open-overlay-layout": { setup: optional(setup) },
+    /** Opens the Overlay page (the header button, a panel's menu), on a setup when it is given, else on the running game's. */
+    "open-overlay-page": { setup: optional(setup) },
+    /** Add overlay in a game workspace's menu on the rail: the game gets an overlay setup of its own. */
+    "add-game-overlay": { workspaceId: c.workspaceId },
+    /** Remove overlay in the same menu: the game's setup goes, with what it holds. */
+    "remove-game-setup": { workspaceId: c.workspaceId },
     /** "Hide all for now" in Settings > Overlays, and "Show again": until Tavora starts again. */
     "set-game-overlays-hidden": { hidden: bool },
     /** Opens the preview window of an overlay (Settings > Overlays, Settings > Streaming). */

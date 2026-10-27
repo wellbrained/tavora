@@ -8,8 +8,7 @@ import { DEFAULT_PANEL_ANCHORED, DEFAULT_RECT, placeAnchored, placeLegacy, type 
 import type { LayoutItemInfo, LayoutItemRef, LayoutSource } from "./game-overlay-service";
 import type { SeenSize } from "./game-overlays";
 import { LayoutPictures } from "./layout-pictures";
-import { OverlayLayout, type LayoutFrame, type LayoutWindow } from "./overlay-layout";
-import type { WindowState } from "./window-state";
+import { OverlayLayout, type LayoutFrame, type LayoutWindow, type SourcePanel } from "./overlay-layout";
 
 let dir: string;
 beforeEach(async () => {
@@ -42,7 +41,7 @@ interface Item {
   opacity?: 100 | 75 | 50 | 25;
 }
 
-function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handles?: Record<string, string>; running?: string[]; startSizes?: { overlay?: { width: number; height: number }; panel?: { width: number; height: number } }; capture?: Buffer | null | "throws"; choose?: Buffer | "cancelled" | "bad"; enabled?: boolean } = {}) {
+function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handles?: Record<string, string>; running?: string[]; sources?: SourcePanel[]; startSizes?: { overlay?: { width: number; height: number }; panel?: { width: number; height: number } }; capture?: Buffer | null | "throws"; choose?: Buffer | "cancelled" | "bad"; enabled?: boolean } = {}) {
   const sent: LayoutView[] = [];
   const placed: { frames: LayoutFrame[]; layer: { x: number; y: number; width: number; height: number } | null; covered: boolean }[] = [];
   const world = {
@@ -50,11 +49,12 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     grid: "normal" as GridSetting,
     /** The games that have a setup; one stays when its last item goes. */
     gameSetups: [...new Set(items.map((item) => setupOf(item)).filter((id) => id !== LAYOUT_ALL_GAMES && id !== LAYOUT_EVERYWHERE))],
-    windowState: null as WindowState | null,
     seen: { ...options.seen },
     opened: 0,
-    focused: 0,
     destroyed: 0,
+    left: 0,
+    added: [] as { setup: string; instanceId: string }[],
+    moved: [] as { from: string; to: string }[],
     closedWindow: () => {},
     captured: [] as { handle: string; size: { width: number; height: number } }[],
     enabled: options.enabled ?? true,
@@ -96,8 +96,24 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     gameWindow: () => null,
     grid: () => world.grid,
     setGrid: (grid) => void (world.grid = grid),
-    window: () => world.windowState,
-    setWindow: (state) => void (world.windowState = state),
+    running: () => [...world.running],
+    addSetup: (gameId) => {
+      if (world.gameSetups.includes(gameId)) return false;
+      world.gameSetups.push(gameId);
+      return true;
+    },
+    addPanel: (setupId, panel) => {
+      world.added.push({ setup: setupId, instanceId: panel.instanceId });
+      world.items.push({ key: panel.instanceId, gameId: panel.workspaceId, scope: panel.workspaceId === "personal" ? "all" : "game", setup: setupId, rect: DEFAULT_PANEL_ANCHORED, panel: true });
+      return "added";
+    },
+    move: (ref, from, to) => {
+      const item = find(from, ref);
+      if (!item) return "missing";
+      world.moved.push({ from, to });
+      item.setup = to;
+      return "added";
+    },
     setRect: (setupId, ref, rect) => {
       const item = find(setupId, ref);
       if (item) {
@@ -116,7 +132,6 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     layerOpen: () => false,
   };
   const window: LayoutWindow = {
-    focus: () => void world.focused++,
     destroy: () => void world.destroyed++,
     send: (view) => void sent.push(view),
     place: (frames, layer, covered) => void placed.push({ frames, layer, covered }),
@@ -125,7 +140,13 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
   const layout = new OverlayLayout({
     source,
     pictures,
-    gameName: (id) => ({ elden: "Elden Ring", poe2: "Path of Exile 2" })[id] ?? null,
+    gameName: (id) => ({ elden: "Elden Ring", poe2: "Path of Exile 2", personal: "Personal" })[id] ?? null,
+    games: () => [
+      { id: "elden", name: "Elden Ring" },
+      { id: "poe2", name: "Path of Exile 2" },
+    ],
+    sources: () => options.sources ?? [],
+    leave: () => void world.left++,
     screen: () => ({ x: 0, y: 0, width: 2560, height: 1440 }),
     enabled: () => world.enabled,
     language: () => "en",
@@ -158,20 +179,19 @@ const setupOf = (item: Item) => item.setup ?? (item.scope === "all" ? LAYOUT_ALL
 const clock = (key: string, gameId = "elden", rect = at(0.036, 0.03, 0.356, 0.16)): Item => ({ key, gameId, scope: "game", rect });
 
 describe("opening", () => {
-  it("closes with Done only when the shell asks", () => {
+  it("goes back to the workspace only when the page asks", () => {
     const { layout, world } = setup([clock("a")]);
     layout.open();
     layout.handle({ type: "done" }, false);
-    expect(layout.isOpen).toBe(true);
+    expect(world.left).toBe(0);
     layout.handle({ type: "done" }, true);
-    expect(layout.isOpen).toBe(false);
-    expect(world.destroyed).toBe(1);
+    expect(world.left).toBe(1);
   });
   it("offers All games alongside a game and shows only general items there", () => {
     const { layout } = setup([clock("own"), { ...clock("general", "personal"), scope: "all" }]);
     layout.open("elden");
     layout.handle({ type: "game", gameId: LAYOUT_ALL_GAMES }, true);
-    expect(layout.view().games[0]!.id).toBe(LAYOUT_ALL_GAMES);
+    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_EVERYWHERE, LAYOUT_ALL_GAMES, "elden"]);
     expect(layout.view().items.map((item) => item.name)).toEqual(["general"]);
   });
 
@@ -197,13 +217,32 @@ describe("opening", () => {
     expect(world.items[0]!.rect).toEqual(base);
     expect(world.items[1]!.rect).toEqual(base);
   });
-  it("opens one window and brings it forward when opened again", () => {
-    const { layout, world } = setup([clock("a")]);
+  it("opens one canvas and only changes the setup when opened again", () => {
+    const { layout, world } = setup([clock("a"), clock("b", "poe2")]);
     layout.open("elden");
-    layout.open("elden");
+    layout.open("poe2");
     expect(world.opened).toBe(1);
-    expect(world.focused).toBe(1);
+    expect(layout.view().gameId).toBe("poe2");
     expect(layout.isOpen).toBe(true);
+  });
+
+  it("opens on the running game's setup, else All games while a game runs, else Everywhere", () => {
+    const own = setup([clock("a")], { running: ["elden"] });
+    own.layout.open();
+    expect(own.layout.view().gameId).toBe("elden");
+    const other = setup([clock("a")], { running: ["poe2"] });
+    other.layout.open();
+    expect(other.layout.view().gameId).toBe(LAYOUT_ALL_GAMES);
+    const none = setup([clock("a")]);
+    none.layout.open();
+    expect(none.layout.view().gameId).toBe(LAYOUT_EVERYWHERE);
+  });
+
+  it("stays on the setup it shows when opened again without one", () => {
+    const { layout } = setup([clock("a")]);
+    layout.open("elden");
+    layout.open();
+    expect(layout.view().gameId).toBe("elden");
   });
 
   it("opens again after the window was closed, with a fresh start", () => {
@@ -233,11 +272,11 @@ describe("opening", () => {
 });
 
 describe("the setups of the picker", () => {
-  it("lists All games and the games that have a setup, each with its own items", () => {
+  it("lists Everywhere, All games and the games that have a setup, each with its own items", () => {
     const { layout } = setup([clock("a", "elden"), clock("b", "poe2"), { key: "g", gameId: "personal", scope: "all", rect: at(0.1, 0.1, 0.2, 0.2) }]);
     layout.open("elden");
     const view = layout.view();
-    expect(view.games).toEqual([{ id: LAYOUT_ALL_GAMES, name: "All games" }, { id: "elden", name: "Elden Ring" }, { id: "poe2", name: "Path of Exile 2" }]);
+    expect(view.games).toEqual([{ id: LAYOUT_EVERYWHERE, name: "Everywhere" }, { id: LAYOUT_ALL_GAMES, name: "All games" }, { id: "elden", name: "Elden Ring" }, { id: "poe2", name: "Path of Exile 2" }]);
     expect(view.gameId).toBe("elden");
     expect(view.items.map((item) => item.name)).toEqual(["a"]);
     layout.handle({ type: "game", gameId: "poe2" }, true);
@@ -249,25 +288,25 @@ describe("the setups of the picker", () => {
   it("shows All games for a game that has no setup of its own: that is what shows over it", () => {
     const { layout } = setup([{ key: "g", gameId: "personal", scope: "all", rect: at(0.1, 0.1, 0.2, 0.2) }, clock("b", "poe2")]);
     layout.open("elden");
-    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_ALL_GAMES, "poe2"]);
+    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_EVERYWHERE, LAYOUT_ALL_GAMES, "poe2"]);
     expect(layout.view().gameId).toBe(LAYOUT_ALL_GAMES);
     expect(layout.view().items.map((item) => item.name)).toEqual(["g"]);
   });
 
-  it("lists Everywhere while it has something, on the main screen's shape", () => {
+  it("always lists Everywhere, on the main screen's shape", () => {
     const { layout, world } = setup([{ key: "e", gameId: "personal", scope: "all", setup: LAYOUT_EVERYWHERE, rect: at(0.1, 0.1, 0.2, 0.2) }]);
     layout.open(LAYOUT_EVERYWHERE);
-    expect(layout.view().games).toEqual([{ id: LAYOUT_ALL_GAMES, name: "All games" }, { id: LAYOUT_EVERYWHERE, name: "Everywhere" }]);
+    expect(layout.view().games).toEqual([{ id: LAYOUT_EVERYWHERE, name: "Everywhere" }, { id: LAYOUT_ALL_GAMES, name: "All games" }]);
     expect(layout.view()).toMatchObject({ gameId: LAYOUT_EVERYWHERE, canTakePicture: false, seen: false, canvas: { width: 1920, height: 1080 } });
     world.items = [];
     layout.refresh();
-    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_ALL_GAMES]);
+    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_EVERYWHERE, LAYOUT_ALL_GAMES]);
   });
 
-  it("falls back to All games when only general ones exist and no game is known", () => {
+  it("shows All games with its general items and no picture to take", () => {
     const { layout } = setup([{ key: "g", gameId: "personal", scope: "all", rect: at(0.1, 0.1, 0.2, 0.2) }]);
-    layout.open();
-    expect(layout.view().games).toEqual([{ id: LAYOUT_ALL_GAMES, name: "All games" }]);
+    layout.open(LAYOUT_ALL_GAMES);
+    expect(layout.view().games).toEqual([{ id: LAYOUT_EVERYWHERE, name: "Everywhere" }, { id: LAYOUT_ALL_GAMES, name: "All games" }]);
     expect(layout.view().gameId).toBe(LAYOUT_ALL_GAMES);
     expect(layout.view().canTakePicture).toBe(false);
   });
@@ -279,13 +318,11 @@ describe("the setups of the picker", () => {
     layout.refresh();
     expect(layout.view().gameId).toBe("elden");
     expect(layout.view().items).toEqual([]);
-    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_ALL_GAMES, "elden", "poe2"]);
+    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_EVERYWHERE, LAYOUT_ALL_GAMES, "elden", "poe2"]);
   });
 
   it("shows All games when the setup asked for is not one it knows", () => {
     const { layout } = setup([clock("b", "poe2")]);
-    layout.open();
-    expect(layout.view().gameId).toBe(LAYOUT_ALL_GAMES);
     layout.open("nowhere");
     expect(layout.view().gameId).toBe(LAYOUT_ALL_GAMES);
   });
@@ -848,5 +885,156 @@ describe("the game picture", () => {
     layout.forgetWorkspace("elden");
     await flush();
     expect(await pictures.has("elden")).toBe(false);
+  });
+});
+
+const panel = (instanceId: string, workspaceId: string, over: Partial<SourcePanel> = {}): SourcePanel => ({
+  instanceId,
+  name: instanceId,
+  owner: "official",
+  moduleId: "tavora.notes",
+  workspaceId,
+  workspaceName: workspaceId === "personal" ? "Personal" : workspaceId === "elden" ? "Elden Ring" : "Path of Exile 2",
+  scope: workspaceId === "personal" ? "all" : "game",
+  inGame: true,
+  ...over,
+});
+
+describe("the sources", () => {
+  const sources = [panel("notes", "personal"), panel("map", "elden"), panel("build", "poe2"), panel("timer", "personal", { inGame: false })];
+
+  it("lists every panel of every workspace with its workspace and why one cannot be added", () => {
+    const { layout } = setup([clock("a", "elden"), clock("b", "poe2")], { sources });
+    layout.open("elden");
+    expect(layout.view().sources).toEqual([
+      { id: "notes", name: "notes", moduleId: "tavora.notes", from: "Personal", game: null, block: null },
+      { id: "map", name: "map", moduleId: "tavora.notes", from: "Elden Ring", game: "Elden Ring", block: null },
+      { id: "build", name: "build", moduleId: "tavora.notes", from: "Path of Exile 2", game: "Path of Exile 2", block: "game-only" },
+      { id: "timer", name: "timer", moduleId: "tavora.notes", from: "Personal", game: null, block: "not-in-game" },
+    ]);
+  });
+
+  it("lets a personal panel go into Everywhere and All games, and a game panel only into its own setup", () => {
+    const { layout } = setup([clock("a", "elden")], { sources });
+    for (const setupId of [LAYOUT_EVERYWHERE, LAYOUT_ALL_GAMES]) {
+      layout.open(setupId);
+      const blocks = Object.fromEntries(layout.view().sources.map((source) => [source.id, source.block]));
+      expect(blocks).toEqual({ notes: null, map: "game-only", build: "game-only", timer: "not-in-game" });
+    }
+  });
+
+  it("marks a panel the setup holds and a setup that is full", () => {
+    const items = Array.from({ length: 8 }, (_, index) => ({ ...clock(`c${index}`, "elden"), ...(index === 0 ? { key: "notes", panel: true } : {}) }));
+    const { layout } = setup(items, { sources });
+    layout.open("elden");
+    const blocks = Object.fromEntries(layout.view().sources.map((source) => [source.id, source.block]));
+    expect(blocks).toMatchObject({ notes: "in-setup", map: "full" });
+    expect(layout.view().limit).toBe(8);
+  });
+
+  it("adds a panel to the setup shown and selects it", () => {
+    const { layout, world } = setup([clock("a", "elden")], { sources });
+    layout.open("elden");
+    layout.handle({ type: "add-source", id: "map" }, true);
+    expect(world.added).toEqual([{ setup: "elden", instanceId: "map" }]);
+    expect(layout.view().items.map((item) => item.name)).toEqual(["a", "map"]);
+    expect(layout.view().selection).toBe("panel\nmap");
+  });
+
+  it("adds a personal panel to Everywhere", () => {
+    const { layout, world } = setup([], { sources });
+    layout.open(LAYOUT_EVERYWHERE);
+    layout.handle({ type: "add-source", id: "notes" }, true);
+    expect(world.added).toEqual([{ setup: LAYOUT_EVERYWHERE, instanceId: "notes" }]);
+  });
+
+  it("adds nothing that cannot go there, that is unknown, or on the layer's word", () => {
+    const { layout, world } = setup([clock("a", "elden")], { sources });
+    layout.open("elden");
+    for (const id of ["build", "timer", "nothing"]) layout.handle({ type: "add-source", id }, true);
+    layout.handle({ type: "add-source", id: "map" }, false);
+    expect(world.added).toEqual([]);
+  });
+
+  it("says so when the setup is full", () => {
+    const items = Array.from({ length: 8 }, (_, index) => clock(`c${index}`, "elden"));
+    const { layout, world } = setup(items, { sources });
+    layout.open("elden");
+    layout.handle({ type: "add-source", id: "map" }, true);
+    expect(world.added).toEqual([]);
+    expect(layout.view().notice).toMatch(/room/i);
+  });
+});
+
+describe("adding and moving", () => {
+  it("lists the game workspaces without a setup to add one for", () => {
+    const { layout } = setup([clock("a", "elden")]);
+    layout.open("elden");
+    expect(layout.view().addable).toEqual([{ id: "poe2", name: "Path of Exile 2" }]);
+  });
+
+  it("adds a setup for such a game and shows it", () => {
+    const { layout, world } = setup([clock("a", "elden")]);
+    layout.open("elden");
+    layout.handle({ type: "add-setup", gameId: "poe2" }, true);
+    expect(world.gameSetups).toContain("poe2");
+    expect(layout.view().gameId).toBe("poe2");
+    expect(layout.view().addable).toEqual([]);
+  });
+
+  it("does not add a setup for a game that has one, an unknown workspace, or on the layer's word", () => {
+    const { layout, world } = setup([clock("a", "elden")]);
+    layout.open("elden");
+    layout.handle({ type: "add-setup", gameId: "elden" }, true);
+    layout.handle({ type: "add-setup", gameId: "nowhere" }, true);
+    layout.handle({ type: "add-setup", gameId: "poe2" }, false);
+    expect(world.gameSetups).toEqual(["elden"]);
+    expect(layout.view().gameId).toBe("elden");
+  });
+
+  it("offers a personal item the other of Everywhere and All games, and nothing else", () => {
+    const personal = (setupId: string): Item => ({ key: "p", gameId: "personal", scope: "all", setup: setupId, rect: at(0.1, 0.1, 0.2, 0.2) });
+    const everywhere = setup([personal(LAYOUT_EVERYWHERE)]);
+    everywhere.layout.open(LAYOUT_EVERYWHERE);
+    expect(everywhere.layout.view().items[0]!.moveTo).toBe(LAYOUT_ALL_GAMES);
+    const all = setup([personal(LAYOUT_ALL_GAMES), clock("own", "elden")]);
+    all.layout.open(LAYOUT_ALL_GAMES);
+    expect(all.layout.view().items[0]!.moveTo).toBe(LAYOUT_EVERYWHERE);
+    all.layout.open("elden");
+    expect(all.layout.view().items.map((item) => item.moveTo)).toEqual([null]);
+  });
+
+  it("does not offer a game's own item a move, nor a personal item in a game's setup", () => {
+    const { layout } = setup([{ key: "p", gameId: "personal", scope: "all", setup: "elden", rect: at(0.1, 0.1, 0.2, 0.2) }, clock("own", "elden")]);
+    layout.open("elden");
+    expect(layout.view().items.map((item) => item.moveTo)).toEqual([null, null]);
+  });
+
+  it("moves an item to the other setup and lets go of the selection", () => {
+    const { layout, world } = setup([{ key: "p", gameId: "personal", scope: "all", setup: LAYOUT_EVERYWHERE, rect: at(0.1, 0.1, 0.2, 0.2) }]);
+    layout.open(LAYOUT_EVERYWHERE);
+    const id = layout.view().items[0]!.id;
+    layout.handle({ type: "select", id }, true);
+    layout.handle({ type: "move", id }, true);
+    expect(world.moved).toEqual([{ from: LAYOUT_EVERYWHERE, to: LAYOUT_ALL_GAMES }]);
+    expect(layout.view().items).toEqual([]);
+    expect(layout.view().selection).toBeNull();
+  });
+
+  it("moves nothing that cannot move, or on the layer's word", () => {
+    const { layout, world } = setup([clock("own", "elden"), { key: "p", gameId: "personal", scope: "all", setup: LAYOUT_EVERYWHERE, rect: at(0.1, 0.1, 0.2, 0.2) }]);
+    layout.open("elden");
+    layout.handle({ type: "move", id: layout.view().items[0]!.id }, true);
+    layout.open(LAYOUT_EVERYWHERE);
+    layout.handle({ type: "move", id: layout.view().items[0]!.id }, false);
+    expect(world.moved).toEqual([]);
+  });
+
+  it("names the workspace an item comes from", () => {
+    const { layout } = setup([clock("own", "elden"), { key: "p", gameId: "personal", scope: "all", rect: at(0.1, 0.1, 0.2, 0.2) }]);
+    layout.open("elden");
+    expect(layout.view().items[0]!.from).toBe("Elden Ring");
+    layout.open(LAYOUT_ALL_GAMES);
+    expect(layout.view().items[0]!.from).toBe("Personal");
   });
 });

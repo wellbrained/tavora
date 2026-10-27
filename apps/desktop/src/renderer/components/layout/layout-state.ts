@@ -1,7 +1,8 @@
-// The Overlay layout's view as the main process last sent it (both pages of the window use it), and the keys both pages
-// share: the arrow keys nudge the selected item, Ctrl+Z and Ctrl+Y undo and redo, Esc lets go of the selection.
-import { onBeforeUnmount, onMounted, shallowRef } from "vue";
-import type { LayoutMessage, LayoutView } from "../../../shared/layout-view";
+// The Overlay page's view as the main process last sent it (the page in the main window and the layer on the canvas both
+// use it), and the keys both share: the arrow keys nudge the selected item, Ctrl+Z and Ctrl+Y undo and redo, Esc lets go
+// of the selection.
+import { nextTick, onBeforeUnmount, onMounted, shallowRef } from "vue";
+import type { LayoutMessage, LayoutStills, LayoutView } from "../../../shared/layout-view";
 import { nudge } from "../../../shared/layout-math";
 import { api } from "../../host";
 
@@ -12,6 +13,26 @@ void api.layout.getState().then((initial) => {
 });
 
 export const send = (message: LayoutMessage) => api.layout.send(message);
+
+/** Still pictures of the live pages and of the layer, drawn where they are while a list or menu is open over the canvas. */
+export const stills = shallowRef<LayoutStills>({ items: [], layer: null });
+let stillChanges = 0;
+function decoded(url: string): Promise<unknown> {
+  const image = new Image();
+  image.src = url;
+  return image.decode().catch(() => undefined);
+}
+api.layout.onStills(async (next) => {
+  const change = ++stillChanges;
+  const urls = [...next.items.map((item) => item.url), ...(next.layer ? [next.layer.url] : [])];
+  // Said to be shown only once they are decoded and a frame with them was drawn: the pages step aside after that.
+  await Promise.all(urls.map(decoded));
+  if (change !== stillChanges) return;
+  stills.value = next;
+  if (!urls.length) return;
+  await nextTick();
+  requestAnimationFrame(() => requestAnimationFrame(() => change === stillChanges && api.layout.stillsShown()));
+});
 
 /** Where a key press should be left to its field: a list, a text field, a row of choices. */
 function belongsToControl(target: EventTarget | null): boolean {

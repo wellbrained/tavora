@@ -23,6 +23,7 @@ import SteamImportDialog from "./components/SteamImportDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
 import InboxDialogs from "./components/messages/InboxDialogs.vue";
 import { dialog, state, toast } from "./host";
+import OverlayPage from "./pages/OverlayPage.vue";
 import WorkspacePage from "./pages/WorkspacePage.vue";
 import OnboardingPage from "./pages/OnboardingPage.vue";
 import WelcomePage from "./pages/WelcomePage.vue";
@@ -35,6 +36,7 @@ import WelcomePage from "./pages/WelcomePage.vue";
     </TooltipProvider>
     <div class="relative h-full min-w-0 flex-1">
       <WorkspacePage v-if="state.screen === 'workspace' && state.currentWorkspaceId" :key="state.currentWorkspaceId" />
+      <OverlayPage v-else-if="state.screen === 'overlay'" />
       <template v-else>
         <OnboardingPage v-if="!state.library.onboarded" />
         <WelcomePage v-else />
