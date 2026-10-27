@@ -1,4 +1,4 @@
-// Getting a picture ready to be stored: telling what the player picked, and for the Optimized
+// Getting a picture ready to be stored: telling what the user picked, and for the Optimized
 // quality shrinking it. Original keeps the file exactly as it is.
 
 import { BLOB_TYPES } from "@tavora/sdk";

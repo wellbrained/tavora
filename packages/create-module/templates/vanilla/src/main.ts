@@ -6,7 +6,7 @@ import { connect, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 const status = document.querySelector<HTMLParagraphElement>("#status")!;
 const counter = document.querySelector<HTMLButtonElement>("#counter")!;
 
-/** Your texts in English and German; Tavora says which language the player uses. */
+/** Your texts in English and German; Tavora says which language the user uses. */
 const TEXTS = {
   en: { playing: "Playing {game}.", clicked: "Clicked {count} times in this game." },
   de: { playing: "Du spielst {game}.", clicked: "{count}-mal in diesem Spiel geklickt." },

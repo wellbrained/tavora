@@ -9,7 +9,7 @@ import { writeFileAtomic } from "./fsutil";
  * shortcuts. It comes from the Steam client on this PC when it has the file,
  * and otherwise from Steam's public icon address, which serves the very same
  * file. Tavora's service is never involved and Tavora never ships these: only
- * the player's own copy exists, kept unchanged in the player's data folder.
+ * the user's own copy exists, kept unchanged in the user's data folder.
  */
 
 export const STEAM_ICON_BASE = "https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps";
@@ -258,7 +258,7 @@ export type HashResult = { status: "found"; hash: string } | { status: "none" } 
 
 /**
  * The hash of a game's small community icon from Steam's public store API. No
- * key and no account are needed, and it works for games the player does not own.
+ * key and no account are needed, and it works for games the user does not own.
  */
 export async function fetchPublicIconHash(appid: number, options: { fetchImpl?: typeof fetch; apiUrl?: string } = {}): Promise<HashResult> {
   if (!isSteamAppId(appid)) return { status: "none" };

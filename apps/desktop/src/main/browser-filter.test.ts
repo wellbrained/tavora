@@ -21,9 +21,9 @@ describe("judgeRequest", () => {
     expect(judge("http://192.168.1.1/", "subFrame")).toBe("private");
     expect(judge("http://router.local/", "image")).toBe("private");
     expect(judge("http://127.0.0.1:8080/api", "xhr", null)).toBe("private");
-    // A local page the player opened may use local addresses.
+    // A local page the user opened may use local addresses.
     expect(judge("http://127.0.0.1:8080/api", "xhr", "http://localhost:8080/")).toBe("allow");
-    // The page the player asked for is decided by the navigation checks.
+    // The page the user asked for is decided by the navigation checks.
     expect(judge("http://127.0.0.1:8080/", "mainFrame")).toBe("allow");
   });
 
@@ -34,7 +34,7 @@ describe("judgeRequest", () => {
     expect(judge("https://ads.example/", "mainFrame")).toBe("allow");
   });
 
-  it("lets ads through where the player turned blocking off, or without an engine", () => {
+  it("lets ads through where the user turned blocking off, or without an engine", () => {
     expect(judgeRequest({ url: "https://ads.example/b.js", resourceType: "script", topUrl: "https://a.com/" }, ads, () => false)).toBe("allow");
     expect(judgeRequest({ url: "https://ads.example/b.js", resourceType: "script", topUrl: "https://a.com/" }, null, on)).toBe("allow");
   });

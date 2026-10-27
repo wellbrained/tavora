@@ -37,7 +37,7 @@ export interface AppOptions {
    * while this is set, so no icon is ever offered without a way to object.
    */
   takedownContact?: string;
-  /** Icons offered by players. Absent: the offer route answers 503. */
+  /** Icons offered by users. Absent: the offer route answers 503. */
   submissions?: Submissions;
   submitRateLimiter?: RateLimiter;
   /** Accounts, only when the service can send email. Absent: the account routes answer 503. */
@@ -80,7 +80,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     return idByAppid;
   };
 
-  // The query is what a player typed: never cached, never logged here. Only the
+  // The query is what a user typed: never cached, never logged here. Only the
   // hosted icons, which are the same for everyone, say otherwise themselves.
   app.use("*", async (context, next) => {
     await next();
@@ -116,7 +116,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   });
 
   // Hosted game icons: a list of what exists, then the files. The app downloads
-  // only the ones it needs, so the service never learns a player's library.
+  // only the ones it needs, so the service never learns a user's library.
   const iconsAvailable = Boolean(takedownContact?.trim());
   app.get("/v1/icons", (context) => {
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
@@ -143,7 +143,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     });
   });
 
-  // A signed-in player offers an icon their PC has and the service lacks. It is
+  // A signed-in user offers an icon their PC has and the service lacks. It is
   // checked, cleaned and queued; nothing is served until a person approves it.
   // JSON only, which a web page on another site cannot send without a preflight
   // this service refuses. The account is kept with the offer until it is reviewed.
@@ -208,7 +208,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   });
 
   // The module catalog, read-only and without sign-in. The app takes the whole index (for a game, or
-  // all of it) and decides on the PC what to update, so it never sends what a player has installed (C11).
+  // all of it) and decides on the PC what to update, so it never sends what a user has installed (C11).
   // "by <name>" comes from the account the key is linked to, never from the listing (C13).
   // `installs` counts installs from Browse (POST /installed), never who installed.
   // Its rating is every version's ratings together; the app shows "New" below MIN_RATINGS_SHOWN.
@@ -269,7 +269,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     context.header("Cache-Control", "public, max-age=300");
     return context.json({ module: listed(found.module), versions: found.versions, readme: found.readme });
   });
-  // Sent once by the app after a player installed a module from Browse: only the module id.
+  // Sent once by the app after a user installed a module from Browse: only the module id.
   catalogApp.post("/installed", async (context) => {
     const body = (await context.req.json().catch(() => null)) as { id?: unknown } | null;
     const id = typeof body?.id === "string" && body.id.length <= 200 ? body.id : null;
@@ -309,7 +309,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     });
   });
   // The signed lists, byte for byte as tavora-catalog-sign wrote them. Short caching, so a revocation
-  // or a blocked zip reaches players soon; the app refuses a list older than the one it has.
+  // or a blocked zip reaches users soon; the app refuses a list older than the one it has.
   catalogApp.get("/lists/:file", (context) => {
     const match = /^([a-z]+)\.json$/.exec(context.req.param("file"));
     const bytes = match && isSignedList(match[1]!) ? catalog!.list(match[1]) : null;
@@ -335,7 +335,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   }
   app.route("/v1/catalog", catalogApp);
 
-  // Accounts: the only player data the service keeps, and only once it can send email.
+  // Accounts: the only user data the service keeps, and only once it can send email.
   // The cloud copy first: its bodies are bigger than the account routes allow, and it has its own limits.
   if (accounts?.copies) app.route("/v1/account/copy", copyRoutes({ copies: accounts.copies, accounts: accounts.store, clientKey: (request) => (clientKey ? clientKey(request) : "local"), ...(accounts.now ? { now: accounts.now } : {}) }));
   else app.all("/v1/account/copy", (context) => context.json({ error: "The cloud copy is not available right now.", reason: "unavailable" }, 503)).all("/v1/account/copy/*", (context) => context.json({ error: "The cloud copy is not available right now.", reason: "unavailable" }, 503));
@@ -372,7 +372,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));
   app.onError((error, context) => {
-    // Never include the request: it holds what the player typed.
+    // Never include the request: it holds what the user typed.
     console.error(`[tavora-api] ${error instanceof Error ? error.message : "unknown error"}`);
     return context.json({ error: "Something went wrong." }, 500);
   });

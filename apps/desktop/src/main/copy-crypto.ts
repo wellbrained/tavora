@@ -1,10 +1,10 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes, type KeyObject } from "node:crypto";
 import { deflateRawSync, inflateRawSync } from "node:zlib";
 
-// The cloud copy's encryption (decided 2026-10-19): only the player can read
+// The cloud copy's encryption (decided 2026-10-19): only the user can read
 // the copy. A random 256-bit copy key (since 2026-10-20 the account's root key,
 // account-key.ts) is made on the PC and never leaves it except as the recovery
-// key the player keeps.
+// key the user keeps.
 // Everything sent is sealed with AES-256-GCM under a key derived from it; each
 // part is named by an HMAC of its content under a second derived key, so equal
 // content is stored once and the service cannot tell which file a part is.
@@ -51,7 +51,7 @@ export const openVault = (rootKey: Uint8Array, sealed: Uint8Array): Buffer => op
 
 // Approving a new PC from an old one (pairing.ts): each side makes a one-time X25519 key. The old PC seals
 // the root key under a key both derive from the two one-time keys, and both show a short code made from
-// them, so the player sees that nobody swapped one on the way.
+// them, so the user sees that nobody swapped one on the way.
 const PAIRING_AAD = Buffer.from("tavora-pair-1");
 /** What comes before a raw X25519 public key in its DER form. */
 const X25519_SPKI = Buffer.from("302a300506032b656e032100", "hex");
@@ -141,7 +141,7 @@ export function recoveryKey(copyKey: Uint8Array): string {
 }
 
 /**
- * The copy key from what the player typed, or null when it isn't one. Spaces, dashes and case don't
+ * The copy key from what the user typed, or null when it isn't one. Spaces, dashes and case don't
  * matter, and the letters people mix up are read as the digits they look like (O as 0, I and L as 1).
  */
 export function parseRecoveryKey(text: string): Buffer | null {

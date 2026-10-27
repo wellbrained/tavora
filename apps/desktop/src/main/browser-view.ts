@@ -95,14 +95,14 @@ export interface BrowserPanelOptions {
   devTools: boolean;
   background(): string;
   sessionFor(kind: BrowserKind): Session;
-  /** Whether a page address belongs to a site the player signs in to for all games. */
+  /** Whether a page address belongs to a site the user signs in to for all games. */
   isSharedSite(url: string): boolean;
   adblockOn(url: string): boolean;
   /** Puts a new view in the window in place of the old one (null when the panel opens). */
   swap(previous: WebContentsView | null, next: WebContentsView): void;
   /** Ctrl+L in the page: the toolbar's address bar takes the focus. */
   onFocusAddress(): void;
-  /** A new Browser tab beside this one: a link the player opened in a new tab (in the background when asked), or an empty one (Ctrl+T). */
+  /** A new Browser tab beside this one: a link the user opened in a new tab (in the background when asked), or an empty one (Ctrl+T). */
   onOpenTab(url: string | null, background: boolean): void;
   /** Ctrl+W in the page closes this tab. */
   onCloseTab(): void;
@@ -149,7 +149,7 @@ export class BrowserPanel {
     return this.committedUrl === null && this.requestedUrl === null;
   }
 
-  /** Opens the address the panel showed last time, unless the player already went somewhere. */
+  /** Opens the address the panel showed last time, unless the user already went somewhere. */
   restore(url: unknown): void {
     if (typeof url !== "string" || !isWebUrl(url) || this.committedUrl !== null || this.requestedUrl !== null) return;
     this.open(url, this.kindFor(url));
@@ -197,12 +197,12 @@ export class BrowserPanel {
     const current = () => this.view.webContents === contents;
     contents.setWebRTCIPHandlingPolicy("default_public_interface_only");
     contents.on("will-attach-webview", (event) => event.preventDefault());
-    // A page may open a link in a "new window" only right after the player
+    // A page may open a link in a "new window" only right after the user
     // clicked or typed; it then opens as a new Browser tab instead.
     contents.on("input-event", (_event, input) => {
       if (input.type === "mouseDown" || input.type === "keyDown" || input.type === "gestureTap") this.lastGesture = Date.now();
     });
-    // A link the player opened in a new tab or window (target=_blank,
+    // A link the user opened in a new tab or window (target=_blank,
     // Ctrl+click, middle click) becomes a new Browser tab beside this one.
     // Without a click or key press just before, nothing opens, and one click
     // opens one tab, so a page cannot open a pile of them from a single click.
@@ -310,7 +310,7 @@ export class BrowserPanel {
     return isWebUrl(url) && !(isPrivateUrl(url) && !isPrivateUrl(this.committedUrl ?? ""));
   }
 
-  /** Goes to what the player typed in the address bar. */
+  /** Goes to what the user typed in the address bar. */
   navigate(address: string): void {
     const url = addressToUrl(address);
     if (url) this.open(url, this.kindFor(url));
@@ -342,7 +342,7 @@ export class BrowserPanel {
     this.changed();
   }
 
-  /** The player changed whether this site signs in for all games: the page reloads in the right session. */
+  /** The user changed whether this site signs in for all games: the page reloads in the right session. */
   siteSettingsChanged(): void {
     const url = this.committedUrl ?? this.requestedUrl;
     if (!url || !isWebUrl(url)) return this.changed();

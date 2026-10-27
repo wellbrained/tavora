@@ -12,7 +12,7 @@ import type { Submissions } from "./submissions.ts";
 
 /**
  * The JSON behind the panel's overview, updates, modules, accounts and status pages. All read-only, and
- * all numbers or public facts: nothing here names a player (the account list, which does, is accounts-admin.ts). (The review actions stay in admin-app.ts.)
+ * all numbers or public facts: nothing here names a user (the account list, which does, is accounts-admin.ts). (The review actions stay in admin-app.ts.)
  */
 
 export interface PanelOptions {
@@ -59,7 +59,7 @@ export function registerPanelRoutes(app: Hono, options: PanelOptions): void {
 
   const waiting = (): WaitingKind[] => [
     { id: "approval", label: "Module versions waiting for review", count: catalog?.waitingVersions().length ?? 0, section: "approval" },
-    { id: "icons", label: "Icons offered by players", count: submissions.listPending().length, section: "review", tab: "pending" },
+    { id: "icons", label: "Icons offered by users", count: submissions.listPending().length, section: "review", tab: "pending" },
     { id: "reports", label: "Reported modules", count: catalog?.reports().length ?? 0, section: "review", tab: "reports" },
     { id: "review-queue", label: "New reviews", count: reviews?.queue().length ?? 0, section: "review", tab: "reviews" },
     { id: "reviews", label: "Reported reviews", count: reviews?.reports().length ?? 0, section: "review", tab: "reviews" },

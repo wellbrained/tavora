@@ -16,7 +16,7 @@ export interface KeyInput {
  * module panel has focus and modules cannot take them over, which is why none
  * may be a key editors use, like Ctrl+B); the host page uses the same mapping
  * for key events that reach it without passing through main, such as the
- * synthetic ones in tests. Shown to players in the shortcut overview
+ * synthetic ones in tests. Shown to users in the shortcut overview
  * (renderer/shortcuts.ts); keep both in step.
  */
 export function shortcutForKey(input: KeyInput, mac: boolean): HostShortcut | null {

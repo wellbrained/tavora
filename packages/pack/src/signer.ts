@@ -8,7 +8,7 @@ import { fingerprint, rawPublicKey, signedBytes } from "./signature.ts";
 export interface Signer {
   /** The raw 32-byte Ed25519 public key, base64. */
   publicKey: string;
-  /** The key's owner id, as players see it. */
+  /** The key's owner id, as users see it. */
   fingerprint: string;
   /** The signature over a package's file hashes. `manifest` is the package's tavora.module.json. */
   signPackage(files: Record<string, string>, manifest: Buffer): Promise<Buffer>;

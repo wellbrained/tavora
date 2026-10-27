@@ -85,7 +85,7 @@ function fitLabel(module: CatalogModuleView): string {
   return module.forGames.length ? t("catalog.forGames", { games: module.forGames.join(", ") }) : t("catalog.notForWorkspaces");
 }
 
-/** New until enough players rated it to show its stars. */
+/** New until enough users rated it to show its stars. */
 const isNew = (module: CatalogModuleView) => !module.rating || module.rating.count < MIN_RATINGS_SHOWN;
 
 async function install(module: CatalogModuleView) {

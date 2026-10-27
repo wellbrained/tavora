@@ -18,7 +18,7 @@ async function store(contents?: unknown) {
 }
 
 describe("GrantStore", () => {
-  it("allows nothing before the player grants anything", async () => {
+  it("allows nothing before the user grants anything", async () => {
     const { grants } = await store();
     expect(grants.allowed(subject(["api.example.com"]))).toEqual({ network: [], connectors: [] });
     expect(grants.missing(subject(["api.example.com"]))).toEqual({ network: ["api.example.com"], connectors: [] });

@@ -1,9 +1,9 @@
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 
-// The developer names players see for publisher keys ("by wellbrained" instead of a fingerprint).
+// The developer names users see for publisher keys ("by wellbrained" instead of a fingerprint).
 // Tavora's service says which name a key's account chose; the answer is kept on this PC in
-// publisher-names.json and asked again at most once a day, and only while the player allows the
+// publisher-names.json and asked again at most once a day, and only while the user allows the
 // online features. A name is shown only in the plain form the service allows, so a name can never
 // carry other text, links or direction marks.
 
@@ -30,7 +30,7 @@ export interface PublisherNamesOptions {
   file: string;
   baseUrl: string;
   fetch: typeof fetch;
-  /** Whether the player allows Tavora to ask its service (Settings > Online > Online features). */
+  /** Whether the user allows Tavora to ask its service (Settings > Online > Online features). */
   online: () => boolean;
   /** A name became known or changed. */
   onChange: () => void;

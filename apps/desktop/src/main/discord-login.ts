@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { Language } from "../shared/i18n";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 
 // Discord login for the Tavora account (decided 2026-10-16): Discord's sign-in
-// page opens in the player's own browser, and Discord sends the browser back to
+// page opens in the user's own browser, and Discord sends the browser back to
 // this PC, where Tavora listens for exactly one return. Separate from the
 // Discord panel's connection: no Discord token ever reaches this PC; the code
 // and the PKCE verifier go to Tavora's service, which asks Discord who this is.
@@ -15,7 +15,7 @@ export const DISCORD_LOGIN_PORT = 53682;
 /** Registered in the Discord Developer Portal; the service uses the same address for the exchange. */
 export const DISCORD_LOGIN_REDIRECT = `http://127.0.0.1:${DISCORD_LOGIN_PORT}/discord`;
 export const DISCORD_AUTHORIZE_URL = "https://discord.com/oauth2/authorize";
-/** How long Tavora waits for the player to approve in the browser. */
+/** How long Tavora waits for the user to approve in the browser. */
 export const DISCORD_LOGIN_TIMEOUT_MS = 2 * 60_000;
 
 export interface DiscordLoginResult {
@@ -24,7 +24,7 @@ export interface DiscordLoginResult {
 }
 
 export interface DiscordLoginOptions {
-  /** Opens the address in the player's browser (Electron's shell.openExternal). */
+  /** Opens the address in the user's browser (Electron's shell.openExternal). */
   open: (url: string) => Promise<void>;
   language: () => Language;
   authorizeUrl?: string;
@@ -52,7 +52,7 @@ let current: { server: Server; fail: (error: Error) => void } | null = null;
  * random `state`, and stops after it or after two minutes.
  */
 export async function discordLogin(options: DiscordLoginOptions): Promise<DiscordLoginResult> {
-  current?.fail(new PlayerError("account.error.discordCancelled"));
+  current?.fail(new UserError("account.error.discordCancelled"));
   const verifier = base64url(randomBytes(32));
   const challenge = base64url(createHash("sha256").update(verifier).digest());
   const state = base64url(randomBytes(16));
@@ -76,9 +76,9 @@ export async function discordLogin(options: DiscordLoginOptions): Promise<Discor
       // A return without our state is someone else's (or an old tab): not ours to act on.
       if (url.searchParams.get("state") !== state) return;
       if (ok) finish(null, { code: code!, verifier });
-      else finish(new PlayerError(url.searchParams.get("error") === "access_denied" ? "account.error.discordCancelled" : "account.error.discordRefused"));
+      else finish(new UserError(url.searchParams.get("error") === "access_denied" ? "account.error.discordCancelled" : "account.error.discordRefused"));
     });
-    const timer = setTimeout(() => finish(new PlayerError("account.error.discordCancelled")), options.timeoutMs ?? DISCORD_LOGIN_TIMEOUT_MS);
+    const timer = setTimeout(() => finish(new UserError("account.error.discordCancelled")), options.timeoutMs ?? DISCORD_LOGIN_TIMEOUT_MS);
     const finish = (error: Error | null, result?: DiscordLoginResult) => {
       if (settled) return;
       settled = true;
@@ -90,7 +90,7 @@ export async function discordLogin(options: DiscordLoginOptions): Promise<Discor
       else resolve(result!);
     };
     current = { server, fail: (error) => finish(error) };
-    server.once("error", () => finish(new PlayerError("account.error.discordPort", { port })));
+    server.once("error", () => finish(new UserError("account.error.discordPort", { port })));
     server.listen(port, "127.0.0.1", () => {
       const authorize = new URL(options.authorizeUrl ?? DISCORD_AUTHORIZE_URL);
       authorize.search = new URLSearchParams({
@@ -102,7 +102,7 @@ export async function discordLogin(options: DiscordLoginOptions): Promise<Discor
         code_challenge: challenge,
         code_challenge_method: "S256",
       }).toString();
-      options.open(authorize.toString()).catch(() => finish(new PlayerError("account.error.discordBrowser")));
+      options.open(authorize.toString()).catch(() => finish(new UserError("account.error.discordBrowser")));
     });
   });
 }

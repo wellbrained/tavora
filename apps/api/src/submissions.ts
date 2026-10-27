@@ -5,13 +5,13 @@ import { isIconId, type IconStore } from "./icons.ts";
 import { icoToPng, inspectPng, stripPng } from "./png.ts";
 
 /**
- * Icons offered by players' apps, and what happens to them. Only a signed-in
- * player can offer one. An offer is checked, cleaned and put in a queue;
+ * Icons offered by users' apps, and what happens to them. Only a signed-in
+ * user can offer one. An offer is checked, cleaned and put in a queue;
  * nothing is served until a person approves it on the private review page.
  * The account that sent it is kept only while it waits, so blocking a bad
  * offer can also stop its sender.
  *
- * A game the player added by name (a `local-` id) is offered under its name:
+ * A game the user added by name (a `local-` id) is offered under its name:
  * a game in the dataset with that name gets it under its own id, and a name
  * no game has becomes a custom game the icon is listed for by that name.
  */
@@ -42,7 +42,7 @@ const decodeBase64 = (value: string): Uint8Array | null => {
   return new Uint8Array(Buffer.from(value, "base64"));
 };
 
-/** A game name as the player typed it: printable, trimmed, at most 120 characters; null for anything else. */
+/** A game name as the user typed it: printable, trimmed, at most 120 characters; null for anything else. */
 const cleanName = (input: unknown): string | null => {
   if (typeof input !== "string" || /[\u0000-\u001f\u007f-\u009f]/.test(input)) return null;
   const name = input.trim();
@@ -74,7 +74,7 @@ export function createSubmissions({ state, store, gameName, gamesNamed, now = ()
 
   return {
     /**
-     * Checks an icon a signed-in player (`sender`, the account id) offers and queues it. The same answer for a new
+     * Checks an icon a signed-in user (`sender`, the account id) offers and queues it. The same answer for a new
      * offer, a repeat, a blocked file and a blocked account, so nothing can be probed.
      */
     submit(input: unknown, sender: string): SubmitResult {

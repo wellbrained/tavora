@@ -23,7 +23,7 @@ const ageConfirmed = ref(false);
 const busy = ref(false);
 /** True while Discord's page is open in the browser and Tavora waits for its return. */
 const waitingDiscord = ref(false);
-/** A new account waits for the player's yes: from an email code or a Discord login. */
+/** A new account waits for the user's yes: from an email code or a Discord login. */
 const creating = computed(() => (pending.value?.kind === "sign-in" && pending.value.step === "create") || pending.value?.kind === "discord-create");
 
 // A new step always starts with an empty code box.

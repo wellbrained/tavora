@@ -1,5 +1,5 @@
 // `pnpm dev` restarts Tavora whenever its main code changes, often while the developer works or plays in another
-// window. A restart brings the window back the way it was, never in the player's face: minimized stays minimized,
+// window. A restart brings the window back the way it was, never in the user's face: minimized stays minimized,
 // and a window that wasn't the active one comes back behind the one that is, without taking the focus.
 import type { BrowserWindow } from "electron";
 

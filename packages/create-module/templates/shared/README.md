@@ -20,7 +20,7 @@ One or two sentences: what your module does and who it is for.
 
 ## Requirements
 
-- What a player needs first, such as a game or an internet connection
+- What a user needs first, such as a game or an internet connection
 
 ## Known issues
 

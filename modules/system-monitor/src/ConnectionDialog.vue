@@ -18,7 +18,7 @@ const enabled = ref(props.current.enabled);
 const value = ref(props.current.target);
 const error = ref("");
 
-// The save runs straight from the click (or Enter), with nothing awaited before it: Tavora counts that as the player's.
+// The save runs straight from the click (or Enter), with nothing awaited before it: Tavora counts that as the user's.
 async function submit(): Promise<void> {
   const target = cleanTarget(value.value);
   if (!target) {

@@ -267,7 +267,7 @@ async function onDrop(event: DragEvent, target: Target) {
   // Dropping a favorite back into the main list takes it out of Favorites, since it can't be in both.
   if (favoriteIds.value.has(item.id)) await act({ type: "unfavorite", gameId: item.id });
   if (target.kind === "folder" && zone === "into") {
-    // The folder stays as the player left it: closed folders do not pop open.
+    // The folder stays as the user left it: closed folders do not pop open.
     await act({ type: "move-game", gameId: item.id, folderId: target.id });
   } else if (target.place.list === "root" && zone === "into") {
     const gameIds = [target.id, item.id];
@@ -504,7 +504,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     </div>
     </div>
 
-    <!-- Player things live at the bottom on their own: a game running now, the profile, then Settings. -->
+    <!-- User things live at the bottom on their own: a game running now, the profile, then Settings. -->
     <div class="flex flex-col gap-1 border-t py-2">
       <RunningGameButton :expanded="expanded" />
       <UpdateMarker :expanded="expanded" />

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { AccountView } from "../shared/host-api";
 import { AccountClient, deviceOs, loadAccount, saveAccount, type ProfileData, type SavedAccount } from "./account";
 import type { Encryptor } from "./discord-store";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 
 // Stands in for safeStorage: reversible, and never the plain text.
 const encryptor = (available = true): Encryptor => ({
@@ -158,9 +158,9 @@ describe("signing in", () => {
     }) as typeof fetch);
     await expect(offline.account.sendCode("me@example.com")).rejects.toMatchObject({ key: "account.error.unreachable" });
     const off = client(service({ "POST /code": () => json({ reason: "unavailable" }, 503) }).fetchImpl);
-    await expect(off.account.sendCode("me@example.com")).rejects.toBeInstanceOf(PlayerError);
+    await expect(off.account.sendCode("me@example.com")).rejects.toBeInstanceOf(UserError);
     await expect(off.account.sendCode("me@example.com")).rejects.toMatchObject({ key: "account.error.unavailable" });
-    // The day's emails are used up: when it works again, in the player's language.
+    // The day's emails are used up: when it works again, in the user's language.
     const full = client(service({ "POST /code": () => json({ reason: "daily-limit", retryAt: "2026-10-17T00:00:00.000Z" }, 503) }).fetchImpl);
     await expect(full.account.sendCode("me@example.com")).rejects.toMatchObject({ key: "account.error.dailyLimit" });
     const fullNoTime = client(service({ "POST /code": () => json({ reason: "daily-limit" }, 503) }).fetchImpl);
@@ -509,12 +509,12 @@ describe("the developer side", () => {
     expect(account.view().publisherKeys).toEqual([{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z" }]);
   });
 
-  it("says when the name can change again, in the player's own words", async () => {
+  it("says when the name can change again, in the user's own words", async () => {
     const { fetchImpl } = service({ "PUT /developer": () => json({ reason: "name-too-soon", nextChangeAt: "2026-11-16T12:00:00.000Z" }, 409) });
     const { account } = client(fetchImpl, { saved: SAVED });
     await account.init();
     const error = await account.setDeveloperName("brainwell").catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(PlayerError);
+    expect(error).toBeInstanceOf(UserError);
     expect(error).toMatchObject({ key: "account.error.nameTooSoon", params: { date: "16. November 2026" } });
   });
 

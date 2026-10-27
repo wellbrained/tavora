@@ -7,7 +7,7 @@ import type { CatalogTrust } from "./catalog-trust.ts";
  * Block from the panel (decided 2026-10-26): the maintainer picks a zip and writes why, the panel keeps it as a block
  * to sign, and offers every block in force plus the ones to sign as a file for `pnpm tavora-catalog-sign blocks`. The
  * catalogue key never comes to the server: the maintainer signs on their PC and uploads with `tavora-api-catalog
- * set-list blocks`. A block counts as in force once the served signed list holds it; then players' Tavora turns that
+ * set-list blocks`. A block counts as in force once the served signed list holds it; then users' Tavora turns that
  * zip off and keeps its data. Taking a block back out of force means signing a list without it.
  */
 

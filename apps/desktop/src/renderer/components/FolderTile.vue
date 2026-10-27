@@ -11,7 +11,7 @@ import GameIcon from "./GameIcon.vue";
 const props = defineProps<{
   /** The folder's games in order; only the first four are drawn. */
   games: GameView[];
-  /** Letters the player chose for the folder, shown instead of its games. */
+  /** Letters the user chose for the folder, shown instead of its games. */
   label: string | null;
   open: boolean;
 }>();

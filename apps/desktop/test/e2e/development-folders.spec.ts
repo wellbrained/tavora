@@ -164,7 +164,7 @@ test("an example is copied into a project folder as a new project of its own", a
     await expect(examples.getByTestId(`module-${VUE}`)).toBeVisible();
     await expect(examples.getByTestId(`module-${PLAYGROUND}`)).toHaveCount(0);
 
-    // Make a copy offers the project folder, and names the module for the player to change.
+    // Make a copy offers the project folder, and names the module for the user to change.
     await page.getByTestId(`copy-example-${VANILLA}`).click();
     const dialog = page.getByTestId("copy-example-dialog");
     await expect(page.getByTestId("copy-example-name")).toHaveValue("My Module");

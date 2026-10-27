@@ -70,7 +70,7 @@ export const isSignedList = (value: string): value is SignedList => (SIGNED_LIST
 
 /**
  * Version order, newest last. The same order as `compareModuleVersions` in the app's installer,
- * which decides on the player's PC whether a catalog version is an update.
+ * which decides on the user's PC whether a catalog version is an update.
  */
 export function compareModuleVersions(a: string, b: string): number {
   const split = (version: string) => {
@@ -96,7 +96,7 @@ export function compareModuleVersions(a: string, b: string): number {
 
 export interface CheckedZip {
   manifest: ModuleManifest;
-  /** The publisher key's fingerprint: whose data the module gets on a player's PC. */
+  /** The publisher key's fingerprint: whose data the module gets on a user's PC. */
   owner: string;
   sha256: string;
   size: number;
@@ -213,7 +213,7 @@ export function checkCatalogZip(bytes: Buffer): CheckedZip {
   return { manifest, owner: verified.owner, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length, notes, screenshots, icon, readme, files };
 }
 
-/** What a player sees of a module in the catalog, at its newest version. */
+/** What a user sees of a module in the catalog, at its newest version. */
 export interface CatalogEntry {
   id: string;
   name: string;
@@ -232,7 +232,7 @@ export interface CatalogEntry {
   notes: string[];
   /** The module's web page from its manifest, http or https; the app shows it as plain text and opens it like a module link. */
   homepage: string | null;
-  /** Where players send feedback, from its manifest: an https address or an email address; the app opens it only after a click. */
+  /** Where users send feedback, from its manifest: an https address or an email address; the app opens it only after a click. */
   support: string | null;
   /** The name and description in other languages, from the manifest's `translations`, keyed by language code. */
   translations: Record<string, { name?: string; description?: string }>;
@@ -384,7 +384,7 @@ export class CatalogStore {
         unique (module_id, version)
       );
     `);
-    // Reports (C12): the module, key and zip a player pressed Report on, counted, never who pressed it.
+    // Reports (C12): the module, key and zip a user pressed Report on, counted, never who pressed it.
     this.db.exec(`
       create table if not exists reports (
         sha256 text primary key, module_id text not null, owner text not null,
@@ -801,7 +801,7 @@ export class CatalogStore {
   }
 
   /**
-   * Records a player's report of a zip. Only a zip the catalog lists, under that module id and key
+   * Records a user's report of a zip. Only a zip the catalog lists, under that module id and key
    * (the module's owner, or the key that signed that version), can be reported. Reports hide nothing: a person decides on the admin page (C12).
    */
   report(input: { id: string; owner: string; sha256: string }, now: Date = new Date()): boolean {
@@ -816,7 +816,7 @@ export class CatalogStore {
     return true;
   }
 
-  /** Counts one install of a listed module from Browse. Nothing about the player is kept. */
+  /** Counts one install of a listed module from Browse. Nothing about the user is kept. */
   countInstall(id: string): boolean {
     if (!this.db.prepare("select 1 from modules m where m.id = ? and m.listed = 1 and exists (select 1 from versions where module_id = m.id and status = 'listed')").get(id)) return false;
     this.db.prepare("insert into installs (module_id, count) values (?, 1) on conflict (module_id) do update set count = count + 1").run(id);

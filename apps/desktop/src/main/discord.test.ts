@@ -127,7 +127,7 @@ describe("DiscordConnector", () => {
     await until(() => connector.state().status === "connected");
     expect(await connector.command("GET_SELECTED_VOICE_CHANNEL", {})).toEqual({ ok: true, data: { id: "10", guild_id: "20", name: "Factory Floor", voice_states: [person("1", "Robin")] } });
 
-    // Joining takes the player out of another call, as Discord's own list does; leaving does not need to.
+    // Joining takes the user out of another call, as Discord's own list does; leaving does not need to.
     await connector.command("SELECT_VOICE_CHANNEL", { channel_id: "11" });
     await connector.command("SELECT_VOICE_CHANNEL", { channel_id: null });
     expect(fake.commands.filter((c) => c.cmd === "SELECT_VOICE_CHANNEL").map((c) => c.args)).toEqual([{ channel_id: "11", force: true }, { channel_id: null }]);
@@ -144,7 +144,7 @@ describe("DiscordConnector", () => {
     expect(await connector.command("GET_GUILDS", {})).toEqual({ ok: false, reason: "not-connected", code: null, message: null });
   });
 
-  it("does not mute with a sign-in that lacks the permission, until the player allows it", async () => {
+  it("does not mute with a sign-in that lacks the permission, until the user allows it", async () => {
     const { connector, fake } = await setup({ secrets: SIGNED_IN });
     fake.answers.set("AUTHENTICATE", () => ({ data: { user: { id: "1", username: "robin", global_name: "Robin" }, scopes: ["rpc", "rpc.voice.read", "identify"] } }));
     await connector.use("p1", panel().listener);

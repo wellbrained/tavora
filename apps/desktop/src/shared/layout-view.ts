@@ -77,7 +77,7 @@ export interface LayoutView {
   canRedo: boolean;
   /** Game overlays are off in Settings: the layout still works, but nothing shows over the game. */
   enabled: boolean;
-  /** A short sentence for the player (the game isn't running, a picture can't be used); null when there is none. */
+  /** A short sentence for the user (the game isn't running, a picture can't be used); null when there is none. */
   notice: string | null;
 }
 

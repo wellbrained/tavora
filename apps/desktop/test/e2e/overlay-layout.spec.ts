@@ -97,7 +97,7 @@ test("Reset position and Reset size work from the list, and Take picture says wh
     await row.getByRole("button").first().click();
     await expect.poll(async () => (await state(shell)).selection).toBe(id);
 
-    // Drag it with the mouse on the layer, as the player does.
+    // Drag it with the mouse on the layer, as the user does.
     const layer = app.windows().find((candidate) => candidate.url().endsWith("#layer"))!;
     const outline = layer.locator('[data-testid^="layout-item-"]').first();
     await expect(outline).toBeVisible();

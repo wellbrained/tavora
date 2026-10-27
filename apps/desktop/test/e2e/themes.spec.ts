@@ -1,5 +1,5 @@
 // Theme packages: picking a theme recolours the host and open module panels,
-// the choice survives a restart, the player's own themes load from their
+// the choice survives a restart, the user's own themes load from their
 // themes folder, and Reset always brings the default back.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -77,7 +77,7 @@ test("Follow System shows the version that suits the system, and Dark or Light s
   await again.app.close();
 });
 
-test("the player's own themes load from the themes folder, and broken ones say why", async () => {  const userData = await newUserData();
+test("the user's own themes load from the themes folder, and broken ones say why", async () => {  const userData = await newUserData();
   const { app, page } = await launch(userData);
   const official = JSON.parse(
     await readFile(path.resolve(desktopDir, "../../themes/nightfall/tavora.theme.json"), "utf8"),

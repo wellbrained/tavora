@@ -4,7 +4,7 @@ import type { SystemApp } from "@tavora/sdk";
 /** "share" is the % RAM column: the same order as RAM. */
 export type AppsSort = "name" | "memory" | "share" | "cpu";
 
-/** Apps under this share of the installed RAM fold away until the player opens them. */
+/** Apps under this share of the installed RAM fold away until the user opens them. */
 export const SMALL_SHARE = 5;
 
 /** RAM, % and CPU start with the biggest, names from A. */

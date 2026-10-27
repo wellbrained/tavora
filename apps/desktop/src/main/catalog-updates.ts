@@ -1,9 +1,9 @@
 // Keeps modules installed from the catalog up to date (catalog threat model, C3, C4, C11). The whole
-// index is downloaded and compared on the PC, so the service never learns what a player has. An
+// index is downloaded and compared on the PC, so the service never learns what a user has. An
 // update goes through every installer rule before anything else: the zip must be the listed one,
-// from the module's owner and newer than what is installed. Only when the player turned on
+// from the module's owner and newer than what is installed. Only when the user turned on
 // "Update modules automatically" does one that asks for nothing new install at once (its panels
-// reload); every other update waits, fully checked, until the player says yes, and the installed
+// reload); every other update waits, fully checked, until the user says yes, and the installed
 // version keeps running until then. One that asks for new network hosts or connectors always waits.
 import { connectorsAtAdd, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import type { ModuleNote } from "../shared/host-api";
@@ -24,7 +24,7 @@ export interface CatalogInstalled {
   asks: Permissions;
 }
 
-/** An update that asks for more than the installed version, checked and waiting for the player. */
+/** An update that asks for more than the installed version, checked and waiting for the user. */
 export interface PendingUpdate {
   id: string;
   /** The key the listing names, which must have signed the zip. */
@@ -99,7 +99,7 @@ export function notesSince(versions: readonly CatalogVersion[], from: string, to
 }
 
 export interface CatalogUpdaterOptions {
-  /** Whether updates that ask for nothing new install by themselves (a setting, off unless the player turned it on). */
+  /** Whether updates that ask for nothing new install by themselves (a setting, off unless the user turned it on). */
   autoInstall?(): boolean;
   client: Pick<CatalogClient, "index" | "details" | "download">;
   /** The modules installed from the catalog, as they are now. */
@@ -120,7 +120,7 @@ export class CatalogUpdater {
 
   constructor(private readonly options: CatalogUpdaterOptions) {}
 
-  /** The update waiting for the player's yes for a module, if any. */
+  /** The update waiting for the user's yes for a module, if any. */
   pending(id: string): PendingUpdate | undefined {
     return this.pendingUpdates.get(id);
   }
@@ -137,7 +137,7 @@ export class CatalogUpdater {
   }
 
   /**
-   * The player said yes to a waiting update (exactly `version`, the one they were shown): it is
+   * The user said yes to a waiting update (exactly `version`, the one they were shown): it is
    * installed by every installer rule again, against what is installed now.
    */
   async apply(id: string, version: string): Promise<{ installed: Installed; asks: Permissions }> {

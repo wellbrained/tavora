@@ -31,7 +31,7 @@ export function reusable(saved: unknown, workAreas: Rectangle[]): boolean {
 }
 
 /**
- * Bounds for the Overlay layout window. Where the player left it while that screen is there; else on a screen the game
+ * Bounds for the Overlay layout window. Where the user left it while that screen is there; else on a screen the game
  * is not on (so the window doesn't cover it), when there is one, else on the main screen. `game` is the game
  * window's place on screen, when it is known.
  */

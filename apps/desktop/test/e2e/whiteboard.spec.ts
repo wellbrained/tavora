@@ -10,7 +10,7 @@ const NEWEST_TOAST = `[...document.querySelectorAll('[data-slot="toast"]')].at(-
 const DISMISS_TOASTS = `document.querySelectorAll('[data-slot="toast"] button[title="Dismiss"]').forEach((button) => button.click())`;
 const UNDO_BUTTON = `[...document.querySelectorAll('[data-slot="toast"] button')].find((button) => button.textContent.trim() === "Undo")`;
 
-/** Runs a mouse gesture in the module's page as real input, the way a player draws. */
+/** Runs a mouse gesture in the module's page as real input, the way a user draws. */
 async function drag(app: ElectronApplication, from: { x: number; y: number }, to: { x: number; y: number }) {
   await app.evaluate(
     async ({ webContents }, { moduleId, from, to }) => {
@@ -189,7 +189,7 @@ test("whiteboard: a pasted picture can be dragged into place, is then locked, ke
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Board 1");
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board")}.dataset.pictures`), { timeout: 15_000 }).toBe("1");
 
-  // The player can unlock the pictures to move them, and lock them again.
+  // The user can unlock the pictures to move them, and lock them again.
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}?.dataset.locked ?? ""`)).toBe("true");
   await inModule(app, WHITEBOARD, `${q("picture-lock")}.click()`);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}.dataset.locked`)).toBe("false");
@@ -206,7 +206,7 @@ test("whiteboard: a pasted picture can be dragged into place, is then locked, ke
   await app.close();
 });
 
-/** A real click on an element of the module's page, so the host counts it as the player's. */
+/** A real click on an element of the module's page, so the host counts it as the user's. */
 async function click(app: ElectronApplication, testId: string) {
   const box = await inModule<{ x: number; y: number }>(app, WHITEBOARD, `(() => { const r = ${q(testId)}.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
   await app.evaluate(
@@ -308,7 +308,7 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
   expect(await app.evaluate(async ({ clipboard }) => (await clipboard.read()).flatMap((item) => item.types))).toContain("image/png");
 
   // Save as picture opens the save dialog in Pictures\Tavora with the board's name filled in (numbered when taken);
-  // here the player takes what it suggests. Closing the dialog saves nothing.
+  // here the user takes what it suggests. Closing the dialog saves nothing.
   await app.evaluate(({ dialog }) => {
     const state = globalThis as { saveAnswer?: "save" | "close"; savedIn?: string[] };
     state.saveAnswer = "close";

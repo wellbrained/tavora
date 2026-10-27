@@ -1,5 +1,5 @@
 // The panel's link to Tavora's system-info connector: what this PC is, the newest numbers, the connection and its
-// log of drops, and what the player chose. Tavora does the timing and pauses it while the panel is hidden, so there are no timers here. The numbers
+// log of drops, and what the user chose. Tavora does the timing and pauses it while the panel is hidden, so there are no timers here. The numbers
 // live in shallow refs and plain arrays: a snapshot replaces the old one whole, and only the text that changed is
 // redrawn. The traffic, when shown, is read again with the first snapshot 5 minutes after the last read, so it too
 // pauses while the panel is hidden.
@@ -146,7 +146,7 @@ export function createMonitor(sdk: TavoraSDK) {
         connection.value = next;
         void refreshLog();
       }),
-      // A drive was plugged in or removed: ask again, then watch the drives the player picked.
+      // A drive was plugged in or removed: ask again, then watch the drives the user picked.
       sdk.connectors.systemInfo.onDrivesChange(() => {
         void readInfo().then(watch, fail);
       }),
@@ -160,7 +160,7 @@ export function createMonitor(sdk: TavoraSDK) {
     }
   }
 
-  /** After the player allowed System info or came back to the panel: try again where it had failed. */
+  /** After the user allowed System info or came back to the panel: try again where it had failed. */
   async function retry(): Promise<void> {
     if (status.value === "ready" || status.value === "loading") return;
     status.value = "loading";
@@ -241,7 +241,7 @@ export function createMonitor(sdk: TavoraSDK) {
       ramHistory.setInterval(intervalMs);
       saveApp({ ...app.value, intervalMs });
     },
-    /** The player's own choice of drives; once saved, newly seen drives are not added to it. */
+    /** The user's own choice of drives; once saved, newly seen drives are not added to it. */
     setDrives(drives: string[]): void {
       saveApp({ ...app.value, drives });
     },

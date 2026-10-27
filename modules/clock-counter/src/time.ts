@@ -1,4 +1,4 @@
-// Clock formats: a pattern the player types, such as `h:mm:ss` or `m:ss "min"`. Tokens are runs of h, m or s; the
+// Clock formats: a pattern the user types, such as `h:mm:ss` or `m:ss "min"`. Tokens are runs of h, m or s; the
 // number of letters is the least number of digits (`mm` pads to two). Text in double quotes, and anything that is
 // not h, m or s, is kept as typed. The largest unit in the pattern takes the rest: without an hours token the
 // minutes go on past 59, so nothing is lost. Seconds are the smallest unit.

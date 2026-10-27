@@ -7,7 +7,7 @@ import { moduleIconUrl } from "./module-icon";
 import type { ModuleProblemKind, ModuleProblemValues } from "../shared/module-problem";
 
 /**
- * Who publishes a module, shown to players next to its name. Official
+ * Who publishes a module, shown to users next to its name. Official
  * modules ship with Tavora; every other module found on disk is local.
  * Community modules arrive with the catalog (Milestone E).
  */
@@ -26,7 +26,7 @@ export interface InstalledModule {
   owner: string;
   /** Part of the host (the Browser), not a package on disk. */
   builtIn?: true;
-  /** Loaded from this development folder, as the player added it in Settings > Development. */
+  /** Loaded from this development folder, as the user added it in Settings > Development. */
   developmentFolder?: string;
   /** The module's project folder: the development folder itself, or a folder directly inside it. */
   developmentProject?: string;
@@ -44,7 +44,7 @@ export const BROWSER_MODULE_ID = "tavora.browser";
  * The example modules that ship with Tavora as starting points for module
  * authors. Settings > Development lists them under Examples, to open or copy,
  * and the module library lists them under Development instead of next to the
- * modules players use.
+ * modules users use.
  */
 const EXAMPLE_MODULES = new Set([
   "local.example.vanilla-module",
@@ -57,7 +57,7 @@ export function isExampleModule(id: string): boolean {
   return EXAMPLE_MODULES.has(id);
 }
 
-/** A folder that looks like a module but could not be loaded, and why, in words a player can read. */
+/** A folder that looks like a module but could not be loaded, and why, in words a user can read. */
 export interface ModuleProblem {
   folder: string;
   /** The folder's full path, so Settings can show it and open it. */
@@ -67,7 +67,7 @@ export interface ModuleProblem {
   developmentFolder?: string;
   /** For a project in a development folder: the project's full path. */
   developmentProject?: string;
-  /** Why it did not load, so Settings can say it in the player's language; `values` are the details that text names. */
+  /** Why it did not load, so Settings can say it in the user's language; `values` are the details that text names. */
   kind?: ModuleProblemKind;
   values?: ModuleProblemValues;
   /** The name and version its manifest gives, when it has them, so Settings can name the module; its id too, when it has one. */
@@ -290,7 +290,7 @@ function aboutOf(raw: unknown): ModuleProblem["about"] {
 export interface ModuleInfo {
   /** Where the module was found, without a full path; the host UI words it. */
   origin: { kind: "official" | "example" | "own" | "dev"; folder: string };
-  /** Only a direct child of the player's own modules folder can be removed from Settings. */
+  /** Only a direct child of the user's own modules folder can be removed from Settings. */
   removable: boolean;
   /** The manifest icon as a data address, or null (see module-icon.ts). */
   icon: string | null;

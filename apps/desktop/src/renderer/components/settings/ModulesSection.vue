@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Settings > Modules: what is installed and where it came from, and the
-// player's own modules folder, the same way themes have theirs. Install from
+// user's own modules folder, the same way themes have theirs. Install from
 // zip checks and unpacks a module zip into the folder; dropping a module
 // package into the folder and pressing Reload adds it too. Remove moves it
 // to the recycle bin. A module's data stays, so adding it again finds it.
@@ -32,7 +32,7 @@ const modules = computed(() => state.value!.modules);
 const problems = computed(() => state.value!.moduleProblems);
 const leftover = computed(() => state.value!.leftoverModuleData);
 const files = computed(() => state.value!.moduleFiles);
-// Tavora's own modules first, then the player's; development modules are listed in Settings > Development.
+// Tavora's own modules first, then the user's; development modules are listed in Settings > Development.
 const sorted = computed(() => {
   const rank = (module: ModuleView) => (module.provenance === "official" ? 0 : 1);
   return modules.value.filter((module) => !module.development).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
@@ -85,7 +85,7 @@ async function checkUpdates() {
   const updated = result.updated ?? 0;
   const waiting = result.waiting ?? 0;
   if (updated + waiting === 0) showToast(t("settings.modules.updatesNone"));
-  // Nothing installed: they were only found, and wait for the player.
+  // Nothing installed: they were only found, and wait for the user.
   else if (updated === 0) showToast(t("settings.modules.updatesWaiting", { count: waiting }));
   else showToast(t("settings.modules.updatesFound", { updated: String(updated), waiting: String(waiting) }));
 }

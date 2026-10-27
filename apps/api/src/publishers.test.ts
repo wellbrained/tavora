@@ -59,7 +59,7 @@ describe("the link statement", () => {
 });
 
 describe("the real tavora-pack link command", () => {
-  it("links a key against a running service, and players then see the name", async () => {
+  it("links a key against a running service, and users then see the name", async () => {
     const { request, signIn, store, clock } = setup();
     const token = await signIn("cli@example.com");
     await request("PUT", "/v1/account/developer", { name: "cli-dev" }, token);
@@ -81,7 +81,7 @@ describe("the real tavora-pack link command", () => {
           child.on("close", (status) => resolve({ status, out }));
         });
       const linked = await run(`${code.slice(0, 4)}-${code.slice(4).toLowerCase()}`);
-      expect(linked.out).toContain('Players now see your modules as "by cli-dev".');
+      expect(linked.out).toContain('Users now see your modules as "by cli-dev".');
       expect(linked.status).toBe(0);
       const fingerprintLine = /Linked publisher key ([0-9a-f]{32})/.exec(linked.out)?.[1] ?? "";
       expect(store.publisherName(fingerprintLine)).toBe("cli-dev");
@@ -185,7 +185,7 @@ describe("linking a publisher key", () => {
     // A code works once.
     expect(await (await request("POST", "/v1/publishers/link", key.body(code))).json()).toMatchObject({ reason: "wrong-code" });
 
-    // Players learn the name and nothing else.
+    // Users learn the name and nothing else.
     const lookup = await request("GET", `/v1/publishers/${key.fingerprint}`);
     expect(await lookup.json()).toEqual({ name: "example-dev" });
     expect(lookup.headers.get("cache-control")).toBe("public, max-age=3600");

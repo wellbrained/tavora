@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Settings > Modules > Website access: every module the player allowed to reach websites,
+// Settings > Modules > Website access: every module the user allowed to reach websites,
 // with what it may reach, and taking that back (decision log, module grants row of 2026-10-16).
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";

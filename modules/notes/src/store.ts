@@ -36,7 +36,7 @@ export interface NotePatch {
 export function createNotesStore(sdk: TavoraSDK) {
   const entries = ref(new Map<string, NoteEntry>());
   const appearance = ref<Appearance>(parseAppearance(null));
-  /** The order the player put the notes in; notes not in it follow by age. */
+  /** The order the user put the notes in; notes not in it follow by age. */
   const order = ref<string[]>([]);
   /** How pictures are stored: shrunk (Optimized) or exactly as the file (Original). */
   const imageQuality = ref<ImageQuality>("optimized");
@@ -81,7 +81,7 @@ export function createNotesStore(sdk: TavoraSDK) {
     imageQuality.value = (await sdk.storage.get("imageQuality")) === "original" ? "original" : "optimized";
   }
 
-  /** Stores a picture the player picked, pasted or dropped, at the chosen quality, and returns its id. */
+  /** Stores a picture the user picked, pasted or dropped, at the chosen quality, and returns its id. */
   async function addImage(file: File): Promise<string> {
     if (!isAcceptedType(file.type)) throw new ImageProblem("type", "type", file.name);
     const usage = await sdk.blobs.usage();

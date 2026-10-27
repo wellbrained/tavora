@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { findUnsafeSwitch } from "./unsafe-switches";
 
-const EXE = "C:\\Users\\player\\AppData\\Local\\Programs\\Tavora\\Tavora.exe";
+const EXE = "C:\\Users\\user\\AppData\\Local\\Programs\\Tavora\\Tavora.exe";
 
 describe("findUnsafeSwitch", () => {
   it("lets a plain start through", () => {

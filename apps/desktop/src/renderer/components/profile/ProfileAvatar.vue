@@ -3,7 +3,7 @@ import { User } from "@lucide/vue";
 import { computed } from "vue";
 import { autoInitials } from "./initials";
 
-// The player's round avatar: their picture, else their initials in gold
+// The user's round avatar: their picture, else their initials in gold
 // (their own or taken from the name), else a person icon.
 const props = withDefaults(
   defineProps<{ name: string; pictureUrl: string | null; size?: number; initials?: string; square?: boolean }>(),

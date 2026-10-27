@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 // This page runs inside a Tavora panel; in a normal browser connect() fails. Build it and add this
 // folder in Tavora (Settings > Development > Add a development folder) to see it.
 
-/** Your texts in English and German; Tavora says which language the player uses. */
+/** Your texts in English and German; Tavora says which language the user uses. */
 const TEXTS = {
   en: { connecting: "Connecting to Tavora…", playing: "Playing {game}.", clicked: "Clicked {count} times in this game." },
   de: { connecting: "Verbinde mit Tavora …", playing: "Du spielst {game}.", clicked: "{count}-mal in diesem Spiel geklickt." },

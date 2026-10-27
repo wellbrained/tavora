@@ -1,13 +1,13 @@
 // Steam import: turns a profile link or SteamID64 into the list of games that
 // account owns, using Steam's Web API with the service's key. Nothing is kept:
-// the list goes straight back to the player's PC.
+// the list goes straight back to the user's PC.
 
 export interface SteamGame {
   appid: number;
   name: string;
 }
 
-/** What the player did wrong or what Steam said, with the HTTP status to answer. */
+/** What the user did wrong or what Steam said, with the HTTP status to answer. */
 export class SteamError extends Error {
   // Declared as a field: Node strips types without running parameter properties.
   readonly status: 400 | 404 | 502 | 503;

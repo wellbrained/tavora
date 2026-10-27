@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 /**
  * What the maintainer did in the admin (decided 2026-10-27): every change a POST to /api/* made, with what it touched, the
  * reason and note typed for it, and a few numbers from the answer (was the developer mailed). Admin only; nothing about a
- * player is kept beyond the account the action was about. Kept in `activity.sqlite` of the state directory, newest first.
+ * user is kept beyond the account the action was about. Kept in `activity.sqlite` of the state directory, newest first.
  */
 
 export interface ActivityTarget {

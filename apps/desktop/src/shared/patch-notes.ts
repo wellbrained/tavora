@@ -3,7 +3,7 @@
  * of the Settings sections list is pressed (it is not a menu item).
  * Entries are added when a pull request merges, from its change note in
  * apps/desktop/changes/ (the Number workflow); a test keeps them in step with
- * apps/desktop/package.json. Write for players, in plain friendly words. At 1.0 these
+ * apps/desktop/package.json. Write for users, in plain friendly words. At 1.0 these
  * entries are replaced by a "1.0 release catalog" of all features, and a fresh
  * changelog starts (the decision log).
  */
@@ -14,7 +14,7 @@ export interface PatchNote {
   date: string;
   /** A few words on what this version is about. */
   title: string;
-  /** What players will notice, one line each. */
+  /** What users will notice, one line each. */
   notes: string[];
   /**
    * For Tavora Admin, never shown in the app: the pull requests this version holds and the areas they touched

@@ -16,7 +16,7 @@ export interface TavoraGame {
   id: string;
   displayName: string;
   /**
-   * A game, or a personal workspace the player made for modules that belong to no game, such as notes.
+   * A game, or a personal workspace the user made for modules that belong to no game, such as notes.
    * Tavora older than 0.18.1 leaves it out, which means a game.
    */
   kind?: "game" | "workspace";
@@ -93,7 +93,7 @@ export interface HandshakeResult {
 
 /**
  * What a panel shows, as the module names it: a build, a character, a run, a document. Tavora keeps it
- * with the panel and shows the title when the player hovers the panel's tab.
+ * with the panel and shows the title when the user hovers the panel's tab.
  */
 export interface PanelContent {
   /** The module's own id for it, at most 200 characters. */
@@ -104,7 +104,7 @@ export interface PanelContent {
 
 /**
  * Why this page of the panel is loading.
- * - `add`: the player just added the panel. Pick the content yourself, such as the last one used, or show a picker.
+ * - `add`: the user just added the panel. Pick the content yourself, such as the last one used, or show a picker.
  * - `restore`: the panel was open before (a restart, a game switch back, a reload). `content` is what it last
  *   showed through `panel.setContent`, or null.
  * - `open`: another panel of this module opened it with `panels.open`. Show `content`, or pick yourself when it is null.
@@ -120,7 +120,7 @@ export type PanelLaunch =
  * - `switched`: an open panel of that type switched to the content (its `panel.onNavigate` handler succeeded).
  * - `opened`: Tavora opened a new panel of that type.
  * - `failed`: the panel that should switch could not save or did not answer in time. It keeps what it showed, and
- *   Tavora offers the player to open the content in a new panel.
+ *   Tavora offers the user to open the content in a new panel.
  */
 export type PanelOpenResult = "shown" | "switched" | "opened" | "failed";
 
@@ -153,7 +153,7 @@ export interface PutDocumentParams {
 
 /**
  * A web request the host makes for the module (network.fetch). Only to a host the module names in
- * `permissions.network` and the player granted, only over HTTPS; the host sends no cookies and
+ * `permissions.network` and the user granted, only over HTTPS; the host sends no cookies and
  * follows redirects only to granted hosts.
  */
 export interface NetworkRequest {
@@ -181,12 +181,12 @@ export interface NetworkResponse {
 /** A public page rendered in a new, hidden, isolated browser session. */
 export interface PageResponse { url: string; status: number; title: string; html: string }
 
-/** An AI account the player set up in Settings > Integrations > AI usage, as the ai-usage connector shows it. */
+/** An AI account the user set up in Settings > Integrations > AI usage, as the ai-usage connector shows it. */
 export interface AiUsageAccountInfo {
   /** Chosen by Tavora; stays the same while the account exists. */
   id: string;
   provider: "claude" | "codex";
-  /** The player's name for it. */
+  /** The user's name for it. */
   label: string;
   /** The subscription plan from the profile's saved login, from a fixed list of names (Pro, Max 5×, Plus, ...), or null. */
   plan: string | null;
@@ -371,10 +371,10 @@ export interface SystemTraffic {
   months: SystemTrafficPeriod[];
 }
 
-/** What a media session is doing, as the player reports it to Windows. */
+/** What a media session is doing, as the user reports it to Windows. */
 export type MediaStatus = "playing" | "paused" | "stopped" | "changing" | "closed";
 
-/** What media.control can ask a player to do. */
+/** What media.control can ask a user to do. */
 export type MediaAction = "playPause" | "next" | "previous";
 
 /** The actions media.control takes. */
@@ -472,7 +472,7 @@ export interface SystemConnectionLog {
   outages: SystemOutage[];
 }
 
-/** What the player chose for the watcher. It is the same for every panel and module on this PC. */
+/** What the user chose for the watcher. It is the same for every panel and module on this PC. */
 export interface SystemConnectionSettings {
   /** Whether Tavora watches the connection at all. */
   enabled: boolean;
@@ -480,7 +480,7 @@ export interface SystemConnectionSettings {
   target: string;
 }
 
-/** The address pinged unless the player picks another. */
+/** The address pinged unless the user picks another. */
 export const SYSTEM_PING_TARGET = "1.1.1.1";
 
 /**
@@ -490,19 +490,19 @@ export const SYSTEM_PING_TARGET = "1.1.1.1";
 export interface DiscordState {
   /**
    * connecting: looking for the Discord app and signing in. not-running: no Discord app was found;
-   * Tavora keeps looking. signed-out: Tavora was never approved in Discord, or the player signed out;
+   * Tavora keeps looking. signed-out: Tavora was never approved in Discord, or the user signed out;
    * connect() asks. approving: Discord shows its approval pop-up. connected: commands and events work.
    * error: the last sign-in failed (see `error`); connect() tries again.
    */
   status: "connecting" | "not-running" | "signed-out" | "approving" | "connected" | "error";
   /**
-   * For error: not-approved (the player declined in Discord), no-code (Discord gave no sign-in code),
+   * For error: not-approved (the user declined in Discord), no-code (Discord gave no sign-in code),
    * offline (discord.com could not be reached), no-sign-in (discord.com refused the sign-in), failed.
    */
   error: "not-approved" | "no-code" | "offline" | "no-sign-in" | "failed" | null;
   /** Who Tavora is signed in to Discord as, once connected. Names come from Discord; show them as text only. */
   user: { id: string; name: string } | null;
-  /** The sign-in may mute and deafen the player (SET_VOICE_SETTINGS). Sign-ins made before Tavora 0.5.11 can't until allowControl(). */
+  /** The sign-in may mute and deafen the user (SET_VOICE_SETTINGS). Sign-ins made before Tavora 0.5.11 can't until allowControl(). */
   canControl: boolean;
   /** False where this PC can't keep the sign-in safely, so it lasts only until Tavora closes. */
   canSaveSignIn: boolean;
@@ -513,9 +513,9 @@ export interface DiscordState {
  * Tavora checks every argument and sends exactly these fields; Discord's answer comes back as it came.
  */
 export interface DiscordCommands {
-  /** The voice channel the player is in, with its `voice_states`, or null. */
+  /** The voice channel the user is in, with its `voice_states`, or null. */
   GET_SELECTED_VOICE_CHANNEL: Record<string, never>;
-  /** The servers the player is on. */
+  /** The servers the user is on. */
   GET_GUILDS: Record<string, never>;
   GET_GUILD: { guild_id: string };
   /** A server's channels (ids, names and types; voice channels are type 2, stage channels 13). */
@@ -524,9 +524,9 @@ export interface DiscordCommands {
   GET_CHANNEL: { channel_id: string };
   /** Joins a voice channel (an id) or leaves (null). Only right after a click or key press in the panel, one per click. */
   SELECT_VOICE_CHANNEL: { channel_id: string | null };
-  /** Mutes or deafens the player. Needs DiscordState.canControl. */
+  /** Mutes or deafens the user. Needs DiscordState.canControl. */
   SET_VOICE_SETTINGS: { mute?: boolean; deaf?: boolean };
-  /** How loud someone is for the player (0 to 200) and/or muted for the player only: Discord's own per-person settings. */
+  /** How loud someone is for the user (0 to 200) and/or muted for the user only: Discord's own per-person settings. */
   SET_USER_VOICE_SETTINGS: { user_id: string; volume?: number; mute?: boolean };
 }
 
@@ -552,7 +552,7 @@ export type DiscordResult =
   | { ok: false; reason: "not-connected" | "refused" | "no-answer"; code: number | null; message: string | null };
 
 /**
- * Discord RPC events a module may subscribe to. VOICE_CHANNEL_SELECT (the player joined, moved or left)
+ * Discord RPC events a module may subscribe to. VOICE_CHANNEL_SELECT (the user joined, moved or left)
  * takes no channel; the others are for one voice channel and need its id.
  */
 export const DISCORD_EVENTS = ["VOICE_CHANNEL_SELECT", "VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE", "SPEAKING_START", "SPEAKING_STOP"] as const;
@@ -572,7 +572,7 @@ export interface DocumentChange {
 
 /**
  * Capabilities gate methods beyond the always-available core. A module has a
- * capability once the player granted one of its permissions for it (`network`:
+ * capability once the user granted one of its permissions for it (`network`:
  * a host in `permissions.network`; `aiUsage`: the `ai-usage` connector; `discord`:
  * the `discord` connector; `overlay`: the `stream-overlay` connector; `systemInfo`: the `system-info` connector; `media`: the `media` connector); calling a gated method without it fails
  * with PERMISSION_DENIED. The others cannot be granted yet.
@@ -581,19 +581,19 @@ export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "system
 
 /**
  * What overlay.copyLink did. `copied`: the link is on the clipboard, ready to paste into OBS as a Browser Source.
- * `off`: Stream overlays are off in Tavora; Tavora opened the setting so the player can turn them on. `denied`: the
- * module asks for the connector on request (permissions.onRequest) and the player said no in Tavora's dialog.
+ * `off`: Stream overlays are off in Tavora; Tavora opened the setting so the user can turn them on. `denied`: the
+ * module asks for the connector on request (permissions.onRequest) and the user said no in Tavora's dialog.
  */
 export type OverlayLinkResult = "copied" | "off" | "denied";
 
 /**
  * What overlay.showOverGame did. `shown`: the overlay is over the game now (or already was). `off`: Game overlays are
- * off in Tavora; Tavora opened the setting so the player can turn them on. `full`: this game already has the most game
- * overlays it may have (LIMITS.maxGameOverlays); the player can remove one in Settings > Overlays.
+ * off in Tavora; Tavora opened the setting so the user can turn them on. `full`: this game already has the most game
+ * overlays it may have (LIMITS.maxGameOverlays); the user can remove one in Settings > Overlays.
  */
 export type GameOverlayResult = "shown" | "off" | "full";
 
-/** A hotkey the player set for this module in the current game: which action, for what. Never the key itself. */
+/** A hotkey the user set for this module in the current game: which action, for what. Never the key itself. */
 export interface HotkeyBinding {
   /** One of the manifest's `actions` ids. */
   action: string;
@@ -601,7 +601,7 @@ export interface HotkeyBinding {
   target: string;
 }
 
-/** What the player did in Tavora's hotkey dialog (hotkeys.set): set a key, removed the one set, or closed it. */
+/** What the user did in Tavora's hotkey dialog (hotkeys.set): set a key, removed the one set, or closed it. */
 export type HotkeySetResult = "set" | "removed" | "cancelled";
 
 /** Request methods and their params/result types. */
@@ -668,7 +668,7 @@ export interface Methods {
   /** A web request to a granted host (capability `network`). */
   "network.fetch": { params: NetworkRequest; result: NetworkResponse };
   "network.readPage": { params: { url: string }; result: PageResponse };
-  /** The AI accounts the player set up, in their order (capability `aiUsage`). */
+  /** The AI accounts the user set up, in their order (capability `aiUsage`). */
   "aiUsage.accounts": { params: undefined; result: AiUsageAccountInfo[] };
   /** Reads one account's usage (capability `aiUsage`). */
   "aiUsage.read": { params: { accountId: string }; result: AiUsageReading };
@@ -739,7 +739,7 @@ export interface Methods {
   /** Gives the overlay for `key` a new link; the old one stops working (capability `overlay`). */
   "overlay.resetLink": { params: { key: string }; result: null };
   /**
-   * Shows the overlay page for `key` over the player's game, in a Tavora window above it. Only right after a click or
+   * Shows the overlay page for `key` over the user's game, in a Tavora window above it. Only right after a click or
    * key press in the panel; needs no capability. Tavora 0.20.51 and newer.
    */
   "overlay.showOverGame": { params: { key: string }; result: GameOverlayResult };
@@ -751,12 +751,12 @@ export interface Methods {
   /** The keys of this module's game overlays in the panel's workspace scope. Needs no capability. Tavora 0.21.3 and newer. */
   "overlay.overGame": { params: undefined; result: string[] };
   /**
-   * Opens (or brings forward) a small Tavora window with the overlay page for `key` at its real size, for the player to
+   * Opens (or brings forward) a small Tavora window with the overlay page for `key` at its real size, for the user to
    * see what it looks like. Only right after a click or key press in the panel; needs no capability, but the module must
    * have an `overlay` in its manifest. Tavora 0.21.3 and newer.
    */
   "overlay.preview": { params: { key: string }; result: null };
-  /** The hotkeys the player set for this module in the current game. Tavora 0.19.26 and newer. */
+  /** The hotkeys the user set for this module in the current game. Tavora 0.19.26 and newer. */
   "hotkeys.list": { params: undefined; result: HotkeyBinding[] };
   /**
    * Opens Tavora's dialog to set the key for one of the manifest's `actions` on `target`; `label` names the target
@@ -798,7 +798,7 @@ export interface Events {
   "systemInfo.connectionChanged": SystemConnection;
   /** What plays on this PC changed (media.watch). Only with capability `media`, while the panel watches. */
   "media.changed": MediaState;
-  /** The player added, renamed or removed an AI account; ask aiUsage.accounts again. Only with capability `aiUsage`. */
+  /** The user added, renamed or removed an AI account; ask aiUsage.accounts again. Only with capability `aiUsage`. */
   "aiUsage.accountsChanged": null;
   /** The connection to the Discord app changed. Only with capability `discord`, after discord.state. */
   "discord.state": DiscordState;
@@ -806,9 +806,9 @@ export interface Events {
   "discord.event": DiscordEvent;
   /** Another panel of this module asked this one to show other content; answer with `panel.navigated` within navigateTimeoutMs. */
   "panel.navigate": PanelNavigateRequest;
-  /** The panel started or stopped filling the workspace (Maximize and Restore, by the player or panel.setMaximized). */
+  /** The panel started or stopped filling the workspace (Maximize and Restore, by the user or panel.setMaximized). */
   "panel.maximized": { maximized: boolean };
-  /** The player pressed a hotkey set for this module (hotkeys.set). Sent to one panel of the module in the game shown now, the one used last. */
+  /** The user pressed a hotkey set for this module (hotkeys.set). Sent to one panel of the module in the game shown now, the one used last. */
   "hotkeys.pressed": HotkeyBinding;
   "lifecycle.suspend": null;
   "lifecycle.resume": null;
@@ -952,7 +952,7 @@ export const OVERLAY_STATE_PATH = "_state";
 export type MenuEntry =
   | {
       type: "item";
-      /** Returned when the player picks it; unique within the menu, at most 64 characters. */
+      /** Returned when the user picks it; unique within the menu, at most 64 characters. */
       id: string;
       label: string;
       /** Small grey text on the right, such as a shortcut ("Ctrl+D"). */
@@ -1030,9 +1030,9 @@ export const BLOB_ID = /^[a-f0-9]{32}$/;
 export const CLIPBOARD_PATH = "/_clipboard/";
 
 /**
- * POST a PNG here, from the module's own page, to save it as a file where the player picks in Tavora's save dialog
+ * POST a PNG here, from the module's own page, to save it as a file where the user picks in Tavora's save dialog
  * (see pictures.save). `?name=` suggests the file name; the answer is `{ fileName }`, the name it was saved under,
- * or `{ fileName: null }` when the player closed the dialog.
+ * or `{ fileName: null }` when the user closed the dialog.
  */
 export const PICTURES_PATH = "/_pictures/";
 
@@ -1040,15 +1040,15 @@ export const PICTURES_PATH = "/_pictures/";
 export const DOCUMENT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
 /**
- * POST a JSON document here, from the module's own page, to save it as a file where the player picks in Tavora's save
+ * POST a JSON document here, from the module's own page, to save it as a file where the user picks in Tavora's save
  * dialog (see files.saveJson). `?name=` suggests the file name; the answer is `{ fileName }`, or `{ fileName: null }`
- * when the player closed the dialog.
+ * when the user closed the dialog.
  */
 export const JSON_SAVE_PATH = "/_files/json/save/";
 
 /**
- * POST here, from the module's own page, to open a JSON file the player picks in Tavora's open dialog (see
- * files.openJson). The answer is `{ fileName, value }`, or `null` when the player closed the dialog.
+ * POST here, from the module's own page, to open a JSON file the user picks in Tavora's open dialog (see
+ * files.openJson). The answer is `{ fileName, value }`, or `null` when the user closed the dialog.
  */
 export const JSON_OPEN_PATH = "/_files/json/open/";
 

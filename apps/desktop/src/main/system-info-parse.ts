@@ -158,7 +158,7 @@ export function parseConnectionTarget(value: unknown): string {
   return target;
 }
 
-/** What the player may change about the watcher; every part is optional. */
+/** What the user may change about the watcher; every part is optional. */
 export interface ConnectionSettingsChange {
   enabled?: boolean;
   target?: string;

@@ -560,7 +560,7 @@ describe("startRect", () => {
 });
 
 describe("panels in the game", () => {
-  it("are kept by instance id across a restart, with where the player put them", async () => {
+  it("are kept by instance id across a restart, with where the user put them", async () => {
     const store = await GameOverlayStore.load(dir);
     expect(store.addPanel(panel())).toBe("added");
     expect(store.addPanel(panel())).toBe("exists");
@@ -635,7 +635,7 @@ describe("panels in the game", () => {
     expect(store.all().map((item) => [item.gameId, item.scope])).toEqual([[overlay.gameId, "game"], ["personal", "all"]]);
   });
 
-  it("take the keyboard and the player's clicks only while the layer is open", () => {
+  it("take the keyboard and the user's clicks only while the layer is open", () => {
     expect(gestureCounts(false, false)).toBe(true);
     expect(gestureCounts(true, false)).toBe(false);
     expect(gestureCounts(true, true)).toBe(true);

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Settings > Account > Recovery key: the one key the player keeps. It opens the cloud copy and the
+// Settings > Account > Recovery key: the one key the user keeps. It opens the cloud copy and the
 // publisher keys Tavora keeps. A new PC gets it from another PC, or asks for it once. The key stays in the main process,
-// except while the player looks at it here.
+// except while the user looks at it here.
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";

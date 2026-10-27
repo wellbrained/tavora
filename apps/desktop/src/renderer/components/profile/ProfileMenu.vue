@@ -13,7 +13,7 @@ import { readPicture } from "./picture";
 import ProfileAvatar from "./ProfileAvatar.vue";
 import RailFooterTile from "../RailFooterTile.vue";
 
-// The player's avatar in the rail footer. A click opens a small card above
+// The user's avatar in the rail footer. A click opens a small card above
 // it to change the name, initials and picture; there is no account behind it
 // yet. Name and initials are kept with Save (closing the card drops unsaved
 // edits); a picture is kept as soon as its crop is saved.

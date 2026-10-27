@@ -28,7 +28,7 @@ export interface IconEntry {
   names: string[];
   sha256: string;
   size: number;
-  /** Open for replacements: served as before, but players' apps may offer another icon for this game. */
+  /** Open for replacements: served as before, but users' apps may offer another icon for this game. */
   open?: true;
 }
 

@@ -10,10 +10,10 @@
 
 ## Writing
 
-Texts in the app are short and friendly, talking to the player as "you" (German: "du").
+Texts in the app are short and friendly, talking to the user as "you" (German: "du").
 
 - Titles, labels and buttons are a few words. Descriptions are one short sentence, two at most.
-- Keep only what the player needs to decide or act. Leave out how things work inside, unless it is about privacy or safety.
+- Keep only what the user needs to decide or act. Leave out how things work inside, unless it is about privacy or safety.
 - Plain, casual words ("Can't find this folder", "Thanks!"), never stiff or technical ones.
 - Write English and German together; both follow these rules.
 
@@ -26,11 +26,11 @@ The app and the official modules share one kit: `@tavora/official-ui` (`modules/
 
 ## Save as image
 
-Every Save as image, in the app and in every module (game modules too), saves through `pictures.save`: Tavora's save dialog with the name filled in, opening where the player last saved a picture (at first `Pictures\Tavora`). Never save a picture to a fixed folder without asking. Closing the dialog shows no message.
+Every Save as image, in the app and in every module (game modules too), saves through `pictures.save`: Tavora's save dialog with the name filled in, opening where the user last saved a picture (at first `Pictures\Tavora`). Never save a picture to a fixed folder without asking. Closing the dialog shows no message.
 
 ## Save and open files
 
-Every save of a file, in the app and in every module (game modules too), saves through `files.saveJson`: Tavora's save dialog with the name filled in, opening where the player last saved or opened a file of that module (at first `Documents\Tavora`). Opening a file uses `files.openJson`, starting in that same folder. Never save a file to a fixed folder without asking. Closing the dialog shows no message.
+Every save of a file, in the app and in every module (game modules too), saves through `files.saveJson`: Tavora's save dialog with the name filled in, opening where the user last saved or opened a file of that module (at first `Documents\Tavora`). Opening a file uses `files.openJson`, starting in that same folder. Never save a file to a fixed folder without asking. Closing the dialog shows no message.
 
 ## Game modules (locked decision)
 

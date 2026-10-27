@@ -7,7 +7,7 @@ import { profileEnv } from "./ai-usage-cli";
 import { CodexMissingError, type CodexReading } from "./ai-usage-codex";
 import { claudeAccessToken, claudePlan, codexPlan, parseEmail } from "./ai-usage-parse";
 import { HostError } from "./errors";
-import { PlayerError } from "./messages";
+import { UserError } from "./messages";
 
 // The credentials in these tests are made up; nothing here reads a real login.
 
@@ -135,7 +135,7 @@ describe("AiUsageConnector accounts", () => {
 
   it("checks accounts before adding or changing them", async () => {
     const { connector } = setup(onlyClaude);
-    const key = (promise: Promise<unknown>) => promise.then(() => "ok", (error: unknown) => (error instanceof PlayerError ? error.key : "other"));
+    const key = (promise: Promise<unknown>) => promise.then(() => "ok", (error: unknown) => (error instanceof UserError ? error.key : "other"));
     expect(await key(connector.add("codex", "  ", CODEX_DIR))).toBe("aiUsage.error.label");
     expect(await key(connector.add("codex", "x".repeat(61), CODEX_DIR))).toBe("aiUsage.error.label");
     expect(await key(connector.add("codex", "Work", "relative/folder"))).toBe("aiUsage.error.directory");

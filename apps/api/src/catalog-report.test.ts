@@ -60,9 +60,9 @@ describe("reporting a catalog module", () => {
     expect(catalog.index()).toHaveLength(1);
   });
 
-  it("takes exactly id, owner and sha256, so nothing else about the player rides along", async () => {
+  it("takes exactly id, owner and sha256, so nothing else about the user rides along", async () => {
     const { catalog, of, report } = setup();
-    for (const body of [{ ...of, player: "me" }, { id: of.id, sha256: of.sha256 }, { ...of, owner: "x" }, { ...of, id: "Not An Id" }, { ...of, sha256: of.sha256.toUpperCase() }, [of], "not json", null]) {
+    for (const body of [{ ...of, user: "me" }, { id: of.id, sha256: of.sha256 }, { ...of, owner: "x" }, { ...of, id: "Not An Id" }, { ...of, sha256: of.sha256.toUpperCase() }, [of], "not json", null]) {
       expect((await report(body)).status).toBe(400);
     }
     expect((await report(of, "text/plain")).status).toBe(415);

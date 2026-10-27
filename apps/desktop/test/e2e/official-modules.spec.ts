@@ -530,7 +530,7 @@ test("clipboard: a module copies a PNG only right after a key press, once, and o
   await openModule(page, NOTES);
   await ready(app, NOTES, "editor");
 
-  /** A real key press in the module's page, the way the player would make one. */
+  /** A real key press in the module's page, the way the user would make one. */
   const pressKey = () =>
     app.evaluate(
       async ({ webContents }, moduleId) => {

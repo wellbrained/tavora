@@ -1,5 +1,5 @@
 // Tells Tavora's service that a new app version finished downloading: only the version number, so the
-// admin can chart updates per day. No cookies, no referrer, no sign-in, nothing about the player or the
+// admin can chart updates per day. No cookies, no referrer, no sign-in, nothing about the user or the
 // PC. Only called while Online features are on. Never throws.
 import { DEFAULT_API_URL } from "./online";
 

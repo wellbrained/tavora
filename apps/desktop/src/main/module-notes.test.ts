@@ -15,7 +15,7 @@ describe("module patch notes", () => {
     expect(installedNotes(entries, "1.1.0").map((entry) => entry.version)).toEqual(["1.1.0", "1.0.0"]);
   });
 
-  it("marks notes new only after an update past the version the player saw", () => {
+  it("marks notes new only after an update past the version the user saw", () => {
     expect(hasUnseenNotes(entries, "1.1.0", "1.0.0")).toBe(true);
     expect(hasUnseenNotes(entries, "1.1.0", "1.1.0")).toBe(false);
     // Never seen: a fresh install starts read, so nothing is new.

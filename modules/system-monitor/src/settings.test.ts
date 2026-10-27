@@ -23,7 +23,7 @@ const info = (overrides: Partial<SystemInfo> = {}): SystemInfo => ({
 const say = (key: string, params?: Record<string, string | number>) => (params ? `${key} ${JSON.stringify(params)}` : key);
 
 describe("drives", () => {
-  it("ticks the internal drives until the player chooses", () => {
+  it("ticks the internal drives until the user chooses", () => {
     expect(defaultDrives(info())).toEqual(["C:", "D:"]);
     expect(watchedDrives(info(), defaultApp())).toEqual(["C:", "D:"]);
   });

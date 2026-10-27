@@ -31,7 +31,7 @@ export const BREVO_URL = "https://api.brevo.com/v3/smtp/email";
 /**
  * Sends through Brevo's transactional API (decided 2026-10-16: the free plan,
  * about 300 a day). Plain text only, no tracking (switched off in the Brevo
- * account), nothing about the player but the address and the mail itself.
+ * account), nothing about the user but the address and the mail itself.
  */
 export function createBrevoMailer(options: { apiKey: string; from: string; fetch?: typeof fetch; timeoutMs?: number }): Mailer {
   const fetchImpl = options.fetch ?? fetch;

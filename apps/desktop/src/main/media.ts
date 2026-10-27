@@ -1,6 +1,6 @@
 /**
  * The media connector: what plays on this PC, as Windows' media controls (the volume flyout) show it, and play/pause,
- * next and previous, for modules the player granted it. One MediaConnector serves every panel. Windows is read by a
+ * next and previous, for modules the user granted it. One MediaConnector serves every panel. Windows is read by a
  * small helper program of Tavora's own (packages/media-helper, tavora-media.exe), which waits for Windows' change
  * events and tells them over stdio, so nothing polls and a crash of it never takes Tavora down. It runs only while a
  * panel watches, and ends a minute after the last one stops. Nothing leaves the PC; a module gets the texts, the

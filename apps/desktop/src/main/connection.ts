@@ -375,7 +375,7 @@ export class ConnectionWatcher implements ConnectionSource {
     this.tracker = new ConnectionTracker(prune([...options.initial.outages], this.now()));
   }
 
-  /** Whether the timer runs: wanted by the host and not switched off by the player. */
+  /** Whether the timer runs: wanted by the host and not switched off by the user. */
   get running(): boolean {
     return this.timer !== null || this.first !== null;
   }

@@ -4,7 +4,7 @@ import path from "node:path";
 // A module's own browser storage (IndexedDB, the origin-private file system,
 // local storage) lives in its session's folder and Chromium lets it grow to a
 // large share of the disk. The bridge's storage has quotas; this is the
-// matching limit for the rest, so a module cannot fill the player's disk.
+// matching limit for the rest, so a module cannot fill the user's disk.
 // Chromium offers no per-origin quota to set, so the host measures the folder
 // while the panel is open and clears it when it grows past the limit. A module
 // can write for up to one check interval before it is stopped.
@@ -13,7 +13,7 @@ import path from "node:path";
 export const MODULE_STORAGE_LIMIT = 256 * 1024 * 1024;
 /** How often an open module's storage is measured. */
 export const STORAGE_CHECK_MS = 1_000;
-/** More files than this counts as over the limit, however small: each costs the player's disk and our time to measure. */
+/** More files than this counts as over the limit, however small: each costs the user's disk and our time to measure. */
 export const MAX_STORAGE_FILES = 5_000;
 
 export interface FolderUsage {

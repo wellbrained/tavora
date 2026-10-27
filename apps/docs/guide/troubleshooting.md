@@ -31,7 +31,7 @@ Check `error.code`, not the message. The codes are in the [protocol reference](.
 
 | Code | Usually |
 | --- | --- |
-| `PERMISSION_DENIED` | The player hasn't granted that host or connector, or a [call that needs a click](./permissions.md#calls-that-need-a-click) wasn't made from one. `error.capability` says which grant is missing. |
+| `PERMISSION_DENIED` | The user hasn't granted that host or connector, or a [call that needs a click](./permissions.md#calls-that-need-a-click) wasn't made from one. `error.capability` says which grant is missing. |
 | `INVALID_PARAMS` | A value that isn't plain JSON (a `Date`, `undefined`, a `Map`), a wrong id, or a field the call doesn't take. |
 | `QUOTA_EXCEEDED` | Over a [limit](../reference/protocol.md#limits); for big pictures use `blobs`. |
 | `CONFLICT` | Another panel saved the document first. See [Saving data](./saving-data.md#documents). |
@@ -58,7 +58,7 @@ Check `error.code`, not the message. The codes are in the [protocol reference](.
 - **"is loaded from your development folder"**: Tavora is loading the same module from its project folder. Remove that development folder in Settings > Development, then install the zip.
 - **"is already loaded from …"**: the same id is loaded from another folder. Remove it there first.
 - **"comes with Tavora"**: your module uses the id of one that ships with Tavora. Give it its own id.
-- **"needs Tavora … or newer"**: the player has to update Tavora first.
+- **"needs Tavora … or newer"**: the user has to update Tavora first.
 - **"can't be read as a module zip"**: make the zip with **Save as zip** in Tavora (or `tavora-pack` in CI), not by hand.
 
 ## Still stuck?

@@ -65,7 +65,7 @@ export function asksFor(connector: ModuleConnector): boolean {
 
 /**
  * The AI usage accounts, for Settings > Integrations and the consent dialog. Asked for only once a
- * module wants them, so Tavora reads no AI login for a player without such a module.
+ * module wants them, so Tavora reads no AI login for a user without such a module.
  */
 export const aiUsage = shallowRef<AiUsageView | null>(null);
 api.onAiUsage((next) => (aiUsage.value = next));
@@ -145,7 +145,7 @@ void api.getPairing().then((initial) => {
   if (initial && !pairing.value) pairing.value = initial;
 });
 
-/** The question the cloud copy asks over the app, unless the player put it off for now. */
+/** The question the cloud copy asks over the app, unless the user put it off for now. */
 export const copyLater = ref<"conflict" | "newer" | null>(null);
 export const copyQuestion = computed<"closing" | "conflict" | "newer" | null>(() => {
   const view = cloudCopy.value;
@@ -256,7 +256,7 @@ export interface LinkChoiceRequest {
   url: string;
 }
 
-/** A game of the library just started and the player chose to be asked (HostViewState.pendingGameSwitch). */
+/** A game of the library just started and the user chose to be asked (HostViewState.pendingGameSwitch). */
 export interface GameSwitchRequest {
   kind: "game-switch";
   gameId: string;
@@ -270,7 +270,7 @@ export interface NavigationChoiceRequest {
 }
 
 /**
- * The consent dialog: what a module asks for that the player has not granted. Drawn by Tavora,
+ * The consent dialog: what a module asks for that the user has not granted. Drawn by Tavora,
  * never by the module. `slot` is where the module goes once allowed; a review (an update that asks
  * for more, from the bar on its panels) opens nothing.
  */
@@ -345,7 +345,7 @@ watch(
   },
 );
 
-// A game started while the player chose to be asked: ask whether to switch. It goes away when the game closes.
+// A game started while the user chose to be asked: ask whether to switch. It goes away when the game closes.
 watch(
   () => state.value?.pendingGameSwitch ?? null,
   (gameId) => {
@@ -471,7 +471,7 @@ export function stopUpdateAsks(): void {
   dialog.value = { kind: "add-module", view: "updates" };
 }
 
-/** Whether the module asks for something the player has not granted yet. */
+/** Whether the module asks for something the user has not granted yet. */
 export function needsGrant(module: ModuleState): boolean {
   return module.permissions.missing.network.length > 0 || module.permissions.missing.connectors.length > 0;
 }

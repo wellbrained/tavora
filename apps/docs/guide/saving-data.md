@@ -4,9 +4,9 @@ Your page has no files of its own to write. Everything it keeps goes through the
 
 | Kind | Use it for | Shared by | Gone when |
 | --- | --- | --- | --- |
-| `tavora.storage` | Small settings: a filter, a sort order, a counter | All panels of your module in this game | The player deletes the module's data |
+| `tavora.storage` | Small settings: a filter, a sort order, a counter | All panels of your module in this game | The user deletes the module's data |
 | `tavora.storage.app` | Settings that should be the same in every game | All panels of your module in every game | As above |
-| `tavora.documents` | The player's work: a plan, a list, a note | All panels of your module in this game, with revisions | As above |
+| `tavora.documents` | The user's work: a plan, a list, a note | All panels of your module in this game, with revisions | As above |
 | `tavora.blobs` | Pictures too big for a document | All panels of your module in this game | The game is deleted |
 | `tavora.panel` state | Where this one panel is: open tab, scroll position | This panel only | The panel closes |
 
@@ -23,7 +23,7 @@ await tavora.storage.set("view", "grid");
 
 ## Documents
 
-A document is a JSON value with a title and a revision, up to 4 MiB each. Use one for anything the player would be sad to lose.
+A document is a JSON value with a title and a revision, up to 4 MiB each. Use one for anything the user would be sad to lose.
 
 Two panels of your module can be open at once, even in the same game, so save with `ifRevision`. Then a save that would overwrite another panel's newer one fails with `CONFLICT` instead:
 
@@ -63,7 +63,7 @@ await tavora.panel.setState({ tab: "gear", scroll: 120 });
 const state = await tavora.panel.getState<{ tab: string }>();
 ```
 
-Up to 256 KiB, and it goes away when the player closes the panel. Use it so a panel looks the same after Tavora restarts, not for anything the player made.
+Up to 256 KiB, and it goes away when the user closes the panel. Use it so a panel looks the same after Tavora restarts, not for anything the user made.
 
 ## Save as you go
 
@@ -74,5 +74,5 @@ Save when something changes, not when the panel closes. `lifecycle.onDispose` ma
 Data belongs to your module's id together with who published it: the key that signed the zip, or "local" for an unsigned folder. So:
 
 - Your development folder and your signed zip don't see each other's data, even with the same id.
-- An update signed with the same key keeps everything the player saved.
+- An update signed with the same key keeps everything the user saved.
 - A zip signed with a different key starts empty. That is why [your publisher key](./publisher-key.md) matters.

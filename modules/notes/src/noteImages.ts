@@ -17,7 +17,7 @@ export interface NoteImagesHost {
   editor(): Editor | undefined;
   /** The note that is open now; null while none is. A picture added for another note is not inserted. */
   loadedNote(): string | null;
-  /** Shows the player a message. */
+  /** Shows the user a message. */
   notice(message: string): void;
 }
 
@@ -48,7 +48,7 @@ export function useNoteImages(host: NoteImagesHost) {
       for (const file of files) {
         try {
           const blobId = await host.store().addImage(file);
-          // The player may have gone to another note meanwhile; the picture then stays unused and is cleaned up later.
+          // The user may have gone to another note meanwhile; the picture then stays unused and is cleaned up later.
           if (host.loadedNote() !== forNote) continue;
           const size = instance.state.doc.content.size;
           at = Math.min(at, size);

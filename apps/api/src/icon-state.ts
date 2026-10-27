@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 
 /**
- * The one writable thing the service keeps: icons players have offered and
+ * The one writable thing the service keeps: icons users have offered and
  * are waiting to be reviewed, icons that were approved, hashes that must never
  * come back, and hosted icons that were taken down. It lives in its own small
  * SQLite file, apart from the read-only game dataset. An offer records the
@@ -210,7 +210,7 @@ export class IconState {
   // ── Icons open for replacements ────────────────────────────────────────
 
   /**
-   * Marks a hosted icon open for replacements (or closes it again): players may offer another icon for its game,
+   * Marks a hosted icon open for replacements (or closes it again): users may offer another icon for its game,
    * and approving one replaces it. It is served as before until then.
    */
   setReplaceable(id: string, open: boolean, now: Date): void {

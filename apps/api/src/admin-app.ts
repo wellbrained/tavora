@@ -24,10 +24,10 @@ import type { Submissions } from "./submissions.ts";
 /**
  * Tavora Admin, the private panel: Overview, Updates, Modules, Review, Accounts and Status. The page is the
  * built Tavora Admin (its own repo, wellbrained/tavora-admin: Vue and the shared kit), served from `adminDir`; its JSON is here and in admin-panel.ts.
- * Review is the old review page: the icons players have offered, shown the way the
+ * Review is the old review page: the icons users have offered, shown the way the
  * app will show them, with Approve, Deny and Deny and block; and the hosted
- * icons, with Take down for a publisher's request; and the modules players
- * reported from the catalog, with Delist and Dismiss; and the reviews players reported, with Hide and Dismiss; and the developers' requests to replace a lost
+ * icons, with Take down for a publisher's request; and the modules users
+ * reported from the catalog, with Delist and Dismiss; and the reviews users reported, with Hide and Dismiss; and the developers' requests to replace a lost
  * or leaked publisher key, exported as entries to sign offline. It is served on its own
  * port of 127.0.0.1 that the web server never forwards, and every call needs
  * the admin token, so reaching it takes the server and the token.
@@ -247,7 +247,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     return context.json({ ok: submissions.deny(sha256, block === true) });
   });
 
-  // Opens a hosted icon for replacements (players may offer another for its game) or closes it again.
+  // Opens a hosted icon for replacements (users may offer another for its game) or closes it again.
   app.post("/api/replaceable", async (context) => {
     const { id, replaceable } = await json(context.req.raw);
     if (typeof id !== "string" || typeof replaceable !== "boolean") return context.json({ error: "Send { id, replaceable }." }, 400);

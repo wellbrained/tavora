@@ -3,7 +3,7 @@
 // card is a small preview of the theme drawn with its own colours, so a
 // theme can be judged before it is picked; picking applies it at once, and
 // Reset always goes back to the Tavora default. Below are how text and tabs
-// look, and the player's own themes.
+// look, and the user's own themes.
 import { Check, CopyPlus, FolderOpen, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";

@@ -37,8 +37,8 @@ function setup() {
   const developer = store.createAccount({ email: "dev@example.com" }, clock.now);
   store.linkKey(developer.id, keyFingerprint(rawKey(key)), rawKey(key).toString("base64"), clock.now);
   const app = createApp({ db, catalog, rateLimiter: roomy(), reviewRateLimiter: roomy(), accounts: { store, mailer: createTestInbox(), reviews, now: () => clock.now } });
-  // Players are a day old, so the minimum account age doesn't get in the way.
-  const player = (email: string, name = "Mara", createdAt = clock.now - DAY) => {
+  // Users are a day old, so the minimum account age doesn't get in the way.
+  const user = (email: string, name = "Mara", createdAt = clock.now - DAY) => {
     const account = store.createAccount({ email }, createdAt);
     if (name) store.setProfile(account.id, { name, initials: name.slice(0, 2).toUpperCase(), picture: PNG, updatedAt: clock.now });
     return { account, token: store.createSession(account.id, "windows", clock.now).token };
@@ -50,18 +50,18 @@ function setup() {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   const rate = (token: string, body: unknown) => call("PUT", "/modules/wellbrained.timer/review", token, body);
-  return { store, reviews, catalog, clock, app, developer, player, call, rate, devToken: store.createSession(developer.id, "windows", clock.now).token };
+  return { store, reviews, catalog, clock, app, developer, user, call, rate, devToken: store.createSession(developer.id, "windows", clock.now).token };
 }
 
 describe("rating a catalog module", () => {
   it("keeps one rating per account, shows it on the listing and the module's reviews", async () => {
-    const { player, rate, call, clock } = setup();
-    const mara = player("mara@example.com");
+    const { user, rate, call, clock } = setup();
+    const mara = user("mara@example.com");
     const first = await rate(mara.token, { stars: 4, text: "Handy timer.", version: "1.0.0" });
     expect(first.status).toBe(200);
     clock.now += 60_000;
     expect((await rate(mara.token, { stars: 5, text: "  Even better now!  ", version: "1.1.0" })).status).toBe(200);
-    for (const [email, stars] of [["a@example.com", 3], ["b@example.com", 5]] as const) await rate(player(email, "").token, { stars, text: null, version: "1.1.0" });
+    for (const [email, stars] of [["a@example.com", 3], ["b@example.com", 5]] as const) await rate(user(email, "").token, { stars, text: null, version: "1.1.0" });
 
     const index = (await (await call("GET", "")).json()) as { modules: { id: string; rating: unknown }[] };
     expect(index.modules[0]!.rating).toEqual({ average: 4.3, count: 3, stars: [0, 0, 1, 0, 2] });
@@ -87,8 +87,8 @@ describe("rating a catalog module", () => {
   });
 
   it("gives the author's picture only with a shown review and its hash", async () => {
-    const { player, rate, call } = setup();
-    const mara = player("mara@example.com");
+    const { user, rate, call } = setup();
+    const mara = user("mara@example.com");
     const { review } = (await (await rate(mara.token, { stars: 4, text: "Nice", version: "1.0.0" })).json()) as { review: { id: string; author: { picture: { sha256: string } } } };
     const picture = await call("GET", `/reviews/${review.id}/picture/${review.author.picture.sha256}.png`);
     expect(picture.status).toBe(200);
@@ -98,10 +98,10 @@ describe("rating a catalog module", () => {
   });
 
   it("needs a sign-in, a published version and 1 to 5 stars", async () => {
-    const { player, rate, call } = setup();
-    const mara = player("mara@example.com");
+    const { user, rate, call } = setup();
+    const mara = user("mara@example.com");
     expect((await call("PUT", "/modules/wellbrained.timer/review", undefined, { stars: 4, text: null, version: "1.0.0" })).status).toBe(401);
-    for (const body of [{ stars: 0, text: null, version: "1.0.0" }, { stars: 6, text: null, version: "1.0.0" }, { stars: 4.5, text: null, version: "1.0.0" }, { stars: 4, text: null, version: "2.0.0" }, { stars: 4, text: "x".repeat(501), version: "1.0.0" }, { stars: 4, text: null, version: "1.0.0", player: "me" }]) {
+    for (const body of [{ stars: 0, text: null, version: "1.0.0" }, { stars: 6, text: null, version: "1.0.0" }, { stars: 4.5, text: null, version: "1.0.0" }, { stars: 4, text: null, version: "2.0.0" }, { stars: 4, text: "x".repeat(501), version: "1.0.0" }, { stars: 4, text: null, version: "1.0.0", user: "me" }]) {
       expect((await rate(mara.token, body)).status).toBe(400);
     }
     expect((await call("PUT", "/modules/wellbrained.other/review", mara.token, { stars: 4, text: null, version: "1.0.0" })).status).toBe(404);
@@ -116,24 +116,24 @@ describe("rating a catalog module", () => {
   });
 
   it("holds slurs and links for the maintainer instead of showing them, and hides a name the filter refuses", async () => {
-    const { player, rate, call } = setup();
-    const mara = player("mara@example.com");
+    const { user, rate, call } = setup();
+    const mara = user("mara@example.com");
     const link = await rate(mara.token, { stars: 1, text: "get it at www.example.com", version: "1.0.0" });
     expect(link.status).toBe(200);
     expect(await link.json()).toMatchObject({ review: { held: true, hidden: true } });
     expect(await (await call("GET", "/modules/wellbrained.timer/reviews")).json()).toEqual({ summary: null, reviews: [] });
-    const rude0 = player("rude0@example.com", "Rudi");
+    const rude0 = user("rude0@example.com", "Rudi");
     expect(await (await rate(rude0.token, { stars: 1, text: "made by a f4ggot", version: "1.0.0" })).json()).toMatchObject({ review: { held: true } });
     expect(await (await call("GET", "/modules/wellbrained.timer/review", rude0.token)).json()).toMatchObject({ review: { held: true } });
-    const rude = player("rude@example.com", "c u n t");
+    const rude = user("rude@example.com", "c u n t");
     expect((await rate(rude.token, { stars: 2, text: "Meh.", version: "1.0.0" })).status).toBe(200);
     const answer = (await (await call("GET", "/modules/wellbrained.timer/reviews")).json()) as { reviews: { author: { name: string | null } }[] };
     expect(answer.reviews[0]!.author.name).toBeNull();
   });
 
-  it("lets the player read, change and delete their own rating", async () => {
-    const { player, rate, call } = setup();
-    const mara = player("mara@example.com");
+  it("lets the user read, change and delete their own rating", async () => {
+    const { user, rate, call } = setup();
+    const mara = user("mara@example.com");
     expect(await (await call("GET", "/modules/wellbrained.timer/review", mara.token)).json()).toEqual({ review: null, own: false });
     await rate(mara.token, { stars: 2, text: "Buggy", version: "1.0.0" });
     const own = (await (await call("GET", "/modules/wellbrained.timer/review", mara.token)).json()) as { review: { stars: number; version: string; hidden: boolean } };
@@ -143,8 +143,8 @@ describe("rating a catalog module", () => {
   });
 
   it("lets the publisher reply once under a review, and nobody else", async () => {
-    const { player, rate, call, devToken } = setup();
-    const mara = player("mara@example.com");
+    const { user, rate, call, devToken } = setup();
+    const mara = user("mara@example.com");
     const { review } = (await (await rate(mara.token, { stars: 2, text: "Crashes on start", version: "1.0.0" })).json()) as { review: { id: string } };
     expect((await call("PUT", `/reviews/${review.id}/reply`, mara.token, { text: "Me too" })).status).toBe(403);
     expect((await call("PUT", `/reviews/${review.id}/reply`, devToken, { text: "Fixed in 1.1.0, thanks!" })).status).toBe(200);
@@ -157,9 +157,9 @@ describe("rating a catalog module", () => {
     expect((await call("PUT", `/reviews/${review.id}/reply`, devToken, { text: "Hm?" })).status).toBe(404);
   });
 
-  it("takes a report without anything about the player, and the admin page hides the text but keeps the stars", async () => {
-    const { player, rate, call, reviews, store, catalog } = setup();
-    const mara = player("mara@example.com");
+  it("takes a report without anything about the user, and the admin page hides the text but keeps the stars", async () => {
+    const { user, rate, call, reviews, store, catalog } = setup();
+    const mara = user("mara@example.com");
     const { review } = (await (await rate(mara.token, { stars: 1, text: "Mean words", version: "1.0.0" })).json()) as { review: { id: string } };
     expect((await call("POST", `/reviews/${review.id}/report`)).status).toBe(202);
     expect((await call("POST", "/reviews/AAAAAAAAAAAAAAAA/report")).status).toBe(404);
@@ -175,8 +175,8 @@ describe("rating a catalog module", () => {
   });
 
   it("forgets every rating with the account", async () => {
-    const { player, rate, reviews } = setup();
-    const mara = player("mara@example.com");
+    const { user, rate, reviews } = setup();
+    const mara = user("mara@example.com");
     await rate(mara.token, { stars: 4, text: "Nice", version: "1.0.0" });
     reviews.forget(mara.account.id);
     expect(reviews.summary("wellbrained.timer")).toBeNull();
@@ -196,9 +196,9 @@ describe("review text", () => {
 
 describe("the maintainer's queue", () => {
   it("holds filtered reviews, lists new live ones, and lets the maintainer approve, mark seen or remove", async () => {
-    const { player, rate, reviews, call } = setup();
-    const clean = player("clean@example.com", "Cleo");
-    const rude = player("rude@example.com", "Rudi");
+    const { user, rate, reviews, call } = setup();
+    const clean = user("clean@example.com", "Cleo");
+    const rude = user("rude@example.com", "Rudi");
     await rate(clean.token, { stars: 5, text: "Works well", version: "1.0.0" });
     await rate(rude.token, { stars: 1, text: "made by a f4ggot", version: "1.0.0" });
     expect(reviews.queue().map((review) => [review.text, review.held, review.seen])).toEqual([
@@ -222,8 +222,8 @@ describe("the maintainer's queue", () => {
   });
 
   it("puts a held review back in the queue when its author edits it, and releases it when the new text is clean", async () => {
-    const { player, rate, reviews } = setup();
-    const mara = player("mara@example.com");
+    const { user, rate, reviews } = setup();
+    const mara = user("mara@example.com");
     await rate(mara.token, { stars: 1, text: "get it at www.example.com", version: "1.0.0" });
     expect(reviews.queue()[0]).toMatchObject({ held: true });
     await rate(mara.token, { stars: 2, text: "Not for me, sorry", version: "1.0.0" });
@@ -232,9 +232,9 @@ describe("the maintainer's queue", () => {
   });
 
   it("holds a module's 21st new rating of the day, keeps it held through edits, and lets the maintainer approve it", async () => {
-    const { player, rate, reviews, clock } = setup();
+    const { user, rate, reviews, clock } = setup();
     for (let index = 0; index < 20; index++) reviews.rate(`account-${index}`, "wellbrained.timer", { stars: 1, text: null, version: "1.0.0" }, clock.now - index * 60_000);
-    const mara = player("mara@example.com");
+    const mara = user("mara@example.com");
     expect(await (await rate(mara.token, { stars: 5, text: null, version: "1.0.0" })).json()).toMatchObject({ review: { held: true } });
     expect(reviews.queue()[0]).toMatchObject({ held: true, capped: true, text: null });
     expect(reviews.summary("wellbrained.timer")?.count).toBe(20);
@@ -243,14 +243,14 @@ describe("the maintainer's queue", () => {
     expect(reviews.summary("wellbrained.timer")?.count).toBe(21);
     // A day later the module takes new ratings again.
     clock.now += DAY;
-    expect(await (await rate(player("next@example.com").token, { stars: 3, text: null, version: "1.0.0" })).json()).toMatchObject({ review: { held: false } });
+    expect(await (await rate(user("next@example.com").token, { stars: 3, text: null, version: "1.0.0" })).json()).toMatchObject({ review: { held: false } });
   });
 });
 
 describe("rating limits", () => {
   it("refuses an account younger than a day, with the hours left", async () => {
-    const { player, rate, clock } = setup();
-    const fresh = player("fresh@example.com", "Fia", clock.now - 4.5 * 3_600_000);
+    const { user, rate, clock } = setup();
+    const fresh = user("fresh@example.com", "Fia", clock.now - 4.5 * 3_600_000);
     const answer = await rate(fresh.token, { stars: 5, text: null, version: "1.0.0" });
     expect(answer.status).toBe(403);
     expect(await answer.json()).toMatchObject({ reason: "account-too-new", hours: 20 });
@@ -259,8 +259,8 @@ describe("rating limits", () => {
   });
 
   it("lets an account give 10 new ratings a day, edits free, and counts deleting and rating again", async () => {
-    const { player, rate, call, reviews, clock } = setup();
-    const mara = player("mara@example.com");
+    const { user, rate, call, reviews, clock } = setup();
+    const mara = user("mara@example.com");
     for (let index = 0; index < 9; index++) reviews.rate(mara.account.id, `wellbrained.other${index}`, { stars: 3, text: null, version: "1.0.0" }, clock.now - 3_600_000 * (index + 1));
     expect((await rate(mara.token, { stars: 4, text: null, version: "1.0.0" })).status).toBe(200);
     expect((await rate(mara.token, { stars: 5, text: "Changed my mind", version: "1.0.0" })).status).toBe(200);

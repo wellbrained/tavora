@@ -590,7 +590,7 @@ describe("which icon a game shows", () => {
     expect(library.games["local-diablo-iv"]).toMatchObject({ useOriginalIcon: true, iconSharedAt: null });
   });
 
-  it("stops showing the game's own icon when the player chooses letters, so their letters are what shows", () => {
+  it("stops showing the game's own icon when the user chooses letters, so their letters are what shows", () => {
     const library = libraryWith("Diablo IV");
     setGameLabel(library, "local-diablo-iv", "D4");
     expect(library.games["local-diablo-iv"]).toMatchObject({ icon: { kind: "monogram", text: "D4" }, useOriginalIcon: false });

@@ -4,7 +4,7 @@ import { checkMenu } from "./module-menu";
 const at = { x: 10, y: 20, width: 28, height: 28 };
 
 describe("checkMenu", () => {
-  it("keeps exactly what the module sent, and lists the ids the player can pick", () => {
+  it("keeps exactly what the module sent, and lists the ids the user can pick", () => {
     const { request, choices } = checkMenu({
       items: [
         { type: "heading", label: "Group" },

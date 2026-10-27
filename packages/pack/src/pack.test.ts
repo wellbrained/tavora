@@ -70,7 +70,7 @@ describe("packModule with a changelog", () => {
     expect(names).toContain("changelog.json");
   });
 
-  it("refuses a missing or invalid changelog, so players never get one Tavora cannot show", async () => {
+  it("refuses a missing or invalid changelog, so users never get one Tavora cannot show", async () => {
     await expect(packModule(await moduleFolder({ "tavora.module.json": JSON.stringify(withChangelog) }), key())).rejects.toThrow("the changelog changelog.json is missing");
     await expect(packModule(await moduleFolder({ "tavora.module.json": JSON.stringify(withChangelog), "changelog.json": "{" }), key())).rejects.toThrow(/not valid JSON/);
     await expect(packModule(await moduleFolder({ "tavora.module.json": JSON.stringify(withChangelog), "changelog.json": JSON.stringify([{ version: "1", notes: ["x"] }]) }), key())).rejects.toThrow(/version must be semver/);
