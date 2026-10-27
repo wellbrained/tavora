@@ -314,6 +314,9 @@ export function hostActionTable(c: HostChecks) {
     /** Picks a module project folder to load from (answers with the folder), or forgets one. */
     "add-development-folder": {},
     "remove-development-folder": { folder: filled(500) },
+    /** Puts a development folder at another place in the list, or closes or opens it in Settings. */
+    "move-development-folder": { folder: filled(500), index: position },
+    "collapse-development-folder": { folder: filled(500), collapsed: bool },
     /** Copies an example into a new project in a development folder, or in a folder the user picks (null); answers with the new project. */
     "copy-example": { moduleId: c.moduleId, name: named(80), folder: nullable(filled(500)) },
     /** Opens a module project of a development folder (a `developmentFolders` project) in the file manager. */

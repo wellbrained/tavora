@@ -13,7 +13,9 @@ import {
   markOpened,
   openedTimes,
   monogram,
+  moveDevelopmentFolder,
   moveFolder,
+  setDevelopmentFolderCollapsed,
   moveWorkspace,
   placeFavorite,
   purgeExpired,
@@ -249,6 +251,9 @@ describe("Steam icons", () => {
     const many = Array.from({ length: 25 }, (_, i) => (process.platform === "win32" ? `D:\\Code\\m${i}` : `/code/m${i}`));
     expect(sanitizeLibrary({ developmentFolders: many }).developmentFolders).toHaveLength(20);
     expect(sanitizeLibrary({ developmentFolders: "nope" }).developmentFolders).toEqual([]);
+    // Closed development folders: only folders still in the list.
+    expect(emptyLibrary().collapsedDevelopmentFolders).toEqual([]);
+    expect(sanitizeLibrary({ developmentFolders: [many[0]], collapsedDevelopmentFolders: [many[0], many[1], 7] }).collapsedDevelopmentFolders).toEqual([many[0]]);
     expect(emptyLibrary().steamProfile).toBeNull();
     expect(sanitizeLibrary({ steamProfile: "  https://steamcommunity.com/id/me " }).steamProfile).toBe("https://steamcommunity.com/id/me");
     for (const bad of ["", "   ", 5, "x".repeat(201)]) expect(sanitizeLibrary({ steamProfile: bad }).steamProfile).toBeNull();
@@ -673,5 +678,29 @@ describe("Browser sites", () => {
     expect(library.browser.sharedSites).toEqual([]);
     library.browser.adblockOff = Array.from({ length: MAX_SITES }, (_, i) => `site${i}.com`);
     expect(() => setSiteListed(library, "adblockOff", "one-more.com", true)).toThrow(LibraryError);
+  });
+});
+
+describe("development folders", () => {
+  const [a, b, c] = ["a", "b", "c"].map((name) => (process.platform === "win32" ? `D:\\Code\\${name}` : `/code/${name}`)) as [string, string, string];
+
+  it("moves a folder to another place", () => {
+    const library = { ...emptyLibrary(), developmentFolders: [a, b, c] };
+    moveDevelopmentFolder(library, c, 0);
+    expect(library.developmentFolders).toEqual([c, a, b]);
+    moveDevelopmentFolder(library, c, 99);
+    expect(library.developmentFolders).toEqual([a, b, c]);
+    moveDevelopmentFolder(library, "/not/added", 0);
+    expect(library.developmentFolders).toEqual([a, b, c]);
+  });
+
+  it("closes and opens a folder", () => {
+    const library = { ...emptyLibrary(), developmentFolders: [a, b] };
+    setDevelopmentFolderCollapsed(library, b, true);
+    setDevelopmentFolderCollapsed(library, b, true);
+    setDevelopmentFolderCollapsed(library, "/not/added", true);
+    expect(library.collapsedDevelopmentFolders).toEqual([b]);
+    setDevelopmentFolderCollapsed(library, b, false);
+    expect(library.collapsedDevelopmentFolders).toEqual([]);
   });
 });

@@ -87,6 +87,8 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "pairing-decide", id: "0123456789abcdef", allow: true }],
   [{ type: "add-development-folder" }],
   [{ type: "remove-development-folder", folder: "D:\Code\my-tracker" }],
+  [{ type: "move-development-folder", folder: "D:\Code\my-tracker", index: 0 }],
+  [{ type: "collapse-development-folder", folder: "D:\Code\my-tracker", collapsed: true }],
   [{ type: "copy-example", moduleId: "local.example.vue-module", name: "My Vue Module", folder: "D:\Code" }],
   [{ type: "copy-example", moduleId: "local.example.vue-module", name: "My Vue Module", folder: null }],
   [{ type: "open-example-folder", moduleId: "local.example.vue-module" }],
