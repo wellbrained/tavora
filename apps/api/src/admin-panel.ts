@@ -61,6 +61,7 @@ export function registerPanelRoutes(app: Hono, options: PanelOptions): void {
     { id: "approval", label: "Module versions waiting for review", count: catalog?.waitingVersions().length ?? 0, section: "approval" },
     { id: "icons", label: "Icons offered by players", count: submissions.listPending().length, section: "review", tab: "pending" },
     { id: "reports", label: "Reported modules", count: catalog?.reports().length ?? 0, section: "review", tab: "reports" },
+    { id: "review-queue", label: "New reviews", count: reviews?.queue().length ?? 0, section: "review", tab: "reviews" },
     { id: "reviews", label: "Reported reviews", count: reviews?.reports().length ?? 0, section: "review", tab: "reviews" },
     { id: "keys", label: "Publisher key requests", count: options.keysWaiting(), section: "review", tab: "keys" },
     { id: "blocks", label: "Blocks to sign", count: options.blocksToSign?.() ?? 0, section: "modules" },

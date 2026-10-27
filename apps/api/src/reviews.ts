@@ -44,6 +44,10 @@ export interface StoredReview {
   createdAt: number;
   updatedAt: number;
   hidden: boolean;
+  /** Held for the maintainer: the word filter found something, so nobody sees the text or counts the stars until it is approved. */
+  held: boolean;
+  /** Whether the maintainer has looked at it (new ones sit in the admin's queue). */
+  seen: boolean;
   reply: { text: string; updatedAt: number } | null;
 }
 
@@ -64,11 +68,13 @@ interface ReviewSql {
   created_at: number;
   updated_at: number;
   hidden: number;
+  held: number;
+  reviewed: number;
   reply: string | null;
   reply_at: number | null;
 }
 
-const REVIEW_COLUMNS = "r.id, r.account_id, r.module_id, r.stars, r.text, r.version, r.created_at, r.updated_at, r.hidden, p.text as reply, p.updated_at as reply_at";
+const REVIEW_COLUMNS = "r.id, r.account_id, r.module_id, r.stars, r.text, r.version, r.created_at, r.updated_at, r.hidden, r.held, r.reviewed, p.text as reply, p.updated_at as reply_at";
 const REVIEW_FROM = "reviews r left join replies p on p.review_id = r.id";
 
 function toReview(row: ReviewSql | undefined): StoredReview | null {
@@ -83,6 +89,8 @@ function toReview(row: ReviewSql | undefined): StoredReview | null {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     hidden: row.hidden === 1,
+    held: row.held === 1,
+    seen: row.reviewed === 1,
     reply: row.reply === null ? null : { text: row.reply, updatedAt: row.reply_at ?? row.updated_at },
   };
 }
@@ -113,6 +121,9 @@ export class ReviewStore {
     `);
     // Reviews hidden because their account is suspended (decided 2026-10-26), so unsuspending shows exactly these again.
     const columns = (this.db.prepare("pragma table_info(reviews)").all() as unknown as { name: string }[]).map((column) => column.name);
+    // Held reviews and the queue (decided 2026-10-27). Reviews that already exist count as seen.
+    if (!columns.includes("held")) this.db.exec("alter table reviews add column held integer not null default 0");
+    if (!columns.includes("reviewed")) this.db.exec("alter table reviews add column reviewed integer not null default 1");
     if (!columns.includes("hidden_by_suspend")) this.db.exec("alter table reviews add column hidden_by_suspend integer not null default 0");
   }
 
@@ -122,7 +133,7 @@ export class ReviewStore {
 
   /** Every module's ratings at once, for the catalog index. */
   summaries(): Map<string, RatingSummary> {
-    const rows = this.db.prepare("select module_id, stars, count(*) as n from reviews group by module_id, stars").all() as unknown as { module_id: string; stars: number; n: number }[];
+    const rows = this.db.prepare("select module_id, stars, count(*) as n from reviews where held = 0 group by module_id, stars").all() as unknown as { module_id: string; stars: number; n: number }[];
     const stars = new Map<string, RatingSummary["stars"]>();
     for (const row of rows) {
       const counts = stars.get(row.module_id) ?? [0, 0, 0, 0, 0];
@@ -134,7 +145,7 @@ export class ReviewStore {
 
   /** One module's ratings, or null without any. */
   summary(moduleId: string): RatingSummary | null {
-    const rows = this.db.prepare("select stars, count(*) as n from reviews where module_id = ? group by stars").all(moduleId) as unknown as { stars: number; n: number }[];
+    const rows = this.db.prepare("select stars, count(*) as n from reviews where module_id = ? and held = 0 group by stars").all(moduleId) as unknown as { stars: number; n: number }[];
     if (!rows.length) return null;
     const counts: RatingSummary["stars"] = [0, 0, 0, 0, 0];
     for (const row of rows) counts[row.stars - 1] = row.n;
@@ -163,17 +174,22 @@ export class ReviewStore {
    * Sets the account's rating of a module, keeping its id, its reply and whether it is hidden. Taking
    * the text out takes the publisher's reply with it: a reply always answers a text.
    */
-  rate(accountId: string, moduleId: string, input: { stars: number; text: string | null; version: string }, now: number): StoredReview {
+  rate(accountId: string, moduleId: string, input: { stars: number; text: string | null; version: string; held?: boolean }, now: number): StoredReview {
     const current = this.own(accountId, moduleId);
     if (current) {
-      this.db.prepare("update reviews set stars = ?, text = ?, version = ?, updated_at = ? where id = ?").run(input.stars, input.text, input.version, now, current.id);
+      const held = input.held ? 1 : 0;
+      this.db
+        .prepare(
+          "update reviews set stars = ?, text = ?, version = ?, updated_at = ?, hidden = case when ? = 1 then 1 when held = 1 then 0 else hidden end, held = ?, reviewed = case when ? is null then 1 else 0 end where id = ?",
+        )
+        .run(input.stars, input.text, input.version, now, held, held, input.text, current.id);
       if (input.text === null) this.db.prepare("delete from replies where review_id = ?").run(current.id);
       return this.review(current.id)!;
     }
     const id = randomBytes(12).toString("base64url");
     this.db
-      .prepare("insert into reviews (id, account_id, module_id, stars, text, version, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(id, accountId, moduleId, input.stars, input.text, input.version, now, now);
+      .prepare("insert into reviews (id, account_id, module_id, stars, text, version, created_at, updated_at, hidden, held, reviewed) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(id, accountId, moduleId, input.stars, input.text, input.version, now, now, input.held ? 1 : 0, input.held ? 1 : 0, input.text === null ? 1 : 0);
     return this.review(id)!;
   }
 
@@ -189,6 +205,30 @@ export class ReviewStore {
     if (text === null) this.db.prepare("delete from replies where review_id = ?").run(reviewId);
     else this.db.prepare("insert into replies (review_id, text, updated_at) values (?, ?, ?) on conflict (review_id) do update set text = excluded.text, updated_at = excluded.updated_at").run(reviewId, text, now);
     return true;
+  }
+
+  /** What waits for the maintainer: held reviews, and live ones with text that nobody has looked at yet. Newest first. */
+  queue(): StoredReview[] {
+    return (
+      this.db.prepare(`select ${REVIEW_COLUMNS} from ${REVIEW_FROM} where r.held = 1 or (r.reviewed = 0 and r.text is not null) order by r.updated_at desc, r.rowid desc`).all() as unknown as ReviewSql[]
+    ).map((row) => toReview(row)!);
+  }
+
+  /** The maintainer lets a held review through: its text shows and its stars count. False when it isn't held. */
+  approve(reviewId: string): boolean {
+    return Number(this.db.prepare("update reviews set held = 0, hidden = 0, reviewed = 1, hidden_by_suspend = 0 where id = ? and held = 1").run(reviewId).changes) > 0;
+  }
+
+  /** The maintainer has looked at these live reviews. Returns how many were new. */
+  markSeen(ids: readonly string[]): number {
+    let changed = 0;
+    for (const id of ids) changed += Number(this.db.prepare("update reviews set reviewed = 1 where id = ? and reviewed = 0").run(id).changes);
+    return changed;
+  }
+
+  /** The maintainer removes a rating for good: its text, reply, reports and stars are gone. */
+  remove(reviewId: string): boolean {
+    return Number(this.db.prepare("delete from reviews where id = ?").run(reviewId).changes) > 0;
   }
 
   /** Records that a player pressed Report on a shown review. Nothing about who pressed it is kept. */
@@ -394,7 +434,7 @@ export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateL
     if (!listed) return context.json({ error: "Not found.", reason: "not-found" }, 404);
     const account = context.get("account").id;
     const own = reviews.own(account, id);
-    return context.json({ review: own ? { ...reviewAnswer(own, accounts), hidden: own.hidden, text: own.text } : null, own: ownsModule(accounts, account, id, listed.module.owner) });
+    return context.json({ review: own ? { ...reviewAnswer(own, accounts), hidden: own.hidden, held: own.held, text: own.text } : null, own: ownsModule(accounts, account, id, listed.module.owner) });
   });
   app.put("/modules/:id/review", async (context) => {
     const id = context.req.param("id");
@@ -418,12 +458,10 @@ export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateL
     ) {
       return context.json({ error: "Send { stars: 1 to 5, text: at most 500 characters or null, version: a published version }.", reason: "bad-request" }, 400);
     }
-    if (text !== null) {
-      const check = checkReviewText(text);
-      if (check !== "ok") return refused(context, check);
-    }
-    const review = reviews.rate(account, id, { stars: input.stars, text, version: input.version }, now());
-    return context.json({ review: { ...reviewAnswer(review, accounts), hidden: review.hidden, text: review.text } });
+    // The word filter no longer refuses: what it finds waits for the maintainer, and the author sees it is waiting.
+    const held = text !== null && checkReviewText(text) !== "ok";
+    const review = reviews.rate(account, id, { stars: input.stars, text, version: input.version, held }, now());
+    return context.json({ review: { ...reviewAnswer(review, accounts), hidden: review.hidden, held: review.held, text: review.text } });
   });
   app.delete("/modules/:id/review", (context) => {
     const id = context.req.param("id");

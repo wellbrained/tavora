@@ -310,6 +310,45 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     }),
   );
 
+  // Reviews that wait for you: held by the word filter, or live and not looked at yet. Approve lets a held one through,
+  // Seen clears the new ones, Hide takes the text off (the stars stay) and Remove takes the whole rating away.
+  app.get("/api/reviews/queue", (context) =>
+    context.json({
+      queue: (reviews?.queue() ?? []).map((review) => ({
+        id: review.id,
+        held: review.held,
+        moduleId: review.moduleId,
+        moduleName: catalog?.module(review.moduleId)?.module.name ?? review.moduleId,
+        stars: review.stars,
+        text: review.text,
+        version: review.version,
+        hidden: review.hidden,
+        author: accounts?.profile(review.accountId)?.name ?? null,
+        authorId: review.accountId,
+        at: new Date(review.updatedAt).toISOString(),
+        reply: review.reply?.text ?? null,
+      })),
+    }),
+  );
+
+  app.post("/api/reviews/approve", async (context) => {
+    const { id } = await json(context.req.raw);
+    if (typeof id !== "string") return context.json({ error: "Send { id }." }, 400);
+    return reviews?.approve(id) ? context.json({ ok: true }) : context.json({ error: "That review isn't held." }, 404);
+  });
+
+  app.post("/api/reviews/seen", async (context) => {
+    const { ids } = await json(context.req.raw);
+    if (!Array.isArray(ids) || ids.length > 200 || ids.some((id) => typeof id !== "string")) return context.json({ error: "Send { ids: up to 200 review ids }." }, 400);
+    return context.json({ ok: true, marked: reviews?.markSeen(ids as string[]) ?? 0 });
+  });
+
+  app.post("/api/reviews/remove", async (context) => {
+    const { id } = await json(context.req.raw);
+    if (typeof id !== "string") return context.json({ error: "Send { id }." }, 400);
+    return reviews?.remove(id) ? context.json({ ok: true }) : context.json({ error: "No such review." }, 404);
+  });
+
   app.post("/api/reviews/hidden", async (context) => {
     const { id, hidden } = await json(context.req.raw);
     if (typeof id !== "string" || typeof hidden !== "boolean") return context.json({ error: "Send { id, hidden }." }, 400);

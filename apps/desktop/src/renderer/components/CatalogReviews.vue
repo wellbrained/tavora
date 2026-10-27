@@ -136,6 +136,7 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
             <Button size="sm" variant="secondary" :disabled="busy" data-testid="catalog-reviews-keep" @click="keep">{{ t("catalog.reviews.keep") }}</Button>
           </p>
           <p v-if="mine?.hidden" class="text-muted-foreground mb-2 text-sm" role="status">{{ t("catalog.reviews.hidden") }}</p>
+          <p v-else-if="mine?.held" class="text-muted-foreground mb-2 text-sm" role="status" data-testid="catalog-reviews-held">{{ t("catalog.reviews.held") }}</p>
           <Textarea v-model="text" :placeholder="t('catalog.reviews.placeholder')" :aria-label="t('catalog.reviews.placeholder')" class="min-h-20 text-sm" :disabled="busy" data-testid="catalog-reviews-text" />
           <div class="mt-2 flex flex-wrap items-center gap-2">
             <span class="text-muted-foreground min-w-0 flex-1 text-xs">{{ t("catalog.reviews.public") }}</span>
@@ -150,7 +151,6 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
           {{ t("catalog.reviews.signIn") }}
           <Button size="sm" variant="secondary" data-testid="catalog-reviews-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</Button>
         </p>
-        <p v-else-if="loaded.can === 'install'" class="text-sm">{{ t("catalog.reviews.install") }}</p>
         <p v-else class="text-sm">{{ t("catalog.reviews.own") }}</p>
         <p v-if="error" class="text-destructive mt-2 text-sm" role="alert" data-testid="catalog-reviews-error">{{ error }}</p>
       </div>
