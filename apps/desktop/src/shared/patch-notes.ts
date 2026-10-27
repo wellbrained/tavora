@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.44",
+    date: "2026-10-27",
+    title: "Reporting needs a sign-in",
+    notes: [
+      "Reporting a module or a review now needs you to be signed in. Without an account you see \"Sign in to report.\"",
+    ],
+    prs: [
+      { number: 408, title: "Conversations API, and reports that need sign-in" },
+    ],
+    tags: ["accounts", "catalog", "privacy", "service", "website"],
+  },
+  {
     version: "0.21.43",
     date: "2026-10-27",
     title: "Everything on the rail is a workspace",
