@@ -28,6 +28,16 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.67",
+    date: "2026-10-28",
+    title: "Bigger header, closing menus",
+    notes: [
+      "The header buttons have larger icons and text, and sit closer to the window edge.",
+      "A click on the header closes an open menu, like Layouts.",
+      "The inbox is as big as Settings.",
+    ],
+  },
+  {
     version: "0.21.66",
     date: "2026-10-28",
     title: "Calmer header",
