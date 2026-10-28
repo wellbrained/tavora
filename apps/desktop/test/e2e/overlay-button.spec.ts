@@ -7,18 +7,21 @@ import { launch, newUserData, openModule, seedLibrary } from "./harness";
 
 const MODULES = path.resolve("../../modules");
 
-test("the header button opens the Overlay page, pauses overlays", async () => {
+test("the header button opens the Overlay page, starts and stops overlays", async () => {
   const userData = await newUserData();
   await mkdir(userData, { recursive: true });
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), gameOverlays: true }));
   const { app, page } = await launch(userData, [MODULES], { seed: false });
   try {
     const live = page.getByTestId("overlay-live");
-    await expect(live).toHaveAttribute("data-state", "ready");
+    // Overlays are stopped until the user starts them.
+    await expect(live).toHaveAttribute("data-state", "stopped");
+    await expect(live).toHaveText("Start");
     await live.click();
-    await expect(live).toHaveAttribute("data-state", "paused");
-    await live.click();
     await expect(live).toHaveAttribute("data-state", "ready");
+    await expect(live).toHaveText("Stop");
+    await live.click();
+    await expect(live).toHaveAttribute("data-state", "stopped");
     // A workspace with a panel has the ▾ next to Add module; the page keeps it, dimmed, so the header never changes size.
     await openModule(page, "tavora.todos");
     await expect(page.getByTestId("modules-in-game")).toHaveCount(1);
@@ -36,7 +39,6 @@ test("the header button opens the Overlay page, pauses overlays", async () => {
     await expect(page.getByTestId("modules-in-game")).toHaveCount(menus);
     expect(menus).toBe(1);
     await expect(page.getByTestId("overlay-live").locator("svg")).toBeVisible();
-    await expect(page.getByTestId("overlay-live")).toHaveText("");
     expect(app.windows().some((window) => window.url().includes("layout.html") && !window.url().endsWith("#layer"))).toBe(false);
     // Any workspace on the rail leaves it.
     await page.getByTestId("rail-workspace-poe2").click();

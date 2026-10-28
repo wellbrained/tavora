@@ -41,7 +41,7 @@ A page in the main window that works like a workspace (no entry on the rail; onl
 The header is the workspace's own header on the Overlay page too, with every button in the same place (the ones for a workspace, Layouts and Add module, are dimmed there). A two-part button in it, next to Layouts:
 
 - **Overlay** opens the Overlay page.
-- **Live** icon (the right part of the button, icon only) pauses and resumes overlays (today's "Hide all for now"), with three looks, each its own icon and colour: Live (green, something shows now), Ready (blue, on, nothing shows), Paused (yellow). Its tooltip says which one it is and what a click does.
+- **Start / Stop** (the right part of the button, text and icon) starts and stops overlays. Overlays are stopped whenever Tavora starts; the user starts them. There is no Pause state. Running, it is green while something shows and blue while it waits for a game. Its tooltip says what a click does.
 
 The button is hidden while overlays are off in Settings. Main sends a new live state to the renderer for it; today's `GameOverlaysView` has none.
 

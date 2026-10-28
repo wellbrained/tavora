@@ -273,8 +273,8 @@ export class GameOverlays {
   private notification: number | null = null;
   private veil: VeilWindow | null = null;
   private escape = false;
-  /** "Hide all for now": nothing shows until Tavora starts again or the user shows it again. */
-  private suspended = false;
+  /** Stopped: nothing shows until the user starts the overlays with the header button, and again after Tavora starts. */
+  private suspended = true;
   /** Whether something showed at the last look: the keys are told when that changes. */
   private wasShowing = false;
   private shownCount = 0;
