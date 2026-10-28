@@ -30,6 +30,16 @@ describe("parseProfile", () => {
   ])("refuses %j", (input) => {
     expect(() => parseProfile(input)).toThrow(SteamError);
   });
+
+  it.each([
+    ["hello", "bad-link"],
+    ["https://example.com/id/someone", "not-steam-link"],
+    ["https://steamcommunity.com/id/someone/games", "not-steam-link"],
+    ["https://steamcommunity.com/profiles/123", "bad-id"],
+    ["https://steamcommunity.com/id/a", "bad-name"],
+  ])("gives %j the reason %s", (input, code) => {
+    expect(() => parseProfile(input)).toThrow(expect.objectContaining({ status: 400, code }));
+  });
 });
 
 /** A fake Steam: answers by the method in the URL and remembers what it was asked. */
@@ -88,6 +98,7 @@ describe("createSteamClient", () => {
     const { fetcher } = fakeSteam({ "ISteamUser/ResolveVanityURL": { response: { success: 42 } } });
     await expect(createSteamClient({ key: "k", fetch: fetcher }).ownedGames("https://steamcommunity.com/id/nobody")).rejects.toMatchObject({
       status: 404,
+      code: "no-such-profile",
     });
   });
 
@@ -95,22 +106,24 @@ describe("createSteamClient", () => {
     const privateProfile = fakeSteam({ "IPlayerService/GetOwnedGames": { response: {} } });
     await expect(createSteamClient({ key: "k", fetch: privateProfile.fetcher }).ownedGames(ID)).rejects.toMatchObject({
       status: 502,
+      code: "no-game-list",
       message: expect.stringContaining("Game details"),
     });
     const empty = fakeSteam({ "IPlayerService/GetOwnedGames": { response: { game_count: 0 } } });
     expect(await createSteamClient({ key: "k", fetch: empty.fetcher }).ownedGames(ID)).toEqual([]);
     const missingList = fakeSteam({ "IPlayerService/GetOwnedGames": { response: { game_count: 3 } } });
-    await expect(createSteamClient({ key: "k", fetch: missingList.fetcher }).ownedGames(ID)).rejects.toMatchObject({ status: 502 });
+    await expect(createSteamClient({ key: "k", fetch: missingList.fetcher }).ownedGames(ID)).rejects.toMatchObject({ status: 502, code: "no-game-list" });
   });
 
   it("answers 502 when Steam fails, times out or sends junk, without leaking the key", async () => {
     const down = createSteamClient({ key: "secret-key", fetch: (async () => Response.json({}, { status: 500 })) as typeof fetch });
-    await expect(down.ownedGames(ID)).rejects.toMatchObject({ status: 502 });
+    await expect(down.ownedGames(ID)).rejects.toMatchObject({ status: 502, code: "steam-unreachable" });
     const broken = createSteamClient({ key: "secret-key", fetch: (async () => { throw new Error("connect failed for secret-key"); }) as typeof fetch });
     const error = (await broken.ownedGames(ID).catch((caught: unknown) => caught)) as SteamError;
     expect(error).toBeInstanceOf(SteamError);
+    expect(error.code).toBe("steam-unreachable");
     expect(error.message).not.toContain("secret-key");
     const junk = createSteamClient({ key: "k", fetch: (async () => new Response("<html>", { status: 200 })) as typeof fetch });
-    await expect(junk.ownedGames(ID)).rejects.toMatchObject({ status: 502 });
+    await expect(junk.ownedGames(ID)).rejects.toMatchObject({ status: 502, code: "steam-unreadable" });
   });
 });

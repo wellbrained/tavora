@@ -61,7 +61,8 @@ describe("backupData", () => {
   });
 
   it("keeps the newest seven days and removes the rest", async () => {
-    await seed();
+    // Nine snapshots of the full seed are a lot of small files; the pruning needs only something to copy.
+    await write("library.json", '{"version":1,"games":{}}');
     for (let d = 1; d <= 9; d++) await backupData({ userData: dir, now: at(2026, 10, d) });
     expect(await list("backups")).toEqual(["2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09"]);
   });

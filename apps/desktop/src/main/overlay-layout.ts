@@ -110,6 +110,8 @@ export class OverlayLayout {
   /** Where an item is while it is dragged, in canvas units. */
   private readonly dragging = new Map<string, Rect>();
   private picture: string | null = null;
+  /** Picture work in the background (taking, choosing, loading, removing), so a test can wait for it. */
+  private readonly pending = new Set<Promise<unknown>>();
   private pictureFor = "";
   private sentView = "";
   /** Items seen in the last look, to drop the undo steps of those that went. */
@@ -336,7 +338,7 @@ export class OverlayLayout {
     if (this.pictureFor !== gameId) {
       this.pictureFor = gameId;
       this.picture = null;
-      void this.loadPicture(gameId);
+      this.track(this.loadPicture(gameId));
     }
     const shown = this.itemsOf(this.gameId);
     const runs = this.options.keepRunning(shown.map((info) => ({ workspaceId: info.keyTarget.workspaceId, moduleId: info.moduleId, instanceId: info.ref.kind === "panel" ? info.ref.instanceId : null })));
@@ -353,6 +355,19 @@ export class OverlayLayout {
       window.send(view);
     }
     window.place(this.bounds ? this.frames(view, this.bounds) : [], this.bounds, this.covered);
+  }
+
+  private track(work: Promise<unknown>): void {
+    const done = work.then(
+      () => void this.pending.delete(done),
+      () => void this.pending.delete(done),
+    );
+    this.pending.add(done);
+  }
+
+  /** Resolves once the picture work started so far, and what it started in turn, has finished. */
+  async settled(): Promise<void> {
+    while (this.pending.size > 0) await Promise.all([...this.pending]);
   }
 
   private async loadPicture(gameId: string): Promise<void> {
@@ -429,15 +444,15 @@ export class OverlayLayout {
         break;
       case "take-picture":
         if (!fromShell) return;
-        void this.takePicture();
+        this.track(this.takePicture());
         return;
       case "choose-picture":
         if (!fromShell) return;
-        void this.choosePicture();
+        this.track(this.choosePicture());
         return;
       case "remove-picture":
         if (!fromShell) return;
-        void this.options.pictures.remove(this.gameId).then(() => this.loadPicture(this.gameId));
+        this.track(this.options.pictures.remove(this.gameId).then(() => this.loadPicture(this.gameId)));
         return;
       case "dismiss-notice":
         this.notice = null;
@@ -597,6 +612,6 @@ export class OverlayLayout {
 
   /** A workspace left the library: the picture of its game goes. */
   forgetWorkspace(workspaceId: string): void {
-    void this.options.pictures.remove(workspaceId);
+    this.track(this.options.pictures.remove(workspaceId));
   }
 }

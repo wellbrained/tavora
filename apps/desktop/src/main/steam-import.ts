@@ -1,6 +1,6 @@
 import { isGameId } from "@tavora/module-schema";
 import type { SteamGameView, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
-import { translate, type Language, type MessageKey } from "../shared/i18n";
+import { hasMessage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { normalizeName } from "./launcher-games";
 import { addWorkspace, type Library } from "./library";
 import { isSteamAppId } from "./steam-icons";
@@ -54,10 +54,15 @@ export function parseSteamGame(raw: unknown): SteamImportGame | null {
 
 export interface SteamImportOptions {
   baseUrl: string;
-  /** The language of the messages made here; the service's own messages stay as it sent them. */
+  /** The language of the messages shown. A service that sends no reason code (older ones) keeps its own English text. */
   language?: Language;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+}
+
+function steamReasonKey(code: string): MessageKey {
+  const key = `error.steam.reason.${code}`;
+  return hasMessage(key) ? key : "error.steam.reason.unknown";
 }
 
 /**
@@ -84,10 +89,13 @@ export async function fetchSteamLibrary(
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ profile: text }),
     });
-    const body = (await response.json().catch(() => null)) as { games?: unknown; error?: unknown } | null;
+    const body = (await response.json().catch(() => null)) as { games?: unknown; error?: unknown; code?: unknown } | null;
     if (response.status === 429) return say("error.steam.tooMany");
     if (!response.ok) {
-      // The service words its refusals for users (a wrong link, a private profile, Steam being down).
+      // The service names the reason (a wrong link, a private profile, Steam being down) and the app words it
+      // in the user's language. An unknown reason gets the general line; a service that sends no reason
+      // (an older one) gets its own English text.
+      if (typeof body?.code === "string") return say(steamReasonKey(body.code));
       return typeof body?.error === "string" && body.error.length <= 300 ? { status: "error", error: body.error } : say("error.steam.unavailable");
     }
     if (!Array.isArray(body?.games)) return say("error.steam.unreadable");
