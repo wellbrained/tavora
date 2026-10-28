@@ -12,6 +12,7 @@ import { autoInitials } from "./initials";
 import { readPicture } from "./picture";
 import ProfileAvatar from "./ProfileAvatar.vue";
 import RailFooterTile from "../RailFooterTile.vue";
+import RailTooltip from "../RailTooltip.vue";
 
 // The user's avatar in the rail footer. A click opens a small card above
 // it to change the name, initials and picture; there is no account behind it
@@ -87,6 +88,7 @@ function closeCrop() {
 </script>
 
 <template>
+  <RailTooltip :text="profile.name.trim() || t('profile.label')" :disabled="expanded || open">
   <PopoverRoot :open="open" @update:open="onOpenChange">
     <PopoverTrigger as-child>
       <button
@@ -100,7 +102,6 @@ function closeCrop() {
         data-rail-item
         data-testid="rail-profile"
         :aria-label="profile.name.trim() ? t('profile.named', { name: profile.name.trim() }) : t('profile.label')"
-        :title="expanded ? undefined : profile.name.trim() || t('profile.label')"
       >
         <RailFooterTile>
           <ProfileAvatar :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="40" square />
@@ -218,6 +219,7 @@ function closeCrop() {
       </PopoverContent>
     </PopoverPortal>
   </PopoverRoot>
+  </RailTooltip>
 
   <ImageCropDialog :src="cropping" :title="t('onboarding.crop')" round @save="savePicture" @cancel="closeCrop" />
 </template>

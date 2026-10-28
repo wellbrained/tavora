@@ -14,6 +14,8 @@ export default defineComponent({
     id: String,
     /** Smaller type and padding, for a label beside a small icon. */
     compact: Boolean,
+    /** `at` is the middle of the thing it labels: the card sits beside it, centred on that height. */
+    center: Boolean,
   },
   emits: ['dismiss'],
   setup(props, { emit, slots }) {
@@ -31,7 +33,9 @@ export default defineComponent({
       await nextTick();
       if (version !== generation || !card.value) return;
       const measured = card.value.getBoundingClientRect();
-      position.value = tooltipPosition(props.at, measured.width, measured.height, { width: innerWidth, height: innerHeight });
+      const placed = tooltipPosition(props.at, measured.width, measured.height, { width: innerWidth, height: innerHeight });
+      if (props.center) placed.top = Math.max(12, Math.min(innerHeight - measured.height - 12, props.at.y - measured.height / 2));
+      position.value = placed;
       ready.value = true;
     }
     watch(() => [props.open, props.at.x, props.at.y, props.title, props.description], place, { immediate: true });

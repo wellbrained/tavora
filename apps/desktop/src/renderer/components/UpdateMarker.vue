@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { act, state } from "../host";
 import { t } from "../i18n";
 import RailFooterTile from "./RailFooterTile.vue";
+import RailTooltip from "./RailTooltip.vue";
 
 defineProps<{ expanded: boolean }>();
 
@@ -32,8 +33,8 @@ function press() {
 </script>
 
 <template>
+  <RailTooltip v-if="visible" :text="label" :disabled="expanded">
   <button
-    v-if="visible"
     type="button"
     :class="
       cn(
@@ -45,7 +46,6 @@ function press() {
     data-testid="rail-update"
     :disabled="busy"
     :aria-label="label"
-    :title="label"
     @click="press"
   >
     <RailFooterTile :dot="busy ? undefined : 'primary'">
@@ -55,4 +55,5 @@ function press() {
     </RailFooterTile>
     <span v-if="expanded" class="truncate text-sm font-medium">{{ label }}</span>
   </button>
+  </RailTooltip>
 </template>

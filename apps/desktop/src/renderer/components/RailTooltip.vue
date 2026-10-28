@@ -30,9 +30,9 @@ function show(trigger: Element | null) {
   if (props.disabled || !trigger || open.value) return;
   clearTimeout(delay);
   delay = setTimeout(() => {
-    // Beside the icon, its top in line with the icon's top (the tooltip sits 12px below the point).
+    // Beside the icon, centred on its height.
     const bounds = trigger.getBoundingClientRect();
-    at.value = { x: bounds.right - 6, y: bounds.top - 12 };
+    at.value = { x: bounds.right - 6, y: bounds.top + bounds.height / 2 };
     clearTimeout(release);
     setFloating(true);
     open.value = true;
@@ -69,7 +69,7 @@ onBeforeUnmount(() => {
     @focusout="leave"
   >
     <slot />
-    <Tooltip compact :open="open" :at="at" :title="text" :description="hint" @dismiss="hide">
+    <Tooltip compact center :open="open" :at="at" :title="text" :description="hint" @dismiss="hide">
       <ul v-if="folder" class="rail-tooltip-workspaces" data-testid="rail-tooltip-workspaces">
         <li v-for="line in lines" :key="line" class="truncate">{{ line }}</li>
         <li v-if="more">{{ t("rail.folderMore", { count: more }) }}</li>

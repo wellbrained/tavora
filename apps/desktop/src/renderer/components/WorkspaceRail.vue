@@ -333,19 +333,20 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
   >
     <div class="rail-entry relative flex flex-col border-b p-2" :data-active="state!.screen === 'welcome'">
       <span class="rail-pill" aria-hidden="true" />
-      <button
-        type="button"
-        :class="cn('flex h-12 items-center gap-3 rounded-lg px-3', expanded && 'hover:bg-accent', expanded && state!.screen === 'welcome' && 'bg-accent')"
-        data-rail-item
-        data-testid="rail-home"
-        :aria-label="t('rail.home')"
-        :aria-current="state!.screen === 'welcome' ? 'page' : undefined"
-        :title="t('rail.home')"
-        @click="act({ type: 'show-welcome' })"
-      >
-        <img class="rail-icon rail-icon-bare" src="/brand/flame-96.png" alt="" width="32" height="32" draggable="false" />
-        <span v-if="expanded" class="text-lg font-semibold">Tavora</span>
-      </button>
+      <RailTooltip :text="t('rail.home')" :disabled="expanded">
+        <button
+          type="button"
+          :class="cn('flex h-12 items-center gap-3 rounded-lg px-3', expanded && 'hover:bg-accent', expanded && state!.screen === 'welcome' && 'bg-accent')"
+          data-rail-item
+          data-testid="rail-home"
+          :aria-label="t('rail.home')"
+          :aria-current="state!.screen === 'welcome' ? 'page' : undefined"
+          @click="act({ type: 'show-welcome' })"
+        >
+          <img class="rail-icon rail-icon-bare" src="/brand/flame-96.png" alt="" width="32" height="32" draggable="false" />
+          <span v-if="expanded" class="text-lg font-semibold">Tavora</span>
+        </button>
+      </RailTooltip>
     </div>
 
     <div class="relative min-h-0 flex-1">
@@ -471,22 +472,23 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         </template>
         <!-- Add game is a tile under the last workspace, like one more entry in the list. -->
         <div class="rail-entry group relative mt-1 flex items-center px-2">
-          <button
-            type="button"
-            :class="cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent')"
-            data-rail-item
-            data-testid="rail-add-game"
-            :aria-label="t('common.addGame')"
-            :title="t('common.addGame')"
-            @click="dialog = { kind: 'add-game' }"
-          >
-            <span
-              class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-12 flex-none items-center justify-center rounded-[12px]"
+          <RailTooltip :text="t('common.addGame')" :disabled="expanded">
+            <button
+              type="button"
+              :class="cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent')"
+              data-rail-item
+              data-testid="rail-add-game"
+              :aria-label="t('common.addGame')"
+              @click="dialog = { kind: 'add-game' }"
             >
-              <Plus class="size-6" :stroke-width="1.75" />
-            </span>
-            <span v-if="expanded" class="text-sm font-medium">{{ t("common.addGame") }}</span>
-          </button>
+              <span
+                class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-12 flex-none items-center justify-center rounded-[12px]"
+              >
+                <Plus class="size-6" :stroke-width="1.75" />
+              </span>
+              <span v-if="expanded" class="text-sm font-medium">{{ t("common.addGame") }}</span>
+            </button>
+          </RailTooltip>
         </div>
       </section>
     </div>
@@ -515,21 +517,22 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       <RailModuleUpdates :expanded="expanded" />
       <RailInboxButton :expanded="expanded" />
       <ProfileMenu :expanded="expanded" />
-      <button
-        type="button"
-        :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-3 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
-        data-rail-item
-        data-testid="rail-settings"
-        :aria-label="t('rail.settings')"
-        aria-haspopup="dialog"
-        :title="t('rail.settings')"
-        @click="openSettings()"
-      >
-        <RailFooterTile>
-          <Settings class="size-5 transition-transform duration-300 group-hover:rotate-45 motion-reduce:group-hover:rotate-0" :stroke-width="1.5" />
-        </RailFooterTile>
-        <span v-if="expanded" class="text-sm font-medium">{{ t("rail.settings") }}</span>
-      </button>
+      <RailTooltip :text="t('rail.settings')" :disabled="expanded">
+        <button
+          type="button"
+          :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-3 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
+          data-rail-item
+          data-testid="rail-settings"
+          :aria-label="t('rail.settings')"
+          aria-haspopup="dialog"
+          @click="openSettings()"
+        >
+          <RailFooterTile>
+            <Settings class="size-5 transition-transform duration-300 group-hover:rotate-45 motion-reduce:group-hover:rotate-0" :stroke-width="1.5" />
+          </RailFooterTile>
+          <span v-if="expanded" class="text-sm font-medium">{{ t("rail.settings") }}</span>
+        </button>
+      </RailTooltip>
     </div>
 
     <button
