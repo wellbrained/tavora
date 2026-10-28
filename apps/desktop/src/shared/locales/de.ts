@@ -186,7 +186,7 @@ export const de: Record<keyof typeof en, string> = {
   "common.remove": "Entfernen",
   "common.clear": "Löschen…",
   "settings.title": "Einstellungen",
-  "settings.search": "Einstellungen durchsuchen",
+  "settings.search": "Einstellung suchen",
   "settings.sections": "Bereiche der Einstellungen",
   "settings.close": "Einstellungen schließen",
   "settings.group.library": "Bibliothek",

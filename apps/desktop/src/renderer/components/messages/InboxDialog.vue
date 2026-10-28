@@ -63,7 +63,7 @@ function itemTitle(item: ConversationItem): string {
       <div v-else class="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)]">
         <nav class="overflow-y-auto border-r py-2" :aria-label="t('inbox.title')" data-testid="inbox-list">
           <section v-for="group in groups" :key="group.key" class="mb-2">
-            <h3 class="text-primary px-4 py-1 text-xs font-semibold tracking-wider uppercase">{{ heading(group) }}</h3>
+            <h3 class="text-muted-foreground px-4 py-1 text-xs font-semibold tracking-wider uppercase">{{ heading(group) }}</h3>
             <ul>
               <li v-for="item in group.items" :key="item.id">
                 <button type="button" class="hover:bg-muted/60 focus-visible:ring-ring flex w-full flex-col gap-1 px-4 py-2 text-left outline-none focus-visible:ring-2" :class="item.id === selected && 'bg-muted'" :aria-current="item.id === selected || undefined" :data-testid="`inbox-item-${item.id}`" @click="selected = item.id">

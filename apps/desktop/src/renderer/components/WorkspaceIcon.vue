@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { WorkspaceView } from "../../shared/host-api";
-import { badgeLook } from "../badge";
+import { badgeLook, LETTER } from "../badge";
 import { backdropOf } from "../icon-tone";
 
 const props = withDefaults(defineProps<{ workspace: WorkspaceView; size?: number }>(), { size: 48 });
@@ -47,8 +47,9 @@ const fontSize = computed(() => Math.max(12, Math.round(props.size * ([...text.v
     </template>
     <span
       v-else
-      class="text-foreground flex size-full items-center justify-center font-semibold tracking-wide"
+      class="flex size-full items-center justify-center font-semibold tracking-wide"
       :style="{
+        color: LETTER,
         backgroundColor: look.color,
         backgroundImage: look.image,
         backgroundSize: look.size,

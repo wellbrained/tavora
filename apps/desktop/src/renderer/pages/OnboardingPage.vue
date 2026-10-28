@@ -85,7 +85,9 @@ const tips = computed(() => [
 
 <template>
   <main class="relative flex h-full flex-col items-center overflow-y-auto px-8 pt-14 pb-8" data-testid="onboarding">
+    <!-- Skips the whole intro. The games step has its own Skip for now under Next, so this one steps aside there. -->
     <button
+      v-if="step !== 1"
       type="button"
       class="text-muted-foreground hover:text-foreground app-no-drag absolute top-4 right-6 z-10 rounded-md px-2 py-1 text-sm"
       data-testid="onboarding-skip"

@@ -90,12 +90,14 @@ const taskTitles = (app: ElectronApplication, scope = "", index = 0) =>
     index,
   );
 
-test("official modules are marked Official, the examples Example", async () => {
+test("official modules sit under Official without a tag of their own, the examples are marked Example", async () => {
   const { app, page } = await launch();
   await page.getByTestId("add-module").click();
-  await expect(page.getByTestId(`provenance-${NOTES}`)).toHaveText("Official");
-  await expect(page.getByTestId(`provenance-${TODOS}`)).toHaveText("Official");
-  await expect(page.getByTestId(`provenance-${PLAYGROUND}`)).toHaveText("Official");
+  const official = page.getByRole("region", { name: "Official", exact: true });
+  for (const id of [NOTES, TODOS, PLAYGROUND]) {
+    await expect(official.getByTestId(`module-${id}`)).toBeVisible();
+    await expect(page.getByTestId(`provenance-${id}`)).toHaveCount(0);
+  }
   await expect(page.getByTestId(`provenance-${VUE}`)).toHaveText("Example");
   await app.close();
 });

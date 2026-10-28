@@ -330,6 +330,9 @@ export function browserModule(version: string): InstalledModule {
       id: BROWSER_MODULE_ID,
       name: "Browser",
       description: "Wikis, maps, guides and videos next to your game. Ads blocked, no downloads.",
+      translations: {
+        de: { name: "Browser", description: "Wikis, Karten, Guides und Videos direkt neben deinem Spiel. Ohne Werbung, ohne Downloads." },
+      },
       version,
       apiVersion: "1",
       entry: "",
