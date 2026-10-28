@@ -608,6 +608,7 @@ export class ModuleView {
           },
           submit: (params) => this.options.leaderboards.submit(params),
           top: (params) => this.options.leaderboards.top(params),
+          mine: (params) => this.options.leaderboards.mine(params),
         },
         systemInfo: this.systemInfoFor(() => bridge),
         media: this.mediaFor(() => bridge),

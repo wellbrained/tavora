@@ -19,6 +19,7 @@ import {
   type JsonValue,
   type LeaderboardStatus,
   type LeaderboardSubmitResult,
+  type LeaderboardMine,
   type LeaderboardTop,
   type NetworkResponse,
   type GameOverlayResult,
@@ -145,6 +146,7 @@ export interface BridgeContext {
     hide(): Promise<LeaderboardStatus>;
     submit(params: unknown): Promise<LeaderboardSubmitResult>;
     top(params: unknown): Promise<LeaderboardTop>;
+    mine(params: unknown): Promise<LeaderboardMine>;
   };
   panelState: PanelStateStore;
   /** What the user has granted this module right now; asked on every gated call, so a revoke takes effect at once. */
@@ -409,6 +411,7 @@ const handlers = new Map<string, Handler>([
   ["leaderboards.hide", (s, params) => (needs(s, "leaderboards", "leaderboards.hide"), noParams(params), s.context.leaderboards.hide())],
   ["leaderboards.submit", (s, params) => (needs(s, "leaderboards", "leaderboards.submit"), s.context.leaderboards.submit(object(params)))],
   ["leaderboards.top", (s, params) => (needs(s, "leaderboards", "leaderboards.top"), s.context.leaderboards.top(object(params)))],
+  ["leaderboards.mine", (s, params) => (needs(s, "leaderboards", "leaderboards.mine"), s.context.leaderboards.mine(object(params)))],
 
   ["discord.state", (s, params) => (needs(s, "discord", "discord.state"), noParams(params), s.context.discord.state())],
   ["discord.connect", async (s, params) => (needs(s, "discord", "discord.connect"), noParams(params), await s.context.discord.connect(), null)],
