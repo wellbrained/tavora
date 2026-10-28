@@ -731,6 +731,7 @@ export const en = {
   "settings.modules.install": "Install zip",
   "settings.modules.checkUpdates": "Check for updates",
   "settings.modules.updatesNone": "Your community modules are up to date.",
+  "settings.modules.updatesNoCommunity": "You have no community modules yet, so there's nothing to update.",
   "settings.modules.updatesFound": "Updated: {updated}. Waiting for you: {waiting}.",
   "settings.modules.update": "Update to {version}",
   "settings.modules.leftover": "Data from removed modules",

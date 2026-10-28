@@ -86,7 +86,8 @@ async function checkUpdates() {
   if (!result.ok) return;
   const updated = result.updated ?? 0;
   const waiting = result.waiting ?? 0;
-  if (updated + waiting === 0) showToast(t("settings.modules.updatesNone"));
+  // Without any community module there is nothing to be up to date about.
+  if (updated + waiting === 0) showToast(t(modules.value.some((module) => module.fromCatalog) ? "settings.modules.updatesNone" : "settings.modules.updatesNoCommunity"));
   // Nothing installed: they were only found, and wait for the user.
   else if (updated === 0) showToast(t("settings.modules.updatesWaiting", { count: waiting }));
   else showToast(t("settings.modules.updatesFound", { updated: String(updated), waiting: String(waiting) }));

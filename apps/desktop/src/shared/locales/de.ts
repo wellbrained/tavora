@@ -733,6 +733,7 @@ export const de: Record<keyof typeof en, string> = {
   "settings.modules.install": "ZIP installieren",
   "settings.modules.checkUpdates": "Nach Updates suchen",
   "settings.modules.updatesNone": "Deine Community-Module sind aktuell.",
+  "settings.modules.updatesNoCommunity": "Du hast noch keine Community-Module, also gibt es nichts zu aktualisieren.",
   "settings.modules.updatesFound": "Aktualisiert: {updated}. Warten auf dich: {waiting}.",
   "settings.modules.update": "Auf {version} aktualisieren",
   "settings.modules.leftover": "Daten entfernter Module",
