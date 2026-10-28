@@ -184,7 +184,7 @@ const keyOf = (item: LayoutItemView) => (item.mode === "toggle" && item.hotkey ?
       <span v-if="!item.live" class="text-foreground pointer-events-none block truncate px-2 py-1 text-xs font-medium">{{ item.name }}</span>
       <span v-else-if="item.idle" class="text-foreground/80 pointer-events-none flex h-full flex-col items-center justify-center gap-0.5 px-2 text-center text-xs">
         <span class="max-w-full truncate font-medium">{{ item.name }}</span>
-        <span class="max-w-full truncate">{{ t("overlays.layout.idle") }}</span>
+        <span class="max-w-full truncate">{{ t(item.idle === "stopped" ? "overlays.layout.idle" : "overlays.layout.empty") }}</span>
       </span>
       <span v-if="keyOf(item).length" class="pointer-events-none absolute top-1 right-1 flex items-center gap-0.5" :class="item.off && 'opacity-60'">
         <Kbd v-for="key in keyOf(item)" :key="key">{{ key }}</Kbd>

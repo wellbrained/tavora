@@ -68,7 +68,7 @@ export interface OverlayLayoutOptions {
   sources(): SourcePanel[];
   openWindow(request: { closed(): void }): LayoutWindow;
   /** The panels behind the items shown: they have to run for their pages to have anything to show, whichever workspace they are in. */
-  keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): void;
+  keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): boolean[];
   /** The page asked to go back to the workspace. */
   leave(): void;
   /** The picture of the window with this handle (physical pixels at most `size`), as PNG bytes; null when it can't be taken. */
@@ -115,6 +115,8 @@ export class OverlayLayout {
   /** Items seen in the last look, to drop the undo steps of those that went. */
   private known = new Set<string>();
   private idleTimer: ReturnType<typeof setInterval> | undefined;
+  /** Whether the panel behind each item runs, as of the last look. */
+  private running = new Map<string, boolean>();
 
   constructor(private readonly options: OverlayLayoutOptions) {}
 
@@ -276,7 +278,7 @@ export class OverlayLayout {
       hideFromCapture: info.hideFromCapture,
       hotkey: info.hotkey,
       live: info.source !== null,
-      idle: info.source !== null && info.source.state() === null,
+      idle: info.source === null || info.source.state() !== null ? null : this.running.get(info.id) === false ? "stopped" : "empty",
       off: info.mode === "toggle" && !info.toggledOn,
       hiddenOnCanvas: this.hiddenOnCanvas.has(info.id),
     }));
@@ -336,8 +338,10 @@ export class OverlayLayout {
       this.picture = null;
       void this.loadPicture(gameId);
     }
+    const shown = this.itemsOf(this.gameId);
+    const runs = this.options.keepRunning(shown.map((info) => ({ workspaceId: info.keyTarget.workspaceId, moduleId: info.moduleId, instanceId: info.ref.kind === "panel" ? info.ref.instanceId : null })));
+    this.running = new Map(shown.map((info, index) => [info.id, runs[index] ?? false]));
     const view = this.view();
-    this.options.keepRunning(this.itemsOf(view.gameId).map((info) => ({ workspaceId: info.keyTarget.workspaceId, moduleId: info.moduleId, instanceId: info.ref.kind === "panel" ? info.ref.instanceId : null })));
     // Undo steps of an item that is gone can't be taken back.
     const present = new Set(view.items.map((item) => item.id));
     for (const id of this.known) if (!present.has(id)) this.undo.forget(id);

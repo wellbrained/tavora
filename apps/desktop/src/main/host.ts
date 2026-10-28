@@ -2404,15 +2404,17 @@ export class Host {
   }
 
   /** The Overlay page shows what panels publish, so the panels of its items run, hidden, even from a workspace not opened this run; they stop when the page is left. */
-  private runForOverlayPage(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): void {
-    if (this.screen !== "overlay") return;
-    for (const panel of panels) {
+  private runForOverlayPage(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): boolean[] {
+    return panels.map((panel) => {
       const entry = this.library.workspaces[panel.workspaceId];
-      if (!entry || entry.trashedAt) continue;
+      if (!entry || entry.trashedAt) return false;
       const record = this.records(entry.id).find((item) => (panel.instanceId ? item.instanceId === panel.instanceId : item.moduleId === panel.moduleId));
-      if (!record || this.views.has(record.instanceId) || this.panelTypeOf(record) === undefined) continue;
-      this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
-    }
+      if (!record) return false;
+      if (this.screen === "overlay" && !this.views.has(record.instanceId) && this.panelTypeOf(record) !== undefined) {
+        this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+      }
+      return this.views.has(record.instanceId);
+    });
   }
 
   /** Panels run for the started overlays (every item of every setup), from any workspace and whether or not it was opened; they stop with Stop. */
