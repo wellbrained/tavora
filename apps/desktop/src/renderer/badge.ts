@@ -2,8 +2,10 @@
 // derived from its id. Pure, so the same id looks the same on every PC and
 // after a rename.
 
-// Muted, warm tones that keep ivory text readable.
+// Muted, warm tones that keep ivory text readable. They stay the same in every theme, so the letter does too.
 export const TONES = ["#6b4f2a", "#5a3d36", "#3f4a3a", "#3b4656", "#5b4a63", "#4d4a3c", "#64422a", "#37504f"] as const;
+/** The letter on a badge: Tavora's ivory in every theme. A light theme's dark text would vanish on these tones. */
+export const LETTER = "#f2ece0";
 
 const LIGHT = "rgb(255 255 255 / 0.07)";
 

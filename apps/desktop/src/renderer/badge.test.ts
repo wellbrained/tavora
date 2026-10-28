@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PATTERNS, TONES, badgeLook } from "./badge";
+import { LETTER, PATTERNS, TONES, badgeLook } from "./badge";
 
 describe("badgeLook", () => {
   it("is the same for the same id", () => {
@@ -25,5 +25,16 @@ describe("badgeLook", () => {
     const kinds = new Set(ids.map((id) => JSON.stringify(badgeLook(id))));
     // 64 combinations for 40 ids: plenty of distinct looks, a few repeats allowed.
     expect(kinds.size).toBeGreaterThanOrEqual(25);
+  });
+
+  it("keeps the letter readable on every tone, in light and dark themes alike", () => {
+    const luminance = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((at) => {
+        const channel = parseInt(hex.slice(at, at + 2), 16) / 255;
+        return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    for (const tone of TONES) expect((luminance(LETTER) + 0.05) / (luminance(tone) + 0.05)).toBeGreaterThanOrEqual(4.5);
   });
 });

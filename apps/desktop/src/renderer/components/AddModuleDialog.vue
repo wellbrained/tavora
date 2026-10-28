@@ -247,8 +247,8 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
         <ModuleUpdates v-else-if="view === 'updates'" :query="query" />
         <div v-else class="min-h-0 flex-1 overflow-y-auto px-5 pb-8 sm:px-8" data-testid="module-results">
           <section v-for="group in groups" :key="group.id" :aria-label="group.label" class="pt-6">
-            <h3 v-if="showHeadings" class="text-primary flex items-center gap-2 pb-3 text-xs font-semibold tracking-wider uppercase">
-              {{ group.label }} <span class="text-muted-foreground tabular-nums">{{ group.items.length }}</span>
+            <h3 v-if="showHeadings" class="text-muted-foreground flex items-center gap-2 pb-3 text-xs font-semibold tracking-wider uppercase">
+              {{ group.label }} <span class="text-muted-foreground/70 font-normal tabular-nums">{{ group.items.length }}</span>
             </h3>
             <ul class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
               <li
@@ -273,9 +273,9 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                       <button type="button" class="hover:text-primary focus-visible:ring-ring truncate rounded-sm text-left font-medium outline-none focus-visible:ring-2" :title="module.name"
                         :aria-label="t('catalog.infoLabel', { name: module.name })" :data-testid="`module-name-${module.id}`" @click="openInfo(module)"
                       >{{ module.name }}</button>
-                      <!-- The Official tag only where the list mixes kinds; under the Official heading it would say nothing. -->
+                      <!-- Where a copy came from, for your own modules (Catalog, From file, Local…). Official ones always sit in their own Official group, so the tag would only repeat it. -->
                       <Badge
-                        v-if="view !== 'official'"
+                        v-if="group.id !== 'official'"
                         variant="outline"
                         :class="cn('py-0 font-normal', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
                         :data-testid="`provenance-${module.id}`"
