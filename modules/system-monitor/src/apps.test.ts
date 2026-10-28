@@ -1,6 +1,6 @@
 import type { SystemApp } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
-import { firstDirection, listApps, ramShare, shownBytes, splitApps } from "./apps";
+import { firstDirection, listApps, ramShare, ramSplit, shownBytes, splitApps } from "./apps";
 
 const app = (name: string, memoryBytes: number, cpu: number | null = 0): SystemApp => ({ name, memoryBytes, cpu, windows: false });
 const APPS = [app("Firefox", 6.8e9, 2), app("Discord", 0.6e9, 0.1), app("Chrome", 1.9e9, 7.5), app("Svchost", 0.25e9, null)];
@@ -38,6 +38,22 @@ it("starts numbers with the biggest and names from A", () => {
 
 it("adds up what the list shows", () => {
   expect(shownBytes([app("A", 1e9), app("B", 2e9)])).toBe(3e9);
+});
+
+describe("ramSplit", () => {
+  const GB = 1024 ** 3;
+  it("rounds to whole GB from 10 GB in use, so apps + rest = in use on screen", () => {
+    // 19.4 + 8.4 = 27.8: rounded on their own this would read 19 + 8 = 28.
+    expect(ramSplit(19.4 * GB, 27.8 * GB)).toEqual({ apps: 19, rest: 9, used: 28, decimals: 0 });
+  });
+
+  it("uses tenths under 10 GB in use", () => {
+    expect(ramSplit(5.04 * GB, 7.26 * GB)).toEqual({ apps: 5, rest: 2.3, used: 7.3, decimals: 1 });
+  });
+
+  it("never shows a rest below zero", () => {
+    expect(ramSplit(30 * GB, 28 * GB)).toEqual({ apps: 28, rest: 0, used: 28, decimals: 0 });
+  });
 });
 
 describe("splitApps", () => {
