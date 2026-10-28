@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.93",
+    date: "2026-10-29",
+    title: "Easier Whiteboard planning",
+    notes: [
+      "Add note cards or pictures with captions, grouped so you can move them together.",
+      "Image locks appear when you point at an image, select it or focus its lock.",
+      "Narrow panels keep board actions in a compact menu to leave more room for drawing.",
+    ],
+    prs: [
+      { number: 449, title: "Whiteboard: add planning cards and quieter controls" },
+    ],
+    tags: ["whiteboard"],
+  },
+  {
     version: "0.21.92",
     date: "2026-10-28",
     title: "Leaderboards in modules",
