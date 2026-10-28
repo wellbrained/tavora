@@ -618,6 +618,8 @@ export interface HostViewState {
    * the game of the workspace open now. Its id is its game workspace's. Null when none, or while "When a game starts" is off.
    */
   runningGameId: string | null;
+  /** Whether the game of the workspace open now runs on this PC; the header says so. False while "When a game starts" is off. */
+  workspaceRunning: boolean;
   /** A game that just started, while the user chose to be asked; the host UI asks whether to switch to it (game-switch). */
   pendingGameSwitch: string | null;
   snapshots: SnapshotView[];

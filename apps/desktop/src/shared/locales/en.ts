@@ -1308,6 +1308,7 @@ export const en = {
   "workspace.addModule": "Add module",
   "workspace.modulesHere": "Modules in this workspace",
   "workspace.inWorkspace": "In this workspace",
+  "workspace.running": "Running",
   "workspace.startTitle": "Start building your workspace",
   "workspace.startText": "Add a module to get going.",
   "workspace.orLayout": "Or pick a layout",

@@ -307,7 +307,17 @@ function setControls(value: Controls | null) {
   <p v-else-if="!sdk || !shown" class="text-muted-foreground p-4 text-sm">{{ t("loading") }}</p>
   <div v-else class="flex h-full min-h-0 flex-col" data-testid="whiteboard-app">
     <header class="bg-primary/5 border-primary/25 flex flex-none flex-wrap items-center gap-2 border-b px-2 py-1">
-      <BoardMenu :boards="list" :current-id="shown.id" :current-name="shown.name" @select="show" @create="createBoard" @rename="rename" @delete="remove" />
+      <BoardMenu
+        :boards="list"
+        :current-id="shown.id"
+        :current-name="shown.name"
+        :can-clear="!empty"
+        @select="show"
+        @create="createBoard"
+        @rename="rename"
+        @clear="clearBoard"
+        @delete="remove"
+      />
       <span class="flex-1" />
       <Button
         v-if="pictures.count > 0"
@@ -324,7 +334,6 @@ function setControls(value: Controls | null) {
       </Button>
       <Button type="button" variant="outline" size="sm" :title="t('copy.hint')" data-testid="copy-picture" :disabled="empty || copying" @click="copyAsPicture">{{ t("copy.button") }}</Button>
       <Button type="button" variant="outline" size="sm" :title="t('savePicture.hint')" data-testid="save-picture" :disabled="empty || copying" @click="saveAsPicture">{{ t("savePicture.button") }}</Button>
-      <Button type="button" variant="danger" size="sm" :title="t('clear.hint')" data-testid="clear-board" :disabled="empty" @click="clearBoard">{{ t("clear.button") }}</Button>
     </header>
     <Notice v-if="level !== 'ok'" :variant="level === 'full' ? 'error' : 'warning'" class="mx-2 mt-2 flex-none" data-testid="board-size">
       {{ t(level === "full" ? "size.full" : "size.warn", { used: formatMegabytes(bytes), max: formatMegabytes(MAX_BOARD_BYTES) }) }}

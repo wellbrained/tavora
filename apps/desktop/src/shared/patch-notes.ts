@@ -28,6 +28,32 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.82",
+    date: "2026-10-28",
+    title: "Running, and a safer Whiteboard",
+    notes: [
+      "The workspace header says \"Running\" while its game is running on this PC.",
+      "Clear board moved from the Whiteboard's top bar into the board menu, away from the save buttons. Undo still brings the board back.",
+      "The Whiteboard's hint for moving around is in plain words, in English and German.",
+    ],
+    prs: [
+      { number: 436, title: "Workspace header says Running; Whiteboard: Clear board in the board menu, hint in Tavora's words" },
+    ],
+    tags: ["games", "whiteboard", "workspace"],
+  },
+  {
+    version: "0.21.81",
+    date: "2026-10-28",
+    title: "Memory that adds up",
+    notes: [
+      "System Monitor: below the apps list, the RAM now adds up: your apps, plus Windows and memory apps share, equals what's in use.",
+    ],
+    prs: [
+      { number: 438, title: "System Monitor: make the RAM line under the apps list add up" },
+    ],
+    tags: ["system-monitor"],
+  },
+  {
     version: "0.21.80",
     date: "2026-10-28",
     title: "Small fixes",

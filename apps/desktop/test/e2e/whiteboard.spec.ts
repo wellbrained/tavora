@@ -2,7 +2,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { inModule, launch, openModule, panels, shootPanels, WHITEBOARD } from "./harness";
+import { inModule, launch, openModule, panels, shootPanels, waitForShown, WHITEBOARD } from "./harness";
 
 const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
 // The shared kit shows notices and the Undo offer as toasts, newest last.
@@ -338,8 +338,12 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
   const refused = await inModule<string>(app, WHITEBOARD, `fetch("/_pictures/?name=x", { method: "POST", body: new Blob([new Uint8Array(8)], { type: "image/png" }) }).then((r) => r.status)`);
   expect(refused).toBe(403);
 
-  // Clear board takes everything off; Undo in the notice brings it back.
+  // Clear board sits in the board menu, not in the top bar next to the save actions. It takes everything off; Undo in
+  // the notice brings it back.
   await inModule(app, WHITEBOARD, `${DISMISS_TOASTS}`);
+  expect(await inModule(app, WHITEBOARD, `${q("clear-board")} === null`)).toBe(true);
+  await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `${q("clear-board")} !== null`)).toBe(true);
   await inModule(app, WHITEBOARD, `${q("clear-board")}.click()`);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(true);
   await inModule(app, WHITEBOARD, `${UNDO_BUTTON}.click()`);
@@ -485,4 +489,17 @@ test("whiteboard: zoomed far in, a pasted picture keeps its size and an empty bo
   await open("Board 2");
   await expect.poll(zoom).toBe(100);
   await app.close();
+});
+
+test("the hint for moving around the board is in Tavora's words", async () => {
+  const { app, page } = await launch();
+  try {
+    await openModule(page, WHITEBOARD);
+    await waitForShown(app, WHITEBOARD);
+    await expect
+      .poll(() => inModule(app, WHITEBOARD, `document.querySelector(".HintViewer")?.textContent.trim() ?? ""`))
+      .toBe("Hold Space or the mouse wheel and drag to move around");
+  } finally {
+    await app.close();
+  }
 });

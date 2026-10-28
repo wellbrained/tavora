@@ -438,6 +438,16 @@ const emptySlot = EmptySlot as unknown as VueComponent;
     <header class="app-drag flex h-14 flex-none items-center gap-3 pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+0.5rem)] pl-6">
       <WorkspaceIcon v-if="workspace" :workspace="workspace" :size="32" />
       <h1 class="max-w-72 min-w-0 truncate text-lg font-semibold">{{ workspace?.name }}</h1>
+      <!-- While this workspace's game runs. Overlays have their own Start / Stop on the right. -->
+      <span
+        v-if="view.workspaceRunning"
+        class="text-success border-success/40 bg-success/10 flex flex-none items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium"
+        :title="t('rail.running', { name: workspace?.name ?? '' })"
+        data-testid="workspace-running"
+      >
+        <span class="bg-success size-1.5 rounded-full" aria-hidden="true" />
+        {{ t("workspace.running") }}
+      </span>
       <span class="text-info ml-auto min-w-0 truncate text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>
       <HeaderTools @add-module="dialog = { kind: 'add-module' }" />
     </header>
