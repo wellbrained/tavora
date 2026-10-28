@@ -2,4 +2,4 @@
 .tavora-tooltip h2{font-size:var(--tavora-tooltip-title-size);font-weight:600;line-height:1.35;margin:0}.tavora-tooltip p{font-size:var(--tavora-tooltip-text-size);line-height:1.5;margin:8px 0 0;color:var(--muted-foreground,#b8afa1)}
 
 .tavora-tooltip p:first-child{margin-top:0}
-.tavora-tooltip.compact{padding:7px 10px;border-radius:6px}.tavora-tooltip.compact h2{font-size:13px;line-height:1.3}.tavora-tooltip.compact p{font-size:12px;margin-top:3px}.tavora-tooltip.compact li{font-size:12px}
+.tavora-tooltip.compact{padding:7px 10px;border-radius:6px;background:color-mix(in srgb,var(--foreground,#eee7d9) 14%,var(--popover,#171412));border-color:color-mix(in srgb,var(--foreground,#eee7d9) 32%,transparent);box-shadow:0 6px 20px #0008}.tavora-tooltip.compact h2{color:var(--foreground,#fff)}.tavora-tooltip.compact h2{font-size:13px;line-height:1.3}.tavora-tooltip.compact p{font-size:12px;margin-top:3px}.tavora-tooltip.compact li{font-size:12px}
