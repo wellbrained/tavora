@@ -8,9 +8,7 @@ import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { cn } from "@/lib/utils";
 import { state } from "../../host";
 import { t } from "../../i18n";
-import InboxButton from "../messages/InboxButton.vue";
 import LayoutsMenu from "./LayoutsMenu.vue";
-import ModuleUpdatesButton from "./ModuleUpdatesButton.vue";
 import ModulesMenu from "./ModulesMenu.vue";
 import OverlayButton from "./OverlayButton.vue";
 
@@ -25,10 +23,6 @@ const hasPanels = computed(() => props.onOverlay || (state.value?.panels.length 
 <template>
   <div class="app-no-drag flex flex-none items-center gap-3">
     <OverlayButton />
-    <div class="flex items-center gap-0.5">
-      <ModuleUpdatesButton />
-      <InboxButton />
-    </div>
     <span class="bg-border h-5 w-px flex-none" aria-hidden="true" />
     <div :inert="onOverlay" :class="cn('flex items-center gap-2', onOverlay && 'opacity-50')">
       <LayoutsMenu />

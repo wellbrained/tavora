@@ -2,7 +2,7 @@
 // Saved layouts of the current workspace: apply one, or save the current layout.
 // Below them, a Templates submenu (uneven arrangements of empty slots to fill
 // with modules) and a picker for even grids.
-import { LayoutPanelLeft, LayoutTemplate } from "@lucide/vue";
+import { ChevronDown, LayoutPanelLeft, LayoutTemplate } from "@lucide/vue";
 import type { SnapshotView } from "../../../shared/host-api";
 import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "../../../shared/layout-templates";
 import {
@@ -97,9 +97,9 @@ function items(): MenuItem[] {
     side="bottom"
     align="end"
     menu-class="w-72"
-    class="text-foreground/80 hover:text-foreground focus-visible:ring-ring/50 size-9 rounded-md transition-colors outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] focus-visible:ring-3 data-[state=open]:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))]"
+    class="text-foreground focus-visible:ring-ring/50 flex h-9 w-auto gap-2 rounded-md px-3 text-sm font-medium transition-colors outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] focus-visible:ring-3 data-[state=open]:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))]"
   >
-    <LayoutPanelLeft class="size-5" :stroke-width="2" absolute-stroke-width :title="t('layouts.title')" />
+    <LayoutPanelLeft class="size-5" :stroke-width="2" absolute-stroke-width /> {{ t("layouts.button") }} <ChevronDown class="size-4" :stroke-width="2" absolute-stroke-width />
     <template #after>
       <DropdownMenuSeparator />
       <!-- Templates sit one level down, so the grid picker stays in the main menu. -->
