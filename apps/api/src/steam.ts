@@ -7,13 +7,32 @@ export interface SteamGame {
   name: string;
 }
 
+/**
+ * Why an import failed, as a stable word the app words for the user in their
+ * own language. The English message stays for app versions that show it as is.
+ */
+export type SteamErrorCode =
+  | "bad-request"
+  | "bad-link"
+  | "not-steam-link"
+  | "bad-id"
+  | "bad-name"
+  | "no-such-profile"
+  | "steam-unreachable"
+  | "steam-unreadable"
+  | "no-game-list"
+  | "too-many"
+  | "unavailable";
+
 /** What the user did wrong or what Steam said, with the HTTP status to answer. */
 export class SteamError extends Error {
-  // Declared as a field: Node strips types without running parameter properties.
+  // Declared as fields: Node strips types without running parameter properties.
   readonly status: 400 | 404 | 502 | 503;
-  constructor(status: 400 | 404 | 502 | 503, message: string) {
+  readonly code: SteamErrorCode;
+  constructor(status: 400 | 404 | 502 | 503, code: SteamErrorCode, message: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -34,20 +53,20 @@ export function parseProfile(input: string): Profile {
   try {
     url = new URL(text);
   } catch {
-    throw new SteamError(400, "Enter a Steam profile link or a SteamID64.");
+    throw new SteamError(400, "bad-link", "Enter a Steam profile link or a SteamID64.");
   }
   const host = url.hostname.toLowerCase();
   if ((url.protocol !== "https:" && url.protocol !== "http:") || (host !== "steamcommunity.com" && host !== "www.steamcommunity.com")) {
-    throw new SteamError(400, "Enter a steamcommunity.com profile link.");
+    throw new SteamError(400, "not-steam-link", "Enter a steamcommunity.com profile link.");
   }
   const match = /^\/(id|profiles)\/([^/]+)\/?$/.exec(url.pathname);
-  if (!match) throw new SteamError(400, "Enter a steamcommunity.com profile link.");
+  if (!match) throw new SteamError(400, "not-steam-link", "Enter a steamcommunity.com profile link.");
   const value = decodeURIComponent(match[2]!);
   if (match[1] === "profiles") {
-    if (!STEAM_ID.test(value)) throw new SteamError(400, "That profile link has no valid SteamID64.");
+    if (!STEAM_ID.test(value)) throw new SteamError(400, "bad-id", "That profile link has no valid SteamID64.");
     return { kind: "id", id: value };
   }
-  if (!VANITY.test(value)) throw new SteamError(400, "That profile name is not valid.");
+  if (!VANITY.test(value)) throw new SteamError(400, "bad-name", "That profile name is not valid.");
   return { kind: "vanity", name: value };
 }
 
@@ -68,13 +87,13 @@ export function createSteamClient({ key, fetch: fetcher = globalThis.fetch }: St
     try {
       response = await fetcher(url, { headers: { "x-webapi-key": key }, signal: AbortSignal.timeout(TIMEOUT_MS) });
     } catch {
-      throw new SteamError(502, "Steam did not answer. Try again in a moment.");
+      throw new SteamError(502, "steam-unreachable", "Steam did not answer. Try again in a moment.");
     }
-    if (!response.ok) throw new SteamError(502, "Steam could not give the game list. Try again in a moment.");
+    if (!response.ok) throw new SteamError(502, "steam-unreachable", "Steam could not give the game list. Try again in a moment.");
     try {
       return await response.json();
     } catch {
-      throw new SteamError(502, "Steam sent an answer Tavora could not read.");
+      throw new SteamError(502, "steam-unreadable", "Steam sent an answer Tavora could not read.");
     }
   }
 
@@ -84,7 +103,7 @@ export function createSteamClient({ key, fetch: fetcher = globalThis.fetch }: St
       response?: { success?: number; steamid?: string };
     };
     const id = body.response?.success === 1 ? body.response.steamid : undefined;
-    if (typeof id !== "string" || !STEAM_ID.test(id)) throw new SteamError(404, "Steam has no profile with that name.");
+    if (typeof id !== "string" || !STEAM_ID.test(id)) throw new SteamError(404, "no-such-profile", "Steam has no profile with that name.");
     return id;
   }
 
@@ -99,11 +118,11 @@ export function createSteamClient({ key, fetch: fetcher = globalThis.fetch }: St
       const answer = body.response;
       // A private "Game details" setting gives an empty answer, not an empty list.
       if (!answer || typeof answer.game_count !== "number") {
-        throw new SteamError(502, "Steam did not return a game list. Check that Game details are public on the profile.");
+        throw new SteamError(502, "no-game-list", "Steam did not return a game list. Check that Game details are public on the profile.");
       }
       if (answer.game_count === 0) return [];
       if (!Array.isArray(answer.games)) {
-        throw new SteamError(502, "Steam did not return a game list. Check that Game details are public on the profile.");
+        throw new SteamError(502, "no-game-list", "Steam did not return a game list. Check that Game details are public on the profile.");
       }
       const seen = new Map<number, SteamGame>();
       for (const entry of answer.games.slice(0, MAX_GAMES) as { appid?: unknown; name?: unknown }[]) {

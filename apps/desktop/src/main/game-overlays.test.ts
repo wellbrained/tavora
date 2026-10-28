@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { DEFAULT_PANEL_ANCHORED, DEFAULT_RECT, normalizeLegacy, placeAnchored, placeLegacy, type AnchoredRect } from "../shared/overlay-anchor";
 import {
@@ -35,14 +35,15 @@ import {
 import { moveToWorkspaces } from "./workspace-move";
 
 let dir: string;
+const stores: GameOverlayStore[] = [];
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), "tavora-game-overlays-"));
 });
 
 afterEach(async () => {
-  // Saves run in the background; let the last one land first.
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  // The folder goes only after every store of the test has written what it still had waiting.
+  await Promise.all(stores.splice(0).map((store) => store.save()));
   await rm(dir, { recursive: true, force: true, maxRetries: 5 });
 });
 
@@ -67,8 +68,13 @@ const oldPanel = (instanceId = ID, gameId = "poe2") => ({ owner: "official", mod
 /** Loads the file as Tavora does at start: moved to the workspace names first (workspace-move.ts). */
 async function loadStore(userData: string, scopes: (workspaceId: string) => OverlayScope = scopeOf): Promise<GameOverlayStore> {
   await moveToWorkspaces(userData);
-  return GameOverlayStore.load(userData, scopes);
+  return own(await GameOverlayStore.load(userData, scopes));
 }
+
+const own = (store: GameOverlayStore) => {
+  stores.push(store);
+  return store;
+};
 
 const readSaved = async () => JSON.parse(await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8"));
 const keys = (store: GameOverlayStore, setupId: string) => store.overlaysIn(setupId).map((overlay) => `${overlay.workspaceId}/${overlay.key}`);
@@ -434,7 +440,11 @@ describe("the move to setups", () => {
     const original = await readFile(path.join(dir, GAME_OVERLAYS_FILE), "utf8");
     // A file where the backups folder should be: no copy can be made.
     await writeFile(path.join(dir, "backups"), "in the way");
-    const store = await GameOverlayStore.load(dir, MOVED_SCOPES);
+    // The failed backup is reported to the log on purpose; keep it out of the test output.
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const store = own(await GameOverlayStore.load(dir, MOVED_SCOPES));
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("backing up game overlays"), expect.anything());
+    logged.mockRestore();
     expect(store.moved).toBe(true);
     expect(keys(store, ALL_GAMES)).toEqual(["personal/timer"]);
     store.add("elden-ring", subject("new", "elden-ring"));
@@ -520,19 +530,21 @@ describe("the move to setups", () => {
   });
 
   it("converts on any real window size, to the pixel (a few shapes, and a window that is not at the screen's corner)", async () => {
-    const old = { ...oldSubject("a"), scope: "game", mode: "always", opacity: 100, hideFromCapture: false };
-    for (const [width, height] of [[1920, 1080], [2560, 1440], [3440, 1440], [1280, 1024], [1366, 768], [5120, 1440], [800, 600]] as const) {
-      for (const rel of [{ x: 0.7, y: 0.6, width: 0.25, height: 0.3 }, { x: 0, y: 0, width: 1, height: 1 }, { x: 0.4, y: 0.4, width: 0.2, height: 0.2 }, { x: 0.001, y: 0.9, width: 0.05, height: 0.02 }]) {
-        await writeOld({ version: 2, overlays: [{ ...old, rect: rel }], panels: [] });
-        const store = await loadStore(dir, MOVED_SCOPES);
-        store.convertLegacy("poe2", { width, height });
-        const game = { x: 120, y: 40, width, height };
-        expect(placeItem(store.find(subject("a"))!, game), `${width}x${height}`).toEqual(placeLegacy(normalizeLegacy(rel)!, game));
-        // Its save lands now, not over the next old file.
-        await store.save();
-        await rm(path.join(dir, "backups"), { recursive: true, force: true });
-      }
-    }
+    // One game per size and one item per shape in a single old file: one load and one save, not one of each per case.
+    const shapes = [{ x: 0.7, y: 0.6, width: 0.25, height: 0.3 }, { x: 0, y: 0, width: 1, height: 1 }, { x: 0.4, y: 0.4, width: 0.2, height: 0.2 }, { x: 0.001, y: 0.9, width: 0.05, height: 0.02 }];
+    const sizes = [[1920, 1080], [2560, 1440], [3440, 1440], [1280, 1024], [1366, 768], [5120, 1440], [800, 600]] as const;
+    const old = (key: string, gameId: string, rect: unknown) => ({ ...oldSubject(key, gameId), scope: "game", mode: "always", opacity: 100, hideFromCapture: false, rect });
+    await writeOld({ version: 2, overlays: sizes.flatMap((_, size) => shapes.map((rel, index) => old(`a${index}`, `game-${size}`, rel))), panels: [] });
+    const store = await loadStore(dir, MOVED_SCOPES);
+    sizes.forEach(([width, height], size) => {
+      store.convertLegacy(`game-${size}`, { width, height });
+      const game = { x: 120, y: 40, width, height };
+      shapes.forEach((rel, index) => {
+        expect(placeItem(store.find(subject(`a${index}`, `game-${size}`))!, game), `${width}x${height}`).toEqual(placeLegacy(normalizeLegacy(rel)!, game));
+      });
+    });
+    // Its save lands before the folder goes.
+    await store.save();
   });
 });
 

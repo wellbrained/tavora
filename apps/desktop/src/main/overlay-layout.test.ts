@@ -11,10 +11,13 @@ import { LayoutPictures } from "./layout-pictures";
 import { OverlayLayout, edgesToBounds, type LayoutFrame, type LayoutWindow, type SourcePanel } from "./overlay-layout";
 
 let dir: string;
+const layouts: OverlayLayout[] = [];
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), "tavora-overlay-layout-"));
 });
 afterEach(async () => {
+  // The folder goes only after every picture write of the test has landed.
+  await Promise.all(layouts.splice(0).map((layout) => layout.settled()));
   await rm(dir, { recursive: true, force: true, maxRetries: 5 });
 });
 
@@ -158,14 +161,13 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     },
     choose: async () => options.choose ?? "cancelled",
   });
+  layouts.push(layout);
   const last = () => sent.at(-1)!;
   const lastPlace = () => placed.at(-1)!;
   /** Lets the shell report where the canvas is: 1080 px high is the reference, so scale 1 for a 1920x1080 game. */
   const bounds = (height = 540, x = 300, y = 50) => layout.handle({ type: "bounds", bounds: { x, y, width: Math.round((height * 16) / 9), height } }, true);
-  // The pictures are files: under load a few rounds are needed for the writes to land.
-  const flush = async () => {
-    for (let round = 0; round < 6; round += 1) await new Promise((resolve) => setTimeout(resolve, 20));
-  };
+  // The pictures are files: wait for the layout's own picture work, not for a guess of how long it takes.
+  const flush = () => layout.settled();
   return { layout, world, sent, placed, last, lastPlace, bounds, flush, pictures };
 }
 

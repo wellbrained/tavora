@@ -6,6 +6,13 @@ import { LIMITS } from "@tavora/sdk/protocol";
 import { HotkeyRegistrar, HotkeyStore, HOTKEYS_FILE, type HotkeyRecord, type ShortcutRegistry } from "./hotkeys";
 
 let dir: string;
+const stores: HotkeyStore[] = [];
+/** Loads a store the test owns: its folder goes only after the store's saves have landed. */
+const load = async () => {
+  const store = await HotkeyStore.load(dir);
+  stores.push(store);
+  return store;
+};
 
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), "tavora-hotkeys-"));
@@ -13,7 +20,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   // Saves run in the background; let the last one land first.
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await Promise.all(stores.splice(0).map((store) => store.flush()));
   await rm(dir, { recursive: true, force: true, maxRetries: 5 });
 });
 
@@ -30,16 +37,16 @@ const record = (fields: Partial<HotkeyRecord> = {}): HotkeyRecord => ({
 
 describe("HotkeyStore", () => {
   it("keeps one key per action and target, across a restart", async () => {
-    const store = await HotkeyStore.load(dir);
+    const store = await load();
     expect(store.set(record())).toBe(true);
     expect(store.set(record({ accelerator: "F9" }))).toBe(true);
     expect(store.all()).toEqual([record({ accelerator: "F9" })]);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect((await HotkeyStore.load(dir)).all()).toEqual([record({ accelerator: "F9" })]);
+    await store.flush();
+    expect((await load()).all()).toEqual([record({ accelerator: "F9" })]);
   });
 
   it("finds a key another binding in the same workspace uses, not one in another workspace", async () => {
-    const store = await HotkeyStore.load(dir);
+    const store = await load();
     store.set(record());
     expect(store.conflict(record({ target: "item-2" }), "Ctrl+Alt+1")).toEqual(record());
     expect(store.conflict(record(), "Ctrl+Alt+1")).toBeUndefined();
@@ -51,7 +58,7 @@ describe("HotkeyStore", () => {
   });
 
   it("limits the hotkeys of one module in one workspace", async () => {
-    const store = await HotkeyStore.load(dir);
+    const store = await load();
     for (let i = 0; i < LIMITS.maxHotkeys; i++) expect(store.set(record({ target: `t${i}`, accelerator: `F${(i % 24) + 1}` }))).toBe(true);
     expect(store.set(record({ target: "one-more" }))).toBe(false);
     expect(store.set(record({ target: "one-more", workspaceId: "elden-ring" }))).toBe(true);
@@ -59,7 +66,7 @@ describe("HotkeyStore", () => {
 
   it("drops entries with a key it doesn't take", async () => {
     await writeFile(path.join(dir, HOTKEYS_FILE), JSON.stringify({ version: 2, hotkeys: [record(), record({ target: "x", accelerator: "K" }), { owner: 1 }] }));
-    expect((await HotkeyStore.load(dir)).all()).toEqual([record()]);
+    expect((await load()).all()).toEqual([record()]);
   });
 });
 

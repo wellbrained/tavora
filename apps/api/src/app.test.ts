@@ -71,7 +71,7 @@ describe("steam library endpoint", () => {
   );
   const client: SteamClient = {
     ownedGames: async (profile) => {
-      if (profile === "private") throw new SteamError(502, "Check that Game details are public.");
+      if (profile === "private") throw new SteamError(502, "no-game-list", "Check that Game details are public.");
       return [
         { appid: 1245620, name: "ELDEN RING" },
         { appid: 999, name: "Unknown Game" },
@@ -105,7 +105,19 @@ describe("steam library endpoint", () => {
     const app = createApp({ db: steamDb, steam: client });
     const response = await post(app, { profile: "private" });
     expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: "Check that Game details are public." });
+    expect(await response.json()).toEqual({ error: "Check that Game details are public.", code: "no-game-list" });
+  });
+
+  it("names the reason of every refusal with a stable code next to the English message", async () => {
+    const app = createApp({ db: steamDb, steam: client, steamRateLimiter: createRateLimiter({ limit: 100, windowMs: 60_000 }) });
+    const reason = async (response: Response) => ({ status: response.status, body: (await response.json()) as { error: string; code: string } });
+    expect(await reason(await post(app, { profile: "x" }, { "content-type": "text/plain" }))).toMatchObject({ status: 415, body: { code: "bad-request" } });
+    expect(await reason(await post(app, {}))).toMatchObject({ status: 400, body: { code: "bad-request" } });
+    expect(await reason(await post(app, { profile: "x", padding: "y".repeat(2000) }))).toMatchObject({ status: 413, body: { code: "bad-request" } });
+    expect(await reason(await post(createApp({ db: steamDb }), { profile: "x" }))).toMatchObject({ status: 503, body: { code: "unavailable" } });
+    const limited = createApp({ db: steamDb, steam: client, steamRateLimiter: createRateLimiter({ limit: 1, windowMs: 60_000 }) });
+    await post(limited, { profile: "76561197960287930" });
+    expect(await reason(await post(limited, { profile: "76561197960287930" }))).toMatchObject({ status: 429, body: { error: "Too many requests.", code: "too-many" } });
   });
 
   it("refuses anything that is not JSON with a profile text", async () => {

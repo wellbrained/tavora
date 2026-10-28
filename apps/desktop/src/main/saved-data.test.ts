@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyLibrary } from "./library";
 import { DATA_FILES, keepNewerFile, readGrayscaleText, SavedData, WINDOW_FILE } from "./saved-data";
 
@@ -37,6 +37,8 @@ describe("SavedData", () => {
   });
 
   it("says whether there was a profile, and keeps going after a failed write", async () => {
+    // The failed write is reported to the log on purpose; keep it out of the test output.
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const saved = new SavedData(dir);
     const first = await saved.loadProfile();
     expect(first.saved).toBe(false);
@@ -45,6 +47,8 @@ describe("SavedData", () => {
     saved.saveWindow({ bounds: { x: 1, y: 2, width: 800, height: 600 }, maximized: false });
     await saved.flush();
     expect(JSON.parse(await read(WINDOW_FILE)).bounds.width).toBe(800);
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("could not save profile"), expect.any(Error));
+    logged.mockRestore();
     await rm(path.join(dir, "profile.json"), { recursive: true });
     await saved.saveProfile(first.profile);
     expect((await saved.loadProfile()).saved).toBe(true);

@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.86",
+    date: "2026-10-28",
+    title: "Steam import in German",
+    notes: [
+      "When the Steam import can't find your profile, can't see your games or Steam doesn't answer, you now read it in your own language.",
+    ],
+    prs: [
+      { number: 440, title: "Steam import errors in German; make flaky unit tests deterministic" },
+    ],
+    tags: ["cloud-copy", "games", "hotkeys", "overlays", "service"],
+  },
+  {
     version: "0.21.85",
     date: "2026-10-28",
     title: "Overlay changes kept on quit",

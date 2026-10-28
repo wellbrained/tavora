@@ -106,7 +106,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
     if (wait > 0) {
       context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests." }, 429);
+      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
     }
     const q = context.req.query("q") ?? "";
     if (q.length > MAX_QUERY_LENGTH) return context.json({ error: "Query too long." }, 400);
@@ -126,7 +126,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
     if (wait > 0) {
       context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests." }, 429);
+      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
     }
     if (!iconsAvailable) return context.json({ error: "Icons are not available right now." }, 503);
     context.header("Cache-Control", "public, max-age=300");
@@ -137,7 +137,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
     if (wait > 0) {
       context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests." }, 429);
+      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
     }
     const match = /^([a-z0-9-]+)\.png$/.exec(context.req.param("file"));
     const bytes = iconsAvailable && match && isIconId(match[1]) ? icons.file(match[1]) : null;
@@ -158,14 +158,14 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
       const wait = submitLimiter.check(clientKey ? clientKey(context.req.raw) : "local");
       if (wait > 0) {
         context.header("Retry-After", String(wait));
-        return context.json({ error: "Too many requests." }, 429);
+        return context.json({ error: "Too many requests.", code: "too-many" }, 429);
       }
       if (!iconsAvailable || !submissions || !accounts) return context.json({ error: "Sharing icons is not available right now." }, 503);
       const token = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "")?.[1];
       const session = token ? accounts.store.sessionByToken(token, (accounts.now ?? Date.now)()) : null;
       if (!session || !accounts.store.account(session.accountId)) return context.json({ error: "Sign in to share icons.", reason: "signed-out" }, 401);
       if (!(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
-        return context.json({ error: "Send JSON." }, 415);
+        return context.json({ error: "Send JSON.", code: "bad-request" }, 415);
       }
       let body: unknown;
       try {
@@ -181,15 +181,15 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
 
   // Steam import. POST, so the profile is in no URL; JSON only, which a web
   // page on another site cannot send without a preflight this service refuses.
-  app.post("/v1/steam/library", bodyLimit({ maxSize: STEAM_BODY, onError: (context) => context.json({ error: "Send { \"profile\": a Steam profile link or SteamID64 }." }, 413) }), async (context) => {
+  app.post("/v1/steam/library", bodyLimit({ maxSize: STEAM_BODY, onError: (context) => context.json({ error: "Send { \"profile\": a Steam profile link or SteamID64 }.", code: "bad-request" }, 413) }), async (context) => {
     const wait = steamLimiter.check(clientKey ? clientKey(context.req.raw) : "local");
     if (wait > 0) {
       context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests." }, 429);
+      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
     }
-    if (!steam) return context.json({ error: "Steam import is not available right now." }, 503);
+    if (!steam) return context.json({ error: "Steam import is not available right now.", code: "unavailable" }, 503);
     if (!(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
-      return context.json({ error: "Send JSON." }, 415);
+      return context.json({ error: "Send JSON.", code: "bad-request" }, 415);
     }
     const text = await context.req.text();
     let profile: unknown;
@@ -199,14 +199,14 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
       profile = undefined;
     }
     if (typeof profile !== "string" || profile.length === 0 || profile.length > MAX_PROFILE_LENGTH) {
-      return context.json({ error: "Send { \"profile\": a Steam profile link or SteamID64 }." }, 400);
+      return context.json({ error: "Send { \"profile\": a Steam profile link or SteamID64 }.", code: "bad-request" }, 400);
     }
     try {
       const ids = canonicalIds();
       const owned = await steam.ownedGames(profile);
       return context.json({ games: owned.map((game) => ({ appid: game.appid, name: game.name, id: ids.get(game.appid) ?? null })) });
     } catch (error) {
-      if (error instanceof SteamError) return context.json({ error: error.message }, error.status);
+      if (error instanceof SteamError) return context.json({ error: error.message, code: error.code }, error.status);
       throw error;
     }
   });
@@ -255,7 +255,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
     if (wait > 0) {
       context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests." }, 429);
+      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
     }
     if (!catalog) return context.json({ error: "The module catalog is not available right now." }, 503);
     await next();
@@ -383,7 +383,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
     if (wait > 0) {
       context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests." }, 429);
+      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
     }
     const body = (await context.req.json().catch(() => null)) as { version?: unknown } | null;
     if (!isAppVersion(body?.version)) return context.json({ error: "Send { version }." }, 400);
