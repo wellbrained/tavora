@@ -21,6 +21,8 @@ defineProps<{ highlight: string | null }>();
 
 const appearance = computed(() => state.value!.appearance);
 const active = computed(() => appearance.value.themes.find((theme) => theme.id === appearance.value.themeId));
+/** Official and Local tags only when the list has both; on every card they would say nothing. */
+const mixedThemes = computed(() => new Set(appearance.value.themes.map((theme) => theme.provenance)).size > 1);
 
 /** The variation a card previews: the one with the active variation's id (so Light shows Light), otherwise the theme's first. */
 function previewOf(theme: ThemeView): ThemeVariationView {
@@ -128,7 +130,7 @@ const showVariation = computed(() => {
             <span class="bg-card flex flex-1 flex-col gap-0.5 border-t px-3 py-2.5">
               <span class="flex items-center gap-2">
                 <span class="truncate font-medium">{{ theme.name }}</span>
-                <Badge variant="outline" :class="cn('flex-none font-normal', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')">{{
+                <Badge v-if="mixedThemes" variant="outline" :class="cn('flex-none font-normal', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')">{{
                   theme.provenance === "official" ? t("common.official") : t("common.local")
                 }}</Badge>
                 <Check v-if="theme.id === appearance.themeId" class="text-primary ml-auto size-4 flex-none" :stroke-width="1.5" />

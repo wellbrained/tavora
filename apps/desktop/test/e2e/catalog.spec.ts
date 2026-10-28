@@ -51,7 +51,8 @@ function listing(id: string, name: string, zip: Buffer, owner: string, fields: R
     owner,
     publisher: null,
     zip: { sha256: createHash("sha256").update(zip).digest("hex"), size: zip.length },
-    publishedAt: "2026-10-18T10:00:00.000Z",
+    // Published a week ago: within the two weeks a card says New.
+    publishedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
     notes: [],
     ...fields,
   };
@@ -130,7 +131,7 @@ test("a user browses the catalog for a game, sees who publishes a module and ins
     await page.getByTestId("module-tab-browse").click();
     const row = page.getByTestId("catalog-wellbrained.tracker");
     await expect(row).toBeVisible();
-    await expect(page.getByTestId("catalog-fits-wellbrained.factory")).toHaveText("For Satisfactory");
+    await expect(page.getByTestId("catalog-fits-wellbrained.factory")).toHaveText("Works in Satisfactory workspaces");
     await expect(page.getByTestId("catalog-install-wellbrained.factory")).toBeDisabled();
     await expect(row.getByTestId("catalog-fits-wellbrained.tracker")).toHaveText("Works here");
     await expect(row.getByTestId("catalog-publisher")).toHaveText("by wellbrained");
@@ -247,7 +248,8 @@ test("a user sees a module's rating on its card, how many gave each star, and it
   const rating = { average: 4.7, count: 23, stars: [0, 1, 1, 3, 18] };
   const { url, server } = await catalogServer([
     {
-      entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { publisher: "wellbrained", description: "Tracks your runs.", rating }),
+      // Published months ago: no longer New, however it is rated.
+      entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { publisher: "wellbrained", description: "Tracks your runs.", rating, publishedAt: "2026-06-01T10:00:00.000Z" }),
       body: tracker,
       reviews: {
         summary: rating,
@@ -280,6 +282,7 @@ test("a user sees a module's rating on its card, how many gave each star, and it
     await expect(card.locator("[data-slot=star-rating] [data-fill]")).toHaveCount(5);
     await expect(card.locator("[data-slot=star-rating] [data-fill=half]")).toHaveCount(1);
     await expect(page.getByTestId("catalog-wellbrained.factory").getByTestId("catalog-rating-new")).toHaveText("2 ratings");
+    // New says "published lately", not "unrated": the week-old Factory has it, the months-old Tracker does not.
     await expect(page.getByTestId("catalog-new-wellbrained.factory")).toHaveText("New");
     await expect(page.getByTestId("catalog-new-wellbrained.tracker")).toHaveCount(0);
 

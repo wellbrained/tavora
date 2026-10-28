@@ -4,7 +4,7 @@
 import {
   Bold,
   Check,
-  ChevronLeft,
+  PanelLeftOpen,
   Ellipsis,
   Eraser,
   FilePlus,
@@ -473,7 +473,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         :title="t('editor.allNotes')"
         @click="emit('back')"
       >
-        <ChevronLeft :stroke-width="1.5" />
+        <PanelLeftOpen :stroke-width="1.5" />
       </Button>
       <div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden" role="toolbar" :aria-label="t('editor.formatting')">
         <DropdownMenu>

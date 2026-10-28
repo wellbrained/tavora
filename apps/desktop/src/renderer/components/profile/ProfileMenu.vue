@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { Camera, Check, X } from "@lucide/vue";
+import { Camera, Check, UserRound, X } from "@lucide/vue";
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
-import { act, state, useFloating } from "../../host";
+import { act, openSettings, state, useFloating } from "../../host";
 import { t } from "../../i18n";
 import ImageCropDialog from "../ImageCropDialog.vue";
 import { autoInitials } from "./initials";
@@ -15,9 +15,9 @@ import RailFooterTile from "../RailFooterTile.vue";
 import RailTooltip from "../RailTooltip.vue";
 
 // The user's avatar in the rail footer. A click opens a small card above
-// it to change the name, initials and picture; there is no account behind it
-// yet. Name and initials are kept with Save (closing the card drops unsaved
-// edits); a picture is kept as soon as its crop is saved.
+// it to change the name, initials and picture, with a way to the account in
+// Settings. Name and initials save on their own: on Enter, when a field loses
+// focus and when the card closes; a picture is kept as soon as its crop is saved.
 defineProps<{ expanded: boolean }>();
 
 const MAX_NAME = 32;
@@ -29,21 +29,40 @@ const open = ref(false);
 const draft = ref({ name: "", initials: "" });
 const dirty = computed(() => draft.value.name !== profile.value.name || draft.value.initials !== profile.value.initials);
 const saving = ref(false);
-/** Shows "Saved" on the button for a moment after a save. */
+/** Shows "Saved" for a moment after a save. */
 const saved = ref(false);
 let savedTimer: ReturnType<typeof setTimeout> | undefined;
 const fileInput = ref<HTMLInputElement | null>(null);
+/** The initials field shows once asked for, or when the user has set their own. */
+const editInitials = ref(false);
+const initialsWrap = ref<HTMLElement | null>(null);
 /** The picked image waiting in the crop dialog. */
 const cropping = ref<string | null>(null);
 
 const track = useFloating();
 function onOpenChange(value: boolean) {
+  // Closing keeps what was typed, like leaving a field does.
+  if (!value) void save();
   open.value = value;
   track(value);
   if (value) {
     draft.value = { name: profile.value.name, initials: profile.value.initials };
+    editInitials.value = Boolean(profile.value.initials.trim());
     saved.value = false;
   }
+}
+
+async function showInitials() {
+  editInitials.value = true;
+  await nextTick();
+  initialsWrap.value?.querySelector("input")?.focus();
+}
+
+function openAccount() {
+  void save();
+  open.value = false;
+  track(false);
+  openSettings({ section: "account" });
 }
 
 async function save() {
@@ -154,7 +173,8 @@ function closeCrop() {
                 <X class="size-3.5" :stroke-width="2" />
               </button>
             </div>
-            <div class="flex min-w-0 flex-1 items-center gap-2 pb-1">
+            <!-- Kept clear of the banner: the row starts where the banner ends. -->
+            <div class="flex min-w-0 flex-1 items-center gap-2 pt-2 pb-1">
               <span :class="cn('truncate text-lg font-semibold', !draft.name.trim() && 'text-muted-foreground')">
                 {{ draft.name.trim() || t("profile.yours") }}
               </span>
@@ -172,7 +192,7 @@ function closeCrop() {
         </div>
 
         <form class="flex w-full flex-col" @submit.prevent="save">
-          <div class="flex gap-2 px-4 pb-4">
+          <div class="flex gap-2 px-4 pb-2">
             <label class="flex min-w-0 flex-1 flex-col gap-1.5">
               <span class="text-muted-foreground text-xs font-medium tracking-wide uppercase">{{ t("profile.name") }}</span>
               <Input
@@ -182,37 +202,40 @@ function closeCrop() {
                 spellcheck="false"
                 :maxlength="MAX_NAME"
                 data-testid="profile-name"
+                @blur="save"
               />
             </label>
-            <label class="flex w-20 flex-none flex-col gap-1.5">
+            <label v-if="editInitials" ref="initialsWrap" class="flex w-20 flex-none flex-col gap-1.5">
               <span class="text-muted-foreground text-xs font-medium tracking-wide uppercase">{{ t("profile.initials") }}</span>
               <Input
                 v-model="draft.initials"
                 class="text-center"
-                :placeholder="autoInitials(draft.name) || t('profile.initialsAuto')"
+                :placeholder="autoInitials(draft.name)"
                 autocomplete="off"
                 spellcheck="false"
                 :maxlength="MAX_INITIALS"
                 :title="t('profile.initialsHint')"
                 data-testid="profile-initials"
+                @blur="save"
               />
             </label>
           </div>
+          <!-- Enter in a field submits; there is no Save button. -->
+          <button type="submit" class="hidden" tabindex="-1" aria-hidden="true" />
 
-          <!-- Footer bar, apart from the fields. -->
-          <div class="bg-background/50 flex min-h-13 items-center gap-3 border-t px-4 py-2.5">
-            <span class="text-muted-foreground text-xs" role="status">
-              {{ dirty ? t("profile.unsaved") : saved ? t("profile.allSaved") : "" }}
+          <div class="flex min-h-7 items-center gap-2 px-4 pb-3">
+            <Button v-if="!editInitials" type="button" variant="link" size="sm" class="h-auto p-0" data-testid="profile-change-initials" @click="showInitials">
+              {{ t("profile.changeInitials") }}
+            </Button>
+            <span class="text-muted-foreground ml-auto flex items-center gap-1 text-xs" role="status" data-testid="profile-status">
+              <template v-if="saved && !dirty"><Check class="size-3.5" :stroke-width="2" /> {{ t("profile.saved") }}</template>
             </span>
-            <Button
-              type="submit"
-              :variant="dirty || saving ? 'default' : 'secondary'"
-              class="ml-auto min-w-20"
-              :disabled="!dirty || saving"
-              data-testid="profile-save"
-            >
-              <template v-if="saved && !dirty"><Check :stroke-width="2" /> {{ t("profile.saved") }}</template>
-              <template v-else>{{ saving ? t("profile.saving") : t("common.save") }}</template>
+          </div>
+
+          <!-- Footer: the way to the account behind the profile. -->
+          <div class="bg-background/50 flex items-center border-t px-2 py-1.5">
+            <Button type="button" variant="ghost" size="sm" class="w-full justify-start" data-testid="profile-account" @click="openAccount">
+              <UserRound :stroke-width="1.5" /> {{ t("profile.account") }}
             </Button>
           </div>
         </form>

@@ -11,7 +11,7 @@ import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api
 import { act, addModule, api, dialog, openSettings, state, type AddModuleRequest } from "../host";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@tavora/official-ui/components/ui/select";
 import { t } from "../i18n";
 import { formatSize } from "../catalog-size";
 import { cn } from "@/lib/utils";
@@ -82,8 +82,13 @@ function fitLabel(module: CatalogModuleView): string {
   return module.forGames.length ? t("catalog.forGames", { games: module.forGames.join(", ") }) : t("catalog.notForPersonal");
 }
 
-/** New until enough users rated it to show its stars. */
-const isNew = (module: CatalogModuleView) => !module.rating || module.rating.count < MIN_RATINGS_SHOWN;
+/** New for two weeks after it was published; a badge on every card would say nothing. */
+const NEW_DAYS = 14;
+const isNew = (module: CatalogModuleView) => Date.now() - (Date.parse(module.publishedAt) || 0) < NEW_DAYS * 24 * 60 * 60 * 1000;
+/** A count this small works against a module rather than for it, so the card leaves it out. */
+const MIN_INSTALLS_SHOWN = 10;
+/** A pre-release version (1.2.0-alpha.3) reads as Preview; the exact version stays in the tooltip. */
+const isPreview = (module: CatalogModuleView) => module.version.includes("-");
 
 async function install(module: CatalogModuleView) {
   installing.value = module.id;
@@ -116,8 +121,8 @@ function settings() {
       <div class="flex flex-wrap items-center gap-3 pt-6 pb-3">
         <p class="text-muted-foreground flex min-w-0 flex-1 items-center gap-2 text-sm"><ShieldCheck class="size-4 flex-none" :stroke-width="1.5" /> {{ t("catalog.hint") }}</p>
         <Select v-model="sort">
-          <SelectTrigger size="sm" class="w-40" :aria-label="t('catalog.sort.label')" data-testid="catalog-sort">
-            <SelectValue />
+          <SelectTrigger size="sm" class="w-44" :aria-label="t('catalog.sort.label')" data-testid="catalog-sort">
+            <span class="truncate">{{ t("catalog.sort.current", { by: t(`catalog.sort.${sort}`) }) }}</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="name">{{ t("catalog.sort.name") }}</SelectItem>
@@ -137,8 +142,10 @@ function settings() {
                 <button type="button" class="hover:text-primary focus-visible:ring-ring truncate rounded-sm text-left font-medium outline-none focus-visible:ring-2" :title="module.name"
                   :aria-label="t('catalog.infoLabel', { name: module.name })" data-testid="catalog-name" :data-module="module.id" @click="open(module)"
                 >{{ module.name }}</button>
-                <span class="text-muted-foreground shrink-0 text-xs tabular-nums">{{ module.version }}</span>
-                <Badge v-if="isNew(module)" variant="info" class="self-center" :title="t('catalog.rating.newHint')" :data-testid="`catalog-new-${module.id}`">{{ t("catalog.rating.new") }}</Badge>
+                <span class="text-muted-foreground shrink-0 text-xs tabular-nums" :title="isPreview(module) ? t('catalog.previewHint', { version: module.version }) : undefined" :data-testid="`catalog-version-${module.id}`">{{
+                  isPreview(module) ? t("catalog.preview") : module.version
+                }}</span>
+                <Badge v-if="isNew(module)" variant="info" class="self-center" :title="t('catalog.newHint')" :data-testid="`catalog-new-${module.id}`">{{ t("catalog.rating.new") }}</Badge>
               </div>
               <p class="text-muted-foreground truncate text-xs" :title="module.owner" data-testid="catalog-publisher">{{ module.publisher ? t("catalog.by", { name: module.publisher }) : t("catalog.byKey", { key: module.owner.slice(0, 8) }) }}</p>
               <p v-if="module.description" class="text-muted-foreground mt-1.5 line-clamp-2 text-sm" :title="module.description" data-testid="catalog-description">{{ module.description }}</p>
@@ -153,8 +160,10 @@ function settings() {
                   <component :is="module.fits ? CircleCheck : Gamepad2" class="size-3.5 flex-none" :stroke-width="1.75" />
                   <span class="truncate">{{ fitLabel(module) }}</span>
                 </span>
-                <span aria-hidden="true">·</span>
-                <span class="shrink-0 tabular-nums" :data-testid="`catalog-installs-${module.id}`">{{ t("catalog.installs", { count: module.installs }) }}</span>
+                <template v-if="module.installs >= MIN_INSTALLS_SHOWN">
+                  <span aria-hidden="true">·</span>
+                  <span class="shrink-0 tabular-nums" :data-testid="`catalog-installs-${module.id}`">{{ t("catalog.installs", { count: module.installs }) }}</span>
+                </template>
               </span>
               <!-- A disabled button gets no hover, so the reason sits on a wrapper. -->
               <span class="shrink-0" :title="whereFits(module) ?? undefined">

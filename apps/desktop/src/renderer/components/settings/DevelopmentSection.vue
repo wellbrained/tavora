@@ -24,7 +24,28 @@ import RecoveryKeySettings from "./RecoveryKeySettings.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
-defineProps<{ highlight: string | null }>();
+const props = defineProps<{ highlight: string | null }>();
+
+// Players never see the developer tools until they ask for them: a card asks "Want to make modules?" and
+// Let's go shows them, kept in the library (so in backups and the cloud copy). Anyone who already has
+// project folders or a developer account, or who searched for one of these settings, gets them straight away.
+function startMaking() {
+  void act({ type: "set-makes-modules", on: true });
+}
+
+// Before it was a library setting, Let's go was kept in this window's local storage: carried over once.
+const OLD_MAKES_MODULES = "tavora.makesModules";
+const carriedOver = ref(false);
+try {
+  if (localStorage.getItem(OLD_MAKES_MODULES) === "1") {
+    carriedOver.value = true;
+    void act({ type: "set-makes-modules", on: true }, { quiet: true }).then((result) => {
+      if (result.ok) localStorage.removeItem(OLD_MAKES_MODULES);
+    });
+  }
+} catch {
+  // No local storage: nothing to carry over.
+}
 
 /** Publishing needs the account; in builds without accounts there is none of it. */
 const accounts = computed(() => account.value?.enabled === true);
@@ -33,6 +54,14 @@ const recoveryKey = computed(() => Boolean(developerKeys.value?.recoveryKey) || 
 
 const modules = computed(() => state.value!.modules);
 const folders = computed(() => state.value!.developmentFolders);
+const makesModules = computed(
+  () =>
+    state.value!.library.makesModules ||
+    carriedOver.value ||
+    folders.value.length > 0 ||
+    Boolean(account.value?.developer) ||
+    (props.highlight !== null && props.highlight !== "developer-docs"),
+);
 const examples = computed(() => modules.value.filter((module) => module.origin.kind === "example").sort((a, b) => a.name.localeCompare(b.name)));
 const moduleById = (id: string) => modules.value.find((module) => module.id === id);
 
@@ -139,6 +168,18 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
 </script>
 
 <template>
+  <SettingGroup v-if="!makesModules">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-3 py-4" data-testid="development-intro">
+      <Rocket class="text-primary size-6 flex-none" :stroke-width="1.5" aria-hidden="true" />
+      <div class="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
+        <span class="font-medium">{{ t("devStart.card.title") }}</span>
+        <span class="text-muted-foreground text-sm">{{ t("settings.development-intro") }}</span>
+      </div>
+      <Button class="flex-none" data-testid="development-start" @click="startMaking">{{ t("devStart.card.start") }}</Button>
+    </div>
+  </SettingGroup>
+
+  <template v-else>
   <SettingGroup v-if="accounts && developerState === 'missing'">
     <div class="flex flex-wrap items-center gap-x-6 gap-y-3 py-4" data-testid="developer-start-card">
       <Rocket class="text-primary size-6 flex-none" :stroke-width="1.5" aria-hidden="true" />
@@ -297,6 +338,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
   <template v-if="accounts && account?.account">
     <RecoveryKeySettings v-if="recoveryKey" />
     <ModuleDeveloperSettings :highlight="highlight" />
+  </template>
   </template>
 
   <SettingGroup :title="t('settings.heading.help')">

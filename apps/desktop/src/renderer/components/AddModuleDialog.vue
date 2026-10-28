@@ -273,7 +273,9 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                       <button type="button" class="hover:text-primary focus-visible:ring-ring truncate rounded-sm text-left font-medium outline-none focus-visible:ring-2" :title="module.name"
                         :aria-label="t('catalog.infoLabel', { name: module.name })" :data-testid="`module-name-${module.id}`" @click="openInfo(module)"
                       >{{ module.name }}</button>
+                      <!-- The Official tag only where the list mixes kinds; under the Official heading it would say nothing. -->
                       <Badge
+                        v-if="view !== 'official'"
                         variant="outline"
                         :class="cn('py-0 font-normal', module.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')"
                         :data-testid="`provenance-${module.id}`"

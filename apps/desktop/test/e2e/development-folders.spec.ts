@@ -207,7 +207,8 @@ test("an example copied into another folder adds its project as a project folder
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as unknown as typeof dialog.showOpenDialog;
     }, elsewhere);
 
-    // Without project folders there is nothing to choose: the folder is picked after Copy.
+    // Without project folders the tools show after Let's go, and there is nothing to choose: the folder is picked after Copy.
+    await page.getByTestId("development-start").click();
     await page.getByTestId(`copy-example-${VUE}`).click();
     await expect(page.getByTestId("copy-example-folder")).toHaveCount(0);
     await expect(page.getByTestId("copy-example-name")).toHaveValue("My Vue Module");

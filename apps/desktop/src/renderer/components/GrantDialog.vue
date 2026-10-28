@@ -54,6 +54,27 @@ const from = computed(() => {
   return current.provenance === "official" ? t("grant.from.official") : t("grant.from.local");
 });
 
+/** Each connector's question, so a prompt that asks for one thing leads with what it is for. */
+const ASK = {
+  "system-info": "grant.ask.systemInfo",
+  media: "grant.ask.media",
+  "ai-usage": "grant.ask.aiUsage",
+  discord: "grant.ask.discord",
+  "stream-overlay": "grant.ask.overlay",
+} as const;
+
+const title = computed(() => {
+  const current = module.value;
+  if (!current) return "";
+  if (update.value) return t("grant.updateTitle", { name: current.name, version: update.value.version });
+  if (props.request.review) return t("grant.reviewTitle", { name: current.name });
+  const only = connectors.value.length === 1 && !hosts.value.length ? (ASK as Record<string, (typeof ASK)[keyof typeof ASK]>)[connectors.value[0]!] : undefined;
+  if (only) return t(only, { name: current.name });
+  if (!connectors.value.length && hosts.value.length === 1) return t("grant.ask.site", { name: current.name, host: hosts.value[0]! });
+  if (!connectors.value.length && hosts.value.length > 1) return t("grant.ask.sites", { name: current.name, count: hosts.value.length });
+  return t("grant.title", { name: current.name });
+});
+
 /** The accounts are chosen in Settings; the dialog closes so the page is not behind it. */
 function editAccounts() {
   dialog.value = null;
@@ -99,9 +120,7 @@ async function allow() {
 <template>
   <ModalDialog
     v-if="module"
-    :title="
-      update ? t('grant.updateTitle', { name: module.name, version: update.version }) : request.review ? t('grant.reviewTitle', { name: module.name }) : t('grant.title', { name: module.name })
-    "
+    :title="title"
     class="sm:max-w-[480px]"
     testid="grant-dialog"
     @close="close"
@@ -168,3 +187,10 @@ async function allow() {
     </div>
   </ModalDialog>
 </template>
+
+<style>
+/* A light theme gets a lighter scrim, so the cream dialog doesn't sit on near-black. The kit's overlay comes right before its content. */
+html:not(.dark) [data-slot="dialog-overlay"]:has(+ [data-testid="grant-dialog"]) {
+  background-color: rgb(0 0 0 / 0.35);
+}
+</style>

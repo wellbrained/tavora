@@ -2,7 +2,7 @@
   "$schema": "../../packages/module-schema/schema/tavora.module.schema.json",
   "id": "local.example.vue-module",
   "name": "Vue Test Module",
-  "description": "The same example features, built with Vue.",
+  "description": "The same small module, built with Vue.",
   "version": "0.0.0",
   "apiVersion": "1",
   "entry": "dist/index.html",
