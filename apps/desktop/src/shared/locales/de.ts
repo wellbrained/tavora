@@ -1297,6 +1297,7 @@ export const de: Record<keyof typeof en, string> = {
   "workspace.addModule": "Modul hinzufügen",
   "workspace.modulesHere": "Module in diesem Arbeitsbereich",
   "workspace.inWorkspace": "In diesem Arbeitsbereich",
+  "workspace.running": "Läuft",
   "workspace.startTitle": "Baue deinen Arbeitsbereich auf",
   "workspace.startText": "Füge ein Modul hinzu, um loszulegen.",
   "workspace.orLayout": "Oder wähle ein Layout",

@@ -97,6 +97,11 @@ export interface GameWatcherOptions {
   onChange: (running: ReadonlySet<string>, initial: boolean) => void;
   /** Looks at the running programs; a test stands in for Windows. */
   probe?: ProgramProbe;
+  /**
+   * Tests only: Steam runs this game, nothing else runs, on any platform. Asked when the watch starts. A packaged app
+   * never sets it (index.ts).
+   */
+  testSteamAppId?: () => number | undefined;
   platform?: NodeJS.Platform;
   log?: (line: string) => void;
 }
@@ -124,7 +129,8 @@ export class GameWatcher {
   }
 
   start(): void {
-    if (!this.stopped || (this.options.platform ?? process.platform) !== "win32") return;
+    const testApp = this.options.testSteamAppId?.();
+    if (!this.stopped || (testApp === undefined && (this.options.platform ?? process.platform) !== "win32")) return;
     this.stopped = false;
     this.installedKnown = false;
     this.looked = false;
@@ -132,7 +138,7 @@ export class GameWatcher {
     void this.refreshInstalled();
     this.refreshTimer = setInterval(() => void this.refreshInstalled(), INSTALLED_REFRESH_MS);
     this.refreshTimer.unref?.();
-    this.probe = this.options.probe ?? windowsProgramProbe();
+    this.probe = testApp !== undefined ? () => ({ programs: new Map(), steamAppId: testApp }) : (this.options.probe ?? windowsProgramProbe());
     this.lookTimer = setInterval(() => this.look(), POLL_SECONDS * 1000);
     this.lookTimer.unref?.();
     this.look();

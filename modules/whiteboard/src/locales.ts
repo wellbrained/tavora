@@ -51,6 +51,7 @@ export const en = {
   "palette.more": "More options",
   "palette.less": "Fewer options",
   "palette.move": "Drag to move the palette. Double-click to put it back.",
+  "hint.panning": "Hold Space or the mouse wheel and drag to move around",
   "palette.collapse": "Fold the palette away",
   "palette.expand": "Show the palette",
 } as const;
@@ -106,6 +107,7 @@ export const de: Record<keyof typeof en, string> = {
   "palette.more": "Weitere Optionen",
   "palette.less": "Weniger Optionen",
   "palette.move": "Ziehen, um die Palette zu verschieben. Doppelklick setzt sie zurück.",
+  "hint.panning": "Halte Leertaste oder Mausrad und zieh, um die Tafel zu verschieben",
   "palette.collapse": "Palette einklappen",
   "palette.expand": "Palette ausklappen",
 };

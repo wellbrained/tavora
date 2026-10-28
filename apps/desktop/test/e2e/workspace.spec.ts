@@ -7,11 +7,13 @@ import {
   expectModuleText,
   inModule,
   launch,
+  newUserData,
   openWorkspace,
   openModule,
   panels,
   RAIL_WIDTH,
   REACT,
+  seedLibrary,
   setContentSize,
   VANILLA,
   waitForShown,
@@ -183,6 +185,27 @@ test("the rail's expand button keeps clear of the workspace header", async () =>
     const icon = (await page.getByTestId("workspace").locator("header > span").first().boundingBox())!;
     // The round button hangs over the rail's edge; the header's game icon starts after it, with room to spare.
     expect(icon.x).toBeGreaterThanOrEqual(button.x + button.width + 8);
+  } finally {
+    await app.close();
+  }
+});
+
+test("the header says when the workspace's game is running", async () => {
+  // Steam is taken to run Path of Exile 2 (a test switch; a packaged app never has it).
+  const userData = await newUserData();
+  await mkdir(userData, { recursive: true });
+  const seeded = seedLibrary();
+  const library = { ...seeded, workspaces: { ...seeded.workspaces, poe2: { ...seeded.workspaces.poe2, steamAppId: 2694490 } } };
+  await writeFile(path.join(userData, "library.json"), JSON.stringify(library));
+  const { app, page } = await launch(userData, [], { seed: false, env: { TAVORA_TEST_STEAM_APP: "2694490" } });
+  try {
+    await openWorkspace(page, "poe2");
+    // The watcher reports once it has looked for the games installed on this PC, which can take a while.
+    await expect(page.getByTestId("workspace-running")).toHaveText("Running", { timeout: 30_000 });
+    await expect(page.getByTestId("workspace-running")).toHaveAttribute("title", "Path of Exile 2 is running");
+    // Another game's workspace says nothing.
+    await openWorkspace(page, "satisfactory");
+    await expect(page.getByTestId("workspace-running")).toHaveCount(0);
   } finally {
     await app.close();
   }

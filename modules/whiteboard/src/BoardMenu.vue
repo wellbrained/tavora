@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The board dropdown in the header: switch boards, make a new one, rename or delete the current one.
-import { ChevronDown, Pencil, Plus, Trash2 } from "@lucide/vue";
+// The board dropdown in the header: switch boards, make a new one, rename, clear or delete the current one.
+import { ChevronDown, Eraser, Pencil, Plus, Trash2 } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import {
   DropdownMenu,
@@ -16,8 +16,8 @@ import { nextTick, ref } from "vue";
 import { MAX_NAME, type BoardSummary } from "./boards";
 import { t } from "./i18n";
 
-const props = defineProps<{ boards: BoardSummary[]; currentId: string; currentName: string }>();
-const emit = defineEmits<{ select: [id: string]; create: []; rename: [name: string]; delete: [] }>();
+const props = defineProps<{ boards: BoardSummary[]; currentId: string; currentName: string; canClear: boolean }>();
+const emit = defineEmits<{ select: [id: string]; create: []; rename: [name: string]; clear: []; delete: [] }>();
 
 const renaming = ref(false);
 const draft = ref("");
@@ -85,6 +85,11 @@ function finishRename(save: boolean, event?: Event) {
         <DropdownMenuItem data-testid="board-rename" @select="startRename">
           <Pencil :stroke-width="1.5" />
           {{ t("board.rename") }}
+        </DropdownMenuItem>
+        <!-- Clearing shows Undo afterwards (and Ctrl+Z works), so it needs no question first. -->
+        <DropdownMenuItem :disabled="!canClear" :title="t('clear.hint')" data-testid="clear-board" @select="emit('clear')">
+          <Eraser :stroke-width="1.5" />
+          {{ t("clear.button") }}
         </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" data-testid="board-delete" @select="emit('delete')">
           <Trash2 :stroke-width="1.5" />

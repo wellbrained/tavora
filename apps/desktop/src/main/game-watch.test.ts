@@ -154,4 +154,25 @@ describe("GameWatcher", () => {
     expect(watcher.active).toBe(false);
     expect(probe).not.toHaveBeenCalled();
   });
+  it("takes a test's Steam game as running, on any platform", async () => {
+    vi.useFakeTimers();
+    try {
+      const library = emptyLibrary();
+      const id = addWorkspace(library, { name: "Some Game", steamAppId: 570 }, day(1));
+      const changes: [string[], boolean][] = [];
+      const watcher = new GameWatcher({
+        entries: () => liveWorkspaces(library),
+        findInstalled: async () => [],
+        onChange: (running, initial) => changes.push([[...running], initial]),
+        platform: "linux",
+        testSteamAppId: () => 570,
+      });
+      watcher.start();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(changes).toEqual([[[id], true]]);
+      watcher.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

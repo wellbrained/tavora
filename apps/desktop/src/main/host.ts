@@ -300,6 +300,8 @@ export interface HostOptions {
   systemTheme?: "dark" | "light" | undefined;
   /** Development and tests only: what the system's language is taken to be, instead of the real one. */
   systemLocale?: string | undefined;
+  /** Tests only: Steam is taken to run this game (game-watch.ts), so a test can see a game running. */
+  testSteamAppId?: number | undefined;
   /** Tests only: what a module may keep in its browser storage, in bytes, instead of the usual limit. */
   moduleStorageLimit?: number | undefined;
   /** Tests only: host names network.fetch reaches on a local server, over plain http (network.ts). */
@@ -422,6 +424,7 @@ export class Host {
     entries: () => liveWorkspaces(this.library),
     findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
     onChange: (running, initial) => this.gamesRunning(running, initial),
+    testSteamAppId: () => this.options.testSteamAppId,
     log: (line) => console.warn(`[tavora] ${line}`),
   });
   /** Where modules keep their pictures. */
@@ -4154,6 +4157,7 @@ export class Host {
       opening: this.opening !== null,
       pendingLink: this.pendingLink,
       runningGameId: this.running.filter((id) => id !== this.workspaceId && isLive(this.library, id)).at(-1) ?? null,
+      workspaceRunning: this.workspaceId !== null && this.running.includes(this.workspaceId),
       pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
       streaming: this.streaming.view(),
       gameOverlays: this.gameOverlays.view(),
