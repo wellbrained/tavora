@@ -28,6 +28,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.63",
+    date: "2026-10-28",
+    title: "Overlay button colours",
+    notes: [
+      "Start is green and Stop is red, each with a filled icon.",
+    ],
+  },
+  {
     version: "0.21.62",
     date: "2026-10-28",
     title: "Overlays run from any workspace",
