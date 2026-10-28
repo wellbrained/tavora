@@ -28,6 +28,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.85",
+    date: "2026-10-28",
+    title: "Overlay changes kept on quit",
+    notes: [
+      "Overlay setups you changed just before closing Tavora are now saved.",
+    ],
+    prs: [
+      { number: 441, title: "Tests: green e2e suite on main" },
+    ],
+  },
+  {
     version: "0.21.84",
     date: "2026-10-28",
     title: "What's new, at a glance",
