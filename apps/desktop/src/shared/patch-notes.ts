@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.84",
+    date: "2026-10-28",
+    title: "What's new, at a glance",
+    notes: [
+      "After an update, Home shows \"Tavora is here\" once, with a link to what's new.",
+      "Settings > Modules only tags modules from elsewhere; Tavora's own ones no longer say \"Official\" on every row.",
+      "An empty overlay canvas says how to fill it.",
+    ],
+    prs: [
+      { number: 439, title: "Home names a new version once; Settings > Modules tags only outside modules; empty overlay canvas says what to do" },
+    ],
+    tags: ["games", "onboarding", "settings"],
+  },
+  {
     version: "0.21.83",
     date: "2026-10-28",
     title: "Clearer when you're offline",

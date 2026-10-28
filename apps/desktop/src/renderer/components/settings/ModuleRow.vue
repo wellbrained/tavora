@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // One module in a Settings list: icon, name, version, who made it, what it
-// does and where it was found (the Official badge says it for Tavora's own; a list
-// that already says it, like a project folder's, hides it). The buttons for it go in the slot.
+// does and where it was found. Tavora's own modules are the usual case and carry no tag; the others say where they
+// came from (Catalog, From file, Local…), and a list that already says it, like a project folder's, hides it. The
+// buttons for it go in the slot.
 import { FileArchive, FolderCode, Hourglass, Package, Store, Upload } from "@lucide/vue";
 import { computed } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
@@ -42,8 +43,8 @@ const tagClass = {
       <span class="flex min-w-0 items-center gap-2">
         <span class="truncate font-medium">{{ module.name }}</span>
         <span class="text-muted-foreground flex-none text-xs tabular-nums">{{ module.version }}</span>
-        <!-- The Examples list already says Example, so its rows skip the tag. -->
-        <Badge v-if="!(hideOrigin && kind === 'example')" variant="outline" :class="cn('py-0', tagClass[kind])" :data-testid="`module-tag-${module.id}`" :data-kind="kind">
+        <!-- Official needs no tag; the Examples list already says Example, so its rows skip the tag too. -->
+        <Badge v-if="kind !== 'official' && !(hideOrigin && kind === 'example')" variant="outline" :class="cn('py-0', tagClass[kind])" :data-testid="`module-tag-${module.id}`" :data-kind="kind">
           <Package v-if="kind === 'release'" aria-hidden="true" />
           <FolderCode v-else-if="kind === 'local'" aria-hidden="true" />
           <Store v-else-if="kind === 'catalog'" aria-hidden="true" />

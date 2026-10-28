@@ -760,6 +760,11 @@ export class Host {
     // The last workspace's pages start loading with the window, and its first look already has the one loading cover.
     if (host.screen === "workspace") host.openCurrentWorkspace();
     await host.window.loadURL(options.devServer ?? `${HOST_SCHEME}://app/index.html`);
+    // A first start (or the first with this setting) counts the running version as seen: no news card for it.
+    if (library.seenVersion === null) {
+      library.seenVersion = app.getVersion();
+      host.saveLibrary();
+    }
     host.syncGameWatcher();
     host.gameOverlays.start();
     void host.files.check();
@@ -2095,6 +2100,10 @@ export class Host {
       }),
       "set-makes-modules": saved((action) => {
         this.library.makesModules = action.on;
+      }),
+      // The user saw what's new in this version (Home's card); always the running version, never one the page names.
+      "see-version": saved(() => {
+        this.library.seenVersion = app.getVersion();
       }),
       "set-rail": saved((action) => setRail(this.library, action)),
 
@@ -4042,6 +4051,7 @@ export class Host {
         steamProfile: library.steamProfile,
         onboarded: library.onboarded,
         makesModules: library.makesModules,
+        seenVersion: library.seenVersion,
         rail: { ...library.rail },
         browser: { sharedSites: [...library.browser.sharedSites], adblockOff: [...library.browser.adblockOff] },
       },

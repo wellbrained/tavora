@@ -109,6 +109,7 @@ test("Reset position and Reset size work from the page, Take picture says why it
     // Drag it with the mouse on the layer, as the user does.
     const layer = layerOf(app);
     const outline = layer.locator('[data-testid^="layout-item-"]').first();
+    await expect(layer.getByTestId("layout-canvas-empty")).toHaveCount(0);
     await expect(outline).toBeVisible();
     const box = (await outline.boundingBox())!;
     await layer.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -165,6 +166,8 @@ test("The page opens on Everywhere, lists every panel with the reason one can't 
     await overlayPage(app, page);
     // No game runs, and nothing was set up: Everywhere, and the dropdown holds only setups that exist.
     await expect.poll(async () => (await state(page))?.gameId).toBe("$everywhere");
+    // An empty canvas says what to do instead of staying blank.
+    await expect(layerOf(app).getByTestId("layout-canvas-empty")).toHaveText("Nothing here yet. Add a panel from Sources.");
     const view = await state(page);
     expect(view.games.map((game) => game.id)).toEqual(["$everywhere", "$all"]);
     expect(view.sources).toHaveLength(1);
