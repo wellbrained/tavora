@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.91",
+    date: "2026-10-28",
+    title: "Honest update check",
+    notes: [
+      "Check for updates says when you have no community modules yet, instead of calling them up to date.",
+    ],
+    prs: [
+      { number: 446, title: "Modules: say so when there are no community modules to update" },
+    ],
+    tags: ["settings"],
+  },
+  {
     version: "0.21.90",
     date: "2026-10-28",
     title: "Home fills big screens",
