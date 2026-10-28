@@ -586,6 +586,12 @@ export class AccountStore {
     return this.db.prepare("select 1 from suspensions where account_id = ?").get(accountId) !== undefined;
   }
 
+  /** The accounts that are suspended or banned now: public lists such as leaderboards leave them out. */
+  suspendedOrBanned(): Set<string> {
+    const rows = this.db.prepare("select account_id from suspensions union select account_id from bans").all() as { account_id: string }[];
+    return new Set(rows.map((row) => row.account_id));
+  }
+
   suspension(accountId: string): Suspension | null {
     const row = this.db.prepare("select reason, note, suspended_at, last_active_at from suspensions where account_id = ?").get(accountId) as
       | { reason: string; note: string | null; suspended_at: number; last_active_at: number | null }
@@ -867,6 +873,12 @@ export class AccountStore {
       | { name: string; initials: string; picture: Uint8Array | null; updated_at: number }
       | undefined;
     return row ? { name: row.name, initials: row.initials, picture: row.picture ? new Uint8Array(row.picture) : null, updatedAt: row.updated_at } : null;
+  }
+
+  /** Only the profile's name, or null without a profile. */
+  profileName(accountId: string): string | null {
+    const row = this.db.prepare("select name from profiles where account_id = ?").get(accountId) as { name: string } | undefined;
+    return row?.name ?? null;
   }
 
   /** Keeps a profile unless the account already has a newer one; returns what the account has now. */

@@ -250,6 +250,29 @@ export class AccountClient {
     if (this.saved) void this.readDeveloper();
   }
 
+  /** Whether this Tavora has accounts at all; a build without Tavora's service has none. */
+  enabled(): boolean {
+    return this.options.enabled;
+  }
+
+  /** Whether accounts are on and the user is signed in. */
+  isSignedIn(): boolean {
+    return this.options.enabled && this.saved !== null;
+  }
+
+  /**
+   * One leaderboard request under /v1/leaderboards (leaderboards.ts), with the sign-in when there is one: the status
+   * and body as they came, for the module's own answer. A sign-in the service no longer knows is forgotten here too.
+   * Throws a UserError only when the service can't be reached.
+   */
+  async leaderboardRequest(method: "GET" | "PUT" | "POST" | "DELETE", path: string, body?: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+    const signedIn = this.saved !== null;
+    const response = await this.send(method, `/v1/leaderboards${path}`, body, true);
+    const answer = (await response.json().catch(() => ({}))) as unknown;
+    if (response.status === 401 && signedIn) await this.forget();
+    return { status: response.status, body: typeof answer === "object" && answer !== null && !Array.isArray(answer) ? (answer as Record<string, unknown>) : {} };
+  }
+
   /** The sign-in token, for another call to the service that needs a signed-in user (sharing icons); null when signed out. */
   token(): string | null {
     return this.options.enabled ? (this.saved?.token ?? null) : null;
@@ -757,25 +780,13 @@ export class AccountClient {
     this.options.onChange(this.view());
   }
 
-  /**
-   * One request to the service. Its own errors become messages for the user;
-   * a sign-in the service no longer knows (signed out from another device,
-   * unused for a year, account deleted) is forgotten here too. A Buffer body goes as a zip.
-   */
-  private async call(
-    method: string,
-    path: string,
-    body?: unknown,
-    auth = false,
-    root = "/v1/account",
-    extra: { headers?: Record<string, string>; timeoutMs?: number } = {},
-  ): Promise<Record<string, unknown>> {
+  /** Sends one request to the service, with the sign-in when `auth` and there is one. Throws only when the service can't be reached. */
+  private async send(method: string, path: string, body: unknown, auth: boolean, extra: { headers?: Record<string, string>; timeoutMs?: number } = {}): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), extra.timeoutMs ?? this.options.timeoutMs ?? ACCOUNT_TIMEOUT_MS);
     const zip = Buffer.isBuffer(body);
-    let response: Response;
     try {
-      response = await this.options.fetch(`${this.baseUrl}${root}${path === "/" ? "" : path}`, {
+      return await this.options.fetch(`${this.baseUrl}${path}`, {
         method,
         signal: controller.signal,
         credentials: "omit",
@@ -794,6 +805,22 @@ export class AccountClient {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * One request to the service. Its own errors become messages for the user;
+   * a sign-in the service no longer knows (signed out from another device,
+   * unused for a year, account deleted) is forgotten here too. A Buffer body goes as a zip.
+   */
+  private async call(
+    method: string,
+    path: string,
+    body?: unknown,
+    auth = false,
+    root = "/v1/account",
+    extra: { headers?: Record<string, string>; timeoutMs?: number } = {},
+  ): Promise<Record<string, unknown>> {
+    const response = await this.send(method, `${root}${path === "/" ? "" : path}`, body, auth, extra);
     if (response.status === 204) return {};
     const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     if (response.ok) return json;

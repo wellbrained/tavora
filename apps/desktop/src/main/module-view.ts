@@ -99,6 +99,8 @@ export interface ModuleViewOptions {
   appSettings: ModuleStore;
   /** The ai-usage connector, for a module granted it. */
   aiUsage: BridgeContext["aiUsage"];
+  /** The leaderboards connector for this module (leaderboards.ts); `show` asks the user in this panel. */
+  leaderboards: BridgeContext["leaderboards"];
   /** The system-info connector, shared by every panel; each view holds one subscription of its own. */
   systemInfo: { info(): SystemInfo | Promise<SystemInfo>; subscribe: SystemMonitor["subscribe"]; apps(): Promise<SystemApps>; traffic(): Promise<SystemTraffic> };
   /** The connection watcher (connection.ts): its log and settings are shared by every panel. */
@@ -591,6 +593,22 @@ export class ModuleView {
         panelState,
         appSettings: this.options.appSettings,
         aiUsage: this.options.aiUsage,
+        leaderboards: {
+          status: () => this.options.leaderboards.status(),
+          show: async () => {
+            // Tavora asks in this panel: one click asks once, and not while the panel is over the game.
+            this.refuseOverGame("leaderboards.show");
+            await this.takeGesture("leaderboards.show");
+            return this.options.leaderboards.show();
+          },
+          hide: async () => {
+            // Deleting the user's results takes their click, so a page can't do it on its own.
+            await this.takeGesture("leaderboards.hide");
+            return this.options.leaderboards.hide();
+          },
+          submit: (params) => this.options.leaderboards.submit(params),
+          top: (params) => this.options.leaderboards.top(params),
+        },
         systemInfo: this.systemInfoFor(() => bridge),
         media: this.mediaFor(() => bridge),
         discord: this.discordFor(() => bridge),
@@ -692,11 +710,12 @@ export class ModuleView {
     this.view.webContents.postMessage("tavora:port", null, [port2]);
   }
 
-  /** What the user has granted now (grants.ts): `network` with any granted host, `aiUsage`, `systemInfo`, `media`, `discord` and `overlay` with their connectors. */
+  /** What the user has granted now (grants.ts): `network` with any granted host, `aiUsage`, `leaderboards`, `systemInfo`, `media`, `discord` and `overlay` with their connectors. */
   private capabilities(): ReadonlySet<Capability> {
     const granted = new Set<Capability>();
     if (this.options.networkHosts().size > 0) granted.add("network");
     if (this.options.connectors().has("ai-usage")) granted.add("aiUsage");
+    if (this.options.connectors().has("leaderboards")) granted.add("leaderboards");
     if (this.options.connectors().has("system-info")) granted.add("systemInfo");
     if (this.options.connectors().has("media")) granted.add("media");
     if (this.options.connectors().has("discord")) granted.add("discord");

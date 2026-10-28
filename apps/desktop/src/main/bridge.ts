@@ -17,6 +17,9 @@ import {
   type HotkeyBinding,
   type HotkeySetResult,
   type JsonValue,
+  type LeaderboardRow,
+  type LeaderboardStatus,
+  type LeaderboardSubmitResult,
   type NetworkResponse,
   type GameOverlayResult,
   type OverlayLinkResult,
@@ -130,6 +133,18 @@ export interface BridgeContext {
     subscribe(event: DiscordEventName, channelId: string | null): Promise<void>;
     unsubscribe(event: DiscordEventName, channelId: string | null): Promise<void>;
     image(url: string): Promise<string | null>;
+  };
+  /**
+   * The leaderboards connector (leaderboards.ts) for this module; only reached with the `leaderboards` capability. The
+   * params of submit and top are checked there, against the manifest's boards. `show` and `hide` throw
+   * PERMISSION_DENIED unless the panel just got a click or key press; `show` resolves once the user answered.
+   */
+  leaderboards: {
+    status(): Promise<LeaderboardStatus>;
+    show(): Promise<LeaderboardStatus>;
+    hide(): Promise<LeaderboardStatus>;
+    submit(params: unknown): Promise<LeaderboardSubmitResult>;
+    top(params: unknown): Promise<LeaderboardRow[]>;
   };
   panelState: PanelStateStore;
   /** What the user has granted this module right now; asked on every gated call, so a revoke takes effect at once. */
@@ -245,6 +260,13 @@ const handlers = new Map<string, Handler>([
   ["storage.get", (s, params) => s.context.data.settings.get(object(params).key)],
   ["storage.keys", (s, params) => (noParams(params), s.context.data.settings.keys())],
   [
+    "storage.compareAndSet",
+    (s, params) => {
+      const p = object(params);
+      return s.context.data.settings.compareAndSet(p.key, required(p, "expected"), required(p, "value"));
+    },
+  ],
+  [
     "storage.set",
     async (s, params) => {
       const p = object(params);
@@ -262,6 +284,13 @@ const handlers = new Map<string, Handler>([
 
   ["storage.app.get", (s, params) => s.context.appSettings.get(object(params).key)],
   ["storage.app.keys", (s, params) => (noParams(params), s.context.appSettings.keys())],
+  [
+    "storage.app.compareAndSet",
+    (s, params) => {
+      const p = object(params);
+      return s.context.appSettings.compareAndSet(p.key, required(p, "expected"), required(p, "value"));
+    },
+  ],
   [
     "storage.app.set",
     async (s, params) => {
@@ -374,6 +403,12 @@ const handlers = new Map<string, Handler>([
       return s.context.media.control(session, action);
     },
   ],
+
+  ["leaderboards.status", (s, params) => (needs(s, "leaderboards", "leaderboards.status"), noParams(params), s.context.leaderboards.status())],
+  ["leaderboards.show", (s, params) => (needs(s, "leaderboards", "leaderboards.show"), noParams(params), s.context.leaderboards.show())],
+  ["leaderboards.hide", (s, params) => (needs(s, "leaderboards", "leaderboards.hide"), noParams(params), s.context.leaderboards.hide())],
+  ["leaderboards.submit", (s, params) => (needs(s, "leaderboards", "leaderboards.submit"), s.context.leaderboards.submit(object(params)))],
+  ["leaderboards.top", (s, params) => (needs(s, "leaderboards", "leaderboards.top"), s.context.leaderboards.top(object(params)))],
 
   ["discord.state", (s, params) => (needs(s, "discord", "discord.state"), noParams(params), s.context.discord.state())],
   ["discord.connect", async (s, params) => (needs(s, "discord", "discord.connect"), noParams(params), await s.context.discord.connect(), null)],

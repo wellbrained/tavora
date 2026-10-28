@@ -9,6 +9,7 @@ import { copyRoutes } from "./cloud-copy.ts";
 import { pairingRoutes } from "./pairing.ts";
 import { reviewRoutes, type ReviewStore } from "./reviews.ts";
 import { conversationRoutes, createConversationNotifier } from "./conversations.ts";
+import { leaderboardRoutes } from "./leaderboards.ts";
 import { createNotifier } from "./moderation-mail.ts";
 import { vaultRoutes } from "./vault.ts";
 import { catalogFilter, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
@@ -61,11 +62,13 @@ export interface AppOptions {
   reviewRateLimiter?: RateLimiter;
   /** Conversation messages and settings written per client. */
   conversationRateLimiter?: RateLimiter;
+  /** Leaderboard writes per account and module. */
+  leaderboardRateLimiter?: RateLimiter;
   /** Plain daily totals (stats.ts). Absent: nothing is counted. */
   stats?: StatsStore;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, stats }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
@@ -365,6 +368,21 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     catalogApp.all("/modules/:id/contact", off);
   }
   app.route("/v1/catalog", catalogApp);
+
+  // Leaderboards (leaderboards.ts): a catalog module's boards are the ones its newest listed version declares.
+  if (accounts?.leaderboards) {
+    app.route(
+      "/v1/leaderboards",
+      leaderboardRoutes({
+        leaderboards: accounts.leaderboards,
+        accounts: accounts.store,
+        boards: (moduleId) => catalog?.previousListed(moduleId)?.manifest.leaderboards?.boards ?? null,
+        clientKey: (request) => (clientKey ? clientKey(request) : "local"),
+        ...(leaderboardRateLimiter ? { writeRateLimiter: leaderboardRateLimiter } : {}),
+        ...(accounts.now ? { now: accounts.now } : {}),
+      }),
+    );
+  } else app.all("/v1/leaderboards/*", (context) => context.json({ error: "Leaderboards are not available right now.", reason: "unavailable" }, 503));
 
   // Accounts: the only user data the service keeps, and only once it can send email.
   // The cloud copy first: its bodies are bigger than the account routes allow, and it has its own limits.

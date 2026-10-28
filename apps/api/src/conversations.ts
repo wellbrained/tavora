@@ -145,10 +145,10 @@ const toConversation = (row: ConversationSql): Conversation => ({
   about: row.about_type && row.about_id ? { type: row.about_type, id: row.about_id } : null,
 });
 
-/** Letters and digits without look-alikes, so a label reads well aloud: "K7". */
+/** Letters and digits without look-alikes, so a label reads well aloud: "K7". Leaderboards use the same (leaderboards.ts). */
 const LABEL_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ";
 const LABEL_DIGITS = "23456789";
-const newLabel = () => LABEL_LETTERS[randomBytes(1)[0]! % LABEL_LETTERS.length]! + LABEL_DIGITS[randomBytes(1)[0]! % LABEL_DIGITS.length]!;
+export const newLabel = () => LABEL_LETTERS[randomBytes(1)[0]! % LABEL_LETTERS.length]! + LABEL_DIGITS[randomBytes(1)[0]! % LABEL_DIGITS.length]!;
 
 /** The conversations, messages, reports, contact settings and editable texts, in `conversations.sqlite` of the state directory. */
 export class ConversationStore {

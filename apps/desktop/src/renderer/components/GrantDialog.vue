@@ -10,7 +10,7 @@
 // With `inPanel` the same question is the content of the panel that asks (decision of 2026-10-28): the module's first
 // panel when it is added or still misses access, or the running panel that asks for a connector on request. Cancel then
 // closes the panels that wait for the answer; Allow lets the host start them (main/host.ts questionOf).
-import { Cpu, Gauge, Globe, Headphones, Music, Radio } from "@lucide/vue";
+import { Cpu, Gauge, Globe, Headphones, Music, Radio, Trophy } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, aiUsage, dialog, discord, nextUpdateAsk, openPanels, openSettings, state, stopUpdateAsks, type GrantRequest } from "../host";
@@ -68,6 +68,7 @@ const from = computed(() => {
 const ASK = {
   "system-info": "grant.ask.systemInfo",
   media: "grant.ask.media",
+  leaderboards: "grant.ask.leaderboards",
   "ai-usage": "grant.ask.aiUsage",
   discord: "grant.ask.discord",
   "stream-overlay": "grant.ask.overlay",
@@ -164,6 +165,10 @@ async function allow() {
     <section v-if="connectors.includes('media')" class="flex flex-col gap-2" :aria-label="t('grant.media')" data-testid="grant-media">
       <h3 class="flex items-center gap-2 font-medium"><Music :stroke-width="1.5" class="size-4" /> {{ t("grant.media") }}</h3>
       <p class="text-muted-foreground text-sm">{{ t("grant.mediaNote") }}</p>
+    </section>
+    <section v-if="connectors.includes('leaderboards')" class="flex flex-col gap-2" :aria-label="t('grant.leaderboards')" data-testid="grant-leaderboards">
+      <h3 class="flex items-center gap-2 font-medium"><Trophy :stroke-width="1.5" class="size-4" /> {{ t("grant.leaderboards") }}</h3>
+      <p class="text-muted-foreground text-sm">{{ t("grant.leaderboardsNote") }}</p>
     </section>
     <section v-if="connectors.includes('discord')" class="flex flex-col gap-2" :aria-label="t('grant.discord')" data-testid="grant-discord">
       <h3 class="flex items-center gap-2 font-medium"><Headphones :stroke-width="1.5" class="size-4" /> {{ t("grant.discord") }}</h3>

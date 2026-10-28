@@ -588,10 +588,73 @@ export interface DocumentChange {
  * Capabilities gate methods beyond the always-available core. A module has a
  * capability once the user granted one of its permissions for it (`network`:
  * a host in `permissions.network`; `aiUsage`: the `ai-usage` connector; `discord`:
- * the `discord` connector; `overlay`: the `stream-overlay` connector; `systemInfo`: the `system-info` connector; `media`: the `media` connector); calling a gated method without it fails
+ * the `discord` connector; `overlay`: the `stream-overlay` connector; `systemInfo`: the `system-info` connector; `media`: the `media` connector; `leaderboards`: the `leaderboards` connector); calling a gated method without it fails
  * with PERMISSION_DENIED. The others cannot be granted yet.
  */
-export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "systemInfo" | "media" | "files" | "clipboard" | "sharedData";
+export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "systemInfo" | "media" | "leaderboards" | "files" | "clipboard" | "sharedData";
+
+/**
+ * Where the user stands with this module's leaderboards (leaderboards.status). `signedIn`: signed in to a Tavora
+ * account. `available`: Tavora's service runs this module's boards (a catalog module once Tavora allowed it; a
+ * development copy always, on test boards only its developer sees). `shown`: the user agreed to show their name and
+ * results on this module's boards. `name`: the name the boards show for them once `shown`; null before that, so the
+ * user's name reaches the module only once it is public.
+ */
+export interface LeaderboardStatus {
+  signedIn: boolean;
+  available: boolean;
+  shown: boolean;
+  name: string | null;
+}
+
+/**
+ * One finished game on a `streak` board. `id`: a UUID you make once per game, so sending it again changes nothing.
+ * `at`: when it ended, in milliseconds since 1970 (Date.now()). `day`: on a `daily` board, the local calendar day the
+ * game belongs to (YYYY-MM-DD); left out on other boards.
+ */
+export interface LeaderboardStreakResult {
+  id: string;
+  outcome: "won" | "lost";
+  at: number;
+  day?: string;
+}
+
+/** One finished game on a `score` board: its number (points, or a time in milliseconds on a board where low wins). */
+export interface LeaderboardScoreResult {
+  id: string;
+  value: number;
+  at: number;
+}
+
+export type LeaderboardResult = LeaderboardStreakResult | LeaderboardScoreResult;
+
+/**
+ * Why the service refused one result; a refused result never counts, so don't send it again. `invalid`: its shape is
+ * off. `time`: `at` is in the future or more than a year ago. `archive`: a daily result that ended outside its day
+ * (an archive replay). `day-taken`: the board already has another result for that day. `full`: this account holds
+ * too many results for this module.
+ */
+export type LeaderboardRejection = "invalid" | "time" | "archive" | "day-taken" | "full";
+
+/** What leaderboards.submit did with each result: ids the board took (also ones it had already) and ids it refused. */
+export interface LeaderboardSubmitResult {
+  accepted: string[];
+  rejected: { id: string; reason: LeaderboardRejection }[];
+}
+
+/**
+ * One line of a board. `name` is the user's Tavora name, or a neutral one such as "User · K7" when their name may not
+ * be shown. `self` marks the user's own line; nothing else about who it is reaches the module. Streak boards give
+ * `current` and `best`, score boards `value` (the user's best).
+ */
+export interface LeaderboardRow {
+  rank: number;
+  name: string;
+  self: boolean;
+  current?: number;
+  best?: number;
+  value?: number;
+}
 
 /**
  * What overlay.copyLink did. `copied`: the link is on the clipboard, ready to paste into OBS as a Browser Source.
@@ -634,11 +697,17 @@ export interface Methods {
   "storage.set": { params: { key: string; value: JsonValue }; result: null };
   "storage.delete": { params: { key: string }; result: null };
   "storage.keys": { params: undefined; result: string[] };
+  /**
+   * Sets `value` only while the key holds `expected` (null: the key is not set), in one step, so two panels can't
+   * overwrite each other's change; whether it was set. Tavora 0.21.92 and newer.
+   */
+  "storage.compareAndSet": { params: { key: string; expected: JsonValue | null; value: JsonValue }; result: boolean };
   /** The same calls for settings shared by every workspace: this module's own, in all workspaces. */
   "storage.app.get": { params: { key: string }; result: JsonValue | null };
   "storage.app.set": { params: { key: string; value: JsonValue }; result: null };
   "storage.app.delete": { params: { key: string }; result: null };
   "storage.app.keys": { params: undefined; result: string[] };
+  "storage.app.compareAndSet": { params: { key: string; expected: JsonValue | null; value: JsonValue }; result: boolean };
   "documents.list": { params: undefined; result: DocumentSummary[] };
   "documents.get": { params: { id: string }; result: TavoraDocument | null };
   "documents.put": { params: PutDocumentParams; result: DocumentSummary };
@@ -688,6 +757,28 @@ export interface Methods {
   "network.readPage": { params: { url: string }; result: PageResponse };
   /** The AI accounts the user set up, in their order (capability `aiUsage`). */
   "aiUsage.accounts": { params: undefined; result: AiUsageAccountInfo[] };
+  /** Where the user stands with this module's leaderboards (capability `leaderboards`). NETWORK_ERROR while Tavora's service can't be reached. Tavora 0.21.92 and newer. */
+  "leaderboards.status": { params: undefined; result: LeaderboardStatus };
+  /**
+   * Asks the user, in Tavora's own words in this panel, whether to show their name and results on this module's boards
+   * (signed out, it offers to sign in instead); the status after their answer. Only right after a click or key press in
+   * the panel (capability `leaderboards`). Tavora 0.21.92 and newer.
+   */
+  "leaderboards.show": { params: undefined; result: LeaderboardStatus };
+  /** Takes the user off this module's boards and deletes their results there. Only right after a click or key press (capability `leaderboards`). Tavora 0.21.92 and newer. */
+  "leaderboards.hide": { params: undefined; result: LeaderboardStatus };
+  /**
+   * Sends finished games to one of the manifest's boards, up to LIMITS.maxLeaderboardResults at once; each is taken or
+   * refused on its own. PERMISSION_DENIED while the user is signed out or hasn't agreed (status), NETWORK_ERROR while
+   * the service can't be reached: keep the results and send them later (capability `leaderboards`). Tavora 0.21.92 and newer.
+   */
+  "leaderboards.submit": { params: { board: string; results: LeaderboardResult[] }; result: LeaderboardSubmitResult };
+  /**
+   * The best lines of one of the manifest's boards, `limit` of them (default 20, at most LIMITS.maxLeaderboardRows). When
+   * the user is on the board but further down, their own line comes last. `day`: the user's local day (YYYY-MM-DD) on a
+   * daily board, so a streak whose last day was before yesterday shows as ended (capability `leaderboards`). Tavora 0.21.92 and newer.
+   */
+  "leaderboards.top": { params: { board: string; day?: string; limit?: number }; result: LeaderboardRow[] };
   /** Reads one account's usage (capability `aiUsage`). */
   "aiUsage.read": { params: { accountId: string }; result: AiUsageReading };
   /** What this PC is: processor, memory, graphics cards and drives. Read once and kept (capability `systemInfo`). Tavora 0.21.1 and newer. */
@@ -928,6 +1019,10 @@ export const LIMITS = {
   maxNetworkInFlight: 6,
   /** How often Tavora reads one AI account at most, for every module together; asking sooner gives the last reading. */
   aiUsageMinReadMs: 60_000,
+  /** Results one leaderboards.submit may send. */
+  maxLeaderboardResults: 50,
+  /** Lines one leaderboards.top gives at most. */
+  maxLeaderboardRows: 100,
   /** How long one aiUsage.read may take; the Codex command line can be slow to start. */
   aiUsageTimeoutMs: 40_000,
   /** How long one discord.command may take; a slower answer is `no-answer`. */

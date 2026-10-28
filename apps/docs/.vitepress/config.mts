@@ -51,6 +51,7 @@ export default defineConfig({
           { text: "Saving data", link: "/guide/saving-data" },
           { text: "Look and languages", link: "/guide/look-and-languages" },
           { text: "Several panels", link: "/guide/panels" },
+          { text: "Leaderboards", link: "/guide/leaderboards" },
           { text: "Your publisher key", link: "/guide/publisher-key" },
           { text: "Publishing to the catalog", link: "/guide/publishing" },
           { text: "What's not allowed", link: "/guide/catalog-rules" },

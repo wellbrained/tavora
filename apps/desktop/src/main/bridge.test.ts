@@ -67,6 +67,13 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     },
     media: { watch: () => { throw new Error("no media in this test"); }, control: () => Promise.reject(new Error("no media in this test")) },
     discord: noDiscord,
+    leaderboards: {
+      status: () => Promise.resolve({ signedIn: true, available: true, shown: false, name: "Mara" }),
+      show: () => Promise.resolve({ signedIn: true, available: true, shown: true, name: "Mara" }),
+      hide: () => Promise.resolve({ signedIn: true, available: true, shown: false, name: "Mara" }),
+      submit: (params) => Promise.resolve({ accepted: [(params as { results: { id: string }[] }).results[0]!.id], rejected: [] }),
+      top: () => Promise.resolve([{ rank: 1, name: "Mara", self: true, current: 2, best: 3 }]),
+    },
     panelState: registry.panelState,
     capabilities: () => new Set(),
     getViewport: () => ({ width: 400, height: 300 }),
@@ -564,6 +571,41 @@ describe("storage.app", () => {
   it("checks keys and values like storage.set", async () => {
     expect(await call(port, "storage.app.set", { key: 7, value: 1 })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
     expect(await call(port, "storage.app.set", { key: "k" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+});
+
+describe("compareAndSet", () => {
+  it("sets a workspace or shared setting only while it holds what was expected", async () => {
+    expect(await call(port, "storage.compareAndSet", { key: "run", expected: null, value: 1 })).toMatchObject({ ok: true, result: true });
+    expect(await call(port, "storage.compareAndSet", { key: "run", expected: null, value: 2 })).toMatchObject({ ok: true, result: false });
+    expect(await call(port, "storage.get", { key: "run" })).toMatchObject({ ok: true, result: 1 });
+    expect(await call(port, "storage.app.compareAndSet", { key: "run", expected: null, value: { n: 1 } })).toMatchObject({ ok: true, result: true });
+    expect(await call(port, "storage.app.compareAndSet", { key: "run", expected: { n: 1 }, value: { n: 2 } })).toMatchObject({ ok: true, result: true });
+    expect(await call(port, "storage.app.get", { key: "run" })).toMatchObject({ ok: true, result: { n: 2 } });
+  });
+
+  it("needs expected and value", async () => {
+    expect(await call(port, "storage.compareAndSet", { key: "run", value: 1 })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(await call(port, "storage.app.compareAndSet", { key: "run", expected: null })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+});
+
+describe("leaderboards", () => {
+  const granted = () => connected({ ...makeContext(), capabilities: () => new Set(["leaderboards"] as const) });
+
+  it.each(["leaderboards.status", "leaderboards.show", "leaderboards.hide", "leaderboards.submit", "leaderboards.top"])("denies %s without the leaderboards connector", async (method) => {
+    const params = method === "leaderboards.submit" || method === "leaderboards.top" ? { board: "daily", results: [] } : undefined;
+    expect(await call(port, method, params)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "leaderboards" } });
+  });
+
+  it("passes a granted module's calls to the connector", async () => {
+    const p = await granted();
+    expect(await call(p, "leaderboards.status")).toMatchObject({ ok: true, result: { signedIn: true, shown: false, name: "Mara" } });
+    expect(await call(p, "leaderboards.show")).toMatchObject({ ok: true, result: { shown: true } });
+    expect(await call(p, "leaderboards.submit", { board: "daily", results: [{ id: "a" }] })).toMatchObject({ ok: true, result: { accepted: ["a"], rejected: [] } });
+    expect(await call(p, "leaderboards.top", { board: "daily" })).toMatchObject({ ok: true, result: [{ rank: 1, self: true }] });
+    expect(await call(p, "leaderboards.status", { extra: 1 })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(await call(p, "leaderboards.top", "daily")).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   });
 });
 

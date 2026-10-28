@@ -2,6 +2,10 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.1.5
+
+- `leaderboards`: the boards a module keeps on Tavora's service (`LeaderboardBoard`): `{ id, kind: "streak", daily? }` or `{ id, kind: "score", order? }`, up to `MAX_LEADERBOARD_BOARDS` (20) with ids checked by `isLeaderboardId`. It needs the new `leaderboards` connector, the connector needs it, and both need a `minTavora` newer than `LAST_TAVORA_WITHOUT_LEADERBOARDS` (0.21.91), except Tavora's own modules.
+
 ## 0.1.4
 
 - `personalWorkspaces`: whether a module for any game may be added to a personal workspace, which belongs to no game. It replaces `workspaces`, its name from before Tavora called every item on the rail a workspace (Tavora 0.21.43). `workspaces` is still read until Tavora's 1.0 preparation; never set both. A manifest with `personalWorkspaces` needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES` (0.21.42), except Tavora's own modules. `allowsPersonalWorkspaces(manifest)` tells under either name.

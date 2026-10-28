@@ -21,6 +21,16 @@ await tavora.storage.set("view", "grid");
 
 5 MiB per module and workspace, the same again for `storage.app`. Type parameters are not checked, so be ready for a value an older version of your module wrote.
 
+Two panels of your module can change the same setting at once. When that matters, such as a game in progress that every panel moves on, use `compareAndSet` (Tavora 0.21.92 and newer): it sets the value only while the key still holds what you read, and tells you whether it did.
+
+```ts
+const run = await tavora.storage.app.get<Run>("run");
+const next = { ...run, guesses: [...run.guesses, guess] };
+if (!(await tavora.storage.app.compareAndSet("run", run, next))) {
+  // Another panel was faster: read "run" again and show that.
+}
+```
+
 ## Documents
 
 A document is a JSON value with a title and a revision, up to 4 MiB each. Use one for anything the user would be sad to lose.

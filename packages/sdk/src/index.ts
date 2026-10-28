@@ -53,6 +53,10 @@ import {
   type HotkeyBinding,
   type HotkeySetResult,
   type JsonValue,
+  type LeaderboardResult,
+  type LeaderboardRow,
+  type LeaderboardStatus,
+  type LeaderboardSubmitResult,
   type MenuRequest,
   type MethodName,
   type Methods,
@@ -74,6 +78,13 @@ import {
 
 export type {
   ReadOnlyFile,
+  LeaderboardRejection,
+  LeaderboardResult,
+  LeaderboardRow,
+  LeaderboardScoreResult,
+  LeaderboardStatus,
+  LeaderboardStreakResult,
+  LeaderboardSubmitResult,
   HotkeyBinding,
   HotkeySetResult,
   OverlayLinkResult,
@@ -169,6 +180,12 @@ export interface KeyValueStore {
   set(key: string, value: JsonValue): Promise<void>;
   delete(key: string): Promise<void>;
   keys(): Promise<string[]>;
+  /**
+   * Sets `value` only while the key holds `expected` (null: the key is not set), in one step, so two panels can't
+   * overwrite each other's change. True when it was set; false when the key held something else, so read it again and
+   * retry. Values count as equal when they hold the same JSON, whatever the order of their keys. Tavora 0.21.92 and newer.
+   */
+  compareAndSet(key: string, expected: JsonValue | null, value: JsonValue): Promise<boolean>;
 }
 
 export interface TavoraSDK {
@@ -458,6 +475,36 @@ export interface TavoraSDK {
     };
   };
   /**
+   * The module's leaderboards (the manifest's `leaderboards`), kept by Tavora's service with the user's Tavora account.
+   * Needs `"leaderboards"` in `permissions.connectors` and the user's grant (PERMISSION_DENIED otherwise). Tavora asks
+   * the user once in your panel before their name and results go public (show); your module never learns who they are,
+   * only which line is their own (`self`). Results played while signed out still count: keep them and send them once
+   * the user signed in and agreed. Tavora 0.21.92 and newer.
+   */
+  leaderboards: {
+    /** Where the user stands: signed in, boards available for this module, shown on them, and (once shown) the name the boards show. */
+    status(): Promise<LeaderboardStatus>;
+    /**
+     * Asks the user in your panel, in Tavora's own words, whether to show their Tavora name and results on your boards;
+     * signed out, it offers to sign in instead. Resolves with the status after their answer. Call it from a click or key
+     * press (PERMISSION_DENIED otherwise).
+     */
+    show(): Promise<LeaderboardStatus>;
+    /** Takes the user off your boards and deletes their results there. Call it from a click or key press. */
+    hide(): Promise<LeaderboardStatus>;
+    /**
+     * Sends finished games to a board of the manifest, up to LIMITS.maxLeaderboardResults at once. Each result is taken or
+     * refused on its own; a refused one never counts, so drop it. Throws PERMISSION_DENIED while the user is signed out or
+     * not shown, NETWORK_ERROR while Tavora's service can't be reached: keep the results and send them later.
+     */
+    submit(board: string, results: LeaderboardResult[]): Promise<LeaderboardSubmitResult>;
+    /**
+     * The best lines of a board (`limit`: default 20, at most LIMITS.maxLeaderboardRows); the user's own line comes last
+     * when they are further down. On a daily board, pass the user's local `day` (YYYY-MM-DD) so streaks that ended show as 0.
+     */
+    top(board: string, options?: { day?: string; limit?: number }): Promise<LeaderboardRow[]>;
+  };
+  /**
    * Pages for streaming software such as OBS (the manifest's `overlay`), one per key: an item, a scoreboard, whatever
    * the module shows on stream. Needs `"stream-overlay"` in `permissions.connectors` and the user's grant
    * (PERMISSION_DENIED otherwise). Tavora 0.19.26 and newer.
@@ -683,6 +730,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         await call("storage.delete", { key });
       },
       keys: () => call("storage.keys"),
+      compareAndSet: (key, expected, value) => call("storage.compareAndSet", { key, expected, value }),
       app: {
         get: <T = JsonValue>(key: string) => call("storage.app.get", { key }) as Promise<T | null>,
         set: async (key, value) => {
@@ -692,6 +740,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
           await call("storage.app.delete", { key });
         },
         keys: () => call("storage.app.keys"),
+        compareAndSet: (key, expected, value) => call("storage.app.compareAndSet", { key, expected, value }),
       },
     },
     documents: {
@@ -923,6 +972,14 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         onEvent: (fn) => on("discord.event", fn),
         image: (url) => call("discord.image", { url }),
       },
+    },
+    leaderboards: {
+      status: () => call("leaderboards.status"),
+      // Waits for the user's answer in the panel.
+      show: () => call("leaderboards.show", undefined, MENU_TIMEOUT_MS),
+      hide: () => call("leaderboards.hide"),
+      submit: (board, results) => call("leaderboards.submit", { board, results }),
+      top: (board, options = {}) => call("leaderboards.top", { board, ...options }),
     },
     overlay: {
       publish: async (key, state) => {
