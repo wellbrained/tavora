@@ -189,8 +189,8 @@ test("the modules menu adds the panel types not open yet and brings open ones to
   const { app, page } = await launch(await newUserData());
   const tab = (type: string) => page.locator(`[data-panel-tab][data-panel-type="${type}"]`);
   const front = (type: string) => page.locator(`.dv-tab.dv-active-tab [data-panel-type="${type}"]`);
-  // Nothing in the game yet: only Add module.
-  await expect(page.getByTestId("modules-in-game")).toHaveCount(0);
+  // Nothing in the game yet: the ▾ is there, but off.
+  await expect(page.getByTestId("modules-in-game")).toBeDisabled();
   await addPanel(page, "planner");
 
   // The toolbar's ▾ lists the module with its panel types; the open one is checked.

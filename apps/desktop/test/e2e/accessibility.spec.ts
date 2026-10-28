@@ -94,7 +94,7 @@ type Spot = keyof typeof NEEDS;
 test("small text, off switches and disabled buttons keep their contrast in every official theme", async () => {
   test.setTimeout(180_000);
   const { app, page } = await launch();
-  // Satisfactory gets Notes; Path of Exile 2 stays empty so the layout picker's caption shows.
+  // Satisfactory gets Notes; the layout picker's caption is read from the Layouts menu.
   await openWorkspace(page, "satisfactory");
   await openModule(page, NOTES);
   await expect.poll(() => inModule<number>(app, NOTES, `document.querySelectorAll('[data-testid="note-editor"]').length`).catch(() => 0)).toBeGreaterThan(0);
@@ -143,7 +143,12 @@ test("small text, off switches and disabled buttons keep their contrast in every
 
       await openWorkspace(page, "poe2");
       await settled(page);
+      // The grid picker's caption now lives in the Layouts menu.
+      await page.getByTestId("layouts").click();
+      await expect(page.getByTestId("layout-grid-size")).toBeVisible();
+      await settled(page);
       record(theme.name, mode, "Point at a size", await painted(page, '[data-testid="layout-grid-size"]'));
+      await page.keyboard.press("Escape");
       await openWorkspace(page, "satisfactory");
       await expect
         .poll(() => inModule<string>(app, NOTES, `getComputedStyle(document.documentElement).getPropertyValue("--tavora-background").trim()`).catch(() => null))
