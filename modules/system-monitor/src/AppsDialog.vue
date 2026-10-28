@@ -10,8 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { SystemApps, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
-import { firstDirection, listApps, ramShare, shownBytes, splitApps, type AppsSort } from "./apps";
-import { memory, num, size } from "./format";
+import { firstDirection, listApps, ramShare, ramSplit, shownBytes, splitApps, type AppsSort } from "./apps";
+import { memory, num } from "./format";
 import { language, t } from "./i18n";
 
 const props = defineProps<{ sdk: TavoraSDK; /** The installed RAM, for % RAM and which apps fold away. */ totalBytes: number }>();
@@ -77,9 +77,13 @@ const rows = computed(() => (read.value ? listApps(read.value.apps, query.value,
 const groups = computed(() => splitApps(rows.value, props.totalBytes, query.value));
 /** The rows the user sees: the small ones only while open. */
 const visible = computed(() => (showSmall.value ? rows.value : groups.value.big));
-const total = computed(() =>
-  read.value && read.value.usedBytes > 0 ? t("apps.total", { shown: size(shownBytes(visible.value), language.value), used: size(read.value.usedBytes, language.value) }) : "",
-);
+/** Every app, folded or found or not, plus the rest of the RAM in use, so the line adds up. */
+const total = computed(() => {
+  if (!read.value || read.value.usedBytes <= 0) return "";
+  const split = ramSplit(shownBytes(read.value.apps), read.value.usedBytes);
+  const gb = (value: number) => `${num(value, split.decimals, language.value)} GB`;
+  return t("apps.total", { apps: gb(split.apps), rest: gb(split.rest), used: gb(split.used) });
+});
 /** CPU and % RAM alike: one decimal and a %, a dash while unknown. */
 const pct = (value: number | null) => (value === null ? "–" : `${num(value, 1, language.value)} %`);
 

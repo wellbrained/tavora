@@ -38,3 +38,19 @@ export function splitApps(apps: readonly SystemApp[], totalBytes: number, query:
 }
 
 export const shownBytes = (apps: readonly SystemApp[]) => apps.reduce((sum, app) => sum + app.memoryBytes, 0);
+
+const GB = 1024 ** 3;
+
+/**
+ * The RAM in use split into what the apps take and the rest: Windows itself and memory apps share, which no app's
+ * own number counts. All three in GB, rounded to one step (whole GB from 10 GB in use, else tenths) before the rest
+ * is worked out, so "apps + rest = in use" adds up on screen too.
+ */
+export function ramSplit(appsBytes: number, usedBytes: number): { apps: number; rest: number; used: number; decimals: 0 | 1 } {
+  const decimals = usedBytes >= 10 * GB ? 0 : 1;
+  const step = decimals === 0 ? 1 : 10;
+  const round = (bytes: number) => Math.round((Math.max(0, bytes) / GB) * step) / step;
+  const used = round(usedBytes);
+  const apps = Math.min(round(appsBytes), used);
+  return { apps, rest: Math.round((used - apps) * step) / step, used, decimals };
+}

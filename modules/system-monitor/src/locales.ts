@@ -122,7 +122,7 @@ export const en = {
   "apps.loading": "Looking at your apps…",
   "apps.error": "Can't read your apps right now.",
   "apps.none": "No app matches.",
-  "apps.total": "Shown: {shown} of {used} in use",
+  "apps.total": "Apps {apps} + Windows & shared {rest} = {used} in use",
 };
 
 export const de: typeof en = {
@@ -248,5 +248,5 @@ export const de: typeof en = {
   "apps.loading": "Schaue auf deine Apps…",
   "apps.error": "Deine Apps lassen sich gerade nicht lesen.",
   "apps.none": "Keine App passt.",
-  "apps.total": "Angezeigt: {shown} von {used} belegt",
+  "apps.total": "Apps {apps} + Windows & geteilt {rest} = {used} belegt",
 };

@@ -27,7 +27,7 @@ test("the Memory card lists the apps", async () => {
     await inModule(app, SYSTEM_MONITOR, `${q("apps-small")}.click()`);
     await expect.poll(count).toBeGreaterThan(5);
     expect(await inModule<number>(app, SYSTEM_MONITOR, `document.querySelectorAll('[data-testid="app-windows"]').length`)).toBeGreaterThan(0);
-    expect(await inModule<string>(app, SYSTEM_MONITOR, `${q("apps-total")}.textContent`)).toMatch(/^Shown: .+ GB of .+ GB in use$/);
+    expect(await inModule<string>(app, SYSTEM_MONITOR, `${q("apps-total")}.textContent`)).toMatch(/^Apps .+ GB \+ Windows & shared .+ GB = .+ GB in use$/);
     // Biggest first by RAM; a CPU figure follows after the second look.
     const rows = () => inModule<string[]>(app, SYSTEM_MONITOR, `[...document.querySelectorAll('[data-testid="app-row"]')].map((row) => row.textContent)`);
     await expect.poll(async () => (await rows()).some((row) => /\d %$/.test(row ?? ""))).toBe(true);
