@@ -28,6 +28,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.73",
+    date: "2026-10-28",
+    title: "One look for rail labels",
+    notes: [
+      "Every item in the rail shows the same label card beside it, centred on the icon: Home, workspaces, Add game, Overlay, messages, your profile and Settings.",
+    ],
+  },
+  {
     version: "0.21.72",
     date: "2026-10-28",
     title: "Idle overlay frames say why",
