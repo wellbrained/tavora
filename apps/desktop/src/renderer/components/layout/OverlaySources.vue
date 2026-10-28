@@ -3,7 +3,7 @@
 // and the module overlays the setup shown already holds. A panel that is in the setup is picked here (and on the canvas),
 // and its eye hides it on the canvas only; one that is not is added with a click; one that can't go into this setup is
 // greyed out with the reason and kept together, folded, at the bottom. The search narrows the list by name and workspace.
-import { Check, ChevronRight, Eye, EyeOff, Plus } from "@lucide/vue";
+import { Check, Eye, EyeOff, Plus } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
@@ -76,7 +76,7 @@ function press(row: Row) {
     </div>
     <Input v-model="query" type="search" :placeholder="t('overlays.layout.search')" :aria-label="t('overlays.layout.search')" data-testid="layout-search" />
     <p v-if="!shown.length" class="text-muted-foreground px-1 py-2 text-sm" data-testid="layout-empty">{{ query ? t("overlays.layout.noSources") : t("overlays.layout.nothing") }}</p>
-    <div v-else class="-mr-3 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1" data-testid="layout-sources-list">
+    <div v-else class="-mr-3 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1 [scrollbar-gutter:stable]" data-testid="layout-sources-list">
       <ul class="flex flex-col gap-1">
         <li
           v-for="row in usable"
@@ -116,7 +116,6 @@ function press(row: Row) {
       </ul>
       <Collapsible v-if="unusable.length" v-model:open="folded" class="mt-1" data-testid="layout-unusable">
         <CollapsibleTrigger class="text-muted-foreground flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-xs outline-none focus-visible:ring-2" data-testid="layout-unusable-toggle">
-          <ChevronRight :class="cn('size-4 flex-none transition-transform', folded && 'rotate-90')" :stroke-width="1.5" aria-hidden="true" />
           {{ t("overlays.layout.unusable", { count: unusable.length }) }}
         </CollapsibleTrigger>
         <CollapsibleContent>

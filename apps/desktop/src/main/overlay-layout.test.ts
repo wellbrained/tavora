@@ -8,7 +8,7 @@ import { DEFAULT_PANEL_ANCHORED, DEFAULT_RECT, placeAnchored, placeLegacy, type 
 import type { LayoutItemInfo, LayoutItemRef, LayoutSource } from "./game-overlay-service";
 import type { SeenSize } from "./game-overlays";
 import { LayoutPictures } from "./layout-pictures";
-import { OverlayLayout, type LayoutFrame, type LayoutWindow, type SourcePanel } from "./overlay-layout";
+import { OverlayLayout, edgesToBounds, type LayoutFrame, type LayoutWindow, type SourcePanel } from "./overlay-layout";
 
 let dir: string;
 beforeEach(async () => {
@@ -177,6 +177,18 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
 const setupOf = (item: Item) => item.setup ?? (item.scope === "all" ? LAYOUT_ALL_GAMES : item.gameId);
 
 const clock = (key: string, gameId = "elden", rect = at(0.036, 0.03, 0.356, 0.16)): Item => ({ key, gameId, scope: "game", rect });
+
+describe("the views over the canvas", () => {
+  it("never reach past the canvas by a rounding pixel", () => {
+    const layer = { x: 97, y: 241, width: 918, height: 516 };
+    const scale = layer.height / 1080;
+    // 1536 + 384 is the canvas's right edge: the view ends where the layer ends, however the two numbers round.
+    const bounds = edgesToBounds(layer, { x: 1536, y: 30, width: 384, height: 173 }, scale);
+    expect(bounds.x + bounds.width).toBe(layer.x + Math.round(1920 * scale));
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(layer.x + layer.width);
+    expect(edgesToBounds(layer, { x: 0, y: 0, width: 1, height: 1 }, scale)).toMatchObject({ width: 1, height: 1 });
+  });
+});
 
 describe("opening", () => {
   it("goes back to the workspace only when the page asks", () => {

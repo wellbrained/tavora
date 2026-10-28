@@ -3,7 +3,7 @@
 // page, where it stays, is lit and takes you back), and the
 // Live icon next to it pauses and resumes everything over the game. Three looks: Live (something shows now), Ready (on,
 // nothing shows) and Paused.
-import { Circle, CirclePause, Radio } from "@lucide/vue";
+import { CircleCheck, CirclePause, Radio } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
@@ -13,8 +13,13 @@ import { t } from "../../i18n";
 const props = defineProps<{ active?: boolean }>();
 const overlays = computed(() => state.value!.gameOverlays);
 const look = computed(() => (overlays.value.hidden ? "paused" : overlays.value.showing ? "live" : "ready"));
-const icons = { live: Radio, ready: Circle, paused: CirclePause };
-const tint = { live: "text-success", ready: "", paused: "text-muted-foreground" };
+// Each state has its own icon and colour: Live (green, on air), Ready (blue, on and waiting), Paused (yellow, held back).
+const icons = { live: Radio, ready: CircleCheck, paused: CirclePause };
+const tint = {
+  live: "bg-success/15 text-success hover:bg-success/25 hover:text-success",
+  ready: "bg-info/15 text-info hover:bg-info/25 hover:text-info",
+  paused: "bg-warning/15 text-warning hover:bg-warning/25 hover:text-warning",
+};
 </script>
 
 <template>

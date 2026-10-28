@@ -21,6 +21,7 @@ test("the header button opens the Overlay page, pauses overlays", async () => {
     await expect(live).toHaveAttribute("data-state", "ready");
     const before = (await page.getByTestId("overlay-open").boundingBox())!;
     const header = (await page.locator("header").boundingBox())!;
+    const menus = await page.getByTestId("modules-in-game").count();
     await page.getByTestId("overlay-open").click();
     // The page replaces the workspace in the same window; no window of its own opens.
     await expect(page.getByTestId("overlay-page")).toBeVisible();
@@ -29,6 +30,7 @@ test("the header button opens the Overlay page, pauses overlays", async () => {
     expect(await page.getByTestId("overlay-open").boundingBox()).toEqual(before);
     expect(await page.locator("header").boundingBox()).toEqual(header);
     await expect(page.getByTestId("add-module")).toBeVisible();
+    await expect(page.getByTestId("modules-in-game")).toHaveCount(menus);
     await expect(page.getByTestId("overlay-live").locator("svg")).toBeVisible();
     await expect(page.getByTestId("overlay-live")).toHaveText("");
     expect(app.windows().some((window) => window.url().includes("layout.html") && !window.url().endsWith("#layer"))).toBe(false);
