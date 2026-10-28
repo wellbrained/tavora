@@ -7,12 +7,14 @@ import {
   expectModuleText,
   launch,
   newUserData,
+  NOTES,
   noteText,
   openWorkspace,
   openModule,
   panels,
   setContentSize,
   saveNote,
+  TODOS,
   VANILLA,
 } from "./harness";
 
@@ -48,11 +50,20 @@ test("the first-run welcome takes a name and games, and can be shown again", asy
   const { app, page, userData } = await launch(undefined, [], { seed: false });
   await page.getByTestId("onboarding-name").fill("Robin");
   await page.getByTestId("onboarding-next").click();
+  // Next waits for a game; skipping stays possible.
+  await expect(page.getByTestId("onboarding-next")).toBeDisabled();
+  await expect(page.getByTestId("onboarding-skip-games")).toBeVisible();
+  // A popular game is one click, and leaves the tiles once it is added.
+  await page.getByTestId("onboarding-game-minecraft").click();
+  await expect(page.getByTestId("onboarding-games")).toContainText("Minecraft");
+  await expect(page.getByTestId("onboarding-game-minecraft")).toHaveCount(0);
+  await expect(page.getByTestId("onboarding-next")).toBeEnabled();
+  // Any other game comes from the search.
   await page.getByTestId("onboarding-add-game").click();
-  await page.getByTestId("game-search").fill("elden");
-  await page.getByTestId("catalog-elden-ring").click();
+  await page.getByTestId("game-search").fill("hollow");
+  await page.getByTestId("catalog-hollow-knight").click();
   // Adding a game here keeps the welcome open and lists the game.
-  await expect(page.getByTestId("onboarding-games")).toContainText("Elden Ring");
+  await expect(page.getByTestId("onboarding-games")).toContainText("Hollow Knight");
   await page.getByTestId("onboarding-next").click();
   await page.getByTestId("onboarding-done").click();
   await expect(page.getByTestId("welcome")).toContainText("Welcome back");
@@ -77,10 +88,18 @@ test("users add games from the built-in list or by name", async () => {
   await page.getByTestId("welcome-add-game").click();
   await page.getByTestId("game-search").fill("elden");
   await page.getByTestId("catalog-elden-ring").click();
-  // A new game opens straight away, with an empty workspace.
+  // A new game opens straight away, with Notes and To-Dos side by side.
   await expect(page.getByTestId("rail-workspace-elden-ring")).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("workspace")).toContainText("Elden Ring");
+  await expect(panels(page, NOTES)).toHaveCount(1);
+  await expect(panels(page, TODOS)).toHaveCount(1);
+  await expect(page.locator(".dv-groupview")).toHaveCount(2);
+  await expect(page.getByTestId("empty-workspace")).toHaveCount(0);
+  // Closing both leaves the empty card: Add module first, the layouts below it.
+  await panels(page, NOTES).getByTestId("close").click();
+  await panels(page, TODOS).getByTestId("close").click();
   await expect(page.getByTestId("empty-workspace")).toBeVisible();
+  await expect(page.getByTestId("empty-add-module")).toBeVisible();
 
   await page.getByTestId("rail-add-game").click();
   // Games already in the library are not offered again.
@@ -90,6 +109,11 @@ test("users add games from the built-in list or by name", async () => {
   await page.getByTestId("add-custom").click();
   await expect(page.getByTestId("rail-workspace-local-my-indie-game")).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("rail-workspace-local-my-indie-game")).toContainText("MIG");
+  // A game added by name gets the same starter.
+  await expect(panels(page, NOTES)).toHaveCount(1);
+  await expect(panels(page, TODOS)).toHaveCount(1);
+  // Closing from the test skips the app's wait for pending saves: let the layout settle first.
+  await page.waitForTimeout(500);
   await running.app.close();
 
   const again = await launch(userData);
@@ -305,7 +329,7 @@ test("a workspace in Trash is deleted for good after 30 days or when the user sa
   await again.page.getByTestId("rail-add-game").click();
   await again.page.getByTestId("game-search").fill("satisf");
   await again.page.getByTestId("catalog-satisfactory").click();
-  await expect(again.page.getByTestId("empty-workspace")).toBeVisible();
+  await expect(panels(again.page, TODOS)).toHaveCount(1);
   await openModule(again.page, VANILLA);
   await expectModuleText(again.app, VANILLA, "status", "Connected");
   await expectModuleText(again.app, VANILLA, "note-revision", "0");

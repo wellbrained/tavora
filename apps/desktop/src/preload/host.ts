@@ -9,6 +9,7 @@ const api: TavoraHostApi = {
   getState: () => ipcRenderer.invoke("host:get-state"),
   act: (action) => ipcRenderer.invoke("host:action", action),
   searchCatalog: (query) => ipcRenderer.invoke("host:search-catalog", query),
+  popularGames: () => ipcRenderer.invoke("host:popular-games"),
   moduleNotes: (moduleId) => ipcRenderer.invoke("host:module-notes", moduleId),
   searchOnline: (query) => ipcRenderer.invoke("host:search-online", query),
   steamLibrary: (profile) => ipcRenderer.invoke("host:steam-library", profile),
