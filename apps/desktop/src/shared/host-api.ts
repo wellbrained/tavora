@@ -82,6 +82,11 @@ export interface PanelView {
   status: InstanceStatus;
   /** A module panel whose page is still loading: the host UI shows a loader in its place. */
   waiting: boolean;
+  /**
+   * The panel's module asks for access first (main/host.ts questionOf): `ask`, the question is this panel's content until
+   * answered; `wait`, another panel of the module asks and this one starts with it.
+   */
+  question?: "ask" | "wait";
   /** The full name of what the panel shows, as the module last set it (panel.setContent); the tab's hover text. */
   content: string | null;
   /** Set for Browser panels: what their toolbar shows. */

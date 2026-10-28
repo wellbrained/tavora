@@ -21,7 +21,8 @@ const props = defineProps<{ params: IDockviewPanelHeaderProps }>();
 const dock = inject(DOCK)!;
 const id = props.params.api.id;
 const panel = computed(() => state.value?.panels.find((item) => item.instanceId === id));
-const status = computed<InstanceStatus>(() => panel.value?.status ?? "loading");
+// A panel that waits for a permission answer has no page yet: its tab says nothing about loading, the panel asks.
+const status = computed<InstanceStatus>(() => (panel.value?.question ? "ready" : (panel.value?.status ?? "loading")));
 /**
  * A panel type's tab names the module too, on hover and as its menu's heading; the hover text adds the
  * full name of what the panel shows on a line below (the decision log, named panels round 4).

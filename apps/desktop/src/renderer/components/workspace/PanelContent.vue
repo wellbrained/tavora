@@ -10,12 +10,15 @@
 // A panel whose type the module no longer offers says so, with Remove and the
 // module's other panel types (the decision log, named panels round 4).
 // A panel of Discord or AI Usage, which left Tavora for the catalog, offers to install it.
+// A panel whose module asks for access first shows the question as its content, or waits while another of its panels
+// asks (decision of 2026-10-28; main/host.ts questionOf).
 import type { IDockviewPanelProps } from "dockview-vue";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ShieldAlert } from "@lucide/vue";
-import { act, dialog, frozen, needsGrant, state } from "../../host";
+import { act, dialog, frozen, needsGrant, state, type GrantRequest } from "../../host";
 import { t } from "../../i18n";
+import GrantDialog from "../GrantDialog.vue";
 import BrowserToolbar from "./BrowserToolbar.vue";
 import CampfireLoader from "./CampfireLoader.vue";
 import { DOCK } from "./dock-context";
@@ -27,10 +30,16 @@ const element = ref<HTMLElement | null>(null);
 const panel = computed(() => state.value?.panels.find((item) => item.instanceId === id));
 const image = computed(() => frozen.value[id]);
 const module = computed(() => state.value?.modules.find((item) => item.id === panel.value?.moduleId));
-/** The module's update asks for something not granted yet (or its grant was lost): the bar offers to review it. */
-const reviewNeeded = computed(() => {
-  const module = state.value?.modules.find((item) => item.id === panel.value?.moduleId);
-  return module !== undefined && needsGrant(module);
+/** A running panel whose module asks for more after an update (it keeps what was granted): the bar offers a review. */
+const reviewNeeded = computed(() => module.value !== undefined && !panel.value?.question && needsGrant(module.value));
+/** The question this panel shows: what its module asks for on request now, or the access it still needs. */
+const question = computed<GrantRequest | null>(() => {
+  if (panel.value?.question !== "ask") return null;
+  const pending = state.value?.pendingConnector;
+  if (pending && pending.moduleId === panel.value.moduleId) {
+    return { kind: "grant", moduleId: pending.moduleId, slot: null, review: true, onRequest: { id: pending.id, connectors: [...pending.connectors] } };
+  }
+  return { kind: "grant", moduleId: panel.value.moduleId, slot: null, review: false };
 });
 const updateWaiting = computed(() => module.value?.update ?? null);
 
@@ -91,8 +100,14 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
     </Button>
   </div>
   <div ref="element" class="relative min-h-0 w-full flex-1 overflow-hidden" :data-testid="`panel-content-${id}`">
+    <div v-if="question" :key="question.onRequest?.id ?? 'access'" class="flex size-full justify-center overflow-y-auto p-6" :data-testid="`panel-question-${id}`">
+      <GrantDialog in-panel :request="question" class="my-auto" />
+    </div>
+    <p v-else-if="panel?.question === 'wait'" class="text-muted-foreground flex size-full items-center justify-center p-4 text-center text-sm" :data-testid="`panel-question-wait-${id}`">
+      {{ t("grant.waiting") }}
+    </p>
     <div
-      v-if="panel?.overGame"
+      v-else-if="panel?.overGame"
       class="text-muted-foreground flex size-full flex-col items-center justify-center gap-3 p-4 text-center text-sm"
       :data-testid="`panel-over-game-${id}`"
     >

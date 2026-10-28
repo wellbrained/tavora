@@ -374,7 +374,9 @@ watch(
 watch(
   () => state.value?.pendingConnector ?? null,
   (pending) => {
-    if (pending) dialog.value = { kind: "grant", moduleId: pending.moduleId, slot: null, review: true, onRequest: { id: pending.id, connectors: [...pending.connectors] } };
+    // The panel that asks shows the question itself (PanelContent.vue); the window only when none of its panels is in view.
+    const inPanel = pending !== null && (state.value?.panels.some((panel) => panel.moduleId === pending.moduleId && panel.question === "ask") ?? false);
+    if (pending && !inPanel) dialog.value = { kind: "grant", moduleId: pending.moduleId, slot: null, review: true, onRequest: { id: pending.id, connectors: [...pending.connectors] } };
     else if (dialog.value?.kind === "grant" && dialog.value.onRequest) dialog.value = null;
   },
 );
@@ -501,14 +503,16 @@ export function needsGrant(module: ModuleState): boolean {
 /**
  * Adds a module to the current workspace, into `slot` if given; `panelTypes` picks which of its panel
  * types to open, one panel each (its continuing type when left out). A module that asks for something
- * not granted yet goes through the consent dialog first; once granted, it is added without asking.
+ * not granted yet is added too, and its first new panel asks (PanelContent.vue); its pages start once allowed.
  * `stay` keeps the module library open afterwards, so more panels can be added from it.
  */
 export function addModule(moduleId: string, slot: string | null = null, panelTypes: string[] = [], { stay = false } = {}): void {
   const module = state.value?.modules.find((item) => item.id === moduleId);
   if (!module) return;
+  // Its panel asks in the workspace, so the library steps aside for it even when asked to stay.
   if (needsGrant(module)) {
-    dialog.value = { kind: "grant", moduleId, slot, review: false, ...(panelTypes.length ? { panelTypes } : {}), ...(stay ? { backToLibrary: true } : {}) };
+    dialog.value = null;
+    void openPanels(moduleId, slot, panelTypes);
     return;
   }
   if (!stay) dialog.value = null;

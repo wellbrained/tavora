@@ -1014,6 +1014,7 @@ export const de: Record<keyof typeof en, string> = {
   "grant.network": "Diese Websites erreichen",
   "grant.networkNote": "Es kann Daten abrufen und öffentliche Seiten in einem temporären Browser lesen, nur auf diesen Websites. Deine Cookies und Anmeldungen bleiben privat.",
   "grant.later": "Du kannst das jederzeit in den Einstellungen ändern.",
+  "grant.waiting": "Wartet auf dein OK",
   "grant.allow": "Erlauben",
   "grant.notNow": "Nicht jetzt",
   "grant.reviewBar": "{name} möchte mehr Zugriff",
