@@ -1,5 +1,6 @@
 // Ctrl+K search and the Settings search box.
 import { expect, test } from "@playwright/test";
+import { gameService } from "./fake-games";
 import { inModule, launch, openWorkspace, openModule, panels, VANILLA } from "./harness";
 
 test("Tavora's shortcuts open the overview, Settings, Home and numbered workspaces", async () => {
@@ -54,6 +55,32 @@ test("Ctrl+K finds workspaces, modules and settings and runs them", async () => 
   await page.keyboard.press("Escape");
   await expect(search).toHaveCount(0);
   await app.close();
+});
+
+test("Ctrl+K puts your own things before games to add, and offers few of those", async () => {
+  const { url, server } = await gameService([
+    { id: "thememory", name: "TheMemory" },
+    { id: "theme-park-studio", name: "Theme Park Studio" },
+    { id: "theme-hospital", name: "Theme Hospital" },
+    { id: "theme-aquarium", name: "Theme Aquarium" },
+    // Contains the text without starting a word: never suggested unasked.
+    { id: "anathema", name: "Anathema" },
+  ]);
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
+  await page.keyboard.press("Control+K");
+  await page.getByTestId("search-input").fill("theme");
+  const options = page.getByTestId("search").locator('[role="option"]');
+  await expect(page.getByTestId("search-add-game-theme-aquarium")).toBeVisible();
+  // The Theme setting comes first; the games to add sit at the end, three at most.
+  await expect(options.first()).toHaveAttribute("data-testid", "search-setting-theme");
+  const ids = await options.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-testid")));
+  const games = ids.filter((id) => id?.startsWith("search-add-game-"));
+  expect(games).toHaveLength(3);
+  expect(ids.slice(-3)).toEqual(games);
+  expect(games).not.toContain("search-add-game-anathema");
+  await page.keyboard.press("Escape");
+  await app.close();
+  server.close();
 });
 
 test("Ctrl+K works while a module panel has focus", async () => {

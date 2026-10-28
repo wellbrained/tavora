@@ -43,3 +43,40 @@ export function rank<T>(items: readonly T[], query: string, fields: (item: T) =>
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map((entry) => entry.item);
 }
+
+// ── Game names ────────────────────────────────────────────────────────────────
+// The Add a game list and the Ctrl+K catalog suggestions rank whole names:
+// "eld" should list Elden Ring before Battlefield 6.
+
+/** Lower case, no accents, every run of punctuation a single space: "Counter-Strike 2" → "counter strike 2". */
+function words(text: string): string {
+  return normalize(text)
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/** How well a name fits the whole query: 5 exact, 4 starts with it, 3 has it as a whole word, 2 as a word's start, 1 somewhere inside, 0 not at all. */
+export function nameScore(query: string, name: string): number {
+  const q = words(query);
+  const title = words(name);
+  if (!q) return 0;
+  if (title === q) return 5;
+  if (title.startsWith(q)) return 4;
+  if (` ${title} `.includes(` ${q} `)) return 3;
+  if (` ${title}`.includes(` ${q}`)) return 2;
+  if (title.includes(q)) return 1;
+  return 0;
+}
+
+/** The query starts the name or sits in it as a whole word: a match worth suggesting unasked. */
+export function startsOrIsWord(query: string, name: string): boolean {
+  return nameScore(query, name) >= 3;
+}
+
+/** Items by how well their name fits, best first; equal fits go by name. Nothing is dropped. */
+export function rankByName<T>(items: readonly T[], query: string, name: (item: T) => string): T[] {
+  return items
+    .map((item) => ({ item, name: name(item), score: nameScore(query, name(item)) }))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+    .map((entry) => entry.item);
+}
