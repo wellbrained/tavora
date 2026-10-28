@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.81",
+    date: "2026-10-28",
+    title: "Memory that adds up",
+    notes: [
+      "System Monitor: below the apps list, the RAM now adds up: your apps, plus Windows and memory apps share, equals what's in use.",
+    ],
+    prs: [
+      { number: 438, title: "System Monitor: make the RAM line under the apps list add up" },
+    ],
+    tags: ["system-monitor"],
+  },
+  {
     version: "0.21.80",
     date: "2026-10-28",
     title: "Small fixes",
