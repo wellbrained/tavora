@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.92",
+    date: "2026-10-28",
+    title: "Leaderboards in modules",
+    notes: [
+      "Modules can now offer leaderboards with your Tavora name.",
+      "Tavora asks you in the module's panel before your name and results go public.",
+      "Changed your mind? Leave them in Settings > Integrations > Leaderboards. Your results are deleted.",
+    ],
+    prs: [
+      { number: 447, title: "Leaderboards: any module can rank its users, with consent in its panel" },
+    ],
+    tags: ["accounts", "leaderboards", "modules", "privacy", "publishing", "sdk", "service", "settings", "website", "workspace"],
+  },
+  {
     version: "0.21.91",
     date: "2026-10-28",
     title: "Honest update check",
