@@ -28,6 +28,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.68",
+    date: "2026-10-28",
+    title: "Tidier header",
+    notes: [
+      "The hover label in the rail is smaller.",
+      "The header icons are crisper, the Start and Add module text a bit smaller, and the buttons sit in two tidy groups.",
+    ],
+  },
+  {
     version: "0.21.67",
     date: "2026-10-28",
     title: "Bigger header, closing menus",
