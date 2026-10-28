@@ -116,8 +116,18 @@ const leaderboards = {
   ...valid,
   minTavora: "0.21.92",
   permissions: { network: [], connectors: ["leaderboards"] },
-  leaderboards: { boards: [{ id: "unlimited", kind: "streak" }, { id: "daily", kind: "streak", daily: true }, { id: "fastest-easy", kind: "score", order: "low" }] },
+  leaderboards: {
+    boards: [
+      { id: "unlimited", name: "Winning streak", kind: "streak" },
+      { id: "daily", name: "Daily streak", kind: "streak", daily: true },
+      { id: "fastest-easy", name: "Fastest easy solve", kind: "score", order: "low", unit: "s" },
+      { id: "solved", name: "Puzzles solved", kind: "total" },
+      { id: "average", name: "Average time", kind: "average", order: "low", minGames: 5, unit: "s" },
+      { id: "wins", name: "Win rate", kind: "rate", minGames: 20 },
+    ],
+  },
 };
+const board = (fields: Record<string, unknown>) => ({ ...leaderboards, leaderboards: { boards: [{ id: "a", name: "A", kind: "score", ...fields }] } });
 
 // Every case is checked by the validator and by the JSON Schema, and both
 // must agree, so editors flag exactly what Tavora refuses to load.
@@ -134,13 +144,27 @@ const cases: [string, unknown, boolean][] = [
   ["the leaderboards connector without leaderboards", { ...leaderboards, leaderboards: undefined }, false],
   ["leaderboards without boards", { ...leaderboards, leaderboards: { boards: [] } }, false],
   ["leaderboards with 21 boards", { ...leaderboards, leaderboards: { boards: Array.from({ length: 21 }, (_, i) => ({ id: `b${i}`, kind: "score" })) } }, false],
-  ["a leaderboard id with capitals", { ...leaderboards, leaderboards: { boards: [{ id: "Daily", kind: "streak" }] } }, false],
-  ["a leaderboard id with a double hyphen", { ...leaderboards, leaderboards: { boards: [{ id: "a--b", kind: "streak" }] } }, false],
-  ["a leaderboard of an unknown kind", { ...leaderboards, leaderboards: { boards: [{ id: "a", kind: "time" }] } }, false],
-  ["a daily score board", { ...leaderboards, leaderboards: { boards: [{ id: "a", kind: "score", daily: true }] } }, false],
-  ["a streak board with an order", { ...leaderboards, leaderboards: { boards: [{ id: "a", kind: "streak", order: "low" }] } }, false],
-  ["a score board ordered sideways", { ...leaderboards, leaderboards: { boards: [{ id: "a", kind: "score", order: "middle" }] } }, false],
-  ["leaderboards with an unknown field", { ...leaderboards, leaderboards: { boards: [{ id: "a", kind: "score" }], public: true } }, false],
+  ["a leaderboard id with capitals", board({ id: "Daily" }), false],
+  ["a leaderboard id with a double hyphen", board({ id: "a--b" }), false],
+  ["a leaderboard without a name", board({ name: undefined }), false],
+  ["a leaderboard name too long", board({ name: "x".repeat(41) }), false],
+  ["a leaderboard name on two lines", board({ name: "Daily\nstreak" }), false],
+  ["a leaderboard of an unknown kind", board({ kind: "time" }), false],
+  ["a daily score board", board({ daily: true }), false],
+  ["a streak board with an order", board({ kind: "streak", order: "low" }), false],
+  ["a streak board with a unit", board({ kind: "streak", unit: "days" }), false],
+  ["a score board ordered sideways", board({ order: "middle" }), false],
+  ["a score board with minGames", board({ minGames: 5 }), false],
+  ["a total board with an order", board({ kind: "total", order: "low" }), false],
+  ["a rate board with a unit", board({ kind: "rate", unit: "%" }), false],
+  ["a rate board wanting no games", board({ kind: "rate", minGames: 0 }), false],
+  ["an average board wanting too many games", board({ kind: "average", minGames: 1001 }), false],
+  ["an average board wanting half a game", board({ kind: "average", minGames: 2.5 }), false],
+  ["a unit too long", board({ unit: "x".repeat(11) }), false],
+  ["an empty unit", board({ unit: " " }), false],
+  ["leaderboards with an unknown field", { ...leaderboards, leaderboards: { boards: [{ id: "a", name: "A", kind: "score" }], public: true } }, false],
+  ["translated board names", { ...leaderboards, translations: { de: { boards: { daily: "Tagesserie" } } } }, true],
+  ["a translated board name too long", { ...leaderboards, translations: { de: { boards: { daily: "x".repeat(41) } } } }, false],
   ["full", { ...valid, $schema: "x", description: "Plans builds.", icon: "assets/icon.webp" }, true],
   ["any game", { ...valid, games: [] }, true],
   ["changelog", { ...valid, changelog: "changelog.json" }, true],
@@ -400,6 +424,7 @@ describe("translations", () => {
   it("only names panels and actions the manifest lists", () => {
     const result = validateManifest({ ...translated, translations: { de: { panels: { map: "Karte" }, actions: { lap: "Runde" } } } });
     expect(result).toEqual({ ok: false, errors: ["translations.de.panels names map, which panels does not list", "translations.de.actions names lap, which actions does not list"] });
+    expect(validateManifest({ ...leaderboards, translations: { de: { boards: { weekly: "Wochenserie" } } } })).toEqual({ ok: false, errors: ["translations.de.boards names weekly, which boards does not list"] });
   });
 
   it("needs a Tavora newer than the last one without them, except for Tavora's own modules", () => {
@@ -461,10 +486,24 @@ describe("leaderboards", () => {
   });
 
   it("refuses a board id listed twice", () => {
-    expect(validateManifest({ ...leaderboards, leaderboards: { boards: [{ id: "daily", kind: "streak" }, { id: "daily", kind: "score" }] } })).toEqual({
+    expect(validateManifest({ ...leaderboards, leaderboards: { boards: [{ id: "daily", name: "Daily", kind: "streak" }, { id: "daily", name: "Daily", kind: "score" }] } })).toEqual({
       ok: false,
       errors: ["leaderboards lists the board daily twice"],
     });
+  });
+
+  it("says which kinds there are, and which fields each takes", () => {
+    expect(validateManifest(board({ kind: "time" }))).toEqual({ ok: false, errors: ['leaderboards.boards[0].kind must be one of "streak", "score", "total", "average", "rate"'] });
+    expect(validateManifest(board({ kind: "rate", unit: "%" }))).toEqual({ ok: false, errors: ["unknown leaderboards.boards[0] fields: unit"] });
+    expect(validateManifest(board({ kind: "average", minGames: 0 }))).toEqual({ ok: false, errors: ["leaderboards.boards[0].minGames must be a whole number from 1 to 1000"] });
+  });
+
+  it("shows board names in the user's language", () => {
+    const manifest = { ...leaderboards, translations: { de: { boards: { daily: "Tagesserie" } } } };
+    expect(validateManifest(manifest).ok).toBe(true);
+    const german = translateManifest(manifest as ModuleManifest, "de");
+    expect(german.leaderboards!.boards.map((item) => item.name)).toEqual(["Winning streak", "Tagesserie", "Fastest easy solve", "Puzzles solved", "Average time", "Win rate"]);
+    expect(german.leaderboards!.boards[1]).toEqual({ id: "daily", name: "Tagesserie", kind: "streak", daily: true });
   });
 });
 

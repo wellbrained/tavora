@@ -176,18 +176,24 @@ describe("requests", () => {
     await tavora.leaderboards.status();
     await tavora.leaderboards.show();
     await tavora.leaderboards.hide();
-    await tavora.leaderboards.submit("daily", [{ id: "a", outcome: "won", at: 1, day: "2026-10-28" }]);
+    // A result without a day gets the local day of its time: noon on 2026-10-28 is that day everywhere.
+    const noon = new Date(2026, 9, 28, 12).getTime();
+    await tavora.leaderboards.submit("daily", [{ id: "a", outcome: "won", at: 1, day: "2026-10-28" }, { id: "b", value: 83, at: noon }]);
     await tavora.leaderboards.top("daily", { day: "2026-10-28", limit: 5 });
-    await tavora.leaderboards.top("fastest");
+    await tavora.leaderboards.top("fastest", { period: "week" });
+    await tavora.leaderboards.mine();
+    await tavora.leaderboards.mine({ day: "2026-10-28" });
     expect(host.requests.slice(1).map((request) => [request.method, request.params])).toEqual([
       ["storage.compareAndSet", { key: "run", expected: null, value: 1 }],
       ["storage.app.compareAndSet", { key: "run", expected: { n: 1 }, value: { n: 2 } }],
       ["leaderboards.status", undefined],
       ["leaderboards.show", undefined],
       ["leaderboards.hide", undefined],
-      ["leaderboards.submit", { board: "daily", results: [{ id: "a", outcome: "won", at: 1, day: "2026-10-28" }] }],
+      ["leaderboards.submit", { board: "daily", results: [{ id: "a", outcome: "won", at: 1, day: "2026-10-28" }, { id: "b", value: 83, at: noon, day: "2026-10-28" }] }],
       ["leaderboards.top", { board: "daily", day: "2026-10-28", limit: 5 }],
-      ["leaderboards.top", { board: "fastest" }],
+      ["leaderboards.top", { board: "fastest", period: "week" }],
+      ["leaderboards.mine", {}],
+      ["leaderboards.mine", { day: "2026-10-28" }],
     ]);
   });
 
