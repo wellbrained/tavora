@@ -1,5 +1,5 @@
 import { isLeaderboardId, type LeaderboardBoard } from "@tavora/module-schema";
-import { LIMITS, type LeaderboardRow, type LeaderboardStatus, type LeaderboardSubmitResult } from "@tavora/sdk/protocol";
+import { LIMITS, type LeaderboardStatus, type LeaderboardSubmitResult, type LeaderboardTop } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
 
 // The leaderboards connector (decided 2026-10-28, apps/api/src/leaderboards.ts has the service's side). A module
@@ -45,7 +45,8 @@ export interface ModuleLeaderboardsOptions {
 
 type Answer = { status: number; body: Record<string, unknown> };
 
-const SIGNED_OUT: LeaderboardStatus = { signedIn: false, available: false, shown: false, name: null };
+/** While accounts are off there is no service to reach. */
+const NO_SERVICE: LeaderboardStatus = { online: false, signedIn: false, available: false, shown: false, name: null };
 /** The longest submit Tavora sends, in bytes; the service takes 32 KB. */
 const MAX_SUBMIT_BYTES = 30_000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -85,9 +86,10 @@ export class ModuleLeaderboards {
     return (await this.read()).status;
   }
 
-  /** Asks the user in the panel, then shows them on the boards if they agree; signed out, offers to sign in. */
+  /** Asks the user in the panel, then shows them on the boards if they agree; signed out, offers to sign in. Offline, asks nothing. */
   async show(): Promise<LeaderboardStatus> {
     const { status: before, name } = await this.read();
+    if (!before.online) return before;
     if (!before.signedIn) {
       if (this.options.account.enabled()) await this.options.ask({ kind: "sign-in" });
       return before;
@@ -132,7 +134,7 @@ export class ModuleLeaderboards {
     };
   }
 
-  async top(params: unknown): Promise<LeaderboardRow[]> {
+  async top(params: unknown): Promise<LeaderboardTop> {
     const input = isObject(params) ? params : {};
     const board = this.board(input.board);
     if (input.day !== undefined && (typeof input.day !== "string" || !DAY.test(input.day))) throw new HostError("INVALID_PARAMS", "params.day must be a day as YYYY-MM-DD");
@@ -141,15 +143,15 @@ export class ModuleLeaderboards {
     }
     const query = new URLSearchParams({ ...declaration(board), ...(input.day === undefined ? {} : { day: input.day as string }), ...(input.limit === undefined ? {} : { limit: String(input.limit) }) });
     const answer = await this.request("GET", `/boards/${board.id}?${query}`);
-    if (!answer) return [];
+    if (!answer) return { rows: [] };
     if (answer.status !== 200) refused(answer);
     const rows = Array.isArray(answer.body.rows) ? answer.body.rows.filter(isObject) : [];
-    return rows.map((row) => ({
+    return { rows: rows.map((row) => ({
       rank: count(row.rank),
       name: typeof row.name === "string" ? row.name : this.options.pseudonym(typeof row.label === "string" ? row.label : ""),
       self: row.self === true,
       ...(board.kind === "streak" ? { current: count(row.current), best: count(row.best) } : { value: count(row.value) }),
-    }));
+    })) };
   }
 
   /** A board of the manifest by its id, or INVALID_PARAMS. */
@@ -159,12 +161,22 @@ export class ModuleLeaderboards {
     return board;
   }
 
-  /** The status, and the name the boards would show, which only Tavora's own question shows before the user agreed. */
+  /**
+   * The status, and the name the boards would show, which only Tavora's own question shows before the user agreed.
+   * Offline (or the service busy or failing) is a status too, never an error: the module asks again later.
+   */
   private async read(again = true): Promise<{ status: LeaderboardStatus; name: string | null }> {
-    const answer = await this.request("GET", "");
-    if (!answer) return { status: { ...SIGNED_OUT }, name: null };
+    const offline = { status: { online: false, signedIn: this.options.account.isSignedIn(), available: false, shown: false, name: null }, name: null };
+    let answer: Answer | null;
+    try {
+      answer = await this.request("GET", "");
+    } catch {
+      return offline;
+    }
+    if (!answer) return { status: { ...NO_SERVICE }, name: null };
     // A sign-in the service no longer knows was forgotten just now: ask again as signed out.
     if (answer.status === 401 && again && !this.options.account.isSignedIn()) return this.read(false);
+    if (answer.status === 429 || answer.status >= 500) return offline;
     if (answer.status !== 200) refused(answer);
     return { status: this.statusOf(answer.body), name: this.nameOf(answer.body) };
   }
@@ -173,7 +185,7 @@ export class ModuleLeaderboards {
   private statusOf(body: Record<string, unknown>): LeaderboardStatus {
     const signedIn = this.options.account.isSignedIn();
     const shown = signedIn && body.shown === true;
-    return { signedIn, available: body.available === true, shown, name: shown ? this.nameOf(body) : null };
+    return { online: true, signedIn, available: body.available === true, shown, name: shown ? this.nameOf(body) : null };
   }
 
   private nameOf(body: Record<string, unknown>): string | null {

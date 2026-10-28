@@ -53,16 +53,16 @@ describe("the boards' module id", () => {
 
 describe("the leaderboard status", () => {
   it("says where the user stands, and the name the boards show only once they are on them", async () => {
-    expect(await setup().leaderboards.status()).toEqual({ signedIn: true, available: true, shown: false, name: null });
+    expect(await setup().leaderboards.status()).toEqual({ online: true, signedIn: true, available: true, shown: false, name: null });
     const hidden = setup({ answers: { "GET /local.word-guess": { status: 200, body: { available: true, shown: true, name: null, label: "K7" } } } });
-    expect(await hidden.leaderboards.status()).toEqual({ signedIn: true, available: true, shown: true, name: "User · K7" });
+    expect(await hidden.leaderboards.status()).toEqual({ online: true, signedIn: true, available: true, shown: true, name: "User · K7" });
   });
 
   it("is signed out without a sign-in, and while accounts are off asks nothing at all", async () => {
     const out = setup({ signedIn: false, answers: { "GET /local.word-guess": { status: 200, body: { available: true, shown: false, name: null, label: null } } } });
-    expect(await out.leaderboards.status()).toEqual({ signedIn: false, available: true, shown: false, name: null });
+    expect(await out.leaderboards.status()).toEqual({ online: true, signedIn: false, available: true, shown: false, name: null });
     const off = setup({ enabled: false });
-    expect(await off.leaderboards.status()).toEqual({ signedIn: false, available: false, shown: false, name: null });
+    expect(await off.leaderboards.status()).toEqual({ online: false, signedIn: false, available: false, shown: false, name: null });
     expect(off.requests).toEqual([]);
   });
 
@@ -70,22 +70,30 @@ describe("the leaderboard status", () => {
     const forgotten = { status: 401, body: { reason: "signed-out" } };
     const anonymous = { status: 200, body: { available: true, shown: false, name: null, label: null } };
     const { leaderboards, requests } = setup({ answers: { "GET /local.word-guess": [forgotten, anonymous] } });
-    expect(await leaderboards.status()).toEqual({ signedIn: false, available: true, shown: false, name: null });
+    expect(await leaderboards.status()).toEqual({ online: true, signedIn: false, available: true, shown: false, name: null });
     expect(requests).toHaveLength(2);
     const broken = setup({ answers: { "GET /local.word-guess": [forgotten, forgotten, forgotten] } });
     await expect(broken.leaderboards.status()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
     expect(broken.requests).toHaveLength(2);
   });
 
-  it("can't reach the service: NETWORK_ERROR", async () => {
-    await expect(setup({ unreachable: true }).leaderboards.status()).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+  it("says offline instead of failing when the service can't be reached or is busy, and asks nothing then", async () => {
+    const offline = { online: false, signedIn: true, available: false, shown: false, name: null };
+    const unreachable = setup({ unreachable: true });
+    expect(await unreachable.leaderboards.status()).toEqual(offline);
+    expect(await unreachable.leaderboards.show()).toEqual(offline);
+    expect(unreachable.questions).toEqual([]);
+    const busy = setup({ answers: { "GET /local.word-guess": { status: 503, body: { reason: "unavailable" } } } });
+    expect(await busy.leaderboards.status()).toEqual(offline);
+    // Sending and hiding still fail, so the module keeps its results.
+    await expect(unreachable.leaderboards.hide()).rejects.toMatchObject({ code: "NETWORK_ERROR" });
   });
 });
 
 describe("showing the user on the boards", () => {
   it("asks first, in Tavora's words with the name the boards will show, and shows them only on yes", async () => {
     const yes = setup();
-    expect(await yes.leaderboards.show()).toEqual({ signedIn: true, available: true, shown: true, name: "Mara" });
+    expect(await yes.leaderboards.show()).toEqual({ online: true, signedIn: true, available: true, shown: true, name: "Mara" });
     expect(yes.questions).toEqual([{ kind: "consent", name: "Mara" }]);
     expect(yes.requests.map((request) => `${request.method} ${request.path}`)).toEqual(["GET /local.word-guess", "PUT /local.word-guess/shown"]);
 
@@ -160,10 +168,12 @@ describe("sending results and reading boards", () => {
         },
       },
     });
-    expect(await leaderboards.top({ board: "fastest", limit: 5 })).toEqual([
-      { rank: 1, name: "Mara", self: true, value: 61_000 },
-      { rank: 2, name: "User · K7", self: false, value: 70_000 },
-    ]);
+    expect(await leaderboards.top({ board: "fastest", limit: 5 })).toEqual({
+      rows: [
+        { rank: 1, name: "Mara", self: true, value: 61_000 },
+        { rank: 2, name: "User · K7", self: false, value: 70_000 },
+      ],
+    });
     expect(requests.at(-1)?.path).toBe("/local.word-guess/boards/fastest?kind=score&order=low&limit=5");
   });
 });
