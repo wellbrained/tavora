@@ -28,6 +28,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.71",
+    date: "2026-10-28",
+    title: "Inbox and updates in the rail",
+    notes: [
+      "Messages and module updates are in the rail now, above your profile, so the header holds only Start / Stop, Layouts and Add module.",
+      "Layouts has its name back.",
+    ],
+  },
+  {
     version: "0.21.70",
     date: "2026-10-28",
     title: "Header and tabs, tidier",
