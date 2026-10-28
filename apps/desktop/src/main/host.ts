@@ -2036,6 +2036,7 @@ export class Host {
       "set-game-overlays-hidden": (action) => {
         this.gameOverlays.setHidden(action.hidden);
         this.syncGameWatcher();
+        this.syncOverlayPanels();
       },
       "preview-overlay": (action) => {
         const { owner, moduleId, workspaceId, key } = action;
@@ -2411,6 +2412,34 @@ export class Host {
       const record = this.records(entry.id).find((item) => (panel.instanceId ? item.instanceId === panel.instanceId : item.moduleId === panel.moduleId));
       if (!record || this.views.has(record.instanceId) || this.panelTypeOf(record) === undefined) continue;
       this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+    }
+  }
+
+  /** Panels run for the started overlays (every item of every setup), from any workspace and whether or not it was opened; they stop with Stop. */
+  private readonly overlayKeep = new Set<string>();
+
+  /** Started: the panels behind every overlay and panel item run now. Stopped: they are let go of, except those of the workspace shown. */
+  private syncOverlayPanels(): void {
+    const layout = this.gameOverlays.layout;
+    const wanted = new Set<string>();
+    if (this.library.gameOverlays && !this.gameOverlays.hidden) {
+      for (const setup of layout.setups()) {
+        for (const info of layout.items(setup)) {
+          const entry = this.library.workspaces[info.keyTarget.workspaceId];
+          if (!entry || entry.trashedAt) continue;
+          const record = this.records(entry.id).find((item) => (info.ref.kind === "panel" ? item.instanceId === info.ref.instanceId : item.moduleId === info.moduleId));
+          if (!record || this.panelTypeOf(record) === undefined || record.moduleId === BROWSER_MODULE_ID) continue;
+          wanted.add(record.instanceId);
+          this.overlayKeep.add(record.instanceId);
+          if (!this.views.has(record.instanceId)) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+        }
+      }
+    }
+    for (const instanceId of [...this.overlayKeep]) {
+      if (wanted.has(instanceId)) continue;
+      this.overlayKeep.delete(instanceId);
+      const shownHere = this.workspace && this.records(this.workspace.id).some((record) => record.instanceId === instanceId);
+      if (!shownHere && !this.floating(instanceId)) this.destroyView(instanceId, false);
     }
   }
 
@@ -3575,6 +3604,7 @@ export class Host {
     this.closeModuleMenu(instanceId);
     // The panel is closing for good: its live state goes, whether or not it was running.
     if (forget) this.gameOverlays?.forgetLive(instanceId);
+    if (forget) this.overlayKeep.delete(instanceId);
     const view = this.views.get(instanceId);
     if (!view) return;
     this.views.delete(instanceId);
@@ -3595,7 +3625,7 @@ export class Host {
     this.endOpening();
     this.cover.cancel();
     // A panel in the layer goes on running there, also while another workspace or Home is shown.
-    for (const instanceId of [...this.views.keys()]) if (!this.floating(instanceId)) this.destroyView(instanceId, false);
+    for (const instanceId of [...this.views.keys()]) if (!this.floating(instanceId) && !this.overlayKeep.has(instanceId)) this.destroyView(instanceId, false);
     this.panelBounds.clear();
   }
 
@@ -3739,7 +3769,8 @@ export class Host {
     // A module page stays hidden until it has its data, so switching workspaces does not show it building itself;
     // while a workspace opens, every panel waits for the others.
     view.setVisible(rect !== undefined && !this.overlay && !this.opening && (!(view instanceof ModuleView) || view.revealed));
-    if (rect && !this.windowHidden) view.resume();
+    // A panel kept running for the overlays isn't paused for being out of sight: its overlay goes on being fed.
+    if ((rect || this.overlayKeep.has(instanceId)) && !this.windowHidden) view.resume();
     else view.suspend();
   }
 
