@@ -42,7 +42,8 @@ const tagClass = {
       <span class="flex min-w-0 items-center gap-2">
         <span class="truncate font-medium">{{ module.name }}</span>
         <span class="text-muted-foreground flex-none text-xs tabular-nums">{{ module.version }}</span>
-        <Badge variant="outline" :class="cn('py-0', tagClass[kind])" :data-testid="`module-tag-${module.id}`" :data-kind="kind">
+        <!-- The Examples list already says Example, so its rows skip the tag. -->
+        <Badge v-if="!(hideOrigin && kind === 'example')" variant="outline" :class="cn('py-0', tagClass[kind])" :data-testid="`module-tag-${module.id}`" :data-kind="kind">
           <Package v-if="kind === 'release'" aria-hidden="true" />
           <FolderCode v-else-if="kind === 'local'" aria-hidden="true" />
           <Store v-else-if="kind === 'catalog'" aria-hidden="true" />

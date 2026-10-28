@@ -218,6 +218,8 @@ test("a developer chooses a public name and links a key file with tavora-pack li
 
     // The developer settings are under Development; linking a key file is part of publishing from CI.
     await page.getByTestId("settings-nav-development").click();
+    // Not a developer yet: the tools show after Let's go.
+    await page.getByTestId("development-start").click();
     const developer = page.getByTestId("account-developer");
     await expect(developer).toBeVisible();
     await page.getByTestId("developer-ci-toggle").click();
@@ -282,6 +284,7 @@ test("Tavora keeps a developer's publisher key, and tavora-pack without a key fi
   try {
     await signIn(page, "keeper@example.com", true);
     await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("development-start").click();
     await page.getByTestId("developer-ci-toggle").click();
     await expect(page.getByTestId("developer-keys-none")).toBeVisible();
     await expect(page.getByTestId("developer-key-create")).toBeDisabled();

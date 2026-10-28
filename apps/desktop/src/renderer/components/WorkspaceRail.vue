@@ -344,7 +344,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           @click="act({ type: 'show-welcome' })"
         >
           <img class="rail-icon rail-icon-bare" src="/brand/flame-96.png" alt="" width="32" height="32" draggable="false" />
-          <span v-if="expanded" class="text-lg font-semibold">Tavora</span>
+          <span v-if="expanded" class="text-lg font-semibold">{{ t("rail.home") }}</span>
         </button>
       </RailTooltip>
     </div>

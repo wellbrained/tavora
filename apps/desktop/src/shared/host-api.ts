@@ -827,7 +827,7 @@ export interface CatalogModuleView {
   screenshots: number;
   /** Whether the listing has an icon; catalogIcon fetches it. */
   icon: boolean;
-  /** Every version's ratings together, or null without any. Below MIN_RATINGS_SHOWN the app says "New". */
+  /** Every version's ratings together, or null without any. Below MIN_RATINGS_SHOWN the card shows no stars. */
   rating: CatalogRating | null;
 }
 

@@ -56,6 +56,7 @@ test("adding a module asks first, adding it again does not, and taking it back r
   await pressAdd(page, NETWORK);
   await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
   await expect(page.getByTestId("grant-dialog")).toBeVisible();
+  await expect(page.getByTestId("grant-dialog").getByRole("heading", { level: 2 })).toHaveText("Let Network Test Module reach 2 websites?");
   await expect(page.getByTestId("grant-hosts").locator("li")).toHaveText(["api.tavora.test", "cdn.tavora.test"]);
   await expect(page.getByTestId("grant-from")).toContainText("not signed");
   await page.getByTestId("grant-cancel").click();

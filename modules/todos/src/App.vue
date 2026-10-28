@@ -2,14 +2,13 @@
 // To-Dos: a toolbar, current objectives, then the user's own groups. Every
 // To-Dos panel of a workspace shows the same list; what is folded, hidden or being
 // edited is each panel's own state.
-import { Check, ChevronsDownUp, ChevronsUpDown, Eye, ListChecks } from "@lucide/vue";
+import { ChevronsDownUp, ChevronsUpDown, ListChecks, SlidersHorizontal } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
 import { Popover, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
 import { Slider } from "@tavora/official-ui/components/ui/slider";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import type { MenuRequest, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import AddInput from "./AddInput.vue";
@@ -22,7 +21,6 @@ import TaskRow from "./TaskRow.vue";
 import { addGroup, addTask, childCount, deleteGroup, findTask, LIST_ID, MAX, moveTask, parseList, type Group, type TodoList } from "./todos";
 
 const EMPTY = parseList(null);
-const FINISHED_MODES: FinishedMode[] = ["stay", "vanish"];
 
 interface PanelState {
   finished: FinishedMode;
@@ -112,7 +110,9 @@ watch(
   { deep: true },
 );
 
-function setFinished(mode: FinishedMode) {
+/** The toolbar toggle: pressed keeps finished to-dos in the list, released lets them vanish. */
+function toggleFinished() {
+  const mode: FinishedMode = finished.value === "stay" ? "vanish" : "stay";
   finished.value = mode;
   savePanel();
 }
@@ -240,26 +240,25 @@ function dropTask() {
         <ChevronsUpDown v-if="allCollapsed" :stroke-width="1.5" />
         <ChevronsDownUp v-else :stroke-width="1.5" />
       </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger as-child>
-          <!-- In a small panel (over the game, say) only the icon stays, so the toolbar keeps its room for the count. -->
-          <Button variant="ghost" size="sm" data-testid="finished-mode" :data-mode="finished" :aria-label="t(`app.finishedLabel.${finished}`)" :title="t(`app.finishedLabel.${finished}`)">
-            <ListChecks :stroke-width="1.5" />
-            <span class="hidden @min-[20rem]:inline">{{ t(`app.finishedLabel.${finished}`) }}</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>{{ t("app.finished") }}</DropdownMenuLabel>
-          <DropdownMenuItem v-for="mode in FINISHED_MODES" :key="mode" :data-testid="`finished-${mode}`" @select="setFinished(mode)">
-            {{ t(`app.finished.${mode}`) }}
-            <Check v-if="finished === mode" class="ml-auto" :stroke-width="1.5" />
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <!-- A toggle: pressed keeps finished to-dos in the list. In a small panel (over the game, say) only the icon stays, so the toolbar keeps its room for the count. -->
+      <Button
+        variant="ghost"
+        size="sm"
+        :class="finished === 'stay' && 'bg-accent text-accent-foreground'"
+        :aria-pressed="finished === 'stay'"
+        :aria-label="t('app.keepFinished')"
+        :title="t(finished === 'stay' ? 'app.keepFinished.on' : 'app.keepFinished.off')"
+        data-testid="finished-mode"
+        :data-mode="finished"
+        @click="toggleFinished"
+      >
+        <ListChecks :stroke-width="1.5" />
+        <span class="hidden @min-[20rem]:inline">{{ t("app.keepFinished") }}</span>
+      </Button>
       <Popover>
         <PopoverTrigger as-child>
           <Button variant="ghost" size="icon-sm" :aria-label="t('live.menu')" :title="t('live.menu')" data-testid="live-settings">
-            <Eye :stroke-width="1.5" />
+            <SlidersHorizontal :stroke-width="1.5" />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" class="w-64" data-testid="live-popover">

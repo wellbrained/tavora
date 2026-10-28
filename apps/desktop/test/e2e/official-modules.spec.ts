@@ -385,7 +385,7 @@ test("to-dos: groups, sub-to-dos, editing in place, objectives and finished task
   await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
 
   // Whether finished tasks stay or vanish is this panel's setting in the toolbar.
-  await pickFromMenu(app, TODOS, q("finished-mode"), "finished-vanish");
+  await click(app, TODOS, `[data-testid="finished-mode"][data-mode="stay"]`);
   await expect.poll(() => taskTitles(app)).not.toContain("Defeat Count Geonor");
 
   await app.close();
@@ -395,7 +395,7 @@ test("to-dos: groups, sub-to-dos, editing in place, objectives and finished task
   await expect.poll(() => taskTitles(again.app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
   await expect.poll(() => taskTitles(again.app)).not.toContain("Defeat Count Geonor");
   await expect.poll(() => taskTitles(again.app)).not.toContain("Reach level 30");
-  await pickFromMenu(again.app, TODOS, q("finished-mode"), "finished-stay");
+  await click(again.app, TODOS, `[data-testid="finished-mode"][data-mode="vanish"]`);
   await expect.poll(() => taskTitles(again.app)).toContain("Defeat Count Geonor");
   await expectModuleText(again.app, TODOS, "task-children", "1/2");
   await again.app.close();
