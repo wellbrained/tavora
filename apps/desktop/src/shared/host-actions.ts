@@ -294,6 +294,7 @@ export function hostActionTable(c: HostChecks) {
     "set-onboarded": { done: bool },
     /** Let's go in Settings > Development: the user wants to make modules, so its tools show; false hides them again. */
     "set-makes-modules": { on: bool },
+    "see-version": {},
     "set-rail": { expanded: optional(bool), width: optional(check<number>((value) => typeof value === "number" && Number.isFinite(value))) },
 
     // Appearance

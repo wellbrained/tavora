@@ -53,6 +53,21 @@ interface AwayItem {
 
 const away = computed<AwayItem[]>(() => {
   const items: AwayItem[] = [];
+  // Tavora was updated since the user last looked at what's new. A first start counts as seen (main/host.ts).
+  const seen = state.value!.library.seenVersion;
+  const version = state.value!.appVersion;
+  if (seen && seen !== version) {
+    items.push({
+      id: "news",
+      title: t("welcome.away.news", { version }),
+      text: t("welcome.away.newsText"),
+      action: t("welcome.away.newsAction"),
+      run: () => {
+        void act({ type: "see-version" });
+        openSettings({ section: "patch-notes" });
+      },
+    });
+  }
   const waiting = state.value!.modules.filter((module) => module.update);
   if (waiting.length) {
     items.push({
