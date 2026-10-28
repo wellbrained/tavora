@@ -97,11 +97,6 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     grid: () => world.grid,
     setGrid: (grid) => void (world.grid = grid),
     running: () => [...world.running],
-    addSetup: (gameId) => {
-      if (world.gameSetups.includes(gameId)) return false;
-      world.gameSetups.push(gameId);
-      return true;
-    },
     addPanel: (setupId, panel) => {
       world.added.push({ setup: setupId, instanceId: panel.instanceId });
       world.items.push({ key: panel.instanceId, gameId: panel.workspaceId, scope: panel.workspaceId === "personal" ? "all" : "game", setup: setupId, rect: DEFAULT_PANEL_ANCHORED, panel: true });
@@ -979,27 +974,10 @@ describe("the sources", () => {
 });
 
 describe("adding and moving", () => {
-  it("lists the game workspaces without a setup to add one for", () => {
-    const { layout } = setup([clock("a", "elden")]);
-    layout.open("elden");
-    expect(layout.view().addable).toEqual([{ id: "poe2", name: "Path of Exile 2" }]);
-  });
-
-  it("adds a setup for such a game and shows it", () => {
+  it("has no way to add a game's setup: that is only on the rail", () => {
     const { layout, world } = setup([clock("a", "elden")]);
     layout.open("elden");
-    layout.handle({ type: "add-setup", gameId: "poe2" }, true);
-    expect(world.gameSetups).toContain("poe2");
-    expect(layout.view().gameId).toBe("poe2");
-    expect(layout.view().addable).toEqual([]);
-  });
-
-  it("does not add a setup for a game that has one, an unknown workspace, or on the layer's word", () => {
-    const { layout, world } = setup([clock("a", "elden")]);
-    layout.open("elden");
-    layout.handle({ type: "add-setup", gameId: "elden" }, true);
-    layout.handle({ type: "add-setup", gameId: "nowhere" }, true);
-    layout.handle({ type: "add-setup", gameId: "poe2" }, false);
+    layout.handle({ type: "add-setup", gameId: "poe2" } as unknown as LayoutMessage, true);
     expect(world.gameSetups).toEqual(["elden"]);
     expect(layout.view().gameId).toBe("elden");
   });

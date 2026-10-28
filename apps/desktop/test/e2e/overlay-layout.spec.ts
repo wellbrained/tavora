@@ -163,11 +163,10 @@ test("The page opens on Everywhere, lists every panel with the reason one can't 
   try {
     await openModule(page, "tavora.todos");
     await overlayPage(app, page);
-    // No game runs, and nothing was set up: Everywhere, and Add overlay for every game.
+    // No game runs, and nothing was set up: Everywhere, and the dropdown holds only setups that exist.
     await expect.poll(async () => (await state(page))?.gameId).toBe("$everywhere");
     const view = await state(page);
     expect(view.games.map((game) => game.id)).toEqual(["$everywhere", "$all"]);
-    expect(view.addable.map((game) => game.id)).toEqual(["poe2", "satisfactory"]);
     expect(view.sources).toHaveLength(1);
     const todos = view.sources[0]!;
     expect(todos).toMatchObject({ name: "To-Dos", from: "Path of Exile 2", game: "Path of Exile 2", block: "game-only" });
@@ -185,11 +184,11 @@ test("The page opens on Everywhere, lists every panel with the reason one can't 
     await expect(row(page, todos.id)).toBeVisible();
     await page.getByTestId("layout-search").fill("");
 
-    // Add overlay for the game from the dropdown: its setup opens, and the panel can be added there.
+    // The game gets its setup the way a user adds it (the rail's Add overlay); the dropdown then lists it, and the panel can be added there.
+    await page.evaluate((workspaceId) => (window as unknown as Host).tavoraHost.act({ type: "add-game-overlay", workspaceId }), GAME);
     await page.getByRole("button", { name: "Overlay for", exact: true }).click();
-    await page.getByTestId(`layout-game-option-add:${GAME}`).click();
+    await page.getByTestId(`layout-game-option-${GAME}`).click();
     await expect.poll(async () => (await state(page)).gameId).toBe(GAME);
-    expect((await state(page)).addable.map((game) => game.id)).toEqual(["satisfactory"]);
     await row(page, todos.id).getByRole("button").first().click();
     await expect.poll(async () => (await state(page)).items.length).toBe(1);
     expect((await state(page)).selection).toContain(todos.id);
@@ -206,7 +205,6 @@ test("The page opens on Everywhere, lists every panel with the reason one can't 
     await railMenu(GAME, "menu-remove-overlay");
     await expect.poll(async () => (await state(page)).games.map((game) => game.id)).toEqual(["$everywhere", "$all"]);
     expect((await state(page)).gameId).toBe("$all");
-    expect((await state(page)).addable.map((game) => game.id)).toEqual(["poe2", "satisfactory"]);
     await railMenu(GAME, "menu-add-overlay");
     await expect.poll(async () => (await state(page)).games.map((game) => game.id)).toEqual(["$everywhere", "$all", GAME]);
   } finally {

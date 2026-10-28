@@ -110,8 +110,6 @@ export interface LayoutSource {
   running(): string[];
   grid(): GridSetting;
   setGrid(grid: GridSetting): void;
-  /** Add overlay: a game workspace gets a setup of its own. */
-  addSetup(gameId: string): boolean;
   /** A panel goes into a setup, at the size its module prefers; "refused" when it may not go there. */
   addPanel(setupId: string, panel: { owner: string; moduleId: string; workspaceId: string; instanceId: string }): AddResult;
   /** An item of a personal workspace moves between Everywhere and All games with its place and settings. */
@@ -1156,7 +1154,6 @@ export class GameOverlays {
         this.options.changed();
       },
       running: () => [...this.running].sort((a, b) => Number(b === this.front) - Number(a === this.front)),
-      addSetup: (gameId) => this.addSetup(gameId),
       addPanel: (setupId, panel) => this.addPanelTo(setupId, panel),
       move: (ref, from, to) => this.moveItem(ref, from, to),
       setRect: (setupId, ref, rect) => {

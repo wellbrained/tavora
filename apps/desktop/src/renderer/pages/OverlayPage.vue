@@ -21,8 +21,6 @@ useLayoutKeys();
 
 /** Where the game's picture is served from (main/layout-pictures.ts; the folder is one of the host UI's image folders). */
 const PICTURE_ORIGIN = "tavora-host://app/";
-/** Dropdown entries that add a setup carry this in front of the game's id. */
-const ADD = "add:";
 
 const area = ref<HTMLElement>();
 const canvas = ref<HTMLElement>();
@@ -114,12 +112,9 @@ watch([size, () => view.value?.gameId], () => requestAnimationFrame(report), { f
 const isGame = computed(() => !!view.value && view.value.gameId !== "$everywhere" && view.value.gameId !== "$all");
 const setup = computed({
   get: () => view.value?.gameId ?? "",
-  set: (value: string) => (value.startsWith(ADD) ? send({ type: "add-setup", gameId: value.slice(ADD.length) }) : send({ type: "game", gameId: value })),
+  set: (value: string) => send({ type: "game", gameId: value }),
 });
-const setupOptions = computed(() => [
-  ...(view.value?.games ?? []).map((item) => ({ value: item.id, label: item.name })),
-  ...(view.value?.addable ?? []).map((game) => ({ value: `${ADD}${game.id}`, label: t("overlays.layout.addFor", { name: game.name }) })),
-]);
+const setupOptions = computed(() => (view.value?.games ?? []).map((item) => ({ value: item.id, label: item.name })));
 const setupName = computed(() => view.value?.games.find((item) => item.id === view.value?.gameId)?.name ?? "");
 const selected = computed(() => view.value?.items.find((item) => item.id === view.value?.selection) ?? null);
 const grid = computed({

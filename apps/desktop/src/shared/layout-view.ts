@@ -71,8 +71,6 @@ export interface LayoutSourceView {
 export interface LayoutView {
   /** The overlay setups: Everywhere, All games, then the games that have one, in name order. */
   games: { id: string; name: string }[];
-  /** The game workspaces that have no setup yet ("Add overlay for…"), in name order. */
-  addable: { id: string; name: string }[];
   /** Every panel from every workspace. */
   sources: LayoutSourceView[];
   /** Items one setup may hold. */
@@ -107,7 +105,6 @@ export interface LayoutView {
 export type LayoutMessage =
   | { type: "game"; gameId: string }
   /** Add overlay for a game workspace (the dropdown), and show it. */
-  | { type: "add-setup"; gameId: string }
   /** A panel from the Sources goes into the setup shown. */
   | { type: "add-source"; id: string }
   /** A personal item moves to the other of Everywhere and All games. */
@@ -156,8 +153,6 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
   switch (raw.type) {
     case "game":
       return text(raw.gameId, 128) ? { type: "game", gameId: raw.gameId } : null;
-    case "add-setup":
-      return text(raw.gameId, 128) ? { type: "add-setup", gameId: raw.gameId } : null;
     case "add-source":
     case "move":
       return text(raw.id) ? { type: raw.type, id: raw.id } : null;
