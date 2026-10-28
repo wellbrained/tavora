@@ -130,6 +130,18 @@ if (!app.requestSingleInstanceLock()) {
   };
   app.on("before-quit", closeOverlays);
   app.on("will-quit", closeOverlays);
+  // Quitting does not wait for saves that are still running: hold it once until everything is on disk. A save that
+  // hangs may delay quitting by a few seconds, never stop it.
+  let flushed = false;
+  app.on("before-quit", (event) => {
+    if (flushed || !host) return;
+    event.preventDefault();
+    flushed = true;
+    const limit = new Promise<void>((resolve) => setTimeout(resolve, 5000).unref());
+    void Promise.race([host.flush(), limit])
+      .catch((error: unknown) => console.error("[tavora] saving on quit failed", error))
+      .finally(() => app.quit());
+  });
   process.on("exit", closeOverlays);
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {

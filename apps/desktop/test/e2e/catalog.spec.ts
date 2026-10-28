@@ -69,6 +69,10 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
       response.writeHead(status, { "content-type": "application/json" });
       response.end(JSON.stringify(body));
     };
+    // A pretend account service: any address and code signs in. A report needs the sign-in.
+    if (url.pathname === "/v1/account/code") return send(204, {});
+    if (url.pathname === "/v1/account/verify") return send(200, { token: "pretend_token_for_the_tests", account: { email: "user@example.com", createdAt: "2026-10-01T00:00:00.000Z" } });
+    if (url.pathname === "/v1/account") return send(200, { account: { email: "user@example.com", createdAt: "2026-10-01T00:00:00.000Z" }, devices: [] });
     if (url.pathname === "/v1/catalog/report" && request.method === "POST") {
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(chunk as Buffer);
@@ -419,7 +423,7 @@ test("catalog module updates wait for the user, install from the Updates view wi
     await checkForUpdates("Found 1 update. It is ready when you are.");
     await page.getByTestId("settings-close").click();
     await expectModuleText(app, id, "version", "1.0.0");
-    await expect(page.getByTestId("module-updates-button")).toHaveText("1 update");
+    await expect(page.getByTestId("module-updates-button")).toHaveAttribute("aria-label", "1 update");
 
     // The module's page says the version installed, and the newest one beside it.
     await page.getByTestId("add-module").click();
@@ -520,6 +524,16 @@ test("a user reports a module from Browse and from Settings, and only its id, ke
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   const sent = { headers: { cookie: null, referer: null }, body: { id: "wellbrained.tracker", owner, sha256, reason: "unsafe" } };
   try {
+    // Reporting needs a sign-in.
+    await page.getByTestId("rail-settings").click();
+    await page.getByTestId("settings-nav-account").click();
+    await page.getByTestId("account-email").fill("user@example.com");
+    await page.getByTestId("account-send-code").click();
+    await page.getByTestId("account-code").fill("123456");
+    await page.getByTestId("account-verify").click();
+    await expect(page.getByTestId("account")).toContainText("user@example.com");
+    await page.getByTestId("settings-close").click();
+
     await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
