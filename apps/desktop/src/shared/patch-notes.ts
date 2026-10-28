@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.79",
+    date: "2026-10-28",
+    title: "A new Home",
+    notes: [
+      "Search right from Home: start typing to open a game, a module or a setting.",
+      "Continue the game that runs, or the one you played last, with one click.",
+      "See what happened while you were away: module updates, new messages and a new Tavora.",
+    ],
+    prs: [
+      { number: 433, title: "Home: search first, continue, and what happened while you were away" },
+    ],
+    tags: ["onboarding"],
+  },
+  {
     version: "0.21.78",
     date: "2026-10-28",
     title: "Plainer words",
