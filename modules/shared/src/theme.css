@@ -34,7 +34,7 @@
   --accent-foreground: #f2ece0;
   --destructive: #e5675a;
   --border: #35302b;
-  --input: #6b665c;
+  --input: #6e695f;
   --ring: #e0a243;
 
   --rail: #100e0d;
@@ -43,6 +43,8 @@
   --info: #6fa8dc;
 
   --radius: 8px;
+  /* How far a disabled control fades: enough to read as off, while its text keeps 3:1 in every official theme. */
+  --disabled-opacity: 0.75;
 }
 
 @theme inline {
@@ -145,4 +147,13 @@
     animation-duration: 0ms !important;
     transition-duration: 0ms !important;
   }
+}
+
+/* Disabled controls in the UI kit fade by --disabled-opacity instead of their own 50%, so "Save", "Send code" or
+   "Remove" stay readable while off. Outside any layer on purpose, so it wins over the kit's disabled:opacity-50. */
+[data-slot="button"]:disabled,
+[data-slot="input"]:disabled,
+[data-slot="textarea"]:disabled,
+[data-slot="switch"]:disabled {
+  opacity: var(--disabled-opacity);
 }
