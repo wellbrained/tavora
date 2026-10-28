@@ -128,7 +128,8 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
 
 <template>
   <main class="flex h-full min-w-0 flex-col" data-testid="overlay-page">
-    <header class="app-drag flex h-14 flex-none items-center gap-3 pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+0.5rem)] pl-2">
+    <!-- pl-6 leaves room for the rail's round expand button, which hangs over the rail's edge. -->
+    <header class="app-drag flex h-14 flex-none items-center gap-3 pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+0.5rem)] pl-6">
       <span class="bg-secondary flex size-8 flex-none items-center justify-center rounded-lg" aria-hidden="true"><Layers :stroke-width="1.5" class="size-5" /></span>
       <h1 class="max-w-72 min-w-0 truncate text-lg font-semibold">{{ t("overlays.button.open") }}</h1>
       <span class="ml-auto" />

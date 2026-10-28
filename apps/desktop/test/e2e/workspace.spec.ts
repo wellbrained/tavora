@@ -174,3 +174,16 @@ test("a workspace opens with all its panels at once, behind one loader until the
     await app.close();
   }
 });
+
+test("the rail's expand button keeps clear of the workspace header", async () => {
+  const { app, page } = await launch();
+  try {
+    await openWorkspace(page, "poe2");
+    const button = (await page.getByTestId("rail-toggle").boundingBox())!;
+    const icon = (await page.getByTestId("workspace").locator("header > span").first().boundingBox())!;
+    // The round button hangs over the rail's edge; the header's game icon starts after it, with room to spare.
+    expect(icon.x).toBeGreaterThanOrEqual(button.x + button.width + 8);
+  } finally {
+    await app.close();
+  }
+});

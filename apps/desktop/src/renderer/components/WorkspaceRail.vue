@@ -537,7 +537,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
 
     <button
       type="button"
-      class="app-no-drag bg-rail text-muted-foreground hover:text-foreground hover:border-primary/60 focus-visible:ring-ring absolute top-5 -right-3 z-20 grid size-6 place-items-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      class="app-no-drag bg-rail text-foreground/80 hover:text-foreground border-foreground/25 hover:border-primary/60 focus-visible:ring-ring absolute top-5 -right-3 z-20 grid size-6 place-items-center rounded-full border shadow-sm shadow-black/30 transition-colors focus-visible:ring-2 focus-visible:outline-none"
       data-testid="rail-toggle"
       :aria-label="expanded ? t('rail.collapse') : t('rail.expand')"
       :title="expanded ? t('rail.collapse') : t('rail.expand')"
