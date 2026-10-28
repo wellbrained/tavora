@@ -5,7 +5,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { generateKeyPairSync } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer, type Server } from "node:http";
-import { createServer } from "node:net";
+import { createConnection, createServer, type Socket } from "node:net";
 import os, { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
@@ -421,5 +421,95 @@ test("a new PC gets the recovery key from another PC, once both show the same co
   } finally {
     await a.app.close();
     await b.app.close();
+  }
+});
+
+/** A stand-in for the network between Tavora and the service: it passes everything on until it is stopped, and can start again. */
+async function flakyLink(target: number) {
+  const port = await freePort();
+  const open = new Set<Socket>();
+  const server = createServer((from) => {
+    const to = createConnection(target, "127.0.0.1");
+    for (const socket of [from, to]) {
+      open.add(socket);
+      socket.on("close", () => open.delete(socket));
+      socket.on("error", () => socket.destroy());
+    }
+    from.pipe(to);
+    to.pipe(from);
+  });
+  const start = () => new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
+  const stop = () =>
+    new Promise<void>((resolve) => {
+      for (const socket of open) socket.destroy();
+      server.close(() => resolve());
+    });
+  await start();
+  return { url: `http://127.0.0.1:${port}`, start, stop };
+}
+
+test("when the cloud can't be reached the copy says so and Try again works once it is back", async () => {
+  test.setTimeout(120_000);
+  const link = await flakyLink(Number(new URL(apiUrl).port));
+  const env = { TAVORA_API_URL: link.url, TAVORA_DISCORD_IPC: path.join(tmpdir(), "tavora-no-discord"), TAVORA_DISCORD_TOKEN_URL: `${discordUrl}/api/oauth2/token` };
+  const a = await launch(undefined, [], { env });
+  try {
+    await signIn(a.page, "offline@example.com", true);
+    await a.page.getByTestId("cloud-copy-on").click();
+    await a.page.getByTestId("cloud-copy-key-saved").click();
+    await expect(a.page.getByTestId("cloud-copy-status")).toContainText("Saved");
+    await expect(a.page.getByTestId("cloud-copy-problem")).toHaveCount(0);
+
+    // Something changes while the connection is gone: the upload fails, and says why and what to do.
+    await link.stop();
+    await a.page.evaluate(() => (window as unknown as { tavoraHost: { act(action: unknown): Promise<unknown> } }).tavoraHost.act({ type: "rename-workspace", workspaceId: "poe2", name: "Renamed" }));
+    await a.page.getByTestId("cloud-copy-upload").click();
+    const problem = a.page.getByTestId("cloud-copy-problem");
+    await expect(problem).toContainText("Cloud copy isn't syncing");
+    await expect(problem).toContainText("Can't reach the cloud. Check your connection.");
+
+    await link.start();
+    await a.page.getByTestId("cloud-copy-retry").click();
+    await expect(problem).toHaveCount(0);
+    await expect(a.page.getByTestId("cloud-copy-status")).toContainText("Saved");
+  } finally {
+    await a.app.close();
+    await link.stop();
+  }
+});
+
+test("a cloud copy in a folder that went missing says so and offers another folder", async () => {
+  test.setTimeout(120_000);
+  const env = { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_IPC: path.join(tmpdir(), "tavora-no-discord"), TAVORA_DISCORD_TOKEN_URL: `${discordUrl}/api/oauth2/token` };
+  const a = await launch(undefined, [], { env });
+  const folder = path.join(a.userData, "my-cloud-folder");
+  await mkdir(folder);
+  const pick = (picked: string) =>
+    a.app.evaluate(({ dialog }, picked) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as unknown as typeof dialog.showOpenDialog;
+    }, picked);
+  try {
+    await a.page.getByTestId("rail-settings").click();
+    await a.page.getByTestId("settings-nav-account").click();
+
+    // A folder that isn't there at the start: nothing turns on, and the user hears why.
+    await pick(path.join(a.userData, "never-existed"));
+    await a.page.getByTestId("cloud-copy-on-folder").click();
+    await expect(a.page.getByTestId("toast")).toHaveText("Can't find your folder. Is it still there? You can pick another one.");
+    await expect(a.page.getByTestId("cloud-copy-on-folder")).toBeVisible();
+
+    // A folder that works, then goes missing: the next upload fails and the problem box offers Change folder.
+    await pick(folder);
+    await a.page.getByTestId("cloud-copy-on-folder").click();
+    await a.page.getByTestId("cloud-copy-key-saved").click();
+    await expect(a.page.getByTestId("cloud-copy-status")).toContainText("Saved");
+    await rm(folder, { recursive: true, force: true });
+    await a.page.evaluate(() => (window as unknown as { tavoraHost: { act(action: unknown): Promise<unknown> } }).tavoraHost.act({ type: "rename-workspace", workspaceId: "poe2", name: "Renamed" }));
+    await a.page.getByTestId("cloud-copy-upload").click();
+    const problem = a.page.getByTestId("cloud-copy-problem");
+    await expect(problem).toContainText("Can't find your folder");
+    await expect(a.page.getByTestId("cloud-copy-retry")).toHaveText("Change folder…");
+  } finally {
+    await a.app.close();
   }
 });

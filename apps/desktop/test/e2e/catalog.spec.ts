@@ -557,3 +557,70 @@ test("a user reports a module from Browse and from Settings, and only its id, ke
     server.close();
   }
 });
+
+test("offline, the catalog says what happened and how to go on, and an update check never says up to date", async () => {
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const owner = fingerprint(key);
+  const tracker = await packed("wellbrained.tracker", "Tracker", key);
+  const other = await packed("wellbrained.other", "Other", key);
+  const { url, server } = await catalogServer([
+    { entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { publisher: "wellbrained" }), body: tracker },
+    { entry: listing("wellbrained.other", "Other", other, owner, { publisher: "wellbrained" }), body: other },
+  ]);
+  const port = Number(new URL(url).port);
+  // The service goes away and comes back on the same address.
+  const stop = () =>
+    new Promise<void>((resolve) => {
+      server.closeAllConnections();
+      server.close(() => resolve());
+    });
+  const start = () => new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
+  try {
+    await openWorkspace(page, "poe2");
+    await page.getByTestId("add-module").click();
+    await page.getByTestId("module-tab-browse").click();
+    await page.getByTestId("catalog-install-wellbrained.tracker").click();
+    await expect(page.getByTestId("catalog-add-wellbrained.tracker")).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    // Offline, checking for updates says it could not check, never "up to date".
+    await stop();
+    await page.getByTestId("rail-settings").click();
+    await page.getByTestId("settings-nav-modules").click();
+    await page.getByTestId("check-module-updates").click();
+    await expect(page.getByTestId("toast")).toHaveText("Can't check for updates. Check your connection and try again.");
+    await page.getByTestId("settings-close").click();
+
+    // The list says what happened and offers Try again, which works once the service is back.
+    await page.getByTestId("add-module").click();
+    await page.getByTestId("module-tab-browse").click();
+    const unreachable = page.getByTestId("catalog-unreachable");
+    await expect(unreachable).toContainText("Can't reach community modules");
+    await expect(unreachable).toContainText("Check your connection, then try again.");
+    await start();
+    await page.getByTestId("catalog-retry").click();
+    await expect(page.getByTestId("catalog-wellbrained.other")).toBeVisible();
+
+    // A module's page keeps what it has and offers Try again for the rest.
+    await stop();
+    await page.getByTestId("catalog-name").first().click(); // Other, by name
+    const info = page.getByTestId("catalog-info-wellbrained.other");
+    await expect(info.getByTestId("catalog-info-missing")).toBeVisible();
+    await expect(info.getByTestId("catalog-reviews-missing")).toBeVisible();
+    await start();
+    await info.getByTestId("catalog-info-retry").click();
+    await expect(info.getByTestId("catalog-info-missing")).toHaveCount(0);
+    await info.getByTestId("catalog-reviews-retry").click();
+    await expect(info.getByTestId("catalog-reviews-missing")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    // An install that can't reach the service says so on its card.
+    await stop();
+    await page.getByTestId("catalog-install-wellbrained.other").click();
+    await expect(page.getByTestId("catalog-error-wellbrained.other")).toContainText("can't be reached");
+  } finally {
+    await app.close();
+    server.close();
+  }
+});

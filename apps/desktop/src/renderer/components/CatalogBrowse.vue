@@ -11,11 +11,12 @@ import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api
 import { act, addModule, api, dialog, openSettings, state, type AddModuleRequest } from "../host";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@tavora/official-ui/components/ui/select";
 import { t } from "../i18n";
 import { formatSize } from "../catalog-size";
 import { cn } from "@/lib/utils";
-import { CircleCheck, Gamepad2, ShieldCheck } from "@lucide/vue";
+import { CircleCheck, Gamepad2, ShieldCheck, WifiOff } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
 import CatalogModuleDialog from "./CatalogModuleDialog.vue";
 import CatalogRating from "./CatalogRating.vue";
@@ -112,11 +113,13 @@ function settings() {
 <template>
   <div class="min-h-0 flex-1 overflow-y-auto px-5 pb-8 sm:px-8" data-testid="catalog-results">
     <p v-if="!result" class="text-muted-foreground py-16 text-center" role="status" data-testid="catalog-loading">{{ t("catalog.loading") }}</p>
-    <div v-else-if="result.status !== 'ok'" class="text-muted-foreground py-16 text-center" role="status" :data-testid="`catalog-${result.status}`">
-      <p>{{ t(`catalog.status.${result.status}`) }}</p>
-      <Button v-if="result.status === 'off'" variant="secondary" class="mt-4" data-testid="catalog-settings" @click="settings">{{ t("catalog.openSettings") }}</Button>
-      <Button v-else variant="ghost" class="mt-3" data-testid="catalog-retry" @click="load">{{ t("catalog.retry") }}</Button>
-    </div>
+    <EmptyState v-else-if="result.status !== 'ok'" class="mt-8" role="status" :title="t(`catalog.problem.${result.status}.title`)" :description="t(`catalog.problem.${result.status}.text`)" :data-testid="`catalog-${result.status}`">
+      <template #icon><WifiOff /></template>
+      <template #action>
+        <Button v-if="result.status === 'off'" variant="secondary" data-testid="catalog-settings" @click="settings">{{ t("catalog.openSettings") }}</Button>
+        <Button v-else variant="secondary" data-testid="catalog-retry" @click="load">{{ t("catalog.retry") }}</Button>
+      </template>
+    </EmptyState>
     <template v-else>
       <div class="flex flex-wrap items-center gap-3 pt-6 pb-3">
         <p class="text-muted-foreground flex min-w-0 flex-1 items-center gap-2 text-sm"><ShieldCheck class="size-4 flex-none" :stroke-width="1.5" /> {{ t("catalog.hint") }}</p>
