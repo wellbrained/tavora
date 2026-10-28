@@ -6,6 +6,34 @@ import type { ModuleProblemKind, ModuleProblemValues } from "./module-problem";
 import type { ContactDraft, ConversationDetailResult, InboxView } from "./conversations";
 import type { HostAction } from "./host-actions";
 import type { LayoutMessage, LayoutStills, LayoutView } from "./layout-view";
+import type { LeaderboardKind, LeaderboardPeriod } from "@tavora/module-schema";
+import type { LeaderboardStanding } from "@tavora/sdk/protocol";
+
+/** The ranks shown in the profile card (Settings keeps the choice, library.profileRanks). */
+export interface ProfileRanksSetting {
+  hidden: boolean;
+  period: LeaderboardPeriod;
+}
+
+/** One board in the profile card: its name in Tavora's language, what it counts, and the user's standing per period. */
+export interface ProfileRankBoard {
+  id: string;
+  name: string;
+  kind: LeaderboardKind;
+  /** A streak board with one result per day (the streak counts days). */
+  daily?: boolean;
+  /** The short text after a number, such as "pts". */
+  unit?: string;
+  periods: Record<LeaderboardPeriod, LeaderboardStanding | null>;
+}
+
+/** Where the user stands on the boards of the catalog modules they agreed to be shown on (host:profile-ranks). */
+export interface ProfileRanksView {
+  /** False while the service can't be reached (or accounts are off). */
+  online: boolean;
+  signedIn: boolean;
+  modules: { id: string; name: string; boards: ProfileRankBoard[] }[];
+}
 
 /**
  * loading: the page is loading. ready: loaded and running. failed: the page
@@ -632,7 +660,7 @@ export interface HostViewState {
   snapshots: SnapshotView[];
   notice: string | null;
   /** The user's local profile. */
-  profile: { name: string; initials: string; pictureUrl: string | null };
+  profile: { name: string; initials: string; pictureUrl: string | null; ranks: ProfileRanksSetting };
   /** A setting that only applies on start was changed since Tavora started. */
   restartPending: boolean;
   /** Where the app is with finding and installing a newer version. */
@@ -1018,6 +1046,8 @@ export interface TavoraHostApi {
   getAiUsage(): Promise<AiUsageView | null>;
   onAiUsage(listener: (view: AiUsageView) => void): void;
   getAccount(): Promise<AccountView | null>;
+  /** The user's ranks for the profile card; null from anything but the host UI. Never rejects. */
+  profileRanks(): Promise<ProfileRanksView | null>;
   onAccount(listener: (view: AccountView) => void): void;
   getCloudCopy(): Promise<CloudCopyView | null>;
   onCloudCopy(listener: (view: CloudCopyView) => void): void;

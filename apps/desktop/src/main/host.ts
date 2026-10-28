@@ -31,7 +31,7 @@ import {
 } from "electron";
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -50,6 +50,7 @@ import { readModulePage } from "./module-page";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
 import { boardsModuleId, ModuleLeaderboards, type LeaderboardQuestion } from "./leaderboards";
+import { profileRanks, type ProfileRankSource } from "./profile-ranks";
 import { ModuleLifecycle } from "./module-lifecycle";
 import type { TestHosts } from "./network";
 import { shortcutFor } from "./shortcuts";
@@ -1693,6 +1694,7 @@ export class Host {
     ipcMain.handle("host:get-discord", (event) => (fromHost(event) ? this.discord.view() : null));
     ipcMain.handle("host:get-ai-usage", (event) => (fromHost(event) ? this.aiUsage.view() : null));
     ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
+    ipcMain.handle("host:profile-ranks", (event) => (fromHost(event) ? this.profileRanks() : null));
     ipcMain.handle("host:get-cloud-copy", (event) => (fromHost(event) ? this.copySync.view() : null));
     ipcMain.handle("host:get-developer-keys", (event) => (fromHost(event) ? this.developerKeys.view() : null));
     ipcMain.handle("host:get-publish", (event) => (fromHost(event) ? this.publisher.view() : null));
@@ -2135,6 +2137,9 @@ export class Host {
       "set-language": saved((action) => {
         this.library.language = action.language;
         for (const view of this.views.values()) view.applyLanguage(this.language);
+      }),
+      "set-profile-ranks": saved((action) => {
+        this.library.profileRanks = { hidden: action.hidden ?? this.library.profileRanks.hidden, period: action.period ?? this.library.profileRanks.period };
       }),
       "set-steam-profile": saved((action) => {
         this.library.steamProfile = action.profile;
@@ -4256,6 +4261,7 @@ export class Host {
         name: this.profile.name,
         initials: this.profile.initials,
         pictureUrl: this.profile.picture ? PROFILE_URL + this.profile.picture : null,
+        ranks: { ...library.profileRanks },
       },
       restartPending: library.grayscaleText !== this.options.grayscaleText,
       appearance: this.appearanceView(),
@@ -4496,11 +4502,24 @@ export class Host {
   private leaderboardsOf(module: InstalledModule, ask: (question: LeaderboardQuestion) => Promise<boolean>): ModuleLeaderboards {
     return new ModuleLeaderboards({
       moduleId: boardsModuleId(module.manifest.id, module.owner === OFFICIAL_OWNER || this.catalogModules.has(module.manifest.id)),
-      boards: module.manifest.leaderboards?.boards ?? [],
+      boards: translateManifest(module.manifest, this.language).leaderboards?.boards ?? [],
       account: this.account,
       pseudonym: (label) => (label ? translate(this.language, "leaderboards.pseudonym", { label }) : translate(this.language, "leaderboards.someone")),
       ask,
     });
+  }
+
+  /** The profile card's ranks: the catalog modules with boards the user agreed to be shown on (profile-ranks.ts). */
+  private async profileRanks(): Promise<ProfileRanksView> {
+    const sources: ProfileRankSource[] = [...this.modules.values()]
+      .filter((module) => (module.owner === OFFICIAL_OWNER || this.catalogModules.has(module.manifest.id)) && (module.manifest.leaderboards?.boards.length ?? 0) > 0)
+      .map((module) => ({
+        id: module.manifest.id,
+        name: translateManifest(module.manifest, this.language).name,
+        boards: module.manifest.leaderboards?.boards ?? [],
+        leaderboards: this.leaderboardsOf(module, async () => false),
+      }));
+    return profileRanks(this.account, sources);
   }
 
   /** Settings > Integrations > Leaderboards: takes the user off a module's boards, whatever the module offers. */

@@ -290,6 +290,8 @@ export function hostActionTable(c: HostChecks) {
     /** Removes one hotkey from Settings > Streaming. */
     "remove-hotkey": { owner: c.ownerId, moduleId: c.moduleId, workspaceId: c.workspaceId, action: matching(/^[a-z][a-z0-9-]{0,31}$/), target: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     "set-language": { language: check<LanguageSetting>(isLanguageSetting) },
+    /** The ranks in the profile card: hide or show them, and the period they show. */
+    "set-profile-ranks": { hidden: optional(bool), period: optional(oneOf("day", "week", "month", "year", "all")) },
     /** Remembers the Steam profile for the import on this PC; null forgets it. */
     "set-steam-profile": { profile: nullable((value) => (typeof value === "string" && value.length <= 200 && value.trim() !== "" ? value.trim() : BAD)) },
     /** Done ends the first-run welcome; false shows it again. */
