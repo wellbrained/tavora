@@ -8,7 +8,7 @@ import { t } from "../../i18n";
 </script>
 
 <template>
-  <Button v-if="inbox.icon" size="icon-sm" variant="secondary" class="relative" :title="t('inbox.title')" :aria-label="inbox.unread ? t('inbox.unreadCount', { count: inbox.unread }) : t('inbox.title')" data-testid="inbox-button" @click="openInbox()">
+  <Button v-if="inbox.icon" size="icon-sm" variant="ghost" class="relative" :title="t('inbox.title')" :aria-label="inbox.unread ? t('inbox.unreadCount', { count: inbox.unread }) : t('inbox.title')" data-testid="inbox-button" @click="openInbox()">
     <Mail :stroke-width="1.5" />
     <span v-if="inbox.unread" class="bg-primary text-primary-foreground absolute -top-1.5 -right-1.5 grid min-w-4 place-items-center rounded-full px-1 text-[10px] leading-4 font-semibold" data-testid="inbox-badge">{{ inbox.unread }}</span>
   </Button>

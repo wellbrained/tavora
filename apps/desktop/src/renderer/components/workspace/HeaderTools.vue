@@ -32,13 +32,14 @@ watchEffect(() => {
 
 <template>
   <div class="app-no-drag flex flex-none items-center gap-2">
-    <ModuleUpdatesButton />
     <OverlayButton />
     <InboxButton />
+    <ModuleUpdatesButton />
+    <span class="bg-border h-5 w-px flex-none" aria-hidden="true" />
     <div :inert="onOverlay" :class="cn('flex items-center gap-2', onOverlay && 'opacity-50')">
       <LayoutsMenu />
       <ButtonGroup>
-        <Button size="sm" variant="secondary" data-testid="add-module" @click="$emit('addModule')">
+        <Button size="sm" data-testid="add-module" @click="$emit('addModule')">
           <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
         </Button>
         <ModulesMenu v-if="hasPanels" />

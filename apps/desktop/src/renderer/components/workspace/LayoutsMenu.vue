@@ -2,7 +2,7 @@
 // Saved layouts of the current workspace: apply one, or save the current layout.
 // Below them, a Templates submenu (uneven arrangements of empty slots to fill
 // with modules) and a picker for even grids.
-import { ChevronDown, LayoutPanelLeft, LayoutTemplate } from "@lucide/vue";
+import { LayoutPanelLeft, LayoutTemplate } from "@lucide/vue";
 import type { SnapshotView } from "../../../shared/host-api";
 import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "../../../shared/layout-templates";
 import {
@@ -97,9 +97,9 @@ function items(): MenuItem[] {
     side="bottom"
     align="end"
     menu-class="w-72"
-    class="flex h-8 w-auto gap-1.5 rounded-lg px-2.5 text-sm font-medium"
+    class="size-8 rounded-lg"
   >
-    <LayoutPanelLeft class="size-4" :stroke-width="1.5" /> {{ t("layouts.button") }} <ChevronDown class="size-3.5" :stroke-width="1.5" />
+    <LayoutPanelLeft class="size-4" :stroke-width="1.5" :title="t('layouts.title')" />
     <template #after>
       <DropdownMenuSeparator />
       <!-- Templates sit one level down, so the grid picker stays in the main menu. -->
