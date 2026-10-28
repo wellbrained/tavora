@@ -127,6 +127,12 @@ test("panels are moved, split and maximized from their menu, and the layout is k
   // React joins the vanilla panel's group as a second tab.
   await panelMenu(page, REACT, "panel-move-previous");
   await expect(groups(page)).toHaveCount(1);
+  // With one group there is nowhere to move a panel or maximize it, so those items don't show.
+  await panels(page, REACT).click({ button: "right" });
+  const open = page.locator('[role="menu"][data-state="open"]');
+  await expect(open.getByTestId("panel-split-down")).toBeVisible();
+  for (const item of ["panel-move-next", "panel-move-previous", "panel-maximize"]) await expect(open.getByTestId(item)).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await expectModuleText(app, VANILLA, "lifecycle", "suspended");
 
   // Split down puts it below, in a group of its own.
@@ -207,6 +213,9 @@ test("a module is removed from one workspace from its panel menu, leaving empty 
   // Both vanilla panels go; their columns stay as empty slots, so React keeps its place.
   await panels(page, VANILLA).first().click({ button: "right" });
   await page.locator('[role="menu"][data-state="open"] [data-testid="panel-remove-module"]').click();
+  // Removing asks first, and says the module's data stays.
+  await expect(page.getByTestId("confirm")).toContainText("saved stays");
+  await page.getByTestId("confirm-submit").click();
   await expect(panels(page, VANILLA)).toHaveCount(0);
   await expect(page.locator("[data-testid^='empty-slot-']")).toHaveCount(2);
   await expect(groups(page)).toHaveCount(3);

@@ -4,9 +4,15 @@
 import { generateKeyPairSync } from "node:crypto";
 import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { expect, test, type ElectronApplication } from "@playwright/test";
+import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
 import { expectModuleText, inModule, launch, newUserData, openWorkspace, openModule, panels, seedLibrary, VANILLA } from "./harness";
+
+/** Picks an entry of the More menu in Settings > Modules, where the rarer ways to add a module sit. */
+async function fromMore(page: Page, item: string) {
+  await page.getByTestId("modules-more").click();
+  await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
+}
 
 async function addModule(userData: string, folder: string, id: string): Promise<string> {
   const dir = path.join(userData, "modules", folder);
@@ -53,7 +59,7 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await writeFile(path.join(userData, "modules", "broken", "tavora.module.json"), "{ nope");
   await rm(path.join(await addModule(userData, "unbuilt", "local.test.unbuilt"), "index.html"));
   await expect(page.getByTestId("module-local.test.later")).toHaveCount(0);
-  await page.getByTestId("reload-modules").click();
+  await fromMore(page, "reload-modules");
   await expect(page.getByTestId("module-local.test.later")).toBeVisible();
   await expect(page.getByTestId("module-problems")).toContainText("broken can't load:");
   await expect(page.getByTestId("module-problems")).toContainText("unbuilt can't load, its files aren't built.");
@@ -110,7 +116,7 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await rm(path.join(userData, "modules", "broken"), { recursive: true });
   await rm(path.join(userData, "modules", "unbuilt"), { recursive: true });
   await rm(path.join(userData, "modules", "duplicate"), { recursive: true });
-  await page.getByTestId("reload-modules").click();
+  await fromMore(page, "reload-modules");
   await expect(warnings).toHaveCount(0);
 
   // Open a panel of the module in a game, then remove the module.
@@ -183,7 +189,7 @@ test("a signed zip installs from Settings, updates only from its publisher, and 
   await page.getByTestId("rail-settings").click();
   await page.getByTestId("settings-nav-modules").click();
   await pickFile(app, zip);
-  await page.getByTestId("install-module").click();
+  await fromMore(page, "install-module");
   await expect(page.getByTestId("module-wellbrained.mini")).toBeVisible();
   await expect(page.getByTestId("module-publisher-wellbrained.mini")).toBeVisible();
   await expect(page.getByTestId("module-origin-wellbrained.mini")).toContainText("wellbrained.mini");
@@ -193,13 +199,13 @@ test("a signed zip installs from Settings, updates only from its publisher, and 
   const copycat = path.join(work, "other", "copycat.zip");
   await writeFile(copycat, (await packModule(path.join(source, "mini"), generateKeyPairSync("ed25519").privateKey)).zip);
   await pickFile(app, copycat);
-  await page.getByTestId("install-module").click();
+  await fromMore(page, "install-module");
   await expect(page.getByText("comes from a different publisher")).toBeVisible();
   expect(await openedIn(app)).toBe(path.resolve(work));
 
   // Only a zip that installed moves it.
   await pickFile(app, null);
-  await page.getByTestId("install-module").click();
+  await fromMore(page, "install-module");
   await expect.poll(() => openedIn(app)).toBe(path.resolve(work));
   await app.close();
 });
@@ -229,7 +235,7 @@ test("data left by modules that are gone is listed and deleted, and a local copy
   expect(await exists(path.join(userData, "module-data", "local", "wellbrained.gone"))).toBe(false);
 
   await pickFile(app, zip);
-  await page.getByTestId("install-module").click();
+  await fromMore(page, "install-module");
   await expect(page.getByTestId("module-publisher-wellbrained.mini")).toBeVisible();
   // Installing never hands data over; the local copy's data waits and is offered.
   await expect(page.getByTestId("leftover-local-wellbrained.mini")).toBeVisible();
@@ -324,7 +330,7 @@ test("a module's patch notes show in Settings, and an update marks the new ones 
   await page.getByTestId("rail-settings").click();
   await page.getByTestId("settings-nav-modules").click();
   await pickFile(app, first);
-  await page.getByTestId("install-module").click();
+  await fromMore(page, "install-module");
   // A fresh install has nothing new to read.
   await expect(page.getByTestId("module-notes-toggle-wellbrained.mini")).toBeVisible();
   await expect(page.getByTestId("module-notes-new-wellbrained.mini")).toHaveCount(0);
@@ -334,7 +340,7 @@ test("a module's patch notes show in Settings, and an update marks the new ones 
     { version: "1.0.0", notes: ["First version."] },
   ]);
   await pickFile(app, second);
-  await page.getByTestId("install-module").click();
+  await fromMore(page, "install-module");
   await expect(page.getByTestId("module-notes-new-wellbrained.mini")).toBeVisible();
   await page.getByTestId("module-notes-toggle-wellbrained.mini").click();
   // Newest first, as plain text.

@@ -2,7 +2,7 @@
 // renders inside it (panel content, tabs and group actions).
 import type { DockviewApi, DockviewGroupPanel, IDockviewPanel } from "dockview-vue";
 import type { InjectionKey } from "vue";
-import { act, showOrAddPanel, state, type MenuItem } from "../../host";
+import { act, confirmAction, showOrAddPanel, state, submitAction, type MenuItem } from "../../host";
 import { t } from "../../i18n";
 import { TAB_HEIGHT, type PanelInfo } from "../../dock";
 import type { ColumnSide } from "../../dock-columns";
@@ -82,55 +82,48 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
   };
   const maximized = group.api.isMaximized();
   const module = info(panel.id)?.module;
+  // Items show only when they can be done: splitting takes a second tab in the group and room for both halves;
+  // moving and maximizing take a second group.
+  const several = api.groups.length > 1;
+  const arrange: MenuItem[] = [];
+  if (canSplit(group, "right", info)) arrange.push({ label: t("dock.splitRight"), testid: "panel-split-right", run: split("right") });
+  if (canSplit(group, "below", info)) arrange.push({ label: t("dock.splitDown"), testid: "panel-split-down", run: split("below") });
+  if (several) {
+    arrange.push({ label: t("dock.moveNext"), testid: "panel-move-next", run: move(1) });
+    arrange.push({ label: t("dock.movePrevious"), testid: "panel-move-previous", run: move(-1) });
+  }
+  if (arrange[0]) arrange[0].separator = true;
+  const size: MenuItem[] = maximized
+    ? [{ label: t("dock.restore"), testid: "panel-restore", separator: true, run: () => group.api.exitMaximized() }]
+    : several
+      ? [{ label: t("dock.maximize"), testid: "panel-maximize", separator: true, run: () => group.api.maximize() }]
+      : [];
   return [
     { label: t("workspace.inWorkspace"), testid: "panel-in-game", submenu: () => workspaceModulesMenu(group) },
-    {
-      label: t("dock.splitRight"),
-      testid: "panel-split-right",
-      separator: true,
-      disabled: !canSplit(group, "right", info),
-      run: split("right"),
-    },
-    {
-      label: t("dock.splitDown"),
-      testid: "panel-split-down",
-      disabled: !canSplit(group, "below", info),
-      run: split("below"),
-    },
-    {
-      label: t("dock.moveNext"),
-      testid: "panel-move-next",
-      disabled: api.groups.length < 2,
-      run: move(1),
-    },
-    {
-      label: t("dock.movePrevious"),
-      testid: "panel-move-previous",
-      disabled: api.groups.length < 2,
-      run: move(-1),
-    },
-    maximized
-      ? { label: t("dock.restore"), testid: "panel-restore", separator: true, run: () => group.api.exitMaximized() }
-      : {
-          label: t("dock.maximize"),
-          testid: "panel-maximize",
-          separator: true,
-          disabled: api.groups.length < 2,
-          run: () => group.api.maximize(),
-        },
+    ...arrange,
+    ...size,
     {
       label: t("dock.closePanel"),
       testid: "panel-close",
       separator: true,
       run: () => act({ type: "close-panel", instanceId: panel.id }),
     },
+    // Removing takes the module's panels out of this workspace, not its data: the question says so.
     ...(module
       ? [
           {
             label: t("dock.removeModule", { name: module.name }),
             testid: "panel-remove-module",
             danger: true,
-            run: () => act({ type: "remove-module-from-workspace", moduleId: module.id }),
+            separator: true,
+            run: () =>
+              confirmAction({
+                title: t("dock.removeModuleTitle", { name: module.name }),
+                message: t("dock.removeModuleMessage", { name: module.name }),
+                confirm: t("common.remove"),
+                danger: true,
+                run: () => submitAction({ type: "remove-module-from-workspace", moduleId: module.id }),
+              }),
           },
         ]
       : []),
