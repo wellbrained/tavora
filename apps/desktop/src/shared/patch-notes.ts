@@ -28,6 +28,22 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.80",
+    date: "2026-10-28",
+    title: "Small fixes",
+    notes: [
+      "Game initials stay easy to read on their tiles in light themes too.",
+      "The Browser module has a German description, and the German settings search fits its field.",
+      "The module library's section labels are quieter, and official modules no longer repeat \"Official\" under their heading.",
+      "The games step of the welcome has one skip instead of two.",
+      "The rail's expand button no longer touches the game's name in the workspace header, and it's easier to see.",
+    ],
+    prs: [
+      { number: 435, title: "Polish: readable monograms in light themes, German gaps, quieter library labels" },
+    ],
+    tags: ["icons", "modules", "onboarding", "overlays", "rail", "workspace"],
+  },
+  {
     version: "0.21.79",
     date: "2026-10-28",
     title: "A new Home",
