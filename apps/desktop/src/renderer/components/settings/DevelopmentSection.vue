@@ -27,24 +27,24 @@ import SettingRow from "./SettingRow.vue";
 const props = defineProps<{ highlight: string | null }>();
 
 // Players never see the developer tools until they ask for them: a card asks "Want to make modules?" and
-// Let's go shows them, remembered on this PC. Anyone who already has project folders or a developer
-// account, or who searched for one of these settings, gets them straight away.
-const MAKES_MODULES = "tavora.makesModules";
-const makesModulesSaved = ref(readMakesModules());
-function readMakesModules(): boolean {
-  try {
-    return localStorage.getItem(MAKES_MODULES) === "1";
-  } catch {
-    return false;
-  }
-}
+// Let's go shows them, kept in the library (so in backups and the cloud copy). Anyone who already has
+// project folders or a developer account, or who searched for one of these settings, gets them straight away.
 function startMaking() {
-  makesModulesSaved.value = true;
-  try {
-    localStorage.setItem(MAKES_MODULES, "1");
-  } catch {
-    // Not remembered; it still shows for now.
+  void act({ type: "set-makes-modules", on: true });
+}
+
+// Before it was a library setting, Let's go was kept in this window's local storage: carried over once.
+const OLD_MAKES_MODULES = "tavora.makesModules";
+const carriedOver = ref(false);
+try {
+  if (localStorage.getItem(OLD_MAKES_MODULES) === "1") {
+    carriedOver.value = true;
+    void act({ type: "set-makes-modules", on: true }, { quiet: true }).then((result) => {
+      if (result.ok) localStorage.removeItem(OLD_MAKES_MODULES);
+    });
   }
+} catch {
+  // No local storage: nothing to carry over.
 }
 
 /** Publishing needs the account; in builds without accounts there is none of it. */
@@ -56,7 +56,8 @@ const modules = computed(() => state.value!.modules);
 const folders = computed(() => state.value!.developmentFolders);
 const makesModules = computed(
   () =>
-    makesModulesSaved.value ||
+    state.value!.library.makesModules ||
+    carriedOver.value ||
     folders.value.length > 0 ||
     Boolean(account.value?.developer) ||
     (props.highlight !== null && props.highlight !== "developer-docs"),

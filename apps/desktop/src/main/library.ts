@@ -127,6 +127,8 @@ export interface Library {
   followSystem: boolean;
   /** False until the first-run welcome was finished or skipped. */
   onboarded: boolean;
+  /** True once the user said they want to make modules (Settings > Development, Let's go): its tools show. */
+  makesModules: boolean;
   /** Browser panel sites: signed in for all workspaces instead of per workspace, and ad blocking turned off. */
   browser: { sharedSites: string[]; adblockOff: string[] };
   lastWorkspaceId: string | null;
@@ -228,6 +230,7 @@ export function emptyLibrary(): Library {
     theme: { ...DEFAULT_THEME },
     followSystem: true,
     onboarded: false,
+    makesModules: false,
     browser: { sharedSites: [], adblockOff: [] },
     lastWorkspaceId: null,
   };
@@ -772,6 +775,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.followSystem === "boolean") library.followSystem = saved.followSystem;
   // A library saved before the welcome existed belongs to someone who is past it.
   library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;
+  if (typeof saved.makesModules === "boolean") library.makesModules = saved.makesModules;
   setRail(library, asRecord(saved.rail));
   const browser = asRecord(saved.browser);
   library.browser = { sharedSites: siteList(browser.sharedSites), adblockOff: siteList(browser.adblockOff) };

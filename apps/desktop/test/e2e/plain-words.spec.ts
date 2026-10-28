@@ -1,8 +1,14 @@
 // Plain words in the chrome: the permission prompt leads with its reason, Settings > Development waits
 // until the user wants to make modules, the profile card saves on its own and leads to the account,
 // and the expanded rail calls its top item Home.
+import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { launch, newUserData, openModule, openWorkspace } from "./harness";
+
+/** The Let's go choice as library.json has it. */
+const makesModulesIn = async (userData: string): Promise<unknown> =>
+  JSON.parse(await readFile(path.join(userData, "library.json"), "utf8").catch(() => "{}")).makesModules;
 
 const SYSTEM_MONITOR = "tavora.system-monitor";
 
@@ -20,7 +26,7 @@ test("the permission prompt asks with the reason and says who made the module", 
   }
 });
 
-test("Development shows its tools only after Let's go, and remembers it", async () => {
+test("Development shows its tools only after Let's go, kept in the library file", async () => {
   const userData = await newUserData();
   const first = await launch(userData);
   try {
@@ -33,11 +39,15 @@ test("Development shows its tools only after Let's go, and remembers it", async 
     await expect(first.page.getByTestId("add-development-folder")).toBeVisible();
     await expect(first.page.getByTestId("development-examples")).toBeVisible();
     await expect(first.page.getByTestId("development-examples")).not.toContainText("test ids");
+    await expect.poll(() => makesModulesIn(userData)).toBe(true);
   } finally {
     await first.app.close();
   }
 
-  const again = await launch(userData);
+  // A new profile with only that library file (as a backup or the cloud copy brings it): no local storage, still shown.
+  const elsewhere = await newUserData();
+  await writeFile(path.join(elsewhere, "library.json"), await readFile(path.join(userData, "library.json"), "utf8"));
+  const again = await launch(elsewhere);
   try {
     await again.page.getByTestId("rail-settings").click();
     await again.page.getByTestId("settings-nav-development").click();
@@ -45,6 +55,23 @@ test("Development shows its tools only after Let's go, and remembers it", async 
     await expect(again.page.getByTestId("development-intro")).toHaveCount(0);
   } finally {
     await again.app.close();
+  }
+});
+
+test("a Let's go kept in the window's local storage moves into the library once", async () => {
+  const userData = await newUserData();
+  const { app, page } = await launch(userData);
+  try {
+    expect(await makesModulesIn(userData)).not.toBe(true);
+    await page.evaluate(() => localStorage.setItem("tavora.makesModules", "1"));
+    await page.getByTestId("rail-settings").click();
+    await page.getByTestId("settings-nav-development").click();
+    await expect(page.getByTestId("add-development-folder")).toBeVisible();
+    await expect(page.getByTestId("development-intro")).toHaveCount(0);
+    await expect.poll(() => makesModulesIn(userData)).toBe(true);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("tavora.makesModules"))).toBeNull();
+  } finally {
+    await app.close();
   }
 });
 

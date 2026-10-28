@@ -525,6 +525,8 @@ export interface HostViewState {
     steamProfile: string | null;
     /** False until the user finished or skipped the first-run welcome. */
     onboarded: boolean;
+    /** True once the user said they want to make modules: Settings > Development shows its tools. */
+    makesModules: boolean;
     rail: { expanded: boolean; width: number };
     /** Sites the user marked: signed in for all workspaces, and ad blocking off. */
     browser: { sharedSites: string[]; adblockOff: string[] };

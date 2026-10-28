@@ -2078,6 +2078,9 @@ export class Host {
       "set-onboarded": saved((action) => {
         this.library.onboarded = action.done;
       }),
+      "set-makes-modules": saved((action) => {
+        this.library.makesModules = action.on;
+      }),
       "set-rail": saved((action) => setRail(this.library, action)),
 
       // Appearance
@@ -4002,6 +4005,7 @@ export class Host {
         moduleIcons: library.moduleIcons,
         steamProfile: library.steamProfile,
         onboarded: library.onboarded,
+        makesModules: library.makesModules,
         rail: { ...library.rail },
         browser: { sharedSites: [...library.browser.sharedSites], adblockOff: [...library.browser.adblockOff] },
       },

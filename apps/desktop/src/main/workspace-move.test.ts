@@ -121,6 +121,7 @@ const OLD_LIBRARY = {
   theme: { id: "tavora.default", variation: "dark" },
   followSystem: true,
   onboarded: true,
+  makesModules: false,
   browser: { sharedSites: ["youtube.com"], adblockOff: [] },
   lastGameId: "local-personal",
 };
