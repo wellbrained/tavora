@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.54",
+    date: "2026-10-28",
+    title: "The Overlay page fits in",
+    notes: [
+      "The Overlay page now looks like a workspace: the Overlay button stays in the header, and you leave it by clicking any workspace.",
+      "Choose in Settings > Overlays whether its sidebar is on the left or the right.",
+    ],
+    prs: [
+      { number: 422, title: "Overlay page fits in like a workspace" },
+    ],
+    tags: ["games", "overlays", "privacy", "settings", "website", "workspace"],
+  },
+  {
     version: "0.21.53",
     date: "2026-10-28",
     title: "Overlay page",
