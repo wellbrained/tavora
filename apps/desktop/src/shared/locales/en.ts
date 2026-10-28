@@ -1600,6 +1600,7 @@ export const en = {
   "overlays.layout.setup": "Overlay for",
   "overlays.layout.sources": "Sources",
   "overlays.layout.search": "Search panels",
+  "overlays.layout.idle": "Panel isn't active",
   "overlays.layout.unusable": "Can't be used here ({count})",
   "overlays.layout.noSources": "No panels found.",
   "overlays.layout.add": "Add",

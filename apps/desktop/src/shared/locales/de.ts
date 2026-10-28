@@ -1602,6 +1602,7 @@ export const de: Record<keyof typeof en, string> = {
   "overlays.layout.setup": "Overlay für",
   "overlays.layout.sources": "Quellen",
   "overlays.layout.search": "Panels suchen",
+  "overlays.layout.idle": "Panel ist nicht aktiv",
   "overlays.layout.unusable": "Hier nicht nutzbar ({count})",
   "overlays.layout.noSources": "Keine Panels gefunden.",
   "overlays.layout.add": "Hinzufügen",

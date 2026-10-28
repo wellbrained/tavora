@@ -89,6 +89,8 @@ export function edgesToBounds(layer: Rect, placed: Rect, scale: number): Rect {
   return { x: left, y: top, width: Math.max(1, Math.round(layer.x + (placed.x + placed.width) * scale) - left), height: Math.max(1, Math.round(layer.y + (placed.y + placed.height) * scale) - top) };
 }
 
+/** How often the live pages are looked at for having something to show. */
+const IDLE_CHECK_MS = 1000;
 const sameRect = (a: AnchoredRect, b: AnchoredRect) => a.h === b.h && a.v === b.v && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 
 
@@ -110,6 +112,7 @@ export class OverlayLayout {
   private sentView = "";
   /** Items seen in the last look, to drop the undo steps of those that went. */
   private known = new Set<string>();
+  private idleTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly options: OverlayLayoutOptions) {}
 
@@ -135,6 +138,8 @@ export class OverlayLayout {
     this.notice = null;
     this.sentView = "";
     this.window = this.options.openWindow({ closed: () => this.closed() });
+    // A page's panel starts or stops publishing without telling the layout; looked at again every second.
+    this.idleTimer = setInterval(() => this.refresh(), IDLE_CHECK_MS);
     this.refresh();
   }
 
@@ -158,6 +163,7 @@ export class OverlayLayout {
 
   /** The page was left (by the user, or Tavora is quitting). */
   private closed(): void {
+    clearInterval(this.idleTimer);
     this.window = null;
     this.bounds = null;
     this.dragging.clear();
@@ -268,6 +274,7 @@ export class OverlayLayout {
       hideFromCapture: info.hideFromCapture,
       hotkey: info.hotkey,
       live: info.source !== null,
+      idle: info.source !== null && info.source.state() === null,
       off: info.mode === "toggle" && !info.toggledOn,
       hiddenOnCanvas: this.hiddenOnCanvas.has(info.id),
     }));

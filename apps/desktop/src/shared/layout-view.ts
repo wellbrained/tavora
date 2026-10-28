@@ -37,6 +37,8 @@ export interface LayoutItemView {
   hotkey: { accelerator: string; taken: boolean } | null;
   /** Its page is drawn live on the canvas; without, the canvas shows a box with the name. */
   live: boolean;
+  /** Live, but its page has been given nothing to show (its panel isn't running, or shows nothing now). */
+  idle: boolean;
   /** Toggle mode and not switched on right now: shown faded. */
   off: boolean;
   /** The eye in the list: hidden on the canvas only, kept over the game. */
