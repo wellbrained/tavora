@@ -20,7 +20,6 @@ import InboxButton from "../messages/InboxButton.vue";
 import LayoutsMenu from "./LayoutsMenu.vue";
 import ModuleUpdatesButton from "./ModuleUpdatesButton.vue";
 import ModulesMenu from "./ModulesMenu.vue";
-import OverlayButton from "./OverlayButton.vue";
 
 const props = defineProps<{ onOverlay?: boolean }>();
 defineEmits<{ addModule: [] }>();
@@ -33,7 +32,6 @@ watchEffect(() => {
 <template>
   <div class="app-no-drag flex flex-none items-center gap-2">
     <ModuleUpdatesButton />
-    <OverlayButton :active="onOverlay" />
     <InboxButton />
     <div :inert="onOverlay" :class="cn('flex items-center gap-2', onOverlay && 'opacity-50')">
       <LayoutsMenu />
