@@ -28,6 +28,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.64",
+    date: "2026-10-28",
+    title: "Overlay bar (trial)",
+    notes: [
+      "Overlays have a bar along the bottom of the window: its state, Start / Stop, and Arrange overlays. It is there on every screen.",
+    ],
+  },
+  {
     version: "0.21.63",
     date: "2026-10-28",
     title: "Overlay button colours",
