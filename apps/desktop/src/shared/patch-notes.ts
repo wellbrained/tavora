@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.75",
+    date: "2026-10-28",
+    title: "Search finds your things first",
+    notes: [
+      "Ctrl+K lists your workspaces, modules, settings and layouts first. Games you could add come last, three at most.",
+      "Ctrl+K only suggests a game to add when what you type starts its name or is one of its words.",
+      "In Add a game, names that start with what you type come first.",
+      "Before you type, Add a game lists games A to Z by the name you see.",
+    ],
+    prs: [
+      { number: 429, title: "Search: your own things before catalog games" },
+    ],
+    tags: ["games"],
+  },
+  {
     version: "0.21.74",
     date: "2026-10-28",
     title: "Easier to read small text and switches",
