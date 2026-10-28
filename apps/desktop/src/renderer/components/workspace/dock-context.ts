@@ -82,7 +82,6 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
   };
   const maximized = group.api.isMaximized();
   const module = info(panel.id)?.module;
-  const entry = state.value?.panels.find((item) => item.instanceId === panel.id);
   return [
     { label: t("workspace.inWorkspace"), testid: "panel-in-game", submenu: () => workspaceModulesMenu(group) },
     {
@@ -119,18 +118,6 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
           disabled: api.groups.length < 2,
           run: () => group.api.maximize(),
         },
-    // Only for panel types the module marked for the game, and where Tavora can draw over a game; with Game overlays off the item opens Settings > Overlays.
-    ...(module && entry?.canInGame && state.value?.gameOverlays.supported
-      ? [
-          entry.inGame
-            ? { label: t("dock.stopInGame"), testid: "panel-stop-in-game", separator: true, run: () => act({ type: "stop-panel-in-game", instanceId: panel.id }) }
-            : { label: t("dock.showInGame"), testid: "panel-show-in-game", separator: true, run: () => act({ type: "show-panel-in-game", instanceId: panel.id }) },
-        ]
-      : []),
-    // A panel that has overlays or is in game can be arranged in the Overlay layout.
-    ...(module && entry?.live && state.value?.gameOverlays.supported
-      ? [{ label: t("overlays.layout.open"), testid: "panel-overlay-layout", separator: !(entry.canInGame), run: () => act({ type: "open-overlay-page" }) }]
-      : []),
     {
       label: t("dock.closePanel"),
       testid: "panel-close",
