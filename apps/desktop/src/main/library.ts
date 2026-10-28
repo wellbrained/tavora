@@ -129,6 +129,8 @@ export interface Library {
   onboarded: boolean;
   /** True once the user said they want to make modules (Settings > Development, Let's go): its tools show. */
   makesModules: boolean;
+  /** The Tavora version whose news the user has seen; Home shows a card for a newer one. Null until the first start. */
+  seenVersion: string | null;
   /** Browser panel sites: signed in for all workspaces instead of per workspace, and ad blocking turned off. */
   browser: { sharedSites: string[]; adblockOff: string[] };
   lastWorkspaceId: string | null;
@@ -231,6 +233,7 @@ export function emptyLibrary(): Library {
     followSystem: true,
     onboarded: false,
     makesModules: false,
+    seenVersion: null,
     browser: { sharedSites: [], adblockOff: [] },
     lastWorkspaceId: null,
   };
@@ -779,6 +782,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   // A library saved before the welcome existed belongs to someone who is past it.
   library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;
   if (typeof saved.makesModules === "boolean") library.makesModules = saved.makesModules;
+  if (typeof saved.seenVersion === "string" && /^\d+\.\d+\.\d+$/.test(saved.seenVersion)) library.seenVersion = saved.seenVersion;
   setRail(library, asRecord(saved.rail));
   const browser = asRecord(saved.browser);
   library.browser = { sharedSites: siteList(browser.sharedSites), adblockOff: siteList(browser.adblockOff) };

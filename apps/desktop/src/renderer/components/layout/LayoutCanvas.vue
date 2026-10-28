@@ -166,6 +166,14 @@ const keyOf = (item: LayoutItemView) => (item.mode === "toggle" && item.hotkey ?
     @pointercancel="abort"
     @lostpointercapture="abort"
   >
+    <!-- An empty canvas says what to do instead of staying blank. -->
+    <p
+      v-if="view && !shown.length"
+      class="text-muted-foreground pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-center text-sm"
+      data-testid="layout-canvas-empty"
+    >
+      {{ t("overlays.layout.nothing") }}
+    </p>
     <div
       v-for="item in shown"
       :key="item.id"

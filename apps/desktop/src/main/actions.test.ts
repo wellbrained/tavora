@@ -134,6 +134,7 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "restart-to-update" }],
   [{ type: "set-onboarded", done: true }],
   [{ type: "set-makes-modules", on: true }],
+  [{ type: "see-version" }],
   [{ type: "rename-workspace", workspaceId: "local-x", name: "New" }],
   [{ type: "set-workspace-label", workspaceId: "poe2", label: null }],
   [{ type: "use-original-icon", workspaceId: "poe2" }],
@@ -346,6 +347,8 @@ describe("parseAction", () => {
     [{ type: "set-onboarded", done: 1 }],
     [{ type: "set-makes-modules", on: "yes" }],
     [{ type: "set-makes-modules" }],
+    // The page never names a version: the host marks the running one as seen.
+    [{ type: "see-version", version: "9.9.9" }],
     [{ type: "set-workspace-label", workspaceId: "poe2", label: 3 }],
     [{ type: "use-original-icon", workspaceId: "../x" }],
     [{ type: "use-original-icon", workspaceId: "poe2", extra: true }],

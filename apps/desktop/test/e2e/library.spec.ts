@@ -1,9 +1,10 @@
 // The game library on the rail: adding, arranging, Trash and the app
 // preferences that go with it.
-import { access, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import {
+  desktopDir,
   expectModuleText,
   launch,
   newUserData,
@@ -14,6 +15,7 @@ import {
   panels,
   setContentSize,
   saveNote,
+  seedLibrary,
   TODOS,
   VANILLA,
 } from "./harness";
@@ -457,4 +459,38 @@ test("grayscale text is chosen in Settings and applies on the next start", async
   await expect(again.page.getByTestId("grayscale-text")).toHaveAttribute("aria-checked", "true");
   await expect(again.page.getByTestId("restart-bar")).toHaveCount(0);
   await again.app.close();
+});
+
+test("Home names a new Tavora version once, and its patch notes are one click away", async () => {
+  const version = (JSON.parse(await readFile(path.join(desktopDir, "package.json"), "utf8")) as { version: string }).version;
+  const libraryVersion = async (dir: string) => (JSON.parse(await readFile(path.join(dir, "library.json"), "utf8")) as { seenVersion?: string }).seenVersion;
+
+  // A first start counts the running version as seen: no card.
+  const fresh = await launch();
+  try {
+    await fresh.page.getByTestId("rail-home").click();
+    await expect(fresh.page.getByTestId("welcome-away")).toBeVisible();
+    await expect(fresh.page.getByTestId("welcome-away-news")).toHaveCount(0);
+    await expect.poll(() => libraryVersion(fresh.userData)).toBe(version);
+  } finally {
+    await fresh.app.close();
+  }
+
+  // After an update: the card, and See what's new opens the patch notes and puts it away.
+  const userData = await newUserData();
+  await mkdir(userData, { recursive: true });
+  await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), seenVersion: "0.0.1" }));
+  const { app, page } = await launch(userData, [], { seed: false });
+  try {
+    await page.getByTestId("rail-home").click();
+    const card = page.getByTestId("welcome-away-news");
+    await expect(card).toContainText(`Tavora ${version} is here`);
+    await card.getByRole("button", { name: "See what's new" }).click();
+    await expect(page.getByTestId("settings-heading")).toHaveText("Patch notes");
+    await expect.poll(() => libraryVersion(userData)).toBe(version);
+    await page.getByTestId("settings-close").click();
+    await expect(card).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
 });
