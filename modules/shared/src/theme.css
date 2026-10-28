@@ -149,11 +149,11 @@
   }
 }
 
-/* Disabled controls in the UI kit fade by --disabled-opacity instead of their own 50%, so "Save", "Send code" or
-   "Remove" stay readable while off. Outside any layer on purpose, so it wins over the kit's disabled:opacity-50. */
+/* Disabled buttons, inputs and text areas in the UI kit fade by --disabled-opacity instead of their own 50%, so "Save",
+   "Send code" or "Remove" stay readable while off. Switches keep the kit's 50%, so a disabled one never looks live.
+   Outside any layer on purpose, so it wins over the kit's disabled:opacity-50. */
 [data-slot="button"]:disabled,
 [data-slot="input"]:disabled,
-[data-slot="textarea"]:disabled,
-[data-slot="switch"]:disabled {
+[data-slot="textarea"]:disabled {
   opacity: var(--disabled-opacity);
 }
