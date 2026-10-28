@@ -28,6 +28,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.58",
+    date: "2026-10-28",
+    title: "Overlay page: small changes",
+    notes: [
+      "Overlays are managed from three places only: right-click a game in the rail, the Overlay button in the header, and Settings > Overlays.",
+      "A panel's menu no longer has Show in game or Arrange overlays.",
+    ],
+  },
+  {
     version: "0.21.57",
     date: "2026-10-28",
     title: "Fewer overlay bits",
