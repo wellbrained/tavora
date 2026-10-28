@@ -91,3 +91,16 @@ The Overlay page is `renderer/pages/OverlayPage.vue`, shown by a third screen (`
 3. The header button and the live state; Settings trimmed (done, built before step 1 and 2).
 
 Each step adds a patch note; the last one raises the minor version once the owner calls the feature complete.
+
+## Where things stand (2026-10-28)
+
+All four steps are on main. Step 2 was built in #421 as a separate screen with a back button, then reshaped in #422 into what the owner wanted: it works like a workspace. There is no rail entry; the header Overlay button is the only way in and stays in the page header, lit. Pressing it, or clicking any workspace, leaves the page. The layout is fixed (canvas plus sidebar), and Settings > Overlays has an "Overlay sidebar" choice (Left / Right, default right; `overlaySidebar` in `library.json`).
+
+Still open:
+
+- Look at the page in a visible window. It has only been checked in the hidden Electron tests.
+- `catalog.spec.ts` "reports a module" failed once on a local run while CI was green. Probably flaky, not confirmed.
+- The `feature-complete` call (the minor version) is the owner's.
+- Branch `claude/overlay-header-button` was left alone on purpose.
+
+Lesson from #421: where a design word like "page" can mean two shapes (a screen or a workspace), ask before building.
