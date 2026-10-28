@@ -93,7 +93,7 @@ test("The old file moves to setups once, each setup keeps its own place and opac
   expect(backup.overlays).toHaveLength(2);
 });
 
-test("Reset position and Reset size work from the page, Take picture says why it is off, and Back leaves with the canvas views", async () => {
+test("Reset position and Reset size work from the page, Take picture says why it is off, and the Overlay button leaves with the canvas views", async () => {
   const userData = await newUserData();
   await seed(userData);
   const { app, page } = await launch(userData, [MODULES], { seed: false });
@@ -140,8 +140,13 @@ test("Reset position and Reset size work from the page, Take picture says why it
     await expect(page.getByTestId("layout-take-picture-hint")).toHaveAttribute("title", "Start the game first.");
     expect((await state(page)).pictureHint).toBe("start");
 
-    // Back is the workspace again, and the views over the canvas go.
-    await page.getByTestId("layout-done").click();
+    // The sidebar is on the right until Settings says otherwise, and the Overlay button stays in the header, lit.
+    const canvasBox = (await page.getByTestId("layout-canvas").boundingBox())!;
+    expect((await page.getByTestId("layout-sources").boundingBox())!.x).toBeGreaterThan(canvasBox.x);
+    await expect(page.getByTestId("overlay-open")).toHaveAttribute("aria-pressed", "true");
+
+    // Pressing it again goes back to the workspace, and the views over the canvas go.
+    await page.getByTestId("overlay-open").click();
     await expect(page.getByTestId("workspace")).toBeVisible();
     await expect(page.getByTestId("overlay-page")).toHaveCount(0);
     await expect.poll(() => app.windows().some((candidate) => candidate.url().endsWith("#layer"))).toBe(false);
@@ -208,4 +213,20 @@ test("The page opens on Everywhere, lists every panel with the reason one can't 
   const saved = JSON.parse(await readFile(path.join(userData, "game-overlays.json"), "utf8"));
   expect(saved.version).toBe(5);
   expect(saved.setups.map((setup: { id: string }) => setup.id)).toEqual(["$everywhere", "$all", GAME]);
+});
+
+test("the sidebar sits where Settings > Overlays puts it", async () => {
+  const userData = await newUserData();
+  await mkdir(userData, { recursive: true });
+  await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), gameOverlays: true, overlaySidebar: "left" }));
+  const { app, page } = await launch(userData, [MODULES], { seed: false });
+  try {
+    await overlayPage(app, page);
+    await expect(page.getByTestId("layout-canvas")).toBeVisible();
+    const canvasBox = (await page.getByTestId("layout-canvas").boundingBox())!;
+    const sidebarBox = (await page.getByTestId("layout-sources").boundingBox())!;
+    expect(sidebarBox.x).toBeLessThan(canvasBox.x);
+  } finally {
+    await app.close();
+  }
 });

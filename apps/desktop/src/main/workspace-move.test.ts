@@ -109,6 +109,7 @@ const OLD_LIBRARY = {
   overlayPort: 47820,
   gameOverlays: true,
   overlaysStay: true,
+  overlaySidebar: "right",
   moduleFilesFolder: null,
   developmentFolders: [],
   dialogFolders: { "game-image": PICTURES, "save-picture": path.join(PICTURES, "Tavora") },

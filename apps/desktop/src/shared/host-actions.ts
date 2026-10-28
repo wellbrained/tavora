@@ -246,6 +246,8 @@ export function hostActionTable(c: HostChecks) {
     "set-game-overlays": { enabled: bool },
     /** Settings > Overlays: overlays stay when the user leaves the game window. */
     "set-overlays-stay": { enabled: bool },
+    /** Settings > Overlays: which side of the Overlay page the sidebar sits on. */
+    "set-overlay-sidebar": { side: oneOf("left", "right") },
     /** Changes what the user set for one game overlay (mode, opacity, Hide from capture), in one setup or in every setup that has it. */
     "set-game-overlay": {
       setup: optional(setup),
@@ -271,6 +273,8 @@ export function hostActionTable(c: HostChecks) {
     "set-overlay-key": { workspaceId: optional(c.workspaceId), owner: optional(c.ownerId), moduleId: optional(c.moduleId), key: optional(matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)) },
     /** Opens the Overlay page (the header button, a panel's menu), on a setup when it is given, else on the running game's. */
     "open-overlay-page": { setup: optional(setup) },
+    /** The Overlay button, lit on the Overlay page: back to the workspace the user came from. */
+    "leave-overlay-page": {},
     /** Add overlay in a game workspace's menu on the rail: the game gets an overlay setup of its own. */
     "add-game-overlay": { workspaceId: c.workspaceId },
     /** Remove overlay in the same menu: the game's setup goes, with what it holds. */

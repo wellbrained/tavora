@@ -674,6 +674,8 @@ export interface GameOverlaysView {
   enabled: boolean;
   /** Overlays stay over the game's spot when the user switches to another window. */
   stay: boolean;
+  /** Which side of the Overlay page the sidebar with the panels sits on. */
+  sidebar: "left" | "right";
   /** "Hide all for now" is on: nothing shows until Tavora starts again or the user shows it again. */
   hidden: boolean;
   /** Something shows over a game right now (the header button's Live look). */

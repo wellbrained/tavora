@@ -164,6 +164,8 @@ export interface GameOverlayServiceOptions {
   toDip(rect: Rect): Rect;
   /** Overlays stay over the game window's spot while the user is in another window (Settings > Overlays). */
   stay?(): boolean;
+  /** Which side of the Overlay page the sidebar sits on (Settings > Overlays). */
+  sidebar?(): "left" | "right";
   /** The main screen (DIPs): Everywhere's area, and what a new item is sized against before any game window was seen. */
   screen?(): Rect;
   /** Whether one of Tavora's windows has the keyboard (its main window, a dialog); the service tells its own overlay windows apart. Everywhere hides then. */
@@ -1325,6 +1327,7 @@ export class GameOverlays {
       supported: this.options.supported,
       enabled: this.options.enabled(),
       stay: this.options.stay?.() ?? false,
+      sidebar: this.options.sidebar?.() ?? "right",
       hidden: this.suspended,
       showing: this.windowsShown,
       gameSetups: this.store.gameSetups(),
