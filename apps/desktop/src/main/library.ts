@@ -283,11 +283,14 @@ export function recentWorkspaces(library: Library, limit: number): WorkspaceEntr
     .slice(0, limit);
 }
 
-/** Built-in games matching a search, leaving out ones already in the library (Trash included). */
+/**
+ * Built-in games matching a search, leaving out ones already in the library (Trash included).
+ * Without a search: the first games by the name the user sees, not by id.
+ */
 export function searchCatalog(library: Library, query: string, limit = 8) {
   const q = normalize(query);
   const available = CATALOG.filter((game) => !library.workspaces[game.id]);
-  if (!q) return available.slice(0, limit);
+  if (!q) return [...available].sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit);
   const score = (text: string) => {
     const t = normalize(text);
     return t.startsWith(q) ? 2 : t.includes(q) ? 1 : 0;

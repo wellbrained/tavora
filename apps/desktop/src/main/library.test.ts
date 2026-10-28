@@ -531,6 +531,13 @@ describe("catalog search", () => {
     expect(searchCatalog(library, "witcher").map((game) => game.id)).toEqual(["the-witcher-3"]);
     expect(searchCatalog(library, "zzzz")).toEqual([]);
   });
+
+  it("lists the first games by the name shown when nothing is typed", () => {
+    const names = searchCatalog(emptyLibrary(), "").map((game) => game.name);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+    expect(names).toHaveLength(8);
+    expect(names.indexOf("Sid Meier's Civilization VI")).toBe(-1);
+  });
 });
 
 describe("rail", () => {
