@@ -205,6 +205,13 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     changed: () => void world.changes++,
     windowsChanged: () => void world.windowsChanged++,
   });
+  // Overlays start stopped until the user presses Start in the header; these tests begin after that. Started with no
+  // game in front, so nothing is placed before a test picks its window.
+  const stoppedAtStart = service.hidden;
+  const front = world.foreground;
+  world.foreground = null;
+  service.setHidden(false);
+  world.foreground = front;
   const keys: HotkeyRecord[] = [];
   const key = (binding: ReturnType<typeof toggleBinding> | ReturnType<typeof layerBinding>): HotkeyRecord => {
     const record = { ...binding, label: "x", accelerator: "F9" };
@@ -212,7 +219,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     return record;
   };
   const live = () => world.windows.filter((window) => !window.destroyed);
-  return { service, world, overlays, key, live };
+  return { service, world, overlays, key, live, stoppedAtStart };
 }
 
 const show = (service: GameOverlays, module = CLOCK, workspaceId = "elden", key = "item-1") => service.show(module, workspaceId, key);
@@ -277,6 +284,11 @@ describe("showOverGame", () => {
     for (let i = 0; i < 8; i++) expect(show(service, CLOCK, "elden", `item-${i}`)).toBe("shown");
     expect(show(service, CLOCK, "elden", "item-8")).toBe("full");
     expect(show(service, CLOCK, "other", "item-8")).toBe("shown");
+  });
+
+  it("starts stopped, until the user presses Start", async () => {
+    const { stoppedAtStart } = await setup();
+    expect(stoppedAtStart).toBe(true);
   });
 
   it("starts at the module's overlaySize, else at the usual size", async () => {
