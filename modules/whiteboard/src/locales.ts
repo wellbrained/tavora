@@ -1,6 +1,17 @@
 // The Whiteboard's texts in English and German, like the other official modules. Keys are flat.
 
 export const en = {
+  "card.add": "Add card",
+  "card.note": "Note card",
+  "card.picture": "Picture card…",
+  "card.heading": "Heading",
+  "card.body": "Double-click to edit.\nAdd your ideas here.",
+  "card.caption": "Add a caption",
+  "card.imageType": "Choose a PNG, JPEG, GIF or WebP image.",
+  "card.imageSize": "Choose an image smaller than 20 MB.",
+  "card.imageFailed": "Could not read this image.",
+  "card.failed": "Could not add the picture: {error}",
+  "board.actions": "Board actions",
   loading: "Loading the whiteboard…",
   retry: "Try again",
   "empty.hint": "Pick a tool above and start drawing",
@@ -57,6 +68,17 @@ export const en = {
 } as const;
 
 export const de: Record<keyof typeof en, string> = {
+  "card.add": "Karte hinzufügen",
+  "card.note": "Notizkarte",
+  "card.picture": "Bildkarte…",
+  "card.heading": "Überschrift",
+  "card.body": "Zum Bearbeiten doppelklicken.\nHier ist Platz für deine Ideen.",
+  "card.caption": "Bildunterschrift hinzufügen",
+  "card.imageType": "Wähle ein PNG-, JPEG-, GIF- oder WebP-Bild.",
+  "card.imageSize": "Wähle ein Bild unter 20 MB.",
+  "card.imageFailed": "Dieses Bild konnte nicht gelesen werden.",
+  "card.failed": "Das Bild konnte nicht hinzugefügt werden: {error}",
+  "board.actions": "Tafelaktionen",
   loading: "Whiteboard wird geladen…",
   retry: "Nochmal versuchen",
   "empty.hint": "Wähle oben ein Werkzeug und leg los",

@@ -5,6 +5,7 @@
 export interface LockSpot {
   id: string;
   locked: boolean;
+  selected?: boolean;
   /** Where the lock goes, in pixels from the board's top left. */
   x: number;
   y: number;
@@ -60,5 +61,5 @@ export function lockSpots(elements: readonly Picture[], view: Viewport): LockSpo
 
 /** A stable description of the spots, so the page only redraws the locks when one moved or changed. */
 export function spotsKey(spots: readonly LockSpot[]): string {
-  return spots.map((spot) => `${spot.id}:${spot.locked ? 1 : 0}:${spot.x}:${spot.y}`).join("|");
+  return spots.map((spot) => `${spot.id}:${spot.locked ? 1 : 0}:${spot.x}:${spot.y}:${spot.selected ? 1 : 0}`).join("|");
 }

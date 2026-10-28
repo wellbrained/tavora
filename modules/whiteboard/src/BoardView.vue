@@ -51,6 +51,7 @@ const host = ref<HTMLElement | null>(null);
 /** Set once the host exists, for the parts that look into Excalidraw's DOM. */
 const board = shallowRef<HTMLElement | null>(null);
 const spots = shallowRef<LockSpot[]>([]);
+const hoveredImage = ref<string | null>(null);
 let controls: Controls | null = null;
 let session: BoardSession | null = null;
 let root: Root | null = null;
@@ -149,12 +150,16 @@ watch(
 function toggleLock(id: string, locked: boolean) {
   controls?.setPictureLocked(id, locked);
 }
+
+function pointerMove(event: PointerEvent) {
+  hoveredImage.value = session?.imageAt(event.clientX, event.clientY) ?? null;
+}
 </script>
 
 <template>
-  <div class="relative size-full">
+  <div class="relative size-full" @pointermove="pointerMove" @pointerleave="hoveredImage = null">
     <div ref="host" class="size-full" />
-    <PictureLocks :spots="spots" @toggle="toggleLock" />
+    <PictureLocks :spots="spots" :active-id="hoveredImage" @toggle="toggleLock" />
     <Palette :board="board" :place="palette" @place="emit('palette', $event)" />
   </div>
 </template>
