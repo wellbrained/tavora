@@ -177,12 +177,6 @@ export class OverlayLayout {
     return [{ id: LAYOUT_EVERYWHERE, name: this.text("overlays.everywhere") }, { id: LAYOUT_ALL_GAMES, name: this.text("overlays.allGames") }, ...list];
   }
 
-  /** The game workspaces without a setup of their own: "Add overlay for…". */
-  private addable(): { id: string; name: string }[] {
-    const have = new Set(this.options.source.setups());
-    return this.options.games().filter((game) => !have.has(game.id)).sort((a, b) => a.name.localeCompare(b.name));
-  }
-
   /** Every panel of every workspace, with why it can't go into the setup shown (if it can't). */
   private sources(setupId: string, items: readonly LayoutItemInfo[]): LayoutSourceView[] {
     const inSetup = new Set(items.flatMap((info) => (info.ref.kind === "panel" ? [info.ref.instanceId] : [])));
@@ -279,7 +273,6 @@ export class OverlayLayout {
     }));
     return {
       games,
-      addable: this.addable(),
       sources: this.sources(gameId, infos),
       limit: LIMITS.maxGameOverlays,
       gameId,
@@ -367,11 +360,6 @@ export class OverlayLayout {
         return;
       case "game":
         if (!fromShell || message.gameId === this.gameId) return;
-        this.switchTo(message.gameId);
-        break;
-      case "add-setup":
-        if (!fromShell || !this.addable().some((game) => game.id === message.gameId)) return;
-        this.options.source.addSetup(message.gameId);
         this.switchTo(message.gameId);
         break;
       case "add-source":

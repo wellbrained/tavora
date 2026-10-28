@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { launch, newUserData, seedLibrary } from "./harness";
+import { launch, newUserData, openModule, seedLibrary } from "./harness";
 
 // The Overlay button in the workspace header, in the hidden test app (never on screen).
 
@@ -19,6 +19,9 @@ test("the header button opens the Overlay page, pauses overlays", async () => {
     await expect(live).toHaveAttribute("data-state", "paused");
     await live.click();
     await expect(live).toHaveAttribute("data-state", "ready");
+    // A workspace with a panel has the ▾ next to Add module; the page keeps it, dimmed, so the header never changes size.
+    await openModule(page, "tavora.todos");
+    await expect(page.getByTestId("modules-in-game")).toHaveCount(1);
     const before = (await page.getByTestId("overlay-open").boundingBox())!;
     const header = (await page.locator("header").boundingBox())!;
     const menus = await page.getByTestId("modules-in-game").count();
@@ -31,6 +34,7 @@ test("the header button opens the Overlay page, pauses overlays", async () => {
     expect(await page.locator("header").boundingBox()).toEqual(header);
     await expect(page.getByTestId("add-module")).toBeVisible();
     await expect(page.getByTestId("modules-in-game")).toHaveCount(menus);
+    expect(menus).toBe(1);
     await expect(page.getByTestId("overlay-live").locator("svg")).toBeVisible();
     await expect(page.getByTestId("overlay-live")).toHaveText("");
     expect(app.windows().some((window) => window.url().includes("layout.html") && !window.url().endsWith("#layer"))).toBe(false);

@@ -1,8 +1,16 @@
+<script lang="ts">
+import { ref } from "vue";
+
+// The ▾ beside Add module is there once the workspace has a panel. The Overlay page has no panels open, so it keeps what the
+// workspace it was opened from had; kept here, outside any one header, because the page's header is a new one.
+const hasPanels = ref(false);
+</script>
+
 <script setup lang="ts">
 // The buttons on the right of the workspace header. The Overlay page shows the same ones in the same places, so the
 // header never moves when you switch to it; the ones that belong to a workspace are dimmed and can't be used there.
 import { Plus } from "@lucide/vue";
-import { ref, watchEffect } from "vue";
+import { watchEffect } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { cn } from "@/lib/utils";
@@ -17,8 +25,6 @@ import OverlayButton from "./OverlayButton.vue";
 const props = defineProps<{ onOverlay?: boolean }>();
 defineEmits<{ addModule: [] }>();
 
-// The ▾ is there once the workspace has a panel. The page keeps what the workspace had, so the header never changes size.
-const hasPanels = ref(false);
 watchEffect(() => {
   if (!props.onOverlay) hasPanels.value = (state.value?.panels.length ?? 0) > 0;
 });

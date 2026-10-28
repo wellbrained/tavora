@@ -13,7 +13,7 @@ An overlay setup is a saved overlay layout: which items show, where, and how eac
 | One per game workspace | added by the user | that game is in front |
 
 - On screen: Everywhere, plus either the game's own setup or All games. Game setups stand alone; they never stack with All games.
-- A game setup is added by right-clicking the workspace on the rail ("Add overlay" / "Overlay hinzufügen") or with "Add overlay for…" in the Overlay page's dropdown; removed with "Remove overlay" / "Overlay entfernen". Removing a workspace removes its setup.
+- A game setup is added by right-clicking the workspace on the rail ("Add overlay" / "Overlay hinzufügen") only (not from the Overlay page); removed with "Remove overlay" / "Overlay entfernen". Removing a workspace removes its setup.
 - Up to 8 items per setup.
 - Per-game overrides of general positions ("Customize for this game", "Follow All games") go away.
 - Nested setups (a "Basic" setup inside a game setup) are dropped for now and kept only as a loose idea.
@@ -76,7 +76,7 @@ Built in step 1 (decided with the owner on 2026-10-27 while building): each new 
 The Overlay page is `renderer/pages/OverlayPage.vue`, shown by a third screen (`Screen = "overlay"`) in the main window, opened by the `open-overlay-page` action. Choices made while building, not covered above:
 
 - **No window of its own.** The live pages and the layer sit as native views over the page's canvas area (`main/overlay-canvas.ts`, the old window's code without the window); leaving the page (a workspace on the rail, Home, or the lit Overlay button) takes them away. The state stays `overlay-layout.ts`; the saved window place is gone from `game-overlays.json` (an older file's is ignored).
-- **Opens on** the setup asked for, else the running game's own, else All games while a game runs, else Everywhere. The dropdown always lists Everywhere and All games, then the games with a setup; its last entries are "Add overlay for …" for game workspaces without one (they make the setup and open it). Remove overlay is on the rail only.
+- **Opens on** the setup asked for, else the running game's own, else All games while a game runs, else Everywhere. The dropdown always lists Everywhere and All games, then the games with a setup. Add overlay and Remove overlay are on the rail only.
 - **Sources list.** Besides every panel of every workspace, it lists the module overlays the setup already holds (they have no other place in the list, and the user selects and hides them there). Reasons shown for a panel that can't be added: only for its game, can't show over a game (its type isn't `inGame`), no room left (8 items). The eye still hides an item on the canvas only.
 - **Moving between Everywhere and All games** is a button in the Settings panel for items from personal workspaces: the item goes with its place and settings; if the other setup has it already, that one stays and this one is dropped.
 - **Hotkey dialog** is the main window's one now (the old window asked for its own).
