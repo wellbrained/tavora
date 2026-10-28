@@ -28,6 +28,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.65",
+    date: "2026-10-28",
+    title: "Overlay in the rail",
+    notes: [
+      "The Overlay page opens from a button in the rail, above your profile. Start / Stop stays in the header.",
+    ],
+  },
+  {
     version: "0.21.64",
     date: "2026-10-28",
     title: "Overlay bar (trial)",
