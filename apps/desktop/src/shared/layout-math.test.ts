@@ -37,8 +37,14 @@ describe("canvasFor", () => {
 
 describe("snapMove", () => {
   it("snaps the top left corner to the grid", () => {
-    expect(snapMove(rect(47, 61, 200, 100), canvas, [], grid).rect).toMatchObject({ x: 60, y: 60 });
-    expect(snapMove(rect(44, 74, 200, 100), canvas, [], grid).rect).toMatchObject({ x: 30, y: 60 });
+    expect(snapMove(rect(47, 61, 210, 90), canvas, [], grid).rect).toMatchObject({ x: 60, y: 60 });
+    expect(snapMove(rect(44, 74, 210, 90), canvas, [], grid).rect).toMatchObject({ x: 30, y: 60 });
+  });
+
+  it("snaps the right or bottom edge to the grid when that edge is nearer, counting the grid from the far side too", () => {
+    // 250 wide: its left edge is 14 off a line, its right edge (counted from the right of the canvas) only 6.
+    expect(snapMove(rect(1004, 100, 250, 100), canvas, [], grid).rect).toMatchObject({ x: 1010 });
+    expect(snapMove(rect(100, 1004 - 100, 120, 100), { width: 1920, height: 1090 }, [], grid).rect.y + 100).toBe(1090 - 30 * Math.round((1090 - 1004) / 30));
   });
 
   it("places freely with the grid off", () => {

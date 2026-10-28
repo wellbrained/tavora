@@ -3,7 +3,7 @@
 // lays out tabs, groups and splits in this page; each panel's module runs in
 // a native view that the main process draws over the panel's content area,
 // at the bounds this page reports.
-import { ChevronLeft, ChevronRight, LayoutGrid, Plus } from "@lucide/vue";
+import { ChevronLeft, ChevronRight, LayoutGrid } from "@lucide/vue";
 import {
   DockviewVue,
   type DockviewApi,
@@ -17,7 +17,6 @@ import {
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds } from "../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { act, api as host, dialog, dragging, nextPanelSlot, panelToMaximize, panelToShow, state } from "../host";
 import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
@@ -41,11 +40,7 @@ import DropGuide, { type GuideState } from "../components/workspace/DropGuide.vu
 import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import EmptySlot from "../components/workspace/EmptySlot.vue";
 import GroupActions from "../components/workspace/GroupActions.vue";
-import LayoutsMenu from "../components/workspace/LayoutsMenu.vue";
-import OverlayButton from "../components/workspace/OverlayButton.vue";
-import InboxButton from "../components/messages/InboxButton.vue";
-import ModuleUpdatesButton from "../components/workspace/ModuleUpdatesButton.vue";
-import ModulesMenu from "../components/workspace/ModulesMenu.vue";
+import HeaderTools from "../components/workspace/HeaderTools.vue";
 import GridPicker from "../components/workspace/GridPicker.vue";
 import TemplatePreview from "../components/workspace/TemplatePreview.vue";
 import PanelContent from "../components/workspace/PanelContent.vue";
@@ -444,18 +439,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       <WorkspaceIcon v-if="workspace" :workspace="workspace" :size="32" />
       <h1 class="max-w-72 min-w-0 truncate text-lg font-semibold">{{ workspace?.name }}</h1>
       <span class="text-info ml-auto min-w-0 truncate text-sm" role="status" data-testid="notice">{{ view.notice ?? "" }}</span>
-      <div class="app-no-drag flex flex-none items-center gap-2">
-        <ModuleUpdatesButton />
-        <OverlayButton />
-        <InboxButton />
-        <LayoutsMenu />
-        <ButtonGroup>
-          <Button size="sm" variant="secondary" data-testid="add-module" @click="dialog = { kind: 'add-module' }">
-            <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
-          </Button>
-          <ModulesMenu v-if="view.panels.length" />
-        </ButtonGroup>
-      </div>
+      <HeaderTools @add-module="dialog = { kind: 'add-module' }" />
     </header>
 
     <div ref="root" class="relative min-h-0 flex-1" :data-drop-line="dropLine ?? undefined" @pointerdown.capture="onPointerDown">
