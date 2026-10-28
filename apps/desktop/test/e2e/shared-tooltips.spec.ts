@@ -63,19 +63,19 @@ test('the host shows its own hints and rail labels with the shared tooltip', asy
   const { app, page } = await launch();
   const tooltip = page.locator('[role=tooltip]');
   try {
-    // A title hint: the system tooltip is replaced, and the card fits a short label.
+    // A rail item: the compact card replaces the system tooltip, and fits a short label.
     await page.getByTestId('rail-settings').hover();
-    await expect(tooltip.locator('p')).toHaveText('Settings');
-    await expect(page.getByTestId('rail-settings')).toHaveAttribute('title', '');
-    expect(await tooltip.evaluate(e => getComputedStyle(e.querySelector('p')!).fontSize)).toBe('14px');
+    await expect(tooltip.locator('h2')).toHaveText('Settings');
+    await expect(page.getByTestId('rail-settings')).not.toHaveAttribute('title', /.+/);
+    expect(await tooltip.evaluate(e => getComputedStyle(e.querySelector('h2')!).fontSize)).toBe('13px');
     expect((await tooltip.boundingBox())!.width).toBeLessThan(200);
     await page.mouse.move(600, 400);
     await expect(tooltip).toHaveCount(0);
 
-    // A rail label: the game's name as the heading, beside its icon.
+    // A workspace label: the game's name as the heading, beside its icon.
     await page.getByTestId('rail-workspace-poe2').hover();
     await expect(tooltip.locator('h2')).toHaveText('Path of Exile 2');
-    expect(await tooltip.evaluate(e => getComputedStyle(e.querySelector('h2')!).fontSize)).toBe('18px');
+    expect(await tooltip.evaluate(e => getComputedStyle(e.querySelector('h2')!).fontSize)).toBe('13px');
     const icon = (await page.getByTestId('rail-workspace-poe2').boundingBox())!, card = (await tooltip.boundingBox())!;
     expect(card.x).toBeGreaterThan(icon.x + icon.width - 8);
     await page.keyboard.press('Escape');
