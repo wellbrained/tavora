@@ -91,7 +91,7 @@ interface Manifest {
 
 export class CopyError extends Error {
   constructor(
-    readonly reason: "signed-out" | "unreachable" | "unavailable" | "too-many" | "damaged" | "failed" | "no-folder" | "not-arrived",
+    readonly reason: "signed-out" | "unreachable" | "unavailable" | "too-many" | "damaged" | "failed" | "no-folder" | "folder-locked" | "not-arrived",
     message: string = reason,
   ) {
     super(message);

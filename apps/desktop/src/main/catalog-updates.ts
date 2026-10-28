@@ -46,6 +46,10 @@ export interface PendingUpdate {
 export interface CheckOutcome {
   updated: Installed[];
   waiting: PendingUpdate[];
+  /** The catalog could not be asked, so nothing is known about updates. */
+  unreachable?: true;
+  /** How many updates were found but could not be downloaded. */
+  failed?: number;
 }
 
 /**
@@ -158,7 +162,7 @@ export class CatalogUpdater {
     }
     if (installed.length === 0) return outcome;
     const index = await this.options.client.index();
-    if (!index) return outcome;
+    if (!index) return { ...outcome, unreachable: true };
     for (const entry of findUpdates(index, installed, this.options.tavoraVersion, this.options.firstKey?.bind(this.options))) {
       const module = installed.find((item) => item.id === entry.id)!;
       const waiting = this.pendingUpdates.get(entry.id);
@@ -176,8 +180,16 @@ export class CatalogUpdater {
         outcome.waiting.push(waiting);
         continue;
       }
+      let zip: Buffer;
       try {
-        const zip = await this.options.client.download(entry.zip);
+        zip = await this.options.client.download(entry.zip);
+      } catch (error) {
+        // Not refused, just not here: the user hears that it could not be fetched.
+        this.options.log?.(`catalog update of ${entry.id} to ${entry.version} not downloaded: ${error instanceof Error ? error.message : String(error)}`);
+        outcome.failed = (outcome.failed ?? 0) + 1;
+        continue;
+      }
+      try {
         // The zip must be signed by the listed key; the installer then checks it is this module's owner.
         const expect = { id: entry.id, owner: entry.owner };
         const checked = await this.options.check(zip, expect);

@@ -6,6 +6,7 @@
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { Notice } from "@tavora/official-ui/components/ui/notice";
 import type { HostAction } from "../../../shared/host-api";
 import { account, act, cloudCopy, confirmAction, copyLater, developerKeys, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
@@ -35,6 +36,14 @@ async function run(action: HostAction): Promise<boolean> {
   }
 }
 
+/** Why it isn't syncing, shown in its own box while the copy is on and nothing is being asked or done. */
+const problem = computed(() => {
+  const copy = view.value;
+  return copy?.on && copy.problem && !copy.busy && !copy.conflict && !copy.restartToTake ? copy.problem : null;
+});
+/** A folder that can't be reached or written is fixed by picking another one. */
+const folderProblem = computed(() => problem.value === "no-folder" || problem.value === "folder-locked");
+
 /** What it is doing, or how it stands: shown under "Cloud copy is on". */
 const status = computed(() => {
   const copy = view.value;
@@ -46,7 +55,6 @@ const status = computed(() => {
   if (copy.busy === "downloading") return t("cloudCopy.status.downloading");
   if (copy.busy === "checking") return t("cloudCopy.status.checking");
   if (copy.conflict || copy.restartToTake) return t("cloudCopy.status.waiting");
-  if (copy.problem) return t(`cloudCopy.error.${copy.problem}`);
   const date = copy.copy ? formatDate(copy.copy.savedAt, { dateStyle: "medium", timeStyle: "short" }) : "";
   const saved = !copy.copy
     ? t("cloudCopy.status.none")
@@ -172,8 +180,9 @@ function startOver() {
     </form>
 
     <template v-else-if="!view.on">
+      <Notice v-if="view.canKeepKey && view.problem" variant="warning" class="my-4" :title="t('cloudCopy.problem.title')" data-testid="cloud-copy-problem">{{ t(`cloudCopy.error.${view.problem}`) }}</Notice>
       <p class="text-muted-foreground border-b py-4 text-sm" data-testid="cloud-copy-off">
-        {{ view.canKeepKey ? (view.problem ? t(`cloudCopy.error.${view.problem}`) : t("cloudCopy.off.description")) : t("cloudCopy.cantKeep") }}
+        {{ view.canKeepKey ? t("cloudCopy.off.description") : t("cloudCopy.cantKeep") }}
         <template v-if="view.devData"><br />{{ t("cloudCopy.dev.notice") }}</template>
       </p>
       <SettingRow :label="t('cloudCopy.server.label')" :description="t(signedIn ? 'cloudCopy.server.description' : 'cloudCopy.server.signIn')">
@@ -185,6 +194,14 @@ function startOver() {
     </template>
 
     <template v-else>
+      <Notice v-if="problem" :variant="problem === 'offline' || problem === 'not-arrived' ? 'warning' : 'error'" class="my-4" :title="t('cloudCopy.problem.title')" data-testid="cloud-copy-problem">
+        {{ t(`cloudCopy.error.${problem}`) }}
+        <template v-if="problem !== 'signed-out'" #action>
+          <Button size="sm" variant="secondary" :disabled="busy || view.busy !== null" data-testid="cloud-copy-retry" @click="folderProblem ? move('folder') : upload()">
+            {{ folderProblem ? t("cloudCopy.where.changeFolder") : t("cloudCopy.problem.retry") }}
+          </Button>
+        </template>
+      </Notice>
       <SettingRow :label="t('cloudCopy.on.label')" :description="status" data-testid="cloud-copy-status">
         <Button v-if="view.conflict" :disabled="busy" @click="decide">{{ t("cloudCopy.conflict.title") }}</Button>
         <Button v-else-if="view.restartToTake" :disabled="busy" @click="run({ type: 'cloud-copy-restart' })">{{ t("cloudCopy.newer.restart") }}</Button>

@@ -47,6 +47,10 @@ async function load() {
   text.value = mine.value?.text ?? "";
 }
 onMounted(load);
+async function retry() {
+  result.value = null;
+  await load();
+}
 
 async function run(action: Parameters<typeof act>[0], onError: (message: string) => void = (message) => (error.value = message)) {
   busy.value = true;
@@ -106,9 +110,10 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
   <section data-testid="catalog-reviews" :aria-label="t('catalog.reviews.title')">
     <h3 class="mb-3 font-medium">{{ t("catalog.reviews.title") }}</h3>
     <p v-if="!result" class="text-muted-foreground text-sm" role="status">{{ t("catalog.reviews.loading") }}</p>
-    <p v-else-if="!loaded" class="text-muted-foreground text-sm" role="status" data-testid="catalog-reviews-missing">
-      {{ result.status === "off" ? t("catalog.status.off") : t("catalog.reviews.missing") }}
-    </p>
+    <div v-else-if="!loaded" class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" role="status" data-testid="catalog-reviews-missing">
+      <p>{{ result.status === "off" ? t("catalog.status.off") : t("catalog.reviews.missing") }}</p>
+      <Button v-if="result.status !== 'off'" size="sm" variant="secondary" data-testid="catalog-reviews-retry" @click="retry">{{ t("catalog.retry") }}</Button>
+    </div>
     <template v-else>
       <div v-if="loaded.rating" class="mb-5 grid items-center gap-x-6 gap-y-3 sm:grid-cols-[auto_minmax(0,1fr)]" data-testid="catalog-reviews-summary">
         <div class="flex flex-col items-start gap-1">
