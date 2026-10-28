@@ -152,8 +152,9 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
       </template>
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="steam-import-error">{{ error }}</p>
       <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" :disabled="busy" @click="back">{{ t("common.back") }}</Button>
+        <Button type="button" :variant="games.length > 0 ? 'secondary' : 'default'" :disabled="busy" data-testid="steam-back" @click="back">{{ t("common.back") }}</Button>
         <Button
+          v-if="games.length > 0"
           type="button"
           variant="secondary"
           data-testid="steam-share-only"
@@ -163,7 +164,7 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
         >
           {{ t("steamImport.shareOnly") }}
         </Button>
-        <Button type="button" data-testid="steam-import-submit" :disabled="busy || count === 0" @click="runImport">
+        <Button v-if="games.length > 0" type="button" data-testid="steam-import-submit" :disabled="busy || count === 0" @click="runImport">
           {{ t("steamImport.import", { count }) }}
         </Button>
       </div>

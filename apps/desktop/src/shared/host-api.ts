@@ -323,7 +323,7 @@ export interface PairingView {
 }
 
 /** Why the cloud copy could not sync last time, worded by the host UI. */
-export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key" | "no-folder" | "not-arrived";
+export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key" | "no-folder" | "folder-locked" | "not-arrived";
 
 /**
  * Settings > Account > Cloud copy, and the questions it asks over the app. Sent on its own channel;

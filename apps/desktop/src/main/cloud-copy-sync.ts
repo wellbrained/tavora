@@ -205,9 +205,15 @@ export class CopySync {
   /** What went wrong, for the settings page; a quiet run (in the background) keeps it there instead of throwing. */
   private noteProblem(error: unknown): CloudCopyProblem {
     if (error instanceof KeyChanged) return (this.problem = "new-key");
-    const reason = error instanceof CopyError ? error.reason : "failed";
+    // A folder that turned read-only (or full) after it was picked fails as a plain file error.
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    const reason = error instanceof CopyError ? error.reason : this.folder !== null && (code === "EACCES" || code === "EPERM" || code === "EROFS" || code === "ENOSPC") ? "folder-locked" : "failed";
     this.problem =
-      reason === "unreachable" || reason === "unavailable" || reason === "too-many" ? "offline" : reason === "signed-out" || reason === "no-folder" || reason === "not-arrived" ? reason : "failed";
+      reason === "unreachable" || reason === "unavailable" || reason === "too-many"
+        ? "offline"
+        : reason === "signed-out" || reason === "no-folder" || reason === "folder-locked" || reason === "not-arrived"
+          ? reason
+          : "failed";
     if (!(error instanceof CopyError) || reason === "failed" || reason === "damaged") this.log(`cloud copy: ${error instanceof Error ? error.message : String(error)}`);
     return this.problem;
   }

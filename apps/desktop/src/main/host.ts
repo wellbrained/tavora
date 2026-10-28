@@ -1442,9 +1442,9 @@ export class Host {
    * panels reload; the others wait for the user, shown in Settings > Modules and on their panels.
    * Answers with how many modules were updated or are waiting.
    */
-  private async checkCatalogUpdates(): Promise<{ updated: number; waiting: number }> {
+  private async checkCatalogUpdates(): Promise<{ updated: number; waiting: number; unreachable?: true; failed?: number }> {
     if (!this.library.onlineSearch) return { updated: 0, waiting: 0 };
-    const { updated, waiting } = await this.lifecycle.updates.check();
+    const { updated, waiting, unreachable, failed } = await this.lifecycle.updates.check();
     if (updated.length === 1) {
       const { manifest } = updated[0]!;
       this.notice = translate(this.language, "modules.catalogUpdated", { name: this.shown(manifest).name, version: manifest.version });
@@ -1452,7 +1452,7 @@ export class Host {
       this.notice = translate(this.language, "modules.catalogUpdatedMany", { count: String(updated.length) });
     }
     this.pushState();
-    return { updated: updated.length, waiting: waiting.length };
+    return { updated: updated.length, waiting: waiting.length, ...(unreachable ? { unreachable } : {}), ...(failed ? { failed } : {}) };
   }
 
   private static themeSources(options: HostOptions) {
@@ -2168,7 +2168,11 @@ export class Host {
       "install-catalog-module": (action) => this.lifecycle.installFromCatalog(action.moduleId),
       "check-module-updates": async () => {
         if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-        return { ok: true, ...(await this.checkCatalogUpdates()) };
+        const { updated, waiting, unreachable, failed } = await this.checkCatalogUpdates();
+        // Never "up to date" when the catalog could not be asked or an update would not download.
+        if (unreachable) throw new UserError("error.updatesUnreachable");
+        if (failed && updated + waiting === 0) throw new UserError("error.updatesFailed");
+        return { ok: true, updated, waiting };
       },
       "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId, { reason: action.reason, note: action.note }),
       "inbox-send-request": (action) => this.inboxAction(() => this.inbox.sendRequest(action.moduleId, action.requestType, action.text, action.previousId)),

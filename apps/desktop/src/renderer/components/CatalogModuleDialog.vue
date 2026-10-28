@@ -51,6 +51,12 @@ async function showFiles() {
   page.value = { status: "ok", module: { ...props.module, support: props.local ? props.local.support : props.module.support, screenshots: screenshots.length }, screenshots, readme: own.status === "ok" ? own.readme : [], versions: [] };
 }
 
+/** Asks for the page again after it could not be loaded. */
+async function retryPage() {
+  page.value = null;
+  page.value = await api.catalogPage(props.module.id);
+}
+
 onMounted(async () => {
   // Opened from the card's rating: start at the reviews.
   if (props.atReviews) void nextTick(() => reviews.value?.scrollIntoView({ block: "start" }));
@@ -158,9 +164,10 @@ async function openHomepage() {
         <div class="grid gap-8 md:grid-cols-[minmax(0,1fr)_240px]">
           <div class="min-w-0 space-y-6">
             <ModuleDescription :blocks="loaded?.readme ?? []" :fallback="module.description" :module-id="catalogParts ? module.id : undefined">
-              <p v-if="page && page.status !== 'ok'" class="text-muted-foreground mt-2 text-sm" role="status" data-testid="catalog-info-missing">
-                {{ page.status === "gone" ? t("catalog.pageGone") : t("catalog.pageMissing") }}
-              </p>
+              <div v-if="page && page.status !== 'ok'" class="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" role="status" data-testid="catalog-info-missing">
+                <p>{{ page.status === "gone" ? t("catalog.pageGone") : t("catalog.pageMissing") }}</p>
+                <Button v-if="page.status !== 'gone' && !fromFiles" size="sm" variant="secondary" data-testid="catalog-info-retry" @click="retryPage">{{ t("catalog.retry") }}</Button>
+              </div>
             </ModuleDescription>
 
             <ModuleVersions :module-id="module.id" :versions="loaded?.versions ?? []" :version="module.version" />

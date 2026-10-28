@@ -167,7 +167,7 @@ export class Pairing {
     try {
       request = await asking.transport.read();
     } catch (error) {
-      if (error instanceof CopyError && (error.reason === "signed-out" || error.reason === "no-folder")) return this.stop(asking, "failed");
+      if (error instanceof CopyError && (error.reason === "signed-out" || error.reason === "no-folder" || error.reason === "folder-locked")) return this.stop(asking, "failed");
       // Offline for a moment: looked at again soon.
       this.askSoon();
       return;
@@ -318,6 +318,7 @@ function toUserError(error: unknown): UserError {
   if (reason === "unreachable" || reason === "unavailable" || reason === "too-many") return new UserError("cloudCopy.error.offline");
   if (reason === "signed-out") return new UserError("cloudCopy.error.signed-out");
   if (reason === "no-folder") return new UserError("cloudCopy.error.no-folder");
+  if (reason === "folder-locked") return new UserError("cloudCopy.error.folder-locked");
   return new UserError("pairing.error.gone");
 }
 

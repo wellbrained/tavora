@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
 import { AccountKey } from "./account-key";
 import { CloudCopy, ServiceStorage } from "./cloud-copy";
+import { FOLDER_NAME } from "./copy-folder";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
 import { FolderPairing, Pairing } from "./pairing";
@@ -248,6 +249,23 @@ describe("the cloud copy, as Tavora runs it", () => {
       expect(await readdir(onedrive)).toEqual([]);
       sync.showKey();
       expect(sync.view().recoveryKey).toBe(key);
+    } finally {
+      await rm(onedrive, { recursive: true, force: true });
+    }
+  });
+
+  it("says whether a picked folder is missing or can't be written to, instead of turning on", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a" });
+    const { sync } = tavora(cloud, a);
+    await sync.beforeLoad();
+    const onedrive = await mkdtemp(path.join(os.tmpdir(), "tavora-onedrive-"));
+    try {
+      await expect(sync.turnOn(path.join(onedrive, "gone"))).rejects.toMatchObject({ key: "cloudCopy.error.no-folder" });
+      // Where Tavora keeps its files in the folder is taken by a plain file, so nothing can be written there.
+      await writeFile(path.join(onedrive, FOLDER_NAME), "in the way");
+      await expect(sync.turnOn(onedrive)).rejects.toMatchObject({ key: "cloudCopy.error.folder-locked" });
+      expect(sync.view().on).toBe(false);
     } finally {
       await rm(onedrive, { recursive: true, force: true });
     }
