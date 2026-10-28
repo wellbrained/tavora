@@ -82,38 +82,26 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
   };
   const maximized = group.api.isMaximized();
   const module = info(panel.id)?.module;
-  // Splitting takes a second tab in the group and room for both halves; the items only show when it can be done.
-  const splits: MenuItem[] = [];
-  if (canSplit(group, "right", info)) splits.push({ label: t("dock.splitRight"), testid: "panel-split-right", run: split("right") });
-  if (canSplit(group, "below", info)) splits.push({ label: t("dock.splitDown"), testid: "panel-split-down", run: split("below") });
-  const arrange: MenuItem[] = [
-    ...splits,
-    {
-      label: t("dock.moveNext"),
-      testid: "panel-move-next",
-      disabled: api.groups.length < 2,
-      run: move(1),
-    },
-    {
-      label: t("dock.movePrevious"),
-      testid: "panel-move-previous",
-      disabled: api.groups.length < 2,
-      run: move(-1),
-    },
-  ];
-  arrange[0]!.separator = true;
+  // Items show only when they can be done: splitting takes a second tab in the group and room for both halves;
+  // moving and maximizing take a second group.
+  const several = api.groups.length > 1;
+  const arrange: MenuItem[] = [];
+  if (canSplit(group, "right", info)) arrange.push({ label: t("dock.splitRight"), testid: "panel-split-right", run: split("right") });
+  if (canSplit(group, "below", info)) arrange.push({ label: t("dock.splitDown"), testid: "panel-split-down", run: split("below") });
+  if (several) {
+    arrange.push({ label: t("dock.moveNext"), testid: "panel-move-next", run: move(1) });
+    arrange.push({ label: t("dock.movePrevious"), testid: "panel-move-previous", run: move(-1) });
+  }
+  if (arrange[0]) arrange[0].separator = true;
+  const size: MenuItem[] = maximized
+    ? [{ label: t("dock.restore"), testid: "panel-restore", separator: true, run: () => group.api.exitMaximized() }]
+    : several
+      ? [{ label: t("dock.maximize"), testid: "panel-maximize", separator: true, run: () => group.api.maximize() }]
+      : [];
   return [
     { label: t("workspace.inWorkspace"), testid: "panel-in-game", submenu: () => workspaceModulesMenu(group) },
     ...arrange,
-    maximized
-      ? { label: t("dock.restore"), testid: "panel-restore", separator: true, run: () => group.api.exitMaximized() }
-      : {
-          label: t("dock.maximize"),
-          testid: "panel-maximize",
-          separator: true,
-          disabled: api.groups.length < 2,
-          run: () => group.api.maximize(),
-        },
+    ...size,
     {
       label: t("dock.closePanel"),
       testid: "panel-close",
