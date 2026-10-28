@@ -28,6 +28,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.59",
+    date: "2026-10-28",
+    title: "Overlay page: idle panels",
+    notes: [
+      "A live item whose panel has nothing to show says \"Panel isn't active\" instead of staying an empty frame.",
+    ],
+  },
+  {
     version: "0.21.58",
     date: "2026-10-28",
     title: "Overlay page: small changes",
