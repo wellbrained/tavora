@@ -82,6 +82,27 @@ describe("fetchSteamLibrary", () => {
     expect(await fetchSteamLibrary(options(down), "x")).toMatchObject({ status: "error", error: expect.stringContaining("reach") });
   });
 
+  it("words a reason code from the service in the user's language, and falls back for one it does not know", async () => {
+    const refuse = (language: "en" | "de", status: number, body: unknown) =>
+      fetchSteamLibrary({ ...options((async () => answer(body, status)) as unknown as typeof fetch), language }, "x");
+    expect(await refuse("de", 404, { error: "Steam has no profile with that name.", code: "no-such-profile" })).toEqual({
+      status: "error",
+      error: "Steam findet dieses Profil nicht. Prüf den Link und versuch es noch mal.",
+    });
+    expect(await refuse("en", 502, { error: "Steam did not return a game list.", code: "no-game-list" })).toMatchObject({ error: expect.stringContaining("Public") });
+    expect(await refuse("de", 429, { error: "Too many requests.", code: "too-many" })).toMatchObject({ error: expect.stringContaining("Zu viele") });
+    expect(await refuse("de", 400, { error: "English text", code: "made-up-later" })).toEqual({
+      status: "error",
+      error: "Der Steam-Import klappt gerade nicht. Versuch es gleich noch mal.",
+    });
+    expect(await refuse("en", 400, { error: "English text", code: "constructor" })).toEqual({
+      status: "error",
+      error: "Can't import from Steam right now. Try again in a bit.",
+    });
+    // A service without codes (an older one) still shows its own text.
+    expect(await refuse("de", 400, { error: "Enter a steamcommunity.com profile link." })).toEqual({ status: "error", error: "Enter a steamcommunity.com profile link." });
+  });
+
   it("does not call the service for an empty or huge profile", async () => {
     let calls = 0;
     const fetchImpl = (async () => {

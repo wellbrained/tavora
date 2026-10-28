@@ -97,6 +97,11 @@ export class HotkeyStore {
     return true;
   }
 
+  /** Resolves once every save started so far has been written (or has failed and been reported). */
+  flush(): Promise<void> {
+    return this.queue.run(async () => undefined);
+  }
+
   private save(): Promise<void> {
     const text = `${JSON.stringify({ version: 2, hotkeys: this.records } satisfies HotkeyFile, null, 2)}\n`;
     return this.queue.run(() => writeFileAtomic(this.file, text)).catch((error: unknown) => console.error("[tavora] saving hotkeys failed", error));
