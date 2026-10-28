@@ -249,14 +249,14 @@ onBeforeUnmount(() => {
         <span v-if="store.error.value || error" class="text-destructive">{{ store.error.value ?? error }}</span>
         <span v-else-if="list.items.length" class="text-muted-foreground tabular-nums">{{ plural("app.count", list.items.length) }}</span>
       </p>
-      <Button variant="ghost" size="sm" :disabled="list.items.length >= MAX.items" data-testid="add" @click="pickKind">
+      <Button v-if="list.items.length" variant="ghost" size="sm" :disabled="list.items.length >= MAX.items" data-testid="add" @click="pickKind">
         <Plus :stroke-width="1.5" />
         {{ t("app.add") }}
       </Button>
     </header>
 
     <div class="min-h-0 flex-1 overflow-y-auto p-2">
-      <div v-if="!list.items.length" class="flex flex-col items-center gap-3 px-4 py-10 text-center" data-testid="empty">
+      <div v-if="!list.items.length" class="flex h-full flex-col items-center justify-center gap-3 px-4 py-10 text-center" data-testid="empty">
         <p class="text-muted-foreground text-sm">{{ t("app.empty") }}</p>
         <div class="flex flex-wrap justify-center gap-2">
           <Button v-for="kind in KINDS" :key="kind" variant="secondary" size="sm" :data-testid="`add-${kind}`" @click="addItem(kind)">

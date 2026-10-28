@@ -1,16 +1,8 @@
-<script lang="ts">
-import { ref } from "vue";
-
-// The ▾ beside Add module is there once the workspace has a panel. The Overlay page has no panels open, so it keeps what the
-// workspace it was opened from had; kept here, outside any one header, because the page's header is a new one.
-const hasPanels = ref(false);
-</script>
-
 <script setup lang="ts">
 // The buttons on the right of the workspace header. The Overlay page shows the same ones in the same places, so the
 // header never moves when you switch to it; the ones that belong to a workspace are dimmed and can't be used there.
 import { Plus } from "@lucide/vue";
-import { watchEffect } from "vue";
+import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { cn } from "@/lib/utils";
@@ -25,9 +17,9 @@ import OverlayButton from "./OverlayButton.vue";
 const props = defineProps<{ onOverlay?: boolean }>();
 defineEmits<{ addModule: [] }>();
 
-watchEffect(() => {
-  if (!props.onOverlay) hasPanels.value = (state.value?.panels.length ?? 0) > 0;
-});
+// The ▾ is always there (the group never changes size); it is off while the workspace has no panel. On the Overlay page the whole
+// group is dimmed and can't be used, so the ▾ looks as it did in the workspace.
+const hasPanels = computed(() => props.onOverlay || (state.value?.panels.length ?? 0) > 0);
 </script>
 
 <template>
@@ -42,9 +34,9 @@ watchEffect(() => {
       <LayoutsMenu />
       <ButtonGroup>
         <Button class="h-9 text-sm [&_svg]:size-5" data-testid="add-module" @click="$emit('addModule')">
-          <Plus :stroke-width="1.8" /> {{ t("workspace.addModule") }}
+          <Plus :stroke-width="2" absolute-stroke-width /> {{ t("workspace.addModule") }}
         </Button>
-        <ModulesMenu v-if="hasPanels" />
+        <ModulesMenu :disabled="!hasPanels" />
       </ButtonGroup>
     </div>
   </div>

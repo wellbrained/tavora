@@ -97,9 +97,9 @@ function items(): MenuItem[] {
     side="bottom"
     align="end"
     menu-class="w-72"
-    class="size-9 rounded-lg"
+    class="text-foreground/80 hover:text-foreground focus-visible:ring-ring/50 size-9 rounded-md transition-colors outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] focus-visible:ring-3 data-[state=open]:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))]"
   >
-    <LayoutPanelLeft class="size-6" :stroke-width="2" :title="t('layouts.title')" />
+    <LayoutPanelLeft class="size-5" :stroke-width="2" absolute-stroke-width :title="t('layouts.title')" />
     <template #after>
       <DropdownMenuSeparator />
       <!-- Templates sit one level down, so the grid picker stays in the main menu. -->

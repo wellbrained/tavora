@@ -206,3 +206,8 @@
 .dockview-theme-tavora .dv-content-container .dv-drop-target-selection.dv-drop-target-center::after {
   content: "Add as a tab";
 }
+
+/* A tab's close button shows on the active tab, and on the others while the pointer or the keyboard is on them. */
+.dockview-theme-tavora .dv-tab.dv-inactive-tab:not(:hover):not(:focus-within) [data-testid="close"] {
+  opacity: 0;
+}
