@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.77",
+    date: "2026-10-28",
+    title: "A head start for new games",
+    notes: [
+      "A game you add opens with Notes and To-Dos side by side, ready to use.",
+      "An empty workspace now leads with Add module. The layouts sit below it.",
+      "The welcome's game step shows popular games you can add in one click. Next waits until you pick one, and you can still skip.",
+    ],
+    prs: [
+      { number: 431, title: "First workspace: start new games with Notes and To-Dos, popular games in onboarding" },
+    ],
+    tags: ["catalog", "onboarding", "workspace"],
+  },
+  {
     version: "0.21.76",
     date: "2026-10-28",
     title: "Tidier Settings",
