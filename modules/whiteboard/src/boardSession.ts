@@ -3,16 +3,17 @@
 // board, so each starts with fresh undo history). Pictures (pasted, dropped or inserted) are kept in the file store and
 // come back when the board is opened.
 
-import { CaptureUpdateAction, exportToBlob } from "@excalidraw/excalidraw";
-import type { ExcalidrawElement, ExcalidrawImageElement, OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import type { AppState, BinaryFiles, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { CaptureUpdateAction, exportToBlob, getCommonBounds } from "@excalidraw/excalidraw";
+import type { ExcalidrawElement, ExcalidrawImageElement, FileId, OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import type { AppState, BinaryFiles, DataURL, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { JsonValue, TavoraSDK } from "@tavora/sdk";
 import { MAX_BOARD_BYTES, sceneSignature, type BoardData } from "./boards";
 import { COPY_PADDING, copyScale, elementsToCopy } from "./copy";
 import { isCanvasAt } from "./excalidrawDom";
 import { t } from "./i18n";
+import { noteCard, pictureCard } from "./cards";
 import { lockSpots, spotsKey, type LockSpot } from "./locks";
-import { createPictures, pictureFileIds } from "./pictures";
+import { blobToDataUrl, createPictures, pictureFileIds } from "./pictures";
 
 /** How long drawing must pause before the board is saved. */
 const SAVE_DELAY_MS = 600;
@@ -29,6 +30,8 @@ export type SaveState = "idle" | "saving" | "saved" | "error";
 
 /** What the page can ask of the board it shows. */
 export interface Controls {
+  addNote(): void;
+  addPicture(file: File): Promise<void>;
   setPicturesLocked(locked: boolean): void;
   /** Locks or frees one picture. */
   setPictureLocked(id: string, locked: boolean): void;
@@ -73,6 +76,7 @@ export interface SessionOptions {
 }
 
 export interface BoardSession {
+  imageAt(clientX: number, clientY: number): string | null;
   /** Excalidraw's onChange. */
   change(elements: readonly OrderedExcalidrawElement[], appState: AppState, files: BinaryFiles): void;
   /** Excalidraw's excalidrawAPI. */
@@ -106,6 +110,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let saving: Promise<void> = Promise.resolve();
   let api: ExcalidrawImperativeAPI | null = null;
+  let disposed = false;
   /** Pictures already on the board when it opened or seen once since; only a new one is locked (once it is placed). */
   const seen = new Set<string>((data.elements as unknown as ExcalidrawElement[]).filter((element) => element.type === "image").map((element) => element.id));
   /** New pictures that are still being placed: they are locked once they are no longer selected. */
@@ -184,7 +189,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
   }
 
   function checkSpots(appState: AppState, live: readonly OrderedExcalidrawElement[]) {
-    rawSpots = lockSpots(live, { scrollX: appState.scrollX, scrollY: appState.scrollY, zoom: appState.zoom.value, width: appState.width, height: appState.height });
+    rawSpots = lockSpots(live, { scrollX: appState.scrollX, scrollY: appState.scrollY, zoom: appState.zoom.value, width: appState.width, height: appState.height }).map((spot) => ({ ...spot, selected: !!appState.selectedElementIds[spot.id] }));
     boardOrigin = { left: appState.offsetLeft, top: appState.offsetTop };
     // What covers a lock is Excalidraw's menus, which come and go with the tool, the selection and the panel's size.
     // Only when one of those or a lock itself changed is the page asked what is where, not on every stroke.
@@ -204,7 +209,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     // let go of (something else is selected, or nothing), it is locked, so scribbling on top of it does not drag it
     // around. Only once Excalidraw has given it its file: until then it is still changing the element.
     const live = elements.filter((element) => element.type === "image" && !element.isDeleted);
-    for (const element of live) if (!seen.has(element.id)) placing.add(element.id);
+    for (const element of live) if (!seen.has(element.id) && element.customData?.whiteboardCard !== "picture") placing.add(element.id);
     const placed = live.filter((element) => placing.has(element.id) && (element as ExcalidrawImageElement).fileId !== null && !appState.selectedElementIds[element.id]);
     if (placed.length > 0) {
       for (const element of placed) placing.delete(element.id);
@@ -259,10 +264,12 @@ export function createBoardSession(options: SessionOptions): BoardSession {
   }
 
   function setLocked(instance: ExcalidrawImperativeAPI, locked: boolean, only?: string) {
+    const scene = instance.getSceneElements();
+    const groups = new Set(scene.filter((element) => element.type === "image" && (!only || element.id === only) && element.customData?.whiteboardCard === "picture").flatMap((element) => element.groupIds));
     instance.updateScene({
       elements: instance
         .getSceneElements()
-        .map((element) => ((only ? element.id === only : element.type === "image") ? { ...element, locked, version: element.version + 1, versionNonce: nonce(), updated: Date.now() } : element)),
+        .map((element) => ((only ? element.id === only : element.type === "image") || element.groupIds.some((id) => groups.has(id)) ? { ...element, locked, version: element.version + 1, versionNonce: nonce(), updated: Date.now() } : element)),
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
   }
@@ -270,7 +277,43 @@ export function createBoardSession(options: SessionOptions): BoardSession {
   // Reads the board's stored pictures back once Excalidraw is ready.
   function ready(instance: ExcalidrawImperativeAPI) {
     api = instance;
+    const insert = (elements: ReturnType<typeof noteCard>) => {
+      const state = instance.getAppState();
+      const [left, top, right, bottom] = getCommonBounds(elements);
+      const dx = state.width / 2 / state.zoom.value - state.scrollX - (left + right) / 2;
+      const dy = state.height / 2 / state.zoom.value - state.scrollY - (top + bottom) / 2;
+      const placed = elements.map((element) => ({ ...element, x: element.x + dx, y: element.y + dy }));
+      instance.updateScene({
+        elements: [...instance.getSceneElementsIncludingDeleted(), ...placed],
+        appState: {
+          editingGroupId: null,
+          selectedElementIds: Object.fromEntries(placed.map((element) => [element.id, true])),
+          selectedGroupIds: Object.fromEntries(placed.flatMap((element) => element.groupIds.map((id) => [id, true]))),
+        },
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      instance.setActiveTool({ type: "selection" });
+    };
     options.onControls({
+      addNote: () => insert(noteCard(0, 0, t("card.heading"), t("card.body"))),
+      addPicture: async (file) => {
+        if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) throw new Error(t("card.imageType"));
+        if (file.size > 20 * 1024 * 1024) throw new Error(t("card.imageSize"));
+        const bitmap = await createImageBitmap(file).catch(() => { throw new Error(t("card.imageFailed")); });
+        try {
+          const scale = Math.min(1, 1440 / Math.max(bitmap.width, bitmap.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+          canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+          canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error(t("card.imageFailed"))), "image/png"));
+          const id = crypto.randomUUID() as FileId;
+          const dataURL = await blobToDataUrl(blob) as DataURL;
+          if (disposed) return;
+          instance.addFiles([{ id, mimeType: "image/png", dataURL, created: Date.now() }]);
+          insert(pictureCard(0, 0, id, canvas.width, canvas.height, t("card.caption")));
+        } finally { bitmap.close(); }
+      },
       setPicturesLocked: (locked) => setLocked(instance, locked),
       setPictureLocked: (id, locked) => {
         placing.delete(id);
@@ -319,12 +362,28 @@ export function createBoardSession(options: SessionOptions): BoardSession {
   document.addEventListener("visibilitychange", flushNow);
 
   return {
+    imageAt(clientX, clientY) {
+      if (!api || !isCanvasAt(clientX, clientY, ".picture-locks")) return null;
+      const state = api.getAppState();
+      const x = (clientX - state.offsetLeft) / state.zoom.value - state.scrollX;
+      const y = (clientY - state.offsetTop) / state.zoom.value - state.scrollY;
+      for (const image of [...api.getSceneElements()].reverse()) {
+        if (image.type !== "image" || image.isDeleted) continue;
+        const dx = x - image.x - image.width / 2;
+        const dy = y - image.y - image.height / 2;
+        const localX = dx * Math.cos(image.angle) + dy * Math.sin(image.angle);
+        const localY = -dx * Math.sin(image.angle) + dy * Math.cos(image.angle);
+        if (Math.abs(localX) <= image.width / 2 && Math.abs(localY) <= image.height / 2) return image.id;
+      }
+      return null;
+    },
     change,
     ready,
     scroll: (scrollX, scrollY, zoom) => options.onView({ scrollX, scrollY, zoom: zoom.value }),
     recheckLocks: () => showSpots(true),
     flush,
     dispose() {
+      disposed = true;
       removeEventListener("keydown", copyKey, true);
       removeEventListener("pagehide", flushNow);
       document.removeEventListener("visibilitychange", flushNow);

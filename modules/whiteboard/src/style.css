@@ -11,6 +11,30 @@ body {
   overflow: hidden;
 }
 
+.whiteboard-app { container-type: inline-size; }
+.board-bar { min-height: 36px; }
+.board-switcher { min-width: 0; max-width: 32%; }
+.board-switcher [data-testid="board-menu"] { max-width: 100%; }
+.board-actions-menu { display: none; }
+@container (max-width: 680px) {
+  .board-image-action { display: none; }
+  .board-actions-menu { display: inline-flex; }
+  .board-switcher { max-width: 60%; }
+  .whiteboard-app .excalidraw .HintViewer { display: none; }
+  .whiteboard-app .excalidraw .App-toolbar--mobile { max-width: calc(100cqw - 32px); }
+  .whiteboard-app .excalidraw .App-toolbar-content { flex-wrap: wrap; justify-content: center; gap: 2px; }
+  .whiteboard-app .excalidraw .App-toolbar-container .ToolIcon__icon { width: 32px; height: 32px; }
+  .whiteboard-app .excalidraw .mobile-misc-tools-container { right: 0; }
+}
+@container (max-width: 420px) {
+  .card-label { display: none; }
+}
+.whiteboard-app .excalidraw .App-toolbar-content { padding: 4px; }
+.whiteboard-app .excalidraw .HintViewer { margin-top: 4px; font-size: 11px; }
+@media (prefers-reduced-motion: reduce) {
+  .picture-lock { transition: none; }
+}
+
 /* Excalidraw is React and brings its own look; what follows only fits it into the page and into Tavora's panel. */
 
 /* Excalidraw fills the board. Its Library button is hidden: Tavora does not use shared libraries. */

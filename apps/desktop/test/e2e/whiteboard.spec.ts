@@ -2,7 +2,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { inModule, launch, openModule, panels, shootPanels, waitForShown, WHITEBOARD } from "./harness";
+import { inModule, launch, openModule, panels, setContentSize, shootPanels, waitForShown, WHITEBOARD } from "./harness";
 
 const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
 // The shared kit shows notices and the Undo offer as toasts, newest last.
@@ -115,7 +115,7 @@ test("whiteboard: draw on a board, keep it, switch boards, delete one and bring 
 });
 
 /** The data stored for the board with this name. */
-async function storedBoard(userData: string, name: string): Promise<{ elements: { type: string; locked?: boolean; fileId?: string }[]; files: Record<string, { blobId: string; mimeType: string }> } | undefined> {
+async function storedBoard(userData: string, name: string): Promise<{ elements: { id: string; type: string; locked?: boolean; fileId?: string }[]; files: Record<string, { blobId: string; mimeType: string }> } | undefined> {
   const root = path.join(userData, "module-data", "official", WHITEBOARD);
   for (const file of (await readdir(root, { recursive: true })).filter((entry) => /board-[a-z0-9-]+\.json$/.test(entry))) {
     const document = JSON.parse(await readFile(path.join(root, file), "utf8")) as { title?: string; data?: never };
@@ -502,4 +502,133 @@ test("the hint for moving around the board is in Tavora's words", async () => {
   } finally {
     await app.close();
   }
+});
+
+test("cards move as groups, undo, keep their pictures, and leave room in narrow panels", async () => {
+  const { app, page, userData } = await launch();
+  let closed = false;
+  try {
+    await openModule(page, WHITEBOARD);
+    await waitForShown(app, WHITEBOARD);
+    await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector('.excalidraw canvas.interactive')`)).toBe(true);
+    await click(app, "add-card");
+    await click(app, "add-note-card");
+    const scene = async () => (await storedBoard(userData, "Board 1"))?.elements as unknown as { id: string; type: string; x: number; y: number; width: number; height: number; groupIds: string[]; locked: boolean }[] | undefined;
+    await expect.poll(async () => (await scene())?.length).toBe(3);
+    const note = (await scene())!;
+    expect(new Set(note.flatMap((element) => element.groupIds)).size).toBe(1);
+    const canvas = await inModule<{ x: number; y: number; width: number; height: number }>(app, WHITEBOARD, `(() => { const r=document.querySelector('.excalidraw canvas.interactive').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}; })()`);
+    const from = { x: canvas.x + note[0]!.x + 140, y: canvas.y + note[0]!.y + 160 };
+    await drag(app, from, { x: from.x - 180, y: from.y - 80 });
+    await expect.poll(async () => (await scene())?.[0]?.x).toBeCloseTo(note[0]!.x - 180, 0);
+    for (const [index, element] of (await scene())!.entries()) {
+      expect(element.x).toBeCloseTo(note[index]!.x - 180, 0);
+      expect(element.y).toBeCloseTo(note[index]!.y - 80, 0);
+    }
+    await app.evaluate(({webContents}, id) => {
+      const target = webContents.getAllWebContents().find((view) => view.getURL().startsWith(`tavora-module://${id}/`))!;
+      target.sendInputEvent({type: "keyDown", keyCode: "Z", modifiers: ["control"]});
+      target.sendInputEvent({type: "keyUp", keyCode: "Z", modifiers: ["control"]});
+    }, WHITEBOARD);
+    await expect.poll(async () => (await scene())?.[0]?.x).toBeCloseTo(note[0]!.x, 0);
+    await drag(app, from, { x: from.x - 360, y: from.y - 80 });
+
+    // A local image chosen for a picture card, delivered through the file input's normal change handler.
+    await inModule(app, WHITEBOARD, `(async () => {
+      const canvas=document.createElement('canvas');canvas.width=400;canvas.height=200;
+      const ctx=canvas.getContext('2d');ctx.fillStyle='#285a75';ctx.fillRect(0,0,400,200);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      const data=new DataTransfer();data.items.add(new File([blob],'camp.png',{type:'image/png'}));
+      const input=document.querySelector('[data-testid="card-file"]');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));
+    })()`);
+    await expect.poll(async () => (await scene())?.length).toBe(6);
+    const card = (await scene())!.slice(3);
+    expect((Math.min(...card.map((element) => element.x)) + Math.max(...card.map((element) => element.x + element.width))) / 2).toBeCloseTo(canvas.width / 2, 0);
+    expect((Math.min(...card.map((element) => element.y)) + Math.max(...card.map((element) => element.y + element.height))) / 2).toBeCloseTo(canvas.height / 2, 0);
+    expect((await scene())!.filter((element) => element.type === "image")[0]!.locked).toBe(false);
+    await expect.poll(async () => Object.keys((await storedBoard(userData, "Board 1"))?.files ?? {}).length).toBe(1);
+    await click(app, "picture-lock");
+    await expect.poll(async () => (await scene())!.slice(3).every((element) => element.locked)).toBe(true);
+    // Neutral lock is hidden away from the image, but a keyboard user can reveal it.
+    await drag(app, {x: 1100, y: 650}, {x: 1100, y: 650});
+    await movePointer(app, {x: 1100, y: 650});
+    await expect.poll(() => inModule(app, WHITEBOARD, `getComputedStyle(document.querySelector('[data-testid="picture-lock-one"]')).opacity`)).toBe("0");
+    await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="picture-lock-one"]').focus()`);
+    await app.evaluate(({webContents}, id) => {
+      const target = webContents.getAllWebContents().find((view) => view.getURL().startsWith(`tavora-module://${id}/`))!;
+      target.sendInputEvent({type: "keyDown", keyCode: "Tab", modifiers: ["shift"]});
+      target.sendInputEvent({type: "keyUp", keyCode: "Tab", modifiers: ["shift"]});
+      target.sendInputEvent({type: "keyDown", keyCode: "Tab"});
+      target.sendInputEvent({type: "keyUp", keyCode: "Tab"});
+    }, WHITEBOARD);
+    await expect.poll(() => inModule(app, WHITEBOARD, `getComputedStyle(document.querySelector('[data-testid="picture-lock-one"]')).opacity`)).toBe("1");
+    await click(app, "picture-lock-one");
+    await expect.poll(async () => (await scene())!.slice(3).every((element) => !element.locked)).toBe(true);
+    await setContentSize(app, 540, 620);
+    await expect.poll(() => inModule(app, WHITEBOARD, `document.querySelector('[data-testid="board-actions"]').getBoundingClientRect().width > 0`)).toBe(true);
+    expect(await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="copy-picture"]').getBoundingClientRect().width`)).toBe(0);
+    expect(await inModule(app, WHITEBOARD, `document.querySelector('header').getBoundingClientRect().height`)).toBeLessThan(45);
+    // Fit to the resized viewport, as a user can do with Shift+1.
+    await drag(app, {x: 100, y: 200}, {x: 100, y: 200});
+    await app.evaluate(({webContents}, id) => {
+      const target = webContents.getAllWebContents().find((view) => view.getURL().startsWith(`tavora-module://${id}/`))!;
+      target.sendInputEvent({type: "keyDown", keyCode: "!", modifiers: ["shift"]});
+      target.sendInputEvent({type: "keyUp", keyCode: "!", modifiers: ["shift"]});
+    }, WHITEBOARD);
+    await shootPanels(app, WHITEBOARD, test.info().outputPath("cards-narrow.png"));
+    await click(app, "board-actions");
+    await click(app, "compact-copy-picture");
+    await expect.poll(() => inModule(app, WHITEBOARD, `${NEWEST_TOAST}?.textContent ?? ''`)).toContain("Copied");
+    await app.close(); closed = true;
+    const again = await launch(userData);
+    try {
+      await expect.poll(() => inModule(again.app, WHITEBOARD, `document.querySelector('[data-testid="board"]').dataset.pictures`).catch(() => "")).toBe("1");
+      expect((await scene())!).toHaveLength(6);
+      await shootPanels(again.app, WHITEBOARD, test.info().outputPath("cards-restored.png"));
+    } finally { await again.app.close(); }
+  } finally { if (!closed) await app.close(); }
+});
+
+test("adding a card preserves earlier deletions in Undo history", async () => {
+  const { app, page, userData } = await launch();
+  try {
+    await openModule(page, WHITEBOARD);
+    await waitForShown(app, WHITEBOARD);
+    const add = async () => { await click(app, "add-card"); await click(app, "add-note-card"); };
+    const key = async (keyCode: string, modifiers: ("control" | "shift")[] = []) => {
+      await inModule(app, WHITEBOARD, `document.querySelector('.excalidraw').focus()`);
+      await app.evaluate(({ webContents }, { id, keyCode, modifiers }) => {
+        const target = webContents.getAllWebContents().find((view) => view.getURL().startsWith(`tavora-module://${id}/`))!;
+        target.sendInputEvent({ type: "keyDown", keyCode, modifiers });
+        target.sendInputEvent({ type: "keyUp", keyCode, modifiers });
+      }, { id: WHITEBOARD, keyCode, modifiers });
+    };
+    await expect.poll(() => inModule(app, WHITEBOARD, `document.querySelector('[data-testid="add-card"]').disabled`)).toBe(false);
+    await add();
+    await expect.poll(async () => (await storedBoard(userData, "Board 1"))?.elements.length).toBe(3);
+    const original = (await storedBoard(userData, "Board 1"))!.elements.map((element) => element.id);
+    await key("Delete");
+    await expect.poll(async () => (await storedBoard(userData, "Board 1"))?.elements.length).toBe(0);
+    await add();
+    await expect.poll(async () => (await storedBoard(userData, "Board 1"))?.elements.length).toBe(3);
+    await key("Z", ["control"]);
+    await expect.poll(async () => (await storedBoard(userData, "Board 1"))?.elements.length).toBe(0);
+    await key("Z", ["control"]);
+    await expect.poll(async () => (await storedBoard(userData, "Board 1"))?.elements.map((element) => element.id)).toEqual(original);
+  } finally { await app.close(); }
+});
+
+test("a broken picture card reports a localized error without changing the board", async () => {
+  const { app, page, userData } = await launch(undefined, [], { locale: "de" });
+  try {
+    await openModule(page, WHITEBOARD);
+    await waitForShown(app, WHITEBOARD);
+    await expect.poll(() => inModule(app, WHITEBOARD, `document.querySelector('[data-testid="add-card"]').disabled`)).toBe(false);
+    await inModule(app, WHITEBOARD, `(() => {
+      const data=new DataTransfer();data.items.add(new File(['broken'],'camp.png',{type:'image/png'}));
+      const input=document.querySelector('[data-testid="card-file"]');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));
+    })()`);
+    await expect.poll(() => inModule(app, WHITEBOARD, `${NEWEST_TOAST}?.textContent ?? ''`)).toContain("Dieses Bild konnte nicht gelesen werden.");
+    expect(Object.values(await storedBoards(userData)).flat()).toEqual([]);
+  } finally { await app.close(); }
 });
