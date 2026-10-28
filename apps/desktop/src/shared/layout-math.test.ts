@@ -41,10 +41,17 @@ describe("snapMove", () => {
     expect(snapMove(rect(44, 74, 210, 90), canvas, [], grid).rect).toMatchObject({ x: 30, y: 60 });
   });
 
-  it("snaps the right or bottom edge to the grid when that edge is nearer, counting the grid from the far side too", () => {
-    // 250 wide: its left edge is 14 off a line, its right edge (counted from the right of the canvas) only 6.
+  it("snaps the right or bottom edge to the grid when that edge is nearer", () => {
+    // 250 wide: its left edge is 14 off a line, its right edge only 6.
     expect(snapMove(rect(1004, 100, 250, 100), canvas, [], grid).rect).toMatchObject({ x: 1010 });
-    expect(snapMove(rect(100, 1004 - 100, 120, 100), { width: 1920, height: 1090 }, [], grid).rect.y + 100).toBe(1090 - 30 * Math.round((1090 - 1004) / 30));
+    // 100 high: its top is 14 off a line, its bottom 4.
+    expect(snapMove(rect(100, 616, 120, 100), canvas, [], grid).rect).toMatchObject({ y: 620 });
+  });
+
+  it("keeps the right edge on the grid drawn on the canvas, also when its width is not a whole number of cells", () => {
+    const wide = { width: 1728, height: 1080 };
+    const result = snapMove(rect(1304, 100, 250, 100), wide, [], grid).rect;
+    expect((result.x + result.width) % 30).toBe(0);
   });
 
   it("places freely with the grid off", () => {

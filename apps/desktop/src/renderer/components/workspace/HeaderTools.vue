@@ -2,7 +2,7 @@
 // The buttons on the right of the workspace header. The Overlay page shows the same ones in the same places, so the
 // header never moves when you switch to it; the ones that belong to a workspace are dimmed and can't be used there.
 import { Plus } from "@lucide/vue";
-import { computed } from "vue";
+import { ref, watchEffect } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { cn } from "@/lib/utils";
@@ -14,10 +14,14 @@ import ModuleUpdatesButton from "./ModuleUpdatesButton.vue";
 import ModulesMenu from "./ModulesMenu.vue";
 import OverlayButton from "./OverlayButton.vue";
 
-defineProps<{ onOverlay?: boolean }>();
+const props = defineProps<{ onOverlay?: boolean }>();
 defineEmits<{ addModule: [] }>();
 
-const hasPanels = computed(() => (state.value?.panels.length ?? 0) > 0);
+// The ▾ is there once the workspace has a panel. The page keeps what the workspace had, so the header never changes size.
+const hasPanels = ref(false);
+watchEffect(() => {
+  if (!props.onOverlay) hasPanels.value = (state.value?.panels.length ?? 0) > 0;
+});
 </script>
 
 <template>

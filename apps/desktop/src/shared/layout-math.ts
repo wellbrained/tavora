@@ -74,14 +74,11 @@ function nearestTarget(values: readonly number[], places: readonly number[], thr
 
 const snapToGrid = (value: number, cell: number) => Math.round(value / cell) * cell;
 
-/** The same grid counted from the far edge of the canvas, so a right or bottom edge can sit on the canvas edge's own lines. */
-const snapToGridFromEnd = (value: number, cell: number, size: number) => size - Math.round((size - value) / cell) * cell;
-
-/** How far an item moves to sit on the grid: by its start edge from the start of the canvas, or by its end edge from the end, whichever is nearer. */
-function gridShift(start: number, length: number, size: number, cell: number): number {
-  const fromStart = snapToGrid(start, cell) - start;
-  const fromEnd = snapToGridFromEnd(start + length, cell, size) - (start + length);
-  return Math.abs(fromEnd) < Math.abs(fromStart) ? fromEnd : fromStart;
+/** How far an item moves to sit on the grid drawn on the canvas: by its start edge or by its end edge (right, bottom), whichever is nearer. */
+function gridShift(start: number, length: number, cell: number): number {
+  const byStart = snapToGrid(start, cell) - start;
+  const byEnd = snapToGrid(start + length, cell) - (start + length);
+  return Math.abs(byEnd) < Math.abs(byStart) ? byEnd : byStart;
 }
 
 /** Where a dragged item ends up: `rect` is where the pointer put it, `others` are the rectangles of the other items. */
@@ -93,12 +90,12 @@ export function snapMove(rect: Rect, canvas: Canvas, others: readonly Rect[], op
     if (hitX) {
       x += hitX.shift;
       guides.push({ axis: "x", at: hitX.at });
-    } else if (options.cell > 0) x += gridShift(x, rect.width, canvas.width, options.cell);
+    } else if (options.cell > 0) x += gridShift(x, rect.width, options.cell);
     const hitY = nearestTarget([y, y + rect.height / 2, y + rect.height], targets("y", canvas, others), options.threshold);
     if (hitY) {
       y += hitY.shift;
       guides.push({ axis: "y", at: hitY.at });
-    } else if (options.cell > 0) y += gridShift(y, rect.height, canvas.height, options.cell);
+    } else if (options.cell > 0) y += gridShift(y, rect.height, options.cell);
   }
   return {
     rect: {
@@ -125,10 +122,7 @@ export function snapResize(rect: Rect, edges: Edges, canvas: Canvas, others: rea
       guides.push({ axis, at: hit.at });
       return hit.at;
     }
-    if (options.cell <= 0) return value;
-    // A right or bottom edge counts its grid from the far side of the canvas.
-    const far = (axis === "x" && value === right) || (axis === "y" && value === bottom);
-    return far ? snapToGridFromEnd(value, options.cell, axis === "x" ? canvas.width : canvas.height) : snapToGrid(value, options.cell);
+    return options.cell > 0 ? snapToGrid(value, options.cell) : value;
   };
   if (edges.left) left = snapEdge("x", left);
   if (edges.right) right = snapEdge("x", right);

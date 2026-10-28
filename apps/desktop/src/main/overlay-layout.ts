@@ -82,6 +82,13 @@ interface Shape {
   seen: boolean;
 }
 
+/** A canvas rectangle in window pixels. Each edge is rounded on its own, so a view never reaches past the canvas by a pixel. */
+export function edgesToBounds(layer: Rect, placed: Rect, scale: number): Rect {
+  const left = Math.round(layer.x + placed.x * scale);
+  const top = Math.round(layer.y + placed.y * scale);
+  return { x: left, y: top, width: Math.max(1, Math.round(layer.x + (placed.x + placed.width) * scale) - left), height: Math.max(1, Math.round(layer.y + (placed.y + placed.height) * scale) - top) };
+}
+
 const sameRect = (a: AnchoredRect, b: AnchoredRect) => a.h === b.h && a.v === b.v && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 
 
@@ -305,12 +312,7 @@ export class OverlayLayout {
       frames.push({
         id: item.id,
         source: info.source,
-        bounds: {
-          x: Math.round(layer.x + item.placed.x * scale),
-          y: Math.round(layer.y + item.placed.y * scale),
-          width: Math.max(1, Math.round(item.placed.width * scale)),
-          height: Math.max(1, Math.round(item.placed.height * scale)),
-        },
+        bounds: edgesToBounds(layer, item.placed, scale),
         // The content has its natural size in a game window of 1080 pixels' height, and the canvas shows that window smaller or bigger.
         zoom: (contentScale(shape.gameHeight) * layer.height) / shape.gameHeight,
         opacity: (item.opacity / 100) * (item.off ? 0.5 : 1),
