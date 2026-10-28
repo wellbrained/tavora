@@ -28,6 +28,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.62",
+    date: "2026-10-28",
+    title: "Overlays run from any workspace",
+    notes: [
+      "Press Start and the panels behind your overlays run, even from workspaces you have not opened. Stop lets them go.",
+    ],
+  },
+  {
     version: "0.21.61",
     date: "2026-10-28",
     title: "Overlays: Start and Stop",
