@@ -39,7 +39,7 @@ watchEffect(() => {
     <div :inert="onOverlay" :class="cn('flex items-center gap-2', onOverlay && 'opacity-50')">
       <LayoutsMenu />
       <ButtonGroup>
-        <Button size="sm" data-testid="add-module" @click="$emit('addModule')">
+        <Button class="h-9 text-[0.9375rem] [&_svg]:size-5" data-testid="add-module" @click="$emit('addModule')">
           <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
         </Button>
         <ModulesMenu v-if="hasPanels" />

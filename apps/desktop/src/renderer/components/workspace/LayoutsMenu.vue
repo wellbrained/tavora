@@ -97,9 +97,9 @@ function items(): MenuItem[] {
     side="bottom"
     align="end"
     menu-class="w-72"
-    class="size-8 rounded-lg"
+    class="size-9 rounded-lg"
   >
-    <LayoutPanelLeft class="size-4" :stroke-width="1.5" :title="t('layouts.title')" />
+    <LayoutPanelLeft class="size-5" :stroke-width="1.5" :title="t('layouts.title')" />
     <template #after>
       <DropdownMenuSeparator />
       <!-- Templates sit one level down, so the grid picker stays in the main menu. -->

@@ -625,6 +625,7 @@ export const overlayOpen = computed(
 );
 // The panels' pictures stay after a dialog closes, under the panels, until the host says every panel has drawn again.
 watch(overlayOpen, (open) => api.setOverlay(open));
+watch(overlayOpen, (open) => document.documentElement.classList.toggle("floating-open", open), { immediate: true });
 
 // The system draws the window buttons above the page, so a dialog backdrop can't dim them: while one is open,
 // the host dims them instead.

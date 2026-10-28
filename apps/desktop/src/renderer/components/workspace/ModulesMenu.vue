@@ -17,8 +17,7 @@ const track = useFloating();
   <DropdownMenu @update:open="track">
     <DropdownMenuTrigger as-child>
       <Button
-        size="sm"
-        class="px-1.5"
+        class="h-9 px-2 [&_svg]:size-5"
         data-testid="modules-in-game"
         :aria-label="t('workspace.modulesHere')"
         :title="t('workspace.modulesHere')"

@@ -127,6 +127,11 @@
   }
 }
 
+/* While a menu or dialog is open, the drag areas let clicks through, so a click on the header closes it. */
+html.floating-open .app-drag {
+  -webkit-app-region: no-drag;
+}
+
 /* Rail entries: a pill on the left edge shows state (short on hover, full
    height when active), and the icon tilts slightly and glows on hover. */
 @layer components {

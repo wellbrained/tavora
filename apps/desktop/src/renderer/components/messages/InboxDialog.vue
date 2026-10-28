@@ -44,7 +44,7 @@ function itemTitle(item: ConversationItem): string {
 
 <template>
   <Dialog :open="true" @update:open="(open: boolean) => !open && (inboxOpen = null)">
-    <DialogContent class="bg-card flex h-[min(640px,calc(100vh-96px))] w-[min(900px,calc(100vw-48px))] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none" data-testid="inbox" :show-close-button="false">
+    <DialogContent class="bg-card top-[calc(50%+env(titlebar-area-height,0px)/2)] flex h-[min(880px,calc(100vh-env(titlebar-area-height,0px)-48px))] w-[min(1240px,calc(100vw-48px))] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none" data-testid="inbox" :show-close-button="false">
       <header class="flex items-start gap-3 border-b px-5 py-4">
         <div class="min-w-0 flex-1">
           <DialogTitle class="text-lg font-semibold">{{ t("inbox.title") }}</DialogTitle>

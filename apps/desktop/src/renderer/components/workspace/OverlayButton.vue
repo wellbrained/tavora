@@ -20,9 +20,8 @@ const tip = { stopped: "overlays.button.startTip", live: "overlays.button.liveTi
 <template>
   <Button
     v-if="overlays.supported && overlays.enabled"
-    size="sm"
     variant="secondary"
-    :class="['w-20', tint[look]]"
+    :class="['h-9 w-24 text-[0.9375rem] [&_svg]:size-5', tint[look]]"
     :title="t(tip[look])"
     :aria-label="t(tip[look])"
     :data-state="look"
