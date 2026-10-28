@@ -2,7 +2,7 @@
 // renders inside it (panel content, tabs and group actions).
 import type { DockviewApi, DockviewGroupPanel, IDockviewPanel } from "dockview-vue";
 import type { InjectionKey } from "vue";
-import { act, showOrAddPanel, state, type MenuItem } from "../../host";
+import { act, confirmAction, showOrAddPanel, state, submitAction, type MenuItem } from "../../host";
 import { t } from "../../i18n";
 import { TAB_HEIGHT, type PanelInfo } from "../../dock";
 import type { ColumnSide } from "../../dock-columns";
@@ -82,21 +82,12 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
   };
   const maximized = group.api.isMaximized();
   const module = info(panel.id)?.module;
-  return [
-    { label: t("workspace.inWorkspace"), testid: "panel-in-game", submenu: () => workspaceModulesMenu(group) },
-    {
-      label: t("dock.splitRight"),
-      testid: "panel-split-right",
-      separator: true,
-      disabled: !canSplit(group, "right", info),
-      run: split("right"),
-    },
-    {
-      label: t("dock.splitDown"),
-      testid: "panel-split-down",
-      disabled: !canSplit(group, "below", info),
-      run: split("below"),
-    },
+  // Splitting takes a second tab in the group and room for both halves; the items only show when it can be done.
+  const splits: MenuItem[] = [];
+  if (canSplit(group, "right", info)) splits.push({ label: t("dock.splitRight"), testid: "panel-split-right", run: split("right") });
+  if (canSplit(group, "below", info)) splits.push({ label: t("dock.splitDown"), testid: "panel-split-down", run: split("below") });
+  const arrange: MenuItem[] = [
+    ...splits,
     {
       label: t("dock.moveNext"),
       testid: "panel-move-next",
@@ -109,6 +100,11 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
       disabled: api.groups.length < 2,
       run: move(-1),
     },
+  ];
+  arrange[0]!.separator = true;
+  return [
+    { label: t("workspace.inWorkspace"), testid: "panel-in-game", submenu: () => workspaceModulesMenu(group) },
+    ...arrange,
     maximized
       ? { label: t("dock.restore"), testid: "panel-restore", separator: true, run: () => group.api.exitMaximized() }
       : {
@@ -124,13 +120,22 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
       separator: true,
       run: () => act({ type: "close-panel", instanceId: panel.id }),
     },
+    // Removing takes the module's panels out of this workspace, not its data: the question says so.
     ...(module
       ? [
           {
             label: t("dock.removeModule", { name: module.name }),
             testid: "panel-remove-module",
             danger: true,
-            run: () => act({ type: "remove-module-from-workspace", moduleId: module.id }),
+            separator: true,
+            run: () =>
+              confirmAction({
+                title: t("dock.removeModuleTitle", { name: module.name }),
+                message: t("dock.removeModuleMessage", { name: module.name }),
+                confirm: t("common.remove"),
+                danger: true,
+                run: () => submitAction({ type: "remove-module-from-workspace", moduleId: module.id }),
+              }),
           },
         ]
       : []),

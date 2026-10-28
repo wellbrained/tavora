@@ -61,7 +61,7 @@ test("80 modules distinguish ten game modules from duplicate panels", async () =
     await page.getByTestId("manage-modules").click();
     await expect(library).toHaveCount(0);
     await expect(page.getByTestId("settings")).toBeVisible();
-    await expect(page.getByTestId("install-module")).toBeVisible();
+    await expect(page.getByTestId("modules-more")).toBeVisible();
   } finally { await app.close(); }
 });
 

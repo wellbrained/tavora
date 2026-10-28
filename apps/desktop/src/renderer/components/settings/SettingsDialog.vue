@@ -3,7 +3,7 @@
 // section on the right, under a title that stays put while it scrolls. Each section is its own
 // component; settings-index.ts lists them and every setting the search can find.
 import { RotateCw, ScrollText, Search, Settings as SettingsIcon, X } from "@lucide/vue";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, provide, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
@@ -28,6 +28,7 @@ import OverlaysSection from "./OverlaysSection.vue";
 import StreamingSection from "./StreamingSection.vue";
 import TrashSection from "./TrashSection.vue";
 import { GROUPS, groupLabel, sectionLabel, settingEntries, type SettingsSection } from "./settings-index";
+import { SETTINGS_PAGE_TITLE } from "./settings-page";
 
 /** The icon shown in the page header: the section's own, a magnifier for search results. */
 const headerIcon = computed(() => {
@@ -39,6 +40,9 @@ const headerIcon = computed(() => {
 
 const section = ref<SettingsSection>("general");
 const query = ref("");
+/** What the page header says; a group with the same title leaves its own out. */
+const pageTitle = computed(() => (query.value.trim() ? t("settings.results.title") : sectionLabel(section.value)));
+provide(SETTINGS_PAGE_TITLE, pageTitle);
 /** The setting a search result led to, tinted for a moment. */
 const highlight = ref<string | null>(null);
 let highlightTimer: ReturnType<typeof setTimeout> | undefined;
@@ -142,7 +146,7 @@ function onSearchKey(event: KeyboardEvent) {
       :show-close-button="false"
       :aria-describedby="undefined"
     >
-      <div class="bg-background flex w-56 flex-none flex-col gap-5 overflow-y-auto border-r p-4 lg:w-64">
+      <div class="settings-scroll settings-menu bg-background flex w-56 flex-none flex-col gap-4 overflow-y-auto border-r p-4 lg:w-64">
         <DialogTitle class="px-2 pt-1 text-xl font-semibold">{{ t("settings.title") }}</DialogTitle>
         <div class="relative">
           <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
@@ -185,7 +189,7 @@ function onSearchKey(event: KeyboardEvent) {
             <span class="bg-primary/15 text-primary flex size-9 flex-none items-center justify-center rounded-lg" aria-hidden="true">
               <component :is="headerIcon" class="size-5" :stroke-width="1.75" />
             </span>
-            <h2 class="truncate text-xl font-semibold" data-testid="settings-heading">{{ query.trim() ? t("settings.results.title") : sectionLabel(section) }}</h2>
+            <h2 class="truncate text-xl font-semibold" data-testid="settings-heading">{{ pageTitle }}</h2>
           </div>
           <DialogClose as-child>
             <Button variant="ghost" size="icon" class="flex-none" data-testid="settings-close" :aria-label="t('settings.close')" :title="t('common.close')">
@@ -194,10 +198,11 @@ function onSearchKey(event: KeyboardEvent) {
           </DialogClose>
         </header>
 
-        <div ref="scroller" class="relative min-h-0 flex-1 overflow-y-auto" data-testid="settings-body">
+        <!-- Always there, so a screen reader hears how many results each search finds. Outside the page, so the
+             first group sits right under the header. -->
+        <p class="sr-only" role="status">{{ resultsAnnouncement }}</p>
+        <div ref="scroller" class="settings-scroll relative min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]" data-testid="settings-body">
           <div class="px-6 pt-8 pb-12 lg:px-10">
-            <!-- Always there, so a screen reader hears how many results each search finds. -->
-            <p class="sr-only" role="status">{{ resultsAnnouncement }}</p>
             <template v-if="query.trim()">
               <p v-if="!results.length" class="text-muted-foreground" data-testid="settings-no-results">{{ t("settings.results.none", { query: query.trim() }) }}</p>
               <ul v-else class="-mx-3 flex flex-col gap-1" :aria-label="t('settings.results.title')" data-testid="settings-results">
@@ -243,3 +248,28 @@ function onSearchKey(event: KeyboardEvent) {
     </DialogContent>
   </Dialog>
 </template>
+
+<style scoped>
+.settings-scroll {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+/* Thin scrollbars in theme colours, without the system's arrow buttons. Only the webkit rules: Chromium ignores
+   them once the standard scrollbar-width or scrollbar-color is set, and then draws arrows again. */
+.settings-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.settings-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.settings-scroll::-webkit-scrollbar-thumb {
+  background: var(--input);
+  border-radius: 4px;
+}
+/* The menu fits a normal window; there it scrolls by wheel or keys without a bar beside it. */
+@media (min-height: 860px) {
+  .settings-menu::-webkit-scrollbar {
+    width: 0;
+  }
+}
+</style>

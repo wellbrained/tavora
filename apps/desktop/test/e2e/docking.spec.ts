@@ -207,6 +207,9 @@ test("a module is removed from one workspace from its panel menu, leaving empty 
   // Both vanilla panels go; their columns stay as empty slots, so React keeps its place.
   await panels(page, VANILLA).first().click({ button: "right" });
   await page.locator('[role="menu"][data-state="open"] [data-testid="panel-remove-module"]').click();
+  // Removing asks first, and says the module's data stays.
+  await expect(page.getByTestId("confirm")).toContainText("saved stays");
+  await page.getByTestId("confirm-submit").click();
   await expect(panels(page, VANILLA)).toHaveCount(0);
   await expect(page.locator("[data-testid^='empty-slot-']")).toHaveCount(2);
   await expect(groups(page)).toHaveCount(3);

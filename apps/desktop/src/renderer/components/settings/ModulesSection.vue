@@ -1,18 +1,20 @@
 <script setup lang="ts">
-// Settings > Modules: what is installed and where it came from, and the
-// user's own modules folder, the same way themes have theirs. Install from
-// zip checks and unpacks a module zip into the folder; dropping a module
-// package into the folder and pressing Reload adds it too. Remove moves it
-// to the recycle bin. A module's data stays, so adding it again finds it.
-// A module installed from the catalog can be reported to Tavora, and its patch
-// notes open in a dialog. Module library opens the library on Tavora's catalog. Below the
-// list are the websites modules may reach, and where module files live. What module developers use (development folders, the examples) is in
+// Settings > Modules: what is installed and where it came from, updates,
+// removal and permissions. Browsing and adding is the module library's job;
+// the More menu keeps the rarer ways in: Install from zip checks and unpacks
+// a module zip into the user's modules folder (the same way themes have
+// theirs); dropping a module package into the folder and pressing Reload
+// adds it too. Remove moves it to the recycle bin. A module's data stays, so
+// adding it again finds it. A module installed from the catalog can be
+// reported to Tavora, and its patch notes open in a dialog. Below the list
+// are the websites modules may reach, and where module files live. What
+// module developers use (development folders, the examples) is in
 // Settings > Development instead.
-import { ArrowRightLeft, CircleAlert, CloudDownload, Ellipsis, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Store, Trash2 } from "@lucide/vue";
+import { ArrowRightLeft, ChevronDown, CircleAlert, CloudDownload, Ellipsis, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Store, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, dialog, workspacesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
@@ -160,21 +162,32 @@ function remove(module: ModuleView) {
       :highlighted="highlight === 'own-modules'"
     >
       <span class="flex max-w-full flex-none flex-wrap items-center justify-end gap-2">
-        <Button variant="secondary" data-testid="open-module-library" @click="openLibrary">
-          <Store :stroke-width="1.5" /> {{ t("settings.modules.library") }}
-        </Button>
-        <Button variant="secondary" data-testid="install-module" @click="install">
-          <FileArchive :stroke-width="1.5" /> {{ t("settings.modules.install") }}
-        </Button>
         <Button v-if="state!.library.onlineSearch" variant="secondary" data-testid="check-module-updates" :disabled="checking" @click="checkUpdates">
           <CloudDownload :stroke-width="1.5" /> {{ t("settings.modules.checkUpdates") }}
         </Button>
-        <Button variant="secondary" size="icon-sm" data-testid="open-modules-folder" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" @click="act({ type: 'open-modules-folder' })">
-          <FolderOpen :stroke-width="1.5" />
-        </Button>
-        <Button variant="secondary" size="icon-sm" data-testid="reload-modules" :aria-label="t('common.reload')" :title="t('common.reload')" @click="act({ type: 'reload-modules' })">
-          <RefreshCw :stroke-width="1.5" />
-        </Button>
+        <!-- Browsing and adding live in the module library; the rarer ways in sit behind More. -->
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button variant="secondary" :aria-label="t('settings.modules.moreLabel')" data-testid="modules-more">
+              {{ t("common.more") }} <ChevronDown :stroke-width="1.5" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem data-testid="open-module-library" @select="openLibrary">
+              <Store :stroke-width="1.5" /> {{ t("settings.modules.library") }}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem data-testid="install-module" @select="install">
+              <FileArchive :stroke-width="1.5" /> {{ t("settings.modules.install") }}
+            </DropdownMenuItem>
+            <DropdownMenuItem data-testid="open-modules-folder" @select="act({ type: 'open-modules-folder' })">
+              <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
+            </DropdownMenuItem>
+            <DropdownMenuItem data-testid="reload-modules" @select="act({ type: 'reload-modules' })">
+              <RefreshCw :stroke-width="1.5" /> {{ t("common.reload") }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </span>
     </SettingRow>
     <SettingRow

@@ -62,10 +62,12 @@ async function copyDiagnostics() {
       <Switch v-model="autoUpdate" :aria-label="t('settings.auto-update.label')" data-testid="auto-update" />
     </SettingRow>
   </SettingGroup>
-  <SettingGroup :title="t('settings.heading.help')">
+  <SettingGroup :title="t('settings.heading.yourData')">
     <SettingRow :label="t('settings.backups.label')" :description="t('settings.backups.description')" setting="backups" :highlighted="highlight === 'backups'">
       <Button variant="secondary" data-testid="open-backups" @click="submitAction({ type: 'open-backups' })">{{ t("common.openFolder") }}</Button>
     </SettingRow>
+  </SettingGroup>
+  <SettingGroup :title="t('settings.heading.help')">
     <SettingRow :label="t('settings.diagnostics.label')" :description="t('settings.diagnostics.description')" setting="diagnostics" :highlighted="highlight === 'diagnostics'">
       <Button variant="secondary" data-testid="copy-diagnostics" @click="copyDiagnostics">{{ copied ? t("settings.diagnostics.copied") : t("settings.diagnostics.copy") }}</Button>
     </SettingRow>
