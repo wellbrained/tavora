@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.57",
+    date: "2026-10-28",
+    title: "Fewer overlay bits",
+    notes: [
+      "Panel tabs no longer show a Live badge.",
+      "The Overlay page no longer lists \"Add overlay for\" games; add one with a right-click on the game in the rail.",
+      "The header keeps the arrow next to Add module on the Overlay page, so it stops jumping.",
+    ],
+    prs: [
+      { number: 427, title: "Overlay page: fewer bits, steadier header" },
+    ],
+    tags: ["overlays", "privacy", "website", "workspace"],
+  },
+  {
     version: "0.21.56",
     date: "2026-10-28",
     title: "Overlay page fixes",
