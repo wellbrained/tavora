@@ -45,8 +45,9 @@ test("the modules page lists where modules came from, reloads, and removes one w
   await page.getByTestId("module-more-local.test.mini").click();
   await expect(page.getByTestId("remove-module-local.test.mini")).toBeVisible();
   await page.keyboard.press("Escape");
-  // Tavora's own modules are listed, with the Official badge instead of a folder, but cannot be removed here.
-  await expect(page.getByTestId("module-tavora.notes")).toContainText("Official");
+  // Tavora's own modules are listed, without a tag (only modules from elsewhere say where they came from), but cannot be removed here.
+  await expect(page.getByTestId("module-tavora.notes")).toBeVisible();
+  await expect(page.getByTestId("module-tag-tavora.notes")).toHaveCount(0);
   await expect(page.getByTestId("module-origin-tavora.notes")).toHaveCount(0);
   await expect(page.getByTestId("remove-module-tavora.notes")).toHaveCount(0);
 
