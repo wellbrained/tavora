@@ -12,7 +12,6 @@ import ConfirmDialog from "./components/ConfirmDialog.vue";
 import GrantDialog from "./components/GrantDialog.vue";
 import HotkeyDialog from "./components/HotkeyDialog.vue";
 import LinkChoiceDialog from "./components/LinkChoiceDialog.vue";
-import OverlayBar from "./components/OverlayBar.vue";
 import NavigationChoiceDialog from "./components/NavigationChoiceDialog.vue";
 import WorkspaceRail from "./components/WorkspaceRail.vue";
 import GameSwitchDialog from "./components/GameSwitchDialog.vue";
@@ -35,18 +34,15 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <TooltipProvider :delay-duration="150" :skip-delay-duration="500">
       <WorkspaceRail />
     </TooltipProvider>
-    <div class="flex h-full min-w-0 flex-1 flex-col">
-      <div class="relative min-h-0 flex-1">
-        <WorkspacePage v-if="state.screen === 'workspace' && state.currentWorkspaceId" :key="state.currentWorkspaceId" />
-        <OverlayPage v-else-if="state.screen === 'overlay'" />
-        <template v-else>
-          <OnboardingPage v-if="!state.library.onboarded" />
-          <WelcomePage v-else />
-          <!-- Lets the window be moved from the empty top edge of Home. -->
-          <div class="app-drag absolute inset-x-0 top-0 h-12" aria-hidden="true" />
-        </template>
-      </div>
-      <OverlayBar />
+    <div class="relative h-full min-w-0 flex-1">
+      <WorkspacePage v-if="state.screen === 'workspace' && state.currentWorkspaceId" :key="state.currentWorkspaceId" />
+      <OverlayPage v-else-if="state.screen === 'overlay'" />
+      <template v-else>
+        <OnboardingPage v-if="!state.library.onboarded" />
+        <WelcomePage v-else />
+        <!-- Lets the window be moved from the empty top edge of Home. -->
+        <div class="app-drag absolute inset-x-0 top-0 h-12" aria-hidden="true" />
+      </template>
     </div>
 
     <SettingsDialog />
