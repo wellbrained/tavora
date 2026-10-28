@@ -174,6 +174,8 @@ if (!app.requestSingleInstanceLock()) {
         testNetworkHosts: !app.isPackaged && process.env.TAVORA_TEST_NETWORK_HOSTS ? parseTestHosts(process.env.TAVORA_TEST_NETWORK_HOSTS) : undefined,
         // Tests only: Claude's usage is asked from a local server; a packaged app always asks Anthropic.
         aiUsageUrl: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+\//.test(process.env.TAVORA_TEST_AI_USAGE_URL ?? "") ? process.env.TAVORA_TEST_AI_USAGE_URL : undefined,
+        // Tests only: Steam is taken to run this game, so a test sees a game running.
+        testSteamAppId: !app.isPackaged && /^\d+$/.test(process.env.TAVORA_TEST_STEAM_APP ?? "") ? Number(process.env.TAVORA_TEST_STEAM_APP) : undefined,
         systemLocale: !app.isPackaged ? process.env.TAVORA_LOCALE : undefined,
         systemTheme: !app.isPackaged && (process.env.TAVORA_SYSTEM_THEME === "dark" || process.env.TAVORA_SYSTEM_THEME === "light") ? process.env.TAVORA_SYSTEM_THEME : undefined,
         devServer,

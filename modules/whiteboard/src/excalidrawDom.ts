@@ -202,6 +202,34 @@ export function watchToolbar(board: HTMLElement, place: ToolbarPlace): () => voi
   };
 }
 
+// --- The hint under the toolbar ---------------------------------------------------------------------------------
+
+/** Excalidraw's own hint for moving the canvas, in the languages the board uses. Only this hint is replaced. */
+const PANNING_HINTS = new Set([
+  "To move canvas, hold mouse wheel or spacebar while dragging, or use the hand tool",
+  "Um die Zeichenfläche zu verschieben, halte das Mausrad oder die Leertaste während des Ziehens, oder verwende das Hand-Werkzeug",
+]);
+
+/**
+ * Says Excalidraw's hint for moving the canvas in Tavora's words. Excalidraw has no setting for one sentence, only for
+ * whole languages, so its text node is changed in place whenever Excalidraw writes the hint again. Its other hints stay.
+ */
+export function watchHints(board: HTMLElement, panning: () => string): () => void {
+  const apply = () => {
+    const hint = board.querySelector(".HintViewer");
+    if (!hint) return;
+    const walker = document.createTreeWalker(hint, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node as Text;
+      if (PANNING_HINTS.has(text.data.trim())) text.data = panning();
+    }
+  };
+  apply();
+  const changed = new MutationObserver(apply);
+  changed.observe(board, { childList: true, characterData: true, subtree: true });
+  return () => changed.disconnect();
+}
+
 // --- What covers a picture's lock --------------------------------------------------------------------------------
 
 /** Whether the drawing itself (not one of Excalidraw's menus) is what shows at this point; `ignore` matches the page's own overlays. */

@@ -8,7 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import type { BoardData } from "./boards";
 import { createBoardSession, type BoardSession, type Controls, type Pictures, type SaveState, type View } from "./boardSession";
-import { watchToolbar } from "./excalidrawDom";
+import { watchHints, watchToolbar } from "./excalidrawDom";
 import ExcalidrawRoot, { type RootProps } from "./ExcalidrawRoot";
 import { language, t } from "./i18n";
 import type { LockSpot } from "./locks";
@@ -127,6 +127,15 @@ watch(
   [board, () => props.toolbar],
   ([element, place], _, onCleanup) => {
     if (element) onCleanup(watchToolbar(element, place));
+  },
+  { flush: "post" },
+);
+
+// Excalidraw's hint for moving the canvas, in Tavora's words.
+watch(
+  [board, language],
+  ([element], _, onCleanup) => {
+    if (element) onCleanup(watchHints(element, () => t("hint.panning")));
   },
   { flush: "post" },
 );
