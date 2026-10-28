@@ -9,7 +9,7 @@ const emit = defineEmits<{ close: [] }>();
 <template>
   <Dialog :open="true" @update:open="(open: boolean) => !open && emit('close')">
     <DialogContent
-      :class="cn('top-[12vh] translate-y-0 gap-4 sm:max-w-[420px]', $props.class)"
+      :class="cn('top-[12vh] max-h-[calc(88vh-1rem)] translate-y-0 gap-4 overflow-y-auto sm:max-w-[420px]', $props.class)"
       :data-testid="testid"
       :show-close-button="false"
     >

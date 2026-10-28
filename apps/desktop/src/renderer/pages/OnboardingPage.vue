@@ -84,7 +84,7 @@ const tips = computed(() => [
 </script>
 
 <template>
-  <main class="relative flex h-full flex-col items-center overflow-y-auto px-8 pt-14 pb-8" data-testid="onboarding">
+  <main class="relative flex h-full flex-col items-center overflow-y-auto px-8 pt-14 pb-8 [@media(max-height:640px)]:pt-10 [@media(max-height:640px)]:pb-4" data-testid="onboarding">
     <!-- Skips the whole intro. The games step has its own Skip for now under Next, so this one steps aside there. -->
     <button
       v-if="step !== 1"
@@ -97,7 +97,7 @@ const tips = computed(() => [
     </button>
 
     <!-- Step dots -->
-    <ol class="mb-10 flex items-center gap-2" :aria-label="t('onboarding.steps')">
+    <ol class="mb-10 [@media(max-height:640px)]:mb-5 flex items-center gap-2" :aria-label="t('onboarding.steps')">
       <li v-for="(label, index) in STEPS" :key="label" class="flex items-center gap-2">
         <span
           :class="cn('h-1.5 rounded-full transition-all duration-300', index === step ? 'bg-primary w-8' : index < step ? 'bg-primary/50 w-3' : 'bg-muted w-3')"
@@ -110,9 +110,9 @@ const tips = computed(() => [
     <Transition :name="forward ? 'step-forward' : 'step-back'" mode="out-in">
       <!-- 1: welcome and profile -->
       <section v-if="step === 0" key="you" class="flex w-full max-w-[420px] flex-col items-center text-center">
-        <img class="mb-6" src="/brand/emblem-240.png" alt="" width="93" height="100" draggable="false" />
+        <img class="mb-6 [@media(max-height:640px)]:hidden" src="/brand/emblem-240.png" alt="" width="93" height="100" draggable="false" />
         <h1 class="text-3xl font-semibold">{{ t("welcome.title.new") }}</h1>
-        <p class="text-muted-foreground mt-2 mb-8">{{ t("onboarding.tagline") }}</p>
+        <p class="text-muted-foreground mt-2 mb-8 [@media(max-height:640px)]:mb-5">{{ t("onboarding.tagline") }}</p>
 
         <button
           type="button"

@@ -148,7 +148,7 @@ function submit() {
       />
     </form>
     <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="add-game-error">{{ error }}</p>
-    <ul class="-mx-2 max-h-[300px] overflow-y-auto" :aria-label="t('common.games')">
+    <ul class="-mx-2 max-h-[300px] overflow-y-auto [@media(max-height:640px)]:max-h-[136px]" :aria-label="t('common.games')">
       <li v-for="row in rows" :key="row.id">
         <button
           type="button"
