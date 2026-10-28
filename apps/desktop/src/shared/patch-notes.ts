@@ -28,6 +28,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.72",
+    date: "2026-10-28",
+    title: "Idle overlay frames say why",
+    notes: [
+      "A frame with nothing to show says \"Panel isn't active\" when its panel is not running, and \"Nothing to show right now\" when it runs and has nothing to show.",
+    ],
+  },
+  {
     version: "0.21.71",
     date: "2026-10-28",
     title: "Inbox and updates in the rail",
