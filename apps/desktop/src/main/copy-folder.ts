@@ -230,7 +230,7 @@ export function follows(newestFirst: { version: number; base: number }[], known:
   return at === known || !byVersion.has(known);
 }
 
-/** Writes a file in the picked folder to see that Tavora may; throws "no-folder" when it can't. */
+/** Writes a file in the picked folder to see that Tavora may; throws "no-folder" when it is not there and "folder-locked" when Tavora may not write in it. */
 export async function checkFolder(folder: string): Promise<void> {
   const info = await stat(folder).catch(() => null);
   if (!info?.isDirectory()) throw new CopyError("no-folder", "the folder is not there");
@@ -240,6 +240,6 @@ export async function checkFolder(folder: string): Promise<void> {
     await writeFile(probe, "");
     await rm(probe, { force: true });
   } catch {
-    throw new CopyError("no-folder", "can't write in the folder");
+    throw new CopyError("folder-locked", "can't write in the folder");
   }
 }

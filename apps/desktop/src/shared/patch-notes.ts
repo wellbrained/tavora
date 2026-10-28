@@ -28,6 +28,22 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.83",
+    date: "2026-10-28",
+    title: "Clearer when you're offline",
+    notes: [
+      "Community modules, Steam import and Cloud copy now say what went wrong and what to do next.",
+      "Try again buttons on the module list, a module's page and its reviews, and on a cloud copy that isn't syncing.",
+      "Checking for module updates no longer says you're up to date when it couldn't check.",
+      "A cloud copy folder that's missing or can't be written to says so and offers another folder.",
+      "An empty Steam list tells you to check that your Game details are public.",
+    ],
+    prs: [
+      { number: 437, title: "Offline and failure states for community modules, Steam import and cloud copy" },
+    ],
+    tags: ["catalog", "cloud-copy", "games", "settings", "steam-import"],
+  },
+  {
     version: "0.21.82",
     date: "2026-10-28",
     title: "Running, and a safer Whiteboard",

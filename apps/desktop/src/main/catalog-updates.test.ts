@@ -62,7 +62,7 @@ async function setup(key: KeyObject, network: string[] = [], safety?: SafetyChec
     modules.set(ID, { manifest: installed.manifest, root: path.join(userModules, ID), provenance: "local", owner: installed.owner });
   load(await installZipData(zipOf("1.0.0", key, network), { ...options(), catalog: true }));
 
-  const catalog: { index: CatalogEntry[]; zips: Map<string, Buffer>; versions: CatalogVersion[]; downloads: string[] } = { index: [], zips: new Map(), versions: [], downloads: [] };
+  const catalog: { index: CatalogEntry[]; zips: Map<string, Buffer>; versions: CatalogVersion[]; downloads: string[]; offline: boolean; noDownloads: boolean } = { index: [], zips: new Map(), versions: [], downloads: [], offline: false, noDownloads: false };
   const publish = (entry: CatalogEntry, zip: Buffer) => {
     catalog.index = [entry];
     catalog.zips.set(entry.zip.sha256, zip);
@@ -72,9 +72,10 @@ async function setup(key: KeyObject, network: string[] = [], safety?: SafetyChec
   const updater = new CatalogUpdater({
     autoInstall: () => auto.on,
     client: {
-      index: async () => catalog.index,
+      index: async () => (catalog.offline ? null : catalog.index),
       details: async () => ({ entry: catalog.index[0]!, versions: catalog.versions, readme: null }),
       download: async (zip) => {
+        if (catalog.noDownloads) throw new Error("connection lost");
         catalog.downloads.push(zip.sha256);
         return catalog.zips.get(zip.sha256)!;
       },
@@ -207,6 +208,24 @@ describe("CatalogUpdater", () => {
     expect(outcome.updated).toEqual([]);
     expect(outcome.waiting.map((item) => item.version)).toEqual(["1.1.0"]);
     expect(await page()).toBe("<p>1.0.0</p>");
+  });
+
+  it("says so when the catalog can't be asked, or an update can't be downloaded, instead of finding nothing", async () => {
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const { updater, publish, catalog, page } = await setup(key);
+    const zip = zipOf("1.1.0", key, [], "<p>1.1.0</p>");
+    publish(listing("1.1.0", zip, fingerprint(key)), zip);
+
+    catalog.offline = true;
+    expect(await updater.check()).toEqual({ updated: [], waiting: [], unreachable: true });
+
+    catalog.offline = false;
+    catalog.noDownloads = true;
+    expect(await updater.check()).toEqual({ updated: [], waiting: [], failed: 1 });
+    expect(await page()).toBe("<p>1.0.0</p>");
+
+    catalog.noDownloads = false;
+    expect((await updater.check()).updated.map((item) => item.manifest.version)).toEqual(["1.1.0"]);
   });
 
   it("refuses an older, the same and another key's version, and leaves the installed one as it is (C3)", async () => {
