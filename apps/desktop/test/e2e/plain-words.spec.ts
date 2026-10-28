@@ -17,7 +17,7 @@ test("the permission prompt asks with the reason and says who made the module", 
   try {
     await openWorkspace(page, "poe2");
     await openModule(page, SYSTEM_MONITOR);
-    const dialog = page.getByTestId("grant-dialog");
+    const dialog = page.getByTestId("grant-question");
     await expect(dialog.getByRole("heading", { level: 2 })).toHaveText("Let System Monitor see how busy your PC is?");
     await expect(dialog.getByTestId("grant-from")).toHaveText("One of Tavora's own modules. It only gets what you allow here.");
     await page.getByTestId("grant-cancel").click();

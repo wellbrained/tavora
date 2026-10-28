@@ -64,7 +64,7 @@ test("a module with the discord connector asks first, connects once approved and
     // Adding it asks to let it use Discord with Tavora's sign-in (the module grants row of 2026-10-16).
     await page.getByTestId("add-module").click();
     await page.getByTestId(`open-${DISCORD}`).click();
-    await expect(page.getByTestId("grant-dialog")).toBeVisible();
+    await expect(page.getByTestId("grant-question")).toBeVisible();
     await expect(page.getByTestId("grant-discord")).toContainText("Join or leave a voice channel when you click");
     await page.getByTestId("grant-allow").click();
     await expectModuleText(app, DISCORD, "probe-status", "ready");

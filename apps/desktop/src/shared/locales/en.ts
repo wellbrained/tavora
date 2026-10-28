@@ -1009,6 +1009,7 @@ export const en = {
   "grant.network": "Reach these websites",
   "grant.networkNote": "It can request data and read public pages in a temporary browser, only on these websites. Your cookies and sign-ins stay private.",
   "grant.later": "You can change this anytime in Settings.",
+  "grant.waiting": "Waiting for your OK",
   "grant.allow": "Allow",
   "grant.notNow": "Not now",
   "grant.reviewBar": "{name} wants new access",

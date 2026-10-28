@@ -420,6 +420,8 @@ export class Host {
   /** A connector a module asks for on request (permissions.onRequest), waiting for the user's answer in the consent dialog. */
   private pendingConnector: { id: number; moduleId: string; connector: Connector; resolve(allowed: boolean): void } | null = null;
   private nextConnectorAsk = 1;
+  /** Panels added while their module still misses access it needs: they ask first and start once allowed (questionOf). */
+  private readonly awaiting = new Set<string>();
   private readonly gameWatcher = new GameWatcher({
     entries: () => liveWorkspaces(this.library),
     findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
@@ -1229,6 +1231,41 @@ export class Host {
   /** Starts a module's open panels again, so they load a new version or connect with a new grant. */
   private reloadModuleViews(moduleId: string): void {
     for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === moduleId) view.reload();
+    // Panels that asked before they could run start now, in the workspace shown (the others start when it opens).
+    const workspace = this.workspace;
+    if (!workspace) return;
+    if (this.needsAnswer(moduleId)) return;
+    for (const record of this.records(workspace.id)) {
+      if (record.moduleId !== moduleId || !this.awaiting.delete(record.instanceId)) continue;
+      this.createView(record, workspace, performance.now());
+    }
+    // The window already said where these panels are; put the new pages there now, so they load and show.
+    this.applyBounds();
+    this.pushState();
+  }
+
+  /** A module that still misses access it needs: its panels ask before its page may run (questionOf). */
+  private needsAnswer(moduleId: string): boolean {
+    const module = this.modules.get(moduleId);
+    if (!module || module.builtIn) return false;
+    const missing = this.grants.missing(module);
+    return missing.network.length > 0 || missing.connectors.length > 0;
+  }
+
+  /**
+   * Permission questions live in the panel that asks (decision of 2026-10-28). Panels added while their module still
+   * misses access it needs: the first of them asks, the others wait, and none starts its page until the user allows.
+   * A running module that asks for a connector on request: its first panel shows the question over its page, which is
+   * hidden meanwhile; its other panels go on. A panel that already runs while its module asks for more (a local update)
+   * keeps running with what was granted and offers a review instead. `records` are the panels of the panel's workspace.
+   */
+  private questionOf(record: InstanceRecord, records: readonly InstanceRecord[]): "ask" | "wait" | null {
+    if (this.awaiting.has(record.instanceId)) {
+      const asking = records.find((item) => item.moduleId === record.moduleId && this.awaiting.has(item.instanceId));
+      return asking?.instanceId === record.instanceId ? "ask" : "wait";
+    }
+    const first = records.find((item) => item.moduleId === record.moduleId)?.instanceId === record.instanceId;
+    return first && this.pendingConnector?.moduleId === record.moduleId ? "ask" : null;
   }
 
   /** The workspaces, by id in the library, with a panel of this module. */
@@ -2886,6 +2923,7 @@ export class Host {
     }
     const record: InstanceRecord = { instanceId: randomUUID(), moduleId, ...(panelType ? { panelType } : {}) };
     this.workspaces.openPanel(workspace.id, record);
+    if (this.needsAnswer(moduleId)) this.awaiting.add(record.instanceId);
     if (openedFrom) this.openedFrom.set(record.instanceId, openedFrom);
     this.launches.set(record.instanceId, options.launch ?? { reason: "add" });
     this.createView(record, workspace, performance.now());
@@ -3022,6 +3060,7 @@ export class Host {
   /** Removes a panel's view and its UI state; module settings and documents stay. */
   private closeView(instanceId: string): void {
     this.openedFrom.delete(instanceId);
+    this.awaiting.delete(instanceId);
     this.launches.delete(instanceId);
     this.destroyView(instanceId);
     this.panelBounds.delete(instanceId);
@@ -3347,6 +3386,8 @@ export class Host {
     // Its panel is in the in-game layer and kept running there while another workspace was shown: it comes back when the layer closes.
     if (this.views.has(record.instanceId)) return;
     if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, workspace);
+    // It was added while its module still asks (questionOf); the page starts once the user allows (reloadModuleViews).
+    if (this.awaiting.has(record.instanceId)) return;
     const panelType = this.panelTypeOf(record);
     // Its type is gone: the slot says so and offers another type; nothing runs.
     if (panelType === undefined) return;
@@ -3774,7 +3815,8 @@ export class Host {
     const bounds = new Map<string, Rect>();
     for (const item of raw as Partial<Rect & { instanceId: unknown; maximized: unknown }>[]) {
       const id = item?.instanceId;
-      if (typeof id !== "string" || !INSTANCE_ID.test(id) || !this.views.has(id)) continue;
+      // A panel that waits for a permission answer has no page yet; its place is kept for when the page starts.
+      if (typeof id !== "string" || !INSTANCE_ID.test(id) || (!this.views.has(id) && !this.awaiting.has(id))) continue;
       const numbers = [item.x, item.y, item.width, item.height];
       if (!numbers.every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0)) continue;
       const x = Math.min(Math.round(item.x!), width);
@@ -3807,6 +3849,14 @@ export class Host {
   private layOut(instanceId: string, view: ModuleView | BrowserPanel): void {
     const rect = this.panelBounds.get(instanceId);
     if (rect) view.setBounds(rect);
+    // Its panel shows a permission question in its place: the page waits, hidden, until it is answered.
+    const shown = this.workspaceId ? this.records(this.workspaceId) : [];
+    const record = shown.find((item) => item.instanceId === instanceId);
+    if (record && this.questionOf(record, shown) === "ask") {
+      view.setVisible(false);
+      view.suspend();
+      return;
+    }
     // A module page stays hidden until it has its data, so switching workspaces does not show it building itself;
     // while a workspace opens, every panel waits for the others.
     view.setVisible(rect !== undefined && !this.overlay && !this.opening && (!(view instanceof ModuleView) || view.revealed));
@@ -4134,7 +4184,8 @@ export class Host {
           // Hidden until its page has its data.
           const overGame = this.floating(record.instanceId);
           // A new page is also waiting until it has drawn once: its loader stays under the see-through view until then.
-          const waiting = !overGame && (status === "loading" || status === "ready") && (!view?.revealed || !view.firstDrawn);
+          const question = this.questionOf(record, workspace.instances);
+          const waiting = !question && !overGame && (status === "loading" || status === "ready") && (!view?.revealed || !view.firstDrawn);
           const inGame = this.gameOverlays.hasPanel(record.instanceId);
           const live = this.gameOverlays.liveFor(record.instanceId, this.modules.get(record.moduleId)?.owner ?? "", record.moduleId, current?.id ?? "");
           return {
@@ -4145,6 +4196,7 @@ export class Host {
             status,
             waiting,
             content,
+            ...(question ? { question } : {}),
             ...(overGame ? { overGame } : {}),
             ...(this.canShowInGame(record) ? { canInGame: true } : {}),
             ...(inGame ? { inGame } : {}),
@@ -4394,6 +4446,7 @@ export class Host {
     return new Promise<boolean>((resolve) => {
       this.pendingConnector = { id: this.nextConnectorAsk++, moduleId, connector, resolve };
       this.pushState();
+      this.applyBounds();
     });
   }
 
@@ -4406,6 +4459,8 @@ export class Host {
     const granted = allow && module !== undefined && (module.manifest.permissions.onRequest ?? []).includes(pending.connector);
     if (granted) await this.grants.grant(module, { network: [], connectors: [pending.connector] });
     pending.resolve(granted);
+    this.pushState();
+    this.applyBounds();
   }
 
   /** Resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */

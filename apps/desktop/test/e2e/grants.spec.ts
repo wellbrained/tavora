@@ -52,21 +52,25 @@ test("adding a module asks first, adding it again does not, and taking it back r
   const userData = await newUserData();
   const { app, page } = await launch(userData, [FIXTURE], { env: ENV });
 
-  // The consent dialog lists what the module asks for; Cancel adds nothing.
+  // Its panel opens and asks in its own place, with no window over the workspace; Cancel closes it and adds nothing.
   await pressAdd(page, NETWORK);
   await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
-  await expect(page.getByTestId("grant-dialog")).toBeVisible();
-  await expect(page.getByTestId("grant-dialog").getByRole("heading", { level: 2 })).toHaveText("Let Network Test Module reach 2 websites?");
+  await expect(page.getByTestId("grant-dialog")).toHaveCount(0);
+  await expect(panels(page, NETWORK)).toHaveCount(1);
+  const question = page.getByTestId("grant-question");
+  await expect(question).toBeVisible();
+  await expect(question.getByRole("heading", { level: 2 })).toHaveText("Let Network Test Module reach 2 websites?");
   await expect(page.getByTestId("grant-hosts").locator("li")).toHaveText(["api.tavora.test", "cdn.tavora.test"]);
   await expect(page.getByTestId("grant-from")).toContainText("not signed");
   await page.getByTestId("grant-cancel").click();
-  await expect(page.getByTestId("grant-dialog")).toHaveCount(0);
+  await expect(question).toHaveCount(0);
   await expect(panels(page, NETWORK)).toHaveCount(0);
   expect(await grantsFile(userData)).toMatchObject({ owners: {} });
 
-  // Allow adds it, and it reaches the hosts.
+  // Allow starts it in the same panel, and it reaches the hosts.
   await pressAdd(page, NETWORK);
   await page.getByTestId("grant-allow").click();
+  await expect(question).toHaveCount(0);
   await expect(panels(page, NETWORK)).toHaveCount(1);
   expect(await fetchFrom(app, "api.tavora.test")).toMatchObject({ ok: true, result: { status: 200, body: "ok" } });
   expect(await grantsFile(userData)).toMatchObject({ owners: { local: { [NETWORK]: { network: ["api.tavora.test", "cdn.tavora.test"] } } } });
@@ -74,7 +78,7 @@ test("adding a module asks first, adding it again does not, and taking it back r
   // Once granted it is added without asking.
   await pressAdd(page, NETWORK);
   await expect(panels(page, NETWORK)).toHaveCount(2);
-  await expect(page.getByTestId("grant-dialog")).toHaveCount(0);
+  await expect(page.getByTestId("grant-question")).toHaveCount(0);
 
   // Settings > Modules lists it; taking it back names the game it is used in.
   await page.getByTestId("rail-settings").click();
@@ -91,12 +95,33 @@ test("adding a module asks first, adding it again does not, and taking it back r
   await expect(page.locator('[data-testid^="empty-slot-"]')).not.toHaveCount(0);
   expect(await grantsFile(userData)).toMatchObject({ owners: {} });
 
-  // Adding it again asks again.
+  // Adding it again asks again, in its panel.
   await pressAdd(page, NETWORK);
-  await expect(page.getByTestId("grant-dialog")).toBeVisible();
+  await expect(page.getByTestId("grant-question")).toBeVisible();
   await page.getByTestId("grant-cancel").click();
+  await expect(panels(page, NETWORK)).toHaveCount(0);
 
   await app.close();
+});
+
+test("a second panel added before the answer waits for it, and both start once allowed", async () => {
+  const { app, page } = await launch(undefined, [FIXTURE], { env: ENV });
+  try {
+    await pressAdd(page, NETWORK);
+    await expect(page.getByTestId("grant-question")).toBeVisible();
+    await pressAdd(page, NETWORK);
+    await expect(panels(page, NETWORK)).toHaveCount(2);
+    // One question, in the first panel; the other one waits for it.
+    await expect(page.getByTestId("grant-question")).toHaveCount(1);
+    await expect(page.locator('[data-testid^="panel-question-wait-"]')).toHaveText("Waiting for your OK");
+    await page.getByTestId("grant-allow").click();
+    await expect(page.getByTestId("grant-question")).toHaveCount(0);
+    await expect(page.locator('[data-testid^="panel-question-wait-"]')).toHaveCount(0);
+    await expect(panels(page, NETWORK)).toHaveCount(2);
+    expect(await fetchFrom(app, "api.tavora.test", 1)).toMatchObject({ ok: true, result: { status: 200, body: "ok" } });
+  } finally {
+    await app.close();
+  }
 });
 
 test("an update that asks for more keeps working and shows a Review bar", async () => {
@@ -115,7 +140,7 @@ test("an update that asks for more keeps working and shows a Review bar", async 
   const { app, page } = await launch(userData, [modules], { env: ENV });
   await pressAdd(page, NETWORK);
   await expect(panels(page, NETWORK)).toHaveCount(1);
-  await expect(page.getByTestId("grant-dialog")).toHaveCount(0);
+  await expect(page.getByTestId("grant-question")).toHaveCount(0);
 
   // The update asks for a second host.
   await writeFile(manifestFile, JSON.stringify({ ...manifest, version: "0.1.0", permissions: { network: ["api.tavora.test", "cdn.tavora.test"] } }));

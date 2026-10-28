@@ -7,6 +7,9 @@
 // asks for more (`request.update`), it shows what the update asks for that the installed version did
 // not, and the update's patch notes; allowing installs the update, and until then the installed
 // version keeps running (catalog threat model, C4).
+// With `inPanel` the same question is the content of the panel that asks (decision of 2026-10-28): the module's first
+// panel when it is added or still misses access, or the running panel that asks for a connector on request. Cancel then
+// closes the panels that wait for the answer; Allow lets the host start them (main/host.ts questionOf).
 import { Cpu, Gauge, Globe, Headphones, Music, Radio } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -16,7 +19,9 @@ import ModalDialog from "./ModalDialog.vue";
 import ModuleIcon from "./ModuleIcon.vue";
 import ModuleNotes from "./settings/ModuleNotes.vue";
 
-const props = defineProps<{ request: GrantRequest }>();
+const props = defineProps<{ request: GrantRequest; inPanel?: boolean }>();
+/** Names the question in a panel; two modules can ask at the same time. */
+const titleId = computed(() => `grant-question-${props.request.moduleId}`);
 const error = ref<string | null>(null);
 const busy = ref(false);
 
@@ -34,6 +39,11 @@ const discordUser = computed(() => discord.value?.user ?? null);
 function close() {
   if (props.request.backToUpdates) return stopUpdateAsks();
   if (props.request.onRequest) void act({ type: "connector-answer", id: props.request.onRequest.id, allow: false }, { quiet: true });
+  if (props.inPanel) {
+    // Not allowed: the panels that were waiting for the answer close; nothing of the module is kept.
+    if (!props.request.onRequest) for (const panel of state.value?.panels ?? []) if (panel.moduleId === props.request.moduleId && panel.question) void act({ type: "close-panel", instanceId: panel.instanceId });
+    return;
+  }
   dialog.value = props.request.backToLibrary ? { kind: "add-module" } : null;
 }
 
@@ -41,7 +51,7 @@ function close() {
 watch(
   [module, hosts, connectors],
   () => {
-    if (!busy.value && (!module.value || hosts.value.length + connectors.value.length === 0)) dialog.value = null;
+    if (!props.inPanel && !busy.value && (!module.value || hosts.value.length + connectors.value.length === 0)) dialog.value = null;
   },
   { immediate: true },
 );
@@ -89,7 +99,7 @@ async function allow() {
     // Only this connector; the module's panels go on running and get it at once.
     await act({ type: "connector-answer", id: props.request.onRequest.id, allow: true }, { quiet: true });
     busy.value = false;
-    dialog.value = null;
+    if (!props.inPanel) dialog.value = null;
     return;
   }
   if (props.request.update) {
@@ -111,6 +121,8 @@ async function allow() {
     error.value = result.error;
     return;
   }
+  // In a panel, the host starts the panels that waited for this answer.
+  if (props.inPanel) return;
   close();
   if (props.request.review) return;
   void openPanels(current.id, props.request.slot, props.request.panelTypes ?? []);
@@ -118,13 +130,13 @@ async function allow() {
 </script>
 
 <template>
-  <ModalDialog
+  <component
+    :is="inPanel ? 'section' : ModalDialog"
     v-if="module"
-    :title="title"
-    class="sm:max-w-[480px]"
-    testid="grant-dialog"
+    v-bind="inPanel ? { class: 'flex w-full max-w-[460px] flex-col gap-4', 'aria-labelledby': titleId, 'data-testid': 'grant-question' } : { title, class: 'sm:max-w-[480px]', testid: 'grant-dialog' }"
     @close="close"
   >
+    <h2 v-if="inPanel" :id="titleId" class="text-lg font-semibold">{{ title }}</h2>
     <div class="flex items-center gap-3">
       <span class="module-tile size-10" aria-hidden="true">
         <ModuleIcon :module-id="module.id" size="size-[34px]" />
@@ -185,7 +197,7 @@ async function allow() {
       </Button>
       <Button type="button" data-testid="grant-allow" :disabled="busy" @click="allow">{{ update ? t("grant.updateAllow") : t("grant.allow") }}</Button>
     </div>
-  </ModalDialog>
+  </component>
 </template>
 
 <style>
