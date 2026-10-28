@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.88",
+    date: "2026-10-28",
+    title: "Clearer messages when something fails",
+    notes: [
+      "Sign-in problems show right under the email field, not as a note at the top.",
+      "When online game search is out of reach, Add a game says why it only shows built-in games.",
+      "Steam import and account errors say what to do next, in English and German.",
+    ],
+    prs: [
+      { number: 443, title: "Clearer messages when something fails" },
+    ],
+    tags: ["accounts", "games", "settings"],
+  },
+  {
     version: "0.21.87",
     date: "2026-10-28",
     title: "Asked where it happens",
