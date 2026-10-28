@@ -28,6 +28,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.61",
+    date: "2026-10-28",
+    title: "Overlays: Start and Stop",
+    notes: [
+      "The Overlay button now has Start / Stop next to it. Overlays are stopped when Tavora starts, and you start them when you want them.",
+      "The Paused state is gone.",
+    ],
+  },
+  {
     version: "0.21.60",
     date: "2026-10-28",
     title: "Overlay page: panels run without a visit",
