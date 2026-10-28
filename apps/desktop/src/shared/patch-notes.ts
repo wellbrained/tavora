@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.89",
+    date: "2026-10-28",
+    title: "Fits small windows",
+    notes: [
+      "On a small window, the welcome screen keeps Next in view.",
+      "Add a game and other windows no longer run off the bottom of a short Tavora window.",
+    ],
+    prs: [
+      { number: 444, title: "Small windows: onboarding keeps Next in view, dialogs fit the window" },
+    ],
+    tags: ["games", "onboarding"],
+  },
+  {
     version: "0.21.88",
     date: "2026-10-28",
     title: "Clearer messages when something fails",
