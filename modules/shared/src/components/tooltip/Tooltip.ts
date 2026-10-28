@@ -12,6 +12,8 @@ export default defineComponent({
     title: { type: String, required: true },
     description: String,
     id: String,
+    /** Smaller type and padding, for a label beside a small icon. */
+    compact: Boolean,
   },
   emits: ['dismiss'],
   setup(props, { emit, slots }) {
@@ -49,7 +51,7 @@ export default defineComponent({
       window.removeEventListener('keydown', key, true);
     });
     return () => h(Teleport, { to: 'body' }, props.open ? [h('section', {
-      id: props.id, ref: card, role: 'tooltip', 'data-slot': 'tooltip', class: 'tavora-tooltip',
+      id: props.id, ref: card, role: 'tooltip', 'data-slot': 'tooltip', class: props.compact ? 'tavora-tooltip compact' : 'tavora-tooltip',
       style: [TOOLTIP_TOKENS, { left: position.value.left + 'px', top: position.value.top + 'px', maxWidth: position.value.width + 'px', visibility: ready.value ? 'visible' : 'hidden' }],
     }, [props.title ? h('h2', props.title) : null, props.description ? h('p', props.description) : null, slots.default?.()])] : []);
   },

@@ -69,7 +69,7 @@ onBeforeUnmount(() => {
     @focusout="leave"
   >
     <slot />
-    <Tooltip :open="open" :at="at" :title="text" :description="hint" @dismiss="hide">
+    <Tooltip compact :open="open" :at="at" :title="text" :description="hint" @dismiss="hide">
       <ul v-if="folder" class="rail-tooltip-workspaces" data-testid="rail-tooltip-workspaces">
         <li v-for="line in lines" :key="line" class="truncate">{{ line }}</li>
         <li v-if="more">{{ t("rail.folderMore", { count: more }) }}</li>
