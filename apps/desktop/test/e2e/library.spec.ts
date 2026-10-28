@@ -426,7 +426,9 @@ test("Tavora starts on Home or on the last workspace, as chosen in Settings", as
 
   const again = await launch(userData);
   await expect(again.page.getByTestId("welcome")).toContainText("Welcome back");
-  await expect(again.page.getByTestId("recent-poe2")).toBeVisible();
+  // The game opened last waits in the Continue bar, not among the other recent games.
+  await again.page.getByTestId("welcome-continue-button").click();
+  await expect(again.page.getByTestId("rail-workspace-poe2")).toHaveAttribute("aria-current", "page");
   await again.app.close();
 });
 

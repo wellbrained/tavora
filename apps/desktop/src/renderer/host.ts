@@ -408,6 +408,12 @@ watch(
 
 /** The search box behind Ctrl+K. */
 export const searchOpen = ref(false);
+/** What the search box starts with when it opens; Home hands over what was typed into its own field. */
+export const searchStart = ref("");
+export function openSearch(text = ""): void {
+  searchStart.value = text;
+  searchOpen.value = true;
+}
 /** Bumped by Ctrl+\; the rail toggles itself when it changes. */
 export const railToggles = ref(0);
 

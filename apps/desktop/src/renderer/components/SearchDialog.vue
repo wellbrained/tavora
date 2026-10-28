@@ -10,7 +10,7 @@ import { rank, rankByName, startsOrIsWord } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { CatalogMatch, OnlineGame, WorkspaceView } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
-import { act, addModule, api, dialog, hiddenSettingIds, hiddenSettings, openSettings, searchOpen, showOrAddPanel, state } from "../host";
+import { act, addModule, api, dialog, hiddenSettingIds, hiddenSettings, openSettings, searchOpen, searchStart, showOrAddPanel, state } from "../host";
 import { t, templateName } from "../i18n";
 
 import WorkspaceIcon from "./WorkspaceIcon.vue";
@@ -47,11 +47,20 @@ const query = ref("");
 const active = ref(0);
 const list = ref<HTMLElement | null>(null);
 
-watch(searchOpen, (open) => {
-  if (open) {
-    query.value = "";
+// Opening starts from what Home handed over; keys typed there while the box is still opening are added to it.
+// The dialog selects the text as it focuses the box; with text handed over from Home the next key would replace it,
+// so the caret goes to the end instead.
+function onFocus(event: FocusEvent) {
+  const input = event.target as HTMLInputElement;
+  queueMicrotask(() => input.setSelectionRange(input.value.length, input.value.length));
+}
+
+watch([searchOpen, searchStart], ([open, start], [wasOpen]) => {
+  if (open && !wasOpen) {
+    query.value = start;
     active.value = 0;
-  }
+  } else if (open && start) query.value += start;
+  if (start) searchStart.value = "";
 });
 
 // Games Tavora knows but the user has not added yet: the built-in list at
@@ -286,6 +295,7 @@ function onKey(event: KeyboardEvent) {
           maxlength="80"
           data-testid="search-input"
           @keydown="onKey"
+          @focus="onFocus"
         />
       </div>
 

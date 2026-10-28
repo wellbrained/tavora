@@ -126,3 +126,14 @@ test("Settings search finds settings and workspaces in Trash", async () => {
   await expect(page.getByTestId("settings")).toHaveCount(0);
   await app.close();
 });
+
+test("typing into the search field on Home opens Ctrl+K with that text", async () => {
+  const { app, page } = await launch();
+  await page.keyboard.press("Control+H");
+  await expect(page.getByTestId("welcome-away-quiet")).toBeVisible();
+  await page.getByTestId("welcome-search").pressSequentially("satisf");
+  await expect(page.getByTestId("search-input")).toBeFocused();
+  await expect(page.getByTestId("search-input")).toHaveValue("satisf");
+  await expect(page.getByTestId("search-workspace-satisfactory")).toHaveAttribute("aria-selected", "true");
+  await app.close();
+});
