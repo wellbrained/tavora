@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.74",
+    date: "2026-10-28",
+    title: "Easier to read small text and switches",
+    notes: [
+      "Switches that are off stand out more from the card behind them.",
+      "Buttons you can't press yet, like Send code or Remove, are easier to read.",
+    ],
+    prs: [
+      { number: 430, title: "Readable disabled controls and off switches in every theme" },
+    ],
+    tags: ["games", "ui-kit", "website"],
+  },
+  {
     version: "0.21.73",
     date: "2026-10-28",
     title: "One look for rail labels",
