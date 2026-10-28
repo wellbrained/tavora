@@ -103,7 +103,7 @@ const away = computed<AwayItem[]>(() => {
 </script>
 
 <template>
-  <main class="@container h-full overflow-y-auto px-12 pt-16 pb-10" data-testid="welcome">
+  <main class="@container flex h-full flex-col overflow-y-auto px-12 pt-16 pb-10" data-testid="welcome">
     <section v-if="empty" class="flex flex-col items-center gap-4 text-center">
       <img class="mb-2" src="/brand/emblem-240.png" alt="" width="111" height="120" draggable="false" />
       <h1 class="text-3xl font-semibold">{{ t("welcome.title.new") }}</h1>
@@ -114,7 +114,8 @@ const away = computed<AwayItem[]>(() => {
       </Button>
     </section>
 
-    <div v-else class="grid grid-cols-[minmax(0,680px)] justify-center gap-x-12 @min-[1048px]:grid-cols-[minmax(0,680px)_320px]">
+    <!-- Centred in the window's height (my-auto keeps the top in reach when it's taller), wider on big windows. -->
+    <div v-else class="my-auto grid grid-cols-[minmax(0,680px)] justify-center gap-x-12 @min-[1048px]:grid-cols-[minmax(0,680px)_320px] @min-[1400px]:grid-cols-[minmax(0,880px)_380px] @min-[1400px]:gap-x-16">
       <header class="pb-7 text-center @min-[1048px]:col-start-1 @min-[1048px]:row-start-1">
         <img class="mx-auto mb-3" src="/brand/emblem-240.png" alt="" width="64" height="69" draggable="false" />
         <h1 class="text-2xl font-semibold">{{ t("welcome.title.back") }}</h1>
