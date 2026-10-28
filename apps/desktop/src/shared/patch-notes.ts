@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.90",
+    date: "2026-10-28",
+    title: "Home fills big screens",
+    notes: [
+      "Home sits in the middle of the window and grows wider on big screens.",
+    ],
+    prs: [
+      { number: 445, title: "Home: centred in the window's height, wider on big screens" },
+    ],
+    tags: ["onboarding"],
+  },
+  {
     version: "0.21.89",
     date: "2026-10-28",
     title: "Fits small windows",
