@@ -57,6 +57,7 @@ import {
   type LeaderboardRow,
   type LeaderboardStatus,
   type LeaderboardSubmitResult,
+  type LeaderboardTop,
   type MenuRequest,
   type MethodName,
   type Methods,
@@ -85,6 +86,7 @@ export type {
   LeaderboardStatus,
   LeaderboardStreakResult,
   LeaderboardSubmitResult,
+  LeaderboardTop,
   HotkeyBinding,
   HotkeySetResult,
   OverlayLinkResult,
@@ -146,7 +148,7 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.12";
+export const SDK_VERSION = "0.2.13";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
@@ -482,7 +484,10 @@ export interface TavoraSDK {
    * the user signed in and agreed. Tavora 0.21.92 and newer.
    */
   leaderboards: {
-    /** Where the user stands: signed in, boards available for this module, shown on them, and (once shown) the name the boards show. */
+    /**
+     * Where the user stands: whether Tavora's service answered (`online`), signed in, boards available for this module,
+     * shown on them, and (once shown) the name the boards show. Never throws for being offline: `online` is false then.
+     */
     status(): Promise<LeaderboardStatus>;
     /**
      * Asks the user in your panel, in Tavora's own words, whether to show their Tavora name and results on your boards;
@@ -502,7 +507,7 @@ export interface TavoraSDK {
      * The best lines of a board (`limit`: default 20, at most LIMITS.maxLeaderboardRows); the user's own line comes last
      * when they are further down. On a daily board, pass the user's local `day` (YYYY-MM-DD) so streaks that ended show as 0.
      */
-    top(board: string, options?: { day?: string; limit?: number }): Promise<LeaderboardRow[]>;
+    top(board: string, options?: { day?: string; limit?: number }): Promise<LeaderboardTop>;
   };
   /**
    * Pages for streaming software such as OBS (the manifest's `overlay`), one per key: an item, a scoreboard, whatever

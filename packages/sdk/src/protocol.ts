@@ -594,13 +594,15 @@ export interface DocumentChange {
 export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "systemInfo" | "media" | "leaderboards" | "files" | "clipboard" | "sharedData";
 
 /**
- * Where the user stands with this module's leaderboards (leaderboards.status). `signedIn`: signed in to a Tavora
- * account. `available`: Tavora's service runs this module's boards (a catalog module once Tavora allowed it; a
+ * Where the user stands with this module's leaderboards (leaderboards.status). `online`: Tavora's service answered;
+ * while it can't be reached, `available` and `shown` are false and `name` is null, so ask again later. `signedIn`: signed
+ * in to a Tavora account (known offline too). `available`: Tavora's service runs this module's boards (a catalog module once Tavora allowed it; a
  * development copy always, on test boards only its developer sees). `shown`: the user agreed to show their name and
  * results on this module's boards. `name`: the name the boards show for them once `shown`; null before that, so the
  * user's name reaches the module only once it is public.
  */
 export interface LeaderboardStatus {
+  online: boolean;
   signedIn: boolean;
   available: boolean;
   shown: boolean;
@@ -647,6 +649,11 @@ export interface LeaderboardSubmitResult {
  * be shown. `self` marks the user's own line; nothing else about who it is reaches the module. Streak boards give
  * `current` and `best`, score boards `value` (the user's best).
  */
+/** What leaderboards.top gives: the lines, best first. An object, so it can tell more later without breaking modules. */
+export interface LeaderboardTop {
+  rows: LeaderboardRow[];
+}
+
 export interface LeaderboardRow {
   rank: number;
   name: string;
@@ -757,7 +764,7 @@ export interface Methods {
   "network.readPage": { params: { url: string }; result: PageResponse };
   /** The AI accounts the user set up, in their order (capability `aiUsage`). */
   "aiUsage.accounts": { params: undefined; result: AiUsageAccountInfo[] };
-  /** Where the user stands with this module's leaderboards (capability `leaderboards`). NETWORK_ERROR while Tavora's service can't be reached. Tavora 0.21.92 and newer. */
+  /** Where the user stands with this module's leaderboards (capability `leaderboards`); `online` is false while Tavora's service can't be reached. Tavora 0.21.92 and newer. */
   "leaderboards.status": { params: undefined; result: LeaderboardStatus };
   /**
    * Asks the user, in Tavora's own words in this panel, whether to show their name and results on this module's boards
@@ -778,7 +785,7 @@ export interface Methods {
    * the user is on the board but further down, their own line comes last. `day`: the user's local day (YYYY-MM-DD) on a
    * daily board, so a streak whose last day was before yesterday shows as ended (capability `leaderboards`). Tavora 0.21.92 and newer.
    */
-  "leaderboards.top": { params: { board: string; day?: string; limit?: number }; result: LeaderboardRow[] };
+  "leaderboards.top": { params: { board: string; day?: string; limit?: number }; result: LeaderboardTop };
   /** Reads one account's usage (capability `aiUsage`). */
   "aiUsage.read": { params: { accountId: string }; result: AiUsageReading };
   /** What this PC is: processor, memory, graphics cards and drives. Read once and kept (capability `systemInfo`). Tavora 0.21.1 and newer. */

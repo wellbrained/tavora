@@ -1,3 +1,10 @@
+## 0.2.13
+
+Leaderboards, with Tavora 0.21.92 or newer. Everything else still works on every Tavora the SDK supports (Tavora 0.19.32), so `MIN_TAVORA` stays; a module that uses leaderboards sets `minTavora` to 0.21.92.
+
+- `leaderboards`: the boards a manifest's `leaderboards` declares, kept on Tavora's service with the user's Tavora account, through the new `leaderboards` connector. `status()` says whether Tavora's service answered (`online`, so it never fails offline), whether the user is signed in, whether the boards run for the module, and whether the user agreed to be shown, with their public name once they did. `show()` (after a click) has Tavora ask the user in the panel; `hide()` (after a click) takes them off and deletes their results. `submit(board, results)` sends up to 50 games, each taken or refused on its own, and `top(board, { day, limit })` reads a board as `{ rows }`. A module never gets an account id, only a `self` mark on the user's own line.
+- `storage.compareAndSet(key, expected, value)` and `storage.app.compareAndSet`: set a value only while the key still holds what you read, so two panels can't overwrite each other's change.
+
 ## 0.2.12
 
 From Tavora 0.21.43 every item on its rail is a workspace: a game workspace, linked to a game, or a personal workspace.

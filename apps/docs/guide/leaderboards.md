@@ -33,7 +33,7 @@ Nothing goes public until the user agrees. Call `show` from a button; Tavora ask
 
 ```ts
 const status = await tavora.leaderboards.status();
-// { signedIn, available, shown, name }
+// { online, signedIn, available, shown, name }
 
 joinButton.onclick = async () => {
   const next = await tavora.leaderboards.show();
@@ -41,6 +41,7 @@ joinButton.onclick = async () => {
 };
 ```
 
+- `online` is false while Tavora's service can't be reached; say so and ask again later. `status` never fails for that.
 - `available` is false until Tavora allows your module. Hide your leaderboard buttons then.
 - `name` is the name the boards show for the user, only once `shown`. It's their Tavora name, or a neutral one such as "User · K7" when their name can't be shown.
 - Offer a way off too: `hide` (from a button) takes the user off your boards, and Tavora's service deletes their results there. Ask them first in your own words.
@@ -73,7 +74,7 @@ async function upload() {
 ## Show a board
 
 ```ts
-const rows = await tavora.leaderboards.top("daily", { day: todayLocal(), limit: 10 });
+const { rows } = await tavora.leaderboards.top("daily", { day: todayLocal(), limit: 10 });
 // [{ rank: 1, name: "Mara", self: false, current: 12, best: 30 }, ...]
 ```
 

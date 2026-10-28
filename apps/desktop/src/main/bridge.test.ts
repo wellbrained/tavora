@@ -68,11 +68,11 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     media: { watch: () => { throw new Error("no media in this test"); }, control: () => Promise.reject(new Error("no media in this test")) },
     discord: noDiscord,
     leaderboards: {
-      status: () => Promise.resolve({ signedIn: true, available: true, shown: false, name: "Mara" }),
-      show: () => Promise.resolve({ signedIn: true, available: true, shown: true, name: "Mara" }),
-      hide: () => Promise.resolve({ signedIn: true, available: true, shown: false, name: "Mara" }),
+      status: () => Promise.resolve({ online: true, signedIn: true, available: true, shown: false, name: "Mara" }),
+      show: () => Promise.resolve({ online: true, signedIn: true, available: true, shown: true, name: "Mara" }),
+      hide: () => Promise.resolve({ online: true, signedIn: true, available: true, shown: false, name: "Mara" }),
       submit: (params) => Promise.resolve({ accepted: [(params as { results: { id: string }[] }).results[0]!.id], rejected: [] }),
-      top: () => Promise.resolve([{ rank: 1, name: "Mara", self: true, current: 2, best: 3 }]),
+      top: () => Promise.resolve({ rows: [{ rank: 1, name: "Mara", self: true, current: 2, best: 3 }] }),
     },
     panelState: registry.panelState,
     capabilities: () => new Set(),
@@ -603,7 +603,7 @@ describe("leaderboards", () => {
     expect(await call(p, "leaderboards.status")).toMatchObject({ ok: true, result: { signedIn: true, shown: false, name: "Mara" } });
     expect(await call(p, "leaderboards.show")).toMatchObject({ ok: true, result: { shown: true } });
     expect(await call(p, "leaderboards.submit", { board: "daily", results: [{ id: "a" }] })).toMatchObject({ ok: true, result: { accepted: ["a"], rejected: [] } });
-    expect(await call(p, "leaderboards.top", { board: "daily" })).toMatchObject({ ok: true, result: [{ rank: 1, self: true }] });
+    expect(await call(p, "leaderboards.top", { board: "daily" })).toMatchObject({ ok: true, result: { rows: [{ rank: 1, self: true }] } });
     expect(await call(p, "leaderboards.status", { extra: 1 })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
     expect(await call(p, "leaderboards.top", "daily")).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   });

@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.11
+
+- New projects start on `@tavora/sdk` 0.2.13, which adds leaderboards and `compareAndSet`.
+
 ## 0.1.10
 
 - New projects ask `tavora.workspace.getCurrent()` for the workspace their panel is in (`@tavora/sdk` 0.2.12): "You're in Elden Ring." in a game workspace, the workspace's name in a personal one.

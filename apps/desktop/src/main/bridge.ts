@@ -17,9 +17,9 @@ import {
   type HotkeyBinding,
   type HotkeySetResult,
   type JsonValue,
-  type LeaderboardRow,
   type LeaderboardStatus,
   type LeaderboardSubmitResult,
+  type LeaderboardTop,
   type NetworkResponse,
   type GameOverlayResult,
   type OverlayLinkResult,
@@ -144,7 +144,7 @@ export interface BridgeContext {
     show(): Promise<LeaderboardStatus>;
     hide(): Promise<LeaderboardStatus>;
     submit(params: unknown): Promise<LeaderboardSubmitResult>;
-    top(params: unknown): Promise<LeaderboardRow[]>;
+    top(params: unknown): Promise<LeaderboardTop>;
   };
   panelState: PanelStateStore;
   /** What the user has granted this module right now; asked on every gated call, so a revoke takes effect at once. */

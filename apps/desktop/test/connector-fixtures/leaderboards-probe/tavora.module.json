@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../../../packages/module-schema/schema/tavora.module.schema.json",
+  "id": "local.test.leaderboards-probe",
+  "name": "Leaderboards Probe",
+  "description": "A test module that uses the leaderboards connector, for the e2e tests.",
+  "version": "0.0.0",
+  "apiVersion": "1",
+  "minTavora": "0.21.92",
+  "entry": "index.html",
+  "games": [],
+  "viewport": { "minWidth": 320, "minHeight": 240 },
+  "leaderboards": {
+    "boards": [
+      { "id": "daily", "kind": "streak", "daily": true },
+      { "id": "fastest", "kind": "score", "order": "low" }
+    ]
+  },
+  "permissions": { "network": [], "connectors": ["leaderboards"] }
+}
