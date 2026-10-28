@@ -41,7 +41,7 @@ A page in the main window that works like a workspace (no entry on the rail; onl
 The header is the workspace's own header on the Overlay page too, with every button in the same place (the ones for a workspace, Layouts and Add module, are dimmed there). A two-part button in it, next to Layouts:
 
 - **Overlay** opens the Overlay page.
-- **Live** icon (the right part of the button, icon only) pauses and resumes overlays (today's "Hide all for now"), with three looks: Live (something shows now), Ready (on, nothing shows), Paused. Its tooltip says which one it is and what a click does.
+- **Live** icon (the right part of the button, icon only) pauses and resumes overlays (today's "Hide all for now"), with three looks, each its own icon and colour: Live (green, something shows now), Ready (blue, on, nothing shows), Paused (yellow). Its tooltip says which one it is and what a click does.
 
 The button is hidden while overlays are off in Settings. Main sends a new live state to the renderer for it; today's `GameOverlaysView` has none.
 
