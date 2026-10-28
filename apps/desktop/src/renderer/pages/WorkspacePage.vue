@@ -3,7 +3,7 @@
 // lays out tabs, groups and splits in this page; each panel's module runs in
 // a native view that the main process draws over the panel's content area,
 // at the bounds this page reports.
-import { ChevronLeft, ChevronRight, LayoutGrid } from "@lucide/vue";
+import { ChevronLeft, ChevronRight, LayoutGrid, Plus } from "@lucide/vue";
 import {
   DockviewVue,
   type DockviewApi,
@@ -41,7 +41,6 @@ import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import EmptySlot from "../components/workspace/EmptySlot.vue";
 import GroupActions from "../components/workspace/GroupActions.vue";
 import HeaderTools from "../components/workspace/HeaderTools.vue";
-import GridPicker from "../components/workspace/GridPicker.vue";
 import TemplatePreview from "../components/workspace/TemplatePreview.vue";
 import PanelContent from "../components/workspace/PanelContent.vue";
 import PanelTab from "../components/workspace/PanelTab.vue";
@@ -492,8 +491,13 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       >
         <LayoutGrid class="text-muted-foreground mb-2 size-12" :stroke-width="1" />
         <p class="text-lg font-semibold">{{ t("workspace.startTitle") }}</p>
-        <p class="text-muted-foreground max-w-sm text-sm">{{ t("workspace.startText", { name: workspace?.name ?? "" }) }}</p>
-        <div class="mt-3 flex flex-wrap justify-center gap-2" role="group" :aria-label="t('workspace.chooseLayout')" data-testid="empty-templates">
+        <p class="text-muted-foreground max-w-sm text-sm">{{ t("workspace.startText") }}</p>
+        <Button class="mt-3 h-9 text-sm [&_svg]:size-5" data-testid="empty-add-module" @click="dialog = { kind: 'add-module' }">
+          <Plus :stroke-width="2" absolute-stroke-width /> {{ t("workspace.addModule") }}
+        </Button>
+        <!-- The quiet way in: the six presets. Even grids live in the Layouts menu only. -->
+        <p class="text-muted-foreground mt-6 text-xs" id="empty-layouts-label">{{ t("workspace.orLayout") }}</p>
+        <div class="flex flex-wrap justify-center gap-2" role="group" aria-labelledby="empty-layouts-label" data-testid="empty-templates">
           <button
             v-for="template in LAYOUT_TEMPLATES"
             :key="template.id"
@@ -507,8 +511,6 @@ const emptySlot = EmptySlot as unknown as VueComponent;
             <TemplatePreview :template="template" class="size-auto h-14 w-[84px]" />
           </button>
         </div>
-        <p class="text-muted-foreground mt-2 text-xs">{{ t("layouts.grid") }}</p>
-        <GridPicker plain />
       </div>
     </div>
   </main>

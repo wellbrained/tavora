@@ -38,6 +38,7 @@ import { compareModuleVersions } from "../shared/module-version";
 import { UserError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { INSTANCE_ID } from "./ids";
+import { popularGames } from "./catalog";
 import { LAYOUT_LIMITS } from "./layout";
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { parseAction, runAction, type ActionHandlers } from "./actions";
@@ -243,6 +244,8 @@ async function realUserModulesDir(options: HostOptions): Promise<string> {
 const TITLE_BAR_HEIGHT = 47;
 /** How dark the kit's dialog backdrop is (bg-black/80 in DialogOverlay). */
 const DIALOG_BACKDROP_OPACITY = 0.8;
+/** What a game workspace the user adds starts with, side by side in this order (startWorkspace). */
+const STARTER_MODULES = ["tavora.notes", "tavora.todos"] as const;
 
 export interface HostOptions {
   userData: string;
@@ -1657,6 +1660,14 @@ export class Host {
         ? searchCatalog(this.library, query).map(({ id, name }) => ({ id, name }))
         : [],
     );
+    // The first-run welcome's tiles: popular games the user does not have yet (Trash included).
+    ipcMain.handle("host:popular-games", (event) =>
+      fromHost(event)
+        ? popularGames()
+            .filter((game) => !this.library.workspaces[game.id])
+            .map(({ id, name }) => ({ id, name }))
+        : [],
+    );
     ipcMain.handle("host:search-online", async (event, query: unknown): Promise<OnlineSearchResult> => {
       if (!fromHost(event) || typeof query !== "string" || query.length > 100) return { status: "ok", games: [] };
       if (!this.library.onlineSearch) return { status: "off", games: [] };
@@ -1914,6 +1925,7 @@ export class Host {
       "add-workspace": (action) => {
         const id = addWorkspace(this.library, action, new Date());
         this.workspaces.addWorkspaces([id]);
+        this.startWorkspace(id);
         this.saveLibrary();
         this.fetchIconsSoon();
         // The game of a game workspace added just now may have been installed since the last look.
@@ -2822,6 +2834,23 @@ export class Host {
       await ses.clearStorageData();
       await ses.clearCache();
     }
+  }
+
+  /**
+   * A game workspace the user just added starts with Notes and To-Dos side by side, so the first look shows
+   * something to use rather than a layout to choose. Only the starter modules that are installed and work in this
+   * workspace are docked; a personal workspace, and workspaces that arrive by other ways (a Steam import, a
+   * restored library), start empty as before.
+   */
+  private startWorkspace(workspaceId: string): void {
+    if (this.library.workspaces[workspaceId]?.kind !== "game") return;
+    const records = STARTER_MODULES.flatMap((moduleId): InstanceRecord[] => {
+      const module = this.modules.get(moduleId);
+      if (!module || !this.supportsWorkspace(module, workspaceId)) return [];
+      const panelType = continuingPanelType(module.manifest) ?? undefined;
+      return [{ instanceId: randomUUID(), moduleId, ...(panelType ? { panelType } : {}) }];
+    });
+    this.workspaces.start(workspaceId, records);
   }
 
   /**

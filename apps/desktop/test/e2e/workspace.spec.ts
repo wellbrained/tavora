@@ -17,16 +17,20 @@ import {
   waitForShown,
 } from "./harness";
 
-test("a new game starts with an empty workspace", async () => {
+test("a workspace with no panels shows Add module first, with the layouts below", async () => {
+  // Seeded workspaces start without the starter panels, as a workspace does once you close everything.
   const { app, page } = await launch();
   await expect(page.getByTestId("empty-workspace")).toBeVisible();
   await expect(panels(page)).toHaveCount(0);
-  // Choosing a layout comes first: the card has no Add module button of its own.
-  await expect(page.getByTestId("empty-add-module")).toHaveCount(0);
+  await expect(page.locator("[data-testid^='empty-template-']")).toHaveCount(6);
+  // Even grids are only in the Layouts menu.
+  await expect(page.getByTestId("empty-workspace").locator("[data-testid^='layout-grid-']")).toHaveCount(0);
+  await page.getByTestId("empty-add-module").click();
+  await expect(page.getByTestId("add-module-dialog")).toBeVisible();
   await app.close();
 });
 
-test("a layout or a grid chosen on the empty workspace fills it with panes that each have Add module", async () => {
+test("a layout chosen on the empty workspace, by mouse or keyboard, fills it with panes that each have Add module", async () => {
   const { app, page } = await launch();
   // The card must sit above the docking area, or the buttons on it cannot be clicked.
   await page.getByTestId("empty-template-main-stacked").click({ timeout: 3000 });
@@ -37,8 +41,15 @@ test("a layout or a grid chosen on the empty workspace fills it with panes that 
   await expect(page.getByRole("dialog")).toBeVisible();
   await app.close();
 
+  const keys = await launch();
+  await keys.page.getByTestId("empty-template-top-two").focus();
+  await keys.page.keyboard.press("Enter");
+  await expect(keys.page.locator("[data-testid^='empty-slot-']")).toHaveCount(3);
+  await keys.app.close();
+
   const grid = await launch();
-  await grid.page.getByTestId("layout-grid-3x2").click({ timeout: 3000 });
+  await grid.page.getByTestId("layouts").click();
+  await grid.page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-3x2"]').click();
   await expect(grid.page.locator("[data-testid^='empty-slot-']")).toHaveCount(6);
   await grid.app.close();
 });

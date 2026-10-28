@@ -3,7 +3,8 @@
 // 1) welcome and profile, 2) first games, 3) a few tips. Settings > General
 // can show it again.
 import { ArrowLeft, Camera, Keyboard, PanelLeft, Plus, Search } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import type { CatalogMatch } from "../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Input } from "@tavora/official-ui/components/ui/input";
@@ -12,7 +13,7 @@ import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import ImageCropDialog from "../components/ImageCropDialog.vue";
 import { readPicture } from "../components/profile/picture";
 import ProfileAvatar from "../components/profile/ProfileAvatar.vue";
-import { act, dialog, state } from "../host";
+import { act, api, dialog, state } from "../host";
 import { t } from "../i18n";
 import { MOD } from "../shortcuts";
 
@@ -22,6 +23,24 @@ const view = computed(() => state.value!);
 const profile = computed(() => view.value.profile);
 // The games added so far: their game workspaces.
 const games = computed(() => Object.values(view.value.library.workspaces).filter((workspace) => workspace.kind === "game"));
+
+// Popular games from the built-in list, one click to add. The host leaves out the ones the user has; one added
+// here leaves the tiles as soon as its workspace is in the library, so the list is not asked again.
+const popular = ref<CatalogMatch[]>([]);
+onMounted(async () => (popular.value = await api.popularGames()));
+const offered = computed(() => popular.value.filter((game) => !view.value.library.workspaces[game.id]));
+/** The tile being added, so a second click does nothing while the host works. */
+const adding = ref<string | null>(null);
+
+async function addGame(catalogId: string) {
+  if (adding.value) return;
+  adding.value = catalogId;
+  try {
+    await act({ type: "add-workspace", catalogId });
+  } finally {
+    adding.value = null;
+  }
+}
 
 const step = ref(0);
 /** Which way the steps slide. */
@@ -129,31 +148,49 @@ const tips = computed(() => [
         <h1 class="text-3xl font-semibold">{{ t("onboarding.games.title") }}</h1>
         <p class="text-muted-foreground mt-2 mb-8">{{ t("onboarding.games.sub") }}</p>
 
-        <ul class="mb-6 flex flex-wrap justify-center gap-3" data-testid="onboarding-games">
+        <!-- The games picked so far, with the look they have on the rail. -->
+        <ul v-if="games.length" class="mb-6 flex flex-wrap justify-center gap-3" :aria-label="t('onboarding.games.yours')" data-testid="onboarding-games">
           <li v-for="game in games" :key="game.id" class="flex w-20 flex-col items-center gap-1.5">
             <WorkspaceIcon :workspace="game" :size="56" />
             <span class="max-w-full truncate text-xs">{{ game.name }}</span>
           </li>
+        </ul>
+
+        <!-- Popular games, one click each, and the way to every other game. -->
+        <ul class="grid w-full grid-cols-3 gap-2" :aria-label="t('onboarding.games.popular')" data-testid="onboarding-popular">
+          <li v-for="game in offered" :key="game.id">
+            <Button
+              variant="outline"
+              class="h-12 w-full justify-start gap-2 px-3 text-sm font-normal"
+              :disabled="adding !== null"
+              :data-testid="`onboarding-game-${game.id}`"
+              @click="addGame(game.id)"
+            >
+              <Plus class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" />
+              <span class="truncate">{{ game.name }}</span>
+            </Button>
+          </li>
           <li>
-            <button
-              type="button"
-              class="hover:bg-card flex w-20 flex-col items-center gap-1.5 rounded-lg"
+            <Button
+              variant="outline"
+              class="text-muted-foreground h-12 w-full justify-start gap-2 border-dashed px-3 text-sm font-normal"
               data-testid="onboarding-add-game"
               @click="dialog = { kind: 'add-game' }"
             >
-              <span class="border-input text-muted-foreground grid size-14 place-items-center rounded-2xl border border-dashed">
-                <Plus class="size-6" :stroke-width="1.5" />
-              </span>
-              <span class="text-muted-foreground text-xs">{{ t("common.addGame") }}</span>
-            </button>
+              <Search class="size-4 flex-none" :stroke-width="1.5" />
+              <span class="truncate">{{ t("onboarding.games.find") }}</span>
+            </Button>
           </li>
         </ul>
         <!-- Steam import: an "Import from Steam" button goes here once it exists. -->
 
-        <div class="mt-4 flex items-center gap-3">
+        <div class="mt-8 flex items-center gap-3">
           <Button variant="ghost" @click="go(0)"><ArrowLeft :stroke-width="1.5" /> {{ t("common.back") }}</Button>
-          <Button class="min-w-32" data-testid="onboarding-next" @click="go(2)">{{ games.length ? t("common.next") : t("onboarding.later") }}</Button>
+          <Button class="min-w-32" :disabled="!games.length" data-testid="onboarding-next" @click="go(2)">{{ t("common.next") }}</Button>
         </div>
+        <Button variant="link" class="text-muted-foreground mt-3 h-auto p-0 text-sm" data-testid="onboarding-skip-games" @click="go(2)">
+          {{ t("onboarding.games.skip") }}
+        </Button>
       </section>
 
       <!-- 3: tips -->

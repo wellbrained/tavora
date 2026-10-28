@@ -945,6 +945,8 @@ export interface TavoraHostApi {
   getState(): Promise<HostViewState | null>;
   act(action: HostAction): Promise<ActionResult>;
   searchCatalog(query: string): Promise<CatalogMatch[]>;
+  /** Popular built-in games the user does not have yet, for the first-run welcome's tiles. */
+  popularGames(): Promise<CatalogMatch[]>;
   /** A module's patch notes, newest first, up to the installed version; empty without any. */
   moduleNotes(moduleId: string): Promise<ModuleNote[]>;
   /** Asks the Tavora service; a newer call cancels an older one. Never rejects. */

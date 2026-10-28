@@ -351,4 +351,24 @@ describe("Workspaces", () => {
     expect(state.workspaces.poe2).toBeUndefined();
     expect(workspaces.workspacesUsing("notes")).toEqual(["satisfactory"]);
   });
+
+  it("starts a new workspace with its panels side by side, and leaves one that has panels alone", () => {
+    const { state, workspaces } = setup();
+    workspaces.addWorkspaces(["enshrouded"]);
+    workspaces.start("enshrouded", [
+      { instanceId: A, moduleId: "notes" },
+      { instanceId: D, moduleId: "todos" },
+    ]);
+    const started = state.workspaces.enshrouded!;
+    expect(started.instances.map((record) => record.instanceId)).toEqual([A, D]);
+    expect(started.layout?.direction).toBe("row");
+    expect(started.layout?.root.children.map((child) => child.kind === "group" && child.panels)).toEqual([[A], [D]]);
+
+    workspaces.start("satisfactory", [{ instanceId: D, moduleId: "todos" }]);
+    expect(state.workspaces.satisfactory!.instances.map((record) => record.instanceId)).toEqual([C]);
+    // No starter module installed: the workspace stays empty.
+    workspaces.addWorkspaces(["valheim"]);
+    workspaces.start("valheim", []);
+    expect(state.workspaces.valheim).toEqual({ instances: [], layout: null, snapshots: [] });
+  });
 });

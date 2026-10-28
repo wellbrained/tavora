@@ -4,7 +4,7 @@ import path from "node:path";
 import { isPanelTypeId } from "@tavora/module-schema";
 import { INSTANCE_ID } from "./ids";
 import { UserError } from "./messages";
-import type { LayoutTemplate } from "../shared/layout-templates";
+import { gridTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { LAYOUT_LIMITS, layoutPanels, parseLayout, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
 import { checkPanelContent, type PanelContent } from "./panel-content";
 
@@ -280,6 +280,18 @@ export class Workspaces {
   addWorkspaces(workspaceIds: readonly string[]): void {
     if (workspaceIds.length === 0) return;
     for (const id of workspaceIds) this.state.workspaces[id] = emptyWorkspace();
+    this.save();
+  }
+
+  /**
+   * Gives a workspace that has no panels yet its starter: these panels side by side, one slot each. The host
+   * UI docks them when the workspace opens. Nothing happens for a workspace that already has a panel.
+   */
+  start(workspaceId: string, records: readonly InstanceRecord[]): void {
+    const workspace = this.workspace(workspaceId);
+    if (records.length === 0 || workspace.instances.length > 0) return;
+    workspace.instances = [...records];
+    workspace.layout = templateLayout(gridTemplate(records.length, 1), records.map((record) => record.instanceId));
     this.save();
   }
 
