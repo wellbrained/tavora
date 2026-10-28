@@ -171,7 +171,9 @@ test("The page opens on Everywhere, lists every panel with the reason one can't 
     expect(view.sources).toHaveLength(1);
     const todos = view.sources[0]!;
     expect(todos).toMatchObject({ name: "To-Dos", from: "Path of Exile 2", game: "Path of Exile 2", block: "game-only" });
-    // A game's panel can't go into Everywhere: greyed out, with the reason.
+    // A game's panel can't go into Everywhere: it is folded away with the others that can't be used, greyed out, with the reason.
+    await expect(row(page, todos.id)).toHaveCount(0);
+    await page.getByTestId("layout-unusable-toggle").click();
     await expect(row(page, todos.id)).toContainText("Only for Path of Exile 2");
     await expect(row(page, todos.id).getByRole("button").first()).toBeDisabled();
     await expect(page.getByTestId("layout-pick")).toBeVisible();

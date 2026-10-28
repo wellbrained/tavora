@@ -1,6 +1,6 @@
 # Overlay page
 
-The Overlay page (a screen of the main window, opened by the Overlay button in the workspace header) applies changes immediately. The Overlay button stays in the header, lit, and any workspace on the rail leaves it; undo and redo last until the page is left or the selected setup changes. It replaced the separate Overlay layout window in step 2 of [overlay setups](overlay-setups.md).
+The Overlay page (a screen of the main window, opened by the Overlay button in the workspace header) applies changes immediately. The Overlay button stays in the header, lit, and any workspace on the rail leaves it; items snap to the grid by their left or right and top or bottom edge, whichever is nearer; undo and redo last until the page is left or the selected setup changes. It replaced the separate Overlay layout window in step 2 of [overlay setups](overlay-setups.md).
 
 ## Setups
 

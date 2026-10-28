@@ -19,10 +19,18 @@ test("the header button opens the Overlay page, pauses overlays", async () => {
     await expect(live).toHaveAttribute("data-state", "paused");
     await live.click();
     await expect(live).toHaveAttribute("data-state", "ready");
+    const before = (await page.getByTestId("overlay-open").boundingBox())!;
+    const header = (await page.locator("header").boundingBox())!;
     await page.getByTestId("overlay-open").click();
     // The page replaces the workspace in the same window; no window of its own opens.
     await expect(page.getByTestId("overlay-page")).toBeVisible();
     await expect(page.getByTestId("workspace")).toHaveCount(0);
+    // The header doesn't move: its buttons stay where the workspace has them, and the ones for a workspace can't be used.
+    expect(await page.getByTestId("overlay-open").boundingBox()).toEqual(before);
+    expect(await page.locator("header").boundingBox()).toEqual(header);
+    await expect(page.getByTestId("add-module")).toBeVisible();
+    await expect(page.getByTestId("overlay-live").locator("svg")).toBeVisible();
+    await expect(page.getByTestId("overlay-live")).toHaveText("");
     expect(app.windows().some((window) => window.url().includes("layout.html") && !window.url().endsWith("#layer"))).toBe(false);
     // Any workspace on the rail leaves it.
     await page.getByTestId("rail-workspace-poe2").click();

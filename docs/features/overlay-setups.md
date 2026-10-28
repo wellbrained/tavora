@@ -30,18 +30,18 @@ An item is an existing panel from some workspace, or a module overlay (`overlay.
 
 A page in the main window that works like a workspace (no entry on the rail; only the header's Overlay button opens it, and it stays there, lit); the separate Overlay layout window goes away. The layout is fixed: the canvas and the sidebar, which sits on the left or the right as set in Settings > Overlays.
 
-- Above the canvas: the setup dropdown. It opens on the running game's setup, else All games while a game runs, else Everywhere.
+- First in the toolbar above the canvas (not in the header): the setup dropdown. It opens on the running game's setup, else All games while a game runs, else Everywhere.
 - Canvas: game setups keep Take picture from the running game; Everywhere and All games use a plain screen-sized area.
 - Sidebar, two stacked panels:
-  - Sources, with search: every panel from every workspace, its source named ("Notes · Satisfactory"). Ones that can't go into the chosen setup are greyed out with the reason. A click adds one; a click on one already in the setup selects it.
-  - Settings of the selected item (picked in the list or on the canvas), sized to its content; a short hint when nothing is selected.
+  - Sources, with search: every panel from every workspace, its source named ("Notes · Satisfactory"). Ones that can't go into the chosen setup are greyed out with the reason and folded together at the bottom ("Can't be used here"). A click adds one; a click on one already in the setup selects it.
+  - Settings of the selected item (picked in the list or on the canvas), its name at the top right, sized to its content; Show (Always on / On a key, with a line saying what it does), Key, Opacity, Hide from capture (with a line saying what it does), then Reset position / Reset size, Preview / Move, and a red Remove; a short hint when nothing is selected.
 
 ## Header
 
-A two-part button in the workspace header, next to Layouts:
+The header is the workspace's own header on the Overlay page too, with every button in the same place (the ones for a workspace, Layouts and Add module, are dimmed there). A two-part button in it, next to Layouts:
 
 - **Overlay** opens the Overlay page.
-- **Live** icon pauses and resumes overlays (today's "Hide all for now"), with three looks: Live (something shows now), Ready (on, nothing shows), Paused.
+- **Live** icon (the right part of the button, icon only) pauses and resumes overlays (today's "Hide all for now"), with three looks: Live (something shows now), Ready (on, nothing shows), Paused. Its tooltip says which one it is and what a click does.
 
 The button is hidden while overlays are off in Settings. Main sends a new live state to the renderer for it; today's `GameOverlaysView` has none.
 

@@ -8,6 +8,7 @@ import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import type { LayoutItemView } from "../../../shared/layout-view";
 import { act } from "../../host";
@@ -58,21 +59,28 @@ const removeLabel = computed(() => {
   if (!item) return "";
   return item.kind === "panel" ? t("overlays.stopShowingNamed", { name: item.name }) : t("overlays.removeLabel", { name: item.name, game: props.setupName });
 });
+// Preview and Move sit side by side; one alone takes the whole row.
+const wide = computed(() => ((props.item?.kind === "overlay" && props.item.live ? 1 : 0) + (props.item?.moveTo ? 1 : 0) === 1 ? "col-span-2" : ""));
 const moveLabel = computed(() => (props.item?.moveTo === "$everywhere" ? t("overlays.layout.moveEverywhere") : t("overlays.layout.moveAll")));
 </script>
 
 <template>
   <section class="bg-card flex flex-none flex-col rounded-lg border" :aria-label="t('overlays.layout.settings')" data-testid="layout-settings">
-    <h2 class="text-muted-foreground px-3 pt-3 text-xs font-medium tracking-wide uppercase">{{ t("overlays.layout.settings") }}</h2>
+    <div class="flex items-baseline justify-between gap-3 px-3 pt-3">
+      <h2 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">{{ t("overlays.layout.settings") }}</h2>
+      <p v-if="item" class="min-w-0 truncate text-sm font-medium" data-testid="layout-selected">{{ item.name }}</p>
+    </div>
     <p v-if="!item" class="text-muted-foreground px-3 py-3 text-sm" data-testid="layout-pick">{{ t("overlays.layout.pick") }}</p>
     <div v-else class="flex flex-col gap-3 px-3 py-3" :data-testid="`layout-row-${item.id}`">
-      <p class="truncate text-sm font-medium">{{ item.name }}</p>
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span class="text-muted-foreground w-20 flex-none text-sm">{{ t("overlays.mode.label") }}</span>
-        <SegmentedControl :model-value="item.mode" :options="modes" :label="t('overlays.mode.label')" @update:model-value="change({ mode: $event })" />
+      <div class="flex flex-col gap-1.5">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span class="text-muted-foreground w-28 flex-none text-sm">{{ t("overlays.mode.label") }}</span>
+          <SegmentedControl :model-value="item.mode" :options="modes" :label="t('overlays.mode.label')" @update:model-value="change({ mode: $event })" />
+        </div>
+        <p class="text-muted-foreground text-xs" data-testid="layout-mode-hint">{{ t(item.mode === "toggle" ? "overlays.mode.toggleHint" : "overlays.mode.alwaysHint") }}</p>
       </div>
       <div v-if="item.mode === 'toggle'" class="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span class="w-20 flex-none" />
+        <span class="text-muted-foreground w-28 flex-none text-sm">{{ t("overlays.key.label") }}</span>
         <span v-if="item.hotkey" class="flex flex-none items-center gap-1">
           <Kbd v-for="key in hotkeyKeys(item.hotkey.accelerator, mac)" :key="key">{{ key }}</Kbd>
         </span>
@@ -83,7 +91,7 @@ const moveLabel = computed(() => (props.item?.moveTo === "$everywhere" ? t("over
         </Button>
       </div>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span class="text-muted-foreground w-20 flex-none text-sm">{{ t("overlays.opacity.label") }}</span>
+        <span class="text-muted-foreground w-28 flex-none text-sm">{{ t("overlays.opacity.label") }}</span>
         <Select v-model="opacity">
           <SelectTrigger size="sm" class="w-24" :aria-label="t('overlays.opacity.label')" :data-testid="`layout-opacity-${item.id}`">
             <SelectValue />
@@ -93,17 +101,19 @@ const moveLabel = computed(() => (props.item?.moveTo === "$everywhere" ? t("over
           </SelectContent>
         </Select>
       </div>
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span class="text-muted-foreground w-20 flex-none text-sm">{{ t("overlays.capture.label") }}</span>
-        <Switch :model-value="item.hideFromCapture" :aria-label="t('overlays.capture.label')" @update:model-value="change({ hideFromCapture: $event })" />
-        <span class="text-muted-foreground min-w-0 flex-1 text-xs">{{ t("overlays.capture.hint") }}</span>
+      <div class="flex flex-col gap-1.5">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span class="text-muted-foreground w-28 flex-none text-sm">{{ t("overlays.capture.label") }}</span>
+          <Switch :model-value="item.hideFromCapture" :aria-label="t('overlays.capture.label')" @update:model-value="change({ hideFromCapture: $event })" />
+        </div>
+        <p class="text-muted-foreground text-xs">{{ t("overlays.capture.hint") }}</p>
       </div>
-      <div class="flex flex-wrap items-center gap-2 border-t pt-3">
-        <Button variant="secondary" size="sm" :data-testid="`layout-reset-${item.id}`" @click="send({ type: 'reset', id: item.id })">{{ t("overlays.layout.reset") }}</Button>
-        <Button variant="secondary" size="sm" :data-testid="`layout-reset-size-${item.id}`" @click="send({ type: 'reset-size', id: item.id })">{{ t("overlays.layout.resetSize") }}</Button>
-        <Button v-if="item.kind === 'overlay' && item.live" variant="secondary" size="sm" :aria-label="t('overlays.previewLabel', { name: item.name })" @click="preview">{{ t("overlays.layout.preview") }}</Button>
-        <Button v-if="item.moveTo" variant="secondary" size="sm" :data-testid="`layout-move-${item.id}`" @click="send({ type: 'move', id: item.id })">{{ moveLabel }}</Button>
-        <Button variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive ml-auto" :aria-label="removeLabel" :data-testid="`layout-remove-${item.id}`" @click="remove">
+      <div class="grid grid-cols-2 gap-2 border-t pt-3">
+        <Button variant="secondary" size="sm" class="w-full" :data-testid="`layout-reset-${item.id}`" @click="send({ type: 'reset', id: item.id })">{{ t("overlays.layout.reset") }}</Button>
+        <Button variant="secondary" size="sm" class="w-full" :data-testid="`layout-reset-size-${item.id}`" @click="send({ type: 'reset-size', id: item.id })">{{ t("overlays.layout.resetSize") }}</Button>
+        <Button v-if="item.kind === 'overlay' && item.live" variant="secondary" size="sm" :class="cn('w-full', wide)" :aria-label="t('overlays.previewLabel', { name: item.name })" @click="preview">{{ t("overlays.layout.preview") }}</Button>
+        <Button v-if="item.moveTo" variant="secondary" size="sm" :class="cn('w-full', wide)" :data-testid="`layout-move-${item.id}`" @click="send({ type: 'move', id: item.id })">{{ moveLabel }}</Button>
+        <Button variant="danger" size="sm" class="col-span-2 w-full" :aria-label="removeLabel" :data-testid="`layout-remove-${item.id}`" @click="remove">
           {{ item.kind === "panel" ? t("overlays.stopShowing") : t("overlays.remove") }}
         </Button>
       </div>

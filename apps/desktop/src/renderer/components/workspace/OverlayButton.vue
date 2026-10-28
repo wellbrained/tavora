@@ -21,7 +21,7 @@ const tint = { live: "text-success", ready: "", paused: "text-muted-foreground" 
   <ButtonGroup v-if="overlays.supported && overlays.enabled" data-testid="overlay-button">
     <Button size="sm" :variant="props.active ? 'default' : 'secondary'" :aria-pressed="props.active ? 'true' : undefined" data-testid="overlay-open" @click="act({ type: props.active ? 'leave-overlay-page' : 'open-overlay-page' })">{{ t("overlays.button.open") }}</Button>
     <Button
-      size="sm"
+      size="icon-sm"
       variant="secondary"
       :class="tint[look]"
       :title="t(`overlays.button.${look}Tip`)"
@@ -30,7 +30,7 @@ const tint = { live: "text-success", ready: "", paused: "text-muted-foreground" 
       data-testid="overlay-live"
       @click="act({ type: 'set-game-overlays-hidden', hidden: !overlays.hidden })"
     >
-      <component :is="icons[look]" :stroke-width="1.5" /> {{ t(`overlays.button.${look}`) }}
+      <component :is="icons[look]" :stroke-width="1.5" />
     </Button>
   </ButtonGroup>
 </template>
