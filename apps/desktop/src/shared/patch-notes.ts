@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.56",
+    date: "2026-10-28",
+    title: "Overlay page fixes",
+    notes: [
+      "Items on the Overlay page snap to the grid you see, also by their right and bottom edge, and the live overlay no longer pokes a pixel past the canvas.",
+      "The header no longer changes size on the Overlay page: its dimmed buttons keep their place.",
+      "The folded list of sources has one arrow, and its rows are no longer cut off at the edge.",
+      "The Live icon next to Overlay is easier to read: green Live, blue Ready, yellow Paused, each with its own icon.",
+    ],
+    prs: [
+      { number: 426, title: "Overlay page fixes" },
+    ],
+    tags: ["overlays", "workspace"],
+  },
+  {
     version: "0.21.55",
     date: "2026-10-28",
     title: "A tidier Overlay page",
