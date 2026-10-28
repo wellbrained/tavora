@@ -55,7 +55,8 @@ Methods without params must be sent with `params` left out.
 | `storage.set` | `{ key, value }` | `null` |
 | `storage.delete` | `{ key }` | `null` |
 | `storage.keys` | none | sorted array of keys |
-| `storage.app.get`, `storage.app.set`, `storage.app.delete`, `storage.app.keys` | as `storage.*` | the same calls for settings shared by every workspace, see [Where data lives](#where-data-lives) |
+| `storage.compareAndSet` | `{ key, expected, value }` | `true` when `value` was set: only while the key holds `expected` (`null`: not set), in one step, so two panels can't overwrite each other's change. Values count as equal when they hold the same JSON, whatever the order of their keys. `false`: read it again and retry (Tavora 0.21.92 and newer) |
+| `storage.app.get`, `storage.app.set`, `storage.app.delete`, `storage.app.keys`, `storage.app.compareAndSet` | as `storage.*` | the same calls for settings shared by every workspace, see [Where data lives](#where-data-lives) |
 | `documents.list` | none | `DocumentSummary[]`, newest first |
 | `documents.get` | `{ id }` | `{ id, title, revision, updatedAt, bytes, data }` or `null` |
 | `documents.put` | `{ id?, title, data, ifRevision? }` | `DocumentSummary` of the saved document |
@@ -232,6 +233,14 @@ A connector is a part of Tavora that reaches outside the module's panel, such as
 - `media.control` with `{ session, action }` asks the app of a watched session to do one of `playPause`, `next` or `previous`, and answers whether it took it (`false` also for a session that is gone). It needs a click or key press in the panel within 2 seconds, or a press of one of the module's hotkeys, and one press allows one call; otherwise `PERMISSION_DENIED`.
 - Outside Windows `state` is always `unavailable`.
 
+**`leaderboards`** (capability `leaderboards`, `sdk.leaderboards`, Tavora 0.21.92+): the boards of the manifest's [`leaderboards`](./manifest.md#leaderboards), kept on Tavora's service with the user's Tavora account. Tavora keeps the sign-in and talks to the service; the module gets names, ranks and numbers, never an account id or anything made from one. See the [guide](../guide/leaderboards.md).
+
+- `leaderboards.status` gives `{ signedIn, available, shown, name }`: signed in to Tavora; the service runs this module's boards (a catalog module once Tavora allowed it, a development copy always); the user agreed to show their results here; and, once `shown`, the name the boards show for them (their Tavora profile name, or a neutral one such as `"User · K7"`), else `null`. `NETWORK_ERROR` while the service can't be reached.
+- `leaderboards.show` asks the user, in Tavora's own words in this panel, whether to show their Tavora name and results; signed out, it offers to sign in instead (the user signs in in Settings, then your module asks again). It answers the status after the user's answer. Only right after a real click or key press in the panel, once per click, and not while the panel is over the game.
+- `leaderboards.hide` takes the user off this module's boards; the service deletes their results for it. Only right after a real click or key press.
+- `leaderboards.submit` with `{ board, results }` sends 1 to 50 finished games to a board of the manifest. A streak result is `{ id, outcome: "won" | "lost", at, day? }`, a score result `{ id, value, at }`: `id` a UUID you make once per game (`crypto.randomUUID()`), `at` when it ended in milliseconds since 1970, `day` the local calendar day as `YYYY-MM-DD` on a daily board, `value` a number. It answers `{ accepted, rejected }`: `accepted` lists the ids the board took, also ones it had already, so sending a result again is safe; `rejected` lists `{ id, reason }`, with `reason` `invalid` (its shape is off), `time` (`at` in the future or more than a year ago), `archive` (a daily result that ended outside its day), `day-taken` (the board has another result for that day) or `full` (the account keeps too many results for this module). A refused result never counts: drop it. Each result is taken or refused on its own; one without a string `id` is left out of both lists. `PERMISSION_DENIED` while the user is signed out, hasn't agreed, or the board isn't live on the service yet, and `NETWORK_ERROR` while the service can't be reached or is busy: keep the results and send them later. An unknown board, or no or more than 50 results, is `INVALID_PARAMS`.
+- `leaderboards.top` with `{ board, day?, limit? }` gives the best lines of a board, `limit` of them (1 to 100, default 20): `{ rank, name, self, current, best }` on a streak board, `{ rank, name, self, value }` on a score board. Equal lines share a rank. `self` marks the user's own line, which comes last when they are further down. On a daily board, pass the user's local `day`: a streak whose last day was before yesterday shows `current` 0. Signed out it still answers, without a `self` line. A development copy's test boards show only the user's own line.
+
 **`discord`** (capability `discord`, `sdk.connectors.discord`): the Discord app on this PC, through Tavora's own Discord sign-in (PKCE, no Client Secret). Tavora keeps the local connection, the sign-in and the token; a module sends a fixed list of RPC commands and gets Discord's answers as they came. Nothing goes through Tavora's service, and Tavora can't hear, talk or read messages.
 
 - `discord.state` gives `{ status, error, user, canControl, canSaveSignIn }` and makes the panel a user of the connection, which runs while at least one panel uses it and stops with the last one. `status` is `connecting`, `not-running` (no Discord app found; Tavora keeps looking), `signed-out`, `approving` (Discord shows its pop-up), `connected` or `error`; `error` is then `not-approved`, `no-code`, `offline`, `no-sign-in` or `failed`. `canControl` says the sign-in may mute and deafen; one made before Tavora 0.5.11 can't until the user presses a button that calls `discord.allowControl`. The `discord.state` event tells every change.
@@ -394,6 +403,7 @@ Some methods need a capability the user grants. A module asks for it in its mani
 | `systemInfo.*` | `systemInfo` | granted for the `system-info` connector, see [Connectors](#connectors) |
 | `media.*` | `media` | granted for the `media` connector, see [Connectors](#connectors) |
 | `discord.*` | `discord` | granted for the `discord` connector, see [Connectors](#connectors) |
+| `leaderboards.*` | `leaderboards` | granted for the `leaderboards` connector, see [Connectors](#connectors) |
 | `overlay.copyLink`, `overlay.resetLink` | `overlay` | granted for the `stream-overlay` connector, see [Stream overlays](#stream-overlays). `overlay.publish`, `overlay.remove`, `overlay.showOverGame` and `overlay.preview` need none |
 | `files.open`, `files.save` | `files` | reserved |
 | `clipboard.writeText`, `clipboard.readText` | `clipboard` | reserved |
@@ -427,6 +437,8 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | `systemInfo.watch` | one watch per panel, 26 drives; Tavora reads at most once a second, for all panels together. The connection is checked every 5 seconds, whatever the panels ask |
 | `media.control` | one per press; an app gets 5 s to answer |
 | `discord.command` | 15 s, answers and events up to 512 KB; 32 subscriptions per panel |
+| `leaderboards.submit` | 50 results per call; the service keeps 10,000 results per account and module and takes 60 requests a minute per account and module |
+| `leaderboards.top` | 100 lines |
 | `ui.showMenu` | one menu per click or key press, 100 entries, labels 80 characters, hints 30 |
 | `overlay.publish` | 16 KB of state per overlay, 200 overlays per module and workspace; keys up to 64 letters, digits, `-` and `_` |
 | `hotkeys` | 100 per module and workspace; labels 60 characters on one line; targets like overlay keys |

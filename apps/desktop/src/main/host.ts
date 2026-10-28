@@ -49,6 +49,7 @@ import { applyOwners, checkZipData, readOwnerRecords } from "./installer";
 import { readModulePage } from "./module-page";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
+import { boardsModuleId, ModuleLeaderboards, type LeaderboardQuestion } from "./leaderboards";
 import { ModuleLifecycle } from "./module-lifecycle";
 import type { TestHosts } from "./network";
 import { shortcutFor } from "./shortcuts";
@@ -420,6 +421,9 @@ export class Host {
   /** A connector a module asks for on request (permissions.onRequest), waiting for the user's answer in the consent dialog. */
   private pendingConnector: { id: number; moduleId: string; connector: Connector; resolve(allowed: boolean): void } | null = null;
   private nextConnectorAsk = 1;
+  /** A module's question about its leaderboards (leaderboards.show), shown in the panel that asked until the user answers. */
+  private pendingLeaderboard: { id: number; instanceId: string; moduleId: string; question: LeaderboardQuestion; resolve(yes: boolean): void } | null = null;
+  private nextLeaderboardAsk = 1;
   /** Panels added while their module still misses access it needs: they ask first and start once allowed (questionOf). */
   private readonly awaiting = new Set<string>();
   private readonly gameWatcher = new GameWatcher({
@@ -1269,6 +1273,8 @@ export class Host {
       const asking = records.find((item) => item.moduleId === record.moduleId && this.awaiting.has(item.instanceId));
       return asking?.instanceId === record.instanceId ? "ask" : "wait";
     }
+    // The leaderboards' question shows in the panel that asked for it.
+    if (this.pendingLeaderboard?.instanceId === record.instanceId) return "ask";
     const first = records.find((item) => item.moduleId === record.moduleId)?.instanceId === record.instanceId;
     return first && this.pendingConnector?.moduleId === record.moduleId ? "ask" : null;
   }
@@ -2125,6 +2131,7 @@ export class Host {
       "hotkey-answer": (action) => this.streaming.answer(action.id, action.choice, action.accelerator),
       "remove-hotkey": (action) => this.streaming.removeHotkey(action),
       "connector-answer": (action) => this.answerConnector(action.id, action.allow),
+      "leaderboard-answer": (action) => this.answerLeaderboard(action.id, action.allow),
       "set-language": saved((action) => {
         this.library.language = action.language;
         for (const view of this.views.values()) view.applyLanguage(this.language);
@@ -2201,6 +2208,7 @@ export class Host {
       "remove-module": (action) => this.lifecycle.remove(action.moduleId),
       "grant-module": (action) => this.lifecycle.grant(action.moduleId, action.network, action.connectors),
       "revoke-module": (action) => this.lifecycle.revoke(action.moduleId),
+      "leaderboards-hide": (action) => this.leaveLeaderboards(action.moduleId),
       "install-module": () => this.installModule(),
       "install-catalog-module": (action) => this.lifecycle.installFromCatalog(action.moduleId),
       "check-module-updates": async () => {
@@ -3068,6 +3076,10 @@ export class Host {
 
   /** Removes a panel's view and its UI state; module settings and documents stay. */
   private closeView(instanceId: string): void {
+    if (this.pendingLeaderboard?.instanceId === instanceId) {
+      this.pendingLeaderboard.resolve(false);
+      this.pendingLeaderboard = null;
+    }
     this.openedFrom.delete(instanceId);
     this.awaiting.delete(instanceId);
     this.launches.delete(instanceId);
@@ -3445,6 +3457,7 @@ export class Host {
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
+      leaderboards: this.leaderboardsOf(module, (question) => this.askLeaderboard(record.instanceId, record.moduleId, question)),
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
       discord: this.discord,
       systemInfo: this.systemInfo,
@@ -4228,6 +4241,12 @@ export class Host {
       streaming: this.streaming.view(),
       gameOverlays: this.gameOverlays.view(),
       pendingConnector: this.pendingConnector && { id: this.pendingConnector.id, moduleId: this.pendingConnector.moduleId, connectors: [this.pendingConnector.connector] },
+      pendingLeaderboard: this.pendingLeaderboard && {
+        id: this.pendingLeaderboard.id,
+        instanceId: this.pendingLeaderboard.instanceId,
+        moduleId: this.pendingLeaderboard.moduleId,
+        ...this.pendingLeaderboard.question,
+      },
       hotkeyRequest: this.streaming.request(),
       pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
@@ -4469,6 +4488,51 @@ export class Host {
     const granted = allow && module !== undefined && (module.manifest.permissions.onRequest ?? []).includes(pending.connector);
     if (granted) await this.grants.grant(module, { network: [], connectors: [pending.connector] });
     pending.resolve(granted);
+    this.pushState();
+    this.applyBounds();
+  }
+
+  /** A module's leaderboards (leaderboards.ts); `ask` shows Tavora's question in the panel that asks. */
+  private leaderboardsOf(module: InstalledModule, ask: (question: LeaderboardQuestion) => Promise<boolean>): ModuleLeaderboards {
+    return new ModuleLeaderboards({
+      moduleId: boardsModuleId(module.manifest.id, module.owner === OFFICIAL_OWNER || this.catalogModules.has(module.manifest.id)),
+      boards: module.manifest.leaderboards?.boards ?? [],
+      account: this.account,
+      pseudonym: (label) => (label ? translate(this.language, "leaderboards.pseudonym", { label }) : translate(this.language, "leaderboards.someone")),
+      ask,
+    });
+  }
+
+  /** Settings > Integrations > Leaderboards: takes the user off a module's boards, whatever the module offers. */
+  private async leaveLeaderboards(moduleId: string): Promise<void> {
+    const module = this.modules.get(moduleId);
+    if (!module) return;
+    try {
+      await this.leaderboardsOf(module, async () => false).hide();
+    } catch {
+      throw new UserError("account.error.unreachable");
+    }
+  }
+
+  /**
+   * Shows Tavora's question about a module's leaderboards in the panel that asked (leaderboards.show, after a click
+   * there); resolves with the user's answer. A newer question closes an older one as no.
+   */
+  private askLeaderboard(instanceId: string, moduleId: string, question: LeaderboardQuestion): Promise<boolean> {
+    this.pendingLeaderboard?.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      this.pendingLeaderboard = { id: this.nextLeaderboardAsk++, instanceId, moduleId, question, resolve };
+      this.pushState();
+      this.applyBounds();
+    });
+  }
+
+  /** The user's answer; the panel's page comes back either way. */
+  private answerLeaderboard(id: number, yes: boolean): void {
+    const pending = this.pendingLeaderboard;
+    if (!pending || pending.id !== id) return;
+    this.pendingLeaderboard = null;
+    pending.resolve(yes);
     this.pushState();
     this.applyBounds();
   }

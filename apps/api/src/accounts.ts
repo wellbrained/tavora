@@ -11,6 +11,7 @@ import { inspectPng } from "./png.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import type { ReviewStore } from "./reviews.ts";
 import type { ConversationStore } from "./conversations.ts";
+import type { LeaderboardStore } from "./leaderboards.ts";
 
 /**
  * The account routes under /v1/account. Every answer that could tell whether
@@ -37,6 +38,8 @@ export interface AccountOptions {
   reviews?: ReviewStore;
   /** Conversations (conversations.ts), closed with `left` and emptied of the account's texts when it is deleted. Absent: the conversation routes answer 503. */
   conversations?: ConversationStore;
+  /** Leaderboards (leaderboards.ts), deleted with their account. Absent: the leaderboard routes answer 503. */
+  leaderboards?: LeaderboardStore;
   /** The signed lists as served (catalog-trust.ts), to tell when a key replacement was signed. Absent: requests stay waiting. */
   trust?: CatalogTrust;
   /** The module catalog, to tell which held prefixes have a module. Absent: none has. */
@@ -117,12 +120,13 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const verifyLimiter = options.verifyRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 15 * 60_000 });
   const prefixLimiter = options.prefixRateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const app = new Hono<Env>();
-  /** Everything on the server goes at once: the account, its sign-ins, its cloud copy and its reviews. */
+  /** Everything on the server goes at once: the account, its sign-ins, its cloud copy, its reviews and its leaderboard results. */
   const deleteAccount = (id: string) => {
     store.deleteAccount(id, now());
     options.copies?.remove(id, true);
     options.reviews?.forget(id);
     options.conversations?.forget(id);
+    options.leaderboards?.forget(id);
     options.catalog?.forgetReporter(id);
   };
 

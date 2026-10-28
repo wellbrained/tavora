@@ -18,6 +18,7 @@ import { clientOf } from "./rate-limit.ts";
 import { StatsStore } from "./stats.ts";
 import { ReviewStore } from "./reviews.ts";
 import { ConversationStore } from "./conversations.ts";
+import { LeaderboardStore } from "./leaderboards.ts";
 import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
 import { scannerFromEnv } from "./virus-scan.ts";
@@ -102,6 +103,8 @@ if (conversations) {
   sweepConversations();
   setInterval(sweepConversations, 60 * 60_000).unref();
 }
+// Leaderboards (leaderboards.ts): their own file, in the daily backup.
+const leaderboards = accountStore ? new LeaderboardStore(path.join(stateDir, "leaderboards.sqlite")) : undefined;
 console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
 // Plain daily totals (stats.ts): nothing about a user. Once a day the account numbers are written down too.
 const stats = new StatsStore(path.join(stateDir, "stats.sqlite"));
@@ -132,6 +135,7 @@ const app = createApp({
           ...(copies ? { copies } : {}),
           ...(reviews ? { reviews } : {}),
           ...(conversations ? { conversations } : {}),
+          ...(leaderboards ? { leaderboards } : {}),
           ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
           // Discord login: Tavora's public Discord app, no secret; DISCORD_API only for a pretend Discord in tests.
           discord: createDiscordClient(process.env.DISCORD_API ? { api: process.env.DISCORD_API } : {}),
@@ -165,6 +169,7 @@ if (adminToken && adminToken.length >= 24) {
     ...(accountStore ? { accounts: accountStore } : {}),
     ...(reviews ? { reviews } : {}),
     ...(conversations ? { conversations } : {}),
+    ...(leaderboards ? { leaderboards } : {}),
     ...(copies ? { copies } : {}),
     // The built panel: deployed from wellbrained/tavora-admin to /srv/tavora-admin/current; in development
     // the tavora-admin checkout next to this repo.

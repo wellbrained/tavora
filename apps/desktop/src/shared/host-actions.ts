@@ -285,6 +285,8 @@ export function hostActionTable(c: HostChecks) {
     "preview-overlay": { owner: c.ownerId, moduleId: c.moduleId, workspaceId: c.workspaceId, key: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     /** The answer in the consent dialog for a connector a module asks for on request (HostViewState.pendingConnector). */
     "connector-answer": { id: check<number>((value) => Number.isSafeInteger(value)), allow: bool },
+    /** The answer to a module's leaderboards question in its panel (HostViewState.pendingLeaderboard). */
+    "leaderboard-answer": { id: check<number>((value) => Number.isSafeInteger(value)), allow: bool },
     /** Removes one hotkey from Settings > Streaming. */
     "remove-hotkey": { owner: c.ownerId, moduleId: c.moduleId, workspaceId: c.workspaceId, action: matching(/^[a-z][a-z0-9-]{0,31}$/), target: matching(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/) },
     "set-language": { language: check<LanguageSetting>(isLanguageSetting) },
@@ -343,6 +345,8 @@ export function hostActionTable(c: HostChecks) {
     "grant-module": { moduleId: c.moduleId, network: c.networkHosts, connectors: list(c.connector, { max: Infinity, unique: true }) },
     /** Takes back everything granted to a module, after removing its panels in every workspace; its data stays. */
     "revoke-module": { moduleId: c.moduleId },
+    /** Settings > Integrations > Leaderboards: takes the user off a module's boards; the service deletes their results there. */
+    "leaderboards-hide": { moduleId: c.moduleId },
     /** Asks for a module zip and installs it into the user's modules folder; answers with the module's id. */
     "install-module": {},
     /** Downloads a module from the catalog, checks it and installs it like a zip. */

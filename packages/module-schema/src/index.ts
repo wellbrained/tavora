@@ -119,6 +119,11 @@ export interface ModuleManifest {
    * because older Tavoras refuse the field; Tavora's own modules ship with the app and need none.
    */
   translations?: Record<string, ModuleTranslation>;
+  /**
+   * The module's leaderboards (sdk.leaderboards), up to MAX_LEADERBOARD_BOARDS. Needs the `leaderboards` connector, and
+   * a `minTavora` newer than LAST_TAVORA_WITHOUT_LEADERBOARDS because older Tavoras refuse the field.
+   */
+  leaderboards?: { boards: LeaderboardBoard[] };
   permissions: {
     /** Hosts the module asks to reach through network.fetch, such as `api.example.com`. Each needs the user's grant. */
     network: string[];
@@ -134,6 +139,16 @@ export interface ModuleManifest {
   };
 }
 
+/**
+ * One leaderboard a module declares (decided 2026-10-28). `streak`: won and lost results, ranked by the best winning
+ * streak, then the current one; with `daily`, one result per calendar day, and a missed day ends the streak. `score`:
+ * one number per result, ranked by each user's best, the highest first (`order` "high", the default) or the lowest
+ * (`order` "low", such as a time).
+ */
+export type LeaderboardBoard =
+  | { id: string; kind: "streak"; daily?: boolean }
+  | { id: string; kind: "score"; order?: "high" | "low" };
+
 export type ManifestResult =
   | { ok: true; manifest: ModuleManifest }
   | { ok: false; errors: string[] };
@@ -144,7 +159,7 @@ const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "personalWorkspaces", "workspaces", "viewport", "panels", "inGame", "overlay", "overlaySize", "actions", "translations", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "personalWorkspaces", "workspaces", "viewport", "panels", "inGame", "overlay", "overlaySize", "actions", "translations", "leaderboards", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
@@ -322,9 +337,10 @@ export function allowsPersonalWorkspaces(manifest: Pick<ModuleManifest, "games" 
  * sign-ins; `discord` talks to the Discord app on this PC with Tavora's Discord sign-in (voice channels, who is
  * talking, joining and muting); `stream-overlay` shows the module's `overlay` page in streaming software on this PC;
  * `system-info` reads this PC's hardware and how busy it is (CPU, graphics card, memory, drives); `media` sees what plays
- * on this PC (Spotify, browsers, video players) and can play, pause and skip.
+ * on this PC (Spotify, browsers, video players) and can play, pause and skip; `leaderboards` keeps the module's
+ * leaderboards (the manifest's `leaderboards`) with the user's Tavora account, once the user agrees to show their name.
  */
-export const CONNECTORS = ["ai-usage", "discord", "media", "stream-overlay", "system-info"] as const;
+export const CONNECTORS = ["ai-usage", "discord", "leaderboards", "media", "stream-overlay", "system-info"] as const;
 export type Connector = (typeof CONNECTORS)[number];
 
 /** Connectors a module may have Tavora ask for on first use (permissions.onRequest) instead of when it is added. */
@@ -370,6 +386,17 @@ export const LAST_TAVORA_WITHOUT_TRANSLATIONS = "0.20.12";
 export const LAST_TAVORA_WITHOUT_OVERLAY_SIZE = "0.21.27";
 /** The last Tavora that refuses `personalWorkspaces` (it knows `workspaces`); a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES = "0.21.42";
+/** The last Tavora that refuses `leaderboards` and its connector; a manifest with them needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_LEADERBOARDS = "0.21.91";
+/** Most leaderboards one module may declare. */
+export const MAX_LEADERBOARD_BOARDS = 20;
+const LEADERBOARD_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+const MAX_LEADERBOARD_ID = 32;
+
+/** A leaderboard id: lowercase letters and digits in words joined by -, starting with a letter, at most 32 characters. */
+export function isLeaderboardId(value: unknown): value is string {
+  return typeof value === "string" && value.length <= MAX_LEADERBOARD_ID && LEADERBOARD_ID.test(value);
+}
 const LANGUAGE_CODE = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/;
 
 /** Whether a manifest may key a translation by this: a lowercase language code such as `de` or `pt-br`. */
@@ -523,6 +550,35 @@ function checkActions(actions: unknown, errors: string[]): void {
   });
 }
 
+function checkLeaderboards(input: Record<string, unknown>, errors: string[]): void {
+  const leaderboards = input.leaderboards;
+  const boards: unknown = isRecord(leaderboards) ? leaderboards.boards : undefined;
+  if (!isRecord(leaderboards) || !Array.isArray(boards) || boards.length === 0 || boards.length > MAX_LEADERBOARD_BOARDS) {
+    return void errors.push(`leaderboards must be { boards } with 1 to ${MAX_LEADERBOARD_BOARDS} boards`);
+  }
+  const unknown = Object.keys(leaderboards).filter((key) => key !== "boards");
+  if (unknown.length > 0) errors.push(`unknown leaderboards fields: ${unknown.join(", ")}`);
+  const ids = new Set<string>();
+  boards.forEach((board: unknown, index) => {
+    const at = `leaderboards.boards[${index}]`;
+    if (!isRecord(board)) return void errors.push(`${at} must be an object`);
+    if (!isLeaderboardId(board.id)) errors.push(`${at}.id must be lowercase letters and digits joined by -, starting with a letter, at most ${MAX_LEADERBOARD_ID} characters`);
+    else if (ids.has(board.id)) errors.push(`leaderboards lists the board ${board.id} twice`);
+    else ids.add(board.id);
+    if (board.kind === "streak") {
+      if (board.daily !== undefined && typeof board.daily !== "boolean") errors.push(`${at}.daily must be true or false`);
+    } else if (board.kind === "score") {
+      if (board.order !== undefined && board.order !== "high" && board.order !== "low") errors.push(`${at}.order must be "high" or "low"`);
+    } else errors.push(`${at}.kind must be "streak" or "score"`);
+    const fields = board.kind === "score" ? ["id", "kind", "order"] : ["id", "kind", "daily"];
+    const extra = Object.keys(board).filter((key) => !fields.includes(key));
+    if (extra.length > 0) errors.push(`unknown ${at} fields: ${extra.join(", ")}`);
+  });
+  if (!officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_LEADERBOARDS)) {
+    errors.push(`leaderboards need a minTavora newer than ${LAST_TAVORA_WITHOUT_LEADERBOARDS}, because older Tavoras refuse them`);
+  }
+}
+
 function checkTranslations(input: Record<string, unknown>, errors: string[]): void {
   const translations = input.translations;
   if (!isRecord(translations) || Object.keys(translations).length === 0 || Object.keys(translations).length > MAX_TRANSLATIONS) {
@@ -630,6 +686,7 @@ export function validateManifest(input: unknown): ManifestResult {
   }
   if (input.actions !== undefined) checkActions(input.actions, errors);
   if (input.translations !== undefined) checkTranslations(input, errors);
+  if (input.leaderboards !== undefined) checkLeaderboards(input, errors);
   if (input.overlay !== undefined) {
     if (!isPackagePath(input.overlay)) errors.push("overlay must be a relative path inside the package");
     else if (!input.overlay.endsWith(".html")) errors.push("overlay must be an .html file");
@@ -680,6 +737,9 @@ export function validateManifest(input: unknown): ManifestResult {
       errors.push(`overlay without the "stream-overlay" connector needs a minTavora newer than ${LAST_TAVORA_WITHOUT_GAME_OVERLAYS}, because older Tavoras refuse it`);
     }
     if (overlayConnector && input.overlay === undefined) errors.push('the "stream-overlay" connector needs an overlay page');
+    const leaderboardsConnector = Array.isArray(permissions.connectors) && permissions.connectors.includes("leaderboards");
+    if (leaderboardsConnector && input.leaderboards === undefined) errors.push('the "leaderboards" connector needs leaderboards');
+    if (!leaderboardsConnector && input.leaderboards !== undefined) errors.push('leaderboards need the "leaderboards" connector');
   }
 
   const extra = Object.keys(input).filter((key) => !FIELDS.includes(key));

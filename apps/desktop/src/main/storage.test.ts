@@ -28,6 +28,34 @@ describe("ModuleStore", () => {
     expect(await new ModuleStore(file).get("count")).toBeNull();
   });
 
+  it("sets with compareAndSet only while the key holds what was expected", async () => {
+    const file = path.join(dir, "storage.json");
+    const store = new ModuleStore(file);
+    expect(await store.compareAndSet("run", { digits: [1] }, { digits: [1, 2] })).toBe(false);
+    expect(await store.compareAndSet("run", null, { digits: [1], at: 1 })).toBe(true);
+    expect(await store.compareAndSet("run", null, { digits: [9] })).toBe(false);
+    // The same JSON in another key order still matches.
+    expect(await store.compareAndSet("run", { at: 1, digits: [1] }, { digits: [1, 2] })).toBe(true);
+    expect(await new ModuleStore(file).get("run")).toEqual({ digits: [1, 2] });
+  });
+
+  it("lets only one of two panels' compareAndSet win, and keeps the winner's change", async () => {
+    const file = path.join(dir, "storage.json");
+    const store = new ModuleStore(file);
+    await store.set("run", { digits: [1] });
+    const outcomes = await Promise.all([store.compareAndSet("run", { digits: [1] }, { digits: [1, 2] }), store.compareAndSet("run", { digits: [1] }, { digits: [1, 3] })]);
+    expect(outcomes).toEqual([true, false]);
+    expect(await new ModuleStore(file).get("run")).toEqual({ digits: [1, 2] });
+  });
+
+  it("checks compareAndSet's key, values and quota like set", async () => {
+    const store = new ModuleStore(path.join(dir, "storage.json"), 100);
+    expect(() => store.compareAndSet("", null, 1)).toThrow(HostError);
+    expect(() => store.compareAndSet("a", null, undefined)).toThrow(HostError);
+    await expect(store.compareAndSet("a", null, "x".repeat(200))).rejects.toMatchObject({ code: "QUOTA_EXCEEDED" });
+    expect(await store.get("a")).toBeNull();
+  });
+
   it("enforces the quota on serialized size, counting replaced values once", async () => {
     const store = new ModuleStore(path.join(dir, "storage.json"), 100);
     await store.set("a", "x".repeat(80));

@@ -167,6 +167,30 @@ describe("requests", () => {
     expect(host.requests.at(-1)).toMatchObject({method:"network.readPage",params:{url:answer.url}});
   });
 
+  it("sends compareAndSet and the leaderboard calls with their params", async () => {
+    const host = fakeHost((request) => (request.method === "bridge.handshake" ? { result: handshake } : { result: request.method.startsWith("storage.") ? true : null }));
+    hosts.push(host);
+    const tavora = await sdk.connect();
+    await expect(tavora.storage.compareAndSet("run", null, 1)).resolves.toBe(true);
+    await tavora.storage.app.compareAndSet("run", { n: 1 }, { n: 2 });
+    await tavora.leaderboards.status();
+    await tavora.leaderboards.show();
+    await tavora.leaderboards.hide();
+    await tavora.leaderboards.submit("daily", [{ id: "a", outcome: "won", at: 1, day: "2026-10-28" }]);
+    await tavora.leaderboards.top("daily", { day: "2026-10-28", limit: 5 });
+    await tavora.leaderboards.top("fastest");
+    expect(host.requests.slice(1).map((request) => [request.method, request.params])).toEqual([
+      ["storage.compareAndSet", { key: "run", expected: null, value: 1 }],
+      ["storage.app.compareAndSet", { key: "run", expected: { n: 1 }, value: { n: 2 } }],
+      ["leaderboards.status", undefined],
+      ["leaderboards.show", undefined],
+      ["leaderboards.hide", undefined],
+      ["leaderboards.submit", { board: "daily", results: [{ id: "a", outcome: "won", at: 1, day: "2026-10-28" }] }],
+      ["leaderboards.top", { board: "daily", day: "2026-10-28", limit: 5 }],
+      ["leaderboards.top", { board: "fastest" }],
+    ]);
+  });
+
   it("ignores messages for another protocol version", async () => {
     const host = fakeHost(standard);
     hosts.push(host);

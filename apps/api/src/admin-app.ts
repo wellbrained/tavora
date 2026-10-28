@@ -20,6 +20,7 @@ import { createNotifier, isUnpublishReason, unpublishedMail, UNPUBLISH_REASONS }
 import type { ReviewStore } from "./reviews.ts";
 import { accountName, createConversationNotifier, type ConversationStore } from "./conversations.ts";
 import { conversationsAdminRoutes, textsAdminRoutes } from "./conversations-admin.ts";
+import { leaderboardsAdminRoutes, type LeaderboardStore } from "./leaderboards.ts";
 import { statsRange, type StatsStore } from "./stats.ts";
 import type { Submissions } from "./submissions.ts";
 
@@ -62,6 +63,8 @@ export interface AdminOptions {
   reviews?: ReviewStore;
   /** Conversations, for Messages and Texts. Absent: those routes answer 404. */
   conversations?: ConversationStore;
+  /** Leaderboards, for allowing modules and hiding names. Absent: those routes answer 404. */
+  leaderboards?: LeaderboardStore;
   /** The built panel (Tavora Admin's dist; on the server /srv/tavora-admin/current). Absent or missing: the page says it is not built. */
   adminDir?: string;
   /** What the panel asks the outside world; the real ones by default. */
@@ -84,7 +87,7 @@ export interface AdminOptions {
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, conversations, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation, ownerEmail, activity }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, conversations, leaderboards, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation, ownerEmail, activity }: AdminOptions) {
   const app = new Hono();
   const expected = digest(token);
 
@@ -486,6 +489,9 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     app.route("/api/messages", conversationsAdminRoutes({ conversations, accounts, catalog, notifier: conversationNotifier, now: moderation?.now }));
     app.route("/api/texts", textsAdminRoutes({ conversations }));
   }
+
+  // Leaderboards (leaderboards.ts): which catalog modules may use them, and the names hidden on every board.
+  if (leaderboards && accounts) app.route("/api/leaderboards", leaderboardsAdminRoutes({ leaderboards, accounts, now: moderation?.now }));
 
   // The account list and Suspend (accounts-admin.ts). The counts at GET /api/accounts stay in admin-panel.ts.
   if (accounts) app.route("/api/accounts", accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer: moderation?.mailer, mailDailyLimit: moderation?.mailDailyLimit, ownerEmail, now: moderation?.now }));

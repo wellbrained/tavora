@@ -46,7 +46,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `viewport.minWidth`, `viewport.minHeight` | yes | Smallest usable panel size in CSS pixels, 1 to 10000. Tavora refuses to open a panel it cannot give this much room. |
 | `viewport.preferredWidth`, `viewport.preferredHeight` | no | Size the module looks best at, 1 to 10000. A panel shown in the game (`inGame`) starts at this size. |
 | `permissions.network` | yes | Hosts the module asks to reach with [`network.fetch`](./protocol.md#network), at most 32, e.g. `["api.example.com"]`; `[]` for none. Exact lowercase public names only: no scheme, port, path, wildcard, IP address, `localhost`, `.local` or `.internal`. Each one works only once the user has granted it. |
-| `permissions.connectors` | no | Connectors the module asks to use: `"ai-usage"` to read the usage of the user's Claude and Codex accounts, `"discord"` to use the Discord app on this PC with Tavora's Discord sign-in (see [Connectors](./protocol.md#connectors)), `"stream-overlay"` to show its [`overlay`](#overlay) page in streaming software on this PC, `"system-info"` to read this PC's hardware, how busy it is and how its connection is doing (Tavora 0.21.1 or newer, the connection 0.21.22 or newer; set `minTavora`), `"media"` to see what plays on this PC and play, pause or skip it (Tavora 0.21.18 or newer; set `minTavora`). Each name once; each works only once the user has granted it. |
+| `permissions.connectors` | no | Connectors the module asks to use: `"ai-usage"` to read the usage of the user's Claude and Codex accounts, `"discord"` to use the Discord app on this PC with Tavora's Discord sign-in (see [Connectors](./protocol.md#connectors)), `"stream-overlay"` to show its [`overlay`](#overlay) page in streaming software on this PC, `"system-info"` to read this PC's hardware, how busy it is and how its connection is doing (Tavora 0.21.1 or newer, the connection 0.21.22 or newer; set `minTavora`), `"media"` to see what plays on this PC and play, pause or skip it (Tavora 0.21.18 or newer; set `minTavora`), `"leaderboards"` to keep [leaderboards](#leaderboards) with the user's Tavora account (needs `leaderboards`). Each name once; each works only once the user has granted it. |
 | `permissions.onRequest` | no | Connectors from `permissions.connectors` that Tavora asks for only when your module first needs one, not when it is added, so it works without them. Only `"stream-overlay"` so far: Tavora asks on the first `overlay.copyLink`. Needs Tavora 0.19.32 or newer. |
 | `permissions.webAssembly` | no | `true` lets the page compile WebAssembly (the page's security policy gets `'wasm-unsafe-eval'`). Only Tavora's own modules may ask for it; a module from your modules folder that does is not loaded, and the Modules page says why. |
 
@@ -56,6 +56,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `overlaySize` | no | `{ "width": 440, "height": 100 }`: the size in pixels the `overlay` page starts at over the user's game; the user can still resize it. Without it the overlay starts at a fifth of the game window's width. Needs `overlay` and a `minTavora` newer than `0.21.27`, because older Tavoras refuse it. |
 | `actions` | no | What the module can do on a key press, 1 to 16, see [Actions](#actions). Needs Tavora 0.19.26 or newer. |
 | `translations` | no | The name, description, panel and action names in other languages, see [Translations](#translations). Needs a `minTavora` newer than `0.20.12`. |
+| `leaderboards` | no | The module's boards, see [Leaderboards](#leaderboards). Needs the `"leaderboards"` connector and a `minTavora` newer than `0.21.91`. |
 
 Paths (`entry`, `icon`, `readme`, `screenshots`, `overlay`, and the same fields of a panel type) are relative to the package root and must stay inside it: no leading `/`, no `.` or `..` segments, no empty segments, no backslashes or `:`. Tavora also checks that both files exist when it discovers the module.
 
@@ -138,6 +139,30 @@ The page loads only its own files: bundle your fonts, and give it colours and te
 Each text Tavora shows comes from the translation for exactly the user's language, else from its base language (`pt` for `pt-br`), else from the plain field. Leave out what stays the same; the plain fields are what users in every other language see, so write them in English. At most 32 languages; codes Tavora doesn't speak yet are fine. The readme and patch notes have one language for now.
 
 Older Tavoras refuse a manifest with `translations`, so set `minTavora` to a version newer than `0.20.12`; Tavora refuses the manifest otherwise. The catalog then doesn't offer your module to older Tavoras.
+
+## Leaderboards
+
+`leaderboards` declares the boards your module keeps on Tavora's service (`sdk.leaderboards`, see the [guide](../guide/leaderboards.md)). It needs `"leaderboards"` in `permissions.connectors`, and the connector needs it.
+
+```json
+"leaderboards": {
+  "boards": [
+    { "id": "unlimited", "kind": "streak" },
+    { "id": "daily", "kind": "streak", "daily": true },
+    { "id": "fastest", "kind": "score", "order": "low" }
+  ]
+}
+```
+
+| Field | Required | Rules |
+| --- | --- | --- |
+| `boards` | yes | 1 to 20 boards. |
+| `boards[].id` | yes | Stable identity: lowercase letters and digits in words joined by `-`, starting with a letter, at most 32 characters, unique in the module. Results are kept by it, so never change it after release. |
+| `boards[].kind` | yes | `"streak"`: won and lost games; a user's line has their current and best winning streak, ranked by the best, then the current one. `"score"`: one number per game; a user's line has their best. |
+| `boards[].daily` | no | Streak boards only. `true`: one result per calendar day, and a missed day ends the streak. A result counts only when it ended within its day, so replaying an old puzzle never does. |
+| `boards[].order` | no | Score boards only. `"high"` (the default): the highest number wins. `"low"`: the lowest wins, such as a time. |
+
+Tavora's service reads a catalog module's boards from its newest listed version, so a board works once the version that declares it is listed. A development copy uses the boards of its own manifest.
 
 ## Game ids
 

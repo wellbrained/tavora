@@ -8,6 +8,7 @@ import AiUsageSection from "./AiUsageSection.vue";
 import DiscordSection from "./DiscordSection.vue";
 import SystemInfoSection from "./SystemInfoSection.vue";
 import MediaSection from "./MediaSection.vue";
+import LeaderboardsSection from "./LeaderboardsSection.vue";
 import { hiddenSettingIds } from "../../host";
 
 defineProps<{ highlight: string | null }>();
@@ -18,4 +19,5 @@ defineProps<{ highlight: string | null }>();
   <AiUsageSection v-if="!hiddenSettingIds.has('ai-usage-accounts')" :highlight="highlight" />
   <SystemInfoSection />
   <MediaSection />
+  <LeaderboardsSection />
 </template>

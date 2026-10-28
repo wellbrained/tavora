@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -112,6 +112,13 @@ describe("validateManifest", () => {
   });
 });
 
+const leaderboards = {
+  ...valid,
+  minTavora: "0.21.92",
+  permissions: { network: [], connectors: ["leaderboards"] },
+  leaderboards: { boards: [{ id: "unlimited", kind: "streak" }, { id: "daily", kind: "streak", daily: true }, { id: "fastest-easy", kind: "score", order: "low" }] },
+};
+
 // Every case is checked by the validator and by the JSON Schema, and both
 // must agree, so editors flag exactly what Tavora refuses to load.
 const cases: [string, unknown, boolean][] = [
@@ -122,6 +129,18 @@ const cases: [string, unknown, boolean][] = [
   ["translation with an unknown field", { ...valid, minTavora: "0.21.0", translations: { de: { readme: "LIESMICH.md" } } }, false],
   ["translated panel name too long", { ...valid, minTavora: "0.21.0", panels: [{ id: "planner", name: "Planner" }], translations: { de: { panels: { planner: "x".repeat(25) } } } }, false],
   ["translated action name on two lines", { ...valid, minTavora: "0.21.0", actions: [{ id: "reset", name: "Reset" }], translations: { de: { actions: { reset: "Zurück\nsetzen" } } } }, false],
+  ["leaderboards", leaderboards, true],
+  ["leaderboards without the connector", { ...leaderboards, permissions: { network: [] } }, false],
+  ["the leaderboards connector without leaderboards", { ...leaderboards, leaderboards: undefined }, false],
+  ["leaderboards without boards", { ...leaderboards, leaderboards: { boards: [] } }, false],
+  ["leaderboards with 21 boards", { ...leaderboards, leaderboards: { boards: Array.from({ length: 21 }, (_, i) => ({ id: `b${i}`, kind: "score" })) } }, false],
+  ["a leaderboard id with capitals", { ...leaderboards, leaderboards: { boards: [{ id: "Daily", kind: "streak" }] } }, false],
+  ["a leaderboard id with a double hyphen", { ...leaderboards, leaderboards: { boards: [{ id: "a--b", kind: "streak" }] } }, false],
+  ["a leaderboard of an unknown kind", { ...leaderboards, leaderboards: { boards: [{ id: "a", kind: "time" }] } }, false],
+  ["a daily score board", { ...leaderboards, leaderboards: { boards: [{ id: "a", kind: "score", daily: true }] } }, false],
+  ["a streak board with an order", { ...leaderboards, leaderboards: { boards: [{ id: "a", kind: "streak", order: "low" }] } }, false],
+  ["a score board ordered sideways", { ...leaderboards, leaderboards: { boards: [{ id: "a", kind: "score", order: "middle" }] } }, false],
+  ["leaderboards with an unknown field", { ...leaderboards, leaderboards: { boards: [{ id: "a", kind: "score" }], public: true } }, false],
   ["full", { ...valid, $schema: "x", description: "Plans builds.", icon: "assets/icon.webp" }, true],
   ["any game", { ...valid, games: [] }, true],
   ["changelog", { ...valid, changelog: "changelog.json" }, true],
@@ -430,6 +449,22 @@ describe("overlay without the stream-overlay connector", () => {
     expect(validateManifest(overlay)).toEqual(error);
     expect(validateManifest({ ...overlay, minTavora: LAST_TAVORA_WITHOUT_GAME_OVERLAYS })).toEqual(error);
     expect(validateManifest({ ...overlay, minTavora: "0.20.51" }).ok).toBe(true);
+  });
+});
+
+describe("leaderboards", () => {
+  it("need a minTavora newer than the last Tavora that refuses them", () => {
+    const error = { ok: false, errors: [`leaderboards need a minTavora newer than ${LAST_TAVORA_WITHOUT_LEADERBOARDS}, because older Tavoras refuse them`] };
+    expect(validateManifest({ ...leaderboards, minTavora: undefined })).toEqual(error);
+    expect(validateManifest({ ...leaderboards, minTavora: LAST_TAVORA_WITHOUT_LEADERBOARDS })).toEqual(error);
+    expect(validateManifest({ ...leaderboards, id: "tavora.puzzle", minTavora: undefined }).ok).toBe(true);
+  });
+
+  it("refuses a board id listed twice", () => {
+    expect(validateManifest({ ...leaderboards, leaderboards: { boards: [{ id: "daily", kind: "streak" }, { id: "daily", kind: "score" }] } })).toEqual({
+      ok: false,
+      errors: ["leaderboards lists the board daily twice"],
+    });
   });
 });
 

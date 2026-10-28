@@ -653,6 +653,12 @@ export interface HostViewState {
    * the host UI shows the consent dialog for it and answers with connector-answer.
    */
   pendingConnector: { id: number; moduleId: string; connectors: ModuleConnector[] } | null;
+  /**
+   * A module's question about its leaderboards (leaderboards.show), shown in the panel that asked (`instanceId`):
+   * `consent` whether to show the user's name (`name`, as the boards will show it) and results; `sign-in` to sign in
+   * first. The host UI answers with leaderboard-answer.
+   */
+  pendingLeaderboard: { id: number; instanceId: string; moduleId: string; kind: "consent"; name: string } | { id: number; instanceId: string; moduleId: string; kind: "sign-in" } | null;
 }
 
 /**
@@ -729,7 +735,7 @@ export interface ModulePermissions {
 }
 
 /** The connectors Tavora has (module-schema CONNECTORS). */
-export type ModuleConnector = "ai-usage" | "discord" | "media" | "stream-overlay" | "system-info";
+export type ModuleConnector = "ai-usage" | "discord" | "leaderboards" | "media" | "stream-overlay" | "system-info";
 
 /** Everything the host UI can ask the main process to do: the table in host-actions.ts. */
 export type { HostAction, HostActionType } from "./host-actions";

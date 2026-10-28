@@ -74,6 +74,39 @@ export class ModuleStore {
     });
   }
 
+  /**
+   * Sets `value` only while the key holds `expected` (null: not set), in one step of the queue, so two panels can't
+   * overwrite each other's change. Values are compared as JSON, whatever the order of their keys. Whether it was set.
+   */
+  compareAndSet(key: unknown, expected: unknown, value: unknown): Promise<boolean> {
+    validateKey(key);
+    const wanted = expected === null ? null : (JSON.parse(serializeJson(expected, "expected")) as JsonValue);
+    const serialized = serializeJson(value, "value");
+    return this.queue.run(async () => {
+      const entries = await this.load();
+      const previous = entries.get(key);
+      const current = previous === undefined ? null : (JSON.parse(previous) as JsonValue);
+      if (!sameJson(current, wanted)) return false;
+      const before = this.bytes;
+      const next = before - (previous === undefined ? 0 : entrySize(key, previous)) + entrySize(key, serialized);
+      if (next > this.maxBytes) {
+        throw new HostError("QUOTA_EXCEEDED", `settings are limited to ${this.maxBytes} bytes per store`);
+      }
+      entries.set(key, serialized);
+      this.bytes = next;
+      try {
+        await this.persist(entries);
+      } catch (error) {
+        // Not written: the next compare must see what is on disk.
+        if (previous === undefined) entries.delete(key);
+        else entries.set(key, previous);
+        this.bytes = before;
+        throw error;
+      }
+      return true;
+    });
+  }
+
   private async load(): Promise<Map<string, string>> {
     if (this.entries) return this.entries;
     const entries = new Map<string, string>();
@@ -96,6 +129,17 @@ export class ModuleStore {
 
 function entrySize(key: string, serialized: string): number {
   return Buffer.byteLength(key) + Buffer.byteLength(serialized);
+}
+
+/** Whether two JSON values hold the same, whatever the order of their objects' keys. */
+function sameJson(a: JsonValue | null, b: JsonValue | null): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((item, index) => sameJson(item, b[index]!));
+  }
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => key in b && sameJson(a[key]!, b[key]!));
 }
 
 /** UI state for one panel instance. Removed when the panel is closed. */
