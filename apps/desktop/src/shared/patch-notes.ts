@@ -28,6 +28,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.60",
+    date: "2026-10-28",
+    title: "Overlay page: panels run without a visit",
+    notes: [
+      "The Overlay page now starts the panels behind its items itself, so Soundtrack and others show without opening their workspace first.",
+    ],
+  },
+  {
     version: "0.21.59",
     date: "2026-10-28",
     title: "Overlay page: idle panels",
