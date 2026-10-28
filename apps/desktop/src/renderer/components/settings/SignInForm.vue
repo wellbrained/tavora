@@ -26,14 +26,23 @@ const waitingDiscord = ref(false);
 /** A new account waits for the user's yes: from an email code or a Discord login. */
 const creating = computed(() => (pending.value?.kind === "sign-in" && pending.value.step === "create") || pending.value?.kind === "discord-create");
 
-// A new step always starts with an empty code box.
-watch(pending, () => (code.value = ""));
+/** Why the last step failed, shown in the form next to what the user typed instead of as a toast. */
+const error = ref<string | null>(null);
+
+// A new step always starts with an empty code box and no old error.
+watch(pending, () => {
+  code.value = "";
+  error.value = null;
+});
 
 async function run(action: HostAction): Promise<boolean> {
   if (busy.value) return false;
   busy.value = true;
+  error.value = null;
   try {
-    return (await act(action)).ok;
+    const result = await act(action, { quiet: true });
+    if (!result.ok) error.value = result.error;
+    return result.ok;
   } finally {
     busy.value = false;
   }
@@ -65,6 +74,7 @@ async function discordSignIn() {
       <Button :disabled="busy || !ageConfirmed" data-testid="account-create" @click="run({ type: 'account-create', ageConfirmed })">{{ t("account.create.confirm") }}</Button>
       <Button variant="secondary" :disabled="busy" data-testid="account-cancel" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
     </div>
+    <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="account-error">{{ error }}</p>
   </div>
 
   <form
@@ -78,6 +88,7 @@ async function discordSignIn() {
       <CodeInput v-model="code" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
       <Button type="submit" :disabled="busy || !codeReady" data-testid="account-verify">{{ t("account.signIn") }}</Button>
     </div>
+    <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="account-error">{{ error }}</p>
     <div class="flex gap-2">
       <Button type="button" variant="ghost" size="sm" :disabled="busy" data-testid="account-resend" @click="run({ type: 'account-send-code', email: pending.email })">{{ t("account.code.resend") }}</Button>
       <Button type="button" variant="ghost" size="sm" :disabled="busy" data-testid="account-cancel" @click="run({ type: 'account-cancel' })">{{ t("account.code.otherAddress") }}</Button>
@@ -90,6 +101,7 @@ async function discordSignIn() {
       <Input v-model="email" type="email" class="max-w-80" autocomplete="email" maxlength="254" :placeholder="t('account.email.placeholder')" :aria-label="t('account.email.label')" data-testid="account-email" />
       <Button type="submit" :disabled="busy || !email.trim()" data-testid="account-send-code">{{ t("account.code.send") }}</Button>
     </div>
+    <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="account-error">{{ error }}</p>
     <span class="text-muted-foreground text-sm">{{ t("account.email.hint") }}</span>
     <template v-if="view?.discordLogin">
       <span class="text-muted-foreground text-sm">{{ t("account.discord.or") }}</span>

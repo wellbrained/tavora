@@ -823,8 +823,8 @@ export class AccountClient {
     if ((json.reason === "invalid" || json.reason === "conflict") && typeof json.error === "string" && json.error.trim()) {
       throw new UserError("publish.error.refused", { message: json.error.replace(/\s+/g, " ").trim().slice(0, 300) });
     }
-    // 503: switched off on the service; 404: a service that has no accounts at all yet.
-    if (response.status === 503 || response.status === 404) throw new UserError("account.error.unavailable");
+    // 503: switched off on the service; other 5xx: it failed; 404: a service that has no accounts at all yet.
+    if (response.status >= 500 || response.status === 404) throw new UserError("account.error.unavailable");
     throw new UserError("error.generic");
   }
 }

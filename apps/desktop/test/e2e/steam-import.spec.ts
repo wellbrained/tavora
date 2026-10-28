@@ -33,9 +33,9 @@ test("a user who can't import from Steam is told what happened and what to do", 
     await expect(error).toHaveText("Enter a steamcommunity.com profile link.");
 
     // A private profile says where to change it.
-    answer = { status: 502, body: { error: "Steam did not return a game list. Check that Game details are public on the profile." } };
+    answer = { status: 502, body: { error: "Steam did not return a game list. Check that Game details are public on the profile.", code: "no-game-list" } };
     await lookUp("https://steamcommunity.com/id/someone");
-    await expect(error).toContainText("Check that Game details are public");
+    await expect(error).toContainText("Set Game details on your Steam profile to Public");
 
     // Too many tries.
     answer = { status: 429, body: { error: "Too many requests." } };
@@ -48,7 +48,7 @@ test("a user who can't import from Steam is told what happened and what to do", 
     await expect(error).toHaveText("Can't reach Tavora's service. Check your connection and try again.");
     answer = { status: 502, body: "<html>Bad gateway</html>" };
     await lookUp("https://steamcommunity.com/id/someone");
-    await expect(error).toHaveText("Steam import is not available right now.");
+    await expect(error).toHaveText("Steam import isn't working right now. Try again in a bit.");
 
     // The same form works again once the service answers: an account without games says how to fix that,
     // and offers only Back (there is nothing to import).
