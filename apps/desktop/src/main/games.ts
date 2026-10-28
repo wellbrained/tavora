@@ -27,7 +27,7 @@ export const THEME: TavoraTheme = {
     "accent-foreground": "#f2ece0",
     destructive: "#e5675a",
     border: "#35302b",
-    input: "#6b665c",
+    input: "#6e695f",
     ring: "#e0a243",
     rail: "#100e0d",
     success: "#8cbf7f",
