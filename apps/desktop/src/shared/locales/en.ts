@@ -1568,6 +1568,7 @@ export const en = {
   "overlays.exclusiveHint": "Switch the game to borderless to see overlays.",
   "overlays.stopped": "This overlay stopped working.",
   "overlays.button.open": "Overlay",
+  "overlays.rail.hint": "Arrange what shows over your games",
   "overlays.button.start": "Start",
   "overlays.button.stop": "Stop",
   "overlays.button.startTip": "Start your overlays. They show over your game.",

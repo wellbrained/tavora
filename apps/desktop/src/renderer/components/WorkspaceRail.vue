@@ -11,6 +11,7 @@ import MenuArea from "./menus/MenuArea.vue";
 import MenuButton from "./menus/MenuButton.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
 import RailFooterTile from "./RailFooterTile.vue";
+import RailOverlayButton from "./RailOverlayButton.vue";
 import RunningGameButton from "./RunningGameButton.vue";
 import UpdateMarker from "./UpdateMarker.vue";
 import RailWorkspace from "./RailWorkspace.vue";
@@ -508,6 +509,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     <div class="flex flex-col gap-1 border-t py-2">
       <RunningGameButton :expanded="expanded" />
       <UpdateMarker :expanded="expanded" />
+      <RailOverlayButton :expanded="expanded" />
       <ProfileMenu :expanded="expanded" />
       <button
         type="button"

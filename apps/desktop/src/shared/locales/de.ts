@@ -1570,6 +1570,7 @@ export const de: Record<keyof typeof en, string> = {
   "overlays.exclusiveHint": "Stell das Spiel auf Rahmenlos, um Overlays zu sehen.",
   "overlays.stopped": "Dieses Overlay funktioniert nicht mehr.",
   "overlays.button.open": "Overlay",
+  "overlays.rail.hint": "Ordne an, was über deinen Spielen zu sehen ist",
   "overlays.button.start": "Start",
   "overlays.button.stop": "Stopp",
   "overlays.button.startTip": "Starte deine Overlays. Sie erscheinen über deinem Spiel.",

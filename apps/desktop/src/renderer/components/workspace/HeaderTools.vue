@@ -33,7 +33,7 @@ watchEffect(() => {
 <template>
   <div class="app-no-drag flex flex-none items-center gap-2">
     <ModuleUpdatesButton />
-    <OverlayButton :active="onOverlay" />
+    <OverlayButton />
     <InboxButton />
     <div :inert="onOverlay" :class="cn('flex items-center gap-2', onOverlay && 'opacity-50')">
       <LayoutsMenu />
