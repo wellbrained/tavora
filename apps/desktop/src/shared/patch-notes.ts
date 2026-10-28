@@ -28,6 +28,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.66",
+    date: "2026-10-28",
+    title: "Calmer header",
+    notes: [
+      "Add module is the one filled button; Inbox, Updates and Layouts are quiet icons, and the overlay and inbox buttons sit apart from the workspace buttons.",
+      "Module updates show as an icon with a count.",
+    ],
+  },
+  {
     version: "0.21.65",
     date: "2026-10-28",
     title: "Overlay in the rail",
