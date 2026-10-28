@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { CatalogMatch, OnlineGame, OnlineSearchResult } from "../../shared/host-api";
 import { act, api, dialog, state } from "../host";
+import { rankByName } from "@/lib/search";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { t } from "../i18n";
@@ -56,10 +57,11 @@ interface Row {
   name: string;
 }
 
-// Built-in matches first, then the online ones that are not the same game.
+// Built-in and online games as one list, ranked by how well the name fits what
+// was typed: "eld" lists Elden Ring before Battlefield 6. Same game once only.
 const rows = computed<Row[]>(() => {
   const known = new Set(matches.value.map((match) => match.id));
-  return [...matches.value, ...online.value.filter((game) => !known.has(game.id))];
+  return rankByName([...matches.value, ...online.value.filter((game) => !known.has(game.id))], query.value, (row) => row.name);
 });
 
 function addRow(row: Row) {

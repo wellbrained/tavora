@@ -6,7 +6,7 @@ import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Sea
 import { computed, nextTick, ref, watch, type Component } from "vue";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
-import { rank } from "@/lib/search";
+import { rank, rankByName, startsOrIsWord } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { CatalogMatch, OnlineGame, WorkspaceView } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
@@ -32,6 +32,8 @@ interface Group {
   id: "workspaces" | "here" | "actions" | "settings" | "add";
   label: string;
   items: Item[];
+  /** Toned down: suggestions, not the user's own things. */
+  quiet?: boolean;
 }
 
 /** A comma-separated list from the locale files as search words. */
@@ -53,9 +55,11 @@ watch(searchOpen, (open) => {
 });
 
 // Games Tavora knows but the user has not added yet: the built-in list at
-// once, the Tavora service a moment after typing stops.
+// once, the Tavora service a moment after typing stops. They come last and
+// only when the typed text starts a name or is one of its words, so a search
+// for a setting is not buried under games.
 const ONLINE_DELAY_MS = 250;
-const MAX_ADD_ITEMS = 5;
+const MAX_ADD_ITEMS = 3;
 const known = ref<CatalogMatch[]>([]);
 const online = ref<OnlineGame[]>([]);
 let knownId = 0;
@@ -90,13 +94,16 @@ const addItems = computed<Item[]>(() => {
     ...known.value.map((game) => ({ id: game.id, name: game.name, input: { catalogId: game.id } })),
     ...online.value.filter((game) => !known.value.some((match) => match.id === game.id)).map((game) => ({ id: game.id, name: game.name, input: { online: game } })),
   ];
-  return rows.slice(0, MAX_ADD_ITEMS).map((row) => ({
-    id: `add-game-${row.id}`,
-    label: t("search.add", { name: row.name }),
-    hint: t("search.newGame"),
-    icon: Plus,
-    run: close(() => addAndOpen(row.input)),
-  }));
+  const text = query.value.trim();
+  return rankByName(rows.filter((row) => startsOrIsWord(text, row.name)), text, (row) => row.name)
+    .slice(0, MAX_ADD_ITEMS)
+    .map((row) => ({
+      id: `add-game-${row.id}`,
+      label: t("search.add", { name: row.name }),
+      hint: t("search.newGame"),
+      icon: Plus,
+      run: close(() => addAndOpen(row.input)),
+    }));
 });
 
 const view = computed(() => state.value!);
@@ -222,8 +229,8 @@ const shown = computed<Group[]>(() => {
   const ranked = groups.value
     .map((group) => ({ ...group, items: rank(group.items, text, (item) => ({ name: item.label, extra: item.keywords })) }))
     .filter((group) => group.items.length > 0);
-  // Already ranked by the search itself, and placed after the user's own workspaces.
-  if (addItems.value.length) ranked.splice(ranked[0]?.id === "workspaces" ? 1 : 0, 0, { id: "add", label: t("addGame.title"), items: addItems.value });
+  // Games to add come after everything the user already has.
+  if (addItems.value.length) ranked.push({ id: "add", label: t("addGame.title"), items: addItems.value, quiet: true });
   return ranked;
 });
 
@@ -292,7 +299,7 @@ function onKey(event: KeyboardEvent) {
             :key="item.id"
             role="option"
             :aria-selected="flat[active] === item"
-            :class="cn('flex h-10 cursor-pointer items-center gap-3 rounded-lg px-3', flat[active] === item && 'bg-accent')"
+            :class="cn('flex h-10 cursor-pointer items-center gap-3 rounded-lg px-3', group.quiet && 'text-muted-foreground', flat[active] === item && 'bg-accent')"
             :data-testid="`search-${item.id}`"
             @mousemove="active = flat.indexOf(item)"
             @click="item.run()"

@@ -15,6 +15,7 @@ import {
   saveNote,
   VANILLA,
 } from "./harness";
+import { gameService } from "./fake-games";
 
 const exists = (file: string) =>
   access(file).then(
@@ -65,6 +66,36 @@ test("the first-run welcome takes a name and games, and can be shown again", asy
   await again.page.getByTestId("show-welcome-again").click();
   await expect(again.page.getByTestId("onboarding")).toBeVisible();
   await again.app.close();
+});
+
+test("the Add a game list ranks real name starts first and sorts by the name shown", async () => {
+  const { url, server } = await gameService([
+    { id: "eldoran", name: "Eldoran" },
+    { id: "eldevin", name: "Eldevin" },
+    { id: "eldgear", name: "Eldgear" },
+  ]);
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
+  await page.getByTestId("rail-add-game").click();
+  const rows = page.getByTestId("add-game-dialog").locator('[data-testid^="catalog-"]');
+  // Nothing typed: the first games by the name you see, so Sid Meier's game is not between B and C.
+  await expect(rows.first()).toHaveAttribute("data-testid", "catalog-age-of-empires-2");
+  await expect(rows.nth(4)).toHaveAttribute("data-testid", "catalog-battlefield-6");
+  await expect(rows.nth(5)).toHaveAttribute("data-testid", "catalog-counter-strike-2");
+
+  await page.getByTestId("game-search").fill("eld");
+  await expect(page.getByTestId("catalog-eldoran")).toBeVisible();
+  const ids = await rows.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-testid")));
+  expect(ids).toEqual([
+    "catalog-elden-ring",
+    "catalog-eldevin",
+    "catalog-eldgear",
+    "catalog-eldoran",
+    "catalog-skyrim",
+    "catalog-battlefield-6",
+    "catalog-starfield",
+  ]);
+  await app.close();
+  server.close();
 });
 
 test("users add games from the built-in list or by name", async () => {
