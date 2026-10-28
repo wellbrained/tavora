@@ -67,6 +67,8 @@ export interface OverlayLayoutOptions {
   /** Every panel from every workspace. */
   sources(): SourcePanel[];
   openWindow(request: { closed(): void }): LayoutWindow;
+  /** The panels behind the items shown: they have to run for their pages to have anything to show, whichever workspace they are in. */
+  keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): void;
   /** The page asked to go back to the workspace. */
   leave(): void;
   /** The picture of the window with this handle (physical pixels at most `size`), as PNG bytes; null when it can't be taken. */
@@ -335,6 +337,7 @@ export class OverlayLayout {
       void this.loadPicture(gameId);
     }
     const view = this.view();
+    this.options.keepRunning(this.itemsOf(view.gameId).map((info) => ({ workspaceId: info.keyTarget.workspaceId, moduleId: info.moduleId, instanceId: info.ref.kind === "panel" ? info.ref.instanceId : null })));
     // Undo steps of an item that is gone can't be taken back.
     const present = new Set(view.items.map((item) => item.id));
     for (const id of this.known) if (!present.has(id)) this.undo.forget(id);

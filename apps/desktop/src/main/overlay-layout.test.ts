@@ -145,6 +145,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     screen: () => ({ x: 0, y: 0, width: 2560, height: 1440 }),
     enabled: () => world.enabled,
     language: () => "en",
+    keepRunning: () => {},
     openWindow: (request) => {
       world.opened++;
       world.closedWindow = request.closed;

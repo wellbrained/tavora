@@ -2402,6 +2402,18 @@ export class Host {
     this.layout.open(setupId);
   }
 
+  /** The Overlay page shows what panels publish, so the panels of its items run, hidden, even from a workspace not opened this run; they stop when the page is left. */
+  private runForOverlayPage(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): void {
+    if (this.screen !== "overlay") return;
+    for (const panel of panels) {
+      const entry = this.library.workspaces[panel.workspaceId];
+      if (!entry || entry.trashedAt) continue;
+      const record = this.records(entry.id).find((item) => (panel.instanceId ? item.instanceId === panel.instanceId : item.moduleId === panel.moduleId));
+      if (!record || this.views.has(record.instanceId) || this.panelTypeOf(record) === undefined) continue;
+      this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+    }
+  }
+
   /** Back from the Overlay page to the workspace it was opened from, else Home. */
   private leaveOverlayPage(): void {
     const last = this.library.lastWorkspaceId;
@@ -4361,6 +4373,7 @@ export class Host {
       language: () => host.language,
       games: () => Object.values(host.library.workspaces).filter((entry) => entry.kind === "game" && !entry.trashedAt).map((entry) => ({ id: entry.id, name: entry.name })),
       sources: () => host.overlaySources(),
+      keepRunning: (panels) => host.runForOverlayPage(panels),
       leave: () => host.leaveOverlayPage(),
       openWindow: () => {
         const page = options.devServer ? new URL("layout.html", options.devServer) : new URL("layout.html", `${HOST_SCHEME}://app/`);
