@@ -469,6 +469,7 @@ export const de: Record<keyof typeof en, string> = {
   "publish.error.tooManyWaiting": "Zu viele deiner Versionen warten auf Prüfung. Warte erst auf sie.",
   "publish.error.dailyLimit": "Du hast heute so viele Versionen veröffentlicht, wie du kannst. Morgen geht es wieder.",
   "publish.error.refused": "Tavora hat abgelehnt: {message}",
+  "publish.error.serverOlder": "Der Server nimmt dein Manifest noch nicht an: {detail}. Dieses Tavora schon, der Server ist wohl älter. Versuch es nochmal, sobald er aktualisiert ist, oder nimm das heraus, um jetzt zu veröffentlichen.",
   "account.delete.description": "Löscht dein Konto sofort. Alles auf deinen PCs bleibt.",
   "account.delete.title": "Tavora-Konto löschen?",
   "account.delete.message": "Tavora schickt dir zur Bestätigung einen Code. Dann werden dein Konto und alle Anmeldungen sofort beim Dienst gelöscht; alles auf deinen PCs bleibt.",

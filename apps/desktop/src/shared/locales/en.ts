@@ -467,6 +467,7 @@ export const en = {
   "publish.error.tooManyWaiting": "Too many of your versions are waiting for review. Wait for them first.",
   "publish.error.dailyLimit": "You've published as many versions as you can today. You can go again tomorrow.",
   "publish.error.refused": "Tavora said no: {message}",
+  "publish.error.serverOlder": "The server doesn't take your manifest yet: {detail}. This Tavora does, so the server is probably older. Try again once it's updated, or remove that to publish now.",
   "account.delete.description": "Deletes your account right away. Everything on your PCs stays.",
   "account.delete.title": "Delete your Tavora account?",
   "account.delete.message": "Tavora emails you a code to confirm. Your account and every sign-in are then deleted on the service at once; everything on your PCs stays.",

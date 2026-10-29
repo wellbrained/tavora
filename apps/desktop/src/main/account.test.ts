@@ -652,6 +652,13 @@ describe("the developer side", () => {
     await expect(account.uploadModule(privateKey, zip)).rejects.toMatchObject({ key: "publish.error.prefixTaken" });
     answer = () => json({ reason: "conflict", error: "Version 1.0.1 of me.tracker is\nalready listed." }, 409);
     await expect(account.uploadModule(privateKey, zip)).rejects.toMatchObject({ key: "publish.error.refused", params: { message: "Version 1.0.1 of me.tracker is already listed." } });
+    // A manifest Tavora accepted but the catalog doesn't: the catalog is older, and the fields it doesn't know are named.
+    answer = () => json({ reason: "invalid", error: "Its manifest is invalid: unknown viewport fields: wide; unknown translations.de fields: boards, extra." }, 400);
+    await expect(account.uploadModule(privateKey, zip)).rejects.toMatchObject({ key: "publish.error.serverOlder", params: { detail: "viewport.wide, translations.de.boards, translations.de.extra" } });
+    answer = () => json({ reason: "invalid", error: "Its manifest is invalid: id must look like prefix.name." }, 400);
+    await expect(account.uploadModule(privateKey, zip)).rejects.toMatchObject({ key: "publish.error.serverOlder", params: { detail: "id must look like prefix.name" } });
+    answer = () => json({ reason: "invalid", error: "The zip is too big." }, 400);
+    await expect(account.uploadModule(privateKey, zip)).rejects.toMatchObject({ key: "publish.error.refused" });
   });
 
   it("checks and claims an id prefix, and reads the prefixes the account holds", async () => {
