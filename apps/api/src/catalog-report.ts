@@ -5,6 +5,7 @@ import { cleanMessage } from "./conversations.ts";
 import type { CatalogStore } from "./catalog.ts";
 import type { Mail } from "./mail.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { fail, signedInAs, signedOut, tooMany } from "./sign-in.ts";
 
 /**
  * The Report button (Milestone E, step 7; C12). The app sends the module id, the key fingerprint and the
@@ -44,7 +45,7 @@ export function reportMail(to: string, module: { id: string; name: string }): Ma
 
 export function reportHandlers({ catalog, accounts, clientKey, rateLimiter, now = Date.now }: ReportOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 10, windowMs: 3_600_000 });
-  const limit = bodyLimit({ maxSize: 3000, onError: (context) => context.json({ error: "Send { id, owner, sha256, reason?, note? }." }, 413) });
+  const limit = bodyLimit({ maxSize: 3000, onError: (context) => fail(context, 413, "too-big", "Send { id, owner, sha256, reason?, note? }.") });
 
   const tellOwner = async (owner: string, id: string) => {
     const store = accounts?.store;
@@ -67,16 +68,11 @@ export function reportHandlers({ catalog, accounts, clientKey, rateLimiter, now 
 
   const handler = async (context: Context) => {
     const wait = limiter.check(clientKey(context.req.raw));
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many reports. Try again later." }, 429);
-    }
-    if (!catalog) return context.json({ error: "The module catalog is not available right now." }, 503);
-    const token = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "")?.[1];
-    const session = token && accounts ? accounts.store.sessionByToken(token, now()) : null;
-    const sender = session ? accounts!.store.account(session.accountId) : null;
-    if (!sender) return context.json({ error: "Sign in to report.", reason: "signed-out" }, 401);
-    if (!(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) return context.json({ error: "Send JSON." }, 415);
+    if (wait > 0) return tooMany(context, wait, "Too many reports. Try again later.");
+    if (!catalog) return fail(context, 503, "unavailable", "The module catalog is not available right now.");
+    const sender = accounts ? signedInAs(accounts.store, context, now())?.account : null;
+    if (!sender) return signedOut(context);
+    if (!(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) return fail(context, 415, "bad-request", "Send JSON.");
     let body: unknown;
     try {
       body = JSON.parse(await context.req.text());
@@ -101,11 +97,11 @@ export function reportHandlers({ catalog, accounts, clientKey, rateLimiter, now 
       typeof input.sha256 !== "string" ||
       !SHA256.test(input.sha256)
     ) {
-      return context.json({ error: "Send { id, owner, sha256, reason?, note? }." }, 400);
+      return fail(context, 400, "bad-request", "Send { id, owner, sha256, reason?, note? }.");
     }
     const report = { id: input.id, owner: input.owner, sha256: input.sha256 };
     const reason = typeof input.reason === "string" ? input.reason : null;
-    if (!catalog.report(report, new Date(now()), { accountId: sender.id, reason, note })) return context.json({ error: "The catalog lists no such module." }, 404);
+    if (!catalog.report(report, new Date(now()), { accountId: sender.id, reason, note })) return fail(context, 404, "not-found", "The catalog lists no such module.");
     await tellOwner(report.owner, report.id);
     return context.json({ status: "received" }, 202);
   };

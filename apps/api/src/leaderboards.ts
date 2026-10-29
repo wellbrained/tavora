@@ -12,9 +12,10 @@ import {
 } from "@tavora/module-schema";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import type { Account, AccountStore } from "./account-store.ts";
+import type { AccountStore } from "./account-store.ts";
 import { newLabel } from "./conversations.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { fail, optionalSignIn, signedOut, tooMany, type MaybeSignedInEnv } from "./sign-in.ts";
 import { checkReviewText } from "./review-filter.ts";
 
 /**
@@ -622,7 +623,7 @@ export class LeaderboardStore {
   }
 }
 
-type Env = { Variables: { account: Account | null } };
+type Env = MaybeSignedInEnv;
 
 export interface LeaderboardOptions {
   leaderboards: LeaderboardStore;
@@ -683,27 +684,14 @@ export function leaderboardRoutes({ leaderboards, accounts, boards, clientKey, w
   const writeLimiter = writeRateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   const readLimiter = readRateLimiter ?? createRateLimiter({ limit: 120, windowMs: 60_000 });
   const app = new Hono<Env>();
-  const fail = (context: Context, status: 400 | 401 | 403 | 404 | 429, reason: string, error: string) => context.json({ error, reason }, status);
 
   // Who asks: a valid sign-in, nobody, or a sign-in the service no longer knows (401, so the app forgets it).
   app.use("*", async (context, next) => {
     const wait = readLimiter.check(clientKey(context.req.raw));
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return fail(context, 429, "too-many", "Too many requests.");
-    }
-    const header = context.req.header("authorization");
-    if (header === undefined) context.set("account", null);
-    else {
-      const match = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(header);
-      const session = match ? accounts.sessionByToken(match[1]!, now()) : null;
-      const account = session ? accounts.account(session.accountId) : null;
-      if (!account) return fail(context, 401, "signed-out", "Sign in again.");
-      context.set("account", account);
-    }
-    context.header("Cache-Control", "no-store");
+    if (wait > 0) return tooMany(context, wait);
     await next();
   });
+  app.use("*", optionalSignIn(accounts, now));
 
   /** The module id from the path, or null when it isn't one. */
   const moduleOf = (context: Context) => {
@@ -717,11 +705,8 @@ export function leaderboardRoutes({ leaderboards, accounts, boards, clientKey, w
     return boards(moduleId)?.find((board) => board.id === id) ?? null;
   };
   const signedIn = (context: Context<Env>) => context.get("account");
-  const writeAllowed = (context: Context<Env>, accountId: string, moduleId: string) => {
-    const wait = writeLimiter.check(`${accountId}:${moduleId}`);
-    if (wait > 0) context.header("Retry-After", String(wait));
-    return wait === 0;
-  };
+  /** Seconds to wait before this account writes to this module's boards again; 0 when it may now. */
+  const writeWait = (accountId: string, moduleId: string) => writeLimiter.check(`${accountId}:${moduleId}`);
   /** A signed-in user's status; a module without boards makes no member, so nobody fills the file with made-up ids. */
   const status = (accountId: string, moduleId: string) => {
     const name = boardName(accounts.profileName(accountId), leaderboards.isNameHidden(accountId));
@@ -754,9 +739,10 @@ export function leaderboardRoutes({ leaderboards, accounts, boards, clientKey, w
     const moduleId = moduleOf(context);
     const account = signedIn(context);
     if (!moduleId) return fail(context, 404, "not-found", "Not found.");
-    if (!account) return fail(context, 401, "signed-out", "Sign in to show your results.");
+    if (!account) return signedOut(context);
     if (!leaderboards.isAvailable(moduleId, account.id)) return fail(context, 403, "not-allowed", "This module has no leaderboards yet.");
-    if (!writeAllowed(context, account.id, moduleId)) return fail(context, 429, "too-many", "Too many requests.");
+    const wait = writeWait(account.id, moduleId);
+    if (wait > 0) return tooMany(context, wait);
     leaderboards.show(account.id, moduleId, now());
     return context.json(status(account.id, moduleId));
   });
@@ -765,8 +751,9 @@ export function leaderboardRoutes({ leaderboards, accounts, boards, clientKey, w
     const moduleId = moduleOf(context);
     const account = signedIn(context);
     if (!moduleId) return fail(context, 404, "not-found", "Not found.");
-    if (!account) return fail(context, 401, "signed-out", "Sign in first.");
-    if (!writeAllowed(context, account.id, moduleId)) return fail(context, 429, "too-many", "Too many requests.");
+    if (!account) return signedOut(context);
+    const wait = writeWait(account.id, moduleId);
+    if (wait > 0) return tooMany(context, wait);
     leaderboards.hide(account.id, moduleId);
     return context.json(status(account.id, moduleId));
   });
@@ -778,10 +765,11 @@ export function leaderboardRoutes({ leaderboards, accounts, boards, clientKey, w
       const moduleId = moduleOf(context);
       const account = signedIn(context);
       if (!moduleId) return fail(context, 404, "not-found", "Not found.");
-      if (!account) return fail(context, 401, "signed-out", "Sign in to send results.");
+      if (!account) return signedOut(context);
       if (!leaderboards.isAvailable(moduleId, account.id)) return fail(context, 403, "not-allowed", "This module has no leaderboards yet.");
       if (!leaderboards.member(account.id, moduleId).shown) return fail(context, 403, "not-shown", "Show your results first.");
-      if (!writeAllowed(context, account.id, moduleId)) return fail(context, 429, "too-many", "Too many requests.");
+      const wait = writeWait(account.id, moduleId);
+      if (wait > 0) return tooMany(context, wait);
       const body = (await context.req.json().catch(() => null)) as { board?: unknown; results?: unknown } | null;
       const results = body?.results;
       if (!Array.isArray(results) || results.length === 0 || results.length > LIMITS.resultsPerRequest) {

@@ -89,13 +89,14 @@ export async function fetchSteamLibrary(
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ profile: text }),
     });
-    const body = (await response.json().catch(() => null)) as { games?: unknown; error?: unknown; code?: unknown } | null;
+    const body = (await response.json().catch(() => null)) as { games?: unknown; error?: unknown; reason?: unknown; code?: unknown } | null;
     if (response.status === 429) return say("error.steam.tooMany");
     if (!response.ok) {
       // The service names the reason (a wrong link, a private profile, Steam being down) and the app words it
       // in the user's language. An unknown reason, or a failure on the service's side, gets the general line;
       // a service that refuses without a reason (an older one) gets its own English text.
-      if (typeof body?.code === "string") return say(steamReasonKey(body.code));
+      const reason = typeof body?.reason === "string" ? body.reason : body?.code;
+      if (typeof reason === "string") return say(steamReasonKey(reason));
       if (response.status >= 500) return say("error.steam.unavailable");
       return typeof body?.error === "string" && body.error.length <= 300 ? { status: "error", error: body.error } : say("error.steam.unavailable");
     }

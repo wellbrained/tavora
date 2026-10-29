@@ -2,11 +2,12 @@ import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import type { Account, AccountStore } from "./account-store.ts";
+import type { AccountStore } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
 import { mailLanguage, type Mail, type MailLanguage } from "./mail.ts";
 import type { Notifier } from "./moderation-mail.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import { checkReviewText } from "./review-filter.ts";
 import { MIN_ACCOUNT_AGE_MS, ownsModule } from "./reviews.ts";
 import { BUILT_IN_TEXTS } from "../../desktop/src/shared/conversations.ts";
@@ -625,7 +626,7 @@ export interface ConversationOptions {
   now?: () => number;
 }
 
-type Env = { Variables: { account: Account } };
+type Env = SignedInEnv;
 
 /**
  * The user routes under /v1/conversations, the developer's contact settings (mounted under /v1/catalog) and the public
@@ -637,23 +638,11 @@ export function conversationRoutes({ conversations, catalog, accounts, clientKey
   const contact = new Hono<Env>();
   const texts = new Hono();
 
-  const tooMany = (context: Context, wait: number) => {
-    context.header("Retry-After", String(wait));
-    return context.json({ error: "Too many requests. Try again later.", reason: "too-many" }, 429);
-  };
   const bad = (context: Context, message: string, reason = "bad-request") => context.json({ error: message, reason }, 400);
   const notFound = (context: Context) => context.json({ error: "Not found.", reason: "not-found" }, 404);
   const hoursUntil = (time: number) => Math.max(1, Math.ceil((time - now()) / 3_600_000));
 
-  const signedIn = async (context: Context<Env>, next: () => Promise<void>) => {
-    const match = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "");
-    const session = match ? accounts.sessionByToken(match[1]!, now()) : null;
-    const account = session ? accounts.account(session.accountId) : null;
-    if (!account) return context.json({ error: "Sign in to use messages.", reason: "signed-out" }, 401);
-    context.set("account", account);
-    context.header("Cache-Control", "no-store");
-    await next();
-  };
+  const signedIn = requireSignIn(accounts, now);
   const writes = async (context: Context<Env>, next: () => Promise<void>) => {
     if (context.req.method === "GET") return next();
     const wait = writeLimiter.check(clientKey(context.req.raw));

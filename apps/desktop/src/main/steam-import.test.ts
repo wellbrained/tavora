@@ -90,6 +90,8 @@ describe("fetchSteamLibrary", () => {
       error: "Steam findet dieses Profil nicht. Prüf den Link und versuch es noch mal.",
     });
     expect(await refuse("en", 502, { error: "Steam did not return a game list.", code: "no-game-list" })).toMatchObject({ error: expect.stringContaining("Public") });
+    // Newer services name it `reason`, as every other API answer does.
+    expect(await refuse("en", 502, { error: "Steam did not return a game list.", reason: "no-game-list" })).toMatchObject({ error: expect.stringContaining("Public") });
     expect(await refuse("de", 429, { error: "Too many requests.", code: "too-many" })).toMatchObject({ error: expect.stringContaining("Zu viele") });
     expect(await refuse("de", 400, { error: "English text", code: "made-up-later" })).toEqual({
       status: "error",

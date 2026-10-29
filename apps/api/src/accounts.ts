@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { cleanDeveloperName, DEVICE_OS, MAX_PREFIXES, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
+import { cleanDeveloperName, DEVICE_OS, MAX_PREFIXES, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type StoredProfile } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
 import type { CatalogTrust } from "./catalog-trust.ts";
 import type { CopyStore } from "./cloud-copy.ts";
@@ -9,6 +9,7 @@ import { keyRequestStatus } from "./key-requests.ts";
 import { codeMail, emailChangedMail, keyRequestMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
 import { inspectPng } from "./png.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import type { ReviewStore } from "./reviews.ts";
 import type { ConversationStore } from "./conversations.ts";
 import type { LeaderboardStore } from "./leaderboards.ts";
@@ -56,7 +57,7 @@ const nextUtcDay = (at: number) => {
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1);
 };
 
-type Env = { Variables: { session: Session; account: Account } };
+type Env = SignedInEnv;
 
 const CODE = /^\d{6}$/;
 /** A module id prefix: the first part of a module id (module-schema's MODULE_ID), which is at most 128 characters with a dot and a second part. */
@@ -97,10 +98,6 @@ export const deviceName = (input: unknown): string | null => {
   if (typeof input !== "string") return null;
   const name = [...input.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim()].slice(0, MAX_DEVICE_NAME).join("").trim();
   return name || null;
-};
-const tooMany = (context: Context, wait: number) => {
-  context.header("Retry-After", String(wait));
-  return context.json({ error: "Too many requests.", reason: "too-many" }, 429);
 };
 /** What the owner sees of their account: never the Discord id, only its username as a label. */
 const accountAnswer = (account: Account) => ({ email: account.email, discord: account.discord ? { name: account.discord.name } : null, createdAt: account.createdAt });
@@ -252,15 +249,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   // ── Signed in ─────────────────────────────────────────────────────────
 
   const signedIn = new Hono<Env>();
-  signedIn.use("*", async (context, next) => {
-    const match = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "");
-    const session = match ? store.sessionByToken(match[1]!, now()) : null;
-    const account = session ? store.account(session.accountId) : null;
-    if (!session || !account) return context.json({ error: "Sign in again.", reason: "signed-out" }, 401);
-    context.set("session", session);
-    context.set("account", account);
-    await next();
-  });
+  signedIn.use("*", requireSignIn(store, now));
 
   signedIn.get("/", (context) => {
     const account = context.get("account");

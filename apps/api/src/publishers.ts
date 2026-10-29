@@ -1,8 +1,9 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { LINK_CODE, type AccountStore } from "./account-store.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { tooMany } from "./sign-in.ts";
 
 /**
  * Publishers under /v1/publishers: which developer name a publisher key shows to users, and
@@ -56,10 +57,6 @@ export function publisherRoutes(options: PublisherOptions, limiter: RateLimiter,
   const now = options.now ?? Date.now;
   const linkLimiter = options.linkRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 15 * 60_000 });
   const app = new Hono();
-  const tooMany = (context: Context, wait: number) => {
-    context.header("Retry-After", String(wait));
-    return context.json({ error: "Too many requests.", reason: "too-many" }, 429);
-  };
 
   app.use("*", async (context, next) => {
     const wait = limiter.check(clientKey(context.req.raw));
