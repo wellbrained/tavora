@@ -28,7 +28,7 @@ test('shared module hints support pointer, keyboard, dynamic labels and narrow p
     const point = await run<{x:number;y:number}>('(()=>{const r=document.querySelector("#hint-target").getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()');
     await input({type:'mouseMove', ...point});
     await expect.poll(() => run('document.querySelector("[role=tooltip] p")?.textContent')).toBe('Readable help from the shared kit.');
-    expect(await run('getComputedStyle(document.querySelector("[role=tooltip] p")).fontSize')).toBe('14px');
+    expect(await run('getComputedStyle(document.querySelector("[role=tooltip] p")).fontSize')).toBe('13px');
     expect(await run('document.querySelector("#hint-target").getAttribute("title")')).toBe('');
     expect(await run('document.querySelector("#hint-target").getAttribute("aria-describedby")')).toContain('tavora-title-tooltip');
     await run('document.querySelector("#hint-target").title="Updated help"');
@@ -49,11 +49,11 @@ test('shared module hints support pointer, keyboard, dynamic labels and narrow p
       view.setBounds({...view.getBounds(),width:400});
     },id);
     await expect.poll(() => run<number>('innerWidth')).toBeLessThanOrEqual(400);
-    await run('document.querySelector("#hint-target").blur();const b=document.querySelectorAll("#tooltips button")[1];b.focus();');
+    await run('document.querySelector("#hint-target").blur();const b=[...document.querySelectorAll("#tooltips button")].find(b=>b.textContent.trim()==="Rich tooltip");b.focus();');
     await expect.poll(() => run('document.querySelector("[role=tooltip] p")?.textContent')).toContain('Readable text');
-    expect(await run('getComputedStyle(document.querySelector("[role=tooltip] h2")).fontSize')).toBe('18px');
+    expect(await run('getComputedStyle(document.querySelector("[role=tooltip] h2")).fontSize')).toBe('15px');
     const bounds=await run<{left:number;right:number;width:number;body:string}>('(()=>{const e=document.querySelector("[role=tooltip]"),r=e.getBoundingClientRect();return{left:r.left,right:r.right,width:innerWidth,body:getComputedStyle(e.querySelector("p")).fontSize}})()');
-    expect(bounds.left).toBeGreaterThanOrEqual(12);expect(bounds.right).toBeLessThanOrEqual(bounds.width-12);expect(bounds.body).toBe('14px');
+    expect(bounds.left).toBeGreaterThanOrEqual(8);expect(bounds.right).toBeLessThanOrEqual(bounds.width-8);expect(bounds.body).toBe('13px');
     const png=await app.evaluate(async({webContents},id)=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://'+id+'/'))!;return(await wc.capturePage()).toPNG().toString('base64');},id);
     await writeFile(info.outputPath('shared-tooltip-narrow.png'),Buffer.from(png,'base64'));
   } finally { await app.close(); }

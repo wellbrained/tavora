@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Bold, ChevronDown, ChevronRight, Copy, Italic, Loader2, MoreHorizontal, Pencil, Pin, Plus, Settings, Trash2 } from "@lucide/vue";
-import { ConfirmDialog, Tooltip } from "@tavora/official-ui";
+import { Bold, ChevronDown, ChevronRight, CircleHelp, Copy, Italic, Loader2, MoreHorizontal, Pencil, Pin, Plus, Settings, Trash2 } from "@lucide/vue";
+import { ConfirmDialog, Tooltip, TooltipRows, type TooltipRow } from "@tavora/official-ui";
+import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@tavora/official-ui/components/ui/context-menu";
@@ -30,11 +31,17 @@ import { type SectionId, sectionTitle as title } from "../sections";
 
 defineProps<{ visible: Set<SectionId>; off: boolean }>();
 
-const tooltipDemo = ref({ open: false, at: { x: 0, y: 0 } });
-function showTooltipDemo(e: PointerEvent | FocusEvent) {
-  const b = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  tooltipDemo.value = { open: true, at: e instanceof PointerEvent ? { x: e.clientX, y: e.clientY } : { x: b.right, y: b.top } };
+/** The rich tooltip examples: which one is open, and the box of the thing it is for. */
+const tip = ref<{ open: string | null; anchor: { left: number; top: number; right: number; bottom: number } }>({ open: null, anchor: { left: 0, top: 0, right: 0, bottom: 0 } });
+function showTip(name: string, e: Event) {
+  const { left, top, right, bottom } = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  tip.value = { open: name, anchor: { left, top, right, bottom } };
 }
+const hideTip = () => (tip.value.open = null);
+const tipOn = (name: string) => ({ onPointerenter: (e: Event) => showTip(name, e), onPointerleave: hideTip, onFocus: (e: Event) => showTip(name, e), onBlur: hideTip });
+const chartRows: TooltipRow[] = [{ label: "Play time", value: "3 h 12 min" }, { label: "vs. last week", value: "+48 min", trend: "better" }];
+const itemRows: TooltipRow[] = [{ label: "Damage", value: "142" }, { label: "Crit chance", value: "+8%", trend: "better" }, { label: "Stamina use", value: "+12%", trend: "worse" }];
+const bars = [40, 55, 35, 80, 60, 45, 70];
 /** A pretend save for the loading toast: done, or failed, after a moment. */
 const wait = (ms: number, fail = false) => new Promise<void>((resolve, reject) => setTimeout(() => (fail ? reject(new Error("failed")) : resolve()), ms));
 const showRead = ref(true);
@@ -99,7 +106,32 @@ const renaming = ref(false);
         </Specimen>
       </DemoSection>
 
-<DemoSection v-if="visible.has('tooltips')" id="tooltips" :title="title('tooltips')" description="Shared readable hover help: 18 px titles, 14 px text. Works with a mouse and keyboard."><Specimen label="Hover help"><Button title="Readable help from the shared kit." :disabled="off">Hover or focus me</Button><Button @pointerenter="showTooltipDemo" @pointerleave="tooltipDemo.open=false" @focus="showTooltipDemo" @blur="tooltipDemo.open=false">Rich tooltip</Button><Tooltip :open="tooltipDemo.open" :at="tooltipDemo.at" title="A place worth exploring" description="Readable text stays beside your pointer and wraps in narrow panels." @dismiss="tooltipDemo.open=false"/></Specimen></DemoSection>
+<DemoSection v-if="visible.has('tooltips')" id="tooltips" :title="title('tooltips')" description="Hover help sits beside the control with a small gap, only its arrow pointing at it. Works with a mouse and keyboard.">
+        <Specimen label="From a title (any element)">
+          <Button title="Readable help from the shared kit." :disabled="off">Hover or focus me</Button>
+          <Button size="icon" variant="secondary" aria-label="Duplicate" title="Duplicate" aria-keyshortcuts="Control+D" :disabled="off"><Copy :stroke-width="1.5" /></Button>
+          <span title="Add a name and an icon first." tabindex="0"><Button disabled class="pointer-events-none">Publish</Button></span>
+          <span class="text-muted-foreground max-w-40 truncate rounded-md border px-2 py-1.5 text-sm" title="D:\Games\Steam\steamapps\common\Enshrouded\Saves">D:\Games\Steam\steamapps\common\Enshrouded\Saves</span>
+        </Specimen>
+        <Specimen label="Rich: title, text, shortcut, warning">
+          <Button variant="ghost" size="icon-sm" aria-label="About starting with Windows" v-bind="tipOn('help')" :disabled="off"><CircleHelp :stroke-width="1.5" /></Button>
+          <Button variant="secondary" v-bind="tipOn('rich')" :disabled="off">Rich tooltip</Button>
+          <Button variant="outline" class="text-warning" v-bind="tipOn('warning')" :disabled="off">92% used</Button>
+        </Specimen>
+        <Specimen label="Values: a chart bar, a game item">
+          <div class="flex h-16 items-end gap-1.5">
+            <button v-for="(height, index) in bars" :key="index" class="bg-primary/30 hover:bg-primary focus-visible:bg-primary w-6 rounded-t-sm" :style="{ height: height + '%' }" :aria-label="'Day ' + (index + 1)" v-bind="tipOn('chart')" />
+          </div>
+          <Button variant="outline" class="size-12 text-xl" aria-label="Wolfbane Longbow" v-bind="tipOn('item')" :disabled="off">🏹</Button>
+        </Specimen>
+        <Tooltip :open="tip.open === 'help'" :anchor="tip.anchor" title="Start with Windows" description="Tavora opens quietly in the tray when you sign in. Your overlays are ready when the game starts." @dismiss="hideTip" />
+        <Tooltip :open="tip.open === 'rich'" :anchor="tip.anchor" title="A place worth exploring" shortcut="Ctrl+K" description="Readable text that wraps in narrow panels." @dismiss="hideTip" />
+        <Tooltip :open="tip.open === 'warning'" :anchor="tip.anchor" tone="warning" title="Almost at your limit" description="Resets Friday at 09:00. You can still use 8% this week." @dismiss="hideTip" />
+        <Tooltip :open="tip.open === 'chart'" :anchor="tip.anchor" side="top" title="Thursday" @dismiss="hideTip"><TooltipRows :rows="chartRows" /></Tooltip>
+        <Tooltip :open="tip.open === 'item'" :anchor="tip.anchor" side="right" title="Wolfbane Longbow" description="Ranged · Level 25" @dismiss="hideTip">
+          <Separator /><TooltipRows :rows="itemRows" /><Separator /><p>Arrows pierce the first enemy.</p>
+        </Tooltip>
+      </DemoSection>
 
 <DemoSection v-if="visible.has('menus')" id="menus" :title="title('menus')" description="Every menu opens from a visible ⋯ button. Destructive items sit last, in red, after a separator.">
         <Specimen label="Dropdown menu">

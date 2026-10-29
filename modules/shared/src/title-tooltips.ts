@@ -8,14 +8,15 @@ export interface TitleTooltipOptions {
   onOpenChange?: (open: boolean) => void;
 }
 
-/** One readable hover layer for title hints, in official modules and in the host: the compact card, as the rail's. */
+/** One readable hover layer for title hints, in official modules and in the host: the compact card below the element, as the rail's.
+ * An element's `aria-keyshortcuts` shows beside the hint as key caps. */
 export function installTitleTooltips(doc: Document = document, options: TitleTooltipOptions = {}): () => void {
   const existing = installed.get(doc);
   if (existing) return existing;
   const container = doc.createElement("div");
   container.dataset.tooltipLayer = "titles";
   doc.body.append(container);
-  const state = reactive({ open: false, title: "", at: { x: 0, y: 0 } });
+  const state = reactive({ open: false, title: "", shortcut: undefined as string | undefined, anchor: { left: 0, top: 0, right: 0, bottom: 0 } });
   const id = "tavora-title-tooltip";
   const suppressed = new WeakSet<Element>();
   let current: Element | null = null;
@@ -50,17 +51,19 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
   function target(event: Event) {
     return event.target instanceof Element ? event.target.closest("[title],[data-tavora-tooltip]") : null;
   }
-  function show(element: Element, at: { x: number; y: number }) {
-    if (element === current) { state.at = at; return; }
+  function show(element: Element) {
+    if (element === current) return;
     const title = element.getAttribute("title") || element.getAttribute("data-tavora-tooltip");
     if (!title?.trim()) return;
     hide();
     current = element;
     if (element.getAttribute("title")) remember(element, title);
     state.title = title;
-    state.at = at;
+    state.shortcut = element.getAttribute("aria-keyshortcuts") || undefined;
     timer = setTimeout(() => {
       if (current !== element || !element.isConnected) return;
+      const { left, top, right, bottom } = element.getBoundingClientRect();
+      state.anchor = { left, top, right, bottom };
       state.open = true;
       options.onOpenChange?.(true);
       const old = element.getAttribute("aria-describedby");
@@ -69,9 +72,8 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
   }
   const over = (event: PointerEvent) => {
     const element = target(event);
-    if (element) show(element, { x: event.clientX, y: event.clientY });
+    if (element) show(element);
   };
-  const move = (event: PointerEvent) => { if (current) state.at = { x: event.clientX, y: event.clientY }; };
   // Only the pointer leaving the hint's own element closes it: a layout change under a resting pointer fires
   // pointerout elsewhere, and that must not close a hint opened from the keyboard.
   const out = (event: PointerEvent) => {
@@ -81,12 +83,11 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
   const focus = (event: FocusEvent) => {
     if (!keyboard) return;
     const element = target(event);
-    if (element) { const bounds = element.getBoundingClientRect(); show(element, { x: bounds.right, y: bounds.top + bounds.height / 2 }); }
+    if (element) show(element);
   };
   const key = (event: KeyboardEvent) => { if (event.key === "Tab") keyboard = true; if (event.key === "Escape") hide(); };
   const down = () => { keyboard = false; hide(); };
   doc.addEventListener("pointerover", over, true);
-  doc.addEventListener("pointermove", move, true);
   doc.addEventListener("pointerout", out, true);
   doc.addEventListener("focusin", focus, true);
   doc.addEventListener("focusout", hide, true);
@@ -121,7 +122,6 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     app.unmount();
     container.remove();
     doc.removeEventListener("pointerover", over, true);
-    doc.removeEventListener("pointermove", move, true);
     doc.removeEventListener("pointerout", out, true);
     doc.removeEventListener("focusin", focus, true);
     doc.removeEventListener("focusout", hide, true);

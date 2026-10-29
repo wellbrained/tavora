@@ -21,7 +21,7 @@ const props = defineProps<{
 }>();
 
 const open = ref(false);
-const at = ref({ x: 0, y: 0 });
+const anchor = ref({ left: 0, top: 0, right: 0, bottom: 0 });
 const setFloating = useFloating();
 let delay: ReturnType<typeof setTimeout> | undefined;
 let release: ReturnType<typeof setTimeout> | undefined;
@@ -30,9 +30,9 @@ function show(trigger: Element | null) {
   if (props.disabled || !trigger || open.value) return;
   clearTimeout(delay);
   delay = setTimeout(() => {
-    // Beside the icon, centred on its height.
-    const bounds = trigger.getBoundingClientRect();
-    at.value = { x: bounds.right - 6, y: bounds.top + bounds.height / 2 };
+    // Beside the icon, its arrow on the icon's middle.
+    const { left, top, right, bottom } = trigger.getBoundingClientRect();
+    anchor.value = { left, top, right, bottom };
     clearTimeout(release);
     setFloating(true);
     open.value = true;
@@ -69,7 +69,7 @@ onBeforeUnmount(() => {
     @focusout="leave"
   >
     <slot />
-    <Tooltip compact center :open="open" :at="at" :title="text" :description="hint" @dismiss="hide">
+    <Tooltip compact side="right" :open="open" :anchor="anchor" :title="text" :description="hint" @dismiss="hide">
       <ul v-if="folder" class="rail-tooltip-workspaces" data-testid="rail-tooltip-workspaces">
         <li v-for="line in lines" :key="line" class="truncate">{{ line }}</li>
         <li v-if="more">{{ t("rail.folderMore", { count: more }) }}</li>

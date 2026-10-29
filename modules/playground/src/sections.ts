@@ -13,7 +13,7 @@ export const SECTIONS = [
   { id: "colours", group: "basics", title: "Colours", keywords: "tokens theme palette swatches radius" },
   { id: "type", group: "basics", title: "Typography", keywords: "text fonts headings caption mono numbers link" },
   { id: "buttons", group: "actions", title: "Buttons", keywords: "primary secondary ghost outline destructive danger remove link icon loading split group menu" },
-  { id: "tooltips", group: "actions", title: "Tooltips", keywords: "tooltip hover help readable keyboard" },
+  { id: "tooltips", group: "actions", title: "Tooltips", keywords: "tooltip hover help readable keyboard shortcut arrow values rows divider" },
   { id: "menus", group: "actions", title: "Menus", keywords: "dropdown menu context right-click submenu actions" },
   { id: "popovers", group: "actions", title: "Popovers", keywords: "popover floating panel form anchor close" },
   { id: "toasts", group: "actions", title: "Toasts", keywords: "toast snackbar undo message notification status" },

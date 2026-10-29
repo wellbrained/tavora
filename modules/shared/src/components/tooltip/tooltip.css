@@ -1,5 +1,34 @@
-.tavora-tooltip{position:fixed;z-index:1000;pointer-events:none;box-sizing:border-box;max-height:calc(100vh - 24px);overflow:hidden;padding:14px 16px;border:1px solid var(--border,#625648);border-radius:8px;background:var(--popover,var(--background,#171412));color:var(--popover-foreground,var(--foreground,#eee7d9));box-shadow:0 6px 20px #0004;font-family:var(--tavora-font-sans,system-ui,sans-serif);font-size:var(--tavora-tooltip-text-size);line-height:1.5;overflow-wrap:anywhere}
-.tavora-tooltip h2{font-size:var(--tavora-tooltip-title-size);font-weight:600;line-height:1.35;margin:0}.tavora-tooltip p{font-size:var(--tavora-tooltip-text-size);line-height:1.5;margin:8px 0 0;color:var(--muted-foreground,#b8afa1)}
+.tavora-tooltip{--tavora-tooltip-surface:color-mix(in srgb,var(--foreground,#f2ece0) 6%,var(--popover,#201c19));--tavora-tooltip-line:color-mix(in srgb,var(--foreground,#f2ece0) 9%,transparent);position:fixed;z-index:1000;pointer-events:none;box-sizing:border-box;padding:10px 12px;border:1px solid var(--tavora-tooltip-line);border-radius:8px;background:var(--tavora-tooltip-surface);color:var(--popover-foreground,var(--foreground,#f2ece0));box-shadow:inset 0 1px 0 #ffffff0a,0 8px 24px #000a,0 2px 6px #0006;font-family:var(--tavora-font-sans,system-ui,sans-serif);font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+.tavora-tooltip h2{font-size:15px;font-weight:600;line-height:1.35;margin:0}
+.tavora-tooltip p{font-size:13px;line-height:1.45;margin:3px 0 0;color:color-mix(in srgb,var(--foreground,#f2ece0) 72%,var(--popover,#201c19))}
+.tavora-tooltip p:first-child,.tavora-tooltip-head p{margin-top:0}
+.tavora-tooltip-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tavora-tooltip-head+p{margin-top:3px}
+.tavora-tooltip[data-tone=warning] h2{color:var(--warning,#e3c75f)}.tavora-tooltip[data-tone=danger] h2{color:var(--destructive,#e5675a)}
 
-.tavora-tooltip p:first-child{margin-top:0}
-.tavora-tooltip.compact{padding:7px 10px;border-radius:6px;background:color-mix(in srgb,var(--foreground,#eee7d9) 14%,var(--popover,#171412));border-color:color-mix(in srgb,var(--foreground,#eee7d9) 32%,transparent);box-shadow:0 6px 20px #0008}.tavora-tooltip.compact h2{color:var(--foreground,#fff)}.tavora-tooltip.compact h2{font-size:13px;line-height:1.3}.tavora-tooltip.compact p{font-size:12px;margin-top:3px}.tavora-tooltip.compact li{font-size:12px}
+/* The arrow: a square turned on its corner, half hidden behind the card's edge that faces the anchor. */
+.tavora-tooltip-arrow{position:absolute;width:8px;height:8px;background:var(--tavora-tooltip-surface);border:1px solid var(--tavora-tooltip-line);transform:rotate(45deg)}
+.tavora-tooltip[data-side=bottom] .tavora-tooltip-arrow{top:-5px;left:calc(var(--tavora-tooltip-arrow) - 5px);border-right:0;border-bottom:0}
+.tavora-tooltip[data-side=top] .tavora-tooltip-arrow{bottom:-5px;left:calc(var(--tavora-tooltip-arrow) - 5px);border-left:0;border-top:0}
+.tavora-tooltip[data-side=right] .tavora-tooltip-arrow{left:-5px;top:calc(var(--tavora-tooltip-arrow) - 5px);border-top:0;border-right:0}
+.tavora-tooltip[data-side=left] .tavora-tooltip-arrow{right:-5px;top:calc(var(--tavora-tooltip-arrow) - 5px);border-bottom:0;border-left:0}
+
+/* Shortcut keys: the kit's key caps, small. */
+.tavora-tooltip-keys{display:inline-flex;gap:3px;flex:none}
+.tavora-tooltip kbd{font:11px/1 var(--tavora-font-mono,ui-monospace,monospace);color:color-mix(in srgb,var(--foreground,#f2ece0) 80%,transparent);background:var(--background,#171412);border:1px solid var(--border,#35302b);border-bottom-width:2px;border-radius:4px;padding:3px 5px}
+
+/* A divider runs edge to edge; label and value rows line their numbers up on the right. */
+.tavora-tooltip hr,.tavora-tooltip [data-slot=separator]{width:auto;height:1px;border:0;background:var(--tavora-tooltip-line);margin:8px -12px}
+.tavora-tooltip-rows{display:grid;grid-template-columns:1fr auto;gap:3px 16px;margin:6px 0 0;font-size:13px}
+.tavora-tooltip hr+.tavora-tooltip-rows,.tavora-tooltip [data-slot=separator]+.tavora-tooltip-rows{margin-top:0}
+.tavora-tooltip-rows dt{color:color-mix(in srgb,var(--foreground,#f2ece0) 72%,var(--popover,#201c19))}
+.tavora-tooltip-rows dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.tavora-tooltip-rows dd[data-trend=better]{color:var(--success,#8cbf7f)}.tavora-tooltip-rows dd[data-trend=worse]{color:var(--destructive,#e5675a)}
+
+/* A one-line label: tighter, the text as bright as a title. */
+.tavora-tooltip.compact{padding:6px 10px;border-radius:7px;font-size:13px}
+.tavora-tooltip.compact h2{font-size:13px;line-height:1.3}
+.tavora-tooltip.compact p{font-size:13px;margin-top:2px}
+.tavora-tooltip.compact p:first-child,.tavora-tooltip.compact .tavora-tooltip-head p{color:inherit;margin-top:0}
+.tavora-tooltip.compact li{font-size:12px}
+.tavora-tooltip.compact .tavora-tooltip-head{gap:10px}
