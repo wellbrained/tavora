@@ -55,6 +55,28 @@ tavora.documents.onChange(async ({ id }) => {
 });
 ```
 
+### The document store
+
+Most modules should not write that by hand. `openDocument` from `@tavora/sdk/store` keeps one document for you: edits show at once, are saved a moment later one after another, and when another panel saved first your edit is applied again on top of its copy, so neither is lost.
+
+```ts
+import { openDocument } from "@tavora/sdk/store";
+
+const plan = await openDocument<Plan>(tavora, "plan", {
+  parse: (raw) => (raw as Plan | null) ?? { items: [] }, // the document may not exist yet
+  title: () => "Plan",
+});
+
+plan.onChange(({ data }) => render(data)); // your own edits and other panels'
+plan.onError(() => showToast("Couldn't save"));      // `plan.data` is back at the saved copy
+plan.update((draft) => void draft.items.push("Milk")); // changes `plan.data` now, saves soon
+await plan.flush();                                    // save right away
+```
+
+An edit is a function that runs on the newest copy, so write it as "add this item", not "the list is now this". After 5 conflicting attempts the store gives up, calls `onError` and goes back to the saved copy. An editor that owns the whole document can pass `merge: "mine"`: then its copy wins a conflict, and another panel's change while it has unsaved edits only reaches `onChange`. Unsaved edits are saved when the panel is hidden and on `dispose()`. A document is still one `documents.put`, so it stays under 4 MiB. In a Vue module, `useDocument` from `@tavora/official-ui` wraps this.
+
+If you need more control (several documents in one save, or your own conflict handling), use `documents.put` with `ifRevision` as above.
+
 `ifRevision: 0` means "only if it doesn't exist yet". Other panels get `documents.onChange` after each save; the panel that saved does not.
 
 ## Pictures

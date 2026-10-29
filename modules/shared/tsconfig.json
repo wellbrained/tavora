@@ -10,7 +10,11 @@
     // Libraries such as reka-ui also publish a "source" export; type-check
     // them from their builds and only the SDK from its sources.
     "customConditions": [],
-    "paths": { "@tavora/sdk": ["../../packages/sdk/src/index.ts"] }
+    "paths": {
+      "@tavora/sdk": ["../../packages/sdk/src/index.ts"],
+      "@tavora/sdk/store": ["../../packages/sdk/src/store.ts"],
+      "@tavora/sdk/testing": ["../../packages/sdk/src/testing.ts"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.vue"]
 }

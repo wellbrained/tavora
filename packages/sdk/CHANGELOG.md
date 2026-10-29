@@ -1,3 +1,9 @@
+## 0.2.16
+
+The document store: `@tavora/sdk/store`. Nothing changes for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `openDocument(sdk, id, { parse, title, merge?, debounceMs? })` keeps one document for a panel: `update(change)` shows an edit at once and saves it after a short pause, one save at a time. When another panel saved first (`CONFLICT`) the store reads the newest copy and applies your edit on it again, up to 5 attempts, then calls `onError` and goes back to the saved copy. When another panel changes the document, the store reloads it, or applies your unsaved edits on the new copy. `merge: "mine"` is for an editor that owns the whole document: its copy wins a conflict. `flush()`, `dispose()` and the panel being hidden save what is pending. `readStored(sdk.storage, key, parse)` reads a typed setting.
+
 ## 0.2.15
 
 A test host: `@tavora/sdk/testing`. Nothing changes for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).

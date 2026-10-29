@@ -1,4 +1,5 @@
 // Saving documents that several panels of a module edit at once.
+// Deprecated: `openDocument` from `@tavora/sdk/store` (or `useDocument`) does this and more; these stay until the last caller has moved.
 
 import { TavoraError, type JsonValue, type TavoraSDK } from "@tavora/sdk";
 
@@ -22,6 +23,8 @@ export interface UpdateOptions<T> {
 const MAX_ATTEMPTS = 5;
 
 /**
+ * @deprecated Use `openDocument` from `@tavora/sdk/store` (or `useDocument`).
+ *
  * Saves a change to a document that several panels may edit at once. The
  * change is applied to the newest stored copy; when another panel saved in
  * between, the document is read again and the change applied once more, so
@@ -46,12 +49,17 @@ export async function updateDocument<T extends JsonValue>(
   }
 }
 
+/** @deprecated Use `openDocument` from `@tavora/sdk/store` (or `useDocument`). */
 export async function readDocument<T>(sdk: TavoraSDK, id: string, parse: (raw: JsonValue | null) => T): Promise<Versioned<T>> {
   const doc = await sdk.documents.get(id);
   return doc ? { data: parse(doc.data), revision: doc.revision } : { data: parse(null), revision: 0 };
 }
 
-/** Runs async jobs one after another, so saves from one panel never overlap. */
+/**
+ * @deprecated The document store saves one after another by itself.
+ *
+ * Runs async jobs one after another, so saves from one panel never overlap.
+ */
 export function serial(): <R>(job: () => Promise<R>) => Promise<R> {
   let tail: Promise<unknown> = Promise.resolve();
   return (job) => {
