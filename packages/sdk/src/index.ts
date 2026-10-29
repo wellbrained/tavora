@@ -256,12 +256,12 @@ export interface TavoraSDK {
      * button: for settings or details that don't fit a small panel. It is the same page, now `size` big (CSS pixels,
      * 240 to 2000 a side, default 560 x 640; Tavora makes it fit the window), so it keeps all it had. Call it from the
      * click or key press that asked for it: the host refuses it otherwise. The user closes it with the close button or a
-     * click beside it (Esc in the page is the module's to handle); onDialogChange says so. Needs Tavora 0.21.94 or newer (older ones throw METHOD_NOT_FOUND).
+     * click beside it (Esc in the page is the module's to handle); onDialogChange says so. Needs Tavora 0.21.95 or newer (older ones throw METHOD_NOT_FOUND).
      */
     openDialog(size?: { width?: number; height?: number }): Promise<void>;
-    /** Puts this panel back in its slot after openDialog. Needs Tavora 0.21.94 or newer. */
+    /** Puts this panel back in its slot after openDialog. Needs Tavora 0.21.95 or newer. */
     closeDialog(): Promise<void>;
-    /** Fires when this panel's dialog opens or closes, whoever did it. Needs Tavora 0.21.94 or newer. */
+    /** Fires when this panel's dialog opens or closes, whoever did it. Needs Tavora 0.21.95 or newer. */
     onDialogChange(fn: (open: boolean) => void): Unsubscribe;
     /**
      * What this panel's live view shows: while the user shows the panel in their game and the in-game layer is closed,
