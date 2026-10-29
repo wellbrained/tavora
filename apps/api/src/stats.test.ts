@@ -6,6 +6,7 @@ import { signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createApp } from "./app.ts";
+import { githubInstallerTotals } from "./github-releases.ts";
 import { CatalogStore } from "./catalog.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createRateLimiter } from "./rate-limit.ts";
@@ -56,6 +57,44 @@ describe("daily counts", () => {
     first.count("app-update", "0.21.28", at("2026-10-26T00:00:00Z"));
     first.close();
     expect(new StatsStore(file).series("2026-10-26", "2026-10-26").totals["app-update"]).toEqual({ "0.21.28": 1 });
+  });
+});
+
+describe("installer downloads from the GitHub releases", () => {
+  it("counts what GitHub's running totals added since the last look, on the day it was seen", () => {
+    const stats = new StatsStore(":memory:");
+    stats.countGithubTotals({ "0.21.35": 4 }, at("2026-10-27T10:00:00Z"));
+    stats.countGithubTotals({ "0.21.35": 4, "0.22.0": 1 }, at("2026-10-28T10:00:00Z"));
+    stats.countGithubTotals({ "0.21.35": 6, "0.22.0": 3 }, at("2026-10-28T11:00:00Z"));
+    // Uploaded again: the total starts over, which counts nothing but becomes the new starting point.
+    stats.countGithubTotals({ "0.21.35": 6, "0.22.0": 0 }, at("2026-10-29T10:00:00Z"));
+    stats.countGithubTotals({ "0.21.35": 6, "0.22.0": 2 }, at("2026-10-29T11:00:00Z"));
+    const series = stats.series("2026-10-27", "2026-10-29");
+    expect(series.counts["app-installer-github"]).toEqual({ "0.21.35": [4, 2, 0], "0.22.0": [0, 3, 2] });
+    expect(series.counts["app-installer"]).toEqual({});
+  });
+
+  it("reads each version's Tavora-Setup exe from every page of releases and nothing else", async () => {
+    const asset = (name: string, download_count: number) => ({ name, download_count });
+    const pages = [
+      Array.from({ length: 100 }, (_, i) => ({ assets: [asset(`Tavora-Setup-0.1.${i}.exe`, 1), asset(`Tavora-Setup-0.1.${i}.exe.blockmap`, 9), asset("latest.yml", 9)] })),
+      [{ assets: [asset("Tavora-Setup-0.22.0.exe", 5), asset("Tavora-0.22.0-win.zip", 9), asset("Tavora-Setup-evil.exe", 9)] }, {}],
+    ];
+    const asked: string[] = [];
+    const fetchFn = (async (url: string) => {
+      asked.push(url);
+      return Response.json(pages[asked.length - 1]);
+    }) as typeof fetch;
+    const totals = await githubInstallerTotals(fetchFn);
+    expect(asked).toHaveLength(2);
+    expect(asked[1]).toContain("page=2");
+    expect(totals["0.22.0"]).toBe(5);
+    expect(totals["0.1.7"]).toBe(1);
+    expect(Object.keys(totals)).toHaveLength(101);
+  });
+
+  it("throws when GitHub doesn't answer with the list", async () => {
+    await expect(githubInstallerTotals((async () => new Response("rate limited", { status: 403 })) as typeof fetch)).rejects.toThrow("403");
   });
 });
 

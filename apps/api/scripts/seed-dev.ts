@@ -730,6 +730,7 @@ export function seedDev({ stateDir, gamesFile, now = Date.now() }: SeedOptions):
     const releasedNow = releaseDays(at);
     const latest = releasedNow.length - 1;
     if (latest >= 0) counts.push({ day, kind: "app-installer", key: appVersion(latest), count: Math.round(users * 0.12 * weekend(at) * noise()) });
+    if (latest >= 0) counts.push({ day, kind: "app-installer-github", key: appVersion(latest), count: Math.round(users * 0.02 * noise()) });
     for (const [index, releaseDay] of releasedNow.entries()) {
       const since = Math.floor((at - releaseDay) / DAY);
       if (since <= 5) counts.push({ day, kind: "app-update", key: appVersion(index), count: Math.round(users * 0.7 * 0.45 ** since * weekend(at) * noise()) });
