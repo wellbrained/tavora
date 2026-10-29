@@ -435,6 +435,12 @@ test("to-dos: Enter in a to-do starts a new one right below it", async () => {
   await addInto(app, TODOS, $(`[data-testid="draft-task"]`), "Bring meat");
   await expect.poll(() => inModule(app, TODOS, `${taskTitled("Bring meat")}?.dataset.depth`)).toBe("1");
   await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Tame a wolf", "Bring meat", "Build a hut"]);
+
+  // The trash button deletes in one click, with its sub-to-dos, and Undo puts them back.
+  await inModule(app, TODOS, `${taskTitled("Tame a wolf")}.querySelector('[data-testid="task-delete"]').click()`);
+  await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Build a hut"]);
+  await click(app, TODOS, `[data-testid="undo"]`);
+  await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Tame a wolf", "Bring meat", "Build a hut"]);
   await app.close();
 });
 

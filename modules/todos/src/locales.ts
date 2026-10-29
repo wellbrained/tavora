@@ -110,6 +110,7 @@ export const en = {
   "task.moveDown": "Move down",
   "task.moveToGroup": "Move to group",
   "task.delete": "Delete to-do",
+  "task.deleteTitle": "Delete “{title}”",
   "task.addBelow": "Add to-do below",
   "task.addSub": "Add sub-to-do",
 } as const;
@@ -225,6 +226,7 @@ export const de: Record<keyof typeof en, string> = {
   "task.moveDown": "Nach unten",
   "task.moveToGroup": "In Gruppe verschieben",
   "task.delete": "To-Do löschen",
+  "task.deleteTitle": "„{title}“ löschen",
   "task.addBelow": "To-Do darunter hinzufügen",
   "task.addSub": "Unter-To-Do hinzufügen",
 };
