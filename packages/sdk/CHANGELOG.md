@@ -1,3 +1,9 @@
+## 0.2.15
+
+A test host: `@tavora/sdk/testing`. Nothing changes for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `createMemoryHost()` gives `{ sdk, host }`: `sdk` is a whole `TavoraSDK` that keeps its state in memory and follows the real host's rules (limits, document revisions and `CONFLICT`, `compareAndSet`, panel state, events), and `host` is what a test uses to set things up, raise events and look at the calls the module made. It can simulate an older Tavora, refuse calls that need a click, and share its state with a second panel. See [Testing your module](https://docs.mytavora.app/guide/testing).
+
 ## 0.2.14
 
 Panel dialogs, with Tavora 0.21.95 or newer. `MIN_TAVORA` stays (Tavora 0.19.32): on an older Tavora `openDialog` throws `METHOD_NOT_FOUND`, so a module can show its settings in the panel instead.

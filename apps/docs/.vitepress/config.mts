@@ -49,6 +49,7 @@ export default defineConfig({
           { text: "Getting started", link: "/guide/getting-started" },
           { text: "Permissions and consent", link: "/guide/permissions" },
           { text: "Saving data", link: "/guide/saving-data" },
+          { text: "Testing your module", link: "/guide/testing" },
           { text: "Look and languages", link: "/guide/look-and-languages" },
           { text: "Several panels", link: "/guide/panels" },
           { text: "Settings for your module", link: "/guide/module-settings" },

@@ -86,3 +86,7 @@ Data belongs to your module's id together with who published it: the key that si
 - Your development folder and your signed zip don't see each other's data, even with the same id.
 - An update signed with the same key keeps everything the user saved.
 - A zip signed with a different key starts empty. That is why [your publisher key](./publisher-key.md) matters.
+
+## Testing what you save
+
+`@tavora/sdk/testing` keeps documents, settings and panel state in memory with Tavora's revisions, limits and errors, so you can test saving without Tavora. See [Testing your module](testing.md).
