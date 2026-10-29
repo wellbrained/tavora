@@ -13,6 +13,7 @@
     "customConditions": [],
     "paths": {
       "@tavora/sdk": ["../../packages/sdk/src/index.ts"],
+      "@tavora/sdk/bootstrap": ["../../packages/sdk/src/bootstrap.ts"],
       "@tavora/sdk/store": ["../../packages/sdk/src/store.ts"]
     }
   },
