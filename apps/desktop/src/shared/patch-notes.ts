@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.97",
+    date: "2026-10-29",
+    title: "Your ranks in your profile",
+    notes: [
+      "Click your picture in the rail to see your ranks in the games you joined.",
+      "Pick today, this week, this month, this year or all time.",
+      "Rather not see them? Hide your ranks there with one click.",
+      "Game modules can now rank totals, averages and win rates too.",
+    ],
+    prs: [
+      { number: 450, title: "Leaderboards: totals, averages, win rates, time periods and your ranks in the profile" },
+    ],
+    tags: ["accounts", "games", "modules", "privacy", "publishing", "sdk", "service", "website"],
+  },
+  {
     version: "0.21.96",
     date: "2026-10-29",
     title: "Tidier hints",
