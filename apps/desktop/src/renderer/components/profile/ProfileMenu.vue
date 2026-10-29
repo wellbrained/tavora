@@ -162,18 +162,23 @@ function closeCrop() {
         type="button"
         :class="
           cn(
-            'group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-3 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2 data-[state=open]:text-foreground',
-            expanded && 'hover:bg-accent data-[state=open]:bg-accent',
+            'group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2 data-[state=open]:text-foreground',
+            // Open, the profile is a card of its own at the very bottom.
+            expanded && 'bg-card text-foreground hover:bg-accent data-[state=open]:bg-accent rounded-xl border p-2 text-left',
           )
         "
         data-rail-item
         data-testid="rail-profile"
         :aria-label="profile.name.trim() ? t('profile.named', { name: profile.name.trim() }) : t('profile.label')"
       >
-        <RailFooterTile>
+        <ProfileAvatar v-if="expanded" :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="34" />
+        <RailFooterTile v-else>
           <ProfileAvatar :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="40" square />
         </RailFooterTile>
-        <span v-if="expanded" class="truncate text-sm font-medium">{{ profile.name.trim() || t("profile.label") }}</span>
+        <span v-if="expanded" class="flex min-w-0 flex-col">
+          <span class="truncate text-sm font-semibold">{{ profile.name.trim() || t("profile.label") }}</span>
+          <span class="text-muted-foreground truncate text-xs">{{ t("rail.profileHint") }}</span>
+        </span>
       </button>
     </PopoverTrigger>
     <PopoverPortal>

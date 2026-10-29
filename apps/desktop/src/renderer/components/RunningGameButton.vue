@@ -23,7 +23,7 @@ const label = computed(() => (game.value ? t("rail.running", { name: game.value.
   <RailTooltip v-if="game" :text="label" :hint="t('rail.runningSwitch')" :disabled="expanded">
     <button
       type="button"
-      :class="cn('running-in mx-2 flex items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent')"
+      :class="cn('running-in mx-2 flex items-center gap-2.5 rounded-lg p-1 group-data-[expanded=true]/rail:px-2 text-left', expanded && 'hover:bg-accent')"
       data-rail-item
       data-testid="rail-running"
       :aria-label="`${label}. ${t('rail.runningSwitch')}`"
@@ -32,10 +32,10 @@ const label = computed(() => (game.value ? t("rail.running", { name: game.value.
       <RailFooterTile dot="success" class="running-tile text-success">
         <Gamepad2 class="running-glyph size-5" :stroke-width="1.5" />
       </RailFooterTile>
-      <span v-if="expanded" class="flex min-w-0 flex-col leading-tight">
-        <span class="truncate text-sm font-semibold">{{ game.name }}</span>
-        <span class="text-success truncate text-xs">{{ t("rail.runningHint") }}</span>
-      </span>
+      <template v-if="expanded">
+        <span class="truncate text-sm font-medium">{{ game.name }}</span>
+        <span class="text-success mr-1 ml-auto flex-none text-xs font-medium">{{ t("rail.runningShort") }}</span>
+      </template>
     </button>
   </RailTooltip>
 </template>

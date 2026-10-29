@@ -210,6 +210,56 @@ html.floating-open .app-drag {
   }
 }
 
+/* The expanded rail is a list: rows are shorter than the compact tiles, so the active pill is too, and the items at
+   the bottom drop their tile and keep only the icon (RailFooterTile.vue). Outside a layer, so they win over the
+   tile's utility classes. */
+nav[data-expanded="true"] .rail-entry[data-active="true"] .rail-pill {
+  height: 24px;
+}
+nav[data-expanded="true"] .rail-entry:hover .rail-pill,
+nav[data-expanded="true"] .rail-entry:focus-within .rail-pill {
+  height: 14px;
+}
+nav[data-expanded="true"] .rail-entry[data-active="true"]:hover .rail-pill {
+  height: 24px;
+}
+nav[data-expanded="true"] .footer-slot {
+  width: 30px;
+}
+/* A section header in the expanded rail ("Favorites", "Games"): plain words with a fold arrow. */
+.rail-section {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  margin: 12px 12px 2px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  font-weight: 500;
+  transition: color 150ms;
+}
+.rail-section:hover {
+  color: var(--foreground);
+}
+nav[data-expanded="true"] .footer-tile {
+  width: 30px;
+  height: 30px;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+nav[data-expanded="true"] .footer-slot > [aria-hidden="true"] {
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  --tw-ring-shadow: 0 0 0 2px var(--rail);
+}
+
 /* Drop position markers on the rail while dragging. */
 @layer components {
   /* A thick line across the rail with a dot at its start: "it goes here". */

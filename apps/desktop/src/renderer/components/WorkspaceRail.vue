@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronLeft, ChevronRight, Plus, Settings } from "@lucide/vue";
+import { ChevronDown, ChevronLeft, ChevronRight, Folder, FolderOpen, Plus, Settings } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
@@ -319,69 +319,106 @@ function dnd(target: Target, item: Dragged = { kind: target.kind, id: target.id 
 }
 
 const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: "root" } });
+
+// ── Sections ───────────────────────────────────────────────────────────
+// In the expanded rail the headers fold their list away for this session. The compact rail has no headers and shows
+// everything, and a drag opens a folded list again, so there is always somewhere to drop.
+const folded = reactive({ favorites: false, all: false });
+const showFavorites = computed(() => !expanded.value || !folded.favorites || dragged.value?.kind === "workspace");
+const showAll = computed(() => !expanded.value || !folded.all || dragged.value !== null);
 </script>
 
 <template>
   <nav
     ref="nav"
-    class="bg-rail relative flex h-full flex-none flex-col border-r"
+    class="group/rail bg-rail relative flex h-full flex-none flex-col border-r"
     :style="{ width: `${width}px` }"
     :aria-label="t('rail.workspaces')"
     data-testid="rail"
     :data-expanded="expanded"
     @keydown="onNavKey"
   >
-    <div class="rail-entry relative flex flex-col border-b p-2" :data-active="state!.screen === 'welcome'">
+    <!-- The flame (and the name, when expanded) is the way home. -->
+    <div class="rail-entry relative flex flex-col px-2 pt-3 pb-1" :data-active="state!.screen === 'welcome'">
       <span class="rail-pill" aria-hidden="true" />
       <RailTooltip :text="t('rail.home')" :disabled="expanded">
         <button
           type="button"
-          :class="cn('flex h-12 items-center gap-3 rounded-lg px-3', expanded && 'hover:bg-accent', expanded && state!.screen === 'welcome' && 'bg-accent')"
+          :class="
+            cn(
+              'flex h-10 items-center gap-2.5 rounded-lg',
+              expanded ? 'hover:bg-accent px-2' : 'justify-center',
+              expanded && state!.screen === 'welcome' && 'bg-accent',
+            )
+          "
           data-rail-item
           data-testid="rail-home"
           :aria-label="t('rail.home')"
           :aria-current="state!.screen === 'welcome' ? 'page' : undefined"
           @click="act({ type: 'show-welcome' })"
         >
-          <img class="rail-icon rail-icon-bare" src="/brand/flame-96.png" alt="" width="32" height="32" draggable="false" />
-          <span v-if="expanded" class="text-lg font-semibold">{{ t("rail.home") }}</span>
+          <span class="flex w-[30px] flex-none justify-center">
+            <img class="rail-icon rail-icon-bare" src="/brand/flame-96.png" alt="" width="26" height="26" draggable="false" />
+          </span>
+          <span v-if="expanded" class="text-base font-semibold">Tavora</span>
         </button>
       </RailTooltip>
     </div>
 
     <div class="relative min-h-0 flex-1">
-    <div ref="scroller" class="size-full overflow-x-hidden overflow-y-auto py-2 [scrollbar-width:none]" @scroll.passive="updateScrollHints">
+    <div ref="scroller" class="size-full overflow-x-hidden overflow-y-auto pb-2 [scrollbar-width:none]" @scroll.passive="updateScrollHints">
     <div ref="listContent">
       <section
         v-if="favorites.length || dragged?.kind === 'workspace'"
-        :class="cn('mb-2 flex flex-col gap-1 border-b pb-2', favoriteZoneActive && 'bg-primary/15')"
+        :class="cn('flex flex-col', expanded ? 'gap-0.5' : 'mb-2 gap-1 border-b pt-1 pb-2', favoriteZoneActive && 'bg-primary/15')"
         :aria-label="t('rail.favorites')"
         data-testid="rail-favorites"
         @dragover="onFavoritesOver"
         @dragleave="favoriteZoneActive = false"
         @drop="onFavoritesDrop"
       >
-        <h2 v-if="expanded" class="text-muted-foreground mx-4 my-1 text-xs font-medium">{{ t("rail.favorites") }}</h2>
-        <RailWorkspace
-          v-for="item in favorites"
-          :key="item.id"
-          :workspace="item"
-          :testid="`rail-favorite-${item.id}`"
-          :active="isActive(item.id)"
-          :expanded="expanded"
-          :shortcut="shortcutOf(item.id)"
-          :menu="menuFor(item.id, true)"
-          :hint="hintFor({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
-          v-on="dnd({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
-          @open="open(item.id)"
-        />
-        <p v-if="!favorites.length" class="text-muted-foreground border-input mx-2 rounded-lg border border-dashed p-2 text-center text-xs">
-          {{ t("rail.dropHere") }}
-        </p>
+        <button
+          v-if="expanded"
+          type="button"
+          class="rail-section"
+          :aria-expanded="showFavorites"
+          data-testid="rail-favorites-header"
+          @click="folded.favorites = !folded.favorites"
+        >
+          {{ t("rail.favorites") }}<ChevronDown :class="cn('size-3.5 transition-transform', !showFavorites && '-rotate-90')" :stroke-width="2" />
+        </button>
+        <template v-if="showFavorites">
+          <RailWorkspace
+            v-for="item in favorites"
+            :key="item.id"
+            :workspace="item"
+            :testid="`rail-favorite-${item.id}`"
+            :active="isActive(item.id)"
+            :expanded="expanded"
+            :shortcut="shortcutOf(item.id)"
+            :menu="menuFor(item.id, true)"
+            :hint="hintFor({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
+            v-on="dnd({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
+            @open="open(item.id)"
+          />
+          <p v-if="!favorites.length" class="text-muted-foreground border-input mx-2 rounded-lg border border-dashed p-2 text-center text-xs">
+            {{ t("rail.dropHere") }}
+          </p>
+        </template>
       </section>
 
-      <section class="flex flex-col gap-1" :aria-label="t('rail.all')">
-        <template v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`">
+      <section :class="cn('flex flex-col', expanded ? 'gap-0.5' : 'gap-1 pt-1')" :aria-label="t('rail.all')">
+        <button
+          v-if="expanded"
+          type="button"
+          class="rail-section"
+          :aria-expanded="showAll"
+          data-testid="rail-all-header"
+          @click="folded.all = !folded.all"
+        >
+          {{ t("rail.games") }}<ChevronDown :class="cn('size-3.5 transition-transform', !showAll && '-rotate-90')" :stroke-width="2" />
+        </button>
+        <template v-for="entry in showAll ? rootEntries : []" :key="`${entry.kind}:${entry.id}`">
           <RailWorkspace
             v-if="entry.kind === 'workspace'"
             :workspace="workspace(entry.id)"
@@ -394,14 +431,15 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
             v-on="dnd({ kind: 'workspace', id: entry.id, place: { list: 'root' } })"
             @open="open(entry.id)"
           />
+          <!-- Compact, an open folder and its workspaces share a quiet panel; expanded, they hang off a line. -->
           <div
             v-else
-            :class="cn(openFolders.has(entry.id) && 'bg-primary/10 ring-primary/40 mx-1 rounded-xl pb-1 ring-1 ring-inset')"
+            :class="cn(!expanded && openFolders.has(entry.id) && 'bg-foreground/[0.05] mx-1 rounded-xl pb-1')"
             :data-testid="`rail-folder-${entry.id}`"
           >
             <MenuArea :items="folderMenuFor(entry.id)" :title="folder(entry.id).name">
               <div
-                :class="cn('group rail-entry relative flex items-center', openFolders.has(entry.id) ? 'px-1' : 'px-2', folderHint(entry.id) && `drop-${folderHint(entry.id)}`)"
+                :class="cn('group rail-entry relative flex items-center', !expanded && openFolders.has(entry.id) ? 'px-1' : 'px-2', folderHint(entry.id) && `drop-${folderHint(entry.id)}`)"
                 draggable="true"
                 v-on="dnd({ kind: 'folder', id: entry.id, place: { list: 'root' } })"
               >
@@ -414,22 +452,33 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 >
                 <button
                   type="button"
-                  :class="cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent', folderHint(entry.id) === 'into' && 'ring-primary ring-2 ring-inset')"
+                  :class="
+                    cn(
+                      'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
+                      expanded ? 'hover:bg-accent px-2 py-1' : 'justify-center p-1',
+                      folderHint(entry.id) === 'into' && 'ring-primary ring-2 ring-inset',
+                    )
+                  "
                   data-rail-item
                   :data-testid="`rail-folder-${entry.id}-toggle`"
                   :aria-expanded="openFolders.has(entry.id)"
                   :aria-label="t('rail.folder', { name: folder(entry.id).name })"
                   @click="toggleFolder(entry.id)"
                 >
+                  <template v-if="expanded">
+                    <span class="text-muted-foreground flex size-[30px] flex-none items-center justify-center">
+                      <component :is="openFolders.has(entry.id) ? FolderOpen : Folder" class="size-[18px]" :stroke-width="1.5" />
+                    </span>
+                    <span class="flex-1 truncate text-base font-medium">{{ folder(entry.id).name }}</span>
+                    <span class="text-muted-foreground mr-1 flex-none text-xs tabular-nums">{{ folderWorkspaces(entry.id).length }}</span>
+                  </template>
                   <FolderTile
+                    v-else
+                    style="zoom: 0.8334"
                     :workspaces="folderWorkspaces(entry.id).slice(0, 4).map(workspace)"
                     :label="folder(entry.id).label"
                     :open="openFolders.has(entry.id)"
                   />
-                  <template v-if="expanded">
-                    <span class="flex-1 truncate text-sm font-medium">{{ folder(entry.id).name }}</span>
-                    <component :is="openFolders.has(entry.id) ? ChevronDown : ChevronRight" class="text-muted-foreground mr-8 size-4 flex-none" />
-                  </template>
                 </button>
                 </RailTooltip>
                 <div
@@ -445,14 +494,14 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 </div>
               </div>
             </MenuArea>
-            <!-- An open folder and its workspaces sit in one tinted panel. The workspaces keep the size and the place of the rest of the rail. -->
             <div
               v-if="openFolders.has(entry.id)"
-              class="mt-1 flex flex-col gap-1 [&>div]:px-1"
+              :class="cn('relative flex flex-col', expanded ? 'mt-0.5 ml-[31px] gap-0.5' : 'mt-1 gap-1 [&>div]:px-1')"
               role="group"
               :aria-label="folder(entry.id).name"
               data-testid="folder-workspaces"
             >
+              <span v-if="expanded && folderWorkspaces(entry.id).length" class="bg-border absolute top-0 bottom-[17px] left-0 w-px" aria-hidden="true" />
               <RailWorkspace
                 v-for="id in folderWorkspaces(entry.id)"
                 :key="id"
@@ -460,6 +509,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 :testid="`rail-workspace-${id}`"
                 :active="isActive(id)"
                 :expanded="expanded"
+                nested
                 :shortcut="shortcutOf(id)"
                 :menu="menuFor(id)"
                 :hint="hintFor({ kind: 'workspace', id, place: { list: 'folder', folderId: entry.id } })"
@@ -470,23 +520,32 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
             </div>
           </div>
         </template>
-        <!-- Add game is a tile under the last workspace, like one more entry in the list. -->
+        <!-- Add game is one more entry under the last workspace: a tile when compact, a quiet row when expanded. -->
         <div class="rail-entry group relative mt-1 flex items-center px-2">
           <RailTooltip :text="t('common.addGame')" :disabled="expanded">
             <button
               type="button"
-              :class="cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent')"
+              :class="
+                cn(
+                  'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
+                  expanded ? 'text-muted-foreground hover:text-foreground hover:bg-accent px-2 py-1' : 'justify-center p-1',
+                )
+              "
               data-rail-item
               data-testid="rail-add-game"
               :aria-label="t('common.addGame')"
               @click="dialog = { kind: 'add-game' }"
             >
-              <span
-                class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-12 flex-none items-center justify-center rounded-[12px]"
-              >
-                <Plus class="size-6" :stroke-width="1.75" />
+              <span v-if="expanded" class="flex size-[30px] flex-none items-center justify-center">
+                <Plus class="size-[18px]" :stroke-width="1.75" />
               </span>
-              <span v-if="expanded" class="text-sm font-medium">{{ t("common.addGame") }}</span>
+              <span
+                v-else
+                class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
+              >
+                <Plus class="size-5" :stroke-width="1.75" />
+              </span>
+              <span v-if="expanded" class="text-base font-medium">{{ t("common.addGame") }}</span>
             </button>
           </RailTooltip>
         </div>
@@ -509,18 +568,17 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     </div>
     </div>
 
-    <!-- User things live at the bottom on their own: a game running now, the profile, then Settings. -->
-    <div class="flex flex-col gap-1 border-t py-2">
+    <!-- User things live at the bottom on their own: a game running now, then Settings, and the profile last. -->
+    <div class="flex flex-col gap-0.5 py-2">
       <RunningGameButton :expanded="expanded" />
       <UpdateMarker :expanded="expanded" />
       <RailOverlayButton :expanded="expanded" />
       <RailModuleUpdates :expanded="expanded" />
       <RailInboxButton :expanded="expanded" />
-      <ProfileMenu :expanded="expanded" />
       <RailTooltip :text="t('rail.settings')" :disabled="expanded">
         <button
           type="button"
-          :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-3 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
+          :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg p-1 group-data-[expanded=true]/rail:px-2 transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
           data-rail-item
           data-testid="rail-settings"
           :aria-label="t('rail.settings')"
@@ -534,32 +592,38 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         </button>
       </RailTooltip>
     </div>
+    <div :class="cn('flex flex-col border-t', expanded ? 'py-2.5' : 'py-2')">
+      <ProfileMenu :expanded="expanded" />
+    </div>
 
-    <button
-      type="button"
-      class="app-no-drag bg-rail text-foreground/80 hover:text-foreground border-foreground/25 hover:border-primary/60 focus-visible:ring-ring absolute top-5 -right-3 z-20 grid size-6 place-items-center rounded-full border shadow-sm shadow-black/30 transition-colors focus-visible:ring-2 focus-visible:outline-none"
-      data-testid="rail-toggle"
-      :aria-label="expanded ? t('rail.collapse') : t('rail.expand')"
-      :title="expanded ? t('rail.collapse') : t('rail.expand')"
-      :aria-expanded="expanded"
-      @click="toggleRail"
-    >
-      <component :is="expanded ? ChevronLeft : ChevronRight" class="size-3.5" :stroke-width="2" />
-    </button>
-
-    <div
-      v-if="expanded"
-      class="hover:bg-primary/15 focus-visible:bg-primary absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize focus-visible:outline-none"
-      role="separator"
-      aria-orientation="vertical"
-      :aria-label="t('rail.resize')"
-      :aria-valuenow="width"
-      :aria-valuemin="MIN_WIDTH"
-      :aria-valuemax="MAX_WIDTH"
-      tabindex="0"
-      data-testid="rail-resize"
-      @pointerdown.prevent="startResize"
-      @keydown="resizeByKey"
-    />
+    <!-- The right edge: hovering it shows a handle that opens or closes the rail; dragging it resizes an open rail.
+         It stays inside the rail, since module panels drawn over the workspace would cover anything beyond it. -->
+    <div class="group/edge app-no-drag absolute inset-y-0 right-0 z-10 w-3">
+      <div
+        v-if="expanded"
+        class="group-hover/edge:bg-primary/15 focus-visible:bg-primary absolute inset-y-0 right-0 w-1.5 cursor-col-resize focus-visible:outline-none"
+        role="separator"
+        aria-orientation="vertical"
+        :aria-label="t('rail.resize')"
+        :aria-valuenow="width"
+        :aria-valuemin="MIN_WIDTH"
+        :aria-valuemax="MAX_WIDTH"
+        tabindex="0"
+        data-testid="rail-resize"
+        @pointerdown.prevent="startResize"
+        @keydown="resizeByKey"
+      />
+      <button
+        type="button"
+        class="bg-accent text-primary border-primary/60 hover:border-primary focus-visible:ring-ring absolute top-1/2 right-0.5 grid h-11 w-3 -translate-y-1/2 place-items-center rounded-full border opacity-0 shadow-sm shadow-black/30 transition-opacity group-hover/edge:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+        data-testid="rail-toggle"
+        :aria-label="expanded ? t('rail.collapse') : t('rail.expand')"
+        :title="expanded ? t('rail.collapse') : t('rail.expand')"
+        :aria-expanded="expanded"
+        @click="toggleRail"
+      >
+        <component :is="expanded ? ChevronLeft : ChevronRight" class="size-2.5" :stroke-width="3" />
+      </button>
+    </div>
   </nav>
 </template>
