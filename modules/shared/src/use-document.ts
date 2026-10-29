@@ -8,19 +8,21 @@ export interface UseDocument<T> {
   /** The current value, edits included; `parse(null)` until the document is loaded. Replaced, never mutated. */
   data: Readonly<ShallowRef<T>>;
   status: Readonly<Ref<DocumentStatus>>;
-  /** The last save error, until the next edit. */
+  /** The last error (a failed save, a dropped edit, or the document not loading), until the next edit. */
   error: Readonly<Ref<unknown>>;
   /** True once the stored copy has been read. */
   loaded: Readonly<Ref<boolean>>;
-  /** Resolves with the handle when loaded (e.g. for `onChange`); rejects when the document cannot be read. */
+  /** Resolves with the handle when loaded (e.g. for `onChange`); rejects when the document cannot be read (also in `error`). */
   ready: Promise<DocumentHandle<T>>;
   update(change: DocumentChangeFn<T>): void;
+  /** Never rejects; does nothing when the document could not be loaded. */
   flush(): Promise<void>;
 }
 
 /**
  * Opens a document for this component: it is closed (unsaved edits saved first) when the surrounding scope or
- * component is disposed. Edits made before it is loaded wait for the load.
+ * component is disposed. Edits made before it is loaded wait for the load; they are dropped if the scope ends first
+ * or the document cannot be loaded.
  */
 export function useDocument<T>(sdk: TavoraSDK, id: string, options: OpenDocumentOptions<T>): UseDocument<T> {
   const data = shallowRef<T>(options.parse(null));
@@ -30,23 +32,33 @@ export function useDocument<T>(sdk: TavoraSDK, id: string, options: OpenDocument
   let handle: DocumentHandle<T> | undefined;
   let disposed = false;
 
-  const ready = openDocument(sdk, id, options).then((opened) => {
-    handle = opened;
-    if (disposed) {
-      void opened.dispose();
+  const ready = openDocument(sdk, id, options).then(
+    (opened) => {
+      handle = opened;
+      if (disposed) {
+        void opened.dispose();
+        return opened;
+      }
+      data.value = opened.data;
+      status.value = opened.status;
+      loaded.value = true;
+      opened.onChange((event) => (data.value = event.data));
+      opened.onStatus((next) => {
+        status.value = next;
+        if (next === "dirty" || next === "saving") error.value = undefined;
+      });
+      opened.onError((failure, kind) => {
+        if (kind !== "reload") error.value = failure;
+      });
       return opened;
-    }
-    data.value = opened.data;
-    status.value = opened.status;
-    loaded.value = true;
-    opened.onChange((event) => (data.value = event.data));
-    opened.onStatus((next) => {
-      status.value = next;
-      if (next === "saving") error.value = undefined;
-    });
-    opened.onError((failure) => (error.value = failure));
-    return opened;
-  });
+    },
+    (failure: unknown) => {
+      error.value = failure;
+      throw failure;
+    },
+  );
+  // Whoever does not await `ready` must not get an unhandled rejection; `error` carries it.
+  ready.catch(() => undefined);
 
   if (getCurrentScope()) {
     onScopeDispose(() => {
@@ -61,7 +73,7 @@ export function useDocument<T>(sdk: TavoraSDK, id: string, options: OpenDocument
     error,
     loaded,
     ready,
-    update: (change) => (handle ? handle.update(change) : void ready.then((opened) => (disposed ? undefined : opened.update(change)))),
-    flush: () => (handle ? handle.flush() : ready.then((opened) => opened.flush())),
+    update: (change) => (handle ? handle.update(change) : void ready.then((opened) => (disposed ? undefined : opened.update(change)), () => undefined)),
+    flush: () => (handle ? handle.flush() : ready.then((opened) => opened.flush(), () => undefined)),
   };
 }

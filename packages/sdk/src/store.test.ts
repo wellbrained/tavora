@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TavoraError, type JsonValue } from "./index.js";
-import { MAX_SAVE_ATTEMPTS, openDocument, readStored, type DocumentChangeEvent, type OpenDocumentOptions } from "./store.js";
+import { MAX_SAVE_ATTEMPTS, openDocument, type DocumentChangeEvent, type OpenDocumentOptions } from "./store.js";
 import { createMemoryHost } from "./testing.js";
 
 interface Plan {
@@ -27,7 +27,7 @@ describe("update and save", () => {
     doc.update(add("a"));
     doc.update(add("b"));
     expect(doc.data.items).toEqual(["a", "b"]);
-    expect(doc.status).toBe("saving");
+    expect(doc.status).toBe("dirty");
     expect(events.map((event) => event.source)).toEqual(["local", "local"]);
 
     await vi.advanceTimersByTimeAsync(299);
@@ -131,7 +131,7 @@ describe("two panels", () => {
     docA.onChange((event) => events.push(event));
     await b.sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["remote"] }, ifRevision: 0 });
     await vi.waitFor(() => expect(docA.data.items).toEqual(["remote"]));
-    expect(events).toEqual([{ data: { items: ["remote"] }, revision: 1, source: "remote", deleted: false }]);
+    expect(events).toEqual([{ data: { items: ["remote"] }, revision: 1, source: "remote", deleted: false, remote: { items: ["remote"] } }]);
     expect(docA.revision).toBe(1);
   });
 
@@ -208,11 +208,11 @@ describe("failures", () => {
     expect(errors).toMatchObject([{ code: "QUOTA_EXCEEDED" }]);
     expect(doc.status).toBe("error");
     expect(doc.data.items).toEqual([]);
-    expect(events.at(-1)).toBe("local");
+    expect(events.at(-1)).toBe("rollback");
 
     host.unanswer("documents.put");
     doc.update(add("c"));
-    expect(doc.status).toBe("saving");
+    expect(doc.status).toBe("dirty");
     await doc.flush();
     expect(doc.status).toBe("idle");
     expect(stored(host)).toEqual(["c"]);
@@ -244,7 +244,7 @@ describe('merge: "mine"', () => {
     await b.sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["remote"] }, ifRevision: 0 });
     await vi.waitFor(() => expect(events.at(-1)?.source).toBe("remote"));
     expect(docA.data.items).toEqual(["local"]);
-    expect(events.at(-1)).toMatchObject({ revision: 1, deleted: false, data: { items: ["local"] } });
+    expect(events.at(-1)).toMatchObject({ revision: 1, deleted: false, data: { items: ["local"] }, remote: { items: ["remote"] } });
   });
 
   it("still reloads when idle", async () => {
@@ -256,12 +256,332 @@ describe('merge: "mine"', () => {
   });
 });
 
-describe("readStored", () => {
-  it("parses a stored value, with the default for a missing key", async () => {
+/** Makes the next `put` of this panel wait until `release()`, so another panel can save in between. */
+function gatePut(sdk: { documents: unknown }) {
+  const target = sdk.documents as { put: (params: unknown) => Promise<unknown> };
+  const real = target.put;
+  let release!: () => void;
+  let entered!: () => void;
+  const open = new Promise<void>((resolve) => (release = resolve));
+  const reached = new Promise<void>((resolve) => (entered = resolve));
+  let gated = true;
+  target.put = async (params) => {
+    if (gated) {
+      gated = false;
+      entered();
+      await open;
+    }
+    return real(params);
+  };
+  return { release, reached };
+}
+
+const quota = () => new TavoraError({ code: "QUOTA_EXCEEDED", message: "too big" });
+
+describe("review fixes", () => {
+  it("saves the copy the panel shows, ids made inside a change included (1)", async () => {
+    const { sdk, host } = createMemoryHost();
+    const doc = await openDocument(sdk, "plan", options());
+    let n = 0;
+    doc.update((draft) => void draft.items.push(`id-${++n}`));
+    const shown = doc.data.items[0];
+    await doc.flush();
+    expect(stored(host)).toEqual([shown]);
+    expect(doc.data.items).toEqual([shown]);
+    expect(n).toBe(1);
+  });
+
+  it("after a conflict, shows what it saved (1)", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    const docA = await openDocument(a.sdk, "plan", options({ debounceMs: 60_000 }));
+    let n = 0;
+    docA.update((draft) => void draft.items.push(`id-${++n}`));
+    await b.sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["theirs"] }, ifRevision: 0 });
+    await docA.flush();
+    expect(docA.data.items).toEqual(stored(a.host));
+  });
+
+  it("tries edits made while a failing save is in flight (2)", async () => {
+    const { sdk, host } = createMemoryHost();
+    const doc = await openDocument(sdk, "plan", options({ debounceMs: 60_000 }));
+    const errors: unknown[] = [];
+    doc.onError((error) => errors.push(error));
+    let failIn!: () => void;
+    const failing = new Promise<void>((resolve) => (failIn = resolve));
+    const real = sdk.documents.put;
+    let first = true;
+    sdk.documents.put = async (params) => {
+      if (first) {
+        first = false;
+        await failing;
+        throw quota();
+      }
+      return real(params);
+    };
+    doc.update(add("a"));
+    const done = doc.flush();
+    await vi.waitFor(() => expect(doc.status).toBe("saving"));
+    doc.update(add("b"));
+    failIn();
+    await done;
+    expect(errors).toHaveLength(1);
+    expect(stored(host)).toEqual(["b"]);
+    expect(doc.data.items).toEqual(["b"]);
+  });
+
+  it("keeps the error status through an empty flush, suspend and dispose (3)", async () => {
+    const { sdk, host } = createMemoryHost();
+    const doc = await openDocument(sdk, "plan", options());
+    host.answer("documents.put", () => {
+      throw quota();
+    });
+    doc.update(add("a"));
+    await doc.flush();
+    expect(doc.status).toBe("error");
+    await doc.flush();
+    expect(doc.status).toBe("error");
+    host.suspend();
+    await tick();
+    expect(doc.status).toBe("error");
+    await doc.dispose();
+    expect(doc.status).toBe("error");
+  });
+
+  it("drops only the change that throws on the newest copy and keeps the others (4)", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    const docA = await openDocument(a.sdk, "plan", options({ debounceMs: 60_000 }));
+    const errors: { error: unknown; kind: string }[] = [];
+    docA.onError((error, kind) => errors.push({ error, kind }));
+    docA.update(add("fine"));
+    docA.update((draft) => {
+      if (draft.items.includes("theirs")) throw new Error("bad change");
+      draft.items.push("risky");
+    });
+    docA.update(add("also fine"));
+    await b.sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["theirs"] }, ifRevision: 0 });
+    await vi.waitFor(() => expect(docA.data.items).toEqual(["theirs", "fine", "also fine"]));
+    expect(errors).toMatchObject([{ kind: "change" }]);
+    expect(docA.revision).toBe(1);
+    await docA.flush();
+    expect(stored(a.host)).toEqual(["theirs", "fine", "also fine"]);
+    expect(docA.status).toBe("idle");
+  });
+
+  it("drops a throwing change during a conflict re-apply too (4)", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    const docA = await openDocument(a.sdk, "plan", options({ debounceMs: 60_000 }));
+    const kinds: string[] = [];
+    docA.onError((_error, kind) => kinds.push(kind));
+    docA.update(add("fine"));
+    docA.update((draft) => {
+      if (draft.items.includes("theirs")) throw new Error("bad change");
+      draft.items.push("risky");
+    });
+    const gate = gatePut(a.sdk);
+    const done = docA.flush();
+    await gate.reached;
+    await b.sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["theirs"] }, ifRevision: 0 });
+    gate.release();
+    await done;
+    expect(kinds).toEqual(["change"]);
+    expect(stored(a.host)).toEqual(["theirs", "fine"]);
+    expect(docA.data.items).toEqual(["theirs", "fine"]);
+    expect(docA.status).toBe("idle");
+  });
+
+  it("reloads a document deleted and recreated while idle (5)", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    a.host.documents.put({ id: "plan", title: "Plan", data: { items: ["old"] } });
+    const docA = await openDocument(a.sdk, "plan", options());
+    await b.sdk.documents.delete("plan");
+    await b.sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["new"] }, ifRevision: 0 });
+    await vi.waitFor(() => expect(docA.data.items).toEqual(["new"]));
+    expect(docA.revision).toBe(1);
+  });
+
+  it("does not recreate a document deleted elsewhere until the next edit or flush (6)", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    a.host.documents.put({ id: "plan", title: "Plan", data: { items: ["old"] } });
+    const docA = await openDocument(a.sdk, "plan", options({ debounceMs: 50 }));
+    const events: DocumentChangeEvent<Plan>[] = [];
+    docA.onChange((event) => events.push(event));
+    docA.update(add("mine"));
+    await b.sdk.documents.delete("plan");
+    await vi.waitFor(() => expect(events.some((event) => event.deleted)).toBe(true));
+    expect(docA.status).toBe("dirty");
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(a.host.documents.get("plan")).toBeNull();
+    expect(docA.data.items).toEqual(["mine"]);
+
+    await docA.flush();
+    expect(stored(a.host)).toEqual(["mine"]);
+    expect(docA.status).toBe("idle");
+  });
+
+  it("pauses saving when the document is deleted during a save (6)", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    a.host.documents.put({ id: "plan", title: "Plan", data: { items: ["old"] } });
+    const docA = await openDocument(a.sdk, "plan", options({ debounceMs: 60_000 }));
+    const events: DocumentChangeEvent<Plan>[] = [];
+    docA.onChange((event) => events.push(event));
+    docA.update(add("mine"));
+    const gate = gatePut(a.sdk);
+    const done = docA.flush();
+    await gate.reached;
+    await b.sdk.documents.delete("plan");
+    gate.release();
+    await done;
+    expect(a.host.documents.get("plan")).toBeNull();
+    expect(events.some((event) => event.deleted)).toBe(true);
+    expect(docA.status).toBe("dirty");
+    expect(docA.data.items).toEqual(["mine"]);
+    docA.update(add("more"));
+    await docA.flush();
+    expect(stored(a.host)).toEqual(["mine", "more"]);
+  });
+
+  it("tells listeners about a rollback with its own source (7)", async () => {
+    const { sdk, host } = createMemoryHost();
+    const doc = await openDocument(sdk, "plan", options());
+    const sources: string[] = [];
+    doc.onChange((event) => sources.push(event.source));
+    host.answer("documents.put", () => {
+      throw quota();
+    });
+    doc.update(add("a"));
+    await doc.flush();
+    expect(sources).toEqual(["local", "rollback"]);
+  });
+
+  it("stays on the copy it re-read in mine mode when a later error comes (8)", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    const docA = await openDocument(a.sdk, "plan", options({ merge: "mine", debounceMs: 60_000 }));
+    docA.update(() => ({ items: ["mine"] }));
+    let calls = 0;
+    a.sdk.documents.put = async () => {
+      if (++calls === 1) {
+        await b.sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["theirs"] }, ifRevision: 0 });
+        throw conflict();
+      }
+      throw quota();
+    };
+    await docA.flush();
+    expect(docA.status).toBe("error");
+    expect(docA.revision).toBe(1);
+  });
+
+  it("two panels saving at the same moment keep both edits, including ones added during the put", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    const docA = await openDocument(a.sdk, "plan", options({ debounceMs: 60_000 }));
+    const docB = await openDocument(b.sdk, "plan", options({ debounceMs: 60_000 }));
+    docA.update(add("a1"));
+    const gate = gatePut(a.sdk);
+    const done = docA.flush();
+    await gate.reached;
+    docA.update(add("a2")); // typed while the put is on its way
+    docB.update(add("b1"));
+    await docB.flush(); // lands first: A's put conflicts
+    gate.release();
+    await done;
+    await docA.flush();
+    expect([...(stored(a.host) ?? [])].sort()).toEqual(["a1", "a2", "b1"]);
+    expect(docA.data.items).toEqual(stored(a.host));
+    expect(docA.status).toBe("idle");
+    await vi.waitFor(() => expect(docB.data.items).toEqual(stored(a.host)));
+  });
+
+  it("dispose during a conflict re-read still saves everything", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    const docA = await openDocument(a.sdk, "plan", options({ debounceMs: 60_000 }));
+    docA.update(add("a1"));
+    const gate = gatePut(a.sdk);
+    const done = docA.flush();
+    await gate.reached;
+    await b.sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["theirs"] }, ifRevision: 0 });
+    gate.release();
+    const disposing = docA.dispose();
+    await Promise.all([done, disposing]);
+    expect(stored(a.host)).toEqual(["theirs", "a1"]);
+  });
+});
+
+describe("dirty status", () => {
+  it("is dirty from an edit until the save starts, and goes back to idle", async () => {
+    vi.useFakeTimers();
     const { sdk } = createMemoryHost();
-    const parseCount = (raw: JsonValue | null) => (typeof raw === "number" ? raw : 0);
-    expect(await readStored(sdk.storage, "count", parseCount)).toBe(0);
-    await sdk.storage.set("count", 3);
-    expect(await readStored(sdk.storage, "count", parseCount)).toBe(3);
+    const doc = await openDocument(sdk, "plan", options({ debounceMs: 100 }));
+    const seen: string[] = [];
+    doc.onStatus((status) => seen.push(status));
+    expect(doc.status).toBe("idle");
+    doc.update(add("a"));
+    doc.update(add("b"));
+    expect(doc.status).toBe("dirty");
+    await vi.advanceTimersByTimeAsync(100);
+    expect(seen).toEqual(["dirty", "saving", "idle"]);
+  });
+});
+
+describe('merge: "mine" failures and remote copies', () => {
+  it("keeps the user's work on screen when a save fails and retries on the next flush", async () => {
+    const { sdk, host } = createMemoryHost();
+    const doc = await openDocument(sdk, "plan", options({ merge: "mine", debounceMs: 60_000 }));
+    const errors: unknown[] = [];
+    const sources: string[] = [];
+    doc.onError((error) => errors.push(error));
+    doc.onChange((event) => sources.push(event.source));
+    host.answer("documents.put", () => {
+      throw quota();
+    });
+    doc.update(() => ({ items: ["work"] }));
+    await doc.flush();
+    expect(errors).toHaveLength(1);
+    expect(doc.status).toBe("error");
+    expect(doc.data.items).toEqual(["work"]);
+    expect(sources).toEqual(["local"]);
+
+    host.unanswer("documents.put");
+    await doc.flush();
+    expect(stored(host)).toEqual(["work"]);
+    expect(doc.status).toBe("idle");
+  });
+
+  it("keeps the work on screen after the conflict attempts run out", async () => {
+    const { sdk, host } = createMemoryHost();
+    host.documents.put({ id: "plan", title: "Plan", data: { items: ["base"] } });
+    const doc = await openDocument(sdk, "plan", options({ merge: "mine" }));
+    host.answer("documents.put", () => {
+      throw conflict();
+    });
+    doc.update(() => ({ items: ["work"] }));
+    await doc.flush();
+    expect(doc.status).toBe("error");
+    expect(doc.data.items).toEqual(["work"]);
+  });
+
+  it("adoptRemote replaces the copy with the last remote one and drops pending edits", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    const docA = await openDocument(a.sdk, "plan", options({ merge: "mine", debounceMs: 60_000 }));
+    docA.update(() => ({ items: ["local"] }));
+    await b.sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["remote"] }, ifRevision: 0 });
+    await vi.waitFor(() => expect(docA.revision).toBe(1));
+    const events: DocumentChangeEvent<Plan>[] = [];
+    docA.onChange((event) => events.push(event));
+    await docA.adoptRemote();
+    expect(docA.data.items).toEqual(["remote"]);
+    expect(docA.status).toBe("idle");
+    expect(events.at(-1)).toMatchObject({ source: "remote", data: { items: ["remote"] } });
+    await docA.flush();
+    expect(a.host.calls["documents.put"]).toBeUndefined();
+    expect(stored(a.host)).toEqual(["remote"]);
   });
 });

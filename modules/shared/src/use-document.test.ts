@@ -22,7 +22,7 @@ describe("useDocument", () => {
 
     plan.update((draft) => void draft.items.push("one"));
     expect(plan.data.value.items).toEqual(["one"]);
-    expect(plan.status.value).toBe("saving");
+    expect(plan.status.value).toBe("dirty");
     await plan.flush();
     expect(plan.status.value).toBe("idle");
 
@@ -40,5 +40,30 @@ describe("useDocument", () => {
     plan.update((draft) => void draft.items.push("early"));
     await plan.flush();
     await vi.waitFor(() => expect((host.documents.get("plan")?.data as unknown as Plan).items).toEqual(["early"]));
+  });
+
+  it("reports a document that cannot be loaded, without an unhandled rejection (vitest fails the run on one)", async () => {
+    const { sdk } = createMemoryHost();
+    sdk.documents.get = async () => {
+      throw new Error("cannot read");
+    };
+    const plan = useDocument(sdk, "plan", options);
+    plan.update((draft) => void draft.items.push("early"));
+    await expect(plan.flush()).resolves.toBeUndefined();
+    await expect(plan.ready).rejects.toThrow("cannot read");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect((plan.error.value as Error).message).toBe("cannot read");
+    expect(plan.loaded.value).toBe(false);
+  });
+
+  it("drops an early edit when the scope ends before the document is loaded", async () => {
+    const { sdk, host } = createMemoryHost();
+    const scope = effectScope();
+    const plan = scope.run(() => useDocument(sdk, "plan", options))!;
+    plan.update((draft) => void draft.items.push("early"));
+    scope.stop();
+    await plan.ready;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(host.documents.get("plan")).toBeNull();
   });
 });
