@@ -28,6 +28,15 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.95",
+    date: "2026-10-29",
+    title: "Bigger room for module settings",
+    notes: [
+      "A module can open its panel big in a dialog over the app, for settings that don't fit a small panel.",
+      "Close it with the ✕ or a click beside it.",
+    ],
+  },
+  {
     version: "0.21.94",
     date: "2026-10-29",
     title: "New panels land where you work",
