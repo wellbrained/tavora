@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildLiveState, LIVE_DEFAULTS, LIVE_MAX, parseLook, shorten, throttle, type LiveLook } from "./live";
+import { buildLiveState, LIVE_DEFAULTS, LIVE_MAX, PANEL_LOOK_DEFAULTS, parseLook, parsePanelLook, shorten, throttle, type LiveLook } from "./live";
 import type { Group, Task, TodoList } from "./todos";
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
@@ -133,7 +133,7 @@ describe("parseLook", () => {
   it("defaults everything", () => {
     expect(parseLook(undefined)).toEqual(LIVE_DEFAULTS);
     expect(parseLook({ font: "comic", size: "huge", bold: 1, color: "red", headers: "x", backgroundColor: "#12345" })).toEqual(LIVE_DEFAULTS);
-    expect(numbers({ background: "x", padding: NaN })).toEqual({ background: 33, padding: 8 });
+    expect(numbers({ background: "x", padding: NaN })).toEqual({ background: 35, padding: 8 });
   });
 
   it("keeps what is valid", () => {
@@ -176,5 +176,16 @@ describe("throttle", () => {
     fn.cancel();
     vi.advanceTimersByTime(500);
     expect(send).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("parsePanelLook", () => {
+  it("keeps a stored font and size", () => {
+    expect(parsePanelLook({ font: "cinzel", size: "xl" })).toEqual({ font: "cinzel", size: "xl" });
+  });
+
+  it("falls back for panels saved before, or with unknown values", () => {
+    expect(parsePanelLook(undefined)).toEqual(PANEL_LOOK_DEFAULTS);
+    expect(parsePanelLook({ font: "comic", size: "huge" })).toEqual(PANEL_LOOK_DEFAULTS);
   });
 });

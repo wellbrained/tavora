@@ -56,7 +56,7 @@ export const LIVE_DEFAULTS: LiveLook = {
   headers: "name",
   showFinished: false,
   backgroundColor: "#000000",
-  background: 33,
+  background: 35,
   padding: 8,
 };
 export const LIVE_RANGE = { background: [0, 100], padding: [0, 25] } as const;
@@ -127,6 +127,30 @@ export function parseLook(raw: { [key: string]: unknown } | null | undefined): L
     backgroundColor: hex(raw?.backgroundColor, d.backgroundColor),
     background: clamp(raw?.background, LIVE_RANGE.background, d.background),
     padding: clamp(raw?.padding, LIVE_RANGE.padding, d.padding),
+  };
+}
+
+/** How the panel itself shows to-dos: font and text size; stored per panel. */
+export interface PanelLook {
+  [key: string]: JsonValue;
+  font: LiveFont;
+  size: LiveSize;
+}
+
+export const PANEL_LOOK_DEFAULTS: PanelLook = { font: "inter", size: "m" };
+
+/** Text size and line height in px for each panel size; medium is the size the panel always had. */
+export const PANEL_SIZES: Record<LiveSize, readonly [number, number]> = { xs: [12, 16], s: [13, 18], m: [14, 20], l: [16, 22], xl: [18, 26] };
+
+/** A panel look from stored panel state; anything unknown falls back to the default. */
+export function parsePanelLook(raw: { [key: string]: unknown } | null | undefined): PanelLook {
+  return {
+    font: oneOf(
+      LIVE_FONTS.map((font) => font.id),
+      raw?.font,
+      PANEL_LOOK_DEFAULTS.font,
+    ),
+    size: oneOf(Object.keys(LIVE_SIZES) as LiveSize[], raw?.size, PANEL_LOOK_DEFAULTS.size),
   };
 }
 

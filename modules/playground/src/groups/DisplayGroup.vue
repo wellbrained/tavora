@@ -16,6 +16,7 @@ import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import { ref } from "vue";
 import DemoSection from "../DemoSection.vue";
+import ModuleSettingsDemo from "./ModuleSettingsDemo.vue";
 import Specimen from "../Specimen.vue";
 import { type SectionId, sectionTitle as title } from "../sections";
 
@@ -219,6 +220,12 @@ function bump(by: number) {
 <DemoSection v-if="visible.has('navlist')" id="navlist" :title="title('navlist')" description="The list of categories beside a page, like in Settings. Arrow keys, Home and End move through it.">
         <Specimen label="Grouped, with counts" column>
           <NavList v-model="navSelected" class="w-56" label="Categories" :groups="NAV_GROUPS" />
+        </Specimen>
+      </DemoSection>
+
+<DemoSection v-if="visible.has('settings')" id="settings" :title="title('settings')" description="A module's settings in its dialog: pages left, one column right, controls lined up in one column. Changes apply at once.">
+        <Specimen label="Dialog (960 × 680 in the app)" column>
+          <div class="overflow-x-auto"><ModuleSettingsDemo :off="off" /></div>
         </Specimen>
       </DemoSection>
 </template>
