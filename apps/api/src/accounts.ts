@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
 import { cleanDeveloperName, DEVICE_OS, MAX_PREFIXES, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type StoredProfile } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
 import type { CatalogTrust } from "./catalog-trust.ts";
@@ -47,6 +48,8 @@ export interface AccountOptions {
   catalog?: CatalogStore;
   /** Prefix claims per client: 30 an hour by default, like uploads. */
   prefixRateLimiter?: RateLimiter;
+  /** What deleting the account reaches (account-lifecycle.ts); the server passes the one built over every store. Absent: built from the stores above. */
+  lifecycle?: AccountLifecycle;
 }
 
 /** Of the day's emails, the last ones are kept for changing the address and deleting the account. */
@@ -117,15 +120,11 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const verifyLimiter = options.verifyRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 15 * 60_000 });
   const prefixLimiter = options.prefixRateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const app = new Hono<Env>();
-  /** Everything on the server goes at once: the account, its sign-ins, its cloud copy, its reviews and its leaderboard results. */
-  const deleteAccount = (id: string) => {
-    store.deleteAccount(id, now());
-    options.copies?.remove(id, true);
-    options.reviews?.forget(id);
-    options.conversations?.forget(id);
-    options.leaderboards?.forget(id);
-    options.catalog?.forgetReporter(id);
-  };
+  const lifecycle =
+    options.lifecycle ??
+    accountLifecycle({ accounts: store, catalog: options.catalog, copies: options.copies, reviews: options.reviews, conversations: options.conversations, leaderboards: options.leaderboards, icons: undefined });
+  /** Everything on the server goes at once (account-lifecycle.ts). */
+  const deleteAccount = (id: string) => lifecycle.delete(id, now());
 
   /** The day's emails are used up (for sign-ins already when only the reserved ones are left). */
   const usedUp = (important: boolean) =>

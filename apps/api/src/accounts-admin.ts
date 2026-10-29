@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
 import type { AccountRow, AccountStore } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
 import type { CopyStore } from "./cloud-copy.ts";
@@ -26,6 +27,8 @@ export interface AccountsAdminOptions {
   /** The owner's address (MAINTAINER_EMAIL, any case): that account is marked as the owner and can't be suspended. */
   ownerEmail?: string | undefined;
   now?: (() => number) | undefined;
+  /** What suspending reaches (account-lifecycle.ts). Absent: built from the stores above. */
+  lifecycle?: AccountLifecycle | undefined;
 }
 
 const MAX_NOTE = 500;
@@ -34,8 +37,9 @@ const FILTERS = ["all", "developers", "banned", "suspended"] as const;
 type Filter = (typeof FILTERS)[number];
 const iso = (at: number | null) => (at === null ? null : new Date(at).toISOString());
 
-export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer, mailDailyLimit, ownerEmail, now = Date.now }: AccountsAdminOptions) {
+export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer, mailDailyLimit, ownerEmail, now = Date.now, lifecycle: given }: AccountsAdminOptions) {
   const app = new Hono();
+  const lifecycle = given ?? accountLifecycle({ accounts, catalog, copies, reviews, conversations: undefined, leaderboards: undefined, icons: undefined });
   const notifier: Notifier = mailer ? createNotifier({ store: accounts, mailer, mailDailyLimit, now }) : { send: async () => false };
 
   const json = async (request: Request): Promise<Record<string, unknown>> => {
@@ -193,12 +197,10 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
     const account = ID.test(id) ? accounts.account(id) : null;
     if (!account) return context.json({ error: "No such account." }, 404);
     if (isOwner(account.email)) return context.json({ error: "This is the owner's account. It can't be suspended." }, 403);
-    // Suspending again changes nothing but finishes what a failed first try left (the reviews), so a retry is safe: no new reason, no second email.
-    if (accounts.isSuspended(id)) return context.json({ ok: true, already: true, signedOut: 0, hiddenReviews: reviews?.hideForSuspension(id) ?? 0, mailed: false });
     const language = mailLanguage(catalog?.languageOf(id));
-    // No await from here to the end of the suspension: sign-ins end and reviews hide in one go.
-    const signedOut = accounts.suspend(id, reason, text, now());
-    const hiddenReviews = reviews?.hideForSuspension(id) ?? 0;
+    // Suspending again changes nothing but finishes what a failed first try left (the reviews), so a retry is safe: no new reason, no second email.
+    const { already, signedOut, hiddenReviews } = lifecycle.suspend(id, reason, text, now());
+    if (already) return context.json({ ok: true, already: true, signedOut: 0, hiddenReviews, mailed: false });
     const mailed = account.email ? await notifier.send(suspendedMail(account.email, reason, text, language)) : false;
     return context.json({ ok: true, signedOut, hiddenReviews, mailed });
   });
@@ -208,8 +210,7 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
     if (typeof id !== "string") return context.json({ error: "Send { id }." }, 400);
     if (!ID.test(id)) return context.json({ error: "This account isn't suspended." }, 404);
     // Idempotent for a retry: the reviews the suspension hid are shown again even when the suspension is already gone.
-    const was = accounts.unsuspend(id);
-    const shownReviews = reviews?.showAfterSuspension(id) ?? 0;
+    const { was, shownReviews } = lifecycle.unsuspend(id);
     if (!was && shownReviews === 0) return context.json({ error: "This account isn't suspended." }, 404);
     return context.json({ ok: true, shownReviews });
   });

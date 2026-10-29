@@ -40,6 +40,11 @@ export function signedOut(context: Context): Response {
   return fail(context, 401, "signed-out", "Sign in again.");
 }
 
+/** A banned developer tries to act as a module's publisher (reply to reviews, change the contact link). */
+export function banned(context: Context): Response {
+  return fail(context, 403, "banned", "This account can't act as a developer any more. Check your email for why.");
+}
+
 /** The token after `Bearer` in the Authorization header, or null. */
 export function bearerToken(context: Context): string | null {
   return BEARER.exec(context.req.header("authorization") ?? "")?.[1] ?? null;

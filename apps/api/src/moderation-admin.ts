@@ -1,5 +1,6 @@
 import { readZip } from "@tavora/pack";
 import { Hono } from "hono";
+import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
 import type { AccountStore } from "./account-store.ts";
 import { CatalogError, checkCatalogZip, type CatalogStore, type ReviewReason, type WaitingVersion } from "./catalog.ts";
 import { PUBLISH_LIMITS } from "./catalog-publish.ts";
@@ -27,6 +28,8 @@ export interface ModerationAdminOptions {
   keepVersions?: number;
   /** The owner's address (MAINTAINER_EMAIL): that account can't be banned. */
   ownerEmail?: string | undefined;
+  /** What banning reaches (account-lifecycle.ts). Absent: built from the catalog and accounts. */
+  lifecycle?: AccountLifecycle | undefined;
 }
 
 const MAX_NOTE = 500;
@@ -88,8 +91,9 @@ function describe(waiting: WaitingVersion, catalog: CatalogStore, accounts: Acco
   };
 }
 
-export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDailyLimit, ownerEmail, now = Date.now, keepVersions = PUBLISH_LIMITS.keepVersions }: ModerationAdminOptions) {
+export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDailyLimit, ownerEmail, now = Date.now, keepVersions = PUBLISH_LIMITS.keepVersions, lifecycle: given }: ModerationAdminOptions) {
   const app = new Hono();
+  const lifecycle = given ?? accountLifecycle({ accounts, catalog, copies: undefined, reviews: undefined, conversations: undefined, leaderboards: undefined, icons: undefined });
   const notifier: Notifier = mailer ? createNotifier({ store: accounts, mailer, mailDailyLimit, now }) : { send: async () => false };
   let running = false;
 
@@ -180,29 +184,20 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
     if (email && ownerEmail?.trim() && email.toLowerCase() === ownerEmail.trim().toLowerCase()) return context.json({ error: "This is the owner's account. It can't be banned." }, 403);
     if (!email && !accounts.developer(id) && accounts.keys(id).length === 0 && catalog.modulesOfAccount(id, []).length === 0) return context.json({ error: "No such developer." }, 404);
     const language = mailLanguage(catalog.languageOf(id));
-    const keys = accounts.keys(id).map((key) => key.fingerprint);
     // No await from here to the end of the ban: what still waits is declined with the same reason (the one mail below covers it),
-    // the modules go, and the account is banned in one go.
-    let declined = 0;
-    for (const waiting of catalog.waitingVersions().filter((version) => version.accountId === id)) {
-      catalog.recordDeclined(waiting, reason, text, new Date(now()));
-      catalog.removeWaiting(waiting.sha256);
-      declined++;
-    }
-    const unlisted = catalog.unlistAll(catalog.modulesOfAccount(id, keys));
-    accounts.ban(id, reason, text, unlisted, now());
+    // the modules go, their conversations close, and the account is banned in one go.
+    const { unlisted, declined, closedConversations } = lifecycle.ban(id, reason, text, now());
     const mailed = email ? await notifier.send(bannedMail(email, reason, text, language)) : false;
-    return context.json({ ok: true, unlisted, declined, mailed });
+    return context.json({ ok: true, unlisted, declined, closedConversations, mailed });
   });
 
   app.post("/unban", async (context) => {
     const { accountId } = await json(context.req.raw);
     if (typeof accountId !== "string") return context.json({ error: "Send { accountId }." }, 400);
-    const modules = accounts.unban(accountId);
-    if (modules === null) return context.json({ error: "This developer isn't banned." }, 404);
     // Only the modules the ban unlisted come back; one the maintainer delisted for another reason was not on that list.
-    const relisted = modules.filter((id) => catalog.setListed(id, true));
-    return context.json({ ok: true, relisted });
+    const unbanned = lifecycle.unban(accountId);
+    if (unbanned === null) return context.json({ error: "This developer isn't banned." }, 404);
+    return context.json({ ok: true, relisted: unbanned.relisted });
   });
 
   app.get("/bans", (context) =>

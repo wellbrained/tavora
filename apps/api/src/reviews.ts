@@ -5,7 +5,7 @@ import { bodyLimit } from "hono/body-limit";
 import type { AccountStore } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
-import { fail, requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
+import { banned, fail, requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import { checkReviewText } from "./review-filter.ts";
 
 /**
@@ -565,6 +565,8 @@ export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateL
     const review = publisherOf(context);
     if (review === null) return context.json({ error: "Not found.", reason: "not-found" }, 404);
     if (review === false) return context.json({ error: "Only the module's publisher can reply.", reason: "not-publisher" }, 403);
+    // A banned developer no longer acts as the publisher (decided 2026-10-29).
+    if (accounts.isBanned(context.get("account").id)) return banned(context);
     const input = await body(context);
     const text = cleanReviewText(input?.text);
     if (!input || Object.keys(input).join() !== "text" || typeof text !== "string") return context.json({ error: "Send { text: at most 500 characters }.", reason: "bad-request" }, 400);
