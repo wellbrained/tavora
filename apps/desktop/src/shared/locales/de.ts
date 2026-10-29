@@ -1149,6 +1149,7 @@ export const de: Record<keyof typeof en, string> = {
   "error.copyWorkspace": "Dieses Beispiel braucht {name}, das nur im Tavora-Code funktioniert.",
   "error.installFolderTaken": "In deinem Modulordner gibt es schon einen Ordner namens {folder}. Verschiebe ihn und versuche es erneut.",
   "error.readmeLink": "Den Link kann ich nicht öffnen.",
+  "error.privateLink": "Links zu diesem PC oder deinem lokalen Netzwerk öffnen sich hier nicht.",
   "error.updatesUnreachable": "Updates lassen sich nicht prüfen. Prüf deine Verbindung und versuch es noch mal.",
   "error.updatesFailed": "Ein Update ist da, ließ sich aber nicht laden. Versuch es gleich noch mal.",
   "error.catalogOff": "Schalte in den Einstellungen die Online-Funktionen ein, um Community-Module zu installieren.",

@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 
 // ModuleView needs only a little of Electron to be made: a view with a page, and a session to harden.
-const made = vi.hoisted(() => ({ views: [] as { background: string; visible: boolean; throttled: boolean; css: string[]; removed: string[] }[], sent: [] as unknown[][] }));
+const made = vi.hoisted(() => ({
+  views: [] as { background: string; visible: boolean; throttled: boolean; css: string[]; removed: string[] }[],
+  sent: [] as unknown[][],
+  /** What the session answers for the module's own addresses (the clipboard, pictures, files). */
+  serve: undefined as ((request: Request) => Promise<Response>) | undefined,
+}));
 
 vi.mock("electron", () => {
   const session = () => ({
-    protocol: { handle: () => undefined },
+    protocol: { handle: (_scheme: string, serve: (request: Request) => Promise<Response>) => void (made.serve = serve) },
     webRequest: { onBeforeRequest: () => undefined },
     setProxy: async () => undefined,
     setPermissionRequestHandler: () => undefined,
@@ -63,6 +68,7 @@ vi.mock("electron", () => {
 });
 
 const { ModuleView, allowedHere } = await import("./module-view");
+const { CLIPBOARD_PATH } = await import("@tavora/sdk/protocol");
 
 function make(extra: Record<string, unknown> = {}) {
   const options = {
@@ -80,6 +86,38 @@ function make(extra: Record<string, unknown> = {}) {
   };
   return new ModuleView(options as never);
 }
+
+describe("one press", () => {
+  const take = (view: InstanceType<typeof ModuleView>) => (view as unknown as { takeGesture(what: string): Promise<void> }).takeGesture("links.open");
+  /** The page writes to the clipboard through its session: 403 when no unused press allows it. */
+  const copy = () => made.serve!(new Request(`tavora-module://tavora.todos${CLIPBOARD_PATH}`, { method: "POST" }));
+
+  it("allows one call, whether the bridge or an address the session answers makes it", async () => {
+    const view = make();
+    view.noteGesture();
+    await take(view);
+    expect((await copy()).status).toBe(403);
+
+    view.noteGesture();
+    expect((await copy()).status).not.toBe(403);
+    await expect(take(view)).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect((await copy()).status).toBe(403);
+  });
+});
+
+describe("links.open", () => {
+  it("opens no address on this PC or the local network, and keeps the press", async () => {
+    const opened: string[] = [];
+    const view = make({ onOpenLink: (url: string) => void opened.push(url) });
+    const open = (url: string) => (view as unknown as { openLink(url: string): Promise<void> }).openLink(url);
+    view.noteGesture();
+    for (const url of ["http://127.0.0.1:8080/", "http://localhost/", "http://192.168.1.1/admin", "http://[::1]/", "http://169.254.169.254/"]) {
+      await expect(open(url)).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    }
+    await open("https://example.com/");
+    expect(opened).toEqual(["https://example.com/"]);
+  });
+});
 
 describe("a panel over the game", () => {
   it("counts a click or key press only while arranging, and always in the workspace", () => {
@@ -144,7 +182,6 @@ describe("a panel over the game", () => {
     expect(told).toHaveBeenCalledTimes(1);
     // Another press, another notice.
     view.noteGesture();
-    (view as unknown as { gestureAt: number }).gestureAt += 1;
     expect(() => refuse("hotkeys.set")).toThrow();
     expect(told).toHaveBeenCalledTimes(2);
 
@@ -153,7 +190,7 @@ describe("a panel over the game", () => {
   });
 
   it("refuses the dialogs the session answers when the last press came from a panel over the game", () => {
-    const gesture: { at: number; overGame?: boolean; refuse?: () => void } = { at: Date.now() };
+    const gesture: { press: { at: number; used: boolean }; overGame?: boolean; refuse?: () => void } = { press: { at: Date.now(), used: false } };
     const refuse = vi.fn();
     const allowed = allowedHere(gesture);
     expect(allowed()).toBe(true);
@@ -163,7 +200,9 @@ describe("a panel over the game", () => {
     expect(refuse).toHaveBeenCalled();
     gesture.overGame = false;
     expect(allowed()).toBe(true);
-    gesture.at = Date.now() - 60_000;
+    gesture.press.used = true;
+    expect(allowed()).toBe(false);
+    gesture.press = { at: Date.now() - 60_000, used: false };
     expect(allowed()).toBe(false);
   });
 

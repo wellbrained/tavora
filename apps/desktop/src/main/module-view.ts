@@ -28,7 +28,7 @@ import { cleanPictureName, servePictureSave } from "./picture-save-http";
 import { serveJsonOpen, serveJsonSave } from "./json-file-http";
 import { saveJsonExport, serveJsonExport } from './json-export-http';
 import { DRAW_CAP_MS, ON_SCREEN_MS } from "./panel-cover";
-import { isWebUrl } from "./browser-url";
+import { isPrivateUrl, isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
 import { onlySystemMonitor } from "./system-apps";
 import { moduleFetch, type TestHosts } from "./network";
@@ -149,9 +149,23 @@ const hardened = new WeakSet<Session>();
  */
 const sessionGestures = new WeakMap<Session, SessionGesture>();
 
+/**
+ * One click or key press in a page. The panel and its session hold the same one, so it allows exactly one call,
+ * made through the bridge or through an address the session answers.
+ */
+interface Press {
+  at: number;
+  used: boolean;
+}
+
+/** The press is recent and no call has used it yet. */
+function unused(press: Press | null): press is Press {
+  return press !== null && !press.used && Date.now() - press.at <= GESTURE_MS;
+}
+
 /** `overGame`: the latest press came from a panel over the game, whose calls that need Tavora's window are refused. */
 interface SessionGesture {
-  at: number;
+  press: Press | null;
   overGame?: boolean;
   /** Tells the user once per press that the panel has to come back first. */
   refuse?: () => void;
@@ -159,14 +173,19 @@ interface SessionGesture {
 
 function gestureOf(ses: Session): SessionGesture {
   let gesture = sessionGestures.get(ses);
-  if (!gesture) sessionGestures.set(ses, (gesture = { at: 0 }));
+  if (!gesture) sessionGestures.set(ses, (gesture = { press: null }));
   return gesture;
+}
+
+/** The checks an address the session answers makes: an unused press, which the call then uses up. */
+function pressCheck(gesture: SessionGesture, allowed: () => boolean = () => unused(gesture.press)) {
+  return { allowed, consume: () => void (gesture.press && (gesture.press.used = true)) };
 }
 
 /** For the calls the session answers that open Tavora's dialogs: a press made over the game doesn't count. */
 export function allowedHere(gesture: SessionGesture): () => boolean {
   return () => {
-    if (Date.now() - gesture.at > GESTURE_MS) return false;
+    if (!unused(gesture.press)) return false;
     if (!gesture.overGame) return true;
     gesture.refuse?.();
     return false;
@@ -208,30 +227,22 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
     if (url.host !== module.manifest.id) return new Response("Not found", { status: 404 });
     if (url.pathname.startsWith(READ_ONLY_FILE_PATH)) return serveReadOnlyFile(request,url.pathname.slice(READ_ONLY_FILE_PATH.length),new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id));
     if (url.pathname.startsWith(BLOB_PATH)) return serveBlobs(blobs, request, url);
-    if (url.pathname === CLIPBOARD_PATH) {
-      const gesture = gestureOf(ses);
-      return serveClipboard(request, { allowed: () => Date.now() - gesture.at <= GESTURE_MS, consume: () => void (gesture.at = 0), write: writeClipboardPicture });
-    }
+    if (url.pathname === CLIPBOARD_PATH) return serveClipboard(request, { ...pressCheck(gestureOf(ses)), write: writeClipboardPicture });
     if (url.pathname === JSON_EXPORT_PATH) {
-      const gesture = gestureOf(ses);
       const downloads = !app.isPackaged && process.env.TAVORA_EXPORTS_DIR ? path.resolve(process.env.TAVORA_EXPORTS_DIR) : path.join(app.getPath('downloads'), 'Tavora');
-      return serveJsonExport(request, url, { allowed: () => Date.now() - gesture.at <= GESTURE_MS, consume: () => void (gesture.at = 0), save: (data, name) => saveJsonExport(downloads, data, name) });
+      return serveJsonExport(request, url, { ...pressCheck(gestureOf(ses)), save: (data, name) => saveJsonExport(downloads, data, name) });
     }
     if (url.pathname === PICTURES_PATH) {
       const gesture = gestureOf(ses);
-      return servePictureSave(request, url, {
-        allowed: allowedHere(gesture),
-        consume: () => void (gesture.at = 0),
-        save: files.savePicture,
-      });
+      return servePictureSave(request, url, { ...pressCheck(gesture, allowedHere(gesture)), save: files.savePicture });
     }
     if (url.pathname === JSON_SAVE_PATH) {
       const gesture = gestureOf(ses);
-      return serveJsonSave(request, url, { allowed: allowedHere(gesture), consume: () => void (gesture.at = 0), save: files.saveJson }, cleanPictureName);
+      return serveJsonSave(request, url, { ...pressCheck(gesture, allowedHere(gesture)), save: files.saveJson }, cleanPictureName);
     }
     if (url.pathname === JSON_OPEN_PATH) {
       const gesture = gestureOf(ses);
-      return serveJsonOpen(request, { allowed: allowedHere(gesture), consume: () => void (gesture.at = 0), open: files.openJson });
+      return serveJsonOpen(request, { ...pressCheck(gesture, allowedHere(gesture)), open: files.openJson });
     }
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
     const file = await resolveAsset(module.root, url.pathname);
@@ -424,8 +435,8 @@ export class ModuleView {
     });
   }
 
-  /** When the user last clicked or pressed a key in the page (reported by the preload from real input only). */
-  private gestureAt = 0;
+  /** The user's last click or key press in the page (reported by the preload from real input only), shared with the session. */
+  private press: Press | null = null;
   private pointer:{x:number;y:number;at:number}|null=null;
   notePointer(raw:unknown):void{
     if(raw===null){this.pointer=null;this.options.tooltip?.close(undefined,true);return;}
@@ -448,10 +459,10 @@ export class ModuleView {
   noteGesture(): void {
     // Over the game the window takes input only while the layer is open; any report at another time is not the user's.
     if (!gestureCounts(this.overGame !== null, this.overGame?.arranging() ?? false)) return;
-    this.gestureAt = Date.now();
-    this.usedAt = this.gestureAt;
+    this.press = { at: Date.now(), used: false };
+    this.usedAt = this.press.at;
     const shared = gestureOf(this.view.webContents.session);
-    shared.at = this.gestureAt;
+    shared.press = this.press;
     shared.overGame = this.overGame !== null;
     shared.refuse = () => this.needsTavora();
     for (const wake of this.gestureWaiters) wake();
@@ -462,12 +473,12 @@ export class ModuleView {
    * whose report has not arrived yet.
    */
   /** The press whose refusal the user was told about, so one press shows the notice once. */
-  private toldAt = 0;
+  private toldFor: Press | null = null;
 
   /** Tells the user once per press that the panel has to come back first. */
   private needsTavora(): void {
-    if (this.toldAt === this.gestureAt && this.gestureAt !== 0) return;
-    this.toldAt = this.gestureAt;
+    if (this.press !== null && this.toldFor === this.press) return;
+    this.toldFor = this.press;
     this.options.onNeedsTavora?.();
   }
 
@@ -479,7 +490,7 @@ export class ModuleView {
   }
 
   private async takeGesture(what: string): Promise<void> {
-    if (Date.now() - this.gestureAt > GESTURE_MS) {
+    if (!unused(this.press)) {
       await new Promise<void>((resolve) => {
         const done = () => {
           clearTimeout(timer);
@@ -490,13 +501,15 @@ export class ModuleView {
         this.gestureWaiters.add(done);
       });
     }
-    if (Date.now() - this.gestureAt > GESTURE_MS) throw new HostError("PERMISSION_DENIED", `${what} must be called right after a click or key press`);
-    this.gestureAt = 0;
+    const press = this.press;
+    if (!unused(press)) throw new HostError("PERMISSION_DENIED", `${what} must be called right after a click or key press`);
+    press.used = true;
   }
 
   /** links.open: only a web address, and only right after the user did something in the page. */
   private async openLink(url: string): Promise<void> {
     if (!isWebUrl(url)) throw new HostError("INVALID_PARAMS", "params.url must be an http or https address");
+    if (isPrivateUrl(url)) throw new HostError("PERMISSION_DENIED", "links.open opens only public addresses, not this PC or the local network");
     // One click opens one link, so a script cannot open a pile of them.
     this.refuseOverGame("links.open");
     await this.takeGesture("links.open");
@@ -643,7 +656,7 @@ export class ModuleView {
             if(request.pinned)await this.takeGesture("ui.tooltip.show pinned");
             else {
               if(!this.tooltipPointerMatches(request.at))await new Promise(resolve=>setTimeout(resolve,40));
-              if(!this.tooltipPointerMatches(request.at)&&Date.now()-this.gestureAt>2000)return false;
+              if(!this.tooltipPointerMatches(request.at)&&!unused(this.press))return false;
             }
             if(this.bridge!==bridge)return false;
             return this.options.tooltip?.show(request)??false;
