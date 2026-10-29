@@ -731,6 +731,11 @@ export function seedDev({ stateDir, gamesFile, now = Date.now() }: SeedOptions):
     const latest = releasedNow.length - 1;
     if (latest >= 0) counts.push({ day, kind: "app-installer", key: appVersion(latest), count: Math.round(users * 0.12 * weekend(at) * noise()) });
     if (latest >= 0) counts.push({ day, kind: "app-installer-github", key: appVersion(latest), count: Math.round(users * 0.02 * noise()) });
+    // mytavora.app: views by where they came from and by country, clicks by link.
+    const visits = users * 1.6 * weekend(at);
+    for (const [from, share] of [["direct", 0.4], ["google.com", 0.2], ["reddit.com", 0.15], ["discord.com", 0.12], ["github.com", 0.08], ["youtube.com", 0.05]] as const) counts.push({ day, kind: "site-view", key: from, count: Math.round(visits * share * noise()) });
+    for (const [country, share] of [["DE", 0.3], ["US", 0.25], ["GB", 0.1], ["FR", 0.08], ["PL", 0.07], ["BR", 0.06], ["CA", 0.05], ["unknown", 0.04]] as const) counts.push({ day, kind: "site-country", key: country, count: Math.round(visits * share * noise()) });
+    for (const [link, share] of [["download", 0.09], ["docs", 0.05], ["github", 0.04], ["privacy", 0.01]] as const) counts.push({ day, kind: "site-click", key: link, count: Math.round(visits * share * noise()) });
     for (const [index, releaseDay] of releasedNow.entries()) {
       const since = Math.floor((at - releaseDay) / DAY);
       if (since <= 5) counts.push({ day, kind: "app-update", key: appVersion(index), count: Math.round(users * 0.7 * 0.45 ** since * weekend(at) * noise()) });

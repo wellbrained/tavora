@@ -11,7 +11,7 @@ import { DatabaseSync } from "node:sqlite";
  * running total per file, so once an hour the server asks for it and counts what was added since (github-releases.ts).
  */
 
-export const STAT_KINDS = ["app-installer", "app-installer-github", "app-update", "module-install", "module-update"] as const;
+export const STAT_KINDS = ["app-installer", "app-installer-github", "app-update", "module-install", "module-update", "site-view", "site-country", "site-click"] as const;
 export type StatKind = (typeof STAT_KINDS)[number];
 
 /** Most different versions or modules counted per kind and day, so made-up names cannot grow the file. */
