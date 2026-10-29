@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.108",
+    date: "2026-10-29",
+    title: "Nicer tooltips",
+    notes: [
+      "Tooltips have a cleaner look and are easier to read.",
+      "They sit next to what you point at with a small arrow, and never cover it.",
+      "Long paths wrap neatly, and shortcuts show next to the label.",
+    ],
+    prs: [
+      { number: 463, title: "Tooltips: new look, anchored with an arrow, shortcut, rows and tone" },
+    ],
+    tags: ["rail", "ui-kit"],
+  },
+  {
     version: "0.21.107",
     date: "2026-10-29",
     title: "Themes colour the toasts",
