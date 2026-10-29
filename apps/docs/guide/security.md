@@ -300,11 +300,12 @@ A module granted the `leaderboards` connector can keep leaderboards (the boards 
 
 ## What Tavora counts
 
-Tavora counts a few things as plain daily totals (per UTC day) so the maintainer can see how the project is used. A count is a number that goes up by one. Nothing about who or from where is kept: no address, no id of a PC or a user, no request log, and a user without an account is never counted as a person.
+Tavora counts a few things as plain daily totals (per UTC day) so the maintainer can see how the project is used. A count is a number that goes up by one. Nothing about who is kept: no address, no id of a PC or a user, no request log, and a user without an account is never counted as a person.
 
-- **App downloads.** How often each installer version is downloaded from the update feed. The feed's web server tells the service the file name when a download starts and nothing else, and the service keeps the version and a number.
+- **App downloads.** How often each installer version is downloaded from the update feed. The feed's web server tells the service the file name when a download starts and nothing else, and the service keeps the version and a number. The installers on GitHub's release pages are counted from GitHub's own download numbers, which the service reads once an hour.
 - **App updates.** How often each version finished downloading as an update. The app tells the service the version number, only while online features are on, with no cookies, referrer or sign-in. The app marks its own update requests with a header, so an update is never counted as an installer download.
 - **Module installs and updates.** How often each catalog module was installed from Browse or updated. The app sends only the module id, as it already did for installs.
+- **Website visits.** When mytavora.app opens, the page tells the service which site the visitor came from (only its domain, such as reddit.com, or nothing), and when a download, docs, GitHub or privacy link is clicked, which one. The service counts the visit by that domain and by country, which it looks up from the address in the free country database of [DB-IP](https://db-ip.com) (IP geolocation by DB-IP, CC BY 4.0) and then forgets. No cookie, no id and no address is kept, and programs that say they are bots are not counted.
 - **Accounts, once a day.** How many accounts exist and how many used a sign-in in the last 7 and 30 days, as three numbers. Nobody is named.
 
 The numbers are shown on the private admin page, which only the maintainer reaches. Anyone can send the counting calls, so the totals are a guide, not an audit.

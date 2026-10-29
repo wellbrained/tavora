@@ -11,6 +11,7 @@ import { createDiscordClient } from "./discord.ts";
 import { createApp } from "./app.ts";
 import { githubInstallerTotals } from "./github-releases.ts";
 import { createHostedStore } from "./hosted-store.ts";
+import { CountryLookup } from "./site-visits.ts";
 import { IconState } from "./icon-state.ts";
 import { normalize } from "./ids.ts";
 import { loadIconStore } from "./icons.ts";
@@ -122,6 +123,16 @@ const countGithubDownloads = () =>
     .catch((error: unknown) => console.error(`[tavora-api] Can't read the GitHub downloads: ${error instanceof Error ? error.message : "unknown error"}`));
 void countGithubDownloads();
 setInterval(() => void countGithubDownloads(), 60 * 60_000).unref();
+// mytavora.app visits by country (site-visits.ts): DB-IP's free country file in the state folder, checked once a
+// day and fetched again when it is over a month old. Without it visits still count, with the country unknown.
+const countries = new CountryLookup(path.join(stateDir, "dbip-country-lite.mmdb"));
+const refreshCountries = () =>
+  countries
+    .refresh()
+    .then((fetched) => fetched && console.log("[tavora-api] Fetched DB-IP's country file."))
+    .catch((error: unknown) => console.error(`[tavora-api] Can't fetch DB-IP's country file: ${error instanceof Error ? error.message : "unknown error"}`));
+void refreshCountries();
+setInterval(() => void refreshCountries(), 24 * 60 * 60_000).unref();
 
 // The virus scan every new catalog version goes through (ClamAV). Without one, or when it fails, every new version waits for review.
 const scanner = scannerFromEnv(process.env);
@@ -135,6 +146,7 @@ const app = createApp({
   submissions,
   catalog,
   stats,
+  countryOf: (request) => (behindProxy ? countries.country(request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()) : null),
   ...(mailer && accountStore
     ? {
         accounts: {

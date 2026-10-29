@@ -13,6 +13,7 @@ import { leaderboardRoutes } from "./leaderboards.ts";
 import { createNotifier } from "./moderation-mail.ts";
 import { vaultRoutes } from "./vault.ts";
 import { catalogFilter, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
+import { isBot, parseVisit, referrerDomain, SITE_CLICKS, SITE_ORIGIN, UNKNOWN_COUNTRY } from "./site-visits.ts";
 import { isAppVersion, type StatsStore } from "./stats.ts";
 import { catalogTrust } from "./catalog-trust.ts";
 import { publisherRoutes } from "./publishers.ts";
@@ -24,6 +25,8 @@ import { MAX_PROFILE_LENGTH, SteamError, type SteamClient } from "./steam.ts";
 
 /** A Steam import body is `{ "profile": <at most MAX_PROFILE_LENGTH characters> }`; nothing bigger is read. */
 const STEAM_BODY = 1000;
+/** A site visit is `{ referrer }` or `{ click }`; nothing bigger is read. */
+const SITE_BODY = 2000;
 
 export interface AppOptions {
   db: DatabaseSync;
@@ -66,13 +69,18 @@ export interface AppOptions {
   leaderboardRateLimiter?: RateLimiter;
   /** Plain daily totals (stats.ts). Absent: nothing is counted. */
   stats?: StatsStore;
+  /** The country of a request, for site visits (site-visits.ts). Absent or null: counted as unknown. */
+  countryOf?: (request: Request) => string | null;
+  /** Site visits per client (site-visits.ts). */
+  siteRateLimiter?: RateLimiter;
 }
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats, countryOf, siteRateLimiter }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
   const steamLimiter = steamRateLimiter ?? createRateLimiter({ limit: 6, windowMs: 60_000 });
+  const siteLimiter = siteRateLimiter ?? createRateLimiter({ limit: 30, windowMs: 60_000 });
   const app = new Hono();
 
   // Steam appid -> canonical id, loaded the first time an import asks.
@@ -416,6 +424,26 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   app.get("/internal/installer-download", (context) => {
     const version = /^\/Tavora-Setup-([0-9.]+)\.exe$/.exec(context.req.header("x-forwarded-uri") ?? "")?.[1];
     if (isAppVersion(version)) stats?.count("app-installer", version);
+    return context.body(null, 204);
+  });
+
+  // Sent by mytavora.app when the page opens ({ referrer }) and when a tracked link is clicked ({ click }).
+  // Always 204, so the page never waits or learns anything. Only calls from the site itself are counted, and not
+  // from programs that say they are one. Nothing about the request is kept (site-visits.ts).
+  app.post("/v1/site/visit", bodyLimit({ maxSize: SITE_BODY, onError: (context) => context.body(null, 413) }), async (context) => {
+    context.header("Access-Control-Allow-Origin", SITE_ORIGIN);
+    if (!stats || context.req.header("origin") !== SITE_ORIGIN || isBot(context.req.header("user-agent"))) return context.body(null, 204);
+    if (siteLimiter.check(clientKey ? clientKey(context.req.raw) : "local") > 0) return context.body(null, 204);
+    const body = parseVisit(await context.req.text());
+    if (body?.click !== undefined) {
+      if ((SITE_CLICKS as readonly unknown[]).includes(body.click)) stats.count("site-click", body.click as string);
+    } else if (body) {
+      const from = referrerDomain(body.referrer);
+      if (from !== null) {
+        stats.count("site-view", from);
+        stats.count("site-country", countryOf?.(context.req.raw) ?? UNKNOWN_COUNTRY);
+      }
+    }
     return context.body(null, 204);
   });
 
