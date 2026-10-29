@@ -111,11 +111,12 @@ describe("deleting an account", () => {
 
   it("is what the server's every store is registered for", () => {
     // A new store in server.ts that keeps account data must be added to AccountStores (or listed here with why not).
-    const source = readFileSync(path.join(import.meta.dirname, "server.ts"), "utf8");
+    const source = readFileSync(path.join(import.meta.dirname, "server.ts"), "utf8").replace(/\r\n/g, "\n");
     const opened = [...source.matchAll(/new (\w+)\(path\.join\(stateDir/g)].map((match) => match[1]).sort();
     const inLifecycle = { AccountStore: "accounts", CatalogStore: "catalog", CopyStore: "copies", ReviewStore: "reviews", ConversationStore: "conversations", LeaderboardStore: "leaderboards", IconState: "icons" };
-    // Daily totals keep nothing about a person; the activity log is the maintainer's own record and holds only ids.
-    const noAccountData = ["StatsStore", "ActivityLog"];
+    // Daily totals keep nothing about a person; the activity log is the maintainer's own record and holds only ids;
+    // the country lookup is a read-only map of IP ranges to countries.
+    const noAccountData = ["StatsStore", "ActivityLog", "CountryLookup"];
     expect(opened).toEqual([...Object.keys(inLifecycle), ...noAccountData].sort());
     const built = /accountLifecycle\(\{([^}]*)\}\)/.exec(source)?.[1] ?? "";
     for (const key of Object.values(inLifecycle)) expect(built).toMatch(new RegExp(`\\b${key}\\b`));
