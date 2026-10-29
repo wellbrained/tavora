@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Bold, ChevronDown, ChevronRight, CircleHelp, Copy, Folder, FolderInput, FolderPlus, Italic, Loader2, MoreHorizontal, Pencil, Pin, Plus, Settings, Trash2 } from "@lucide/vue";
-import { ConfirmDialog, Tooltip, TooltipRows, type TooltipRow } from "@tavora/official-ui";
+import { ConfirmDialog, NameDialog, Tooltip, TooltipRows, type TooltipRow } from "@tavora/official-ui";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
@@ -14,7 +14,6 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@tavora/official-ui/components/ui/context-menu";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -58,6 +57,15 @@ const sort = ref("recent");
 const name = ref("Waystone");
 const confirming = ref(false);
 const renaming = ref(false);
+const renamingBusy = ref(false);
+const sharing = ref(false);
+const savingConfirm = ref(false);
+const working = ref(false);
+/** A pretend save: locks the dialog for a moment, then runs `done`. */
+function slow(done: () => void) {
+  working.value = true;
+  setTimeout(() => { working.value = false; done(); }, 1500);
+}
 </script>
 
 <template>
@@ -257,23 +265,49 @@ const renaming = ref(false);
 <DemoSection v-if="visible.has('dialogs')" id="dialogs" :title="title('dialogs')" description="420 px wide, a title and one sentence, buttons bottom right with the action last.">
         <Specimen label="Dialogs">
           <Button variant="secondary" :disabled="off" @click="renaming = true">Rename…</Button>
+          <Button variant="secondary" :disabled="off" @click="renamingBusy = true">Rename with a slow save…</Button>
+          <Button variant="secondary" :disabled="off" @click="sharing = true">Share (plain confirm)…</Button>
+          <Button variant="secondary" :disabled="off" @click="savingConfirm = true">Slow confirm…</Button>
           <Button variant="secondary" class="text-destructive" :disabled="off" @click="confirming = true">Delete group…</Button>
         </Specimen>
-        <Dialog v-model:open="renaming">
-          <DialogContent class="top-[12vh] translate-y-0 gap-4 sm:max-w-[420px]">
-            <DialogHeader>
-              <DialogTitle class="text-lg">Rename note</DialogTitle>
-              <DialogDescription>The new name shows in the list and the panel tab.</DialogDescription>
-            </DialogHeader>
-            <form class="flex flex-col gap-4" @submit.prevent="renaming = false">
-              <Input v-model="name" aria-label="Note name" autofocus />
-              <DialogFooter>
-                <Button type="button" variant="secondary" @click="renaming = false">Cancel</Button>
-                <Button type="submit">Rename</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <NameDialog
+          v-model:open="renaming"
+          title="Rename note"
+          description="The new name shows in the list and the panel tab."
+          label="Name"
+          :value="name"
+          :max-length="30"
+          confirm="Rename"
+          @submit="(value: string) => { name = value; renaming = false; }"
+        />
+        <NameDialog
+          v-model:open="renamingBusy"
+          title="Rename note"
+          label="Name"
+          :value="name"
+          confirm="Rename"
+          :busy="working"
+          @submit="slow(() => (renamingBusy = false))"
+        >
+          <p class="text-muted-foreground text-xs">Extra fields go here.</p>
+        </NameDialog>
+        <ConfirmDialog
+          v-model:open="sharing"
+          tone="default"
+          title="Share this note?"
+          description="Anyone with the link can read it."
+          confirm="Share"
+          @confirm="sharing = false"
+        />
+        <ConfirmDialog
+          v-model:open="savingConfirm"
+          tone="default"
+          title="Save changes?"
+          description="This takes a moment."
+          confirm="Save"
+          :busy="working"
+          @confirm="slow(() => (savingConfirm = false))"
+        />
         <ConfirmDialog
           v-if="confirming"
           title="Delete “Act 2”?"

@@ -493,6 +493,54 @@ test("ui playground: shows every section, filters them and disables the controls
   await app.close();
 });
 
+test("ui playground: the name dialog selects its text, counts and locks while busy, and the confirm dialog has a plain variant", async () => {
+  const { app, page } = await launch();
+  await openModule(page, PLAYGROUND);
+  await ready(app, PLAYGROUND, "section-colours");
+  // The panel loads its saved tab once connected; switching before that would be undone.
+  await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
+  await page.waitForTimeout(500);
+  await inModule(app, PLAYGROUND, `${q("tab-actions")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("section-dialogs")}`)).toBe(true);
+  const press = (label: string) =>
+    inModule(app, PLAYGROUND, `[...${q("section-dialogs")}.querySelectorAll("button")].find((el) => el.textContent.trim() === ${JSON.stringify(label)}).click()`);
+  const type = (value: string) =>
+    inModule(app, PLAYGROUND, `(() => { const input = ${q("name-input")}; input.value = ${JSON.stringify(value)}; input.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+
+  // The name is selected on open, the count shows the limit, and a name over it can't be confirmed.
+  await press("Rename…");
+  await expect.poll(() => inModule(app, PLAYGROUND, `(() => { const i = ${q("name-input")}; return !!i && document.activeElement === i && i.selectionStart === 0 && i.selectionEnd === i.value.length; })()`)).toBe(true);
+  expect(await inModule(app, PLAYGROUND, `${q("name-count")}.textContent.trim()`)).toBe("8 / 30");
+  await type("x".repeat(31));
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled && !!${q("name-error")}`)).toBe(true);
+  await type("");
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(true);
+  await type("Renamed");
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(false);
+  await click(app, PLAYGROUND, `[data-testid="name-submit"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!${q("name-dialog")}`)).toBe(true);
+
+  // A slow save locks the dialog, then it closes by itself.
+  await press("Rename with a slow save…");
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("name-dialog")}`)).toBe(true);
+  await click(app, PLAYGROUND, `[data-testid="name-submit"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-input")}.disabled && ${q("name-cancel")}.disabled && ${q("name-submit")}.getAttribute("aria-busy") === "true"`)).toBe(true);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!${q("name-dialog")}`)).toBe(true);
+
+  // The plain confirm is not red; a busy one can't be cancelled.
+  await press("Share (plain confirm)…");
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("confirm-submit")}`)).toBe(true);
+  expect(await inModule(app, PLAYGROUND, `${q("confirm-submit")}.dataset.variant`)).toBe("default");
+  await click(app, PLAYGROUND, `[data-testid="confirm-submit"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!${q("confirm")}`)).toBe(true);
+  await press("Slow confirm…");
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("confirm-submit")}`)).toBe(true);
+  await click(app, PLAYGROUND, `[data-testid="confirm-submit"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("confirm-submit")}.disabled && ${q("confirm-cancel")}.disabled`)).toBe(true);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!${q("confirm")}`)).toBe(true);
+  await app.close();
+});
+
 test("to-dos: an open menu stays open when a save comes back", async () => {
   const { app, page } = await launch();
   await openModule(page, TODOS);
