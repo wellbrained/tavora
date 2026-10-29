@@ -39,7 +39,7 @@ test("data from before the workspace names opens with every workspace, its panel
       ],
       favorites: [],
       sort: "manual",
-      rail: { expanded: false, width: 256 },
+      rail: { expanded: false, width: 280 },
       startup: "last-game",
       gameEndWorkspace: "local-personal",
       onboarded: true,

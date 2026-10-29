@@ -66,7 +66,7 @@ export function seedLibrary() {
     ],
     favorites: [],
     sort: "manual",
-    rail: { expanded: false, width: 256 },
+    rail: { expanded: false, width: 280 },
     startup: "last-workspace",
     lastWorkspaceId: "poe2",
   };

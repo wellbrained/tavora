@@ -381,12 +381,12 @@ test("the rail remembers whether it is expanded and how wide it is", async () =>
   await page.getByTestId("rail-resize").focus();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
-  await expect.poll(async () => (await rail.boundingBox())!.width).toBe(288);
+  await expect.poll(async () => (await rail.boundingBox())!.width).toBe(312);
   await app.close();
 
   const again = await launch(userData);
   await expect(again.page.getByTestId("rail")).toHaveAttribute("data-expanded", "true");
-  expect((await again.page.getByTestId("rail").boundingBox())!.width).toBe(288);
+  expect((await again.page.getByTestId("rail").boundingBox())!.width).toBe(312);
   await again.app.close();
 });
 

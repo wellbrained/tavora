@@ -20,7 +20,7 @@ import FolderTile from "./FolderTile.vue";
 import RailTooltip from "./RailTooltip.vue";
 
 const COMPACT = 72;
-const MIN_WIDTH = 180;
+const MIN_WIDTH = 200;
 const MAX_WIDTH = 420;
 /** Below this window width an expanded rail is shown compact, so the workspace keeps its room. */
 const NARROW_WINDOW = 1100;
@@ -352,8 +352,16 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           :aria-current="state!.screen === 'welcome' ? 'page' : undefined"
           @click="act({ type: 'show-welcome' })"
         >
-          <span class="flex w-[30px] flex-none justify-center overflow-visible">
-            <img class="rail-icon rail-icon-bare max-w-none flex-none" src="/brand/flame-96.png" alt="" width="34" height="34" draggable="false" />
+          <span class="flex w-10 flex-none justify-center">
+            <img
+              class="rail-icon rail-icon-bare max-w-none flex-none"
+              src="/brand/emblem-tight-96.png"
+              srcset="/brand/emblem-tight-96.png 1x, /brand/emblem-tight-192.png 2x"
+              alt=""
+              width="40"
+              height="40"
+              draggable="false"
+            />
           </span>
           <span v-if="expanded" class="text-base font-semibold">Tavora</span>
         </button>
@@ -458,7 +466,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                   :class="
                     cn(
                       'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-                      expanded ? 'hover:bg-accent group-data-[state=open]:bg-accent px-2 py-[9px]' : 'justify-center p-1',
+                      expanded ? 'hover:bg-accent group-data-[state=open]:bg-accent px-2 py-1' : 'justify-center p-1',
                       folderHint(entry.id) === 'into' && 'ring-primary ring-2 ring-inset',
                     )
                   "
@@ -469,7 +477,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                   @click="toggleFolder(entry.id)"
                 >
                   <FolderTile
-                    :size="expanded ? 30 : 40"
+                    :size="40"
                     :workspaces="folderWorkspaces(entry.id).slice(0, 4).map(workspace)"
                     :label="folder(entry.id).label"
                     :open="openFolders.has(entry.id)"
@@ -513,7 +521,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               :class="
                 cn(
                   'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-                  expanded ? 'text-muted-foreground hover:text-foreground hover:bg-accent px-2 py-[9px]' : 'justify-center p-1',
+                  expanded ? 'text-muted-foreground hover:text-foreground hover:bg-accent px-2 py-1' : 'justify-center p-1',
                 )
               "
               data-rail-item
@@ -521,8 +529,8 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               :aria-label="t('common.addGame')"
               @click="dialog = { kind: 'add-game' }"
             >
-              <span v-if="expanded" class="flex size-[30px] flex-none items-center justify-center">
-                <Plus class="size-[18px]" :stroke-width="1.75" />
+              <span v-if="expanded" class="flex size-10 flex-none items-center justify-center">
+                <Plus class="size-5" :stroke-width="1.75" />
               </span>
               <span
                 v-else
@@ -577,7 +585,8 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         </button>
       </RailTooltip>
     </div>
-    <div :class="'flex flex-col border-t py-2'">
+    <!-- Open, the profile is a framed card, so the line above it gives way; it stays see-through to keep the height. -->
+    <div :class="cn('flex flex-col border-t py-2', expanded && 'border-transparent')">
       <ProfileMenu :expanded="expanded" />
     </div>
 

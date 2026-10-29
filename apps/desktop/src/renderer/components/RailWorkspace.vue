@@ -21,8 +21,8 @@ const props = defineProps<{
   /** Inside an open folder: in the expanded rail it hangs off the folder's line with a smaller icon. */
   nested?: boolean;
 }>();
-// Compact: 40 px tiles. Expanded: a list with small icons, smaller still inside a folder.
-const size = computed(() => (props.expanded ? (props.nested ? 24 : 30) : 40));
+// 40 px tiles, open or closed; inside a folder of the expanded rail a little smaller, as the folder's line indents it.
+const size = computed(() => (props.expanded && props.nested ? 32 : 40));
 const emit = defineEmits<{ open: [] }>();
 // Drag handlers from the rail go on the row, not on the menu wrapper.
 defineOptions({ inheritAttrs: false });
@@ -47,7 +47,7 @@ defineOptions({ inheritAttrs: false });
         :class="
           cn(
             'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-            expanded ? cn('hover:bg-accent group-data-[state=open]:bg-accent', nested ? 'px-1.5 py-3' : 'px-2 py-[9px]') : 'justify-center p-1',
+            expanded ? cn('hover:bg-accent group-data-[state=open]:bg-accent', nested ? 'px-1.5 py-2' : 'px-2 py-1') : 'justify-center p-1',
             expanded && active && 'bg-accent',
             hint === 'into' && 'ring-primary ring-2 ring-inset',
           )
