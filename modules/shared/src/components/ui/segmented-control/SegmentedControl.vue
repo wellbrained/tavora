@@ -14,7 +14,7 @@ const model = defineModel<T>({ required: true });
       :key="option.value"
       :value="option.value"
       :data-testid="option.testid"
-      class="text-muted-foreground hover:text-foreground focus-visible:outline-ring data-[state=checked]:border-input data-[state=checked]:bg-secondary data-[state=checked]:text-foreground h-7 rounded-sm border border-transparent px-3 text-sm font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50"
+      class="text-muted-foreground hover:text-foreground focus-visible:outline-ring data-[state=checked]:border-primary/50 data-[state=checked]:bg-primary/15 data-[state=checked]:text-primary h-7 rounded-sm border border-transparent px-3 text-sm font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50"
     >
       {{ option.label }}
     </RadioGroupItem>
