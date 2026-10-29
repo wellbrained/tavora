@@ -215,6 +215,9 @@ test("the header says when the workspace's game is running", async () => {
     // Another game's workspace says nothing.
     await openWorkspace(page, "satisfactory");
     await expect(page.getByTestId("workspace-running")).toHaveCount(0);
+    // The card peeking out from behind the profile switches back to the game.
+    await page.getByTestId("rail-running").click();
+    await expect(page.getByTestId("rail-workspace-poe2")).toHaveAttribute("aria-current", "page");
   } finally {
     await app.close();
   }

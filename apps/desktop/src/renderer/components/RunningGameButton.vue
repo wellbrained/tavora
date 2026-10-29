@@ -1,13 +1,13 @@
 <script setup lang="ts">
-// At the bottom of the rail while a game of the library runs on this PC (Settings > General, "When a game
-// starts"): a controller that pulses slowly. It names the game on hover, and a click switches to it. Hidden
-// while that game is the one open, since there is nothing to switch to.
+// While a game of the library runs on this PC (Settings > General, "When a game starts"): a card that peeks out from
+// behind the profile card, like a stacked notification, and switches to the game. The profile card says which game
+// it is. It slides back while that game is open, since there is nothing to switch to, and pushes the items above it
+// up and down as it comes and goes.
 import { Gamepad2 } from "@lucide/vue";
 import { computed } from "vue";
 import { cn } from "@/lib/utils";
 import { act, state } from "../host";
 import { t } from "../i18n";
-import RailFooterTile from "./RailFooterTile.vue";
 import RailTooltip from "./RailTooltip.vue";
 
 defineProps<{ expanded: boolean }>();
@@ -16,81 +16,71 @@ const game = computed(() => {
   const id = state.value!.runningGameId;
   return id ? (state.value!.library.workspaces[id] ?? null) : null;
 });
-const label = computed(() => (game.value ? t("rail.running", { name: game.value.name }) : ""));
+// runningGameId already leaves out the game of the workspace open now, so the card slides back there.
+const shown = computed(() => game.value !== null);
 </script>
 
 <template>
-  <RailTooltip v-if="game" :text="label" :hint="t('rail.runningSwitch')" :disabled="expanded">
-    <button
-      type="button"
-      :class="cn('running-in mx-2 flex items-center gap-2.5 rounded-lg px-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] text-left', expanded && 'hover:bg-accent')"
-      data-rail-item
-      data-testid="rail-running"
-      :aria-label="`${label}. ${t('rail.runningSwitch')}`"
-      @click="act({ type: 'open-workspace', workspaceId: game.id })"
-    >
-      <RailFooterTile dot="success" class="running-tile text-success">
-        <Gamepad2 class="running-glyph size-5" :stroke-width="1.5" />
-      </RailFooterTile>
-      <template v-if="expanded">
-        <span class="truncate text-sm font-medium">{{ game.name }}</span>
-        <span class="text-success mr-1 ml-auto flex-none text-xs font-medium">{{ t("rail.runningShort") }}</span>
-      </template>
-    </button>
-  </RailTooltip>
+  <!-- The 28 px that show above the profile card; the rest of the card sits under it. -->
+  <div :class="cn('running-peek relative', shown ? 'h-7' : 'h-0')" :inert="!shown">
+    <RailTooltip :text="t('rail.switchToGame')" :disabled="expanded">
+      <button
+        type="button"
+        :class="
+          cn(
+            'running-card text-success absolute top-0 flex h-10 items-start justify-center gap-1.5 rounded-lg border pt-[5px] text-xs font-semibold',
+            // Narrower than what it sits behind: the profile card when expanded, the avatar tile when compact.
+            expanded ? 'inset-x-3.5' : 'inset-x-[18px]',
+            !shown && 'translate-y-3 opacity-0',
+          )
+        "
+        data-rail-item
+        data-testid="rail-running"
+        :aria-label="t('rail.switchToGame')"
+        @click="game && act({ type: 'open-workspace', workspaceId: game.id })"
+      >
+        <Gamepad2 class="running-glyph size-4 flex-none" :stroke-width="1.75" />
+        <span v-if="expanded" class="truncate">{{ t("rail.switchToGame") }}</span>
+      </button>
+    </RailTooltip>
+  </div>
 </template>
 
 <style scoped>
-/* Slides in when the game starts. */
-.running-in {
-  animation: running-in 300ms ease-out;
+/* Slow and smooth, so the items above it drift up rather than jump. */
+.running-peek {
+  transition: height 500ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-@keyframes running-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
+.running-card {
+  border-color: color-mix(in oklab, var(--success) 35%, var(--border));
+  background: color-mix(in oklab, var(--success) 14%, var(--card));
+  box-shadow: 0 -2px 12px color-mix(in srgb, black 30%, transparent);
+  transition:
+    transform 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms ease-out,
+    background-color 150ms;
 }
-:deep(.running-tile) {
-  background: color-mix(in oklab, var(--success) 16%, var(--card));
-  animation: running-ring 2.4s ease-in-out infinite;
-}
-button:hover :deep(.running-tile) {
-  background: color-mix(in oklab, var(--success) 30%, var(--card));
+.running-card:hover {
+  background: color-mix(in oklab, var(--success) 24%, var(--card));
 }
 :deep(.running-glyph) {
   animation: running-glyph 2.4s ease-in-out infinite;
 }
-/* A slow breath that never gets loud: the ring and glow rise only a little. */
-@keyframes running-ring {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 2px var(--rail),
-      0 0 0 3px color-mix(in oklab, var(--success) 50%, transparent),
-      0 0 6px 0 color-mix(in oklab, var(--success) 12%, transparent);
-  }
-  50% {
-    box-shadow:
-      0 0 0 2px var(--rail),
-      0 0 0 3.5px color-mix(in oklab, var(--success) 80%, transparent),
-      0 0 12px 2px color-mix(in oklab, var(--success) 25%, transparent);
-  }
-}
+/* A slow breath that never gets loud. */
 @keyframes running-glyph {
   0%,
   100% {
-    opacity: 0.75;
-    transform: scale(0.95);
+    opacity: 0.8;
   }
   50% {
-    opacity: 0.92;
-    transform: scale(1.02);
+    opacity: 1;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .running-in,
-  :deep(.running-tile),
+  .running-peek,
+  .running-card {
+    transition: none;
+  }
   :deep(.running-glyph) {
     animation: none;
   }

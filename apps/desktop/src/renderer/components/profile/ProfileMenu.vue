@@ -27,6 +27,18 @@ const MAX_NAME = 32;
 const MAX_INITIALS = 3;
 
 const profile = computed(() => state.value!.profile);
+/**
+ * The card's second line: the game running now, else whether the user is signed in. That is the game the rail offers
+ * to switch to, else the open workspace's own game while it runs (runningGameId leaves that one out).
+ */
+const runningGame = computed(() => {
+  const view = state.value!;
+  const id = view.runningGameId ?? (view.workspaceRunning ? view.currentWorkspaceId : null);
+  return id ? (view.library.workspaces[id] ?? null) : null;
+});
+const status = computed(() =>
+  runningGame.value ? t("rail.playing", { name: runningGame.value.name }) : account.value?.account ? t("rail.signedIn") : t("rail.signedOut"),
+);
 const open = ref(false);
 /** Name and initials as typed, until saved. */
 const draft = ref({ name: "", initials: "" });
@@ -162,7 +174,8 @@ function closeCrop() {
         type="button"
         :class="
           cn(
-            'group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2 data-[state=open]:text-foreground',
+            // In front of the card of a running game, which peeks out from behind it (RunningGameButton.vue).
+            'group text-muted-foreground hover:text-foreground relative z-10 mx-2 flex items-center gap-2.5 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2 data-[state=open]:text-foreground',
             // Open, the profile is a card of its own at the very bottom, on a glow in the theme's colour (styles.css).
             // Rounded like the other rail items; the avatar's corners follow: 8 px - 4 px padding - 1 px border = 3 px.
             expanded && 'profile-rail-card text-foreground relative overflow-hidden rounded-lg border p-1 text-left',
@@ -187,7 +200,7 @@ function closeCrop() {
           </span>
           <span class="relative flex min-w-0 flex-col">
             <span class="truncate text-sm font-semibold">{{ profile.name.trim() || t("profile.label") }}</span>
-            <span class="text-foreground/80 truncate text-xs font-medium" data-testid="rail-profile-status">{{ account?.account ? t("rail.signedIn") : t("rail.signedOut") }}</span>
+            <span :class="cn('truncate text-xs font-medium', runningGame ? 'text-success' : 'text-foreground/80')" data-testid="rail-profile-status">{{ status }}</span>
           </span>
         </template>
         <RailFooterTile v-else>

@@ -575,9 +575,9 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     </div>
     </section>
 
-    <!-- User things live at the bottom on their own: a game running now, then Settings, and the profile last. -->
+    <!-- User things live at the bottom on their own: Settings and the like, then the profile, with a game running now
+         peeking out from behind it. -->
     <div class="flex flex-col gap-1 pt-2 pb-1">
-      <RunningGameButton :expanded="expanded" />
       <UpdateMarker :expanded="expanded" />
       <RailOverlayButton :expanded="expanded" />
       <RailModuleUpdates :expanded="expanded" />
@@ -600,6 +600,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       </RailTooltip>
     </div>
     <div class="flex flex-col pt-1 pb-2">
+      <RunningGameButton :expanded="expanded" />
       <ProfileMenu :expanded="expanded" />
     </div>
 
