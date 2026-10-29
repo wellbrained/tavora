@@ -9,6 +9,8 @@ export { cn } from "./lib/utils";
 export { createTranslator, type Params, type Translator } from "./i18n";
 export { applyTheme } from "./theme";
 export { default as ConfirmDialog } from "./components/ConfirmDialog.vue";
+export { default as NameDialog } from "./components/NameDialog.vue";
+export { checkName, type NameProblem } from "./components/name-check";
 export { SegmentedControl } from "./components/ui/segmented-control";
 export { errorMessage, readDocument, serial, updateDocument, type UpdateOptions, type Versioned } from "./documents";
 
