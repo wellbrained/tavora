@@ -144,6 +144,28 @@ test("a module's results go public only after the user says yes in its panel, an
     });
     expect(await call(app, "leaderboards.top", { board: "daily", day })).toMatchObject({ ok: true, result: { rows: [{ rank: 1, name, self: true, current: 1, best: 1 }] } });
 
+    // Periods: the user's own line in a week, and their standing on every board in every period. The probe is made for
+    // Tavora 0.21.92, before boards had names (like Sudoku 0.1.0), so each board goes by its id.
+    expect(await call(app, "leaderboards.top", { board: "daily", period: "week", day })).toMatchObject({ ok: true, result: { rows: [{ rank: 1, of: 1, self: true }] } });
+    expect(await call(app, "leaderboards.mine", {})).toMatchObject({
+      ok: true,
+      result: { boards: [{ id: "daily", name: "daily", periods: { day: null, all: { rank: 1, of: 1, current: 1, best: 1 } } }, { id: "fastest", name: "fastest", periods: { all: null } }] },
+    });
+    // A result without a day, as a module made for 0.21.92 sends it: Tavora fills the day in, so it still counts.
+    const time = { id: randomUUID(), value: 83, at: Date.now() };
+    expect(await call(app, "leaderboards.submit", { board: "fastest", results: [time] })).toMatchObject({ ok: true, result: { accepted: [time.id] } });
+    expect(await call(app, "leaderboards.mine", { day })).toMatchObject({ ok: true, result: { boards: [{ id: "daily" }, { id: "fastest", periods: { all: { rank: 1, of: 1, value: 83 } } }] } });
+
+    // The profile card lists catalog modules only, so a development copy never shows there; the card can be hidden and shown.
+    await page.getByTestId("rail-profile").click();
+    await expect(page.getByTestId("profile-ranks")).toContainText("Join a game's leaderboard");
+    await page.getByTestId("profile-ranks-hide").click();
+    await expect(page.getByTestId("profile-ranks")).toContainText("Ranks hidden");
+    await page.getByTestId("profile-ranks-show").click();
+    await expect(page.getByTestId("profile-ranks")).toContainText("Join a game's leaderboard");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("profile-card")).toHaveCount(0);
+
     // Leaving from Settings takes the user off and deletes the results there.
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-integrations").click();

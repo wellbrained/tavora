@@ -64,6 +64,8 @@ export interface ModuleTranslation {
   panels?: Record<string, string>;
   /** Action id to the name shown next to its key. */
   actions?: Record<string, string>;
+  /** Leaderboard id to the board's name. */
+  boards?: Record<string, string>;
 }
 
 export interface ModuleManifest {
@@ -152,14 +154,40 @@ export interface ModuleManifest {
 }
 
 /**
- * One leaderboard a module declares (decided 2026-10-28). `streak`: won and lost results, ranked by the best winning
- * streak, then the current one; with `daily`, one result per calendar day, and a missed day ends the streak. `score`:
- * one number per result, ranked by each user's best, the highest first (`order` "high", the default) or the lowest
- * (`order` "low", such as a time).
+ * One leaderboard a module declares (decided 2026-10-28, the kinds and periods the same day). Every board has a `name`
+ * users see (in Tavora's profile, for one), translatable through `translations.boards`. Five kinds, so most games find
+ * one that fits; a module uses only the ones it needs:
+ *
+ * - `streak`: won and lost results, ranked by the best winning streak, then the current one; with `daily`, one result
+ *   per calendar day, and a missed day ends the streak.
+ * - `score`: one number per result, ranked by each user's best, the highest first (`order` "high", the default) or
+ *   the lowest (`order` "low", such as a time).
+ * - `total`: one number per result (0 or more), ranked by each user's sum: puzzles solved, points collected.
+ * - `average`: one number per result, ranked by each user's mean, highest or lowest by `order`; a user is on the
+ *   board after `minGames` results (LEADERBOARD_MIN_GAMES.default without it).
+ * - `rate`: won and lost results, ranked by the share of games won; on the board after `minGames` results.
+ *
+ * `unit` (score, total and average) is the short text Tavora shows after the number, such as "s" or "pts". Every
+ * board can be read for each LEADERBOARD_PERIODS period; a module declares a board once.
  */
 export type LeaderboardBoard =
-  | { id: string; kind: "streak"; daily?: boolean }
-  | { id: string; kind: "score"; order?: "high" | "low" };
+  | { id: string; name: string; kind: "streak"; daily?: boolean }
+  | { id: string; name: string; kind: "score"; order?: "high" | "low"; unit?: string }
+  | { id: string; name: string; kind: "total"; unit?: string }
+  | { id: string; name: string; kind: "average"; order?: "high" | "low"; minGames?: number; unit?: string }
+  | { id: string; name: string; kind: "rate"; minGames?: number };
+
+export type LeaderboardKind = LeaderboardBoard["kind"];
+export const LEADERBOARD_KINDS: readonly LeaderboardKind[] = ["streak", "score", "total", "average", "rate"];
+/**
+ * The periods every board can be read for: the results of one local day, one week (Monday to Sunday), one calendar
+ * month, one year, or all of them. Which period a result lands in goes by its `day`. Streak boards skip `day`.
+ */
+export const LEADERBOARD_PERIODS = ["day", "week", "month", "year", "all"] as const;
+export type LeaderboardPeriod = (typeof LEADERBOARD_PERIODS)[number];
+export const isLeaderboardPeriod = (value: unknown): value is LeaderboardPeriod => LEADERBOARD_PERIODS.includes(value as LeaderboardPeriod);
+/** How many results an `average` or `rate` board wants before a user is on it: the default, and the most a board may ask. */
+export const LEADERBOARD_MIN_GAMES = { default: 10, max: 1000 } as const;
 
 export type ManifestResult =
   | { ok: true; manifest: ModuleManifest }
@@ -402,10 +430,19 @@ export const LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES = "0.21.42";
 export const LAST_TAVORA_WITHOUT_LEADERBOARDS = "0.21.91";
 /** The last Tavora that refuses `viewport.wide`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_WIDE_LAYOUT = "0.21.93";
+/**
+ * The last Tavora whose boards had no `name`. A manifest for it (`minTavora` at most this, such as Sudoku 0.1.0) may
+ * leave the names out and loads with each board's id as its name; a newer manifest needs them.
+ */
+export const LAST_TAVORA_WITHOUT_BOARD_NAMES = "0.21.96";
 /** Most leaderboards one module may declare. */
 export const MAX_LEADERBOARD_BOARDS = 20;
 const LEADERBOARD_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const MAX_LEADERBOARD_ID = 32;
+/** A board's name, shown in Tavora's profile next to the module's. */
+export const MAX_LEADERBOARD_NAME = 40;
+/** A board's unit, shown after the number ("s", "pts"). */
+export const MAX_LEADERBOARD_UNIT = 10;
 
 /** A leaderboard id: lowercase letters and digits in words joined by -, starting with a letter, at most 32 characters. */
 export function isLeaderboardId(value: unknown): value is string {
@@ -417,7 +454,7 @@ const LANGUAGE_CODE = /^[a-z]{2,3}(-[a-z0-9]{2,8})?$/;
 export function isLanguageCode(value: unknown): value is string {
   return typeof value === "string" && LANGUAGE_CODE.test(value);
 }
-const TRANSLATION_FIELDS = ["name", "description", "panels", "actions"];
+const TRANSLATION_FIELDS = ["name", "description", "panels", "actions", "boards"];
 // Tavora's own modules ship with the app, so no older Tavora ever loads them.
 const OFFICIAL_ID_PREFIX = "tavora.";
 
@@ -450,6 +487,7 @@ export function translateManifest(manifest: ModuleManifest, language: string): M
   if (description !== undefined) translated.description = description;
   if (manifest.panels) translated.panels = manifest.panels.map((type) => ({ ...type, name: pick((t) => t.panels?.[type.id], type.name) }));
   if (manifest.actions) translated.actions = manifest.actions.map((action) => ({ ...action, name: pick((t) => t.actions?.[action.id], action.name) }));
+  if (manifest.leaderboards) translated.leaderboards = { boards: manifest.leaderboards.boards.map((board) => ({ ...board, name: pick((t) => t.boards?.[board.id], board.name) })) };
   return translated;
 }
 
@@ -576,6 +614,14 @@ function checkActions(actions: unknown, errors: string[]): void {
   });
 }
 
+/** The manifest with every board named: an older manifest's boards without a name go by their id. */
+function withBoardNames(input: Record<string, unknown>): Record<string, unknown> {
+  const leaderboards = isRecord(input.leaderboards) ? input.leaderboards : null;
+  const boards = leaderboards && Array.isArray(leaderboards.boards) ? (leaderboards.boards as Record<string, unknown>[]) : null;
+  if (!boards || boards.every((board) => board.name !== undefined)) return input;
+  return { ...input, leaderboards: { ...leaderboards, boards: boards.map((board) => (board.name === undefined ? { ...board, name: board.id } : board)) } };
+}
+
 function checkLeaderboards(input: Record<string, unknown>, errors: string[]): void {
   const leaderboards = input.leaderboards;
   const boards: unknown = isRecord(leaderboards) ? leaderboards.boards : undefined;
@@ -585,23 +631,49 @@ function checkLeaderboards(input: Record<string, unknown>, errors: string[]): vo
   const unknown = Object.keys(leaderboards).filter((key) => key !== "boards");
   if (unknown.length > 0) errors.push(`unknown leaderboards fields: ${unknown.join(", ")}`);
   const ids = new Set<string>();
+  const namesNeeded = officialId(input) || needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_BOARD_NAMES);
+  const newer = new Set<string>();
   boards.forEach((board: unknown, index) => {
     const at = `leaderboards.boards[${index}]`;
     if (!isRecord(board)) return void errors.push(`${at} must be an object`);
     if (!isLeaderboardId(board.id)) errors.push(`${at}.id must be lowercase letters and digits joined by -, starting with a letter, at most ${MAX_LEADERBOARD_ID} characters`);
     else if (ids.has(board.id)) errors.push(`leaderboards lists the board ${board.id} twice`);
     else ids.add(board.id);
-    if (board.kind === "streak") {
+    // An older manifest may leave the names out; the id stands in (see LAST_TAVORA_WITHOUT_BOARD_NAMES).
+    const named = board.name !== undefined || namesNeeded;
+    if (named && (!isText(board.name, MAX_LEADERBOARD_NAME) || /[\u0000-\u001f]/.test(board.name))) errors.push(`${at}.name must be a non-empty string of at most ${MAX_LEADERBOARD_NAME} characters on one line`);
+    const kind = LEADERBOARD_KINDS.includes(board.kind as LeaderboardKind) ? (board.kind as LeaderboardKind) : null;
+    // What the first leaderboards didn't know, so Tavoras up to LAST_TAVORA_WITHOUT_BOARD_NAMES refuse it.
+    for (const field of ["name", "unit", "minGames"]) if (board[field] !== undefined) newer.add(field);
+    if (kind === "total" || kind === "average" || kind === "rate") newer.add(`kind "${kind}"`);
+    if (kind === null) errors.push(`${at}.kind must be one of ${LEADERBOARD_KINDS.map((name) => `"${name}"`).join(", ")}`);
+    const fields = ["id", "name", "kind"];
+    if (kind === "streak") {
+      fields.push("daily");
       if (board.daily !== undefined && typeof board.daily !== "boolean") errors.push(`${at}.daily must be true or false`);
-    } else if (board.kind === "score") {
+    }
+    if (kind === "score" || kind === "average") {
+      fields.push("order");
       if (board.order !== undefined && board.order !== "high" && board.order !== "low") errors.push(`${at}.order must be "high" or "low"`);
-    } else errors.push(`${at}.kind must be "streak" or "score"`);
-    const fields = board.kind === "score" ? ["id", "kind", "order"] : ["id", "kind", "daily"];
+    }
+    if (kind === "average" || kind === "rate") {
+      fields.push("minGames");
+      if (board.minGames !== undefined && (!Number.isInteger(board.minGames) || (board.minGames as number) < 1 || (board.minGames as number) > LEADERBOARD_MIN_GAMES.max)) {
+        errors.push(`${at}.minGames must be a whole number from 1 to ${LEADERBOARD_MIN_GAMES.max}`);
+      }
+    }
+    if (kind === "score" || kind === "total" || kind === "average") {
+      fields.push("unit");
+      if (board.unit !== undefined && (!isText(board.unit, MAX_LEADERBOARD_UNIT) || /[\u0000-\u001f]/.test(board.unit))) errors.push(`${at}.unit must be a non-empty string of at most ${MAX_LEADERBOARD_UNIT} characters on one line`);
+    }
     const extra = Object.keys(board).filter((key) => !fields.includes(key));
-    if (extra.length > 0) errors.push(`unknown ${at} fields: ${extra.join(", ")}`);
+    if (kind !== null && extra.length > 0) errors.push(`unknown ${at} fields: ${extra.join(", ")}`);
   });
   if (!officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_LEADERBOARDS)) {
     errors.push(`leaderboards need a minTavora newer than ${LAST_TAVORA_WITHOUT_LEADERBOARDS}, because older Tavoras refuse them`);
+  }
+  if (!namesNeeded && newer.size > 0) {
+    errors.push(`leaderboards with ${[...newer].join(", ")} need a minTavora newer than ${LAST_TAVORA_WITHOUT_BOARD_NAMES}, because older Tavoras refuse them`);
   }
 }
 
@@ -614,6 +686,7 @@ function checkTranslations(input: Record<string, unknown>, errors: string[]): vo
   const idsOf = (list: unknown) => new Set(Array.isArray(list) ? list.filter(isRecord).map((item) => item.id) : []);
   const panelIds = idsOf(input.panels);
   const actionIds = idsOf(input.actions);
+  const boardIds = idsOf(isRecord(input.leaderboards) ? input.leaderboards.boards : undefined);
   for (const [code, translation] of Object.entries(translations)) {
     const at = `translations.${code}`;
     if (!isLanguageCode(code)) errors.push(`translations must be keyed by lowercase language codes such as de or pt-br, not ${code}`);
@@ -623,10 +696,10 @@ function checkTranslations(input: Record<string, unknown>, errors: string[]): vo
     }
     if (translation.name !== undefined && !isText(translation.name, 80)) errors.push(`${at}.name must be a non-empty string of at most 80 characters`);
     if (translation.description !== undefined && !isText(translation.description, 300)) errors.push(`${at}.description must be a non-empty string of at most 300 characters`);
-    const names = (field: "panels" | "actions", ids: Set<unknown>, max: number) => {
+    const names = (field: "panels" | "actions" | "boards", ids: Set<unknown>, max: number) => {
       const map = translation[field];
       if (map === undefined) return;
-      if (!isRecord(map)) return void errors.push(`${at}.${field} must be an object of ${field === "panels" ? "panel type" : "action"} ids to names`);
+      if (!isRecord(map)) return void errors.push(`${at}.${field} must be an object of ${field === "panels" ? "panel type" : field === "actions" ? "action" : "leaderboard"} ids to names`);
       for (const [id, name] of Object.entries(map)) {
         if (!ids.has(id)) errors.push(`${at}.${field} names ${id}, which ${field} does not list`);
         if (!isText(name, max) || /[\u0000-\u001f]/.test(name)) errors.push(`${at}.${field}.${id} must be a non-empty string of at most ${max} characters on one line`);
@@ -634,6 +707,10 @@ function checkTranslations(input: Record<string, unknown>, errors: string[]): vo
     };
     names("panels", panelIds, MAX_PANEL_NAME);
     names("actions", actionIds, MAX_ACTION_NAME);
+    names("boards", boardIds, MAX_LEADERBOARD_NAME);
+    if (translation.boards !== undefined && !officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_BOARD_NAMES)) {
+      errors.push(`${at}.boards needs a minTavora newer than ${LAST_TAVORA_WITHOUT_BOARD_NAMES}, because older Tavoras refuse it`);
+    }
     const unknown = Object.keys(translation).filter((key) => !TRANSLATION_FIELDS.includes(key));
     if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
   }
@@ -773,5 +850,5 @@ export function validateManifest(input: unknown): ManifestResult {
   if (extra.length > 0) errors.push(`unknown fields: ${extra.join(", ")}`);
 
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, manifest: input as unknown as ModuleManifest };
+  return { ok: true, manifest: withBoardNames(input) as unknown as ModuleManifest };
 }

@@ -73,7 +73,8 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
       show: () => Promise.resolve({ online: true, signedIn: true, available: true, shown: true, name: "Mara" }),
       hide: () => Promise.resolve({ online: true, signedIn: true, available: true, shown: false, name: "Mara" }),
       submit: (params) => Promise.resolve({ accepted: [(params as { results: { id: string }[] }).results[0]!.id], rejected: [] }),
-      top: () => Promise.resolve({ rows: [{ rank: 1, name: "Mara", self: true, current: 2, best: 3 }] }),
+      top: () => Promise.resolve({ rows: [{ rank: 1, of: 1, name: "Mara", self: true, current: 2, best: 3 }] }),
+      mine: () => Promise.resolve({ boards: [{ id: "daily", name: "Daily streak", periods: { day: null, week: null, month: null, year: null, all: { rank: 1, of: 1, current: 2, best: 3 } } }] }),
     },
     panelState: registry.panelState,
     capabilities: () => new Set(),
@@ -594,7 +595,7 @@ describe("compareAndSet", () => {
 describe("leaderboards", () => {
   const granted = () => connected({ ...makeContext(), capabilities: () => new Set(["leaderboards"] as const) });
 
-  it.each(["leaderboards.status", "leaderboards.show", "leaderboards.hide", "leaderboards.submit", "leaderboards.top"])("denies %s without the leaderboards connector", async (method) => {
+  it.each(["leaderboards.status", "leaderboards.show", "leaderboards.hide", "leaderboards.submit", "leaderboards.top", "leaderboards.mine"])("denies %s without the leaderboards connector", async (method) => {
     const params = method === "leaderboards.submit" || method === "leaderboards.top" ? { board: "daily", results: [] } : undefined;
     expect(await call(port, method, params)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "leaderboards" } });
   });
@@ -605,6 +606,7 @@ describe("leaderboards", () => {
     expect(await call(p, "leaderboards.show")).toMatchObject({ ok: true, result: { shown: true } });
     expect(await call(p, "leaderboards.submit", { board: "daily", results: [{ id: "a" }] })).toMatchObject({ ok: true, result: { accepted: ["a"], rejected: [] } });
     expect(await call(p, "leaderboards.top", { board: "daily" })).toMatchObject({ ok: true, result: { rows: [{ rank: 1, self: true }] } });
+    expect(await call(p, "leaderboards.mine", {})).toMatchObject({ ok: true, result: { boards: [{ id: "daily", periods: { all: { rank: 1 } } }] } });
     expect(await call(p, "leaderboards.status", { extra: 1 })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
     expect(await call(p, "leaderboards.top", "daily")).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   });

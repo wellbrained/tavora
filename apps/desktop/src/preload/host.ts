@@ -54,6 +54,7 @@ const api: TavoraHostApi = {
     ipcRenderer.on("host:ai-usage", (_event, view: AiUsageView) => listener(view));
   },
   getAccount: () => ipcRenderer.invoke("host:get-account"),
+  profileRanks: () => ipcRenderer.invoke("host:profile-ranks"),
   onAccount: (listener) => {
     ipcRenderer.on("host:account", (_event, view: AccountView) => listener(view));
   },

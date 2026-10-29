@@ -1,11 +1,15 @@
-import { isLeaderboardId, type LeaderboardBoard } from "@tavora/module-schema";
-import { LIMITS, type LeaderboardStatus, type LeaderboardSubmitResult, type LeaderboardTop } from "@tavora/sdk/protocol";
+import { isLeaderboardId, isLeaderboardPeriod, LEADERBOARD_PERIODS, type LeaderboardBoard } from "@tavora/module-schema";
+import { LIMITS, type LeaderboardMine, type LeaderboardPeriod, type LeaderboardRow, type LeaderboardStanding, type LeaderboardStatus, type LeaderboardSubmitResult, type LeaderboardTop } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
 
 // The leaderboards connector (decided 2026-10-28, apps/api/src/leaderboards.ts has the service's side). A module
 // asks; Tavora's main process talks to the service with the user's sign-in, which never reaches the module, and
 // gives the module only names, numbers and a `self` mark on the user's own line. Before a module's results go
 // public Tavora asks the user itself, in the module's panel (show); the module can't answer or skip that.
+//
+// Five board kinds (streak, score, total, average, rate), each readable for a period (day, week, month, year, all).
+// `top` gives the lines of one board and period, `mine` the user's own standing on every board in every period. A
+// result counts for the periods its `day` is in; one sent without a `day` gets the local day of its `at`.
 
 /** Module ids the service runs test boards for, which only their developer sees. */
 const TEST_PREFIX = "local.";
@@ -53,16 +57,42 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+/** The local calendar day (YYYY-MM-DD) of a time in milliseconds. */
+const dayOf = (at: number) => {
+  const date = new Date(at);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
 
 /** The declaration as the service reads it for a development copy (it uses the catalog's for the others). */
 function declaration(board: LeaderboardBoard): Record<string, string> {
-  return board.kind === "streak" ? { kind: "streak", ...(board.daily ? { daily: "1" } : {}) } : { kind: "score", ...(board.order === "low" ? { order: "low" } : {}) };
+  return {
+    kind: board.kind,
+    ...(board.kind === "streak" && board.daily ? { daily: "1" } : {}),
+    ...((board.kind === "score" || board.kind === "average") && board.order === "low" ? { order: "low" } : {}),
+    ...((board.kind === "average" || board.kind === "rate") && board.minGames !== undefined ? { minGames: String(board.minGames) } : {}),
+  };
 }
+
+/** One standing as the module gets it: the rank, the size of the board and the numbers of the board's kind; null where there is none. */
+function standing(value: unknown, kind: LeaderboardBoard["kind"]): LeaderboardStanding | null {
+  if (!isObject(value)) return null;
+  const numbers: Partial<LeaderboardStanding> =
+    kind === "streak" ? { current: count(value.current), best: count(value.best) }
+    : kind === "score" ? { value: count(value.value) }
+    : kind === "rate" ? { value: count(value.value), games: count(value.games), wins: count(value.wins) }
+    : { value: count(value.value), games: count(value.games) };
+  return { rank: count(value.rank), of: count(value.of), ...numbers };
+}
+
+const emptyPeriods = (): Record<LeaderboardPeriod, LeaderboardStanding | null> => ({ day: null, week: null, month: null, year: null, all: null });
 
 /** A result with only the fields results have; anything else the module put in stays behind. */
 function resultFields(value: unknown): Record<string, unknown> {
   const input = isObject(value) ? value : {};
-  return Object.fromEntries(["id", "outcome", "value", "at", "day"].filter((key) => key in input).map((key) => [key, input[key]]));
+  const fields = Object.fromEntries(["id", "outcome", "value", "at", "day"].filter((key) => key in input).map((key) => [key, input[key]]));
+  // Like the SDK: a result without a day belongs to the local day it ended on.
+  if (!("day" in fields) && typeof fields.at === "number" && Number.isFinite(fields.at)) fields.day = dayOf(fields.at);
+  return fields;
 }
 
 /** Turns the service's refusal into the module's error. */
@@ -137,21 +167,52 @@ export class ModuleLeaderboards {
   async top(params: unknown): Promise<LeaderboardTop> {
     const input = isObject(params) ? params : {};
     const board = this.board(input.board);
-    if (input.day !== undefined && (typeof input.day !== "string" || !DAY.test(input.day))) throw new HostError("INVALID_PARAMS", "params.day must be a day as YYYY-MM-DD");
+    if (input.period !== undefined && !isLeaderboardPeriod(input.period)) throw new HostError("INVALID_PARAMS", `params.period must be one of ${LEADERBOARD_PERIODS.join(", ")}`);
+    this.checkDay(input.day);
     if (input.limit !== undefined && (!Number.isInteger(input.limit) || (input.limit as number) < 1 || (input.limit as number) > LIMITS.maxLeaderboardRows)) {
       throw new HostError("INVALID_PARAMS", `params.limit must be a whole number from 1 to ${LIMITS.maxLeaderboardRows}`);
     }
-    const query = new URLSearchParams({ ...declaration(board), ...(input.day === undefined ? {} : { day: input.day as string }), ...(input.limit === undefined ? {} : { limit: String(input.limit) }) });
+    const query = new URLSearchParams({ ...declaration(board), ...(input.period === undefined ? {} : { period: input.period as string }), ...(input.day === undefined ? {} : { day: input.day as string }), ...(input.limit === undefined ? {} : { limit: String(input.limit) }) });
     const answer = await this.request("GET", `/boards/${board.id}?${query}`);
     if (!answer) return { rows: [] };
     if (answer.status !== 200) refused(answer);
     const rows = Array.isArray(answer.body.rows) ? answer.body.rows.filter(isObject) : [];
-    return { rows: rows.map((row) => ({
-      rank: count(row.rank),
+    return { rows: rows.map((row): LeaderboardRow => ({
+      ...(standing(row, board.kind) as LeaderboardStanding),
       name: typeof row.name === "string" ? row.name : this.options.pseudonym(typeof row.label === "string" ? row.label : ""),
       self: row.self === true,
-      ...(board.kind === "streak" ? { current: count(row.current), best: count(row.best) } : { value: count(row.value) }),
     })) };
+  }
+
+  /** The user's own standing on every board of the manifest, in every period. Signed out, or with accounts off, there is none. */
+  async mine(params: unknown): Promise<LeaderboardMine> {
+    const input = isObject(params) ? params : {};
+    this.checkDay(input.day);
+    const { boards, account, moduleId } = this.options;
+    const none = () => ({ boards: boards.map((board) => ({ id: board.id, name: board.name, periods: emptyPeriods() })) });
+    if (!account.enabled() || !account.isSignedIn()) return none();
+    const query = new URLSearchParams({
+      ...(input.day === undefined ? {} : { day: input.day as string }),
+      // A development copy has no boards on the service, so it says which it has.
+      ...(moduleId.startsWith(TEST_PREFIX) ? { boards: JSON.stringify(boards.map((board) => ({ id: board.id, ...declaration(board) }))) } : {}),
+    });
+    const answer = await this.request("GET", `/mine${query.toString() ? `?${query}` : ""}`);
+    if (!answer) return none();
+    if (answer.status !== 200) refused(answer);
+    const listed = Array.isArray(answer.body.boards) ? answer.body.boards.filter(isObject) : [];
+    return {
+      boards: boards.map((board) => {
+        const periods = emptyPeriods();
+        const found = listed.find((item) => item.id === board.id);
+        const given = found && isObject(found.periods) ? found.periods : {};
+        for (const period of LEADERBOARD_PERIODS) periods[period] = standing(given[period], board.kind);
+        return { id: board.id, name: board.name, periods };
+      }),
+    };
+  }
+
+  private checkDay(day: unknown): void {
+    if (day !== undefined && (typeof day !== "string" || !DAY.test(day))) throw new HostError("INVALID_PARAMS", "params.day must be a day as YYYY-MM-DD");
   }
 
   /** A board of the manifest by its id, or INVALID_PARAMS. */

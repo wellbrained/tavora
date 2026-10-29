@@ -610,31 +610,43 @@ export interface LeaderboardStatus {
 }
 
 /**
- * One finished game on a `streak` board. `id`: a UUID you make once per game, so sending it again changes nothing.
- * `at`: when it ended, in milliseconds since 1970 (Date.now()). `day`: on a `daily` board, the local calendar day the
- * game belongs to (YYYY-MM-DD); left out on other boards.
+ * One finished game on a `streak` or `rate` board. `id`: a UUID you make once per game, so sending it again changes
+ * nothing. `at`: when it ended, in milliseconds since 1970 (Date.now()). `day`: the local calendar day the game
+ * belongs to (YYYY-MM-DD), which decides the day, week, month and year it counts for; the SDK fills it in from `at`
+ * when you leave it out. On a `daily` board it is the puzzle's day, so give it yourself there.
  */
-export interface LeaderboardStreakResult {
+export interface LeaderboardOutcomeResult {
   id: string;
   outcome: "won" | "lost";
   at: number;
   day?: string;
 }
 
-/** One finished game on a `score` board: its number (points, or a time in milliseconds on a board where low wins). */
-export interface LeaderboardScoreResult {
+/**
+ * One finished game on a `score`, `total` or `average` board: its number (points, a time in seconds on a board where
+ * low wins, 1 to count the game on a total board). `id`, `at` and `day` as on LeaderboardOutcomeResult.
+ */
+export interface LeaderboardValueResult {
   id: string;
   value: number;
   at: number;
+  day?: string;
 }
 
-export type LeaderboardResult = LeaderboardStreakResult | LeaderboardScoreResult;
+export type LeaderboardResult = LeaderboardOutcomeResult | LeaderboardValueResult;
+
+/**
+ * A stretch of time a board can be read for: one local day, one week (Monday to Sunday), one calendar month, one
+ * year, or everything (`all`, the default). A result counts for the periods its `day` is in. Streak boards have no
+ * `day` period.
+ */
+export type LeaderboardPeriod = "day" | "week" | "month" | "year" | "all";
 
 /**
  * Why the service refused one result; a refused result never counts, so don't send it again. `invalid`: its shape is
- * off. `time`: `at` is in the future or more than a year ago. `archive`: a daily result that ended outside its day
- * (an archive replay). `day-taken`: the board already has another result for that day. `full`: this account holds
- * too many results for this module.
+ * off. `time`: `at` is in the future or more than a year ago. `archive`: the game ended outside its `day` (an archive
+ * replay, or a day made up later). `day-taken`: a daily board already has another result for that day. `full`: this
+ * account holds too many results for this module.
  */
 export type LeaderboardRejection = "invalid" | "time" | "archive" | "day-taken" | "full";
 
@@ -644,23 +656,47 @@ export interface LeaderboardSubmitResult {
   rejected: { id: string; reason: LeaderboardRejection }[];
 }
 
-/**
- * One line of a board. `name` is the user's Tavora name, or a neutral one such as "User · K7" when their name may not
- * be shown. `self` marks the user's own line; nothing else about who it is reaches the module. Streak boards give
- * `current` and `best`, score boards `value` (the user's best).
- */
 /** What leaderboards.top gives: the lines, best first. An object, so it can tell more later without breaking modules. */
 export interface LeaderboardTop {
   rows: LeaderboardRow[];
 }
 
-export interface LeaderboardRow {
-  rank: number;
+/**
+ * One line of a board. `name` is the user's Tavora name, or a neutral one such as "User · K7" when their name may not
+ * be shown. `self` marks the user's own line; nothing else about who it is reaches the module. The numbers depend on
+ * the board's kind (LeaderboardStanding).
+ */
+export interface LeaderboardRow extends LeaderboardStanding {
   name: string;
   self: boolean;
+}
+
+/**
+ * Where a user stands on a board in one period. `rank`: 1 is best; equal lines share a rank. `of`: how many users the
+ * board has in that period. Streak boards give `current` and `best`; score boards `value` (the best); total boards
+ * `value` (the sum) and `games`; average boards `value` (the mean) and `games`; rate boards `value` (the share of
+ * games won, 0 to 100), `games` and `wins`.
+ */
+export interface LeaderboardStanding {
+  rank: number;
+  of: number;
   current?: number;
   best?: number;
   value?: number;
+  games?: number;
+  wins?: number;
+}
+
+/** What leaderboards.mine gives: the user's own standing on each board of the manifest, in every period. */
+export interface LeaderboardMine {
+  boards: LeaderboardMineBoard[];
+}
+
+/** One board of the manifest (`id` and its `name` in Tavora's language), with the user's standing per period, or null where they have none. */
+export interface LeaderboardMineBoard {
+  id: string;
+  name: string;
+  periods: Record<LeaderboardPeriod, LeaderboardStanding | null>;
 }
 
 /**
@@ -789,10 +825,16 @@ export interface Methods {
   "leaderboards.submit": { params: { board: string; results: LeaderboardResult[] }; result: LeaderboardSubmitResult };
   /**
    * The best lines of one of the manifest's boards, `limit` of them (default 20, at most LIMITS.maxLeaderboardRows). When
-   * the user is on the board but further down, their own line comes last. `day`: the user's local day (YYYY-MM-DD) on a
-   * daily board, so a streak whose last day was before yesterday shows as ended (capability `leaderboards`). Tavora 0.21.92 and newer.
+   * the user is on the board but further down, their own line comes last. `period`: which stretch of time (default
+   * `all`); `day`: the user's local day (YYYY-MM-DD), which picks the period that holds it (default today) and, on a
+   * daily board, shows a streak whose last day was before yesterday as ended (capability `leaderboards`). Tavora 0.21.92 and newer, `period` 0.21.97.
    */
-  "leaderboards.top": { params: { board: string; day?: string; limit?: number }; result: LeaderboardTop };
+  "leaderboards.top": { params: { board: string; period?: LeaderboardPeriod; day?: string; limit?: number }; result: LeaderboardTop };
+  /**
+   * The user's own standing on every board of the manifest, in every period, in one call; `day` as on leaderboards.top
+   * (capability `leaderboards`). Signed out or not shown, every standing is null. Tavora 0.21.97 and newer.
+   */
+  "leaderboards.mine": { params: { day?: string }; result: LeaderboardMine };
   /** Reads one account's usage (capability `aiUsage`). */
   "aiUsage.read": { params: { accountId: string }; result: AiUsageReading };
   /** What this PC is: processor, memory, graphics cards and drives. Read once and kept (capability `systemInfo`). Tavora 0.21.1 and newer. */

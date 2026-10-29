@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { Camera, Check, UserRound, X } from "@lucide/vue";
+import { Camera, Check, EyeOff, UserRound, X } from "@lucide/vue";
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui";
 import { computed, nextTick, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { cn } from "@/lib/utils";
-import { act, openSettings, state, useFloating } from "../../host";
-import { t } from "../../i18n";
+import type { ProfileRankBoard, ProfileRankPeriod, ProfileRankStanding, ProfileRanksView } from "../../../shared/host-api";
+import { intlLocale } from "../../../shared/i18n";
+import { act, api, openSettings, state, useFloating } from "../../host";
+import { language, t } from "../../i18n";
 import ImageCropDialog from "../ImageCropDialog.vue";
 import { autoInitials } from "./initials";
 import { readPicture } from "./picture";
@@ -39,6 +42,50 @@ const initialsWrap = ref<HTMLElement | null>(null);
 /** The picked image waiting in the crop dialog. */
 const cropping = ref<string | null>(null);
 
+/** Where the user stands on the boards they are shown on; null until loaded. All periods come at once. */
+const ranks = ref<ProfileRanksView | null>(null);
+const ranksLoading = ref(false);
+/** The periods to pick, with their names' keys. */
+const PERIODS = [
+  { value: "day", label: "profile.ranks.period.day" },
+  { value: "week", label: "profile.ranks.period.week" },
+  { value: "month", label: "profile.ranks.period.month" },
+  { value: "year", label: "profile.ranks.period.year" },
+  { value: "all", label: "profile.ranks.period.all" },
+] as const satisfies readonly { value: ProfileRankPeriod; label: string }[];
+
+async function loadRanks() {
+  if (profile.value.ranks.hidden || ranksLoading.value) return;
+  ranksLoading.value = true;
+  // A failed call reads as offline, so the card never stays on Loading.
+  ranks.value = (await api.profileRanks().catch(() => null)) ?? { online: false, signedIn: true, modules: [] };
+  ranksLoading.value = false;
+}
+
+function setRanksHidden(hidden: boolean) {
+  void act({ type: "set-profile-ranks", hidden }).then(() => { if (!hidden) void loadRanks(); });
+}
+
+const number = computed(() => new Intl.NumberFormat(intlLocale(language.value), { maximumFractionDigits: 2 }));
+
+/** The standing in the chosen period, or null where the user has none (a streak board has no "day"). */
+function standingOf(board: ProfileRankBoard): ProfileRankStanding | null {
+  return board.kind === "streak" && profile.value.ranks.period === "day" ? null : board.periods[profile.value.ranks.period];
+}
+
+/** The numbers of a standing in words: a streak's best (and the current one on "All time"), a rate with its games, a value with its unit. */
+function numbersOf(board: ProfileRankBoard, standing: ProfileRankStanding): string {
+  if (board.kind === "streak") {
+    const best = standing.best ?? 0;
+    const text = t(board.daily ? "profile.ranks.days" : "profile.ranks.wins", { count: best });
+    const current = standing.current ?? 0;
+    return profile.value.ranks.period === "all" && current > 0 ? `${text} (${t("profile.ranks.now", { count: current })})` : text;
+  }
+  const value = number.value.format(standing.value ?? 0);
+  if (board.kind === "rate") return `${value} % ${t("profile.ranks.games", { wins: standing.wins ?? 0, games: standing.games ?? 0 })}`;
+  return board.unit ? `${value} ${board.unit}` : value;
+}
+
 const track = useFloating();
 function onOpenChange(value: boolean) {
   // Closing keeps what was typed, like leaving a field does.
@@ -49,6 +96,7 @@ function onOpenChange(value: boolean) {
     draft.value = { name: profile.value.name, initials: profile.value.initials };
     editInitials.value = Boolean(profile.value.initials.trim());
     saved.value = false;
+    void loadRanks();
   }
 }
 
@@ -230,6 +278,63 @@ function closeCrop() {
             <span class="text-muted-foreground ml-auto flex items-center gap-1 text-xs" role="status" data-testid="profile-status">
               <template v-if="saved && !dirty"><Check class="size-3.5" :stroke-width="2" /> {{ t("profile.saved") }}</template>
             </span>
+          </div>
+
+          <!-- Where the user stands on the boards they are shown on. -->
+          <div class="flex flex-col gap-2 border-t px-4 py-3" data-testid="profile-ranks">
+            <div v-if="profile.ranks.hidden" class="flex items-center gap-2 text-sm">
+              <span class="text-muted-foreground">{{ t("profile.ranks.hidden") }}</span>
+              <Button type="button" variant="link" size="sm" class="h-auto p-0" data-testid="profile-ranks-show" @click="setRanksHidden(false)">
+                {{ t("profile.ranks.show") }}
+              </Button>
+            </div>
+            <template v-else>
+              <div class="flex items-center gap-2">
+                <span class="text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium tracking-wide uppercase">{{ t("profile.ranks.title") }}</span>
+                <Select :model-value="profile.ranks.period" @update:model-value="act({ type: 'set-profile-ranks', period: $event as ProfileRankPeriod })">
+                  <SelectTrigger size="sm" class="h-7 w-32 text-xs" :aria-label="t('profile.ranks.period')" data-testid="profile-ranks-period">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="period in PERIODS" :key="period.value" :value="period.value">{{ t(period.label) }}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  class="size-7"
+                  :aria-label="t('profile.ranks.hide')"
+                  :title="t('profile.ranks.hide')"
+                  data-testid="profile-ranks-hide"
+                  @click="setRanksHidden(true)"
+                >
+                  <EyeOff :stroke-width="1.5" />
+                </Button>
+              </div>
+              <p v-if="!ranks" class="text-muted-foreground text-sm">{{ t("profile.ranks.loading") }}</p>
+              <p v-else-if="!ranks.signedIn" class="text-muted-foreground text-sm">{{ t("profile.ranks.signedOut") }}</p>
+              <p v-else-if="!ranks.online" class="text-muted-foreground text-sm">{{ t("profile.ranks.offline") }}</p>
+              <p v-else-if="ranks.modules.length === 0" class="text-muted-foreground text-sm">{{ t("profile.ranks.empty") }}</p>
+              <div v-else class="flex max-h-36 flex-col gap-2 overflow-y-auto">
+                <div v-for="module in ranks.modules" :key="module.id" class="flex flex-col gap-1">
+                  <span class="text-muted-foreground truncate text-xs">{{ module.name }}</span>
+                  <div
+                    v-for="board in module.boards"
+                    :key="board.id"
+                    class="flex items-baseline justify-between gap-3 text-sm"
+                    :data-testid="`profile-rank-${module.id}-${board.id}`"
+                  >
+                    <span class="min-w-0 truncate">{{ board.name }}</span>
+                    <span v-if="standingOf(board)" class="flex-none text-right">
+                      <span class="font-medium">{{ t("profile.ranks.rank", { rank: number.format(standingOf(board)!.rank), of: number.format(standingOf(board)!.of) }) }}</span>
+                      <span class="text-muted-foreground block text-xs">{{ numbersOf(board, standingOf(board)!) }}</span>
+                    </span>
+                    <span v-else class="text-muted-foreground flex-none text-xs">{{ t("profile.ranks.none") }}</span>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
 
           <!-- Footer: the way to the account behind the profile. -->
