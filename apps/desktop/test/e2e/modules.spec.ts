@@ -201,7 +201,7 @@ test("a signed zip installs from Settings, updates only from its publisher, and 
   await writeFile(copycat, (await packModule(path.join(source, "mini"), generateKeyPairSync("ed25519").privateKey)).zip);
   await pickFile(app, copycat);
   await fromMore(page, "install-module");
-  await expect(page.getByText("comes from a different publisher")).toBeVisible();
+  await expect(page.getByTestId("toast").getByText("comes from a different publisher")).toBeVisible();
   expect(await openedIn(app)).toBe(path.resolve(work));
 
   // Only a zip that installed moves it.
