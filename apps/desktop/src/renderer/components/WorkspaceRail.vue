@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronLeft, ChevronRight, Folder, FolderOpen, Plus, Settings } from "@lucide/vue";
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, Settings } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
@@ -319,13 +319,6 @@ function dnd(target: Target, item: Dragged = { kind: target.kind, id: target.id 
 }
 
 const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: "root" } });
-
-// ── Sections ───────────────────────────────────────────────────────────
-// In the expanded rail the headers fold their list away for this session. The compact rail has no headers and shows
-// everything, and a drag opens a folded list again, so there is always somewhere to drop.
-const folded = reactive({ favorites: false, all: false });
-const showFavorites = computed(() => !expanded.value || !folded.favorites || dragged.value?.kind === "workspace");
-const showAll = computed(() => !expanded.value || !folded.all || dragged.value !== null);
 </script>
 
 <template>
@@ -370,55 +363,37 @@ const showAll = computed(() => !expanded.value || !folded.all || dragged.value !
     <div ref="listContent">
       <section
         v-if="favorites.length || dragged?.kind === 'workspace'"
-        :class="cn('flex flex-col', expanded ? 'gap-0.5' : 'mb-2 gap-1 border-b pt-1 pb-2', favoriteZoneActive && 'bg-primary/15')"
+        :class="cn('flex flex-col gap-1', favoriteZoneActive && 'bg-primary/15')"
         :aria-label="t('rail.favorites')"
         data-testid="rail-favorites"
         @dragover="onFavoritesOver"
         @dragleave="favoriteZoneActive = false"
         @drop="onFavoritesDrop"
       >
-        <button
-          v-if="expanded"
-          type="button"
-          class="rail-section"
-          :aria-expanded="showFavorites"
-          data-testid="rail-favorites-header"
-          @click="folded.favorites = !folded.favorites"
-        >
-          {{ t("rail.favorites") }}<ChevronDown :class="cn('size-3.5 transition-transform', !showFavorites && '-rotate-90')" :stroke-width="2" />
-        </button>
-        <template v-if="showFavorites">
-          <RailWorkspace
-            v-for="item in favorites"
-            :key="item.id"
-            :workspace="item"
-            :testid="`rail-favorite-${item.id}`"
-            :active="isActive(item.id)"
-            :expanded="expanded"
-            :shortcut="shortcutOf(item.id)"
-            :menu="menuFor(item.id, true)"
-            :hint="hintFor({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
-            v-on="dnd({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
-            @open="open(item.id)"
-          />
-          <p v-if="!favorites.length" class="text-muted-foreground border-input mx-2 rounded-lg border border-dashed p-2 text-center text-xs">
-            {{ t("rail.dropHere") }}
-          </p>
-        </template>
+        <h2 v-if="expanded" class="rail-section">{{ t("rail.favorites") }}</h2>
+        <div v-else class="rail-section" aria-hidden="true"><span class="rail-section-line" /></div>
+        <RailWorkspace
+          v-for="item in favorites"
+          :key="item.id"
+          :workspace="item"
+          :testid="`rail-favorite-${item.id}`"
+          :active="isActive(item.id)"
+          :expanded="expanded"
+          :shortcut="shortcutOf(item.id)"
+          :menu="menuFor(item.id, true)"
+          :hint="hintFor({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
+          v-on="dnd({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
+          @open="open(item.id)"
+        />
+        <p v-if="!favorites.length" class="text-muted-foreground border-input mx-2 rounded-lg border border-dashed p-2 text-center text-xs">
+          {{ t("rail.dropHere") }}
+        </p>
       </section>
 
-      <section :class="cn('flex flex-col', expanded ? 'gap-0.5' : 'gap-1 pt-1')" :aria-label="t('rail.all')">
-        <button
-          v-if="expanded"
-          type="button"
-          class="rail-section"
-          :aria-expanded="showAll"
-          data-testid="rail-all-header"
-          @click="folded.all = !folded.all"
-        >
-          {{ t("rail.games") }}<ChevronDown :class="cn('size-3.5 transition-transform', !showAll && '-rotate-90')" :stroke-width="2" />
-        </button>
-        <template v-for="entry in showAll ? rootEntries : []" :key="`${entry.kind}:${entry.id}`">
+      <section class="flex flex-col gap-1" :aria-label="t('rail.all')">
+        <h2 v-if="expanded" class="rail-section">{{ t("rail.games") }}</h2>
+        <div v-else class="rail-section" aria-hidden="true"><span class="rail-section-line" /></div>
+        <template v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`">
           <RailWorkspace
             v-if="entry.kind === 'workspace'"
             :workspace="workspace(entry.id)"
@@ -431,10 +406,11 @@ const showAll = computed(() => !expanded.value || !folded.all || dragged.value !
             v-on="dnd({ kind: 'workspace', id: entry.id, place: { list: 'root' } })"
             @open="open(entry.id)"
           />
-          <!-- Compact, an open folder and its workspaces share a quiet panel; expanded, they hang off a line. -->
+          <!-- Compact, an open folder and its workspaces share a quiet panel; expanded, they hang off a line. Both keep the
+               same heights, so nothing moves when the rail opens or closes. -->
           <div
             v-else
-            :class="cn(!expanded && openFolders.has(entry.id) && 'bg-foreground/[0.05] mx-1 rounded-xl pb-1')"
+            :class="cn(openFolders.has(entry.id) && 'pb-1', !expanded && openFolders.has(entry.id) && 'bg-foreground/[0.05] mx-1 rounded-xl')"
             :data-testid="`rail-folder-${entry.id}`"
           >
             <MenuArea :items="folderMenuFor(entry.id)" :title="folder(entry.id).name">
@@ -455,7 +431,7 @@ const showAll = computed(() => !expanded.value || !folded.all || dragged.value !
                   :class="
                     cn(
                       'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-                      expanded ? 'hover:bg-accent px-2 py-1' : 'justify-center p-1',
+                      expanded ? 'hover:bg-accent group-has-[[data-state=open]]:bg-accent px-2 py-[9px]' : 'justify-center p-1',
                       folderHint(entry.id) === 'into' && 'ring-primary ring-2 ring-inset',
                     )
                   "
@@ -465,27 +441,21 @@ const showAll = computed(() => !expanded.value || !folded.all || dragged.value !
                   :aria-label="t('rail.folder', { name: folder(entry.id).name })"
                   @click="toggleFolder(entry.id)"
                 >
-                  <template v-if="expanded">
-                    <span class="text-muted-foreground flex size-[30px] flex-none items-center justify-center">
-                      <component :is="openFolders.has(entry.id) ? FolderOpen : Folder" class="size-[18px]" :stroke-width="1.5" />
-                    </span>
-                    <span class="flex-1 truncate text-base font-medium">{{ folder(entry.id).name }}</span>
-                    <span class="text-muted-foreground mr-1 flex-none text-xs tabular-nums">{{ folderWorkspaces(entry.id).length }}</span>
-                  </template>
                   <FolderTile
-                    v-else
-                    style="zoom: 0.8334"
+                    :size="expanded ? 30 : 40"
                     :workspaces="folderWorkspaces(entry.id).slice(0, 4).map(workspace)"
                     :label="folder(entry.id).label"
                     :open="openFolders.has(entry.id)"
                   />
+                  <span v-if="expanded" class="flex-1 truncate text-base font-medium">{{ folder(entry.id).name }}</span>
                 </button>
                 </RailTooltip>
                 <div
                   v-if="expanded"
-                  class="bg-accent absolute right-4 opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100"
+                  class="bg-accent absolute right-4 rounded-md opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100"
                 >
                   <MenuButton
+                    class="hover:bg-foreground/10 data-[state=open]:bg-foreground/10 rounded-md"
                     :items="folderMenuFor(entry.id)"
                     :title="folder(entry.id).name"
                     :testid="`rail-folder-${entry.id}-menu`"
@@ -496,12 +466,12 @@ const showAll = computed(() => !expanded.value || !folded.all || dragged.value !
             </MenuArea>
             <div
               v-if="openFolders.has(entry.id)"
-              :class="cn('relative flex flex-col', expanded ? 'mt-0.5 ml-[31px] gap-0.5' : 'mt-1 gap-1 [&>div]:px-1')"
+              :class="cn('relative mt-1 flex flex-col gap-1', expanded ? 'ml-[22px]' : '[&>div]:px-1')"
               role="group"
               :aria-label="folder(entry.id).name"
               data-testid="folder-workspaces"
             >
-              <span v-if="expanded && folderWorkspaces(entry.id).length" class="bg-border absolute top-0 bottom-[17px] left-0 w-px" aria-hidden="true" />
+              <span v-if="expanded && folderWorkspaces(entry.id).length" class="bg-border absolute top-0 bottom-6 left-0 w-px" aria-hidden="true" />
               <RailWorkspace
                 v-for="id in folderWorkspaces(entry.id)"
                 :key="id"
@@ -528,7 +498,7 @@ const showAll = computed(() => !expanded.value || !folded.all || dragged.value !
               :class="
                 cn(
                   'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-                  expanded ? 'text-muted-foreground hover:text-foreground hover:bg-accent px-2 py-1' : 'justify-center p-1',
+                  expanded ? 'text-muted-foreground hover:text-foreground hover:bg-accent px-2 py-[9px]' : 'justify-center p-1',
                 )
               "
               data-rail-item
@@ -578,7 +548,7 @@ const showAll = computed(() => !expanded.value || !folded.all || dragged.value !
       <RailTooltip :text="t('rail.settings')" :disabled="expanded">
         <button
           type="button"
-          :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg p-1 group-data-[expanded=true]/rail:px-2 transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
+          :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg p-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[9px] transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
           data-rail-item
           data-testid="rail-settings"
           :aria-label="t('rail.settings')"
@@ -592,7 +562,7 @@ const showAll = computed(() => !expanded.value || !folded.all || dragged.value !
         </button>
       </RailTooltip>
     </div>
-    <div :class="cn('flex flex-col border-t', expanded ? 'py-2.5' : 'py-2')">
+    <div :class="'flex flex-col border-t py-2'">
       <ProfileMenu :expanded="expanded" />
     </div>
 

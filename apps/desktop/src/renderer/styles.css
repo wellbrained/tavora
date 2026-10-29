@@ -226,23 +226,25 @@ nav[data-expanded="true"] .rail-entry[data-active="true"]:hover .rail-pill {
 nav[data-expanded="true"] .footer-slot {
   width: 30px;
 }
-/* A section header in the expanded rail ("Favorites", "Games"): plain words with a fold arrow. */
+/* A section header ("Favorites", "Games"): plain words when expanded, a short line in the same space when compact,
+   so the items below keep their place when the rail opens or closes. */
 .rail-section {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  align-self: flex-start;
-  margin: 12px 12px 2px;
-  padding: 2px 4px;
-  border-radius: 6px;
+  align-items: flex-end;
+  height: 30px;
+  margin: 0;
+  padding: 0 16px 4px;
   color: var(--muted-foreground);
   font-size: var(--text-sm);
   line-height: var(--text-sm--line-height);
   font-weight: 500;
-  transition: color 150ms;
 }
-.rail-section:hover {
-  color: var(--foreground);
+.rail-section-line {
+  align-self: center;
+  flex: 1;
+  height: 1px;
+  margin-top: 4px;
+  background: var(--border);
 }
 nav[data-expanded="true"] .footer-tile {
   width: 30px;

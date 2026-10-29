@@ -40,13 +40,14 @@ defineOptions({ inheritAttrs: false });
     >
       <span class="rail-pill" aria-hidden="true" />
       <span v-if="nested && expanded" class="bg-border absolute top-1/2 left-0 h-px w-2" aria-hidden="true" />
+      <!-- Expanded, the row stays lit while its menu is open, so the ⋯ button never floats on its own. -->
       <RailTooltip :text="workspace.name" :disabled="expanded">
       <button
         type="button"
         :class="
           cn(
             'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-            expanded ? 'hover:bg-accent px-2 py-1' : 'justify-center p-1',
+            expanded ? cn('hover:bg-accent group-has-[[data-state=open]]:bg-accent', nested ? 'px-1.5 py-3' : 'px-2 py-[9px]') : 'justify-center p-1',
             expanded && active && 'bg-accent',
             hint === 'into' && 'ring-primary ring-2 ring-inset',
           )
@@ -64,9 +65,9 @@ defineOptions({ inheritAttrs: false });
       </RailTooltip>
       <div
         v-if="expanded"
-        class="bg-accent absolute right-4 opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100"
+        class="bg-accent absolute right-4 rounded-md opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100"
       >
-        <MenuButton :items="menu" :title="workspace.name" :testid="`${testid}-menu`" :label="t('rail.moreWorkspace', { name: workspace.name })" />
+        <MenuButton class="hover:bg-foreground/10 data-[state=open]:bg-foreground/10 rounded-md" :items="menu" :title="workspace.name" :testid="`${testid}-menu`" :label="t('rail.moreWorkspace', { name: workspace.name })" />
       </div>
     </div>
   </MenuArea>

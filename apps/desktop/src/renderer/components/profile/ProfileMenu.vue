@@ -164,7 +164,7 @@ function closeCrop() {
           cn(
             'group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2 data-[state=open]:text-foreground',
             // Open, the profile is a card of its own at the very bottom.
-            expanded && 'bg-card text-foreground hover:bg-accent data-[state=open]:bg-accent rounded-xl border p-2 text-left',
+            expanded && 'bg-card text-foreground hover:bg-accent data-[state=open]:bg-accent rounded-xl border p-[6px] text-left',
           )
         "
         data-rail-item
