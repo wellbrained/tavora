@@ -28,6 +28,30 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.22.2",
+    date: "2026-10-29",
+    title: "Safer links",
+    notes: [
+      "Links from modules and catalog pages no longer open addresses on your PC or local network.",
+      "One click lets a module do one thing that needs a click, as promised.",
+    ],
+    prs: [
+      { number: 477, title: "Desktop: links skip local addresses, and one press allows one call" },
+    ],
+    tags: ["modules", "privacy", "website"],
+  },
+  {
+    version: "0.22.1",
+    date: "2026-10-29",
+    title: "Catalog modules right after starting",
+    notes: [
+      "Modules from the catalog are known as catalog modules as soon as Tavora starts, not only after a module reload: Report, the module page and leaderboards work for them right away.",
+    ],
+    prs: [
+      { number: 474, title: "Desktop: find installed modules in one step at startup and on reload" },
+    ],
+  },
+  {
     version: "0.22.0",
     date: "2026-10-29",
     title: "A new Home, the Overlay page and Community modules",
