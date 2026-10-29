@@ -2,9 +2,10 @@
 // To-Dos: a toolbar, current objectives, then the user's own groups. Every
 // To-Dos panel of a workspace shows the same list; what is folded, hidden or being
 // edited is each panel's own state.
-import { ChevronsDownUp, ChevronsUpDown, ListChecks, SlidersHorizontal } from "@lucide/vue";
+import { ChevronsDownUp, ChevronsUpDown, SlidersHorizontal } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import type { MenuRequest, TavoraSDK } from "@tavora/sdk";
@@ -250,21 +251,11 @@ function dropTask() {
         <ChevronsUpDown v-if="allCollapsed" :stroke-width="1.5" />
         <ChevronsDownUp v-else :stroke-width="1.5" />
       </Button>
-      <!-- A toggle: pressed keeps finished to-dos in the list. In a small panel (over the game, say) only the icon stays, so the toolbar keeps its room for the count. -->
-      <Button
-        variant="ghost"
-        size="sm"
-        :class="finished === 'stay' && 'bg-accent text-accent-foreground'"
-        :aria-pressed="finished === 'stay'"
-        :aria-label="t('app.keepFinished')"
-        :title="t(finished === 'stay' ? 'app.keepFinished.on' : 'app.keepFinished.off')"
-        data-testid="finished-mode"
-        :data-mode="finished"
-        @click="toggleFinished"
-      >
-        <ListChecks :stroke-width="1.5" />
-        <span class="hidden @min-[20rem]:inline">{{ t("app.keepFinished") }}</span>
-      </Button>
+      <!-- A switch: on keeps finished to-dos in the list. In a small panel (over the game, say) only the switch stays, so the toolbar keeps its room for the count. -->
+      <label class="text-muted-foreground flex h-8 flex-none cursor-pointer items-center gap-2 rounded-md px-2 text-sm" :title="t(finished === 'stay' ? 'app.keepFinished.on' : 'app.keepFinished.off')">
+        <span :class="['hidden @min-[20rem]:inline', finished === 'stay' && 'text-foreground']">{{ t("app.keepFinished") }}</span>
+        <Switch :model-value="finished === 'stay'" :aria-label="t('app.keepFinished')" data-testid="finished-mode" :data-mode="finished" @update:model-value="toggleFinished" />
+      </label>
       <Button variant="ghost" size="icon-sm" :aria-label="t('live.menu')" :title="t('live.menu')" data-testid="live-settings" @click="openSettings">
         <SlidersHorizontal :stroke-width="1.5" />
       </Button>

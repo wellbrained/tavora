@@ -350,6 +350,19 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
       <span v-if="task.pinned && !compact" class="flex h-8 flex-none items-center">
         <Pin class="text-primary size-3.5" :stroke-width="1.5" :aria-label="t('task.pinned')" />
       </span>
+      <!-- Deleting in one click, shown on hover; the toast can put it back. -->
+      <span class="flex h-8 flex-none items-center">
+        <button
+          type="button"
+          class="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex size-7 items-center justify-center rounded-md opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"
+          :aria-label="t('task.deleteTitle', { title: task.title })"
+          :title="t('task.delete')"
+          data-testid="task-delete"
+          @click="remove"
+        >
+          <Trash2 class="size-4" :stroke-width="1.5" />
+        </button>
+      </span>
       <span class="flex h-8 flex-none items-center">
         <DropdownMenu v-model:open="menuOpen">
           <DropdownMenuTrigger
