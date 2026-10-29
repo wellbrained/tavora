@@ -68,24 +68,24 @@ const plan = await openDocument<Plan>(tavora, "plan", {
 });
 
 plan.onChange(({ data }) => render(data)); // your own edits, other panels' and rollbacks
-plan.onError(() => showToast("Couldn't save"));      // `plan.data` is back at the saved copy
+plan.onError((error, kind) => kind === "save" && showToast("Couldn't save")); // "change" and "reload" roll nothing back
 plan.update((draft) => void draft.items.push("Milk")); // changes `plan.data` now, saves soon
 await plan.flush();                                    // save right away
-if (plan.status === "error") showToast("Couldn't save"); // flush never throws: check the status
+if (plan.status === "error") showToast("Couldn't save"); // flush never throws; onError is the reliable signal
 ```
 
 An edit is a function that runs on the newest copy, so write it as "add this item", not "the list is now this". It runs again on a newer copy when another panel saved first, so make ids and timestamps outside of it (`const id = crypto.randomUUID()`, then `update((draft) => void draft.items.push({ id, ... }))`), or each run makes new ones. What you see is what is saved, until a conflict makes the store apply your edits again; after that `data` is the re-applied copy. An edit that throws on the newest copy is dropped and reported to `onError` (second argument `"change"`); the other edits stay.
 
 `status` is `"idle"`, `"dirty"` (edits not saved yet), `"saving"` or `"error"` (the last save failed, until the next edit). Calling `flush()` or the panel being hidden with nothing to save does not change it.
 
-When a save gives up (after 5 conflicting attempts, or any other error), `onError` fires with `"save"`, `data` goes back to the saved copy and an `onChange` event with `source: "rollback"` says so (an editor that ignores its own events must adopt it). Edits made while that save ran are kept and saved next. A failed reload of another panel's change goes to `onError` as `"reload"`; nothing is rolled back.
+When a save gives up (after 5 conflicting attempts, or any other error), `onError` fires with `"save"`, `data` goes back to the saved copy and an `onChange` event with `source: "rollback"` says so (an editor that ignores its own events must adopt it). Edits made while that save ran are kept and saved next. Because they are saved in the same run, `status` can already be `"idle"` again when `flush()` resolves, so listen to `onError` rather than only checking `status`. A failed reload of another panel's change goes to `onError` as `"reload"`; nothing is rolled back.
 
-When another panel deletes the document, `onChange` gets `deleted: true`. Your unsaved edits stay, but nothing is saved until your next `update` or `flush()`, which creates the document again; `dispose()` does not. A panel that must not bring it back can drop its edits instead.
+When another panel deletes the document, `onChange` gets `deleted: true`. Your unsaved edits stay, but nothing is saved until your next `update` or `flush()`, which creates the document again; `dispose()` does not. A `flush()` that was already running then resolves with the edits still waiting. A panel that must not bring it back can drop its edits instead.
 
 An editor that owns the whole document can pass `merge: "mine"`:
 
 - Its copy wins a conflict.
-- Another panel's change while it has unsaved edits only reaches `onChange`, with the other copy in `event.remote`; `await plan.adoptRemote()` drops your edits and shows that copy ("load theirs").
+- Another panel's change while it has unsaved edits only reaches `onChange`, with the other copy in `event.remote`; `await plan.adoptRemote()` drops your edits and shows that copy ("load theirs"); if your own save had already gone over it, theirs is saved back as a new revision.
 - A failed save does not roll back: your work stays on screen, `status` is `"error"`, `onError` fires, and the next `flush()` or `update` tries again.
 
 Unsaved edits are saved when the panel is hidden and on `dispose()`. A document is still one `documents.put`, so it stays under 4 MiB. In a Vue module, `useDocument` from `@tavora/official-ui` wraps this; an edit made before it has loaded is dropped if the panel closes first or the document can't be read (`error` says why).

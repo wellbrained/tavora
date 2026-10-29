@@ -70,11 +70,15 @@ export interface DocumentHandle<T> {
    */
   update(change: DocumentChangeFn<T>): void;
   /**
-   * Saves now and resolves once nothing is left to save (it also ends the pause after a delete elsewhere). Never
-   * rejects: a failed save goes to `onError` and `status`, so check `status` afterwards.
+   * Saves now and resolves once nothing is left to save, or saving was paused by a delete elsewhere that came in
+   * meanwhile (a flush also ends an earlier pause). Never rejects: a failed save goes to `onError` and `status`;
+   * `onError` is the reliable signal, as a later edit in the same run can leave `status` at "idle".
    */
   flush(): Promise<void>;
-  /** Drops unsaved edits and shows the other panel's last copy (or the stored one): the "load theirs" of a `"mine"` editor. */
+  /**
+   * Drops unsaved edits and shows the other panel's last copy (or the stored one): the "load theirs" of a `"mine"` editor.
+   * When this panel's own save already went over that copy, it is saved back as a new revision.
+   */
   adoptRemote(): Promise<void>;
   onChange(fn: (event: DocumentChangeEvent<T>) => void): () => void;
   onStatus(fn: (status: DocumentStatus) => void): () => void;
@@ -118,6 +122,8 @@ export async function openDocument<T>(sdk: TavoraSDK, id: string, options: OpenD
   let closed = false;
   /** The document was deleted elsewhere: pending edits wait for an explicit update or flush. */
   let paused = false;
+  /** A save already found the document deleted: its own `documents.changed` event brings nothing new. */
+  let skipDelete = false;
   let queue: Promise<unknown> = Promise.resolve();
 
   const changeListeners = new Set<(event: DocumentChangeEvent<T>) => void>();
@@ -192,7 +198,7 @@ export async function openDocument<T>(sdk: TavoraSDK, id: string, options: OpenD
           try {
             const saved = await sdk.documents.put({ id, title: title(next), data: next as JsonValue, ifRevision: base.revision });
             stored = { data: next, revision: saved.revision };
-            remote = undefined;
+            skipDelete = false;
             break;
           } catch (error) {
             if (!isConflict(error) || attempt >= MAX_SAVE_ATTEMPTS) throw error;
@@ -210,6 +216,7 @@ export async function openDocument<T>(sdk: TavoraSDK, id: string, options: OpenD
               }
               paused = true;
               deletedElsewhere = true;
+              skipDelete = true;
               break;
             }
             if (!mine) {
@@ -278,8 +285,13 @@ export async function openDocument<T>(sdk: TavoraSDK, id: string, options: OpenD
         const newest = await readNewest();
         const dirty = pending.length > 0;
         if (!newest.exists) {
-          // Already known to be missing (e.g. found out by a save): nothing new, and an explicit edit must not be paused again.
-          if (stored.revision === 0) return;
+          // The one delete a save already found: nothing new, and an explicit edit must not be paused again. Any other
+          // delete (the document came back and went again) pauses once more when there are edits.
+          if (skipDelete) {
+            skipDelete = false;
+            return;
+          }
+          if (stored.revision === 0 && !dirty) return;
           stored = { data: newest.data, revision: 0 };
           remote = undefined;
           if (dirty) {
@@ -301,6 +313,7 @@ export async function openDocument<T>(sdk: TavoraSDK, id: string, options: OpenD
         // Compare revisions for inequality: a document deleted and created again starts over at 1.
         if (!change.deleted && newest.revision === stored.revision) return;
         remote = newest.data;
+        skipDelete = false;
         if (!dirty || mine) {
           stored = { data: newest.data, revision: newest.revision };
           if (!dirty) data = stored.data;
@@ -357,9 +370,17 @@ export async function openDocument<T>(sdk: TavoraSDK, id: string, options: OpenD
       return enqueue(async () => {
         pending = [];
         paused = false;
-        data = remote ?? stored.data;
-        setStatus("idle");
+        const adopted = remote;
+        remote = undefined;
+        data = adopted ?? stored.data;
         emit("remote", false, stored.revision, data);
+        if (adopted !== undefined && adopted !== stored.data) {
+          // This panel's own save already went over the other copy: put theirs back as a new revision.
+          pending = [() => adopted];
+          await saveJob();
+          return;
+        }
+        setStatus("idle");
       });
     },
     onChange(fn) {

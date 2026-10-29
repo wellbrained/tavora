@@ -585,3 +585,97 @@ describe('merge: "mine" failures and remote copies', () => {
     expect(stored(a.host)).toEqual(["remote"]);
   });
 });
+
+function gateGet(sdk: { documents: unknown }) {
+  const target = sdk.documents as { get: (id: string) => Promise<unknown> };
+  const real = target.get;
+  let release!: () => void;
+  let entered!: () => void;
+  const open = new Promise<void>((resolve) => (release = resolve));
+  const reached = new Promise<void>((resolve) => (entered = resolve));
+  let gated = true;
+  target.get = async (id) => {
+    if (gated) {
+      gated = false;
+      entered();
+      await open;
+    }
+    return real(id);
+  };
+  return { reached, release };
+}
+
+describe("re-check fixes", () => {
+  it("notices a second delete after the document came back, instead of recreating it (1)", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    a.host.documents.put({ id: "plan", title: "Plan", data: { items: ["old"] } });
+    const docA = await openDocument(a.sdk, "plan", options({ debounceMs: 50 }));
+    const deletes: number[] = [];
+    docA.onChange((event) => {
+      if (event.deleted) deletes.push(event.revision);
+    });
+    docA.update(add("mine"));
+    await b.sdk.documents.delete("plan");
+    await vi.waitFor(() => expect(deletes).toHaveLength(1));
+    // The user edits again, which would bring the document back. Before that save, another panel creates and deletes it
+    // so fast that this panel's re-reads for both events find nothing.
+    docA.update(add("more"));
+    const gate = gateGet(a.sdk);
+    await b.sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["theirs"] }, ifRevision: 0 });
+    await gate.reached;
+    await b.sdk.documents.delete("plan");
+    gate.release();
+    await vi.waitFor(() => expect(deletes.length).toBeGreaterThanOrEqual(2));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(a.host.documents.get("plan")).toBeNull();
+    expect(docA.status).toBe("dirty");
+    expect(docA.data.items).toEqual(["mine", "more"]);
+
+    await docA.flush();
+    expect(stored(a.host)).toEqual(["mine", "more"]);
+  });
+
+  it("skips only the one delete a save already found (1)", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    a.host.documents.put({ id: "plan", title: "Plan", data: { items: ["old"] } });
+    const docA = await openDocument(a.sdk, "plan", options({ debounceMs: 60_000 }));
+    const deletes: boolean[] = [];
+    docA.onChange((event) => deletes.push(event.deleted));
+    docA.update(add("mine"));
+    const gate = gatePut(a.sdk);
+    const done = docA.flush();
+    await gate.reached;
+    await b.sdk.documents.delete("plan");
+    gate.release();
+    await done;
+    await tick();
+    expect(deletes.filter(Boolean)).toHaveLength(1);
+    docA.update(add("more"));
+    await tick();
+    expect(docA.status).toBe("dirty");
+    await docA.flush();
+    expect(stored(a.host)).toEqual(["mine", "more"]);
+  });
+
+  it("adoptRemote saves the other copy back when this panel's own save already went over it (2)", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    const docA = await openDocument(a.sdk, "plan", options({ merge: "mine", debounceMs: 20 }));
+    const events: DocumentChangeEvent<Plan>[] = [];
+    docA.onChange((event) => events.push(event));
+    docA.update(() => ({ items: ["local"] }));
+    await b.sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["remote"] }, ifRevision: 0 });
+    await vi.waitFor(() => expect(events.some((event) => event.remote?.items[0] === "remote")).toBe(true));
+    await vi.waitFor(() => expect(stored(a.host)).toEqual(["local"]));
+    expect(docA.revision).toBe(2);
+
+    await docA.adoptRemote();
+    expect(docA.data.items).toEqual(["remote"]);
+    expect(stored(a.host)).toEqual(["remote"]);
+    expect(docA.revision).toBe(3);
+    expect(docA.status).toBe("idle");
+    expect(events.at(-1)).toMatchObject({ source: "remote", data: { items: ["remote"] } });
+  });
+});
