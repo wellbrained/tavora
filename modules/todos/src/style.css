@@ -1,5 +1,12 @@
 @import "@tavora/official-ui/theme.css";
 
+/* The font and size to-dos show in; Settings > Panel changes them on the panel. */
+:root {
+  --todo-font: "Inter Variable", system-ui, sans-serif;
+  --todo-text: 14px;
+  --todo-leading: 20px;
+}
+
 /* Where a dragged to-do will land. */
 .drop-before::before,
 .drop-after::after {

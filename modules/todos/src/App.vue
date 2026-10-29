@@ -2,7 +2,7 @@
 // To-Dos: a toolbar, current objectives, then the user's own groups. Every
 // To-Dos panel of a workspace shows the same list; what is folded, hidden or being
 // edited is each panel's own state.
-import { ChevronsDownUp, ChevronsUpDown, SlidersHorizontal } from "@lucide/vue";
+import { ChevronsDownUp, ChevronsUpDown, Settings as SettingsIcon } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
@@ -13,9 +13,9 @@ import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch }
 import AddInput from "./AddInput.vue";
 import GroupSection, { type DropTarget } from "./GroupSection.vue";
 import { plural, setLanguage, t } from "./i18n";
-import { buildLiveState, LIVE_DEFAULTS, parseLook, throttle, type LiveLook, type LiveState } from "./live";
-import LiveSettings from "./LiveSettings.vue";
+import { buildLiveState, fontStack, LIVE_DEFAULTS, PANEL_LOOK_DEFAULTS, PANEL_SIZES, parseLook, parsePanelLook, throttle, type LiveLook, type LiveState, type PanelLook } from "./live";
 import { collapse, LINGER_MS, PANEL, UNDO_MS, type Draft, type FinishedMode } from "./panel";
+import Settings from "./Settings.vue";
 import { createTodoStore, type TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
 import { addGroup, addTask, childCount, deleteGroup, findTask, LIST_ID, MAX, moveTask, parseList, type Group, type TodoList } from "./todos";
@@ -28,6 +28,8 @@ interface PanelState {
   folded: string[];
   /** How the live view looks. */
   live: LiveLook;
+  /** How this panel shows to-dos. */
+  panel: PanelLook;
 }
 
 /** What versions before kept instead of `finished` and `live`. */
@@ -44,7 +46,10 @@ const finished = ref<FinishedMode>("stay");
 const collapsed = ref<string[]>([]);
 const folded = ref<string[]>([]);
 const look = shallowRef<LiveLook>({ ...LIVE_DEFAULTS });
-/** The panel is shown big as a dialog, with the live view's settings. */
+const panelLook = shallowRef<PanelLook>({ ...PANEL_LOOK_DEFAULTS });
+/** When the settings last saved something, for the settings' "Saved". */
+const savedAt = ref<number>();
+/** The panel is shown big as a dialog, with its settings. */
 const dialogOpen = ref(false);
 const editing = ref<string | null>(null);
 const draft = ref<Draft | null>(null);
@@ -89,17 +94,30 @@ function offerUndo(message: string, run: () => void) {
 
 function savePanel() {
   // Plain values only: a Vue proxy cannot be sent to the host.
-  void sdk.value?.panel.setState({ finished: finished.value, collapsed: [...collapsed.value], folded: [...folded.value], live: { ...look.value } } satisfies PanelState);
+  void sdk.value?.panel.setState({ finished: finished.value, collapsed: [...collapsed.value], folded: [...folded.value], live: { ...look.value }, panel: { ...panelLook.value } } satisfies PanelState);
 }
 
 function setLook(next: LiveLook) {
   look.value = next;
   savePanel();
+  savedAt.value = Date.now();
 }
 
-/** Opens the live view's settings: the panel shows them big, in a dialog over the app. */
+function setPanelLook(next: PanelLook) {
+  panelLook.value = next;
+  savePanel();
+  savedAt.value = Date.now();
+}
+
+/** The font and text size the panel shows to-dos in (TaskRow reads them). */
+const panelStyle = computed(() => {
+  const [size, leading] = PANEL_SIZES[panelLook.value.size];
+  return { "--todo-font": fontStack(panelLook.value.font), "--todo-text": `${size}px`, "--todo-leading": `${leading}px` };
+});
+
+/** Opens the settings: the panel shows them big, in a dialog over the app, as every module's settings. */
 function openSettings() {
-  void sdk.value?.panel.openDialog({ width: 720, height: 600 }).catch((reason) => (error.value = errorMessage(reason)));
+  void sdk.value?.panel.openDialog({ width: 960, height: 680 }).catch((reason) => (error.value = errorMessage(reason)));
 }
 
 function onKey(event: KeyboardEvent) {
@@ -153,6 +171,7 @@ onMounted(async () => {
     collapsed.value = ids(state?.collapsed);
     folded.value = ids(state?.folded);
     look.value = parseLook(state?.live ?? { background: state?.liveBackground, padding: state?.livePadding });
+    panelLook.value = parsePanelLook(state?.panel);
     cleanup.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
     addEventListener("keydown", onKey);
     cleanup.push(() => removeEventListener("keydown", onKey));
@@ -225,8 +244,8 @@ function dropTask() {
   <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
-  <LiveSettings v-else-if="dialogOpen" :look="look" :state="liveState" @update:look="setLook" />
-  <div v-else class="@container relative flex h-full min-h-0 flex-col" data-testid="todos-app">
+  <Settings v-else-if="dialogOpen" :look="look" :panel-look="panelLook" :state="liveState" :saved-at="savedAt" @update:look="setLook" @update:panel-look="setPanelLook" />
+  <div v-else class="@container relative flex h-full min-h-0 flex-col" :style="panelStyle" data-testid="todos-app">
     <header
       class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2"
       role="toolbar"
@@ -256,8 +275,8 @@ function dropTask() {
         <span :class="['hidden @min-[20rem]:inline', finished === 'stay' && 'text-foreground']">{{ t("app.keepFinished") }}</span>
         <Switch :model-value="finished === 'stay'" :aria-label="t('app.keepFinished')" data-testid="finished-mode" :data-mode="finished" @update:model-value="toggleFinished" />
       </label>
-      <Button variant="ghost" size="icon-sm" :aria-label="t('live.menu')" :title="t('live.menu')" data-testid="live-settings" @click="openSettings">
-        <SlidersHorizontal :stroke-width="1.5" />
+      <Button variant="ghost" size="icon-sm" :aria-label="t('settings.title')" :title="t('settings.title')" data-testid="live-settings" @click="openSettings">
+        <SettingsIcon :stroke-width="1.5" />
       </Button>
     </header>
 
@@ -317,8 +336,6 @@ function dropTask() {
       />
     </div>
 
-    <Toaster />
-
     <ConfirmDialog
       v-if="pendingGroup"
       :title="t('app.deleteGroupTitle', { name: pendingGroup.name })"
@@ -329,4 +346,6 @@ function dropTask() {
       @cancel="pendingGroup = null"
     />
   </div>
+  <!-- Outside the views, so Undo toasts show in the settings too. -->
+  <Toaster />
 </template>

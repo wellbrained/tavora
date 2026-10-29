@@ -28,6 +28,8 @@ const forwardedProps = useForwardProps(delegatedProps)
       </SelectItemIndicator>
     </span>
 
+    <!-- An optional small picture before the name, such as how a style looks; only the name shows in the closed select. -->
+    <slot name="thumb" />
     <SelectItemText>
       <slot />
     </SelectItemText>

@@ -4,8 +4,8 @@
 import { computed, ref } from "vue"
 
 const texts = {
-  en: { close: "Close", dismiss: "Dismiss", customColor: "Custom colour", cancel: "Cancel", zoomIn: "Zoom in", zoomOut: "Zoom out", zoomFit: "Fit to view", zoomHint: "Ctrl + scroll to zoom", showMore: "Show more", showLess: "Show less" },
-  de: { close: "Schließen", dismiss: "Ausblenden", customColor: "Eigene Farbe", cancel: "Abbrechen", zoomIn: "Vergrößern", zoomOut: "Verkleinern", zoomFit: "Alles zeigen", zoomHint: "Strg + Mausrad zum Zoomen", showMore: "Mehr anzeigen", showLess: "Weniger anzeigen" },
+  en: { close: "Close", dismiss: "Dismiss", customColor: "Custom colour", cancel: "Cancel", zoomIn: "Zoom in", zoomOut: "Zoom out", zoomFit: "Fit to view", zoomHint: "Ctrl + scroll to zoom", showMore: "Show more", showLess: "Show less", resetPage: "Reset this page", pageReset: "Page reset", undo: "Undo", autosave: "Changes save as you make them.", saved: "Saved", backdrop: "Preview background", backdropGame: "Game", backdropLight: "Light", backdropDark: "Dark" },
+  de: { close: "Schließen", dismiss: "Ausblenden", customColor: "Eigene Farbe", cancel: "Abbrechen", zoomIn: "Vergrößern", zoomOut: "Verkleinern", zoomFit: "Alles zeigen", zoomHint: "Strg + Mausrad zum Zoomen", showMore: "Mehr anzeigen", showLess: "Weniger anzeigen", resetPage: "Diese Seite zurücksetzen", pageReset: "Seite zurückgesetzt", undo: "Rückgängig", autosave: "Änderungen speichern sich sofort.", saved: "Gespeichert", backdrop: "Hintergrund der Vorschau", backdropGame: "Spiel", backdropLight: "Hell", backdropDark: "Dunkel" },
 }
 
 const language = ref<keyof typeof texts>("en")

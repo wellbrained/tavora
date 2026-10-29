@@ -22,6 +22,7 @@ export const SECTIONS = [
   { id: "choices", group: "inputs", title: "Choices", keywords: "checkbox switch radio segmented select picker dropdown combobox autocomplete search slider" },
   { id: "ratings", group: "inputs", title: "Star rating", keywords: "stars rating review score" },
   { id: "colors", group: "inputs", title: "Colour picker", keywords: "color colour swatch custom palette" },
+  { id: "toggles", group: "inputs", title: "Toggle buttons", keywords: "toggle pressed bold italic underline format group style tiles looks pictures" },
   { id: "status", group: "display", title: "Badges and status", keywords: "badge chip tag status dot kbd shortcut" },
   { id: "progress", group: "display", title: "Progress, charts and loading", keywords: "progress spinner skeleton loading sparkline chart graph line" },
   { id: "notices", group: "display", title: "Notices", keywords: "notice alert callout info warning error success inline message" },
@@ -31,6 +32,7 @@ export const SECTIONS = [
   { id: "tabs", group: "display", title: "Tabs", keywords: "tabs views" },
   { id: "navlist", group: "display", title: "Side navigation", keywords: "nav list categories settings sidebar sections menu" },
   { id: "lists", group: "display", title: "Lists and rows", keywords: "list row hover selected settings divider card" },
+  { id: "settings", group: "display", title: "Module settings", keywords: "settings dialog overlay preview page reset saved control column row" },
   { id: "zoom", group: "canvas", title: "Pan and zoom", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport" },
 ] as const;
 export type SectionId = (typeof SECTIONS)[number]["id"];

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // A row of colour swatches to pick from; arrow keys move between them. With `allowCustom`, a "+"
-// swatch at the end opens the system colour dialog for any other colour.
+// swatch at the end opens the system colour dialog for any other colour. With `columns`, the swatches
+// line up in at most that many columns and wrap onto rows that start under the first swatch.
 import { Check, Plus } from "@lucide/vue";
 import { RadioGroupItem, RadioGroupRoot } from "reka-ui";
 import { computed, type HTMLAttributes } from "vue";
@@ -14,6 +15,8 @@ const props = defineProps<{
   /** The group's name for screen readers. */
   label: string;
   allowCustom?: boolean;
+  /** At most this many swatches per row, such as 7 in a settings row; without it they flow freely. */
+  columns?: number;
   disabled?: boolean;
   class?: HTMLAttributes["class"];
 }>();
@@ -29,12 +32,14 @@ function isLight(hex: string): boolean {
   return ((value >> 16) * 299 + ((value >> 8) & 255) * 587 + (value & 255) * 114) / 1000 > 140;
 }
 /** The native colour input only takes #rrggbb. */
+const count = computed(() => props.colors.length + (isCustom.value ? 1 : 0) + (props.allowCustom ? 1 : 0));
+const grid = computed(() => (props.columns ? { gridTemplateColumns: `repeat(${Math.min(props.columns, count.value)}, 1.5rem)` } : undefined));
 const hexForInput = computed(() => (/^#[0-9a-f]{6}$/i.test(model.value) ? model.value : "#000000"));
 const swatch = "grid size-6 flex-none cursor-pointer place-items-center rounded-full border outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 data-[state=checked]:ring-2 data-[state=checked]:ring-ring data-[state=checked]:ring-offset-1 data-[state=checked]:ring-offset-background";
 </script>
 
 <template>
-  <RadioGroupRoot v-model="model" orientation="horizontal" :aria-label="label" :disabled="disabled" data-slot="color-picker" :class="cn('flex flex-wrap items-center gap-1.5', props.class)">
+  <RadioGroupRoot v-model="model" orientation="horizontal" :aria-label="label" :disabled="disabled" data-slot="color-picker" :class="cn(columns ? 'grid gap-2' : 'flex flex-wrap items-center gap-1.5', props.class)" :style="grid">
     <RadioGroupItem
       v-for="(color, index) in colors"
       :key="color"

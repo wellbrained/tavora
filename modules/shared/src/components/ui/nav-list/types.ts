@@ -8,6 +8,9 @@ export interface NavItem {
   badge?: string | number;
   /** Draws the badge as a filled tag, for something that wants attention. */
   badgeAccent?: boolean;
+  /** A small dot at the end for something that is on or off, such as an overlay; `statusLabel` names it for screen readers. */
+  status?: "on" | "off";
+  statusLabel?: string;
   /** Shown on hover as a hint. */
   title?: string;
   testid?: string;

@@ -293,7 +293,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
               ref="titleInput"
               v-model="title"
               rows="1"
-              class="block field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent px-1 py-1.5 text-sm leading-5 break-words outline-none"
+              class="block field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent px-1 py-1.5 font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words outline-none"
               :aria-label="t('task.title')"
               data-testid="task-title-input"
               :maxlength="MAX.title"
@@ -303,7 +303,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
             <button
               v-else
               type="button"
-              class="block w-full cursor-text rounded-sm px-1 py-1.5 text-left text-sm leading-5 break-words"
+              class="block w-full cursor-text rounded-sm px-1 py-1.5 text-left font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words"
               :aria-label="t('task.edit', { title: task.title })"
               data-testid="task-open"
               @click="startEdit"

@@ -11,10 +11,12 @@ import { Label } from "@tavora/official-ui/components/ui/label";
 import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
-import { Slider } from "@tavora/official-ui/components/ui/slider";
+import { Slider, SliderField } from "@tavora/official-ui/components/ui/slider";
+import { StyleTiles } from "@tavora/official-ui/components/ui/style-tiles";
 import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
+import { Toggle, ToggleGroup } from "@tavora/official-ui/components/ui/toggle";
 import { ref } from "vue";
 import DemoSection from "../DemoSection.vue";
 import Specimen from "../Specimen.vue";
@@ -46,6 +48,16 @@ const LANGUAGE_OPTIONS = [
 const code = ref("");
 const GAMES = ["Path of Exile 2", "Diablo IV", "Final Fantasy XIV", "Guild Wars 2", "Satisfactory", "Stardew Valley", "Enshrouded"];
 const volume = ref([60]);
+const opacity = ref(70);
+const bold = ref(true);
+const italic = ref(false);
+const formats = ref<("bold" | "italic" | "underline")[]>(["bold"]);
+const style = ref<"card" | "bar" | "minimal">("card");
+const STYLES = [
+  { value: "card" as const, label: "Card" },
+  { value: "bar" as const, label: "Bar" },
+  { value: "minimal" as const, label: "Minimal" },
+];
 const range = ref([20, 80]);
 const stars = ref(0);
 const text = ref("");
@@ -201,6 +213,46 @@ const name = ref("Waystone");
             <Slider v-model="range" :max="100" :step="5" class="w-full max-w-64" aria-label="Level range" :disabled="off" />
             <span class="text-muted-foreground text-xs tabular-nums">{{ range[0] }}–{{ range[1] }}</span>
           </div>
+        </Specimen>
+        <Specimen label="Slider with its value (steps of 5)" column>
+          <SliderField v-model="opacity" :min="0" :max="100" :step="5" unit="%" label="Opacity" class="max-w-56" :disabled="off" />
+        </Specimen>
+        <Specimen label="Select with pictures" column>
+          <Select v-model="style" :disabled="off">
+            <SelectTrigger class="w-56" aria-label="Style"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="option in STYLES" :key="option.value" :value="option.value">
+                <template #thumb><span class="bg-muted relative h-5 w-8 flex-none rounded-sm border" aria-hidden="true"><span class="bg-muted-foreground/70 absolute inset-x-1 top-1.5 h-1 rounded-full" /></span>
+<DemoSection v-if="visible.has('toggles')" id="toggles" :title="title('toggles')" description="Buttons that stay pressed, such as Bold next to a text size. Tiles pick one look out of a few by its picture.">
+        <Specimen label="Toggles (separate buttons)">
+          <Toggle v-model="bold" label="Bold" class="font-bold" :disabled="off">B</Toggle>
+          <Toggle v-model="italic" label="Italic" class="font-serif italic" :disabled="off">I</Toggle>
+        </Specimen>
+        <Specimen label="Toggle group (joined)">
+          <ToggleGroup
+            v-model="formats"
+            label="Text style"
+            :disabled="off"
+            :options="[
+              { value: 'bold', label: 'Bold', text: 'B' },
+              { value: 'italic', label: 'Italic', text: 'I' },
+              { value: 'underline', label: 'Underline', text: 'U' },
+            ]"
+          />
+        </Specimen>
+        <Specimen label="Style tiles" column>
+          <StyleTiles v-model="style" label="Style" :options="STYLES" class="max-w-96" :disabled="off">
+            <template #tile="{ option }">
+              <span :class="['absolute inset-x-2 rounded-sm bg-black/70', option.value === 'card' ? 'top-2 bottom-2' : option.value === 'bar' ? 'bottom-2 h-2' : 'top-1/2 h-1 -translate-y-1/2 bg-black/40']" />
+            </template>
+          </StyleTiles>
+        </Specimen>
+      </DemoSection>
+</template>
+                {{ option.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </Specimen>
       </DemoSection>
 
