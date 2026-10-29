@@ -19,12 +19,20 @@ export const PANEL_COMPONENT = "panel";
 type GridNode = SerializedDockview["grid"]["root"];
 type GroupState = Exclude<GridNode["data"], GridNode[]>;
 
-export interface PanelInfo {
+/**
+ * The room a panel asks for: one minimum, or with `wide` one while it is taller than wide (or square) and
+ * one while it is wider than tall. Heights here never count the tab bar.
+ */
+export interface Sizes {
+  minWidth: number;
+  minHeight: number;
+  wide?: { minWidth: number; minHeight: number };
+}
+
+export interface PanelInfo extends Sizes {
   title: string;
   /** The module the panel belongs to, for its menu. */
   module?: { id: string; name: string };
-  minWidth: number;
-  minHeight: number;
 }
 
 /** Width of a panel card's border (dock.css), in px. */
@@ -34,41 +42,155 @@ const CARD_BORDER = 1;
  * The room a panel needs when its module is not there: Discord or AI Usage before they are installed, or a
  * development module that can't load right now. Enough for the note and the button its slot shows.
  */
-export const MISSING_MODULE_SIZE = { minWidth: 240, minHeight: 160 };
+export const MISSING_MODULE_SIZE: Sizes = { minWidth: 240, minHeight: 160 };
 
 /** What docking needs to know about a panel: its title, and the room its module (or panel type) asks for. */
 export function panelInfo(panel: PanelView | undefined, modules: readonly HostViewState["modules"][number][]): PanelInfo | undefined {
   if (!panel) return undefined;
   const module = modules.find((item) => item.id === panel.moduleId);
   // A panel type may need more (or less) room than its module.
-  const size = module?.panels.find((type) => type.id === panel.panelType) ?? module ?? MISSING_MODULE_SIZE;
+  const size: Sizes = module?.panels.find((type) => type.id === panel.panelType) ?? module ?? MISSING_MODULE_SIZE;
   // A panel card's 1 px border on each side comes out of the module's room.
+  const border = 2 * CARD_BORDER;
   return {
     title: panel.name,
-    minWidth: size.minWidth + 2 * CARD_BORDER,
-    minHeight: size.minHeight + 2 * CARD_BORDER,
+    minWidth: size.minWidth + border,
+    minHeight: size.minHeight + border,
+    ...(size.wide ? { wide: { minWidth: size.wide.minWidth + border, minHeight: size.wide.minHeight + border } } : {}),
     ...(module ? { module: { id: module.id, name: module.name } } : {}),
   };
 }
 
+// ── Tall and wide ──────────────────────────────────────────────────────
+//
+// A module may have a layout for panels wider than tall, with its own minimum. The sizes it allows are then no
+// longer one rectangle, so docking asks along one side at a time: a drag changes only one side of a panel, and
+// its size along the other tells which stretch is allowed.
+
+/** Sizes along one side of a panel that its module allows, in px; `max` is Infinity when there is no end. */
+export interface Span {
+  min: number;
+  max: number;
+}
+
+/** Sorts spans and joins those that touch; sizes need not be whole pixels, so one pixel apart touches. */
+function join(spans: Span[]): Span[] {
+  const joined: Span[] = [];
+  for (const span of spans.filter((item) => item.min <= item.max).sort((a, b) => a.min - b.min)) {
+    const last = joined.at(-1);
+    if (last && span.min <= last.max + 1) last.max = Math.max(last.max, span.max);
+    else joined.push({ ...span });
+  }
+  return joined;
+}
+
+/**
+ * The widths a panel allows while it is `height` tall; none when that is too short. With a wide layout: up to square for the tall one and
+ * beyond square for the wide one, each only where its minimum fits. Where the two don't touch, a drag stops at
+ * the square instead of going on into a layout too small.
+ */
+export function widthSpans(panel: Sizes, height: number): Span[] {
+  const { wide } = panel;
+  if (!wide) return height >= panel.minHeight ? [{ min: panel.minWidth, max: Infinity }] : [];
+  const spans: Span[] = [];
+  if (height >= panel.minHeight) spans.push({ min: panel.minWidth, max: height });
+  if (height >= wide.minHeight) spans.push({ min: Math.max(wide.minWidth, height + 1), max: Infinity });
+  return join(spans);
+}
+
+/** The heights a panel allows while it is `width` wide: the same rule as widthSpans, turned. */
+export function heightSpans(panel: Sizes, width: number): Span[] {
+  const { wide } = panel;
+  if (!wide) return width >= panel.minWidth ? [{ min: panel.minHeight, max: Infinity }] : [];
+  const spans: Span[] = [];
+  if (width >= wide.minWidth) spans.push({ min: wide.minHeight, max: width - 1 });
+  if (width >= panel.minWidth) spans.push({ min: Math.max(panel.minHeight, width), max: Infinity });
+  return join(spans);
+}
+
+/** What all of `lists` allow: the overlap of one span from each. */
+function overlap(lists: Span[][]): Span[] {
+  return lists.reduce<Span[]>(
+    (all, spans) => join(all.flatMap((a) => spans.map((b) => ({ min: Math.max(a.min, b.min), max: Math.min(a.max, b.max) })))),
+    [{ min: 0, max: Infinity }],
+  );
+}
+
+/** The smallest size along one side that some layout of the panel allows, whatever the other side is. */
+function loosest(panel: Sizes, horizontal: boolean): number {
+  const own = horizontal ? panel.minWidth : panel.minHeight;
+  if (!panel.wide) return own;
+  return Math.min(own, horizontal ? panel.wide.minWidth : panel.wide.minHeight);
+}
+
+/**
+ * The least room along one side (width when `horizontal`) that panels `ids` all allow while they are `across`
+ * along the other; Infinity when they allow nothing there. Heights count the tab bar, both `across` and the result.
+ */
+export function leastAlong(ids: readonly string[], horizontal: boolean, across: number, info: Info): number {
+  const sizes = ids.map(info).filter((item) => item !== undefined);
+  const spans = overlap(sizes.map((panel) => (horizontal ? widthSpans(panel, across - TAB_HEIGHT) : heightSpans(panel, across))));
+  const least = spans[0]?.min ?? Infinity;
+  return horizontal ? least : least + TAB_HEIGHT;
+}
+
+/** The sizes a group may be dragged to, as dockview takes them. */
+export interface Constraints {
+  minimumWidth: number;
+  maximumWidth: number;
+  minimumHeight: number;
+  maximumHeight: number;
+}
+
+/** A group's size and panels: enough of a dockview group to work out its constraints. */
+export interface GroupShape {
+  width: number;
+  height: number;
+  panels: readonly { id: string }[];
+}
+
+/**
+ * The sizes a group may be dragged to from where it is: along each side, the stretch its panels all allow at
+ * its size along the other that holds the current size (else the nearest one). A size no layout allows, as
+ * before the first layout, falls back to the smallest each side could ever be.
+ */
+export function groupConstraints(group: GroupShape, info: Info): Constraints {
+  const sizes = group.panels.map((panel) => info(panel.id)).filter((item) => item !== undefined);
+  const height = group.height - TAB_HEIGHT;
+  const nearest = (spans: Span[], size: number, horizontal: boolean): Span => {
+    const away = (span: Span) => Math.max(0, span.min - size, size - span.max);
+    const best = spans.reduce<Span | null>((found, span) => (!found || away(span) < away(found) ? span : found), null);
+    return best ?? { min: Math.max(0, ...sizes.map((panel) => loosest(panel, horizontal))), max: Infinity };
+  };
+  const width = nearest(overlap(sizes.map((panel) => widthSpans(panel, height))), group.width, true);
+  const tall = nearest(overlap(sizes.map((panel) => heightSpans(panel, group.width))), height, false);
+  const end = (max: number) => (max === Infinity ? Number.MAX_SAFE_INTEGER : max);
+  return { minimumWidth: width.min, maximumWidth: end(width.max), minimumHeight: tall.min + TAB_HEIGHT, maximumHeight: end(tall.max + TAB_HEIGHT) };
+}
+
 export function toDockview(layout: SavedLayout, info: (id: string) => PanelInfo | undefined): SerializedDockview {
   let groups = 0;
+  let focused: string | undefined;
   const panels: SerializedDockview["panels"] = {};
   const node = (value: LayoutNode): GridNode => {
     const visibility = value.hidden ? { visible: false } : {};
     if (value.kind === "split") return { type: "branch", size: value.size, ...visibility, data: value.children.map(node) };
     for (const id of value.panels) panels[id] = { id, contentComponent: PANEL_COMPONENT, title: info(id)?.title ?? "" };
-    return { type: "leaf", size: value.size, ...visibility, data: { id: `group-${++groups}`, views: value.panels, activeView: value.active ?? undefined } };
+    const id = `group-${++groups}`;
+    if (value.focused) focused = id;
+    return { type: "leaf", size: value.size, ...visibility, data: { id, views: value.panels, activeView: value.active ?? undefined } };
   };
   const row = layout.direction === "row";
+  const root = { ...node(layout.root), size: row ? layout.height : layout.width };
   return {
     grid: {
-      root: { ...node(layout.root), size: row ? layout.height : layout.width },
+      root,
       width: layout.width,
       height: layout.height,
       orientation: row ? Orientation.HORIZONTAL : Orientation.VERTICAL,
     },
     panels,
+    ...(focused ? { activeGroup: focused } : {}),
   };
 }
 
@@ -84,9 +206,10 @@ export function fromDockview(json: SerializedDockview, maximized: string | null 
       return children.length ? { kind: "split", size: value.size ?? 0, ...visibility, children } : null;
     }
     const group = value.data as GroupState;
-    if (!group.views.length) return { kind: "group", size: value.size ?? 0, ...visibility, panels: [], active: null };
+    const focused = json.activeGroup === group.id ? { focused: true as const } : {};
+    if (!group.views.length) return { kind: "group", size: value.size ?? 0, ...visibility, panels: [], active: null, ...focused };
     const active = group.activeView && group.views.includes(group.activeView) ? group.activeView : group.views[0]!;
-    return { kind: "group", size: value.size ?? 0, ...visibility, panels: [...group.views], active, ...(maximized && group.views.includes(maximized) ? { maximized: true } : {}) };
+    return { kind: "group", size: value.size ?? 0, ...visibility, panels: [...group.views], active, ...(maximized && group.views.includes(maximized) ? { maximized: true } : {}), ...focused };
   };
   const root = node(json.grid.root);
   if (!root) return null;
@@ -105,32 +228,27 @@ export function maximizedPanel(layout: SavedLayout | null): string | null {
   return layout ? find(layout.root) : null;
 }
 
-/** The smallest size a group can have: room for each of its panels. */
-export function groupMinimum(group: DockviewGroupPanel, info: (id: string) => PanelInfo | undefined) {
-  let width = 0;
-  let height = 0;
-  for (const panel of group.panels) {
-    const min = info(panel.id);
-    width = Math.max(width, min?.minWidth ?? 0);
-    height = Math.max(height, min?.minHeight ?? 0);
-  }
-  return { width, height: height + TAB_HEIGHT };
-}
-
 type Side = "right" | "below";
 type Info = (id: string) => PanelInfo | undefined;
 
-/** A group's minimum along one axis; its tab bar counts towards height. */
-function leafMinimum(views: string[], horizontal: boolean, info: Info) {
-  let min = 0;
-  for (const id of views) min = Math.max(min, (horizontal ? info(id)?.minWidth : info(id)?.minHeight) ?? 0);
+/** A group's minimum along one axis at its size along the other; its tab bar counts towards height. */
+function leafMinimum(api: DockviewApi, id: string, views: string[], horizontal: boolean, info: Info) {
+  if (!views.length) return horizontal ? 0 : TAB_HEIGHT;
+  const group = api.getGroup(id);
+  const least = group ? leastAlong(views, horizontal, horizontal ? group.height : group.width, info) : Infinity;
+  if (least !== Infinity) return least;
+  // A group not laid out yet, or one no layout fits right now: the smallest it could ever be.
+  const min = Math.max(0, ...views.map((view) => info(view)).filter((item) => item !== undefined).map((panel) => loosest(panel, horizontal)));
   return horizontal ? min : min + TAB_HEIGHT;
 }
 
 /** A node's minimum along one axis: children side by side add up, stacked ones take the largest. */
-function nodeMinimum(node: GridNode, along: Orientation, horizontal: boolean, info: Info): number {
-  if (node.type === "leaf") return leafMinimum((node.data as GroupState).views, horizontal, info);
-  const children = (node.data as GridNode[]).map((child) => nodeMinimum(child, flip(along), horizontal, info));
+function nodeMinimum(api: DockviewApi, node: GridNode, along: Orientation, horizontal: boolean, info: Info): number {
+  if (node.type === "leaf") {
+    const group = node.data as GroupState;
+    return leafMinimum(api, group.id, group.views, horizontal, info);
+  }
+  const children = (node.data as GridNode[]).map((child) => nodeMinimum(api, child, flip(along), horizontal, info));
   const sideBySide = (along === Orientation.HORIZONTAL) === horizontal;
   return sideBySide ? children.reduce((sum, value) => sum + value, 0) : Math.max(0, ...children);
 }
@@ -156,7 +274,7 @@ interface Line {
  */
 function lineOf(api: DockviewApi, group: DockviewGroupPanel, side: Side, info: Info): Line {
   const horizontal = side === "right";
-  const own = { total: horizontal ? group.width : group.height, mins: [leafMinimum(group.panels.map((panel) => panel.id), horizontal, info)], members: [group.id], index: 0 };
+  const own = { total: horizontal ? group.width : group.height, mins: [leafMinimum(api, group.id, group.panels.map((panel) => panel.id), horizontal, info)], members: [group.id], index: 0 };
   const json = api.toJSON();
   const find = (node: GridNode, along: Orientation): Line | null => {
     if (node.type === "leaf") return null;
@@ -164,7 +282,7 @@ function lineOf(api: DockviewApi, group: DockviewGroupPanel, side: Side, info: I
     const index = children.findIndex((child) => child.type === "leaf" && (child.data as GroupState).id === group.id);
     if (index >= 0) {
       if ((along === Orientation.HORIZONTAL) !== horizontal) return own;
-      const mins = children.map((child) => nodeMinimum(child, flip(along), horizontal, info));
+      const mins = children.map((child) => nodeMinimum(api, child, flip(along), horizontal, info));
       const members = children.map((child) => (child.type === "leaf" ? (child.data as GroupState).id : null));
       // Sizes are not always reported, so the line's room is measured from the group.
       const total = children.reduce((sum, child) => sum + (child.size ?? 0), 0) || own.total;
@@ -179,73 +297,17 @@ function lineOf(api: DockviewApi, group: DockviewGroupPanel, side: Side, info: I
   return find(json.grid.root, json.grid.orientation) ?? own;
 }
 
-/** Shares `total` evenly, but never below a member's minimum. */
-export function shareOut(total: number, mins: number[]): number[] {
-  const sizes = mins.map(() => 0);
-  let left = new Set(mins.keys());
-  let room = total;
-  for (;;) {
-    const each = room / left.size;
-    const tight = [...left].filter((i) => mins[i]! > each);
-    if (!tight.length) {
-      for (const i of left) sizes[i] = each;
-      return sizes;
-    }
-    for (const i of tight) {
-      sizes[i] = mins[i]!;
-      room -= mins[i]!;
-      left.delete(i);
-    }
-    if (!left.size) return sizes;
-  }
-}
-
 /**
- * Docks a new panel: into an empty slot if there is one (`slot` if it is
- * still empty, else the active group's, else the first), else beside the
- * active group if its row has room for everyone's minimum width, else below
- * it, else beside or below the roomiest other group, else as a tab in the
- * active group. The row or column it joins is then shared out evenly.
+ * Docks a new panel where the user is working, without moving anything else: into an empty slot if there is
+ * one (`slot` if it is still empty, else the active group's, else the first), else as a tab in the active
+ * group (after a restart the one the user last worked in, else the biggest). A group too small for the new
+ * panel then grows only as far as its constraints make it.
  */
 export function placePanel(api: DockviewApi, id: string, info: Info, slot?: string | null): void {
-  const panel = info(id)!;
-  const base = { id, component: PANEL_COMPONENT, title: panel.title };
-  const active = api.activeGroup ?? api.groups[0];
-  if (!active) {
-    api.addPanel(base);
-    return;
-  }
-  const empty = [slot ? api.getGroup(slot) : undefined, active, ...api.groups].find((group) => group && group.panels.length === 0);
-  if (empty) {
-    api.addPanel({ ...base, position: { referenceGroup: empty.id, direction: "within" } });
-    return;
-  }
-  const others = api.groups.filter((group) => group !== active).sort((a, b) => b.width * b.height - a.width * a.height);
-  for (const group of [active, ...others]) {
-    for (const side of ["right", "below"] as const) {
-      const horizontal = side === "right";
-      const line = lineOf(api, group, side, info);
-      const min = horizontal ? panel.minWidth : panel.minHeight + TAB_HEIGHT;
-      const across = horizontal ? group.height >= panel.minHeight + TAB_HEIGHT : group.width >= panel.minWidth;
-      const needed = line.mins.reduce((sum, value) => sum + value, min);
-      if (!across || needed > line.total) continue;
-      const added = api.addPanel({ ...base, position: { referenceGroup: group, direction: side } });
-      const fresh = added.group;
-      const minimum = groupMinimum(fresh, info);
-      fresh.api.setConstraints({ minimumWidth: minimum.width, minimumHeight: minimum.height });
-      const members = [...line.members];
-      const mins = [...line.mins];
-      members.splice(line.index + 1, 0, fresh.id);
-      mins.splice(line.index + 1, 0, min);
-      const sizes = shareOut(line.total, mins);
-      members.forEach((member, i) => {
-        const target = member ? api.getGroup(member) : undefined;
-        target?.api.setSize(horizontal ? { width: sizes[i]! } : { height: sizes[i]! });
-      });
-      return;
-    }
-  }
-  api.addPanel({ ...base, position: { referenceGroup: active, direction: "within" } });
+  const base = { id, component: PANEL_COMPONENT, title: info(id)?.title ?? "" };
+  const empty = [slot ? api.getGroup(slot) : undefined, api.activeGroup, ...api.groups].find((group) => group && group.panels.length === 0);
+  const target = empty ?? api.activeGroup ?? [...api.groups].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+  api.addPanel(target ? { ...base, position: { referenceGroup: target.id, direction: "within" } } : base);
 }
 
 /**
@@ -267,21 +329,15 @@ export function placeTab(api: DockviewApi, id: string, info: Info, from: string,
   return true;
 }
 
-/** Whether the row or column beside `group` has room for one more of size `min`. */
-function fits(
-  api: DockviewApi,
-  group: DockviewGroupPanel,
-  side: Side,
-  min: { width: number; height: number },
-  info: Info,
-  leaving?: string,
-) {
+/** Whether the row or column beside `group` has room for one more group holding panels `ids`. */
+function fits(api: DockviewApi, group: DockviewGroupPanel, side: Side, ids: readonly string[], info: Info, leaving?: string) {
   const horizontal = side === "right";
   const line = lineOf(api, group, side, info);
-  const across = horizontal ? group.height >= min.height : group.width >= min.width;
+  // The new group shares the target's size across the line.
+  const need = leastAlong(ids, horizontal, horizontal ? group.height : group.width, info);
   // A group that empties by the move gives its room back to the line.
   const mins = line.mins.filter((_, i) => !leaving || line.members[i] !== leaving);
-  return across && mins.reduce((sum, value) => sum + value, horizontal ? min.width : min.height) <= line.total;
+  return mins.reduce((sum, value) => sum + value, need) <= line.total;
 }
 
 /**
@@ -298,15 +354,13 @@ export function dropAllowed(
 ): boolean {
   if (!data || position === "center") return true;
   const source = api.getGroup(data.groupId) as DockviewGroupPanel | undefined;
-  const dragged = data.panelId
-    ? { width: info(data.panelId)?.minWidth ?? 0, height: (info(data.panelId)?.minHeight ?? 0) + TAB_HEIGHT }
-    : source
-      ? groupMinimum(source, info)
-      : { width: 0, height: 0 };
+  const dragged = data.panelId ? [data.panelId] : (source?.panels.map((panel) => panel.id) ?? []);
   const sideways = position === "left" || position === "right";
   if (!target) {
-    // An outer edge: the new column or row needs room next to everything else.
-    return sideways ? api.width - api.minimumWidth >= dragged.width : api.height - api.minimumHeight >= dragged.height;
+    // An outer edge: the new column or row runs the dock's full height or width, beside everything else.
+    return sideways
+      ? api.width - api.minimumWidth >= leastAlong(dragged, true, api.height, info)
+      : api.height - api.minimumHeight >= leastAlong(dragged, false, api.width, info);
   }
   // Moving a group's only panel to its own edge changes nothing.
   if (target === source && target.panels.length === 1) return true;

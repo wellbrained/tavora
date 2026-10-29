@@ -11,6 +11,7 @@ import {
   expectModuleText,
   inModule,
   launch,
+  layOutColumns,
   noteText,
   onWindow,
   openWorkspace,
@@ -83,6 +84,8 @@ for (const { name, id } of EXAMPLES) {
 
 test("modules are suspended while the window is hidden and resumed when it is shown", async () => {
   const { app, page } = await launch();
+  // Side by side, so every one of them is shown, not a tab behind another.
+  await layOutColumns(page, EXAMPLES.length);
   for (const { id } of EXAMPLES) await openModule(page, id);
   for (const { id } of EXAMPLES) await expectModuleText(app, id, "lifecycle", "active");
 

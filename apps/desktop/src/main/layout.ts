@@ -21,7 +21,7 @@ const only = (value: Fields, ...keys: string[]) => Object.keys(value).every((key
 /**
  * Checks a layout sent by the host UI and returns a clean copy, or null if
  * anything about it is malformed. Every panel may appear only once; a
- * group without panels is an empty slot. One group with panels may be maximized.
+ * group without panels is an empty slot. One group with panels may be maximized, and one group focused.
  */
 export function parseLayout(raw: unknown): SavedLayout | null {
   if (!isObject(raw) || !only(raw, "width", "height", "direction", "root")) return null;
@@ -30,6 +30,7 @@ export function parseLayout(raw: unknown): SavedLayout | null {
   const seen = new Set<string>();
   let nodes = 0;
   let maximized = false;
+  let focused = false;
 
   const node = (value: unknown, depth: number): LayoutNode | null => {
     if (++nodes > LAYOUT_LIMITS.nodes || depth > LAYOUT_LIMITS.depth || !isObject(value) || !extent(value.size)) return null;
@@ -46,9 +47,12 @@ export function parseLayout(raw: unknown): SavedLayout | null {
       return { kind: "split", size: value.size, ...visibility, children };
     }
     if (value.kind === "group") {
-      if (!only(value, "kind", "size", "panels", "active", "hidden", "maximized") || !Array.isArray(value.panels)) return null;
+      if (!only(value, "kind", "size", "panels", "active", "hidden", "maximized", "focused") || !Array.isArray(value.panels)) return null;
       if (value.maximized !== undefined && (value.maximized !== true || value.panels.length === 0 || maximized)) return null;
-      if (value.panels.length === 0) return value.active === null ? { kind: "group", size: value.size, ...visibility, panels: [], active: null } : null;
+      if (value.focused !== undefined && (value.focused !== true || focused)) return null;
+      if (value.focused) focused = true;
+      const focus = value.focused ? { focused: true as const } : {};
+      if (value.panels.length === 0) return value.active === null ? { kind: "group", size: value.size, ...visibility, panels: [], active: null, ...focus } : null;
       for (const id of value.panels) {
         if (typeof id !== "string" || !INSTANCE_ID.test(id) || seen.has(id)) return null;
         seen.add(id);
@@ -56,7 +60,7 @@ export function parseLayout(raw: unknown): SavedLayout | null {
       if (seen.size > LAYOUT_LIMITS.panels) return null;
       if (typeof value.active !== "string" || !value.panels.includes(value.active)) return null;
       if (value.maximized) maximized = true;
-      return { kind: "group", size: value.size, ...visibility, panels: [...(value.panels as string[])], active: value.active, ...(value.maximized ? { maximized: true } : {}) };
+      return { kind: "group", size: value.size, ...visibility, panels: [...(value.panels as string[])], active: value.active, ...(value.maximized ? { maximized: true } : {}), ...focus };
     }
     return null;
   };

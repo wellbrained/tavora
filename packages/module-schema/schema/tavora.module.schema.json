@@ -583,6 +583,23 @@
         },
         "preferredHeight": {
           "$ref": "#/definitions/dimension"
+        },
+        "wide": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "minWidth",
+            "minHeight"
+          ],
+          "properties": {
+            "minWidth": {
+              "$ref": "#/definitions/dimension"
+            },
+            "minHeight": {
+              "$ref": "#/definitions/dimension"
+            }
+          },
+          "description": "The smallest size while the panel is wider than tall, for a module with a second layout for that shape; minWidth and minHeight above then apply while it is taller than wide or square. wide.minWidth must be larger than wide.minHeight, and minWidth no larger than minHeight. Needs a minTavora newer than 0.21.93 (except Tavora's own modules); the TypeScript validator checks that."
         }
       }
     }

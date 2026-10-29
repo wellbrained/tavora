@@ -2,6 +2,10 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.1.6
+
+- `viewport.wide`: the smallest size while a panel is wider than tall (`ModuleMinimum`), for a module with a second layout for that shape; the panel type's `viewport` takes it too. With it, `minWidth` must be no larger than `minHeight` and `wide.minWidth` larger than `wide.minHeight`. A manifest with it needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_WIDE_LAYOUT` (0.21.93), except Tavora's own modules.
+
 ## 0.1.5
 
 - `leaderboards`: the boards a module keeps on Tavora's service (`LeaderboardBoard`): `{ id, kind: "streak", daily? }` or `{ id, kind: "score", order? }`, up to `MAX_LEADERBOARD_BOARDS` (20) with ids checked by `isLeaderboardId`. It needs the new `leaderboards` connector, the connector needs it, and both need a `minTavora` newer than `LAST_TAVORA_WITHOUT_LEADERBOARDS` (0.21.91), except Tavora's own modules.

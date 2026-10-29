@@ -113,6 +113,8 @@ export interface PanelTypeView {
   icon: string | null;
   minWidth: number;
   minHeight: number;
+  /** The smallest content area while the panel is wider than tall, when the type has a layout for that. */
+  wide?: { minWidth: number; minHeight: number };
 }
 
 /** A Browser panel's page, as its toolbar shows it. Nothing here comes from the page but its title. */
@@ -430,6 +432,8 @@ export interface LayoutGroup {
   active: string | null;
   /** The group fills the workspace (Maximize); one group of a layout at most. */
   maximized?: true;
+  /** The group the user last worked in, where new panels go; one group of a layout at most. */
+  focused?: true;
 }
 
 export type LayoutNode = LayoutSplit | LayoutGroup;
@@ -546,6 +550,8 @@ export interface HostViewState {
     /** The smallest panel content area the module works in. */
     minWidth: number;
     minHeight: number;
+    /** The smallest content area while the panel is wider than tall, when the module has a layout for that. */
+    wide?: { minWidth: number; minHeight: number };
     /** Its panel types, in the manifest's order; empty for a module with one panel and no types. */
     panels: PanelTypeView[];
     /** Official modules ship with Tavora; local ones were found on disk. */

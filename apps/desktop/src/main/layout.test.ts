@@ -61,8 +61,18 @@ describe("parseLayout", () => {
     ["two maximized groups", layout({ ...group(500, A), maximized: true } as LayoutNode, { ...group(500, B), maximized: true } as LayoutNode)],
     ["a maximized empty slot", layout(group(500, A), { kind: "group", size: 1, panels: [], active: null, maximized: true })],
     ["maximized set to false", layout({ ...group(500, A), maximized: false } as unknown as LayoutNode)],
+    ["two focused groups", layout({ ...group(500, A), focused: true } as LayoutNode, { ...group(500, B), focused: true } as LayoutNode)],
+    ["focused set to false", layout({ ...group(500, A), focused: false } as unknown as LayoutNode)],
   ])("rejects %s", (_name, raw) => {
     expect(parseLayout(raw)).toBeNull();
+  });
+
+  it("keeps the group the user worked in, an empty slot too", () => {
+    const focused = layout(group(400, A), { ...group(600, B), focused: true } as LayoutNode);
+    expect(parseLayout(JSON.parse(JSON.stringify(focused)))).toEqual(focused);
+    const slot = layout(group(400, A), { kind: "group", size: 600, panels: [], active: null, focused: true });
+    expect(parseLayout(JSON.parse(JSON.stringify(slot)))).toEqual(slot);
+    expect(pruneLayout(focused, (id) => id !== A)?.root.children[0]).toMatchObject({ panels: [B], focused: true });
   });
 
   it("keeps the maximized group, through pruning and vacating", () => {
