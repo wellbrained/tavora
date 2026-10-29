@@ -28,6 +28,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.22.3",
+    date: "2026-10-30",
+    title: "Module updates install from Settings again",
+    notes: [
+      "Update to … in Settings > Modules installs the update. Before, it did nothing when the update asked for no new access.",
+    ],
+  },
+  {
     version: "0.22.2",
     date: "2026-10-29",
     title: "Safer links",
