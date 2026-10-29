@@ -1172,8 +1172,10 @@ import type { TooltipRequest, TooltipAnchor } from "./tooltip-types.js";
 export interface MenuRequest {
   items: MenuEntry[];
   /**
-   * Where, in the panel's CSS pixels from its top left corner: a point for a context menu (the pointer's
-   * position), or a rectangle (a button) the menu opens next to. Tavora keeps the menu inside the window.
+   * Where, in the panel's CSS pixels from its top left corner: the rectangle of the element the menu is for
+   * (a button, or the row that was right-clicked). The menu opens next to it, never on top of it; pass the
+   * element's box for a context menu too, not the pointer. A bare point still works. Tavora keeps the menu inside
+   * the window.
    */
   at: { x: number; y: number; width?: number; height?: number };
   /** Which side of `at` the menu opens on, when there is room. Default "bottom". */

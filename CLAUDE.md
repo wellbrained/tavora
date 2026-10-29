@@ -24,6 +24,10 @@ The app and the official modules share one kit: `@tavora/official-ui` (`modules/
 - Use what the kit has. Restyle with classes where it's used, not with a copy of the component.
 - A missing control or variant is a decision for the maintainer: ask before building it. Once agreed, it goes into the kit and gets a specimen in the UI Playground (`modules/playground`).
 
+## Menus and tooltips
+
+Context menus, dropdowns and tooltips, in the app and in every module (game modules too), open next to the element they are for, with a small gap: never at the pointer and never on top of the element. A right-click anchors to the clicked element, as the kit's `ContextMenu` and `Tooltip` do; with `ui.showMenu`, pass the element's box, not the pointer's position.
+
 ## Save as image
 
 Every Save as image, in the app and in every module (game modules too), saves through `pictures.save`: Tavora's save dialog with the name filled in, opening where the user last saved a picture (at first `Pictures\Tavora`). Never save a picture to a fixed folder without asking. Closing the dialog shows no message.

@@ -41,7 +41,7 @@ function items() {
 </script>
 
 <template>
-  <MenuArea :items="items" :title="title">
+  <MenuArea :items="items" :title="title" side="bottom">
     <div
       class="flex h-full max-w-72 min-w-0 items-center gap-2 pr-1 pl-3 text-sm"
       :data-testid="`panel-${id}`"
