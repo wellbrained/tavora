@@ -269,14 +269,6 @@ nav[data-expanded="true"] .rail-entry:hover .rail-icon {
 .running-layer:hover::before {
   background: transparent;
 }
-/* With a picture, it shows blurred on the right, fading out towards the name. */
-.profile-rail-picture {
-  opacity: 0.5;
-  filter: blur(14px) saturate(1.4);
-  transform: scale(1.3);
-  mask-image: linear-gradient(to right, transparent, #000 75%);
-}
-
 /* A section header ("Favorites", "Games"): plain words when expanded, a short line in the same space when compact,
    so the items below keep their place when the rail opens or closes. */
 .rail-section {

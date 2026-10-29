@@ -186,14 +186,6 @@ function closeCrop() {
         :aria-label="profile.name.trim() ? t('profile.named', { name: profile.name.trim() }) : t('profile.label')"
       >
         <template v-if="expanded">
-          <!-- The user's picture, blurred, warms the card from the right; without one the theme's glow does it alone. -->
-          <img
-            v-if="profile.pictureUrl"
-            :src="profile.pictureUrl"
-            alt=""
-            class="profile-rail-picture pointer-events-none absolute inset-y-0 right-0 h-full w-2/3 object-cover"
-            draggable="false"
-          />
           <!-- A thin light edge and a soft shadow keep any picture apart from the glow behind it. -->
           <span class="ring-foreground/25 relative flex-none rounded-[3px] shadow-md ring-1 shadow-black/30">
             <ProfileAvatar class="bg-card" :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="38" square :radius="3" />
