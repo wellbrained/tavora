@@ -163,22 +163,33 @@ function closeCrop() {
         :class="
           cn(
             'group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2 data-[state=open]:text-foreground',
-            // Open, the profile is a card of its own at the very bottom.
-            expanded && 'bg-card text-foreground hover:bg-accent data-[state=open]:bg-accent rounded-xl border p-[5px] text-left',
+            // Open, the profile is a card of its own at the very bottom, on a glow in the theme's colour (styles.css).
+            // Its corners follow the avatar's: 10 px + 5 px padding + 1 px border.
+            expanded && 'profile-rail-card text-foreground relative overflow-hidden rounded-[16px] border p-[5px] text-left',
           )
         "
         data-rail-item
         data-testid="rail-profile"
         :aria-label="profile.name.trim() ? t('profile.named', { name: profile.name.trim() }) : t('profile.label')"
       >
-        <ProfileAvatar v-if="expanded" :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="36" square />
+        <template v-if="expanded">
+          <!-- The user's picture, blurred, warms the card from the right; without one the theme's glow does it alone. -->
+          <img
+            v-if="profile.pictureUrl"
+            :src="profile.pictureUrl"
+            alt=""
+            class="profile-rail-picture pointer-events-none absolute inset-y-0 right-0 h-full w-2/3 object-cover"
+            draggable="false"
+          />
+          <ProfileAvatar class="bg-foreground/10 relative" :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="36" square />
+          <span class="relative flex min-w-0 flex-col">
+            <span class="truncate text-sm font-semibold">{{ profile.name.trim() || t("profile.label") }}</span>
+            <span class="text-muted-foreground truncate text-xs">{{ t("rail.profileHint") }}</span>
+          </span>
+        </template>
         <RailFooterTile v-else>
           <ProfileAvatar :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="40" square />
         </RailFooterTile>
-        <span v-if="expanded" class="flex min-w-0 flex-col">
-          <span class="truncate text-sm font-semibold">{{ profile.name.trim() || t("profile.label") }}</span>
-          <span class="text-muted-foreground truncate text-xs">{{ t("rail.profileHint") }}</span>
-        </span>
       </button>
     </PopoverTrigger>
     <PopoverPortal>
