@@ -8,7 +8,7 @@
 //
 // Every control sits in a box as tall as one title line (32 px), so all of
 // them share the first line's centre.
-import { AlignLeft, ArrowDown, ArrowUp, ChevronRight, Ellipsis, FolderInput, GripVertical, IndentDecrease, IndentIncrease, Pin, PinOff, Trash2 } from "@lucide/vue";
+import { AlignLeft, ArrowDown, ArrowUp, ChevronRight, CornerDownRight, Ellipsis, FolderInput, GripVertical, IndentDecrease, IndentIncrease, ListPlus, Pin, PinOff, Trash2 } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import {
   DropdownMenu,
@@ -32,6 +32,7 @@ import {
   doneState,
   indentTask,
   MAX,
+  MAX_DEPTH,
   moveTask,
   outdentTask,
   removedBlock,
@@ -106,6 +107,7 @@ function setPinned(pinned: boolean) {
 
 async function startEdit() {
   title.value = props.task.title;
+  panel.draft.value = null;
   panel.editing.value = editKey.value;
   await nextTick();
   const input = titleInput.value;
@@ -155,10 +157,19 @@ function onTitleKey(event: KeyboardEvent) {
   } else if (event.key === "Enter") {
     event.preventDefault();
     close(true);
+    // Like the add row at the end: a new to-do opens right below, ready to type.
+    if (!props.compact) addBelow(props.depth);
   } else if (event.key === "Tab" && !props.compact) {
     event.preventDefault();
     void changeLevel(event.shiftKey);
   }
+}
+
+/** Opens a new to-do right after this one and its sub-to-dos: at its level, or one deeper as its last sub-to-do. */
+function addBelow(level: number) {
+  if (level > props.depth && folded.value) panel.toggleFolded(id.value);
+  panel.editing.value = null;
+  panel.draft.value = { groupId: props.group.id, afterId: id.value, level };
 }
 
 // ── The description, in a popover ────────────────────────────────────
@@ -167,8 +178,9 @@ const describing = ref(false);
 const description = ref("");
 const descriptionInput = ref<HTMLTextAreaElement | null>(null);
 let cancelled = false;
-/** The menu item asks for the popover; it opens once the menu has closed and let go of the focus. */
-let describeAfterMenu = false;
+/** A menu item that needs the focus (the description, a new to-do) runs once the menu has closed and let go of it. */
+let afterMenu: (() => void) | null = null;
+const later = (run: () => void) => (afterMenu = run);
 
 function setDescribing(open: boolean) {
   if (open) {
@@ -186,15 +198,12 @@ function cancelDescription() {
   cancelled = true;
 }
 
-function askDescription() {
-  describeAfterMenu = true;
-}
-
 function onMenuClosed(event: Event) {
-  if (!describeAfterMenu) return;
-  describeAfterMenu = false;
+  const run = afterMenu;
+  if (!run) return;
+  afterMenu = null;
   event.preventDefault();
-  setDescribing(true);
+  run();
 }
 
 function focusDescription(event: Event) {
@@ -357,7 +366,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
             <Ellipsis class="size-4" :stroke-width="1.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" @close-auto-focus="onMenuClosed">
-            <DropdownMenuItem data-testid="menu-description" @select="askDescription">
+            <DropdownMenuItem data-testid="menu-description" @select="later(() => setDescribing(true))">
               <AlignLeft :stroke-width="1.5" />
               {{ task.details ? t("task.editDescription") : t("task.addDescription") }}
             </DropdownMenuItem>
@@ -367,6 +376,13 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
               {{ task.pinned ? t("task.unpin") : t("task.pin") }}
             </DropdownMenuItem>
             <template v-if="!compact">
+              <DropdownMenuItem data-testid="menu-add-below" @select="later(() => addBelow(depth))">
+                <ListPlus :stroke-width="1.5" /> {{ t("task.addBelow") }}
+              </DropdownMenuItem>
+              <DropdownMenuItem :disabled="depth >= MAX_DEPTH" data-testid="menu-add-sub" @select="later(() => addBelow(depth + 1))">
+                <CornerDownRight :stroke-width="1.5" /> {{ t("task.addSub") }}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem :disabled="!canIndent(group, index)" data-testid="menu-indent" @select="change((data) => indentTask(data, task.id))">
                 <IndentIncrease :stroke-width="1.5" /> {{ t("task.indent") }}
               </DropdownMenuItem>

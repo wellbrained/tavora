@@ -6,16 +6,15 @@ import { ChevronsDownUp, ChevronsUpDown, ListChecks, SlidersHorizontal } from "@
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
-import { Popover, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
-import { Slider } from "@tavora/official-ui/components/ui/slider";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import type { MenuRequest, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import AddInput from "./AddInput.vue";
 import GroupSection, { type DropTarget } from "./GroupSection.vue";
 import { plural, setLanguage, t } from "./i18n";
-import { buildLiveState, LIVE_DEFAULTS, LIVE_RANGE, parseLook, throttle } from "./live";
-import { collapse, LINGER_MS, PANEL, UNDO_MS, type FinishedMode } from "./panel";
+import { buildLiveState, LIVE_DEFAULTS, parseLook, throttle, type LiveLook, type LiveState } from "./live";
+import LiveSettings from "./LiveSettings.vue";
+import { collapse, LINGER_MS, PANEL, UNDO_MS, type Draft, type FinishedMode } from "./panel";
 import { createTodoStore, type TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
 import { addGroup, addTask, childCount, deleteGroup, findTask, LIST_ID, MAX, moveTask, parseList, type Group, type TodoList } from "./todos";
@@ -26,9 +25,15 @@ interface PanelState {
   finished: FinishedMode;
   collapsed: string[];
   folded: string[];
-  /** Live view: plate opacity in percent and padding in px. */
-  liveBackground: number;
-  livePadding: number;
+  /** How the live view looks. */
+  live: LiveLook;
+}
+
+/** What versions before kept instead of `finished` and `live`. */
+interface OldPanelState {
+  hideDone?: boolean;
+  liveBackground?: number;
+  livePadding?: number;
 }
 
 const sdk = shallowRef<TavoraSDK | null>(null);
@@ -37,9 +42,11 @@ const error = ref<string | null>(null);
 const finished = ref<FinishedMode>("stay");
 const collapsed = ref<string[]>([]);
 const folded = ref<string[]>([]);
-const liveBackground = ref(LIVE_DEFAULTS.background);
-const livePadding = ref(LIVE_DEFAULTS.padding);
+const look = shallowRef<LiveLook>({ ...LIVE_DEFAULTS });
+/** The panel is shown big as a dialog, with the live view's settings. */
+const dialogOpen = ref(false);
 const editing = ref<string | null>(null);
+const draft = ref<Draft | null>(null);
 const pendingGroup = shallowRef<Group | null>(null);
 const dragging = ref<string | null>(null);
 const drop = ref<DropTarget | null>(null);
@@ -81,34 +88,33 @@ function offerUndo(message: string, run: () => void) {
 
 function savePanel() {
   // Plain values only: a Vue proxy cannot be sent to the host.
-  void sdk.value?.panel.setState({ finished: finished.value, collapsed: [...collapsed.value], folded: [...folded.value], liveBackground: liveBackground.value, livePadding: livePadding.value } satisfies PanelState);
+  void sdk.value?.panel.setState({ finished: finished.value, collapsed: [...collapsed.value], folded: [...folded.value], live: { ...look.value } } satisfies PanelState);
 }
 
-function setLook(key: "liveBackground" | "livePadding", value: number | undefined) {
-  if (value === undefined) return;
-  (key === "liveBackground" ? liveBackground : livePadding).value = value;
+function setLook(next: LiveLook) {
+  look.value = next;
   savePanel();
 }
 
-function resetLook() {
-  liveBackground.value = LIVE_DEFAULTS.background;
-  livePadding.value = LIVE_DEFAULTS.padding;
-  savePanel();
+/** Opens the live view's settings: the panel shows them big, in a dialog over the app. */
+function openSettings() {
+  void sdk.value?.panel.openDialog({ width: 720, height: 600 }).catch((reason) => (error.value = errorMessage(reason)));
+}
+
+function onKey(event: KeyboardEvent) {
+  // Esc in an open list (a Select, say) closes only that.
+  const inPopup = (event.target as Element | null)?.closest?.("[role=listbox], [role=menu], [role=dialog]");
+  if (event.key === "Escape" && dialogOpen.value && !event.defaultPrevented && !inPopup) void sdk.value?.panel.closeDialog();
 }
 
 // ── Live view: what Tavora shows over the game while this panel is closed ──
 
-const sendLive = throttle((state: ReturnType<typeof buildLiveState>) => void sdk.value?.panel.setLive(state).catch(() => {}), 250);
+const liveState = computed<LiveState>(() => buildLiveState(list.value, collapsed.value, look.value, { more: t("live.more", { count: "{count}" }), objectives: t("app.objectives") }));
+const sendLive = throttle((state: LiveState) => void sdk.value?.panel.setLive(state).catch(() => {}), 250);
 
-watch(
-  [() => list.value, collapsed, liveBackground, livePadding, sdk],
-  () => {
-    if (!sdk.value || !store.value) return;
-    const look = parseLook({ background: liveBackground.value, padding: livePadding.value });
-    sendLive(buildLiveState(list.value, collapsed.value, look, t("live.more", { count: "{count}" })));
-  },
-  { deep: true },
-);
+watch([liveState, sdk], () => {
+  if (sdk.value && store.value) sendLive(liveState.value);
+});
 
 /** The toolbar toggle: pressed keeps finished to-dos in the list, released lets them vanish. */
 function toggleFinished() {
@@ -131,7 +137,7 @@ function toggleAllGroups() {
 
 /** Before the panel is connected there is nothing to show a menu with. */
 const showMenu = (request: MenuRequest) => sdk.value?.ui.showMenu(request) ?? Promise.resolve(null);
-provide(PANEL, { finished, editing, folded, toggleFolded: (id) => toggle(folded, id), linger, lingering, offerUndo, showMenu });
+provide(PANEL, { finished, editing, draft, folded, toggleFolded: (id) => toggle(folded, id), linger, lingering, offerUndo, showMenu });
 
 const cleanup: (() => void)[] = [];
 
@@ -139,15 +145,16 @@ onMounted(async () => {
   try {
     const connected = await connectModule(setLanguage);
     const todos = createTodoStore(connected);
-    const [state] = await Promise.all([connected.panel.getState<Partial<PanelState> & { hideDone?: boolean }>(), todos.load()]);
+    const [state] = await Promise.all([connected.panel.getState<Partial<PanelState> & OldPanelState>(), todos.load()]);
     const ids = (value: unknown) => (Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []);
     // Panels saved by the version before had a "hide finished" switch instead.
     finished.value = state?.finished === "vanish" || (state?.finished === undefined && state?.hideDone === true) ? "vanish" : "stay";
     collapsed.value = ids(state?.collapsed);
     folded.value = ids(state?.folded);
-    const look = parseLook({ background: state?.liveBackground, padding: state?.livePadding });
-    liveBackground.value = look.background;
-    livePadding.value = look.padding;
+    look.value = parseLook(state?.live ?? { background: state?.liveBackground, padding: state?.livePadding });
+    cleanup.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
+    addEventListener("keydown", onKey);
+    cleanup.push(() => removeEventListener("keydown", onKey));
     cleanup.push(connected.documents.onChange((change) => change.id === LIST_ID && void todos.reload()));
     sdk.value = connected;
     store.value = todos;
@@ -171,7 +178,9 @@ function createGroup(name: string) {
 function firstTask(text: string) {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
-  void store.value!.apply((data) => addTask(data, null, { id, title: text, createdAt }, crypto.randomUUID()));
+  // Made here, not in the change: a change runs again on the stored list, and the group must keep its id.
+  const groupId = crypto.randomUUID();
+  void store.value!.apply((data) => addTask(data, null, { id, title: text, createdAt }, groupId));
 }
 
 function removeGroup() {
@@ -215,6 +224,7 @@ function dropTask() {
   <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
+  <LiveSettings v-else-if="dialogOpen" :look="look" :state="liveState" @update:look="setLook" />
   <div v-else class="@container relative flex h-full min-h-0 flex-col" data-testid="todos-app">
     <header
       class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2"
@@ -255,45 +265,9 @@ function dropTask() {
         <ListChecks :stroke-width="1.5" />
         <span class="hidden @min-[20rem]:inline">{{ t("app.keepFinished") }}</span>
       </Button>
-      <Popover>
-        <PopoverTrigger as-child>
-          <Button variant="ghost" size="icon-sm" :aria-label="t('live.menu')" :title="t('live.menu')" data-testid="live-settings">
-            <SlidersHorizontal :stroke-width="1.5" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" class="w-64" data-testid="live-popover">
-          <p class="text-sm font-medium">{{ t("live.menu") }}</p>
-          <div class="mt-3 flex items-center justify-between text-xs">
-            <span>{{ t("live.background") }}</span>
-            <span class="text-muted-foreground tabular-nums" data-testid="live-background-value">{{ liveBackground }}%</span>
-          </div>
-          <Slider
-            :model-value="[liveBackground]"
-            :min="LIVE_RANGE.background[0]"
-            :max="LIVE_RANGE.background[1]"
-            :step="1"
-            class="mt-2"
-            :aria-label="t('live.background')"
-            data-testid="live-background"
-            @update:model-value="setLook('liveBackground', $event?.[0])"
-          />
-          <div class="mt-4 flex items-center justify-between text-xs">
-            <span>{{ t("live.padding") }}</span>
-            <span class="text-muted-foreground tabular-nums" data-testid="live-padding-value">{{ livePadding }} px</span>
-          </div>
-          <Slider
-            :model-value="[livePadding]"
-            :min="LIVE_RANGE.padding[0]"
-            :max="LIVE_RANGE.padding[1]"
-            :step="1"
-            class="mt-2"
-            :aria-label="t('live.padding')"
-            data-testid="live-padding"
-            @update:model-value="setLook('livePadding', $event?.[0])"
-          />
-          <Button variant="ghost" size="sm" class="mt-3" data-testid="live-reset" @click="resetLook">{{ t("live.reset") }}</Button>
-        </PopoverContent>
-      </Popover>
+      <Button variant="ghost" size="icon-sm" :aria-label="t('live.menu')" :title="t('live.menu')" data-testid="live-settings" @click="openSettings">
+        <SlidersHorizontal :stroke-width="1.5" />
+      </Button>
     </header>
 
     <div class="min-h-0 flex-1 overflow-y-auto p-2" @dragend="dragEnd">

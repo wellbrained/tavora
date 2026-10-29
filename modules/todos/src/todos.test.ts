@@ -12,6 +12,9 @@ import {
   doneState,
   findTask,
   indentTask,
+  indexAfter,
+  insertTask,
+  levelsAt,
   LIMITS,
   MAX_DEPTH,
   moveGroup,
@@ -357,5 +360,41 @@ describe("sub-to-dos", () => {
     expect([0, 1, 2].map((level) => parentAtEnd(group, level))).toEqual([null, "e", "e"]);
     deleteTask(data, "e");
     expect([0, 1, 2, 3, 4].map((level) => parentAtEnd(group, level))).toEqual([null, "a", "c", "d", "d"]);
+  });
+
+  it("can be added between others, at the levels that fit there", () => {
+    const tasks = nested().groups[0]!.tasks;
+    // After b: c below keeps a as its parent, so the new one is at least b's sibling, or b's sub-to-do.
+    expect(levelsAt(tasks, 2)).toEqual({ min: 1, max: 2 });
+    // After a's block, in front of e: anything from the top level down to under d.
+    expect(levelsAt(tasks, 4)).toEqual({ min: 0, max: 3 });
+    expect(levelsAt(tasks, 0)).toEqual({ min: 0, max: 0 });
+    expect(indexAfter(tasks, "a")).toBe(4);
+    expect(indexAfter(tasks, "gone")).toBe(5);
+  });
+
+  it("is inserted right after a task and its sub-to-dos", () => {
+    const insert = (afterId: string | null, level: number) => {
+      const data = nested();
+      insertTask(data, "g1", afterId, level, { id: "n", title: "N", createdAt: AT });
+      return tree(data);
+    };
+    // Enter on b: its sibling.
+    expect(insert("b", 1)).toBe("a b(a) n(a) c(a) d(c) e");
+    // Add sub-to-do on b.
+    expect(insert("b", 2)).toBe("a b(a) n(b) c(a) d(c) e");
+    // Too shallow for its spot: pulled in so c keeps its parent.
+    expect(insert("b", 0)).toBe("a b(a) n(a) c(a) d(c) e");
+    // Add below a: after its whole block.
+    expect(insert("a", 0)).toBe("a b(a) c(a) d(c) n e");
+    // The task it follows is gone: at the end.
+    expect(insert("gone", 0)).toBe("a b(a) c(a) d(c) e n");
+  });
+
+  it("is not inserted into a group that is gone, or without a title", () => {
+    const data = nested();
+    insertTask(data, "gone", "a", 0, { id: "n", title: "N", createdAt: AT });
+    insertTask(data, "g1", "a", 0, { id: "m", title: "  ", createdAt: AT });
+    expect(tree(data)).toBe("a b(a) c(a) d(c) e");
   });
 });

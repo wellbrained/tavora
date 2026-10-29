@@ -7,10 +7,19 @@ import type { InjectionKey, Ref } from "vue";
 /** What happens to a to-do once it is finished: it stays, struck through, or it vanishes after a moment. */
 export type FinishedMode = "stay" | "vanish";
 
+/** A new to-do being typed between others: it goes right after `afterId` and its sub-to-dos, at `level`. */
+export interface Draft {
+  groupId: string;
+  afterId: string;
+  level: number;
+}
+
 export interface PanelContext {
   finished: Ref<FinishedMode>;
   /** The to-do whose inline editor is open, if any. */
   editing: Ref<string | null>;
+  /** The new to-do being typed between others, if any; only one at a time, and never while a title is edited. */
+  draft: Ref<Draft | null>;
   /** To-dos whose sub-to-dos are hidden. */
   folded: Ref<string[]>;
   toggleFolded: (taskId: string) => void;

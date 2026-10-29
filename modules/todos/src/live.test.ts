@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildLiveState, LIVE_DEFAULTS, LIVE_MAX, parseLook, shorten, throttle } from "./live";
+import { buildLiveState, LIVE_DEFAULTS, LIVE_MAX, parseLook, shorten, throttle, type LiveLook } from "./live";
 import type { Group, Task, TodoList } from "./todos";
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
@@ -15,7 +15,9 @@ const task = (id: string, extra: Partial<Task> = {}): Task => ({
 });
 const group = (id: string, tasks: Task[]): Group => ({ id, name: id, color: "", tasks });
 const list = (...groups: Group[]): TodoList => ({ version: 2, groups });
-const build = (data: TodoList, collapsed: string[] = []) => buildLiveState(data, collapsed, LIVE_DEFAULTS, "+{count} more");
+const TEXTS = { more: "+{count} more", objectives: "Objectives" };
+const NO_HEADERS: LiveLook = { ...LIVE_DEFAULTS, headers: "none" };
+const build = (data: TodoList, collapsed: string[] = [], look: LiveLook = NO_HEADERS) => buildLiveState(data, collapsed, look, TEXTS);
 
 describe("buildLiveState", () => {
   it("is empty without groups or tasks", () => {
@@ -42,8 +44,8 @@ describe("buildLiveState", () => {
       group("a", [task("p"), task("s1", { parentId: "p", done: true }), task("s2", { parentId: "p" }), task("s3", { parentId: "p", done: true })]),
     );
     expect(build(data).rows).toEqual([
-      { text: "p", pinned: false, progress: "2/3", depth: 0 },
-      { text: "s2", pinned: false, progress: null, depth: 1 },
+      { kind: "task", text: "p", pinned: false, done: false, progress: "2/3", depth: 0 },
+      { kind: "task", text: "s2", pinned: false, done: false, progress: null, depth: 1 },
     ]);
   });
 
@@ -84,21 +86,69 @@ describe("buildLiveState", () => {
     expect(bytes).toBeLessThan(16 * 1024 * 0.9);
   });
 
-  it("carries the look", () => {
-    const state = buildLiveState(list(), [], { background: 50, padding: 3 }, "m");
-    expect([state.background, state.padding, state.moreText]).toEqual([50, 3, "m"]);
+  it("carries the look and the more text", () => {
+    const look = { ...LIVE_DEFAULTS, background: 50, padding: 3 };
+    const state = build(list(), [], look);
+    expect([state.look, state.moreText]).toEqual([look, TEXTS.more]);
+  });
+
+  it("shows finished to-dos, and what sits under them, when the look asks for it", () => {
+    const data = list(group("a", [task("p", { done: true }), task("s", { parentId: "p", done: true }), task("q")]));
+    const state = build(data, [], { ...NO_HEADERS, showFinished: true });
+    expect(state.rows.map((r) => r.kind === "task" && [r.text, r.done, r.depth])).toEqual([
+      ["p", true, 0],
+      ["s", true, 1],
+      ["q", false, 0],
+    ]);
+  });
+
+  it("starts each group, and the objectives, with a heading", () => {
+    const data = list(group("a", [task("a1"), task("a2", { pinned: true })]), group("b", []), group("c", [task("c1")]));
+    expect(build(data, [], LIVE_DEFAULTS).rows.map((r) => [r.kind, r.text])).toEqual([
+      ["group", "Objectives"],
+      ["task", "a2"],
+      ["group", "a"],
+      ["task", "a1"],
+      ["group", "c"],
+      ["task", "c1"],
+    ]);
+  });
+
+  it("never ends on a heading and counts only to-dos as more", () => {
+    const tasks = Array.from({ length: LIVE_MAX.rows - 2 }, (_, i) => task(`t${i}`));
+    const state = build(list(group("a", tasks), group("b", [task("b1"), task("b2")])), [], LIVE_DEFAULTS);
+    // Heading a, 38 to-dos, then heading b would be row 40: it is dropped with b1 and b2.
+    expect(state.rows.at(-1)!.kind).toBe("task");
+    expect(state.rows).toHaveLength(LIVE_MAX.rows - 1);
+    expect(state.more).toBe(2);
   });
 });
 
 describe("parseLook", () => {
-  it("defaults to 33 % and 8 px", () => {
-    expect(parseLook(undefined)).toEqual({ background: 33, padding: 8 });
-    expect(parseLook({ background: "x", padding: NaN })).toEqual({ background: 33, padding: 8 });
+  const numbers = (raw: Record<string, unknown>) => {
+    const look = parseLook(raw);
+    return { background: look.background, padding: look.padding };
+  };
+
+  it("defaults everything", () => {
+    expect(parseLook(undefined)).toEqual(LIVE_DEFAULTS);
+    expect(parseLook({ font: "comic", size: "huge", bold: 1, color: "red", headers: "x", backgroundColor: "#12345" })).toEqual(LIVE_DEFAULTS);
+    expect(numbers({ background: "x", padding: NaN })).toEqual({ background: 33, padding: 8 });
   });
-  it("keeps 0 and pulls values into range", () => {
-    expect(parseLook({ background: 0, padding: 0 })).toEqual({ background: 0, padding: 0 });
-    expect(parseLook({ background: 400, padding: -3 })).toEqual({ background: 100, padding: 0 });
-    expect(parseLook({ background: 40.6, padding: 30 })).toEqual({ background: 41, padding: 25 });
+
+  it("keeps what is valid", () => {
+    const look = { font: "cinzel", size: "xl", bold: true, color: "#facc15", outline: false, headers: "line", showFinished: true, backgroundColor: "#112233", background: 0, padding: 0 };
+    expect(parseLook(look)).toEqual(look);
+    expect(parseLook({ color: "#FACC15" }).color).toBe("#facc15");
+  });
+
+  it("reads the two settings the version before kept", () => {
+    expect(numbers({ background: 60, padding: 4 })).toEqual({ background: 60, padding: 4 });
+  });
+
+  it("pulls numbers into range", () => {
+    expect(numbers({ background: 400, padding: -3 })).toEqual({ background: 100, padding: 0 });
+    expect(numbers({ background: 40.6, padding: 30 })).toEqual({ background: 41, padding: 25 });
   });
 });
 
