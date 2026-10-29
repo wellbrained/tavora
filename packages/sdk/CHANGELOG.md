@@ -2,7 +2,8 @@
 
 Panel dialogs, with Tavora 0.21.95 or newer. `MIN_TAVORA` stays (Tavora 0.19.32): on an older Tavora `openDialog` throws `METHOD_NOT_FOUND`, so a module can show its settings in the panel instead.
 
-- `panel.openDialog({ width, height })` shows the panel big in a dialog centred on the app, over everything else, with the module's name and a close button: for settings or details that don't fit a small panel. It is the same page, so it keeps all it had. Opening needs a real click or key press. `panel.closeDialog()` puts it back, and `panel.onDialogChange` hears when it opens or closes, also when the user closes it.
+- `panel.openDialog({ width, height })` shows the panel big in a dialog centred on the app, over everything else, with the module's name and a close button: for settings or details that don't fit a small panel. It is the same page, so it keeps all it had. Opening needs a real click or key press. `panel.closeDialog()` puts it back, and `panel.onDialogChange` hears when it opens or closes, also when the user closes it. From a panel over the game, Tavora closes the in-game layer and comes to the front with the dialog open.
+- Toasts follow the user: `theme.toasts` (`ToastPosition`, one of `TOAST_POSITIONS`: `"bottom-center"`, `"bottom-right"` or `"top-center"`) says where they want toasts in a panel; an older Tavora leaves it out, which means bottom center. The new theme tokens `toast` and `toast-foreground` colour them; a theme may leave them out (`OPTIONAL_THEME_TOKENS`) and Tavora fills them in as flipped pills, so a module always gets every token.
 
 ## 0.2.13
 
