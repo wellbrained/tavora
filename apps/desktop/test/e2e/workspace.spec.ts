@@ -146,12 +146,16 @@ test("a workspace opens with all its panels at once, behind one loader until the
     // Notes, every few milliseconds, which of the two pages are shown.
     await app.evaluate(({ BrowserWindow }) => {
       const samples: string[] = [];
-      const shown = (id: string) =>
-        BrowserWindow.getAllWindows()[0]!.contentView.children.some((view) => {
+      const shown = (window: Electron.BrowserWindow, id: string) =>
+        window.contentView.children.some((view) => {
           const contents = (view as unknown as { webContents?: { getURL(): string } }).webContents;
           return !!contents && contents.getURL().startsWith(`tavora-module://${id}/`) && (view as unknown as { getVisible(): boolean }).getVisible();
         });
-      const timer = setInterval(() => samples.push(`${shown("devtest.quick")}/${shown("devtest.slow")}`), 10);
+      // Skips a tick without a window: one thrown here is an uncaught main-process error, whose modal dialog keeps the app open.
+      const timer = setInterval(() => {
+        const window = BrowserWindow.getAllWindows()[0];
+        if (window && !window.isDestroyed()) samples.push(`${shown(window, "devtest.quick")}/${shown(window, "devtest.slow")}`);
+      }, 10);
       Object.assign(globalThis, { switchSamples: samples, switchTimer: timer });
     });
     // Notes whether the workspace's loader came up, however briefly.
@@ -176,6 +180,8 @@ test("a workspace opens with all its panels at once, behind one loader until the
     expect(samples).toContain("false/false");
     expect(samples.filter((sample) => sample === "true/false" || sample === "false/true")).toEqual([]);
   } finally {
+    // Stops the sampler on a failed run too, before the window goes away.
+    await app.evaluate(() => clearInterval((globalThis as { switchTimer?: ReturnType<typeof setInterval> }).switchTimer)).catch(() => undefined);
     await app.close();
   }
 });
