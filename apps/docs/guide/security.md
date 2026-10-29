@@ -69,10 +69,10 @@ File access stays on this PC, outside backups and cloud copies. Restoring map da
 
 ## Calls that need a click
 
-Some calls change something outside the module's panel. They work only within 2 seconds of a real click or key press in that panel; a script cannot fake one, and each press allows one call.
+Some calls change something outside the module's panel. They work only within 2 seconds of a real click or key press in that panel; a script cannot fake one, and each press allows one call, whether the module makes it through the bridge or through an address Tavora answers for the panel (the clipboard, pictures and files).
 
 - **`files.pickReadOnly`** opens a native file picker; one press opens it once. Only the file you select can be remembered and reread through `files.read`. `files.forget` revokes that reference.
-- **`links.open`** opens an `http` or `https` address in Tavora's Browser panel, or, after the user confirms, in the system browser. The module learns nothing back.
+- **`links.open`** opens an `http` or `https` address in Tavora's Browser panel, or, after the user confirms, in the system browser. The module learns nothing back. Addresses on the user's PC or local network (loopback, private and link-local addresses, local name endings and router names) are refused, and so are such links on a catalog listing (homepage, support link, readme) or from a developer's contact link.
 - **`clipboard.writeImage`** puts a checked PNG on the clipboard. There is no call to read the clipboard.
 - **`pictures.save`** writes a checked PNG where the user picks in Tavora's save dialog, which opens in the folder they last saved a picture to (at first `Pictures\Tavora`). The module only suggests a name, which Tavora cleans; it cannot pick the folder or file type, replace a file unless the user confirms it in the dialog, or read anything back, and it never learns where the file went.
 - **`files.saveJson` and `files.openJson`** save and open a JSON file through Tavora's own save and open dialogs, which start in the folder you last used for that module (at first `Documents\Tavora`). The module only suggests a name, which Tavora cleans, and gets back the file name (and, for open, the parsed content of the one file you picked). It never gets a path, cannot pick a file or folder, and cannot replace a file unless you confirm it in the dialog. Each needs a real click or key press and works once per press; files are at most 8 MiB.

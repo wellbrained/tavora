@@ -1147,6 +1147,7 @@ export const en = {
   "error.copyWorkspace": "This example needs {name}, which only works inside the Tavora code.",
   "error.installFolderTaken": "Your modules folder already has a folder named {folder}. Move it away and try again.",
   "error.readmeLink": "Can't open this link.",
+  "error.privateLink": "Links to this PC or your local network don't open here.",
   "error.updatesUnreachable": "Can't check for updates. Check your connection and try again.",
   "error.updatesFailed": "Found an update but couldn't download it. Try again in a moment.",
   "error.catalogOff": "Turn on online features in Settings to install community modules.",

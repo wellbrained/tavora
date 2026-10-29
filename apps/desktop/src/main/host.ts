@@ -140,7 +140,7 @@ import { readJsonText } from "./json-file-http";
 import { freeFileName } from "./picture-save-http";
 import { HostError } from "./errors";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
-import { isWebUrl, siteOfUrl } from "./browser-url";
+import { isPrivateUrl, isWebUrl, siteOfUrl } from "./browser-url";
 import { supportTarget } from "./module-support";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
@@ -2980,6 +2980,8 @@ export class Host {
    * newest Browser panel, or in that panel itself while it is still empty, or in a new Browser panel.
    */
   private openLinkFromModule(url: string, workspaceId?: string): void {
+    // Like a page in the Browser panel, a link from a module or a listing can't reach this PC or the local network.
+    if (isPrivateUrl(url)) throw new UserError("error.privateLink");
     const workspace = this.workspace;
     // The panel that asked belongs to a workspace that isn't the one shown (it is over its game): its link is not for this one.
     if (workspaceId !== undefined && workspace?.id !== workspaceId) throw new HostError("PERMISSION_DENIED", "links.open works only in the workspace shown now");
@@ -3010,7 +3012,7 @@ export class Host {
   private chooseLink(choice: "panel" | "system" | "cancel"): void {
     const url = this.pendingLink;
     this.pendingLink = null;
-    if (!url || choice === "cancel" || !isWebUrl(url)) return;
+    if (!url || choice === "cancel" || !isWebUrl(url) || isPrivateUrl(url)) return;
     if (choice === "system") {
       void shell.openExternal(url).catch((error: unknown) => console.error("[tavora]", error));
       return;
