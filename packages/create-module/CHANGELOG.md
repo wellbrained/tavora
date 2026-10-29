@@ -4,7 +4,7 @@ What changed in `@tavora/create-module`, newest first.
 
 ## 0.1.11
 
-- New projects start on `@tavora/sdk` 0.2.13, which adds leaderboards and `compareAndSet`.
+- New projects start on `@tavora/sdk` 0.2.14, which adds leaderboards, `compareAndSet` and panel dialogs.
 
 ## 0.1.10
 
