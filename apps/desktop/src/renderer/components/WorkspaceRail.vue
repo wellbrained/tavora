@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronLeft, ChevronRight, Plus, Settings } from "@lucide/vue";
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Plus, Settings } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
@@ -330,8 +330,11 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     :data-expanded="expanded"
     @keydown="onNavKey"
   >
-    <!-- The flame (and the name, when expanded) is the way home. -->
-    <div class="rail-entry relative flex flex-col px-2 pt-3 pb-1" :data-active="state!.screen === 'welcome'">
+    <!-- The flame (and the name, when expanded) is the way home. The button that opens and closes the rail ends this
+         row when expanded; compact, it sits on the rail's edge at the same height and shows while the pointer is over
+         the rail, so it is never taken for one of the games. -->
+    <div class="relative flex items-center gap-1 pt-3 pb-1" :class="expanded && 'pr-2'">
+    <div class="rail-entry relative flex min-w-0 flex-1 flex-col pl-2" :class="!expanded && 'pr-2'" :data-active="state!.screen === 'welcome'">
       <span class="rail-pill" aria-hidden="true" />
       <RailTooltip :text="t('rail.home')" :disabled="expanded">
         <button
@@ -355,6 +358,25 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           <span v-if="expanded" class="text-base font-semibold">Tavora</span>
         </button>
       </RailTooltip>
+    </div>
+      <button
+        type="button"
+        :class="
+          cn(
+            'app-no-drag text-muted-foreground hover:text-foreground focus-visible:ring-ring grid flex-none place-items-center focus-visible:ring-2 focus-visible:outline-none',
+            expanded
+              ? 'hover:bg-accent size-8 rounded-md'
+              : 'bg-card border-foreground/20 hover:border-foreground/40 absolute top-[23px] -right-[9px] z-20 size-[18px] rounded-[5px] border opacity-0 shadow-sm shadow-black/30 transition-opacity group-hover/rail:opacity-100 focus-visible:opacity-100',
+          )
+        "
+        data-testid="rail-toggle"
+        :aria-label="expanded ? t('rail.collapse') : t('rail.expand')"
+        :title="expanded ? t('rail.collapse') : t('rail.expand')"
+        :aria-expanded="expanded"
+        @click="toggleRail"
+      >
+        <component :is="expanded ? PanelLeftClose : PanelLeftOpen" :class="expanded ? 'size-[18px]' : 'size-3'" :stroke-width="expanded ? 1.5 : 2" />
+      </button>
     </div>
 
     <div class="relative min-h-0 flex-1">
@@ -559,34 +581,19 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       <ProfileMenu :expanded="expanded" />
     </div>
 
-    <!-- The right edge: hovering it shows a handle that opens or closes the rail; dragging it resizes an open rail.
-         It stays inside the rail, since module panels drawn over the workspace would cover anything beyond it. -->
-    <div class="group/edge app-no-drag absolute inset-y-0 right-0 z-10 w-3">
-      <div
-        v-if="expanded"
-        class="group-hover/edge:bg-primary/15 focus-visible:bg-primary absolute inset-y-0 right-0 w-1.5 cursor-col-resize focus-visible:outline-none"
-        role="separator"
-        aria-orientation="vertical"
-        :aria-label="t('rail.resize')"
-        :aria-valuenow="width"
-        :aria-valuemin="MIN_WIDTH"
-        :aria-valuemax="MAX_WIDTH"
-        tabindex="0"
-        data-testid="rail-resize"
-        @pointerdown.prevent="startResize"
-        @keydown="resizeByKey"
-      />
-      <button
-        type="button"
-        class="bg-accent text-primary border-primary/60 hover:border-primary focus-visible:ring-ring absolute top-1/2 right-0.5 grid h-11 w-3 -translate-y-1/2 place-items-center rounded-full border opacity-0 shadow-sm shadow-black/30 transition-opacity group-hover/edge:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
-        data-testid="rail-toggle"
-        :aria-label="expanded ? t('rail.collapse') : t('rail.expand')"
-        :title="expanded ? t('rail.collapse') : t('rail.expand')"
-        :aria-expanded="expanded"
-        @click="toggleRail"
-      >
-        <component :is="expanded ? ChevronLeft : ChevronRight" class="size-2.5" :stroke-width="3" />
-      </button>
-    </div>
+    <div
+      v-if="expanded"
+      class="hover:bg-primary/15 focus-visible:bg-primary absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize focus-visible:outline-none"
+      role="separator"
+      aria-orientation="vertical"
+      :aria-label="t('rail.resize')"
+      :aria-valuenow="width"
+      :aria-valuemin="MIN_WIDTH"
+      :aria-valuemax="MAX_WIDTH"
+      tabindex="0"
+      data-testid="rail-resize"
+      @pointerdown.prevent="startResize"
+      @keydown="resizeByKey"
+    />
   </nav>
 </template>
