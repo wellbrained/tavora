@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.109",
+    date: "2026-10-29",
+    title: "Menus with icons",
+    notes: [
+      "Menus have a fresh look, with rounder corners and a clearer highlight.",
+      "Every entry in the rail, panel and layout menus has a small icon, so you find things at a glance.",
+    ],
+    prs: [
+      { number: 464, title: "Menus: icons on every entry and a softer look" },
+    ],
+    tags: ["catalog", "modules", "rail", "settings", "ui-kit", "workspace"],
+  },
+  {
     version: "0.21.108",
     date: "2026-10-29",
     title: "Nicer tooltips",
