@@ -250,7 +250,7 @@ test("new windows open as a Browser tab only after a click, and downloads are re
   // B5: a download is refused and the user is told.
   const downloads = await app.evaluate(({ app }) => app.getPath("downloads"));
   await inPage(app, publicUrl("/"), `location.href = "/download"; null`);
-  await expect(page.getByText("Tavora doesn't download files.")).toBeVisible();
+  await expect(page.getByTestId("toast").getByText("Tavora doesn't download files.")).toBeVisible();
   expect(() => readFileSync(path.join(downloads, "tavora-e2e.bin"))).toThrow();
 
   await app.close();
