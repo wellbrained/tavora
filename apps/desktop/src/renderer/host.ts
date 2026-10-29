@@ -2,7 +2,7 @@
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
-import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PublishView } from "../shared/host-api";
+import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
 import { SETTING_SECTIONS, type SettingsSection } from "./components/settings/settings-index";
 import { numberedWorkspaces } from "./shortcuts";
@@ -570,6 +570,10 @@ export const nextPanelSlot = ref<string | null>(null);
 export const moduleMenu = shallowRef<ModuleMenu | null>(null);
 api.onModuleMenu((menu) => (moduleMenu.value = menu));
 
+/** The panel shown big in a dialog over the app (PanelDialog.vue), or null. */
+export const panelDialog = shallowRef<PanelDialog | null>(null);
+api.onPanelDialog((dialog) => (panelDialog.value = dialog));
+
 /** Still images of the panels, by instance id, while they are hidden. */
 export const frozen = shallowRef<Record<string, string>>({});
 let frozenChanges = 0;
@@ -630,6 +634,7 @@ export const overlayOpen = computed(
     state.value?.hotkeyRequest != null ||
     publish.value !== null ||
     settingsOpen.value ||
+    panelDialog.value !== null ||
     searchOpen.value ||
     dragging.value,
 );

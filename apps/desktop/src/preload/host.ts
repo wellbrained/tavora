@@ -3,7 +3,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { LayoutStills, LayoutView } from "../shared/layout-view";
 import type { ContactDraft, ConversationDetailResult, InboxView } from "../shared/conversations";
-import type { AccountView, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, PairingView, PublishView, HostShortcut, HostViewState, ModuleMenu, TavoraHostApi } from "../shared/host-api";
+import type { AccountView, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, PairingView, PublishView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, TavoraHostApi } from "../shared/host-api";
 
 const api: TavoraHostApi = {
   getState: () => ipcRenderer.invoke("host:get-state"),
@@ -84,6 +84,11 @@ const api: TavoraHostApi = {
     ipcRenderer.on("host:module-menu", (_event, menu: ModuleMenu | null) => listener(menu));
   },
   answerModuleMenu: (requestId, id) => ipcRenderer.send("host:module-menu-answer", { requestId, id }),
+  onPanelDialog: (listener) => {
+    ipcRenderer.on("host:panel-dialog", (_event, dialog: PanelDialog | null) => listener(dialog));
+  },
+  placePanelDialog: (bounds) => ipcRenderer.send("host:panel-dialog-bounds", bounds),
+  closePanelDialog: () => ipcRenderer.send("host:panel-dialog-close"),
 };
 
 contextBridge.exposeInMainWorld("tavoraHost", api);

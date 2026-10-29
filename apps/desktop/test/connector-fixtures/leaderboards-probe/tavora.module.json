@@ -11,9 +11,8 @@
   "viewport": { "minWidth": 320, "minHeight": 240 },
   "leaderboards": {
     "boards": [
-      { "id": "daily", "name": "Daily streak", "kind": "streak", "daily": true },
-      { "id": "fastest", "name": "Fastest solve", "kind": "score", "order": "low" },
-      { "id": "solved", "name": "Puzzles solved", "kind": "total" }
+      { "id": "daily", "kind": "streak", "daily": true },
+      { "id": "fastest", "kind": "score", "order": "low" }
     ]
   },
   "permissions": { "network": [], "connectors": ["leaderboards"] }

@@ -50,6 +50,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     navigated: () => {},
     isMaximized: () => false,
     setMaximized: () => Promise.resolve(),
+    setDialog: () => Promise.resolve(),
     setLive: () => {},
     workspace: { id: "poe2", displayName: "Path of Exile 2", kind: "game" },
     data: registry.get("local", moduleId, "poe2"),

@@ -265,6 +265,18 @@ export interface TavoraSDK {
     /** Fires when this panel starts or stops filling the workspace, whoever did it. Needs Tavora 0.20.20 or newer. */
     onMaximizedChange(fn: (maximized: boolean) => void): Unsubscribe;
     /**
+     * Shows this panel big in a dialog centred on the app, over everything else, with the module's name and a close
+     * button: for settings or details that don't fit a small panel. It is the same page, now `size` big (CSS pixels,
+     * 240 to 2000 a side, default 560 x 640; Tavora makes it fit the window), so it keeps all it had. Call it from the
+     * click or key press that asked for it: the host refuses it otherwise. The user closes it with the close button or a
+     * click beside it (Esc in the page is the module's to handle); onDialogChange says so. Needs Tavora 0.21.95 or newer (older ones throw METHOD_NOT_FOUND).
+     */
+    openDialog(size?: { width?: number; height?: number }): Promise<void>;
+    /** Puts this panel back in its slot after openDialog. Needs Tavora 0.21.95 or newer. */
+    closeDialog(): Promise<void>;
+    /** Fires when this panel's dialog opens or closes, whoever did it. Needs Tavora 0.21.95 or newer. */
+    onDialogChange(fn: (open: boolean) => void): Unsubscribe;
+    /**
      * What this panel's live view shows: while the user shows the panel in their game and the in-game layer is closed,
      * Tavora shows the module's overlay page (the manifest's `overlay`) read-only and click-through in the panel's spot,
      * with this state. Any JSON up to LIMITS.maxOverlayStateBytes; null shows nothing. Tavora keeps showing the last
@@ -525,7 +537,7 @@ export interface TavoraSDK {
     top(board: string, options?: { period?: LeaderboardPeriod; day?: string; limit?: number }): Promise<LeaderboardTop>;
     /**
      * The user's own standing on every board of the manifest, in every period, in one call: rank, how many users the
-     * board has, and their numbers; null where they aren't on it. Every standing is null while signed out or not shown.
+     * board has, and their numbers; null where they aren't on it. Every standing is null while signed out or not shown. Tavora 0.21.97 and newer.
      */
     mine(options?: { day?: string }): Promise<LeaderboardMine>;
   };
@@ -796,6 +808,13 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         await call("panel.setMaximized", { maximized });
       },
       onMaximizedChange: (fn) => on("panel.maximized", ({ maximized }) => fn(maximized)),
+      openDialog: async (size) => {
+        await call("panel.setDialog", { open: true, ...size });
+      },
+      closeDialog: async () => {
+        await call("panel.setDialog", { open: false });
+      },
+      onDialogChange: (fn) => on("panel.dialog", ({ open }) => fn(open)),
       onNavigate: (fn) => {
         navigate = fn;
         return () => {

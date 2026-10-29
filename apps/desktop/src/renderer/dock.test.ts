@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Position } from "dockview-vue";
-import { dropReorders, fromDockview, GUIDE, maximizedPanel, MISSING_MODULE_SIZE, panelInfo, resolveDropPosition, resolveOuterEdge, shareOut, toDockview } from "./dock";
+import type { DockviewApi, Position } from "dockview-vue";
+import { dropReorders, fromDockview, GUIDE, groupConstraints, heightSpans, leastAlong, maximizedPanel, MISSING_MODULE_SIZE, PANEL_COMPONENT, panelInfo, placePanel, resolveDropPosition, resolveOuterEdge, TAB_HEIGHT, toDockview, widthSpans, type GroupShape, type Sizes } from "./dock";
 import type { HostViewState, PanelView, SavedLayout } from "../shared/host-api";
 
 describe("what docking knows about a panel", () => {
@@ -47,19 +47,128 @@ describe("the maximized group", () => {
     expect(saved).toEqual(layout);
     expect(maximizedPanel(saved)).toBeNull();
   });
+
+  it("keeps the group the user worked in, so new panels go there after a restart", () => {
+    const focused: SavedLayout = { ...layout, root: { ...layout.root, children: [layout.root.children[0]!, { ...layout.root.children[1]!, focused: true } as SavedLayout["root"]["children"][number]] } };
+    const json = toDockview(focused, info);
+    expect(json.activeGroup).toBe("group-2");
+    expect(fromDockview(json)).toEqual(focused);
+  });
 });
 
-describe("shareOut", () => {
-  it("shares room evenly when every minimum fits", () => {
-    expect(shareOut(1000, [320, 320, 320])).toEqual([1000 / 3, 1000 / 3, 1000 / 3]);
+describe("tall and wide panels", () => {
+  // A module with a layout for each shape: grid above the controls, or beside them.
+  const both: Sizes = { minWidth: 320, minHeight: 440, wide: { minWidth: 500, minHeight: 300 } };
+  const info = (sizes: Record<string, Sizes>) => (id: string) => (sizes[id] ? { title: id, ...sizes[id] } : undefined);
+  const group = (width: number, height: number, ...ids: string[]): GroupShape => ({ width, height: height + TAB_HEIGHT, panels: ids.map((id) => ({ id })) });
+
+  it("knows the wide minimum of a module or panel type, plus the card border", () => {
+    const view = (panelType: string | null): PanelView => ({ instanceId: "p", moduleId: "a.sudoku", panelType, name: "Sudoku", status: "ready", waiting: false, content: null });
+    const module = { id: "a.sudoku", name: "Sudoku", minWidth: 320, minHeight: 440, wide: { minWidth: 500, minHeight: 300 }, panels: [{ id: "small", minWidth: 200, minHeight: 200 }] } as unknown as HostViewState["modules"][number];
+    expect(panelInfo(view(null), [module])).toMatchObject({ minWidth: 322, minHeight: 442, wide: { minWidth: 502, minHeight: 302 } });
+    expect(panelInfo(view("small"), [module])).not.toHaveProperty("wide");
   });
 
-  it("gives tight members their minimum and shares the rest", () => {
-    expect(shareOut(1000, [500, 100, 100])).toEqual([500, 250, 250]);
+  it("lets a drag pass the square where both layouts fit", () => {
+    expect(widthSpans(both, 600)).toEqual([{ min: 320, max: Infinity }]);
+    expect(heightSpans(both, 600)).toEqual([{ min: 300, max: Infinity }]);
   });
 
-  it("settles on minimums when there is exactly enough room", () => {
-    expect(shareOut(960, [320, 640])).toEqual([320, 640]);
+  it("stops a drag at the square where the other layout doesn't fit yet", () => {
+    // 450 tall: tall up to 450 wide, wide only from 500, nothing between.
+    expect(widthSpans(both, 450)).toEqual([
+      { min: 320, max: 450 },
+      { min: 500, max: Infinity },
+    ]);
+    // 450 wide is too narrow for the wide layout, so the panel stays at least square.
+    expect(heightSpans(both, 450)).toEqual([{ min: 450, max: Infinity }]);
+  });
+
+  it("allows only the layout whose minimum fits", () => {
+    expect(widthSpans(both, 350)).toEqual([{ min: 500, max: Infinity }]);
+    expect(widthSpans(both, 200)).toEqual([]);
+    expect(heightSpans(both, 300)).toEqual([]);
+  });
+
+  it("keeps one minimum for any shape when a module has no wide layout", () => {
+    const one: Sizes = { minWidth: 500, minHeight: 300 };
+    expect(widthSpans(one, 800)).toEqual([{ min: 500, max: Infinity }]);
+    expect(heightSpans(one, 500)).toEqual([{ min: 300, max: Infinity }]);
+    expect(widthSpans(one, 200)).toEqual([]);
+  });
+
+  it("gives a group the stretch that holds its size, and no end where there is none", () => {
+    const sizes = info({ g: both });
+    expect(groupConstraints(group(400, 450, "g"), sizes)).toEqual({ minimumWidth: 320, maximumWidth: 450, minimumHeight: 440 + TAB_HEIGHT, maximumHeight: Number.MAX_SAFE_INTEGER });
+    expect(groupConstraints(group(600, 450, "g"), sizes)).toEqual({ minimumWidth: 500, maximumWidth: Number.MAX_SAFE_INTEGER, minimumHeight: 300 + TAB_HEIGHT, maximumHeight: Number.MAX_SAFE_INTEGER });
+  });
+
+  it("falls back to the smallest each side could be before the group is laid out", () => {
+    expect(groupConstraints(group(0, -TAB_HEIGHT, "g"), info({ g: both }))).toEqual({ minimumWidth: 320, maximumWidth: Number.MAX_SAFE_INTEGER, minimumHeight: 300 + TAB_HEIGHT, maximumHeight: Number.MAX_SAFE_INTEGER });
+  });
+
+  it("makes a group of tabs fit every panel in it", () => {
+    const sizes = info({ g: both, notes: { minWidth: 400, minHeight: 200 } });
+    expect(groupConstraints(group(420, 450, "g", "notes"), sizes)).toMatchObject({ minimumWidth: 400, maximumWidth: 450 });
+  });
+
+  it("finds the least room a panel needs beside or below a group", () => {
+    const sizes = info({ g: both });
+    // Beside a 450 tall group: tall from 320 wide.
+    expect(leastAlong(["g"], true, 450 + TAB_HEIGHT, sizes)).toBe(320);
+    // Beside a 350 tall one only the wide layout fits.
+    expect(leastAlong(["g"], true, 350 + TAB_HEIGHT, sizes)).toBe(500);
+    // Below a 600 wide group: wide from 300 tall, plus the tab bar.
+    expect(leastAlong(["g"], false, 600, sizes)).toBe(300 + TAB_HEIGHT);
+    expect(leastAlong(["g"], true, 200 + TAB_HEIGHT, sizes)).toBe(Infinity);
+  });
+});
+
+describe("placing a new panel", () => {
+  const fake = (groups: { id: string; width: number; height: number; panels: string[] }[], active?: string) => {
+    const added: unknown[] = [];
+    const items = groups.map((group) => ({ ...group, panels: group.panels.map((id) => ({ id })) }));
+    const api = {
+      groups: items,
+      activeGroup: items.find((group) => group.id === active),
+      getGroup: (id: string) => items.find((group) => group.id === id),
+      addPanel: (options: unknown) => added.push(options),
+    } as unknown as DockviewApi;
+    return { api, added };
+  };
+  const info = () => ({ title: "Sudoku", minWidth: 320, minHeight: 440 });
+
+  it("goes in as a tab in the active group, so nothing else moves", () => {
+    const { api, added } = fake(
+      [
+        { id: "left", width: 300, height: 800, panels: ["a"] },
+        { id: "right", width: 1200, height: 800, panels: ["b"] },
+      ],
+      "left",
+    );
+    placePanel(api, "new", info);
+    expect(added).toEqual([{ id: "new", component: PANEL_COMPONENT, title: "Sudoku", position: { referenceGroup: "left", direction: "within" } }]);
+  });
+
+  it("takes an empty slot first", () => {
+    const { api, added } = fake(
+      [
+        { id: "left", width: 300, height: 800, panels: ["a"] },
+        { id: "slot", width: 600, height: 800, panels: [] },
+      ],
+      "left",
+    );
+    placePanel(api, "new", info);
+    expect(added).toMatchObject([{ position: { referenceGroup: "slot" } }]);
+  });
+
+  it("goes into the biggest group when none is active", () => {
+    const { api, added } = fake([
+      { id: "small", width: 300, height: 800, panels: ["a"] },
+      { id: "big", width: 1200, height: 800, panels: ["b"] },
+    ]);
+    placePanel(api, "new", info);
+    expect(added).toMatchObject([{ position: { referenceGroup: "big" } }]);
   });
 });
 

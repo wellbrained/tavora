@@ -24,7 +24,7 @@ import {
   dropAllowed,
   dropReorders,
   fromDockview,
-  groupMinimum,
+  groupConstraints,
   guardDrop,
   guideFits,
   maximizedPanel,
@@ -243,12 +243,20 @@ function reconcile(api: DockviewApi) {
   if (changed) saveSoon();
 }
 
-/** Gives every group the minimum size of its largest module, so splits never squeeze one below it. */
+/**
+ * Gives every group the sizes its panels allow from where it is now, so splits never squeeze one below its
+ * minimum and a drag stops where a panel would turn wide (or tall) without room for that layout.
+ */
 function updateConstraints(api: DockviewApi) {
   for (const group of api.groups as DockviewGroupPanel[]) {
-    const min = groupMinimum(group, info);
-    if (group.minimumWidth !== min.width || group.minimumHeight !== min.height) {
-      group.api.setConstraints({ minimumWidth: min.width, minimumHeight: min.height });
+    const next = groupConstraints(group, info);
+    if (
+      group.minimumWidth !== next.minimumWidth ||
+      group.maximumWidth !== next.maximumWidth ||
+      group.minimumHeight !== next.minimumHeight ||
+      group.maximumHeight !== next.maximumHeight
+    ) {
+      group.api.setConstraints(next);
     }
   }
 }
@@ -377,6 +385,8 @@ function onReady({ api }: DockviewReadyEvent) {
   dock = api;
   restore(api);
   api.onDidLayoutChange(() => {
+    // Sizes changed, so what each group may be dragged to next changed too.
+    updateConstraints(api);
     refreshColumns();
     reportSoon();
     if (!applying) saveSoon();
@@ -390,6 +400,10 @@ function onReady({ api }: DockviewReadyEvent) {
     }
     updateConstraints(api);
     reportSoon();
+  });
+  // The group the user works in is saved, so new panels still go there after a restart.
+  api.onDidActiveGroupChange(() => {
+    if (!applying) saveSoon();
   });
   api.onDidMaximizedGroupChange(() => {
     refreshColumns();

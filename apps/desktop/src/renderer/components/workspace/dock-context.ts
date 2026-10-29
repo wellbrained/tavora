@@ -4,7 +4,7 @@ import type { DockviewApi, DockviewGroupPanel, IDockviewPanel } from "dockview-v
 import type { InjectionKey } from "vue";
 import { act, confirmAction, showOrAddPanel, state, submitAction, type MenuItem } from "../../host";
 import { t } from "../../i18n";
-import { TAB_HEIGHT, type PanelInfo } from "../../dock";
+import { leastAlong, type PanelInfo } from "../../dock";
 import type { ColumnSide } from "../../dock-columns";
 
 export interface DockContext {
@@ -20,13 +20,8 @@ export const DOCK: InjectionKey<DockContext> = Symbol("dock");
 
 function canSplit(group: DockviewGroupPanel, side: "right" | "below", info: DockContext["info"]): boolean {
   if (group.panels.length < 2) return false;
-  let width = 0;
-  let height = 0;
-  for (const panel of group.panels) {
-    width = Math.max(width, info(panel.id)?.minWidth ?? 0);
-    height = Math.max(height, (info(panel.id)?.minHeight ?? 0) + TAB_HEIGHT);
-  }
-  return side === "right" ? group.width / 2 >= width : group.height / 2 >= height;
+  const ids = group.panels.map((panel) => panel.id);
+  return side === "right" ? group.width / 2 >= leastAlong(ids, true, group.height, info) : group.height / 2 >= leastAlong(ids, false, group.width, info);
 }
 
 /**

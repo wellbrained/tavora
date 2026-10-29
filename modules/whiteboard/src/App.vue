@@ -3,6 +3,8 @@
 // of a workspace shows the same boards; which board a panel shows, its views and where its palette sits are its own state.
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { ImagePlus, MoreHorizontal, Plus, StickyNote } from "@lucide/vue";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { toast, Toaster } from "@tavora/official-ui/components/ui/toast";
@@ -57,6 +59,8 @@ const empty = ref(true);
 const copying = ref(false);
 const palette = ref<PalettePlace>(DEFAULT_PALETTE);
 const toolbar = ref<ToolbarPlace>("top");
+const pictureInput = ref<HTMLInputElement | null>(null);
+const boardReady = ref(false);
 let controls: Controls | null = null;
 
 let revision = 0;
@@ -292,6 +296,18 @@ function setDirty(value: boolean) {
 
 function setControls(value: Controls | null) {
   controls = value;
+  boardReady.value = value !== null;
+}
+
+function addNote() { controls?.addNote(); }
+
+async function addPicture(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file || !controls) return;
+  try { await controls.addPicture(file); }
+  catch (reason) { notify(t("card.failed", { error: errorMessage(reason) })); }
 }
 </script>
 
@@ -305,26 +321,38 @@ function setControls(value: Controls | null) {
     </Notice>
   </div>
   <p v-else-if="!sdk || !shown" class="text-muted-foreground p-4 text-sm">{{ t("loading") }}</p>
-  <div v-else class="flex h-full min-h-0 flex-col" data-testid="whiteboard-app">
-    <header class="bg-primary/5 border-primary/25 flex flex-none flex-wrap items-center gap-2 border-b px-2 py-1">
-      <BoardMenu
-        :boards="list"
-        :current-id="shown.id"
-        :current-name="shown.name"
-        :can-clear="!empty"
-        @select="show"
-        @create="createBoard"
-        @rename="rename"
-        @clear="clearBoard"
-        @delete="remove"
-      />
+  <div v-else class="whiteboard-app flex h-full min-h-0 flex-col" data-testid="whiteboard-app">
+    <header class="board-bar bg-primary/5 border-primary/25 flex flex-none items-center gap-2 border-b px-2 py-1">
+      <div class="board-switcher">
+        <BoardMenu
+          :boards="list"
+          :current-id="shown.id"
+          :current-name="shown.name"
+          :can-clear="!empty"
+          @select="show"
+          @create="createBoard"
+          @rename="rename"
+          @clear="clearBoard"
+          @delete="remove"
+        />
+      </div>
       <span class="flex-1" />
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="sm" :disabled="!boardReady" data-testid="add-card" :aria-label="t('card.add')" :title="t('card.add')"><Plus class="size-4" aria-hidden="true" /><span class="card-label">{{ t("card.add") }}</span></Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem data-testid="add-note-card" @select="addNote"><StickyNote class="size-4" aria-hidden="true" />{{ t("card.note") }}</DropdownMenuItem>
+          <DropdownMenuItem data-testid="add-picture-card" @select="pictureInput?.click()"><ImagePlus class="size-4" aria-hidden="true" />{{ t("card.picture") }}</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <input ref="pictureInput" class="hidden" type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-testid="card-file" :aria-label="t('card.picture')" @change="addPicture" />
       <Button
         v-if="pictures.count > 0"
         type="button"
         variant="ghost"
         size="sm"
-        class="text-muted-foreground"
+        class="board-image-action text-muted-foreground"
         :title="t(pictures.allLocked ? 'image.unlockHint' : 'image.lockHint')"
         data-testid="picture-lock"
         :data-locked="pictures.allLocked"
@@ -332,8 +360,17 @@ function setControls(value: Controls | null) {
       >
         {{ t(pictures.allLocked ? "image.unlock" : "image.lock") }}
       </Button>
-      <Button type="button" variant="outline" size="sm" :title="t('copy.hint')" data-testid="copy-picture" :disabled="empty || copying" @click="copyAsPicture">{{ t("copy.button") }}</Button>
-      <Button type="button" variant="outline" size="sm" :title="t('savePicture.hint')" data-testid="save-picture" :disabled="empty || copying" @click="saveAsPicture">{{ t("savePicture.button") }}</Button>
+      <Button class="board-image-action" type="button" variant="outline" size="sm" :title="t('copy.hint')" data-testid="copy-picture" :disabled="empty || copying" @click="copyAsPicture">{{ t("copy.button") }}</Button>
+      <Button class="board-image-action" type="button" variant="outline" size="sm" :title="t('savePicture.hint')" data-testid="save-picture" :disabled="empty || copying" @click="saveAsPicture">{{ t("savePicture.button") }}</Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child><Button class="board-actions-menu" variant="ghost" size="icon-sm" :aria-label="t('board.actions')" :title="t('board.actions')" data-testid="board-actions"><MoreHorizontal class="size-4" /></Button></DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem data-testid="compact-copy-picture" :disabled="empty || copying" @select="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
+          <DropdownMenuItem data-testid="compact-save-picture" :disabled="empty || copying" @select="saveAsPicture">{{ t("savePicture.button") }}</DropdownMenuItem>
+          <DropdownMenuSeparator v-if="pictures.count > 0" />
+          <DropdownMenuItem v-if="pictures.count > 0" @select="togglePictureLocks">{{ t(pictures.allLocked ? "image.unlock" : "image.lock") }}</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </header>
     <Notice v-if="level !== 'ok'" :variant="level === 'full' ? 'error' : 'warning'" class="mx-2 mt-2 flex-none" data-testid="board-size">
       {{ t(level === "full" ? "size.full" : "size.warn", { used: formatMegabytes(bytes), max: formatMegabytes(MAX_BOARD_BYTES) }) }}

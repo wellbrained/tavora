@@ -6,25 +6,38 @@ import type { ModuleProblemKind, ModuleProblemValues } from "./module-problem";
 import type { ContactDraft, ConversationDetailResult, InboxView } from "./conversations";
 import type { HostAction } from "./host-actions";
 import type { LayoutMessage, LayoutStills, LayoutView } from "./layout-view";
-import type { LeaderboardKind, LeaderboardPeriod } from "@tavora/module-schema";
-import type { LeaderboardStanding } from "@tavora/sdk/protocol";
+
+// The leaderboard words the profile card needs, as module-schema and the SDK's protocol have them. Written out here:
+// the host UI type-checks packages from their builds, which aren't there yet when CI type-checks.
+export type ProfileRankKind = "streak" | "score" | "total" | "average" | "rate";
+export type ProfileRankPeriod = "day" | "week" | "month" | "year" | "all";
+/** A user's standing on a board in one period (the SDK's LeaderboardStanding). */
+export interface ProfileRankStanding {
+  rank: number;
+  of: number;
+  current?: number;
+  best?: number;
+  value?: number;
+  games?: number;
+  wins?: number;
+}
 
 /** The ranks shown in the profile card (Settings keeps the choice, library.profileRanks). */
 export interface ProfileRanksSetting {
   hidden: boolean;
-  period: LeaderboardPeriod;
+  period: ProfileRankPeriod;
 }
 
 /** One board in the profile card: its name in Tavora's language, what it counts, and the user's standing per period. */
 export interface ProfileRankBoard {
   id: string;
   name: string;
-  kind: LeaderboardKind;
+  kind: ProfileRankKind;
   /** A streak board with one result per day (the streak counts days). */
   daily?: boolean;
   /** The short text after a number, such as "pts". */
   unit?: string;
-  periods: Record<LeaderboardPeriod, LeaderboardStanding | null>;
+  periods: Record<ProfileRankPeriod, ProfileRankStanding | null>;
 }
 
 /** Where the user stands on the boards of the catalog modules they agreed to be shown on (host:profile-ranks). */
@@ -141,6 +154,8 @@ export interface PanelTypeView {
   icon: string | null;
   minWidth: number;
   minHeight: number;
+  /** The smallest content area while the panel is wider than tall, when the type has a layout for that. */
+  wide?: { minWidth: number; minHeight: number };
 }
 
 /** A Browser panel's page, as its toolbar shows it. Nothing here comes from the page but its title. */
@@ -458,6 +473,8 @@ export interface LayoutGroup {
   active: string | null;
   /** The group fills the workspace (Maximize); one group of a layout at most. */
   maximized?: true;
+  /** The group the user last worked in, where new panels go; one group of a layout at most. */
+  focused?: true;
 }
 
 export type LayoutNode = LayoutSplit | LayoutGroup;
@@ -574,6 +591,8 @@ export interface HostViewState {
     /** The smallest panel content area the module works in. */
     minWidth: number;
     minHeight: number;
+    /** The smallest content area while the panel is wider than tall, when the module has a layout for that. */
+    wide?: { minWidth: number; minHeight: number };
     /** Its panel types, in the manifest's order; empty for a module with one panel and no types. */
     panels: PanelTypeView[];
     /** Official modules ship with Tavora; local ones were found on disk. */
@@ -1068,6 +1087,21 @@ export interface TavoraHostApi {
   onModuleMenu(listener: (menu: ModuleMenu | null) => void): void;
   /** The user chose an item of the module menu, or closed it (null). */
   answerModuleMenu(requestId: number, id: string | null): void;
+  /** A panel asked to be shown big in a dialog over the app (panel.setDialog), or null: its dialog closed. */
+  onPanelDialog(listener: (dialog: PanelDialog | null) => void): void;
+  /** Where the dialog's frame leaves room for the panel's page, in window pixels; the host moves the page there. */
+  placePanelDialog(bounds: { x: number; y: number; width: number; height: number }): void;
+  /** The user closed the panel's dialog (its close button or a click beside it). */
+  closePanelDialog(): void;
+}
+
+/** A panel shown big in a dialog over the app: its module's name and icon for the frame, and the size it asked for. */
+export interface PanelDialog {
+  instanceId: string;
+  title: string;
+  icon: string | null;
+  width: number;
+  height: number;
 }
 
 /**

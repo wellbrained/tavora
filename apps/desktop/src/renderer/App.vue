@@ -16,6 +16,7 @@ import NavigationChoiceDialog from "./components/NavigationChoiceDialog.vue";
 import WorkspaceRail from "./components/WorkspaceRail.vue";
 import GameSwitchDialog from "./components/GameSwitchDialog.vue";
 import ModuleMenu from "./components/menus/ModuleMenu.vue";
+import PanelDialog from "./components/PanelDialog.vue";
 import PromptDialog from "./components/PromptDialog.vue";
 import SearchDialog from "./components/SearchDialog.vue";
 import ShareIconsDialog from "./components/ShareIconsDialog.vue";
@@ -62,6 +63,7 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <CopyExampleDialog v-else-if="dialog?.kind === 'copy-example'" :key="dialog.moduleId" :module-id="dialog.moduleId" />
     <InboxDialogs />
     <ModuleMenu />
+    <PanelDialog />
     <CloudCopyDialog />
     <HotkeyDialog />
     <PublishDialog />

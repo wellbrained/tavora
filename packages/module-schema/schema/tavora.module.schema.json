@@ -479,7 +479,7 @@
                 "minLength": 1,
                 "maxLength": 40,
                 "pattern": "^[^\\u0000-\\u001f]*\\S[^\\u0000-\\u001f]*$",
-                "description": "The board's name as users see it, such as Daily streak; translations.boards names it in other languages."
+                "description": "The board's name as users see it, such as Daily streak; translations.boards names it in other languages. Needs a minTavora newer than 0.21.96, as do the total, average and rate kinds, unit and minGames; a manifest for an older Tavora leaves names out and its boards go by their id."
               },
               "kind": {
                 "enum": ["streak", "score", "total", "average", "rate"],
@@ -648,6 +648,23 @@
         },
         "preferredHeight": {
           "$ref": "#/definitions/dimension"
+        },
+        "wide": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "minWidth",
+            "minHeight"
+          ],
+          "properties": {
+            "minWidth": {
+              "$ref": "#/definitions/dimension"
+            },
+            "minHeight": {
+              "$ref": "#/definitions/dimension"
+            }
+          },
+          "description": "The smallest size while the panel is wider than tall, for a module with a second layout for that shape; minWidth and minHeight above then apply while it is taller than wide or square. wide.minWidth must be larger than wide.minHeight, and minWidth no larger than minHeight. Needs a minTavora newer than 0.21.93 (except Tavora's own modules); the TypeScript validator checks that."
         }
       }
     }

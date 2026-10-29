@@ -2,10 +2,22 @@
 // in schema/ describes the same rules for editors; tests keep the two in step.
 
 export interface ModuleViewport {
+  /** The smallest size; with `wide`, the smallest while the panel is taller than wide or square. */
   minWidth: number;
   minHeight: number;
   preferredWidth?: number;
   preferredHeight?: number;
+  /**
+   * The smallest size while the panel is wider than tall, for a module with a second layout for that shape.
+   * Needs a `minTavora` newer than LAST_TAVORA_WITHOUT_WIDE_LAYOUT.
+   */
+  wide?: ModuleMinimum;
+}
+
+/** A smallest panel size in CSS pixels. */
+export interface ModuleMinimum {
+  minWidth: number;
+  minHeight: number;
 }
 
 /**
@@ -188,7 +200,7 @@ const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEWPORT = 10_000;
 const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "personalWorkspaces", "workspaces", "viewport", "panels", "inGame", "overlay", "overlaySize", "actions", "translations", "leaderboards", "permissions"];
-const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight"];
+const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight", "wide"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
 export const MAX_SCREENSHOTS = 5;
@@ -416,11 +428,13 @@ export const LAST_TAVORA_WITHOUT_OVERLAY_SIZE = "0.21.27";
 export const LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES = "0.21.42";
 /** The last Tavora that refuses `leaderboards` and its connector; a manifest with them needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_LEADERBOARDS = "0.21.91";
+/** The last Tavora that refuses `viewport.wide`; a manifest with it needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_WIDE_LAYOUT = "0.21.93";
 /**
  * The last Tavora whose boards had no `name`. A manifest for it (`minTavora` at most this, such as Sudoku 0.1.0) may
  * leave the names out and loads with each board's id as its name; a newer manifest needs them.
  */
-export const LAST_TAVORA_WITHOUT_BOARD_NAMES = "0.21.92";
+export const LAST_TAVORA_WITHOUT_BOARD_NAMES = "0.21.96";
 /** Most leaderboards one module may declare. */
 export const MAX_LEADERBOARD_BOARDS = 20;
 const LEADERBOARD_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
@@ -519,7 +533,7 @@ function isPackagePath(value: unknown): value is string {
   return value.split("/").every((part) => part !== "" && part !== "." && part !== "..");
 }
 
-function checkViewport(viewport: unknown, at: string, errors: string[]): void {
+function checkViewport(viewport: unknown, at: string, errors: string[], wideAllowed: boolean): void {
   if (!isRecord(viewport)) {
     errors.push(`${at} must be an object`);
     return;
@@ -532,9 +546,21 @@ function checkViewport(viewport: unknown, at: string, errors: string[]): void {
   }
   const unknown = Object.keys(viewport).filter((key) => !VIEWPORT_FIELDS.includes(key));
   if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
+  if (viewport.wide === undefined) return;
+  const wide = viewport.wide;
+  if (!isRecord(wide) || !isDimension(wide.minWidth) || !isDimension(wide.minHeight) || Object.keys(wide).some((key) => key !== "minWidth" && key !== "minHeight")) {
+    errors.push(`${at}.wide must be { minWidth, minHeight } in pixels`);
+    return;
+  }
+  // Swapped numbers would leave part of a minimum out of reach: the wide one applies only while width > height.
+  if (wide.minWidth <= wide.minHeight) errors.push(`${at}.wide.minWidth must be larger than ${at}.wide.minHeight`);
+  if (isDimension(viewport.minWidth) && isDimension(viewport.minHeight) && viewport.minWidth > viewport.minHeight) {
+    errors.push(`${at}.minWidth must not be larger than ${at}.minHeight when ${at}.wide is set: it is the minimum while the panel is taller than wide`);
+  }
+  if (!wideAllowed) errors.push(`${at}.wide needs a minTavora newer than ${LAST_TAVORA_WITHOUT_WIDE_LAYOUT}, because older Tavoras refuse it`);
 }
 
-function checkPanels(panels: unknown, errors: string[], inGameAllowed = true): void {
+function checkPanels(panels: unknown, errors: string[], inGameAllowed = true, wideAllowed = true): void {
   if (!Array.isArray(panels) || panels.length === 0 || panels.length > MAX_PANEL_TYPES) {
     errors.push(`panels must be an array of 1 to ${MAX_PANEL_TYPES} panel types`);
     return;
@@ -559,7 +585,7 @@ function checkPanels(panels: unknown, errors: string[], inGameAllowed = true): v
       if (!isPackagePath(type.icon)) errors.push(`${at}.icon must be a relative path inside the package`);
       else if (!/\.(png|webp)$/.test(type.icon)) errors.push(`${at}.icon must be a .png or .webp file`);
     }
-    if (type.viewport !== undefined) checkViewport(type.viewport, `${at}.viewport`, errors);
+    if (type.viewport !== undefined) checkViewport(type.viewport, `${at}.viewport`, errors, wideAllowed);
     if (type.continues !== undefined && typeof type.continues !== "boolean") errors.push(`${at}.continues must be true or false`);
     if (type.continues === true) continuing++;
     if (type.inGame !== undefined && typeof type.inGame !== "boolean") errors.push(`${at}.inGame must be true or false`);
@@ -606,6 +632,7 @@ function checkLeaderboards(input: Record<string, unknown>, errors: string[]): vo
   if (unknown.length > 0) errors.push(`unknown leaderboards fields: ${unknown.join(", ")}`);
   const ids = new Set<string>();
   const namesNeeded = officialId(input) || needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_BOARD_NAMES);
+  const newer = new Set<string>();
   boards.forEach((board: unknown, index) => {
     const at = `leaderboards.boards[${index}]`;
     if (!isRecord(board)) return void errors.push(`${at} must be an object`);
@@ -616,6 +643,9 @@ function checkLeaderboards(input: Record<string, unknown>, errors: string[]): vo
     const named = board.name !== undefined || namesNeeded;
     if (named && (!isText(board.name, MAX_LEADERBOARD_NAME) || /[\u0000-\u001f]/.test(board.name))) errors.push(`${at}.name must be a non-empty string of at most ${MAX_LEADERBOARD_NAME} characters on one line`);
     const kind = LEADERBOARD_KINDS.includes(board.kind as LeaderboardKind) ? (board.kind as LeaderboardKind) : null;
+    // What the first leaderboards didn't know, so Tavoras up to LAST_TAVORA_WITHOUT_BOARD_NAMES refuse it.
+    for (const field of ["name", "unit", "minGames"]) if (board[field] !== undefined) newer.add(field);
+    if (kind === "total" || kind === "average" || kind === "rate") newer.add(`kind "${kind}"`);
     if (kind === null) errors.push(`${at}.kind must be one of ${LEADERBOARD_KINDS.map((name) => `"${name}"`).join(", ")}`);
     const fields = ["id", "name", "kind"];
     if (kind === "streak") {
@@ -641,6 +671,9 @@ function checkLeaderboards(input: Record<string, unknown>, errors: string[]): vo
   });
   if (!officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_LEADERBOARDS)) {
     errors.push(`leaderboards need a minTavora newer than ${LAST_TAVORA_WITHOUT_LEADERBOARDS}, because older Tavoras refuse them`);
+  }
+  if (!namesNeeded && newer.size > 0) {
+    errors.push(`leaderboards with ${[...newer].join(", ")} need a minTavora newer than ${LAST_TAVORA_WITHOUT_BOARD_NAMES}, because older Tavoras refuse them`);
   }
 }
 
@@ -675,6 +708,9 @@ function checkTranslations(input: Record<string, unknown>, errors: string[]): vo
     names("panels", panelIds, MAX_PANEL_NAME);
     names("actions", actionIds, MAX_ACTION_NAME);
     names("boards", boardIds, MAX_LEADERBOARD_NAME);
+    if (translation.boards !== undefined && !officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_BOARD_NAMES)) {
+      errors.push(`${at}.boards needs a minTavora newer than ${LAST_TAVORA_WITHOUT_BOARD_NAMES}, because older Tavoras refuse it`);
+    }
     const unknown = Object.keys(translation).filter((key) => !TRANSLATION_FIELDS.includes(key));
     if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
   }
@@ -741,10 +777,11 @@ export function validateManifest(input: unknown): ManifestResult {
     errors.push(`personalWorkspaces needs a minTavora newer than ${LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES}, because older Tavoras refuse it; set workspaces for them`);
   }
 
-  checkViewport(input.viewport, "viewport", errors);
+  const wideAllowed = officialId(input) || needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_WIDE_LAYOUT);
+  checkViewport(input.viewport, "viewport", errors, wideAllowed);
   if (input.panels !== undefined) {
     const minTavora = { minTavora: typeof input.minTavora === "string" ? input.minTavora : "" };
-    checkPanels(input.panels, errors, officialId(input) || needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_IN_GAME_PANELS));
+    checkPanels(input.panels, errors, officialId(input) || needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_IN_GAME_PANELS), wideAllowed);
   }
   if (input.inGame !== undefined) {
     if (typeof input.inGame !== "boolean") errors.push("inGame must be true or false");

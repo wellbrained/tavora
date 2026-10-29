@@ -2,12 +2,11 @@
 import { Camera, Check, EyeOff, UserRound, X } from "@lucide/vue";
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui";
 import { computed, nextTick, ref } from "vue";
-import type { LeaderboardPeriod, LeaderboardStanding } from "@tavora/sdk/protocol";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { ProfileRankBoard, ProfileRanksView } from "../../../shared/host-api";
+import type { ProfileRankBoard, ProfileRankPeriod, ProfileRankStanding, ProfileRanksView } from "../../../shared/host-api";
 import { intlLocale } from "../../../shared/i18n";
 import { act, api, openSettings, state, useFloating } from "../../host";
 import { language, t } from "../../i18n";
@@ -46,7 +45,14 @@ const cropping = ref<string | null>(null);
 /** Where the user stands on the boards they are shown on; null until loaded. All periods come at once. */
 const ranks = ref<ProfileRanksView | null>(null);
 const ranksLoading = ref(false);
-const PERIODS: LeaderboardPeriod[] = ["day", "week", "month", "year", "all"];
+/** The periods to pick, with their names' keys. */
+const PERIODS = [
+  { value: "day", label: "profile.ranks.period.day" },
+  { value: "week", label: "profile.ranks.period.week" },
+  { value: "month", label: "profile.ranks.period.month" },
+  { value: "year", label: "profile.ranks.period.year" },
+  { value: "all", label: "profile.ranks.period.all" },
+] as const satisfies readonly { value: ProfileRankPeriod; label: string }[];
 
 async function loadRanks() {
   if (profile.value.ranks.hidden || ranksLoading.value) return;
@@ -63,12 +69,12 @@ function setRanksHidden(hidden: boolean) {
 const number = computed(() => new Intl.NumberFormat(intlLocale(language.value), { maximumFractionDigits: 2 }));
 
 /** The standing in the chosen period, or null where the user has none (a streak board has no "day"). */
-function standingOf(board: ProfileRankBoard): LeaderboardStanding | null {
+function standingOf(board: ProfileRankBoard): ProfileRankStanding | null {
   return board.kind === "streak" && profile.value.ranks.period === "day" ? null : board.periods[profile.value.ranks.period];
 }
 
 /** The numbers of a standing in words: a streak's best (and the current one on "All time"), a rate with its games, a value with its unit. */
-function numbersOf(board: ProfileRankBoard, standing: LeaderboardStanding): string {
+function numbersOf(board: ProfileRankBoard, standing: ProfileRankStanding): string {
   if (board.kind === "streak") {
     const best = standing.best ?? 0;
     const text = t(board.daily ? "profile.ranks.days" : "profile.ranks.wins", { count: best });
@@ -285,12 +291,12 @@ function closeCrop() {
             <template v-else>
               <div class="flex items-center gap-2">
                 <span class="text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium tracking-wide uppercase">{{ t("profile.ranks.title") }}</span>
-                <Select :model-value="profile.ranks.period" @update:model-value="act({ type: 'set-profile-ranks', period: $event as LeaderboardPeriod })">
+                <Select :model-value="profile.ranks.period" @update:model-value="act({ type: 'set-profile-ranks', period: $event as ProfileRankPeriod })">
                   <SelectTrigger size="sm" class="h-7 w-32 text-xs" :aria-label="t('profile.ranks.period')" data-testid="profile-ranks-period">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem v-for="period in PERIODS" :key="period" :value="period">{{ t(`profile.ranks.period.${period}`) }}</SelectItem>
+                    <SelectItem v-for="period in PERIODS" :key="period.value" :value="period.value">{{ t(period.label) }}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button

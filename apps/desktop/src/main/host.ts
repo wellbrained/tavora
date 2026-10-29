@@ -31,7 +31,8 @@ import {
 } from "electron";
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { PanelDialogSize } from "./bridge";
+import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -1788,6 +1789,12 @@ export class Host {
     ipcMain.on("host:module-menu-answer", (event, answer: unknown) => {
       if (fromHost(event)) this.answerModuleMenu(answer);
     });
+    ipcMain.on("host:panel-dialog-bounds", (event, raw: unknown) => {
+      if (fromHost(event)) this.placePanelDialog(raw);
+    });
+    ipcMain.on("host:panel-dialog-close", (event) => {
+      if (fromHost(event)) this.closePanelDialog();
+    });
   }
 
   private registerWindowEvents(): void {
@@ -3459,6 +3466,7 @@ export class Host {
       openPanel: (type, content) => this.openRelatedPanel(record, type, content),
       setLive: (state) => this.gameOverlays.setLive(record.instanceId, module.owner, state),
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
+      setDialog: (open, size) => (open ? this.openPanelDialog(record.instanceId, module, size) : this.closePanelDialog(record.instanceId)),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
@@ -3719,6 +3727,7 @@ export class Host {
     this.views.delete(instanceId);
     this.viewsByContents.delete(view.webContentsId);
     this.browsersByContents.delete(view.webContentsId);
+    if (this.panelDialog?.instanceId === instanceId) this.closePanelDialog();
     // A panel in the layer is let go of by its window first (the window never closes the page, this does).
     if (forget && view instanceof ModuleView && this.gameOverlays?.hasPanel(instanceId)) this.gameOverlays.stopPanel(instanceId);
     this.window.contentView.removeChildView(view.view);
@@ -3731,6 +3740,7 @@ export class Host {
   }
 
   private closeAllViews(): void {
+    this.closePanelDialog();
     this.endOpening();
     this.cover.cancel();
     // A panel in the layer goes on running there, also while another workspace or Home is shown.
@@ -3874,7 +3884,9 @@ export class Host {
 
   /** Puts one panel's view where the workspace last said it goes, and shows, pauses or resumes it accordingly. */
   private layOut(instanceId: string, view: ModuleView | BrowserPanel): void {
-    const rect = this.panelBounds.get(instanceId);
+    // A panel in its dialog is placed there and stays in sight above the dimmed app, while the others step aside.
+    const dialog = this.panelDialog?.instanceId === instanceId ? (this.panelDialog.bounds ?? undefined) : undefined;
+    const rect = dialog ?? this.panelBounds.get(instanceId);
     if (rect) view.setBounds(rect);
     // Its panel shows a permission question in its place: the page waits, hidden, until it is answered.
     const shown = this.workspaceId ? this.records(this.workspaceId) : [];
@@ -3886,7 +3898,7 @@ export class Host {
     }
     // A module page stays hidden until it has its data, so switching workspaces does not show it building itself;
     // while a workspace opens, every panel waits for the others.
-    view.setVisible(rect !== undefined && !this.overlay && !this.opening && (!(view instanceof ModuleView) || view.revealed));
+    view.setVisible(rect !== undefined && (dialog !== undefined || (!this.overlay && !this.opening)) && (!(view instanceof ModuleView) || view.revealed));
     // A panel kept running for the overlays isn't paused for being out of sight: its overlay goes on being fed.
     if ((rect || this.overlayKeep.has(instanceId)) && !this.windowHidden) view.resume();
     else view.suspend();
@@ -3925,7 +3937,7 @@ export class Host {
     if (Object.keys(images).length) await this.frozenOnScreen();
     timingLog?.(`overlay: ${Object.keys(images).length} of ${this.panelsInSlots().length} pictures taken in ${Math.round(taken - freezeStarted)} ms, on screen ${Math.round(performance.now() - taken)} ms later`);
     if (change !== this.overlayChanges || this.window.isDestroyed()) return;
-    for (const [instanceId, view] of this.views) if (!this.floating(instanceId)) view.setVisible(false);
+    for (const [instanceId, view] of this.views) if (!this.floating(instanceId) && !this.inPanelDialog(instanceId)) view.setVisible(false);
   }
 
   private frozenShown: (() => void) | null = null;
@@ -4035,6 +4047,57 @@ export class Host {
     if (view instanceof ModuleView && !view.view.webContents.isDestroyed()) view.view.webContents.focus();
   }
 
+  /** The panel shown big in a dialog over the app (panel.setDialog), how big it asked to be, and where the host UI put it. */
+  private panelDialog: { instanceId: string; width: number; height: number; bounds: Rect | null } | null = null;
+
+  private inPanelDialog(instanceId: string): boolean {
+    return this.panelDialog?.instanceId === instanceId && this.panelDialog.bounds !== null;
+  }
+
+  /**
+   * Shows a panel big in a dialog centred on the app: the host UI draws the frame (the module's name and a close button)
+   * over the dimmed app and says where the page goes; the panel's own view moves there, so it keeps everything it had.
+   * Only a panel in sight in the workspace, one at a time; a new one closes the last.
+   */
+  private openPanelDialog(instanceId: string, module: InstalledModule, size: PanelDialogSize): void {
+    const view = this.views.get(instanceId);
+    if (!(view instanceof ModuleView) || !this.panelBounds.has(instanceId) || this.floating(instanceId) || this.window.isDestroyed()) return;
+    if (this.panelDialog?.instanceId === instanceId) return;
+    this.closePanelDialog();
+    this.closeModuleMenu();
+    this.tooltips.close(instanceId);
+    this.panelDialog = { instanceId, ...size, bounds: null };
+    const shown: PanelDialog = { instanceId, title: this.shown(module.manifest).name, icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null, ...size };
+    this.window.webContents.send("host:panel-dialog", shown);
+    view.setInDialog(true);
+  }
+
+  /** The host UI's frame is on screen: the panel's page goes into it, above every other view. */
+  private placePanelDialog(raw: unknown): void {
+    const open = this.panelDialog;
+    const view = open && this.views.get(open.instanceId);
+    if (!open || !view) return;
+    const item = (typeof raw === "object" && raw !== null ? raw : {}) as Partial<Record<keyof Rect, unknown>>;
+    const numbers = [item.x, item.y, item.width, item.height];
+    if (!numbers.every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0)) return;
+    const rect = { x: Math.round(item.x as number), y: Math.round(item.y as number), width: Math.round(item.width as number), height: Math.round(item.height as number) };
+    if (rect.width < 1 || rect.height < 1) return;
+    if (open.bounds === null) this.window.contentView.addChildView(view.view);
+    open.bounds = rect;
+    this.layOut(open.instanceId, view);
+  }
+
+  /** Puts the panel in its dialog back in its slot (only `instanceId`'s, when given); the module hears it. */
+  private closePanelDialog(instanceId?: string): void {
+    const open = this.panelDialog;
+    if (!open || (instanceId !== undefined && open.instanceId !== instanceId)) return;
+    this.panelDialog = null;
+    if (!this.window.isDestroyed()) this.window.webContents.send("host:panel-dialog", null);
+    const view = this.views.get(open.instanceId);
+    if (view instanceof ModuleView) view.setInDialog(false);
+    if (view) this.layOut(open.instanceId, view);
+  }
+
   /** Closes the module menu shown now (only if it belongs to `instanceId`, when given), as if nothing was chosen. */
   private closeModuleMenu(instanceId?: string): void {
     const open = this.moduleMenu;
@@ -4130,12 +4193,14 @@ export class Host {
         available: current !== null && this.supportsWorkspace(module, current.id),
         minWidth: module.manifest.viewport.minWidth,
         minHeight: module.manifest.viewport.minHeight,
+        ...(module.manifest.viewport.wide ? { wide: { ...module.manifest.viewport.wide } } : {}),
         panels: panelTypes(this.shown(module.manifest)).map((type) => ({
           id: type.id,
           name: type.name,
           icon: this.moduleInfo.get(module.manifest.id)?.panelIcons[type.id] ?? null,
           minWidth: type.viewport.minWidth,
           minHeight: type.viewport.minHeight,
+          ...(type.viewport.wide ? { wide: { ...type.viewport.wide } } : {}),
         })),
         provenance: module.provenance,
         development: isExampleModule(module.manifest.id) || module.developmentFolder !== undefined,

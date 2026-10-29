@@ -2,12 +2,12 @@
 
 A game module can rank its users: the longest winning streak in a word game, the fastest Sudoku, the most puzzles solved this week. Tavora keeps the boards on its service with each user's Tavora account, so your module needs no server and never handles a sign-in. Every call is in the [protocol](../reference/protocol.md#connectors) and [manifest](../reference/manifest.md#leaderboards) references.
 
-Needs Tavora 0.21.92 or newer, so set `minTavora` to at least `0.21.92`.
+Needs Tavora 0.21.97 or newer, so set `minTavora` to at least `0.21.97`. A module made for the first leaderboards (`minTavora` 0.21.92 to 0.21.96, streak and score boards without names) keeps working: its boards go by their id.
 
 ## Declare the boards
 
 ```json
-"minTavora": "0.21.92",
+"minTavora": "0.21.97",
 "permissions": { "network": [], "connectors": ["leaderboards"] },
 "leaderboards": {
   "boards": [

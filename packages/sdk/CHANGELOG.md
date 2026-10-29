@@ -1,6 +1,12 @@
+## 0.2.14
+
+Panel dialogs, with Tavora 0.21.95 or newer. `MIN_TAVORA` stays: on an older Tavora `openDialog` throws `METHOD_NOT_FOUND`, so a module can show its settings in the panel instead.
+
+- `panel.openDialog({ width, height })` shows the panel big in a dialog centred on the app, over everything else, with the module's name and a close button: for settings or details that don't fit a small panel. It is the same page, so it keeps all it had. Opening needs a real click or key press. `panel.closeDialog()` puts it back, and `panel.onDialogChange` hears when it opens or closes, also when the user closes it.
+
 ## 0.2.13
 
-Leaderboards, with Tavora 0.21.92 or newer. Everything else still works on every Tavora the SDK supports (Tavora 0.19.32), so `MIN_TAVORA` stays; a module that uses leaderboards sets `minTavora` to 0.21.92.
+Leaderboards, with Tavora 0.21.92 or newer; board names, the `total`, `average` and `rate` kinds, periods and `mine()` with Tavora 0.21.97 or newer. Everything else still works on every Tavora the SDK supports (Tavora 0.19.32), so `MIN_TAVORA` stays; a module that uses leaderboards sets `minTavora` to 0.21.92.
 
 - `leaderboards`: the boards a manifest's `leaderboards` declares, kept on Tavora's service with the user's Tavora account, through the new `leaderboards` connector. `status()` says whether Tavora's service answered (`online`, so it never fails offline), whether the user is signed in, whether the boards run for the module, and whether the user agreed to be shown, with their public name once they did. `show()` (after a click) has Tavora ask the user in the panel; `hide()` (after a click) takes them off and deletes their results. `submit(board, results)` sends up to 50 games, each taken or refused on its own, and `top(board, { period, day, limit })` reads a board as `{ rows }`. A module never gets an account id, only a `self` mark on the user's own line.
 - Five kinds of board, so most games find one that fits: `streak` (won and lost games, optionally one a day), `score` (a user's best number, highest or lowest), `total` (the sum of a user's numbers), `average` (the mean, after `minGames` games) and `rate` (the share of games won, after `minGames`). Every board has a `name` users see, translatable through `translations.boards`, and `score`, `total` and `average` boards may name a `unit`.

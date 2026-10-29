@@ -773,6 +773,13 @@ export interface Methods {
    * only right after a click or key press in the panel. Tavora 0.20.20 and newer.
    */
   "panel.setMaximized": { params: { maximized: boolean }; result: null };
+  /**
+   * Shows the panel big in a dialog centred on the app (open: true), with the module's name and a close button over
+   * the dimmed app, or puts it back in its slot (false). `width` and `height` (240 to 2000, default 560 x 640) are the
+   * page's size in it; Tavora makes it fit the window. Opening only right after a click or key press in the panel.
+   * Tavora 0.21.95 and newer.
+   */
+  "panel.setDialog": { params: { open: boolean; width?: number; height?: number }; result: null };
   /** What this panel's live view (the overlay page shown in its spot over the game) shows; null shows nothing. At most LIMITS.maxOverlayStateBytes. Tavora 0.21.11 and newer. */
   "panel.setLive": { params: { state: JsonValue | null }; result: null };
   /**
@@ -820,12 +827,12 @@ export interface Methods {
    * The best lines of one of the manifest's boards, `limit` of them (default 20, at most LIMITS.maxLeaderboardRows). When
    * the user is on the board but further down, their own line comes last. `period`: which stretch of time (default
    * `all`); `day`: the user's local day (YYYY-MM-DD), which picks the period that holds it (default today) and, on a
-   * daily board, shows a streak whose last day was before yesterday as ended (capability `leaderboards`). Tavora 0.21.92 and newer.
+   * daily board, shows a streak whose last day was before yesterday as ended (capability `leaderboards`). Tavora 0.21.92 and newer, `period` 0.21.97.
    */
   "leaderboards.top": { params: { board: string; period?: LeaderboardPeriod; day?: string; limit?: number }; result: LeaderboardTop };
   /**
    * The user's own standing on every board of the manifest, in every period, in one call; `day` as on leaderboards.top
-   * (capability `leaderboards`). Signed out or not shown, every standing is null. Tavora 0.21.92 and newer.
+   * (capability `leaderboards`). Signed out or not shown, every standing is null. Tavora 0.21.97 and newer.
    */
   "leaderboards.mine": { params: { day?: string }; result: LeaderboardMine };
   /** Reads one account's usage (capability `aiUsage`). */
@@ -966,6 +973,8 @@ export interface Events {
   "panel.navigate": PanelNavigateRequest;
   /** The panel started or stopped filling the workspace (Maximize and Restore, by the user or panel.setMaximized). */
   "panel.maximized": { maximized: boolean };
+  /** The panel's dialog opened or closed (panel.setDialog, or the user closed it). Tavora 0.21.95 and newer. */
+  "panel.dialog": { open: boolean };
   /** The user pressed a hotkey set for this module (hotkeys.set). Sent to one panel of the module in the workspace shown now, the one used last. */
   "hotkeys.pressed": HotkeyBinding;
   "lifecycle.suspend": null;

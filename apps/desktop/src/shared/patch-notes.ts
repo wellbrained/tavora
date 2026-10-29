@@ -28,6 +28,50 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.96",
+    date: "2026-10-29",
+    title: "Tidier hints",
+    notes: [
+      "Hover hints in modules and in Tavora use the same small card as the rail.",
+    ],
+  },
+  {
+    version: "0.21.95",
+    date: "2026-10-29",
+    title: "Bigger room for module settings",
+    notes: [
+      "A module can open its panel big in a dialog over the app, for settings that don't fit a small panel.",
+      "Close it with the ✕ or a click beside it.",
+    ],
+  },
+  {
+    version: "0.21.94",
+    date: "2026-10-29",
+    title: "New panels land where you work",
+    notes: [
+      "A module you add opens as a tab in the area you're working in. The rest of your layout stays as it is.",
+      "Modules can have a tall and a wide layout, each with its own smallest size. Resizing stops before a panel gets too small for its shape.",
+    ],
+    prs: [
+      { number: 451, title: "Panels: a tall and a wide minimum, and new panels land where you work" },
+    ],
+    tags: ["modules", "publishing", "website", "workspace"],
+  },
+  {
+    version: "0.21.93",
+    date: "2026-10-29",
+    title: "Easier Whiteboard planning",
+    notes: [
+      "Add note cards or pictures with captions, grouped so you can move them together.",
+      "Image locks appear when you point at an image, select it or focus its lock.",
+      "Narrow panels keep board actions in a compact menu to leave more room for drawing.",
+    ],
+    prs: [
+      { number: 449, title: "Whiteboard: add planning cards and quieter controls" },
+    ],
+    tags: ["whiteboard"],
+  },
+  {
     version: "0.21.92",
     date: "2026-10-28",
     title: "Leaderboards in modules",
