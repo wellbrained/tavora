@@ -352,8 +352,8 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           :aria-current="state!.screen === 'welcome' ? 'page' : undefined"
           @click="act({ type: 'show-welcome' })"
         >
-          <span class="flex w-[30px] flex-none justify-center">
-            <img class="rail-icon rail-icon-bare" src="/brand/flame-96.png" alt="" width="26" height="26" draggable="false" />
+          <span class="flex w-[30px] flex-none justify-center overflow-visible">
+            <img class="rail-icon rail-icon-bare max-w-none flex-none" src="/brand/flame-96.png" alt="" width="34" height="34" draggable="false" />
           </span>
           <span v-if="expanded" class="text-base font-semibold">Tavora</span>
         </button>
@@ -366,7 +366,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
             'app-no-drag text-muted-foreground hover:text-foreground focus-visible:ring-ring grid flex-none place-items-center focus-visible:ring-2 focus-visible:outline-none',
             expanded
               ? 'hover:bg-accent size-8 rounded-md'
-              : 'bg-card border-foreground/20 hover:border-foreground/40 absolute top-[23px] -right-[9px] z-20 size-[18px] rounded-[5px] border opacity-0 shadow-sm shadow-black/30 transition-opacity group-hover/rail:opacity-100 focus-visible:opacity-100',
+              : 'bg-card border-foreground/20 hover:border-foreground/40 absolute top-[18px] -right-[14px] z-20 size-7 rounded-md border opacity-0 shadow-sm shadow-black/30 transition-opacity group-hover/rail:opacity-100 focus-visible:opacity-100',
           )
         "
         data-testid="rail-toggle"
@@ -375,7 +375,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         :aria-expanded="expanded"
         @click="toggleRail"
       >
-        <component :is="expanded ? PanelLeftClose : PanelLeftOpen" :class="expanded ? 'size-[18px]' : 'size-3'" :stroke-width="expanded ? 1.5 : 2" />
+        <component :is="expanded ? PanelLeftClose : PanelLeftOpen" class="size-[18px]" :stroke-width="1.5" />
       </button>
     </div>
 
