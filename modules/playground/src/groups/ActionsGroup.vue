@@ -151,6 +151,27 @@ function slow(done: () => void) {
       </DemoSection>
 
 <DemoSection v-if="visible.has('menus')" id="menus" :title="title('menus')" description="Every menu opens from a visible ⋯ button. Icons go on every entry or on none. Destructive items sit last, in red, after a separator.">
+        <Specimen label="Dropdown menu with icons and a line under each entry">
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="secondary" :disabled="off"><Plus :stroke-width="1.5" /> Add</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" class="w-72">
+              <DropdownMenuItem description="Start from a file on your PC.">
+                <template #icon><FolderInput :stroke-width="1.6" /></template>
+                Import a build
+              </DropdownMenuItem>
+              <DropdownMenuItem description="Write your own notes.">
+                <template #icon><Pencil :stroke-width="1.6" /></template>
+                New note
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled description="Sign in first.">
+                <template #icon><Pin :stroke-width="1.6" /></template>
+                Share
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </Specimen>
         <Specimen label="Dropdown menu">
           <DropdownMenu>
             <DropdownMenuTrigger as-child>
