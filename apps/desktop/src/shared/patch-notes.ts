@@ -28,6 +28,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.106",
+    date: "2026-10-29",
+    title: "Steadier module dialogs",
+    notes: [
+      "A module's settings open in their dialog without jumping once it has opened.",
+    ],
+  },
+  {
     version: "0.21.105",
     date: "2026-10-29",
     title: "Quicker To-Dos",
