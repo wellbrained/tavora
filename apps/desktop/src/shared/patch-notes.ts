@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.100",
+    date: "2026-10-29",
+    title: "New look for notifications",
+    notes: [
+      "Short messages like Saved now show as a pill that changes shape smoothly, with an icon for what happened.",
+      "Several at once stack up. Point at them to spread them out, and close any with its X.",
+      "Pick where they show in Settings > Appearance > Notifications: bottom, bottom right or top.",
+    ],
+    prs: [
+      { number: 454, title: "Toasts as stacking pills, placed where the user wants them" },
+    ],
+    tags: ["games", "sdk", "settings", "ui-kit", "website"],
+  },
+  {
     version: "0.21.99",
     date: "2026-10-29",
     title: "Calmer Whiteboard cards",
