@@ -143,7 +143,7 @@ export interface Library {
 
 export const GAME_START_CHOICES: readonly GameStart[] = ["switch", "ask", "show", "off"];
 
-export const RAIL = { compact: 72, minWidth: 180, maxWidth: 420, defaultWidth: 256 } as const;
+export const RAIL = { compact: 72, minWidth: 200, maxWidth: 420, defaultWidth: 280 } as const;
 export const TRASH_DAYS = 30;
 export const MAX_NAME = 80;
 export const MAX_LABEL = 3;

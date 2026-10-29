@@ -210,6 +210,101 @@ html.floating-open .app-drag {
   }
 }
 
+/* The expanded rail is a list: rows are shorter than the compact tiles, so the active pill is too, and the items at
+   the bottom drop their tile and keep only the icon (RailFooterTile.vue). Outside a layer, so they win over the
+   tile's utility classes. */
+nav[data-expanded="true"] .rail-entry[data-active="true"] .rail-pill {
+  height: 24px;
+}
+nav[data-expanded="true"] .rail-entry:hover .rail-pill,
+nav[data-expanded="true"] .rail-entry:focus-within .rail-pill {
+  height: 14px;
+}
+nav[data-expanded="true"] .rail-entry[data-active="true"]:hover .rail-pill {
+  height: 24px;
+}
+nav[data-expanded="true"] .footer-slot {
+  width: 40px;
+}
+/* The expanded rail lights the whole row on hover, so the icon keeps still: the tilt and glow are for the compact rail. */
+nav[data-expanded="true"] .rail-entry:hover .rail-icon {
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+/* The profile card at the bottom of the expanded rail (ProfileMenu.vue): a glow in the theme's accent from the top
+   right over fine diagonal lines, so it looks like the profile's banner and follows every theme, light ones too. */
+.profile-rail-card,
+.running-layer {
+  border-color: color-mix(in oklab, var(--primary) 30%, var(--border));
+  background:
+    radial-gradient(90% 170% at 100% 0%, color-mix(in oklab, var(--primary) 34%, transparent), transparent 72%),
+    repeating-linear-gradient(135deg, color-mix(in oklab, var(--foreground) 5%, transparent) 0 2px, transparent 2px 12px),
+    linear-gradient(100deg, var(--card) 35%, color-mix(in oklab, var(--primary) 16%, var(--card)));
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+}
+.profile-rail-card:hover,
+.profile-rail-card[data-state="open"] {
+  border-color: color-mix(in oklab, var(--primary) 60%, var(--border));
+  box-shadow:
+    inset 0 0 0 100px color-mix(in oklab, var(--foreground) 4%, transparent),
+    0 0 14px 0 color-mix(in oklab, var(--primary) 22%, transparent);
+}
+/* The layer of a running game behind the card (RunningGameButton.vue): the card's own look, a shade further back. */
+.running-layer {
+  border-color: color-mix(in oklab, var(--primary) 20%, var(--border));
+  box-shadow: 0 -6px 16px color-mix(in srgb, black 35%, transparent);
+}
+.running-layer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in oklab, var(--rail) 22%, transparent);
+  pointer-events: none;
+  transition: background-color 150ms;
+}
+.running-layer:hover::before {
+  background: transparent;
+}
+/* A section header ("Favorites", "Games"): plain words when expanded, a short line in the same space when compact,
+   so the items below keep their place when the rail opens or closes. */
+.rail-section {
+  display: flex;
+  align-items: flex-end;
+  height: 30px;
+  margin: 0;
+  padding: 0 16px 4px;
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  font-weight: 500;
+}
+.rail-section-line {
+  align-self: center;
+  flex: 1;
+  height: 1px;
+  margin-top: 4px;
+  background: var(--border);
+}
+nav[data-expanded="true"] .footer-tile {
+  width: 30px;
+  height: 30px;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+nav[data-expanded="true"] .footer-slot > [aria-hidden="true"] {
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  --tw-ring-shadow: 0 0 0 2px var(--rail);
+}
+
 /* Drop position markers on the rail while dragging. */
 @layer components {
   /* A thick line across the rail with a dot at its start: "it goes here". */

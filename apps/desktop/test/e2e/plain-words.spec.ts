@@ -103,11 +103,12 @@ test("the profile card saves on Enter, keeps initials behind a link and opens th
   }
 });
 
-test("the expanded rail calls its top item Home", async () => {
+test("the expanded rail's top item shows the app's name and is called Home", async () => {
   const { app, page } = await launch();
   try {
     await page.getByTestId("rail-toggle").click();
-    await expect(page.getByTestId("rail-home")).toHaveText("Home");
+    await expect(page.getByTestId("rail-home")).toHaveText("Tavora");
+    await expect(page.getByTestId("rail-home")).toHaveAttribute("aria-label", "Home");
   } finally {
     await app.close();
   }

@@ -1,13 +1,13 @@
 <script setup lang="ts">
-// At the bottom of the rail while a game of the library runs on this PC (Settings > General, "When a game
-// starts"): a controller that pulses slowly. It names the game on hover, and a click switches to it. Hidden
-// while that game is the one open, since there is nothing to switch to.
-import { Gamepad2 } from "@lucide/vue";
+// While a game of the library runs on this PC (Settings > General, "When a game starts"): a layer behind the profile
+// card that peeks out above it, like the notification behind the front one, and switches to the game. The profile
+// card says which game it is. It slides back while that game is open, since there is nothing to switch to, and moves
+// the items above it up and down as it comes and goes.
+import { ArrowRight } from "@lucide/vue";
 import { computed } from "vue";
 import { cn } from "@/lib/utils";
 import { act, state } from "../host";
 import { t } from "../i18n";
-import RailFooterTile from "./RailFooterTile.vue";
 import RailTooltip from "./RailTooltip.vue";
 
 defineProps<{ expanded: boolean }>();
@@ -16,83 +16,79 @@ const game = computed(() => {
   const id = state.value!.runningGameId;
   return id ? (state.value!.library.workspaces[id] ?? null) : null;
 });
-const label = computed(() => (game.value ? t("rail.running", { name: game.value.name }) : ""));
+// runningGameId already leaves out the game of the workspace open now, so the layer slides back there.
+const shown = computed(() => game.value !== null);
 </script>
 
 <template>
-  <RailTooltip v-if="game" :text="label" :hint="t('rail.runningSwitch')" :disabled="expanded">
-    <button
-      type="button"
-      :class="cn('running-in mx-2 flex items-center gap-3 rounded-lg p-1 text-left', expanded && 'hover:bg-accent')"
-      data-rail-item
-      data-testid="rail-running"
-      :aria-label="`${label}. ${t('rail.runningSwitch')}`"
-      @click="act({ type: 'open-workspace', workspaceId: game.id })"
-    >
-      <RailFooterTile dot="success" class="running-tile text-success">
-        <Gamepad2 class="running-glyph size-5" :stroke-width="1.5" />
-      </RailFooterTile>
-      <span v-if="expanded" class="flex min-w-0 flex-col leading-tight">
-        <span class="truncate text-sm font-semibold">{{ game.name }}</span>
-        <span class="text-success truncate text-xs">{{ t("rail.runningHint") }}</span>
-      </span>
-    </button>
-  </RailTooltip>
+  <!-- The 28 px that show above the profile card; the rest of the layer sits under it. -->
+  <div :class="cn('running-peek relative', shown ? 'h-7' : 'h-0')" :inert="!shown">
+    <RailTooltip :text="t('rail.switchToGame')" :disabled="expanded">
+      <button
+        type="button"
+        :class="
+          cn(
+            'running-layer group/run absolute top-0 flex h-10 items-start rounded-lg border pt-[5px] text-xs font-medium',
+            // Narrower than what it sits behind: the profile card when expanded, the avatar tile when compact.
+            expanded ? 'inset-x-4 justify-between px-2.5' : 'inset-x-[18px] justify-center',
+            !shown && 'translate-y-3 opacity-0',
+          )
+        "
+        data-rail-item
+        data-testid="rail-running"
+        :aria-label="t('rail.switchToGame')"
+        @click="game && act({ type: 'open-workspace', workspaceId: game.id })"
+      >
+        <span class="relative flex h-[18px] items-center gap-2">
+          <span class="running-dot" aria-hidden="true" />
+          <span v-if="expanded" class="text-foreground/90 truncate">{{ t("rail.switchToGame") }}</span>
+        </span>
+        <ArrowRight
+          v-if="expanded"
+          class="text-foreground/90 relative mt-px size-4 flex-none transition-transform duration-200 group-hover/run:translate-x-0.5"
+          :stroke-width="2"
+        />
+      </button>
+    </RailTooltip>
+  </div>
 </template>
 
 <style scoped>
-/* Slides in when the game starts. */
-.running-in {
-  animation: running-in 300ms ease-out;
+/* Slow and smooth, so the items above it drift up rather than jump. */
+.running-peek {
+  transition: height 500ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-@keyframes running-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+.running-layer {
+  transition:
+    transform 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms ease-out;
+}
+.running-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 9999px;
+  background: var(--success);
+  animation: running-dot 2.4s ease-in-out infinite;
+}
+/* A slow breath: a soft ring grows out of the dot and fades. */
+@keyframes running-dot {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--success) 55%, transparent);
   }
-}
-:deep(.running-tile) {
-  background: color-mix(in oklab, var(--success) 16%, var(--card));
-  animation: running-ring 2.4s ease-in-out infinite;
-}
-button:hover :deep(.running-tile) {
-  background: color-mix(in oklab, var(--success) 30%, var(--card));
-}
-:deep(.running-glyph) {
-  animation: running-glyph 2.4s ease-in-out infinite;
-}
-/* A slow breath that never gets loud: the ring and glow rise only a little. */
-@keyframes running-ring {
-  0%,
+  70%,
   100% {
-    box-shadow:
-      0 0 0 2px var(--rail),
-      0 0 0 3px color-mix(in oklab, var(--success) 50%, transparent),
-      0 0 6px 0 color-mix(in oklab, var(--success) 12%, transparent);
-  }
-  50% {
-    box-shadow:
-      0 0 0 2px var(--rail),
-      0 0 0 3.5px color-mix(in oklab, var(--success) 80%, transparent),
-      0 0 12px 2px color-mix(in oklab, var(--success) 25%, transparent);
-  }
-}
-@keyframes running-glyph {
-  0%,
-  100% {
-    opacity: 0.75;
-    transform: scale(0.95);
-  }
-  50% {
-    opacity: 0.92;
-    transform: scale(1.02);
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--success) 0%, transparent);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .running-in,
-  :deep(.running-tile),
-  :deep(.running-glyph) {
+  .running-peek,
+  .running-layer {
+    transition: none;
+  }
+  .running-dot {
     animation: none;
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--success) 25%, transparent);
   }
 }
 </style>

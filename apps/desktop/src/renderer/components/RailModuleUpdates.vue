@@ -18,7 +18,7 @@ const count = computed(() => state.value!.modules.filter((module) => module.upda
   <RailTooltip v-if="count" :text="t('workspace.updates', { count })" :hint="t('workspace.updates.title')" :disabled="expanded">
     <button
       type="button"
-      :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-3 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
+      :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg px-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
       data-rail-item
       data-testid="module-updates-button"
       :aria-label="t('workspace.updates', { count })"

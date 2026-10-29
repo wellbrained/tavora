@@ -6,8 +6,16 @@ import { autoInitials } from "./initials";
 // The user's round avatar: their picture, else their initials in gold
 // (their own or taken from the name), else a person icon.
 const props = withDefaults(
-  defineProps<{ name: string; pictureUrl: string | null; size?: number; initials?: string; square?: boolean }>(),
-  { size: 36, initials: "", square: false },
+  defineProps<{
+    name: string;
+    pictureUrl: string | null;
+    size?: number;
+    initials?: string;
+    square?: boolean;
+    /** Corner radius of a square avatar in px, e.g. to sit evenly inside a rounded card. */
+    radius?: number;
+  }>(),
+  { size: 36, initials: "", square: false, radius: 10 },
 );
 
 const initials = computed(() => props.initials.trim() || autoInitials(props.name));
@@ -15,9 +23,9 @@ const initials = computed(() => props.initials.trim() || autoInitials(props.name
 
 <template>
   <span
-    :class="square ? 'rounded-[10px]' : 'bg-muted rounded-full'"
+    :class="!square && 'bg-muted rounded-full'"
     class="inline-flex flex-none items-center justify-center overflow-hidden shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)]"
-    :style="{ width: `${size}px`, height: `${size}px` }"
+    :style="{ width: `${size}px`, height: `${size}px`, borderRadius: square ? `${radius}px` : undefined }"
     aria-hidden="true"
   >
     <img v-if="pictureUrl" class="size-full object-cover" :src="pictureUrl" alt="" draggable="false" />

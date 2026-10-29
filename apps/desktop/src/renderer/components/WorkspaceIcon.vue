@@ -15,10 +15,11 @@ const iconFailed = ref(false);
 watch(steamIcon, () => (iconFailed.value = false));
 // How a game's own icon sits in the tile depends on the picture; the host works it out (shared/icon-tone.ts).
 const tone = computed(() => props.workspace.steamIconTone ?? "onDark");
-// Small icons (folder collages) show only the first letter.
+// The tiny tiles of a folder collage show only the first letter; the small list icons of the open rail keep all
+// (up to three) at the smallest type size.
 const text = computed(() => {
   const full = props.workspace.icon.kind === "monogram" ? props.workspace.icon.text : "";
-  return props.size < 32 ? [...full].slice(0, 1).join("") : full;
+  return props.size < 20 ? [...full].slice(0, 1).join("") : full;
 });
 const fontSize = computed(() => Math.max(12, Math.round(props.size * ([...text.value].length > 2 ? 0.3 : 0.38))));
 </script>
@@ -47,7 +48,7 @@ const fontSize = computed(() => Math.max(12, Math.round(props.size * ([...text.v
     </template>
     <span
       v-else
-      class="flex size-full items-center justify-center font-semibold tracking-wide"
+      :class="['flex size-full items-center justify-center font-semibold', size < 32 ? 'tracking-tight' : 'tracking-wide']"
       :style="{
         color: LETTER,
         backgroundColor: look.color,
