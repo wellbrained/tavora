@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import type { ProfileRankBoard, ProfileRankPeriod, ProfileRankStanding, ProfileRanksView } from "../../../shared/host-api";
 import { intlLocale } from "../../../shared/i18n";
-import { act, api, openSettings, state, useFloating } from "../../host";
+import { account, act, api, openSettings, state, useFloating } from "../../host";
 import { language, t } from "../../i18n";
 import ImageCropDialog from "../ImageCropDialog.vue";
 import { autoInitials } from "./initials";
@@ -187,7 +187,7 @@ function closeCrop() {
           </span>
           <span class="relative flex min-w-0 flex-col">
             <span class="truncate text-sm font-semibold">{{ profile.name.trim() || t("profile.label") }}</span>
-            <span class="text-foreground/80 truncate text-xs font-medium">{{ t("rail.profileHint") }}</span>
+            <span class="text-foreground/80 truncate text-xs font-medium" data-testid="rail-profile-status">{{ account?.account ? t("rail.signedIn") : t("rail.signedOut") }}</span>
           </span>
         </template>
         <RailFooterTile v-else>

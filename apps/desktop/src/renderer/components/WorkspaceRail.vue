@@ -69,7 +69,21 @@ const rootEntries = computed(() => library.value.root.filter((entry) => entry.ki
 /** How many workspace names the tooltip of a folder lists. */
 const FOLDER_TIP_NAMES = 8;
 const folderWorkspaces = (id: string) => folder(id).workspaces.filter((workspaceId) => !favoriteIds.value.has(workspaceId));
-const openFolders = reactive(new Set<string>());
+// Folders the user left open stay open after a restart. Only this window's look, so it lives in the renderer's storage;
+// ids of folders that are gone are dropped on the next save.
+const OPEN_FOLDERS_KEY = "tavora.rail.openFolders";
+function savedOpenFolders(): string[] {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(OPEN_FOLDERS_KEY) ?? "[]");
+    return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+const openFolders = reactive(new Set<string>(savedOpenFolders()));
+watch(openFolders, () =>
+  localStorage.setItem(OPEN_FOLDERS_KEY, JSON.stringify([...openFolders].filter((id) => library.value.folders[id]))),
+);
 
 function isWorkspace(workspace: WorkspaceView | undefined): workspace is WorkspaceView {
   return workspace !== undefined;
@@ -387,41 +401,41 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       </button>
     </div>
 
-    <div class="relative min-h-0 flex-1">
+    <!-- Favorites and the Games title stay put; only the games below them scroll. -->
+    <section
+      v-if="favorites.length || dragged?.kind === 'workspace'"
+      :class="cn('flex flex-col gap-1', favoriteZoneActive && 'bg-primary/15')"
+      :aria-label="t('rail.favorites')"
+      data-testid="rail-favorites"
+      @dragover="onFavoritesOver"
+      @dragleave="favoriteZoneActive = false"
+      @drop="onFavoritesDrop"
+    >
+      <h2 v-if="expanded" class="rail-section">{{ t("rail.favorites") }}</h2>
+      <div v-else class="rail-section" aria-hidden="true"><span class="rail-section-line" /></div>
+      <RailWorkspace
+        v-for="item in favorites"
+        :key="item.id"
+        :workspace="item"
+        :testid="`rail-favorite-${item.id}`"
+        :active="isActive(item.id)"
+        :expanded="expanded"
+        :shortcut="shortcutOf(item.id)"
+        :menu="menuFor(item.id, true)"
+        :hint="hintFor({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
+        v-on="dnd({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
+        @open="open(item.id)"
+      />
+      <p v-if="!favorites.length" class="text-muted-foreground border-input mx-2 rounded-lg border border-dashed p-2 text-center text-xs">
+        {{ t("rail.dropHere") }}
+      </p>
+    </section>
+    <section class="flex min-h-0 flex-1 flex-col" :aria-label="t('rail.all')">
+      <h2 v-if="expanded" class="rail-section">{{ t("rail.games") }}</h2>
+      <div v-else class="rail-section" aria-hidden="true"><span class="rail-section-line" /></div>
+    <div class="relative mt-1 min-h-0 flex-1">
     <div ref="scroller" class="size-full overflow-x-hidden overflow-y-auto pb-2 [scrollbar-width:none]" @scroll.passive="updateScrollHints">
-    <div ref="listContent">
-      <section
-        v-if="favorites.length || dragged?.kind === 'workspace'"
-        :class="cn('flex flex-col gap-1', favoriteZoneActive && 'bg-primary/15')"
-        :aria-label="t('rail.favorites')"
-        data-testid="rail-favorites"
-        @dragover="onFavoritesOver"
-        @dragleave="favoriteZoneActive = false"
-        @drop="onFavoritesDrop"
-      >
-        <h2 v-if="expanded" class="rail-section">{{ t("rail.favorites") }}</h2>
-        <div v-else class="rail-section" aria-hidden="true"><span class="rail-section-line" /></div>
-        <RailWorkspace
-          v-for="item in favorites"
-          :key="item.id"
-          :workspace="item"
-          :testid="`rail-favorite-${item.id}`"
-          :active="isActive(item.id)"
-          :expanded="expanded"
-          :shortcut="shortcutOf(item.id)"
-          :menu="menuFor(item.id, true)"
-          :hint="hintFor({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
-          v-on="dnd({ kind: 'workspace', id: item.id, place: { list: 'favorites' } })"
-          @open="open(item.id)"
-        />
-        <p v-if="!favorites.length" class="text-muted-foreground border-input mx-2 rounded-lg border border-dashed p-2 text-center text-xs">
-          {{ t("rail.dropHere") }}
-        </p>
-      </section>
-
-      <section class="flex flex-col gap-1" :aria-label="t('rail.all')">
-        <h2 v-if="expanded" class="rail-section">{{ t("rail.games") }}</h2>
-        <div v-else class="rail-section" aria-hidden="true"><span class="rail-section-line" /></div>
+    <div ref="listContent" class="flex flex-col gap-1">
         <template v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`">
           <RailWorkspace
             v-if="entry.kind === 'workspace'"
@@ -542,7 +556,6 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
             </button>
           </RailTooltip>
         </div>
-      </section>
     </div>
     </div>
     <div v-if="moreAbove" class="from-rail pointer-events-none absolute inset-x-0 top-0 h-8 bg-linear-to-b to-transparent" aria-hidden="true" data-testid="rail-fade-top" />
@@ -560,6 +573,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       </button>
     </div>
     </div>
+    </section>
 
     <!-- User things live at the bottom on their own: a game running now, then Settings, and the profile last. -->
     <div class="flex flex-col gap-1 pt-2 pb-1">

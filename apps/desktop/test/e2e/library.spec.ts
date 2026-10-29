@@ -188,7 +188,8 @@ test("workspaces are renamed, favorited and put in folders from their menu", asy
   // All of it is saved.
   const again = await launch(userData);
   await expect(again.page.getByTestId("rail-favorite-poe2")).toBeVisible();
-  await again.page.locator('[data-testid^="rail-folder-"][data-testid$="-toggle"]').click();
+  // The folder was left open, so it opens again on its own.
+  await expect(again.page.locator('[data-testid^="rail-folder-"][data-testid$="-toggle"]')).toHaveAttribute("aria-expanded", "true");
   await expect(again.page.getByTestId("rail-workspace-satisfactory")).toHaveAttribute("aria-label", "Satisfactory 1.0");
 
   await fromMenu(again.page, "satisfactory", "menu-unfolder");
@@ -388,6 +389,33 @@ test("the rail remembers whether it is expanded and how wide it is", async () =>
   await expect(again.page.getByTestId("rail")).toHaveAttribute("data-expanded", "true");
   expect((await again.page.getByTestId("rail").boundingBox())!.width).toBe(312);
   await again.app.close();
+});
+
+test("nothing in the rail moves up or down when it opens or closes", async () => {
+  const { app, page } = await launch();
+  try {
+    // A favorite, a folder left open with a game in it, and the items at the bottom: every kind of row.
+    await fromMenu(page, "poe2", "menu-favorite");
+    await fromMenu(page, "satisfactory", "menu-move-to-folder", "menu-new-folder");
+    await answerPrompt(page, "Builders");
+    await page.locator('[data-testid^="rail-folder-"][data-testid$="-toggle"]').click();
+    await expect(page.getByTestId("rail-workspace-satisfactory")).toBeVisible();
+
+    const tops = () =>
+      page.evaluate(() =>
+        Object.fromEntries(Array.from(document.querySelectorAll<HTMLElement>('[data-testid="rail"] [data-rail-item]'), (item) => [item.dataset.testid, Math.round(item.getBoundingClientRect().top)])),
+      );
+    const rail = page.getByTestId("rail");
+    const compact = await tops();
+    await page.getByTestId("rail-toggle").click();
+    await expect(rail).toHaveAttribute("data-expanded", "true");
+    expect(await tops()).toEqual(compact);
+    await page.getByTestId("rail-toggle").click();
+    await expect(rail).toHaveAttribute("data-expanded", "false");
+    expect(await tops()).toEqual(compact);
+  } finally {
+    await app.close();
+  }
 });
 
 test("an expanded rail turns compact in a narrow window and comes back when it widens", async () => {

@@ -226,6 +226,12 @@ nav[data-expanded="true"] .rail-entry[data-active="true"]:hover .rail-pill {
 nav[data-expanded="true"] .footer-slot {
   width: 40px;
 }
+/* The expanded rail lights the whole row on hover, so the icon keeps still: the tilt and glow are for the compact rail. */
+nav[data-expanded="true"] .rail-entry:hover .rail-icon {
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
 /* The profile card at the bottom of the expanded rail (ProfileMenu.vue): a glow in the theme's accent from the top
    right over fine diagonal lines, so it looks like the profile's banner and follows every theme, light ones too. */
 .profile-rail-card {
