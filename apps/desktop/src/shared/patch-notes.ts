@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.102",
+    date: "2026-10-29",
+    title: "Your To-Dos, your way",
+    notes: [
+      "Press Enter while editing a to-do to start a new one right below it. Its ⋯ menu can add a to-do below or a sub-to-do too.",
+      "The live view's settings open in a big window, with a preview.",
+      "Pick a font, a size, bold, a text color and an outline for the live view, and any color for its background.",
+      "Show a line or the group name between groups, and keep finished to-dos in view, ticked and struck through.",
+    ],
+    prs: [
+      { number: 458, title: "To-Dos: Enter adds a to-do below, and live view settings in a dialog" },
+    ],
+    tags: ["todos"],
+  },
+  {
     version: "0.21.101",
     date: "2026-10-29",
     title: "Try your notifications",
