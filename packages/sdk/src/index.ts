@@ -148,7 +148,7 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.13";
+export const SDK_VERSION = "0.2.14";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
