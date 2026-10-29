@@ -153,15 +153,26 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     }
   };
 
+  /** Whether an account is the maintainer's own (MAINTAINER_EMAIL, any case). */
+  const isMaintainer = (store: AccountStore, accountId: string) => {
+    const email = store.account(accountId)?.email?.toLowerCase();
+    return maintainer !== undefined && email !== undefined && email === maintainer.email.toLowerCase();
+  };
+
   const handler = async (context: Context) => {
-    const wait = limiter.check(clientKey(context.req.raw));
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return refuse(context, 429, "too-many", "Too many uploads. Wait a while and try again.");
+    // The maintainer's own sign-in skips the hourly limit (decided 2026-10-29: the owner publishes without limits); who
+    // signed in is known before the zip is read, so everyone else is still stopped before it.
+    const signedIn = store ? uploader(store, context, now()) : null;
+    if (!(store && signedIn && isMaintainer(store, signedIn.accountId))) {
+      const wait = limiter.check(clientKey(context.req.raw));
+      if (wait > 0) {
+        context.header("Retry-After", String(wait));
+        return refuse(context, 429, "too-many", "Too many uploads. Wait a while and try again.");
+      }
     }
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
     if ((context.req.header("content-type") ?? "").toLowerCase() !== "application/zip") return refuse(context, 415, "bad-request", "Send the zip as application/zip.");
-    const by = uploader(store, context, now());
+    const by = signedIn;
     if (!by) {
       return refuse(context, 401, "sign-in-needed", "Publishing needs your Tavora sign-in now: update tavora-pack and publish with Tavora open, or from CI with a publish token.");
     }
@@ -209,19 +220,18 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     }
 
     const at = now();
-    // The maintainer's own account (MAINTAINER_EMAIL) ships as often as it needs; the hourly, account and
-    // catalog limits still hold for it.
-    const email = store.account(key.accountId)?.email?.toLowerCase();
-    const isMaintainer = maintainer !== undefined && email !== undefined && email === maintainer.email.toLowerCase();
-    if (!isMaintainer && catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
+    // The maintainer's own account (MAINTAINER_EMAIL) ships as often and as much as it needs: no hourly, daily, waiting
+    // or account limit (decided 2026-10-29). The catalog's own size limit still holds, as it guards the server's disk.
+    const owner = isMaintainer(store, key.accountId);
+    if (!owner && catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
       return refuse(context, 429, "daily-limit", `An account can publish ${uploadsPerDay} versions a day. Try again tomorrow.`);
     }
-    if (catalog.waitingCount(key.accountId) >= waitingPerAccount) {
+    if (!owner && catalog.waitingCount(key.accountId) >= waitingPerAccount) {
       return refuse(context, 429, "too-many-waiting", `${waitingPerAccount} of your versions are waiting for review already. Wait for them, or withdraw one.`);
     }
     // Only a module's newest versions keep their zips, so what this version pushes out doesn't count against it.
     const id = checked.manifest.id;
-    if (catalog.storedBytes(key.accountId) - catalog.freedByNextVersion(id, keepVersions, key.accountId) + checked.size > accountBytes) {
+    if (!owner && catalog.storedBytes(key.accountId) - catalog.freedByNextVersion(id, keepVersions, key.accountId) + checked.size > accountBytes) {
       return refuse(context, 413, "account-full", `Your modules may take at most ${accountBytes / 1024 / 1024} MB in the catalog.`);
     }
     const usedBytes = catalog.storedBytes();

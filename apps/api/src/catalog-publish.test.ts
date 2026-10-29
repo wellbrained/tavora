@@ -41,7 +41,7 @@ function hostile(zip: Buffer, name: string, change: (out: Buffer, central: numbe
   throw new Error(`no entry ${name}`);
 }
 
-function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string, prefixRateLimiter = roomy()) {
+function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string, prefixRateLimiter = roomy(), publishRateLimiter = roomy()) {
   const store = new AccountStore(":memory:");
   const dir = mkdtempSync(path.join(tmpdir(), "tavora-catalog-"));
   const catalog = new CatalogStore(dir);
@@ -51,7 +51,7 @@ function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string, pr
     db,
     catalog,
     rateLimiter: roomy(),
-    publishRateLimiter: roomy(),
+    publishRateLimiter,
     publishLimits: limits,
     scanner: cleanScanner,
     catalogueKey: catalogPublicKey(catalogue),
@@ -314,6 +314,17 @@ describe("publishing to the catalog", () => {
     expect((await quiet.send(quietDev.key, moduleZip(quietDev.key))).status).toBe(507);
     expect(quiet.inbox.mails()).toEqual([]);
     expect(quiet.catalog.fullSince()).not.toBeNull();
+  });
+
+  it("lets the maintainer's account publish without the hourly limit, which still holds for everyone else", async () => {
+    const own = setup({}, "maintainer@example.com", roomy(), createRateLimiter({ limit: 1, windowMs: 3_600_000 }));
+    const maintainer = own.developer("Maintainer@Example.com");
+    for (const version of ["1.0.0", "1.0.1", "1.0.2"]) {
+      expect((await own.send(maintainer.key, moduleZip(maintainer.key, "wellbrained.timer", version))).status).toBe(201);
+    }
+    const other = own.developer("dev@example.com");
+    expect((await own.send(other.key, moduleZip(other.key, "other.timer", "1.0.0"))).status).toBe(201);
+    expect(await own.reason(await own.send(other.key, moduleZip(other.key, "other.timer", "1.0.1")))).toBe("too-many");
   });
 
   it("answers 503 without accounts, and 429 when a client uploads too often", async () => {
