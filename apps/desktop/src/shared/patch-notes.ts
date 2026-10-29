@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.104",
+    date: "2026-10-29",
+    title: "Tidier notifications",
+    notes: [
+      "The X on a notification no longer shows a hint.",
+      "Clock & Counter shows its Undo in the new notification style too.",
+    ],
+    prs: [
+      { number: 459, title: "Toasts: no hint on the X; Clock & Counter's Undo uses the kit toast" },
+    ],
+    tags: ["clock-counter", "ui-kit"],
+  },
+  {
     version: "0.21.103",
     date: "2026-10-29",
     title: "Clearer publish errors",
