@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.113",
+    date: "2026-10-29",
+    title: "A calmer sidebar",
+    notes: [
+      "Open, the sidebar is a tidy list of your games under Favorites and Games.",
+      "Open folders show their games on a line below them.",
+      "The logo at the top takes you home, and your profile sits in a card at the bottom.",
+      "Open or close the sidebar with the button next to the logo.",
+    ],
+    prs: [
+      { number: 469, title: "Sidebar: calmer list, steady layout, new profile card" },
+    ],
+    tags: ["accounts", "games", "icons", "overlays", "rail"],
+  },
+  {
     version: "0.21.112",
     date: "2026-10-29",
     title: "Settings from over your game",
