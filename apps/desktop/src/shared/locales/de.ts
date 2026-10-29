@@ -1259,8 +1259,6 @@ export const de: Record<keyof typeof en, string> = {
   "rail.runningSwitch": "Klick zum Wechseln",
   "rail.runningShort": "Läuft",
   "rail.folderMore": "+{count} weitere",
-  "rail.moreFolder": "Weitere Aktionen für den Ordner {name}",
-  "rail.moreWorkspace": "Weitere Aktionen für {name}",
   "rail.newFolder.title": "Neuer Ordner",
   "rail.folderName": "Ordnername",
   "rail.newFolder.confirm": "Erstellen",

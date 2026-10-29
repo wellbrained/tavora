@@ -8,7 +8,6 @@ import { t } from "../i18n";
 import { numberedWorkspaces } from "../shortcuts";
 import { folderMenu, workspaceMenu } from "../rail-actions";
 import MenuArea from "./menus/MenuArea.vue";
-import MenuButton from "./menus/MenuButton.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
 import RailFooterTile from "./RailFooterTile.vue";
 import RailInboxButton from "./RailInboxButton.vue";
@@ -410,12 +409,18 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                same heights, so nothing moves when the rail opens or closes. -->
           <div
             v-else
-            :class="cn(openFolders.has(entry.id) && 'pb-1', !expanded && openFolders.has(entry.id) && 'bg-foreground/[0.05] mx-1 rounded-xl')"
+            :class="cn('relative', openFolders.has(entry.id) && 'pb-1')"
             :data-testid="`rail-folder-${entry.id}`"
           >
+            <!-- Drawn behind the rows, so they keep their place and their pill stays on the rail's edge. -->
+            <span
+              v-if="!expanded && openFolders.has(entry.id)"
+              class="bg-foreground/[0.08] ring-foreground/15 pointer-events-none absolute inset-x-2 inset-y-0 rounded-xl ring-1 ring-inset"
+              aria-hidden="true"
+            />
             <MenuArea :items="folderMenuFor(entry.id)" :title="folder(entry.id).name">
               <div
-                :class="cn('group rail-entry relative flex items-center', !expanded && openFolders.has(entry.id) ? 'px-1' : 'px-2', folderHint(entry.id) && `drop-${folderHint(entry.id)}`)"
+                :class="cn('group rail-entry relative flex items-center px-2', folderHint(entry.id) && `drop-${folderHint(entry.id)}`)"
                 draggable="true"
                 v-on="dnd({ kind: 'folder', id: entry.id, place: { list: 'root' } })"
               >
@@ -431,7 +436,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                   :class="
                     cn(
                       'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-                      expanded ? 'hover:bg-accent group-has-[[data-state=open]]:bg-accent px-2 py-[9px]' : 'justify-center p-1',
+                      expanded ? 'hover:bg-accent group-data-[state=open]:bg-accent px-2 py-[9px]' : 'justify-center p-1',
                       folderHint(entry.id) === 'into' && 'ring-primary ring-2 ring-inset',
                     )
                   "
@@ -450,23 +455,11 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                   <span v-if="expanded" class="flex-1 truncate text-base font-medium">{{ folder(entry.id).name }}</span>
                 </button>
                 </RailTooltip>
-                <div
-                  v-if="expanded"
-                  class="bg-accent absolute right-4 rounded-md opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100"
-                >
-                  <MenuButton
-                    class="hover:bg-foreground/10 data-[state=open]:bg-foreground/10 rounded-md"
-                    :items="folderMenuFor(entry.id)"
-                    :title="folder(entry.id).name"
-                    :testid="`rail-folder-${entry.id}-menu`"
-                    :label="t('rail.moreFolder', { name: folder(entry.id).name })"
-                  />
-                </div>
               </div>
             </MenuArea>
             <div
               v-if="openFolders.has(entry.id)"
-              :class="cn('relative mt-1 flex flex-col gap-1', expanded ? 'ml-[22px]' : '[&>div]:px-1')"
+              :class="cn('relative mt-1 flex flex-col gap-1', expanded && 'ml-[22px]')"
               role="group"
               :aria-label="folder(entry.id).name"
               data-testid="folder-workspaces"

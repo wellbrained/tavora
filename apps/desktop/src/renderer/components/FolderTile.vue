@@ -30,7 +30,8 @@ const labelSize = computed(() => `${Math.max(13, 12 / zoom.value)}px`);
     <svg viewBox="0 0 48 48" class="absolute inset-0 size-full overflow-visible">
       <path
         d="M1 5.5Q1 1 5 1H16Q18.5 1 19.8 3.1L21.2 5.5H43Q47 5.5 47 9.5V43Q47 47 43 47H5Q1 47 1 43Z"
-        :class="cn('fill-card stroke-1', open ? 'stroke-primary' : 'stroke-border')"
+        :style="{ strokeWidth: 1.25 / zoom }"
+        :class="cn('fill-[color-mix(in_oklab,var(--foreground)_9%,var(--card))]', open ? 'stroke-primary' : 'stroke-foreground/35')"
         stroke-linejoin="round"
       />
     </svg>
@@ -38,7 +39,7 @@ const labelSize = computed(() => `${Math.max(13, 12 / zoom.value)}px`);
     <span v-else class="absolute top-2 left-[5.5px] grid grid-cols-[17px_17px] grid-rows-[17px_17px] gap-[3px]">
       <template v-for="slot in SLOTS" :key="slot">
         <WorkspaceIcon v-if="shown[slot]" :workspace="shown[slot]!" :size="17" />
-        <span v-else class="bg-foreground/[0.07] size-[17px] rounded-[4px]" data-testid="folder-empty-slot" />
+        <span v-else class="bg-foreground/[0.12] size-[17px] rounded-[4px]" data-testid="folder-empty-slot" />
       </template>
     </span>
   </span>

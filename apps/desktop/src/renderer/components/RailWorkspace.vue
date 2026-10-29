@@ -4,10 +4,8 @@ import type { WorkspaceView } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
 import type { MenuItem } from "@/host";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
-import { t } from "../i18n";
 import WorkspaceIcon from "./WorkspaceIcon.vue";
 import MenuArea from "./menus/MenuArea.vue";
-import MenuButton from "./menus/MenuButton.vue";
 import RailTooltip from "./RailTooltip.vue";
 
 const props = defineProps<{
@@ -38,16 +36,18 @@ defineOptions({ inheritAttrs: false });
       draggable="true"
       v-bind="$attrs"
     >
-      <span class="rail-pill" aria-hidden="true" />
-      <span v-if="nested && expanded" class="bg-border absolute top-1/2 left-0 h-px w-2" aria-hidden="true" />
-      <!-- Expanded, the row stays lit while its menu is open, so the ⋯ button never floats on its own. -->
+      <!-- In a folder of the expanded rail the row is indented by the folder's line (WorkspaceRail.vue, ml-[22px]); the pill
+           still sits on the rail's edge, not on that line. -->
+      <span class="rail-pill" :style="nested && expanded ? { left: '-22px' } : undefined" aria-hidden="true" />
+      <span v-if="nested && expanded" class="bg-border absolute top-1/2 left-0 h-px w-1.5" aria-hidden="true" />
+      <!-- The menu opens on right-click or the menu key; the row stays lit while it is open. -->
       <RailTooltip :text="workspace.name" :disabled="expanded">
       <button
         type="button"
         :class="
           cn(
             'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-            expanded ? cn('hover:bg-accent group-has-[[data-state=open]]:bg-accent', nested ? 'px-1.5 py-3' : 'px-2 py-[9px]') : 'justify-center p-1',
+            expanded ? cn('hover:bg-accent group-data-[state=open]:bg-accent', nested ? 'px-1.5 py-3' : 'px-2 py-[9px]') : 'justify-center p-1',
             expanded && active && 'bg-accent',
             hint === 'into' && 'ring-primary ring-2 ring-inset',
           )
@@ -63,12 +63,6 @@ defineOptions({ inheritAttrs: false });
         <Kbd v-if="shortcut" class="text-primary ml-auto flex-none" :data-testid="`${testid}-shortcut`">{{ shortcut }}</Kbd>
       </button>
       </RailTooltip>
-      <div
-        v-if="expanded"
-        class="bg-accent absolute right-4 rounded-md opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100"
-      >
-        <MenuButton class="hover:bg-foreground/10 data-[state=open]:bg-foreground/10 rounded-md" :items="menu" :title="workspace.name" :testid="`${testid}-menu`" :label="t('rail.moreWorkspace', { name: workspace.name })" />
-      </div>
     </div>
   </MenuArea>
 </template>

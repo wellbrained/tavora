@@ -1257,8 +1257,6 @@ export const en = {
   "rail.runningSwitch": "Click to switch",
   "rail.runningShort": "Running",
   "rail.folderMore": "+{count} more",
-  "rail.moreFolder": "More actions for folder {name}",
-  "rail.moreWorkspace": "More actions for {name}",
   "rail.newFolder.title": "New folder",
   "rail.folderName": "Folder name",
   "rail.newFolder.confirm": "Create",
