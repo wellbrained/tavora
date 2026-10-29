@@ -562,7 +562,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     </div>
 
     <!-- User things live at the bottom on their own: a game running now, then Settings, and the profile last. -->
-    <div class="flex flex-col gap-0.5 py-2">
+    <div class="flex flex-col gap-1 pt-2 pb-1">
       <RunningGameButton :expanded="expanded" />
       <UpdateMarker :expanded="expanded" />
       <RailOverlayButton :expanded="expanded" />
@@ -571,7 +571,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       <RailTooltip :text="t('rail.settings')" :disabled="expanded">
         <button
           type="button"
-          :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg p-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[9px] transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
+          :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg px-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
           data-rail-item
           data-testid="rail-settings"
           :aria-label="t('rail.settings')"
@@ -585,8 +585,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         </button>
       </RailTooltip>
     </div>
-    <!-- Open, the profile is a framed card, so the line above it gives way; it stays see-through to keep the height. -->
-    <div :class="cn('flex flex-col border-t py-2', expanded && 'border-transparent')">
+    <div class="flex flex-col pt-1 pb-2">
       <ProfileMenu :expanded="expanded" />
     </div>
 

@@ -23,7 +23,7 @@ const label = computed(() => (game.value ? t("rail.running", { name: game.value.
   <RailTooltip v-if="game" :text="label" :hint="t('rail.runningSwitch')" :disabled="expanded">
     <button
       type="button"
-      :class="cn('running-in mx-2 flex items-center gap-2.5 rounded-lg p-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[9px] text-left', expanded && 'hover:bg-accent')"
+      :class="cn('running-in mx-2 flex items-center gap-2.5 rounded-lg px-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] text-left', expanded && 'hover:bg-accent')"
       data-rail-item
       data-testid="rail-running"
       :aria-label="`${label}. ${t('rail.runningSwitch')}`"

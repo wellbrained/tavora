@@ -164,8 +164,8 @@ function closeCrop() {
           cn(
             'group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg p-1 transition-colors focus-visible:-outline-offset-2 data-[state=open]:text-foreground',
             // Open, the profile is a card of its own at the very bottom, on a glow in the theme's colour (styles.css).
-            // Its corners follow the avatar's: 10 px + 5 px padding + 1 px border.
-            expanded && 'profile-rail-card text-foreground relative overflow-hidden rounded-[16px] border p-[5px] text-left',
+            // Rounded like the other rail items; the avatar's corners follow: 8 px - 4 px padding - 1 px border = 3 px.
+            expanded && 'profile-rail-card text-foreground relative overflow-hidden rounded-lg border p-1 text-left',
           )
         "
         data-rail-item
@@ -181,10 +181,13 @@ function closeCrop() {
             class="profile-rail-picture pointer-events-none absolute inset-y-0 right-0 h-full w-2/3 object-cover"
             draggable="false"
           />
-          <ProfileAvatar class="bg-foreground/10 relative" :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="36" square />
+          <!-- A thin light edge and a soft shadow keep any picture apart from the glow behind it. -->
+          <span class="ring-foreground/25 relative flex-none rounded-[3px] shadow-md ring-1 shadow-black/30">
+            <ProfileAvatar class="bg-card" :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="38" square :radius="3" />
+          </span>
           <span class="relative flex min-w-0 flex-col">
             <span class="truncate text-sm font-semibold">{{ profile.name.trim() || t("profile.label") }}</span>
-            <span class="text-muted-foreground truncate text-xs">{{ t("rail.profileHint") }}</span>
+            <span class="text-foreground/80 truncate text-xs font-medium">{{ t("rail.profileHint") }}</span>
           </span>
         </template>
         <RailFooterTile v-else>

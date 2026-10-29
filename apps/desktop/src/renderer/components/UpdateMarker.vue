@@ -38,7 +38,7 @@ function press() {
     type="button"
     :class="
       cn(
-        'text-primary mx-2 flex items-center gap-2.5 rounded-lg p-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[9px] transition-colors focus-visible:-outline-offset-2',
+        'text-primary mx-2 flex items-center gap-2.5 rounded-lg px-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] transition-colors focus-visible:-outline-offset-2',
         busy ? 'cursor-default opacity-80' : 'hover:bg-accent',
       )
     "
