@@ -28,6 +28,33 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.112",
+    date: "2026-10-29",
+    title: "Settings from over your game",
+    notes: [
+      "A panel you show in your game can open its settings now: Tavora comes to the front with them open.",
+    ],
+    prs: [
+      { number: 468, title: "Panels over the game can open their dialog: Tavora comes to the front with it" },
+    ],
+    tags: ["modules", "overlays", "privacy", "sdk", "website"],
+  },
+  {
+    version: "0.21.111",
+    date: "2026-10-29",
+    title: "To-Dos settings, tidied up",
+    notes: [
+      "To-Dos' settings open with the gear in the toolbar and look like the other modules' settings.",
+      "New Panel page: pick the font and text size of your to-dos in the panel.",
+      "Bold sits right next to the live view's text size, and colours wrap neatly into two rows.",
+      "Reset this page puts back only the page you're on, with Undo.",
+    ],
+    prs: [
+      { number: 467, title: "Module settings: one dialog layout in the kit, To-Dos moves to it" },
+    ],
+    tags: ["todos", "ui-kit", "website"],
+  },
+  {
     version: "0.21.110",
     date: "2026-10-29",
     title: "Menus open next to things",

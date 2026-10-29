@@ -1,6 +1,6 @@
 {
   "name": "@tavora/desktop",
-  "version": "0.21.110",
+  "version": "0.21.112",
   "private": true,
   "type": "module",
   "scripts": {
