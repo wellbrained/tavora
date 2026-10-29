@@ -24,11 +24,15 @@ import SteamImportDialog from "./components/SteamImportDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
 import InboxDialogs from "./components/messages/InboxDialogs.vue";
 import { Toaster } from "@tavora/official-ui/components/ui/toast";
-import { dialog, state } from "./host";
+import { computed } from "vue";
+import { dialog, settingsOpen, state } from "./host";
 import OverlayPage from "./pages/OverlayPage.vue";
 import WorkspacePage from "./pages/WorkspacePage.vue";
 import OnboardingPage from "./pages/OnboardingPage.vue";
 import WelcomePage from "./pages/WelcomePage.vue";
+
+// Settings covers the panels, so while it is open toasts show where the user wants them, as Try it shows.
+const toastPosition = computed(() => (settingsOpen.value && state.value ? state.value.library.toasts : "top-center"));
 </script>
 
 <template>
@@ -70,8 +74,8 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <PublishDialog />
     <PairingDialog />
 
-    <!-- Always at the top, over the toolbar: module panels are native views drawn
+    <!-- At the top, over the toolbar: module panels are native views drawn
          above this page, so anything lower would be hidden behind them. -->
-    <Toaster position="top-center" class="top-1! z-[60]!" />
+    <Toaster :position="toastPosition" :class="settingsOpen ? 'z-[60]!' : 'top-1! z-[60]!'" />
   </div>
 </template>

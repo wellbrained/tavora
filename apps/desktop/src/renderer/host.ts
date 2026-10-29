@@ -189,6 +189,19 @@ export function showToast(message: string): void {
   shown = toast({ title: message, testid: "toast" });
 }
 
+/**
+ * Settings > Appearance > Notifications > Try it: a few toasts where the user put them. Settings covers the
+ * panels, so the host window shows them in the chosen place while it is open (see App.vue).
+ */
+export function tryToasts(): void {
+  void toast.promise(new Promise((resolve) => setTimeout(resolve, 1200)), {
+    loading: t("settings.toasts.try.saving"),
+    success: t("settings.toasts.try.saved"),
+    error: t("settings.toasts.try.saved"),
+  });
+  setTimeout(() => toast({ title: t("settings.toasts.try.deleted"), action: { label: t("settings.toasts.try.undo"), onClick: () => toast.success(t("settings.toasts.try.back")) } }), 400);
+}
+
 /** Runs an action. Errors are shown as a toast unless the caller handles them. */
 export async function act(action: HostAction, { quiet = false } = {}): Promise<ActionResult> {
   const started = performance.now();
