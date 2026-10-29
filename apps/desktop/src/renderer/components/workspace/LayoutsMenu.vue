@@ -2,7 +2,7 @@
 // Saved layouts of the current workspace: apply one, or save the current layout.
 // Below them, a Templates submenu (uneven arrangements of empty slots to fill
 // with modules) and a picker for even grids.
-import { ChevronDown, LayoutPanelLeft, LayoutTemplate } from "@lucide/vue";
+import { Bookmark, Check, ChevronDown, LayoutPanelLeft, LayoutTemplate, Pencil, RefreshCw, Save, Trash2 } from "@lucide/vue";
 import type { SnapshotView } from "../../../shared/host-api";
 import { LAYOUT_TEMPLATES, type LayoutTemplateId } from "../../../shared/layout-templates";
 import {
@@ -30,15 +30,17 @@ function saveAs() {
 
 function snapshotItems(snapshot: SnapshotView): MenuItem[] {
   return [
-    { label: t("layouts.apply"), testid: "layout-apply", run: () => act({ type: "apply-snapshot", snapshotId: snapshot.id }) },
+    { label: t("layouts.apply"), testid: "layout-apply", glyph: Check, run: () => act({ type: "apply-snapshot", snapshotId: snapshot.id }) },
     {
       label: t("layouts.replace"),
       testid: "layout-update",
+      glyph: RefreshCw,
       run: () => act({ type: "update-snapshot", snapshotId: snapshot.id }),
     },
     {
       label: t("menu.rename"),
       testid: "layout-rename",
+      glyph: Pencil,
       run: () =>
         prompt({
           title: t("layouts.rename.title"),
@@ -51,6 +53,7 @@ function snapshotItems(snapshot: SnapshotView): MenuItem[] {
     {
       label: t("layouts.delete"),
       testid: "layout-delete",
+      glyph: Trash2,
       danger: true,
       run: () =>
         confirmAction({
@@ -75,11 +78,13 @@ function items(): MenuItem[] {
     ...view.snapshots.map((snapshot) => ({
       label: snapshot.name,
       testid: `layout-${snapshot.id}`,
+      glyph: Bookmark,
       submenu: () => snapshotItems(snapshot),
     })),
     {
       label: t("layouts.saveCurrent"),
       testid: "layout-save",
+      glyph: Save,
       separator: true,
       disabled: view.panels.length === 0,
       run: saveAs,
@@ -107,7 +112,7 @@ function items(): MenuItem[] {
         <!-- The safe zone toward the submenu lasts 1.5 s instead of 0.3 s: the way to it crosses the grid
              picker, and an unhurried mouse must not highlight a grid cell and close the submenu. -->
         <DropdownMenuSubTrigger data-testid="layout-templates" :grace-duration="1500">
-          <LayoutTemplate class="size-4" :stroke-width="1.5" /> {{ t("layouts.templates") }}
+          <LayoutTemplate aria-hidden="true" /> {{ t("layouts.templates") }}
         </DropdownMenuSubTrigger>
         <!-- Opens level with the Templates entry: -5 offsets the panel's border and padding. -->
         <DropdownMenuSubContent class="w-auto" side="right" align="start" :align-offset="-5">

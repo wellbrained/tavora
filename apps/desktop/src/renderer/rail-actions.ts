@@ -1,5 +1,25 @@
 // Menus for workspaces and folders on the rail. Every drag-and-drop move has a
 // menu equivalent here, so the rail works from the keyboard too.
+import {
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
+  CaseSensitive,
+  Folder,
+  FolderInput,
+  FolderOutput,
+  FolderPlus,
+  Image,
+  LayoutGrid,
+  Monitor,
+  MonitorOff,
+  Pencil,
+  Settings,
+  Share2,
+  Star,
+  StarOff,
+  Trash2,
+} from "@lucide/vue";
 import type { FolderView, WorkspaceView } from "../shared/host-api";
 import { act, confirmAction, dialog, openSettings, prompt, state, submitAction, type MenuItem } from "./host";
 import { t } from "./i18n";
@@ -34,10 +54,10 @@ export function workspaceMenu(workspace: WorkspaceView, options: { inFavorites?:
   const isFavorite = favoriteIndex >= 0;
 
   const items: MenuItem[] = [
-    { label: t("menu.open"), testid: "menu-open", run: () => act({ type: "open-workspace", workspaceId: workspace.id }) },
+    { label: t("menu.open"), testid: "menu-open", glyph: ArrowRight, run: () => act({ type: "open-workspace", workspaceId: workspace.id }) },
     isFavorite
-      ? { label: t("menu.favorite.remove"), testid: "menu-unfavorite", run: () => act({ type: "unfavorite", workspaceId: workspace.id }) }
-      : { label: t("menu.favorite.add"), testid: "menu-favorite", run: () => act({ type: "favorite", workspaceId: workspace.id }) },
+      ? { label: t("menu.favorite.remove"), testid: "menu-unfavorite", glyph: StarOff, run: () => act({ type: "unfavorite", workspaceId: workspace.id }) }
+      : { label: t("menu.favorite.add"), testid: "menu-favorite", glyph: Star, run: () => act({ type: "favorite", workspaceId: workspace.id }) },
   ];
 
   if (options.inFavorites) {
@@ -45,12 +65,14 @@ export function workspaceMenu(workspace: WorkspaceView, options: { inFavorites?:
       {
         label: t("menu.favorite.up"),
         testid: "menu-favorite-up",
+        glyph: ArrowUp,
         disabled: favoriteIndex <= 0,
         run: () => act({ type: "favorite", workspaceId: workspace.id, index: favoriteIndex - 1 }),
       },
       {
         label: t("menu.favorite.down"),
         testid: "menu-favorite-down",
+        glyph: ArrowDown,
         disabled: favoriteIndex >= library.favorites.length - 1,
         run: () => act({ type: "favorite", workspaceId: workspace.id, index: favoriteIndex + 1 }),
       },
@@ -70,6 +92,7 @@ function placeItems(items: MenuItem[], workspace: WorkspaceView): void {
   items.push({
     label: t("menu.moveToFolder"),
     testid: "menu-move-to-folder",
+    glyph: FolderInput,
     submenu: () => [
       ...Object.values(library.folders)
         .filter((folder) => folder.id !== where.folderId)
@@ -77,16 +100,18 @@ function placeItems(items: MenuItem[], workspace: WorkspaceView): void {
           (folder): MenuItem => ({
             label: folder.name,
             testid: `menu-folder-${folder.id}`,
+            glyph: Folder,
             run: () => act({ type: "move-workspace", workspaceId: workspace.id, folderId: folder.id }),
           }),
         ),
-      { label: t("menu.newFolder"), testid: "menu-new-folder", run: () => newFolderWith(workspace.id) },
+      { label: t("menu.newFolder"), testid: "menu-new-folder", glyph: FolderPlus, run: () => newFolderWith(workspace.id) },
     ],
   });
   if (where.folderId) {
     items.push({
       label: t("menu.takeOut"),
       testid: "menu-unfolder",
+      glyph: FolderOutput,
       run: () => act({ type: "move-workspace", workspaceId: workspace.id, folderId: null }),
     });
   }
@@ -95,12 +120,14 @@ function placeItems(items: MenuItem[], workspace: WorkspaceView): void {
       {
         label: t("menu.moveUp"),
         testid: "menu-up",
+        glyph: ArrowUp,
         disabled: where.index <= 0,
         run: () => act({ type: "move-workspace", workspaceId: workspace.id, folderId: where.folderId, index: where.index - 1 }),
       },
       {
         label: t("menu.moveDown"),
         testid: "menu-down",
+        glyph: ArrowDown,
         disabled: where.index >= where.size - 1,
         run: () => act({ type: "move-workspace", workspaceId: workspace.id, folderId: where.folderId, index: where.index + 1 }),
       },
@@ -113,8 +140,8 @@ function overlayItems(workspace: WorkspaceView): MenuItem[] {
   const overlays = state.value!.gameOverlays;
   if (workspace.kind !== "game" || !overlays.supported || !overlays.enabled) return [];
   return overlays.gameSetups.includes(workspace.id)
-    ? [{ label: t("menu.removeOverlay"), testid: "menu-remove-overlay", run: () => act({ type: "remove-game-setup", workspaceId: workspace.id }) }]
-    : [{ label: t("menu.addOverlay"), testid: "menu-add-overlay", run: () => act({ type: "add-game-overlay", workspaceId: workspace.id }) }];
+    ? [{ label: t("menu.removeOverlay"), testid: "menu-remove-overlay", glyph: MonitorOff, run: () => act({ type: "remove-game-setup", workspaceId: workspace.id }) }]
+    : [{ label: t("menu.addOverlay"), testid: "menu-add-overlay", glyph: Monitor, run: () => act({ type: "add-game-overlay", workspaceId: workspace.id }) }];
 }
 
 /** What belongs to the workspace itself, wherever it sits on the rail (favorites included). */
@@ -123,6 +150,7 @@ function ownItems(workspace: WorkspaceView): MenuItem[] {
     {
       label: t("menu.rename"),
       testid: "menu-rename",
+      glyph: Pencil,
       run: () =>
         prompt({
           title: t("menu.rename.title", { name: workspace.name }),
@@ -135,6 +163,7 @@ function ownItems(workspace: WorkspaceView): MenuItem[] {
     {
       label: t("menu.changeIcon"),
       testid: "menu-icon",
+      glyph: Image,
       // Three choices, one current: choosing any replaces the others, so there is nothing to "remove".
       submenu: () => [
         // A workspace has no icon of its own; its letters are where it starts.
@@ -174,13 +203,14 @@ function ownItems(workspace: WorkspaceView): MenuItem[] {
     ...overlayItems(workspace),
     // Only for a game workspace whose game's icon Tavora does not have yet: the whole item is the offer.
     ...(workspace.shareIcon
-      ? [{ label: t("menu.shareIcon"), testid: "menu-share-icon", run: () => (dialog.value = { kind: "share-icons", workspaceIds: [workspace.id] }) } satisfies MenuItem]
+      ? [{ label: t("menu.shareIcon"), testid: "menu-share-icon", glyph: Share2, run: () => (dialog.value = { kind: "share-icons", workspaceIds: [workspace.id] }) } satisfies MenuItem]
       : []),
     // Removing many workspaces at once happens in Settings > Workspaces.
-    { label: t("menu.manageWorkspaces"), testid: "menu-manage-workspaces", separator: true, run: () => openSettings({ section: "workspaces" }) },
+    { label: t("menu.manageWorkspaces"), testid: "menu-manage-workspaces", glyph: Settings, separator: true, run: () => openSettings({ section: "workspaces" }) },
     {
       label: t("menu.removeWorkspace"),
       testid: "menu-remove",
+      glyph: Trash2,
       danger: true,
       run: () =>
         confirmAction({
@@ -201,6 +231,7 @@ export function folderMenu(folder: FolderView): MenuItem[] {
     {
       label: t("menu.rename"),
       testid: "menu-rename",
+      glyph: Pencil,
       run: () =>
         prompt({
           title: t("menu.rename.title", { name: folder.name }),
@@ -213,6 +244,7 @@ export function folderMenu(folder: FolderView): MenuItem[] {
     {
       label: t("menu.icon.letters"),
       testid: "menu-folder-label",
+      glyph: CaseSensitive,
       run: () =>
         prompt({
           title: t("menu.folder.letters.title"),
@@ -228,6 +260,7 @@ export function folderMenu(folder: FolderView): MenuItem[] {
     items.push({
       label: t("menu.folder.showIcons"),
       testid: "menu-folder-collage",
+      glyph: LayoutGrid,
       run: () => act({ type: "set-folder-label", folderId: folder.id, label: null }),
     });
   }
@@ -236,12 +269,14 @@ export function folderMenu(folder: FolderView): MenuItem[] {
       {
         label: t("menu.moveUp"),
         testid: "menu-up",
+        glyph: ArrowUp,
         disabled: index <= 0,
         run: () => act({ type: "move-folder", folderId: folder.id, index: index - 1 }),
       },
       {
         label: t("menu.moveDown"),
         testid: "menu-down",
+        glyph: ArrowDown,
         disabled: index >= library.root.length - 1,
         run: () => act({ type: "move-folder", folderId: folder.id, index: index + 1 }),
       },
@@ -250,6 +285,7 @@ export function folderMenu(folder: FolderView): MenuItem[] {
   items.push({
     label: t("menu.folder.delete"),
     testid: "menu-delete-folder",
+    glyph: Trash2,
     danger: true,
     run: () =>
       confirmAction({

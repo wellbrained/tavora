@@ -175,17 +175,17 @@ function remove(module: ModuleView) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem data-testid="open-module-library" @select="openLibrary">
-              <Store :stroke-width="1.5" /> {{ t("settings.modules.library") }}
+              <Store aria-hidden="true" /> {{ t("settings.modules.library") }}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem data-testid="install-module" @select="install">
-              <FileArchive :stroke-width="1.5" /> {{ t("settings.modules.install") }}
+              <FileArchive aria-hidden="true" /> {{ t("settings.modules.install") }}
             </DropdownMenuItem>
             <DropdownMenuItem data-testid="open-modules-folder" @select="act({ type: 'open-modules-folder' })">
-              <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
+              <FolderOpen aria-hidden="true" /> {{ t("common.openFolder") }}
             </DropdownMenuItem>
             <DropdownMenuItem data-testid="reload-modules" @select="act({ type: 'reload-modules' })">
-              <RefreshCw :stroke-width="1.5" /> {{ t("common.reload") }}
+              <RefreshCw aria-hidden="true" /> {{ t("common.reload") }}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -237,7 +237,7 @@ function remove(module: ModuleView) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem v-if="module.localDataWaiting" :data-testid="`move-local-data-${module.id}`" @select="moveLocal(module)">
-                <ArrowRightLeft :stroke-width="1.5" /> {{ t("settings.modules.moveLocal") }}
+                <ArrowRightLeft aria-hidden="true" /> {{ t("settings.modules.moveLocal") }}
               </DropdownMenuItem>
               <DropdownMenuItem
                 v-if="canReport(module)"
@@ -246,7 +246,7 @@ function remove(module: ModuleView) {
                 :data-testid="`report-module-${module.id}`"
                 @select="report(module)"
               >
-                <Flag :stroke-width="1.5" /> {{ t("settings.modules.report") }}
+                <Flag aria-hidden="true" /> {{ t("settings.modules.report") }}
               </DropdownMenuItem>
               <DropdownMenuItem
                 v-if="module.removable"
@@ -256,7 +256,7 @@ function remove(module: ModuleView) {
                 :data-testid="`remove-module-${module.id}`"
                 @select="remove(module)"
               >
-                <Trash2 :stroke-width="1.5" /> {{ t("common.remove") }}
+                <Trash2 aria-hidden="true" /> {{ t("common.remove") }}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
