@@ -8,7 +8,10 @@ What changed in `@tavora/module-schema`, newest first.
 
 ## 0.1.5
 
-- `leaderboards`: the boards a module keeps on Tavora's service (`LeaderboardBoard`): `{ id, kind: "streak", daily? }` or `{ id, kind: "score", order? }`, up to `MAX_LEADERBOARD_BOARDS` (20) with ids checked by `isLeaderboardId`. It needs the new `leaderboards` connector, the connector needs it, and both need a `minTavora` newer than `LAST_TAVORA_WITHOUT_LEADERBOARDS` (0.21.91), except Tavora's own modules.
+- `leaderboards`: the boards a module keeps on Tavora's service (`LeaderboardBoard`), up to `MAX_LEADERBOARD_BOARDS` (20) with ids checked by `isLeaderboardId`. It needs the new `leaderboards` connector, the connector needs it, and both need a `minTavora` newer than `LAST_TAVORA_WITHOUT_LEADERBOARDS` (0.21.91), except Tavora's own modules.
+- Five kinds (`LEADERBOARD_KINDS`): `{ kind: "streak", daily? }`, `{ kind: "score", order?, unit? }`, `{ kind: "total", unit? }`, `{ kind: "average", order?, minGames?, unit? }` and `{ kind: "rate", minGames? }`. `minGames` is a whole number up to `LEADERBOARD_MIN_GAMES.max` (default `LEADERBOARD_MIN_GAMES.default`, 10); `unit` and every board's `name` are one line of at most `MAX_LEADERBOARD_UNIT` and `MAX_LEADERBOARD_NAME` characters.
+- Every board has a `name` users see, translatable through `translations.boards`. Names, units, `minGames` and the `total`, `average` and `rate` kinds need a `minTavora` newer than `LAST_TAVORA_WITHOUT_BOARD_NAMES` (0.21.96); a manifest for an older Tavora may leave the names out, and `validateManifest` gives each such board its id as its name.
+- `LEADERBOARD_PERIODS` (`LeaderboardPeriod`, `isLeaderboardPeriod`): the day, week, month, year or all time a board can be read for.
 
 ## 0.1.4
 
