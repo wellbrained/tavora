@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.105",
+    date: "2026-10-29",
+    title: "Quicker To-Dos",
+    notes: [
+      "Keep finished to-dos is now a switch, so you see at a glance whether it's on.",
+      "Hover a to-do and press the trash button to delete it in one click. Undo puts it back.",
+    ],
+    prs: [
+      { number: 460, title: "To-Dos: Keep finished as a switch, delete a to-do in one click" },
+    ],
+    tags: ["todos"],
+  },
+  {
     version: "0.21.104",
     date: "2026-10-29",
     title: "Tidier notifications",
