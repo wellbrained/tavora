@@ -423,6 +423,14 @@ export class LeaderboardStore {
     return rows.map((row) => ({ accountId: row.account_id, hiddenAt: row.hidden_at }));
   }
 
+  /** The accounts that agreed to be shown on some board, newest first: how many modules each is on, and since when. */
+  shownAccounts(): { accountId: string; modules: number; since: number }[] {
+    const rows = this.db
+      .prepare("select account_id, count(*) as modules, min(shown_at) as since from members where shown_at is not null group by account_id order by since desc, account_id")
+      .all() as { account_id: string; modules: number; since: number }[];
+    return rows.map((row) => ({ accountId: row.account_id, modules: row.modules, since: row.since }));
+  }
+
   // ── Members ────────────────────────────────────────────────────────────
 
   /** An account's membership of a module's boards, made on first ask so its pseudonym label stays the same. */
@@ -895,6 +903,22 @@ export function leaderboardsAdminRoutes({ leaderboards, accounts, now = Date.now
     const body = await json(context.req.raw);
     if (!isModuleId(body.id) || body.id.startsWith(DEV_PREFIX) || typeof body.allowed !== "boolean") return context.json({ error: "Send { id, allowed } for a catalog module." }, 400);
     return context.json({ changed: leaderboards.setAllowed(body.id, body.allowed, now()) });
+  });
+
+  // The names users show on boards (accounts left off for a suspension or ban are not listed), with what the boards do with each:
+  // shown, held back by the word filter, or hidden by the maintainer. ?q= searches the profile name; at most 200 come back.
+  app.get("/names", (context) => {
+    const needle = (context.req.query("q") ?? "").trim().toLowerCase();
+    const hidden = new Set(leaderboards.hiddenNames().map((entry) => entry.accountId));
+    const left = accounts.suspendedOrBanned();
+    const names = leaderboards.shownAccounts().flatMap((entry) => {
+      const name = accounts.profileName(entry.accountId)?.trim() ?? "";
+      if (!name || left.has(entry.accountId) || (needle && !name.toLowerCase().includes(needle))) return [];
+      const state = hidden.has(entry.accountId) ? "hidden" : boardName(name, false) === null ? "filtered" : "shown";
+      return [{ accountId: entry.accountId, name, state, modules: entry.modules, since: iso(entry.since) }];
+    });
+    const count = (state: string) => names.filter((entry) => entry.state === state).length;
+    return context.json({ names: names.slice(0, 200), counts: { all: names.length, filtered: count("filtered"), hidden: count("hidden") } });
   });
 
   app.get("/hidden-names", (context) =>

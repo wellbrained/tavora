@@ -26,6 +26,8 @@ export interface PanelOptions {
   probes: Probes;
   /** How many key replacement requests wait for a decision. */
   keysWaiting: () => number;
+  /** How many catalog modules ask for leaderboards and wait for the maintainer's yes. */
+  leaderboardsWaiting?: () => number;
   /** How many blocks wait to be signed. */
   blocksToSign?: () => number;
   /** The game dataset's name for itself (`/v1/health`): how many games, and when it was built. */
@@ -68,6 +70,7 @@ export function registerPanelRoutes(app: Hono, options: PanelOptions): void {
     { id: "messages", label: "Unread replies to Tavora", count: options.conversations?.waiting().unreadReplies ?? 0, section: "messages" },
     { id: "conversation-reports", label: "Reported conversations", count: options.conversations?.waiting().openReports ?? 0, section: "messages", tab: "reported" },
     { id: "keys", label: "Publisher key requests", count: options.keysWaiting(), section: "review", tab: "keys" },
+    { id: "leaderboards", label: "Modules waiting for leaderboard approval", count: options.leaderboardsWaiting?.() ?? 0, section: "leaderboards", tab: "modules" },
     { id: "blocks", label: "Blocks to sign", count: options.blocksToSign?.() ?? 0, section: "modules" },
     { id: "catalog-full", label: "The module catalog is full", count: catalog?.fullSince() ? 1 : 0, section: "status" },
   ];

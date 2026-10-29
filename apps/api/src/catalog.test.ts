@@ -23,6 +23,7 @@ interface Options {
   games?: string[];
   /** The old name of personalWorkspaces. */
   workspaces?: boolean;
+  leaderboards?: { id: string; name: string; kind: "streak"; daily?: boolean }[];
   personalWorkspaces?: boolean;
   key?: KeyObject | null;
   changelog?: unknown;
@@ -37,7 +38,7 @@ interface Options {
 }
 
 /** A module zip as tavora-pack makes it: manifest, page, optional changelog, and the signature. */
-function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, personalWorkspaces, key = publisher, changelog, homepage, support, translations, readme, icon, screenshots = [], extra = [] }: Options = {}): Buffer {
+function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, personalWorkspaces, key = publisher, changelog, homepage, support, translations, readme, icon, screenshots = [], extra = [], leaderboards }: Options = {}): Buffer {
   const manifest = {
     id,
     name: "Timer",
@@ -52,11 +53,12 @@ function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], wo
     ...(homepage === undefined ? {} : { homepage }),
     ...(support === undefined ? {} : { support }),
     ...(translations === undefined ? {} : { minTavora: "0.21.0", translations }),
+    ...(leaderboards === undefined ? {} : { minTavora: "0.21.97", leaderboards: { boards: leaderboards } }),
     ...(readme === undefined ? {} : { readme: "README.md" }),
     ...(icon === undefined ? {} : { icon: icon.name }),
     ...(screenshots.length ? { screenshots: screenshots.map((shot) => shot.name) } : {}),
     viewport: { minWidth: 200, minHeight: 150 },
-    permissions: { network: ["api.example.com"] },
+    permissions: { network: ["api.example.com"], ...(leaderboards === undefined ? {} : { connectors: ["leaderboards"] }) },
   };
   const files: ZipFile[] = [
     { name: "tavora.module.json", data: Buffer.from(JSON.stringify(manifest)) },
@@ -100,6 +102,15 @@ describe("adding to the catalog", () => {
       ["1.1.0", []],
       ["1.0.0", ["First version."]],
     ]);
+  });
+
+  it("hands the admin panel the boards the newest version declares, null when it declares none", () => {
+    const catalog = store();
+    catalog.add(moduleZip(), new Date("2026-10-18T10:00:00Z"));
+    expect(catalog.adminModules()[0]?.leaderboards).toBeNull();
+    const boards = [{ id: "daily", name: "Daily streak", kind: "streak" as const, daily: true }];
+    catalog.add(moduleZip({ version: "1.1.0", leaderboards: boards }), new Date("2026-10-19T10:00:00Z"));
+    expect(catalog.adminModules()[0]?.leaderboards).toEqual({ boards });
   });
 
   it("tells the admin panel which versions are listed and which still wait for review", () => {
