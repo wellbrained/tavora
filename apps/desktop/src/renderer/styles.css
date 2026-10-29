@@ -234,7 +234,8 @@ nav[data-expanded="true"] .rail-entry:hover .rail-icon {
 }
 /* The profile card at the bottom of the expanded rail (ProfileMenu.vue): a glow in the theme's accent from the top
    right over fine diagonal lines, so it looks like the profile's banner and follows every theme, light ones too. */
-.profile-rail-card {
+.profile-rail-card,
+.running-layer {
   border-color: color-mix(in oklab, var(--primary) 30%, var(--border));
   background:
     radial-gradient(90% 170% at 100% 0%, color-mix(in oklab, var(--primary) 34%, transparent), transparent 72%),
@@ -250,6 +251,23 @@ nav[data-expanded="true"] .rail-entry:hover .rail-icon {
   box-shadow:
     inset 0 0 0 100px color-mix(in oklab, var(--foreground) 4%, transparent),
     0 0 14px 0 color-mix(in oklab, var(--primary) 22%, transparent);
+}
+/* The layer of a running game behind the card (RunningGameButton.vue): the card's own look, a shade further back. */
+.running-layer {
+  border-color: color-mix(in oklab, var(--primary) 20%, var(--border));
+  box-shadow: 0 -6px 16px color-mix(in srgb, black 35%, transparent);
+}
+.running-layer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in oklab, var(--rail) 22%, transparent);
+  pointer-events: none;
+  transition: background-color 150ms;
+}
+.running-layer:hover::before {
+  background: transparent;
 }
 /* With a picture, it shows blurred on the right, fading out towards the name. */
 .profile-rail-picture {
