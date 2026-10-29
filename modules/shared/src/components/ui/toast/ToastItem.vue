@@ -118,7 +118,7 @@ function runAction() {
           {{ item.action.label }}
         </Button>
       </Transition>
-      <Button type="button" size="icon-xs" variant="ghost" class="tavora-toast-button tavora-toast-close" :aria-label="uiText.dismiss" :title="uiText.dismiss" aria-keyshortcuts="Escape" @click="dismissToast(item.id)">
+      <Button type="button" size="icon-xs" variant="ghost" class="tavora-toast-button tavora-toast-close" :aria-label="uiText.dismiss" aria-keyshortcuts="Escape" @click="dismissToast(item.id)">
         <X :stroke-width="1.75" />
       </Button>
     </div>
