@@ -19,6 +19,9 @@ export function windowLook(window: BrowserWindow): WindowStart {
 const SW_SHOWMINNOACTIVE = 7;
 const WPF_RESTORETOMAXIMIZED = 0x2;
 const GWL_STYLE = -16;
+const GWL_EXSTYLE = -20;
+const WS_EX_TOPMOST = 0x8;
+const HWND_TOP = 0;
 const WS_MAXIMIZE = 0x01000000;
 const SWP_NOSIZE = 0x1;
 const SWP_NOMOVE = 0x2;
@@ -82,8 +85,10 @@ export function showInBackground(window: BrowserWindow, how: "behind" | "minimiz
         user32.setWindowPlacement(hwnd, placement);
         return;
       }
-      // Right below the active window, so a game in front stays covered by nothing.
-      const active = user32.getForegroundWindow();
+      // Right below the active window, so a game in front stays covered by nothing. Placed below an always-on-top window,
+      // Windows would make Tavora one too; there it goes on top of the usual windows instead, which is still below it.
+      const foreground = user32.getForegroundWindow();
+      const active = Number(user32.getWindowLong(foreground, GWL_EXSTYLE)) & WS_EX_TOPMOST ? HWND_TOP : foreground;
       if (maximized) {
         // Maximizing the usual way would make it the active window: mark it maximized and give it the work area instead.
         const area = workArea();
