@@ -55,7 +55,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `overlay` | no | The page for streaming software, see [Overlay](#overlay). The `"stream-overlay"` connector (for OBS links) needs this page, but the page needs no connector: without it the page serves game overlays only, and `minTavora` must be newer than `0.20.50`, because older Tavoras refuse it. Needs Tavora 0.19.26 or newer. The same page is the [live view](./protocol.md#live-views) of a panel the user shows in game. |
 | `overlaySize` | no | `{ "width": 440, "height": 100 }`: the size in pixels the `overlay` page starts at over the user's game; the user can still resize it. Without it the overlay starts at a fifth of the game window's width. Needs `overlay` and a `minTavora` newer than `0.21.27`, because older Tavoras refuse it. |
 | `actions` | no | What the module can do on a key press, 1 to 16, see [Actions](#actions). Needs Tavora 0.19.26 or newer. |
-| `translations` | no | The name, description, panel and action names in other languages, see [Translations](#translations). Needs a `minTavora` newer than `0.20.12`. |
+| `translations` | no | The name, description, panel, action and leaderboard names in other languages, see [Translations](#translations). Needs a `minTavora` newer than `0.20.12`. |
 | `leaderboards` | no | The module's boards, see [Leaderboards](#leaderboards). Needs the `"leaderboards"` connector and a `minTavora` newer than `0.21.91`. |
 
 Paths (`entry`, `icon`, `readme`, `screenshots`, `overlay`, and the same fields of a panel type) are relative to the package root and must stay inside it: no leading `/`, no `.` or `..` segments, no empty segments, no backslashes or `:`. Tavora also checks that both files exist when it discovers the module.
@@ -116,7 +116,7 @@ The page loads only its own files: bundle your fonts, and give it colours and te
 
 ## Translations
 
-`translations` gives your module's name, description, panel names and action names in other languages, so users see them in the language they picked in Tavora. Key each language by its lowercase code, such as `de` or `pt-br`:
+`translations` gives your module's name, description, panel, action and leaderboard names in other languages, so users see them in the language they picked in Tavora. Key each language by its lowercase code, such as `de` or `pt-br`:
 
 ```json
 "translations": {
@@ -124,7 +124,8 @@ The page loads only its own files: bundle your fonts, and give it colours and te
     "name": "Kampagnen-Begleiter",
     "description": "Plant deine Builds.",
     "panels": { "planner": "Planer" },
-    "actions": { "reset": "Zurücksetzen" }
+    "actions": { "reset": "Zurücksetzen" },
+    "boards": { "daily": "Tagesserie" }
   }
 }
 ```
@@ -135,6 +136,7 @@ The page loads only its own files: bundle your fonts, and give it colours and te
 | `description` | no | Like `description`: 1 to 300 characters. |
 | `panels` | no | Panel type `id` to its tab name, 1 to 24 characters on one line. Only ids `panels` lists. |
 | `actions` | no | Action `id` to its name, 1 to 40 characters on one line. Only ids `actions` lists. |
+| `boards` | no | Leaderboard `id` to the board's name, 1 to 40 characters on one line. Only ids `leaderboards.boards` lists. |
 
 Each text Tavora shows comes from the translation for exactly the user's language, else from its base language (`pt` for `pt-br`), else from the plain field. Leave out what stays the same; the plain fields are what users in every other language see, so write them in English. At most 32 languages; codes Tavora doesn't speak yet are fine. The readme and patch notes have one language for now.
 
@@ -147,20 +149,27 @@ Older Tavoras refuse a manifest with `translations`, so set `minTavora` to a ver
 ```json
 "leaderboards": {
   "boards": [
-    { "id": "unlimited", "kind": "streak" },
-    { "id": "daily", "kind": "streak", "daily": true },
-    { "id": "fastest", "kind": "score", "order": "low" }
+    { "id": "daily", "name": "Daily streak", "kind": "streak", "daily": true },
+    { "id": "fastest", "name": "Fastest solve", "kind": "score", "order": "low", "unit": "s" },
+    { "id": "solved", "name": "Puzzles solved", "kind": "total" },
+    { "id": "average", "name": "Average time", "kind": "average", "order": "low", "minGames": 5, "unit": "s" },
+    { "id": "wins", "name": "Win rate", "kind": "rate" }
   ]
 }
 ```
+
+A module uses only the kinds it needs. Every board can be read for a day, a week, a month, a year and all time, so declare each board once.
 
 | Field | Required | Rules |
 | --- | --- | --- |
 | `boards` | yes | 1 to 20 boards. |
 | `boards[].id` | yes | Stable identity: lowercase letters and digits in words joined by `-`, starting with a letter, at most 32 characters, unique in the module. Results are kept by it, so never change it after release. |
-| `boards[].kind` | yes | `"streak"`: won and lost games; a user's line has their current and best winning streak, ranked by the best, then the current one. `"score"`: one number per game; a user's line has their best. |
+| `boards[].name` | yes | The board's name as users see it, such as `Daily streak`, 1 to 40 characters on one line. Tavora shows it in the user's profile. `translations.<language>.boards` names it in other languages, keyed by board id. |
+| `boards[].kind` | yes | `"streak"`: won and lost games; a user's line has their current and best winning streak, ranked by the best, then the current one. `"score"`: one number per game; a user's line has their best. `"total"`: one number per game, 0 or more; a user's line has the sum, such as puzzles solved (send `1` per game). `"average"`: one number per game; a user's line has the mean. `"rate"`: won and lost games; a user's line has the share won. |
 | `boards[].daily` | no | Streak boards only. `true`: one result per calendar day, and a missed day ends the streak. A result counts only when it ended within its day, so replaying an old puzzle never does. |
-| `boards[].order` | no | Score boards only. `"high"` (the default): the highest number wins. `"low"`: the lowest wins, such as a time. |
+| `boards[].order` | no | Score and average boards. `"high"` (the default): the highest number wins. `"low"`: the lowest wins, such as a time. |
+| `boards[].minGames` | no | Average and rate boards. How many games a user needs before they are on the board, 1 to 1000, default 10, so one lucky game can't top it. On equal numbers, more games rank first. |
+| `boards[].unit` | no | Score, total and average boards. A short text Tavora shows after the number, such as `s` or `pts`, at most 10 characters. |
 
 Tavora's service reads a catalog module's boards from its newest listed version, so a board works once the version that declares it is listed. A development copy uses the boards of its own manifest.
 

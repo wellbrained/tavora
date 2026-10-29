@@ -1,6 +1,6 @@
 # Leaderboards
 
-A game module can rank its users: the longest winning streak in a word game, the fastest Sudoku. Tavora keeps the boards on its service with each user's Tavora account, so your module needs no server and never handles a sign-in. Every call is in the [protocol](../reference/protocol.md#connectors) and [manifest](../reference/manifest.md#leaderboards) references.
+A game module can rank its users: the longest winning streak in a word game, the fastest Sudoku, the most puzzles solved this week. Tavora keeps the boards on its service with each user's Tavora account, so your module needs no server and never handles a sign-in. Every call is in the [protocol](../reference/protocol.md#connectors) and [manifest](../reference/manifest.md#leaderboards) references.
 
 Needs Tavora 0.21.92 or newer, so set `minTavora` to at least `0.21.92`.
 
@@ -11,16 +11,28 @@ Needs Tavora 0.21.92 or newer, so set `minTavora` to at least `0.21.92`.
 "permissions": { "network": [], "connectors": ["leaderboards"] },
 "leaderboards": {
   "boards": [
-    { "id": "unlimited", "kind": "streak" },
-    { "id": "daily", "kind": "streak", "daily": true },
-    { "id": "fastest-easy", "kind": "score", "order": "low" }
+    { "id": "daily", "name": "Daily streak", "kind": "streak", "daily": true },
+    { "id": "fastest-easy", "name": "Fastest easy solve", "kind": "score", "order": "low", "unit": "s" },
+    { "id": "solved", "name": "Puzzles solved", "kind": "total" }
   ]
 }
 ```
 
-- A **streak** board takes won and lost games and ranks users by their best winning streak, then their current one. With `daily`, each game belongs to a calendar day, one per day, and a missed day ends the streak.
-- A **score** board takes one number per game and ranks users by their best: the highest, or with `"order": "low"` the lowest, such as a time in milliseconds.
+Pick the kinds that fit your game; most use one or two.
+
+| Kind | Takes | Ranks by | For example |
+| --- | --- | --- | --- |
+| `streak` | won or lost | the best winning streak, then the current one | a word game's streak; with `daily`, one game per day and a missed day ends it |
+| `score` | a number | each user's best, highest or with `"order": "low"` lowest | the fastest solve, a high score |
+| `total` | a number, 0 or more | the sum | puzzles solved (send `1` per game), points collected |
+| `average` | a number | the mean, highest or lowest, after `minGames` games | the average solve time, guesses per word |
+| `rate` | won or lost | the share of games won, after `minGames` games | the win rate |
+
+- Every board has a `name` users see, for example in their Tavora profile. Translate it in `translations.<language>.boards`.
+- `unit` (score, total and average) is shown after the number, such as `s`.
+- `minGames` (average and rate, default 10) keeps one lucky game off the top.
 - Separate modes get separate boards: one per difficulty, or daily apart from unlimited.
+- Every board can be read for **today, this week, this month, this year and all time**. Declare each board once; you don't need a weekly copy.
 
 ## Before it goes live
 
@@ -67,7 +79,7 @@ async function upload() {
 ```
 
 - Games played while signed out count too. Keep them in your own storage and send them once `status` says `shown`. A daily game only counts until about a day and a half after its day ends; after that it comes back as `archive`.
-- `at` is when the game ended. A daily game counts only when it ended within its `day`, so replaying an old puzzle from an archive never counts; it comes back as `archive`.
+- `at` is when the game ended, `day` the user's local day; the SDK fills `day` in from `at` when you leave it out. A game counts only when it ended within its `day`, so replaying an old puzzle from an archive never counts; it comes back as `archive`. On a daily board, give the puzzle's day yourself.
 - A daily board takes one game per day. A second one comes back as `day-taken`.
 - Each game is taken or refused on its own, so one bad game never holds up the others. Try again after `NETWORK_ERROR` with a growing wait, not in a loop.
 
@@ -75,10 +87,23 @@ async function upload() {
 
 ```ts
 const { rows } = await tavora.leaderboards.top("daily", { day: todayLocal(), limit: 10 });
-// [{ rank: 1, name: "Mara", self: false, current: 12, best: 30 }, ...]
+// [{ rank: 1, of: 340, name: "Mara", self: false, current: 12, best: 30 }, ...]
+const week = await tavora.leaderboards.top("solved", { period: "week" });
+// [{ rank: 1, of: 52, name: "Mara", self: false, value: 41, games: 41 }, ...]
 ```
 
-Equal lines share a rank. The user's own line has `self: true` and comes last when they are further down. Pass the user's local `day` on a daily board, so a streak that ended shows as 0. Show names as plain text.
+`period` is `day`, `week` (Monday to Sunday), `month`, `year` or `all` (the default); `day` picks which one, so you can show last week too. `of` is how many users the board has then. Equal lines share a rank. The user's own line has `self: true` and comes last when they are further down. Pass the user's local `day` on a daily board, so a streak that ended shows as 0. Show names as plain text.
+
+## The user's own ranks
+
+`mine()` gives the user's standing on every board in every period in one call, for a "#12 daily, #3 fastest" line:
+
+```ts
+const { boards } = await tavora.leaderboards.mine();
+// [{ id: "daily", name: "Daily streak", periods: { day: null, week: { rank: 3, of: 80, current: 5, best: 5 }, ..., all: { rank: 12, of: 340, current: 5, best: 18 } } }, ...]
+```
+
+A period is `null` where the user isn't on the board, and all of them are while signed out or not shown. Tavora also lists these ranks in the user's profile card for every catalog module they joined; the user can hide that list.
 
 ## What users can trust
 

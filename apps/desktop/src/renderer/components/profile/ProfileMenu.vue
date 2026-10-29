@@ -51,7 +51,8 @@ const PERIODS: LeaderboardPeriod[] = ["day", "week", "month", "year", "all"];
 async function loadRanks() {
   if (profile.value.ranks.hidden || ranksLoading.value) return;
   ranksLoading.value = true;
-  ranks.value = await api.profileRanks().catch(() => null);
+  // A failed call reads as offline, so the card never stays on Loading.
+  ranks.value = (await api.profileRanks().catch(() => null)) ?? { online: false, signedIn: true, modules: [] };
   ranksLoading.value = false;
 }
 
@@ -75,7 +76,7 @@ function numbersOf(board: ProfileRankBoard, standing: LeaderboardStanding): stri
     return profile.value.ranks.period === "all" && current > 0 ? `${text} (${t("profile.ranks.now", { count: current })})` : text;
   }
   const value = number.value.format(standing.value ?? 0);
-  if (board.kind === "rate") return `${value} %  ${t("profile.ranks.games", { wins: standing.wins ?? 0, games: standing.games ?? 0 })}`;
+  if (board.kind === "rate") return `${value} % ${t("profile.ranks.games", { wins: standing.wins ?? 0, games: standing.games ?? 0 })}`;
   return board.unit ? `${value} ${board.unit}` : value;
 }
 
