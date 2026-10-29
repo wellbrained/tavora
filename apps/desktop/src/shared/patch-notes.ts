@@ -28,6 +28,14 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.96",
+    date: "2026-10-29",
+    title: "Tidier hints",
+    notes: [
+      "Hover hints in modules and in Tavora use the same small card as the rail.",
+    ],
+  },
+  {
     version: "0.21.95",
     date: "2026-10-29",
     title: "Bigger room for module settings",
