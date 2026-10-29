@@ -1034,6 +1034,22 @@ describe("a panel in the game", () => {
     expect(panelWindows(world)).toHaveLength(2);
   });
 
+  it("comes back to Tavora when it opens its dialog: the layer closes and the game doesn't get the keyboard", async () => {
+    const { service, world, key } = await setup();
+    add(service, PANEL, "elden");
+    expect(service.panelWorkspace(PANEL)).toBe("elden");
+    expect(service.panelWorkspace(SECOND)).toBeNull();
+
+    service.pressed(layerKey(key));
+    const [window] = panelWindows(world);
+    service.endLayer();
+    expect(service.layerOpen).toBe(false);
+    expect(window!.destroyed).toBe(true);
+    expect(service.panelOpen(PANEL)).toBe(false);
+    expect(world.focused).toBe(0);
+    expect(service.hasPanel(PANEL)).toBe(true);
+  });
+
   it("starts at the size its module prefers", async () => {
     const { service, world, key } = await setup();
     show(service);
