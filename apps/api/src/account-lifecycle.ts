@@ -87,8 +87,3 @@ export function accountLifecycle(stores: AccountStores) {
 }
 
 export type AccountLifecycle = ReturnType<typeof accountLifecycle>;
-
-/** Whether an account may not be reached or act as a developer now: suspended or banned. */
-export function stoppedDeveloper(accounts: Pick<AccountStore, "isSuspended" | "isBanned">, accountId: string): boolean {
-  return accounts.isSuspended(accountId) || accounts.isBanned(accountId);
-}
