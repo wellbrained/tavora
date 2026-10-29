@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.110",
+    date: "2026-10-29",
+    title: "Menus open next to things",
+    notes: [
+      "Right-click menus now open next to what you clicked, not under your pointer.",
+      "Tab menus open below the tab.",
+    ],
+    prs: [
+      { number: 465, title: "Context menus open next to their element, never at the pointer" },
+    ],
+    tags: ["sdk", "todos", "ui-kit", "website", "workspace"],
+  },
+  {
     version: "0.21.109",
     date: "2026-10-29",
     title: "Menus with icons",
