@@ -19,6 +19,7 @@ import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { act, confirmAction, dialog, workspacesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
 import { problemText } from "../../../shared/module-problem";
+import { asksMore } from "../../../shared/module-updates";
 import { t } from "../../i18n";
 import ModuleGrantsSection from "./ModuleGrantsSection.vue";
 import ModuleNotesDialog from "./ModuleNotesDialog.vue";
@@ -76,6 +77,22 @@ const autoUpdateModules = computed({
   get: () => state.value!.library.autoUpdateModules,
   set: (enabled: boolean) => void act({ type: "set-auto-update-modules", enabled }),
 });
+
+/**
+ * Installs a waiting update. Only one that asks for new access goes through the consent dialog,
+ * which closes itself when there is nothing to ask (GrantDialog.vue).
+ */
+const updating = ref<string | null>(null);
+async function updateModule(module: ModuleView) {
+  if (!module.update || updating.value) return;
+  if (asksMore(module.update)) {
+    dialog.value = { kind: "grant", moduleId: module.id, slot: null, review: true, update: true };
+    return;
+  }
+  updating.value = module.id;
+  await act({ type: "apply-module-update", moduleId: module.id, version: module.update.version });
+  updating.value = null;
+}
 
 /** Asks the catalog for updates of the modules installed from it now. */
 const checking = ref(false);
@@ -206,7 +223,8 @@ function remove(module: ModuleView) {
             v-if="module.update"
             variant="default"
             :data-testid="`module-update-${module.id}`"
-            @click="dialog = { kind: 'grant', moduleId: module.id, slot: null, review: true, update: true }"
+            :disabled="updating !== null"
+            @click="updateModule(module)"
           >
             <CloudDownload :stroke-width="1.5" /> {{ t("settings.modules.update", { version: module.update.version }) }}
           </Button>
