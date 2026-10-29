@@ -50,8 +50,8 @@
   max-width: 100%;
   overflow: hidden;
   border-radius: 20px;
-  background: var(--foreground);
-  color: var(--background);
+  background: var(--toast);
+  color: var(--toast-foreground);
   box-shadow: 0 8px 20px color-mix(in srgb, black 35%, transparent);
   transition: width 0.45s var(--tavora-toast-spring), height 0.45s var(--tavora-toast-spring);
 }
@@ -74,24 +74,24 @@
 .tavora-toast .tavora-toast-button {
   flex: none;
   background: transparent;
-  color: color-mix(in srgb, var(--background) 76%, transparent);
+  color: color-mix(in srgb, var(--toast-foreground) 76%, transparent);
   font-size: 12px;
   font-weight: 600;
 }
-.tavora-toast .tavora-toast-button:hover { background: color-mix(in srgb, var(--background) 12%, transparent); color: var(--background); }
-.tavora-toast .tavora-toast-button:focus-visible { outline: 2px solid var(--background); outline-offset: 2px; box-shadow: none; }
+.tavora-toast .tavora-toast-button:hover { background: color-mix(in srgb, var(--toast-foreground) 12%, transparent); color: var(--toast-foreground); }
+.tavora-toast .tavora-toast-button:focus-visible { outline: 2px solid var(--toast-foreground); outline-offset: 2px; box-shadow: none; }
 .tavora-toast .tavora-toast-close { margin-left: -4px; }
 
 /* Icons */
 .tavora-toast-icon { display: grid; width: 16px; height: 16px; flex: none; place-items: center; border-radius: 999px; }
-.tavora-toast-icon[data-icon="success"] { background: var(--background); color: var(--foreground); }
+.tavora-toast-icon[data-icon="success"] { background: var(--toast-foreground); color: var(--toast); }
 .tavora-toast-icon[data-icon="error"] { background: var(--destructive); color: #fff; }
 .tavora-toast-icon[data-icon="success"] svg,
 .tavora-toast-icon[data-icon="error"] svg { width: 10px; height: 10px; }
 .tavora-toast-icon[data-icon="warning"] svg,
 .tavora-toast-icon[data-icon="info"] svg { width: 16px; height: 16px; }
-.tavora-toast-glyph { stroke: var(--foreground); }
-.tavora-toast-dot { fill: var(--foreground); }
+.tavora-toast-glyph { stroke: var(--toast); }
+.tavora-toast-dot { fill: var(--toast); }
 .tavora-toast-spinner {
   box-sizing: border-box;
   width: 14px;

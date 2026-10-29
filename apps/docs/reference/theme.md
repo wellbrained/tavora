@@ -58,19 +58,21 @@ Each variation:
 | `mode` | yes | `"dark"` or `"light"`. Native menus, scrollbars and form controls follow it. Users can follow the system (the default): Tavora then shows the variation whose mode matches the system's light or dark setting, so a theme that comes in Dark and Light works with it unchanged. |
 | `contrast` | no | `"normal"` (default) or `"high"`. High-contrast variations need 7:1 for text instead of 4.5:1. |
 | `radius` | no | Corner radius in px, a whole number from 4 to 12. Default 8. |
-| `colors` | yes | Every token below, each as `#rrggbb`. No transparency. |
+| `colors` | yes | Every token below, each as `#rrggbb`. No transparency. `toast` and `toast-foreground` may be left out. |
 
 ## Tokens
 
 The names are shadcn-vue's semantic tokens plus four of Tavora's. Modules get the same values as `--tavora-<name>` properties and through `ui.getTheme`, and `ui.onThemeChange` tells them when the user picks another theme.
 
-`background`, `foreground`, `card`, `card-foreground`, `popover`, `popover-foreground`, `primary`, `primary-hover`, `primary-foreground`, `secondary`, `secondary-foreground`, `muted`, `muted-foreground`, `accent`, `accent-foreground`, `destructive`, `border`, `input`, `ring`, `rail`, `success`, `warning`, `info`.
+`background`, `foreground`, `card`, `card-foreground`, `popover`, `popover-foreground`, `primary`, `primary-hover`, `primary-foreground`, `secondary`, `secondary-foreground`, `muted`, `muted-foreground`, `accent`, `accent-foreground`, `destructive`, `border`, `input`, `ring`, `rail`, `success`, `warning`, `info`, `toast`, `toast-foreground`.
+
+`toast` is the background of the notification pills and `toast-foreground` the text on them. Both are optional: a theme that leaves them out gets a flipped pill, `foreground` as the background and `background` as the text, and Tavora fills the two tokens in before modules see them.
 
 ## Contrast rules
 
 Tavora checks every variation against the colour pairs it really draws. Text needs 4.5:1 (7:1 in a high-contrast variation), and outlines and the focus ring need 3:1:
 
-- Text: `foreground` on `background` and `rail`; `card-foreground`, `popover-foreground`, `secondary-foreground` and `accent-foreground` on their surfaces; `muted-foreground` on `background`, `card` and `muted`; `primary-foreground` on `primary` and `primary-hover`; `primary` on `background` and `card`; `destructive` on `background`, `card` and `secondary`; `success`, `warning` and `info` on `background`.
+- Text: `foreground` on `background` and `rail`; `card-foreground`, `popover-foreground`, `secondary-foreground` and `accent-foreground` on their surfaces; `muted-foreground` on `background`, `card` and `muted`; `primary-foreground` on `primary` and `primary-hover`; `primary` on `background` and `card`; `destructive` on `background`, `card` and `secondary`; `success`, `warning` and `info` on `background`; `toast-foreground` on `toast`.
 - Outlines: `input` on `background`, and `ring` on `background` and `card`.
 
 A variation that misses one is not loaded, and Settings shows which pair failed and by how much.
