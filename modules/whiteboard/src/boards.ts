@@ -21,6 +21,8 @@ export interface BoardData {
   files: Record<string, StoredFile>;
   /** The colour of the board's background. */
   background: string;
+  /** Whether this board shows the alignment grid. Older boards start with it off. */
+  grid: boolean;
   createdAt: string;
 }
 
@@ -39,7 +41,7 @@ export const MAX_NAME = 60;
 export const DEFAULT_BACKGROUND = "#ffffff";
 
 export function emptyBoard(now = new Date().toISOString()): BoardData {
-  return { version: 1, elements: [], files: {}, background: DEFAULT_BACKGROUND, createdAt: now };
+  return { version: 1, elements: [], files: {}, background: DEFAULT_BACKGROUND, grid: false, createdAt: now };
 }
 
 /** The stored files in a board's data, keeping only well-formed entries. */
@@ -64,6 +66,7 @@ export function parseBoard(raw: JsonValue | null, now = new Date().toISOString()
     elements: Array.isArray(value.elements) ? value.elements.filter((element) => element !== null && typeof element === "object" && !Array.isArray(element)) : [],
     files: parseFiles(value.files),
     background: typeof value.background === "string" && /^#[0-9a-fA-F]{3,8}$|^transparent$/.test(value.background) ? value.background : DEFAULT_BACKGROUND,
+    grid: value.grid === true,
     createdAt: typeof value.createdAt === "string" ? value.createdAt : now,
   };
 }
@@ -110,8 +113,8 @@ export function formatMegabytes(bytes: number): string {
 }
 
 /** A cheap fingerprint of a scene, to tell whether it changed: one number per element that changes with every edit. */
-export function sceneSignature(elements: readonly { versionNonce: number; isDeleted?: boolean }[], background: string): string {
+export function sceneSignature(elements: readonly { versionNonce: number; isDeleted?: boolean }[], background: string, grid = false): string {
   let hash = elements.length;
   for (const element of elements) hash = (Math.imul(hash, 31) + element.versionNonce + (element.isDeleted ? 1 : 0)) | 0;
-  return `${hash}:${background}`;
+  return `${hash}:${background}:${grid ? 1 : 0}`;
 }

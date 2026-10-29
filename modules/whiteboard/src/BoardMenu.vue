@@ -12,12 +12,14 @@ import {
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { DropdownMenuCheckboxItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { nextTick, ref } from "vue";
 import { MAX_NAME, type BoardSummary } from "./boards";
 import { t } from "./i18n";
+import type { StarterKind } from "./starters";
 
-const props = defineProps<{ boards: BoardSummary[]; currentId: string; currentName: string; canClear: boolean }>();
-const emit = defineEmits<{ select: [id: string]; create: []; rename: [name: string]; clear: []; delete: [] }>();
+const props = defineProps<{ boards: BoardSummary[]; currentId: string; currentName: string; canClear: boolean; grid: boolean; ready: boolean; creating: boolean }>();
+const emit = defineEmits<{ select: [id: string]; create: [kind: StarterKind]; rename: [name: string]; clear: []; delete: []; grid: [enabled: boolean] }>();
 
 const renaming = ref(false);
 const draft = ref("");
@@ -78,10 +80,15 @@ function finishRename(save: boolean, event?: Event) {
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem data-testid="board-new" @select="emit('create')">
-          <Plus :stroke-width="1.5" />
-          {{ t("board.new") }}
-        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger :disabled="creating" data-testid="board-new"><Plus :stroke-width="1.5" />{{ t("board.new") }}</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem data-testid="board-new-blank" @select="emit('create', 'blank')">{{ t("starter.blank") }}</DropdownMenuItem>
+            <DropdownMenuItem data-testid="board-new-idea" @select="emit('create', 'idea')">{{ t("starter.idea") }}</DropdownMenuItem>
+            <DropdownMenuItem data-testid="board-new-screenshot" @select="emit('create', 'screenshot')">{{ t("starter.screenshot") }}</DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuCheckboxItem :model-value="grid" :disabled="!ready" data-testid="board-grid" @update:model-value="emit('grid', $event === true)">{{ t("board.grid") }}</DropdownMenuCheckboxItem>
         <DropdownMenuItem data-testid="board-rename" @select="startRename">
           <Pencil :stroke-width="1.5" />
           {{ t("board.rename") }}

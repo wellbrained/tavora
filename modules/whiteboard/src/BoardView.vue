@@ -27,6 +27,7 @@ const props = defineProps<{
   save: (data: BoardData) => Promise<void>;
   toolbar: ToolbarPlace;
   palette: PalettePlace;
+  fitOnOpen?: boolean;
 }>();
 const emit = defineEmits<{
   view: [view: View];
@@ -44,6 +45,7 @@ const emit = defineEmits<{
   controls: [controls: Controls | null];
   toolbar: [place: ToolbarPlace];
   palette: [place: PalettePlace];
+  grid: [enabled: boolean];
 }>();
 
 /** The element Excalidraw fills. */
@@ -63,6 +65,7 @@ const initialData: RootProps["initialData"] = {
   elements: props.data.elements as unknown as readonly ExcalidrawElement[],
   appState: {
     viewBackgroundColor: props.data.background,
+    gridModeEnabled: props.data.grid,
     ...(start ? { scrollX: start.scrollX, scrollY: start.scrollY, zoom: { value: start.zoom as never } } : {}),
   },
   scrollToContent: !start && props.data.elements.length > 0,
@@ -106,6 +109,8 @@ onMounted(() => {
     },
     onSpots: (next) => (spots.value = next),
     onView: (view) => emit("view", view),
+    onGrid: (enabled) => emit("grid", enabled),
+    fitOnOpen: props.fitOnOpen,
   });
   root = createRoot(host.value!);
   board.value = host.value;

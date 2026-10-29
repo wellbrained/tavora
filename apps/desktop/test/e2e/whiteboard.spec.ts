@@ -10,6 +10,22 @@ const NEWEST_TOAST = `[...document.querySelectorAll('[data-slot="toast"]')].at(-
 const DISMISS_TOASTS = `document.querySelectorAll('[data-slot="toast"] button[title="Dismiss"]').forEach((button) => button.click())`;
 const UNDO_BUTTON = `[...document.querySelectorAll('[data-slot="toast"] button')].find((button) => button.textContent.trim() === "Undo")`;
 
+async function drawingArea(app: ElectronApplication) {
+  const rect = `(() => { const r=document.querySelector('.excalidraw canvas.interactive')?.getBoundingClientRect(); return r ? {x:r.x,y:r.y,width:r.width,height:r.height} : null; })()`;
+  await expect.poll(async () => { const area=await inModule<{width:number;height:number}|null>(app,WHITEBOARD,rect); return !!area && area.width>0 && area.height>0; }).toBe(true);
+  await inModule(app,WHITEBOARD,`new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
+  return (await inModule<{x:number;y:number;width:number;height:number}>(app,WHITEBOARD,rect));
+}
+
+async function newBoard(app: ElectronApplication, kind: "blank" | "idea" | "screenshot") {
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!${q("board-list")}`)).toBe(false);
+  await click(app, "board-menu");
+  await click(app, "board-new");
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!${q(`board-new-${kind}`)}`)).toBe(true);
+  await inModule(app, WHITEBOARD, `${q(`board-new-${kind}`)}.click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!${q("board-list")}`)).toBe(false);
+}
+
 /** Runs a mouse gesture in the module's page as real input, the way a user draws. */
 async function drag(app: ElectronApplication, from: { x: number; y: number }, to: { x: number; y: number }) {
   await app.evaluate(
@@ -61,8 +77,9 @@ test("whiteboard: draw on a board, keep it, switch boards, delete one and bring 
   await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
 
   // Draw a rectangle with the toolbar's tool.
+  const box = await drawingArea(app);
   await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="toolbar-rectangle"]').click()`);
-  const box = await inModule<{ x: number; y: number; width: number; height: number }>(app, WHITEBOARD, `(() => { const r = document.querySelector(".excalidraw canvas.interactive").getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+  await expect.poll(() => inModule(app,WHITEBOARD,`document.querySelector('[data-testid="toolbar-rectangle"]').checked`)).toBe(true);
   await drag(app, { x: box.x + box.width * 0.3, y: box.y + box.height * 0.3 }, { x: box.x + box.width * 0.6, y: box.y + box.height * 0.6 });
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("save-state")}.dataset.state`), { timeout: 10_000 }).toBe("saved");
   const savePosition = await inModule<{ inHeader: boolean; inFooter: boolean; gap: number; centerOffset: number }>(app, WHITEBOARD, `(() => {
@@ -85,8 +102,7 @@ test("whiteboard: draw on a board, keep it, switch boards, delete one and bring 
   await expect.poll(async () => (await storedBoards(userData))["Board 1"]?.map((element) => element.type)).toEqual(["rectangle"]);
 
   // A second board starts empty; the first keeps its drawing.
-  await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
-  await inModule(app, WHITEBOARD, `${q("board-new")}.click()`);
+  await newBoard(app, "blank");
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Board 2");
   expect((await storedBoards(userData))["Board 2"]).toEqual([]);
   expect((await storedBoards(userData))["Board 1"]).toHaveLength(1);
@@ -115,7 +131,22 @@ test("whiteboard: draw on a board, keep it, switch boards, delete one and bring 
 });
 
 /** The data stored for the board with this name. */
-async function storedBoard(userData: string, name: string): Promise<{ elements: { id: string; type: string; locked?: boolean; fileId?: string }[]; files: Record<string, { blobId: string; mimeType: string }> } | undefined> {
+interface DrawingElement {
+  id: string;
+  type: string;
+  locked?: boolean;
+  fileId?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  startBinding?: { elementId: string } | null;
+  endBinding?: { elementId: string } | null;
+  startArrowhead?: string | null;
+  endArrowhead?: string | null;
+}
+
+async function storedBoard(userData: string, name: string): Promise<{ elements: DrawingElement[]; grid: boolean; files: Record<string, { blobId: string; mimeType: string }> } | undefined> {
   const root = path.join(userData, "module-data", "official", WHITEBOARD);
   for (const file of (await readdir(root, { recursive: true })).filter((entry) => /board-[a-z0-9-]+\.json$/.test(entry))) {
     const document = JSON.parse(await readFile(path.join(root, file), "utf8")) as { title?: string; data?: never };
@@ -180,8 +211,7 @@ test("whiteboard: a pasted picture can be dragged into place, is then locked, ke
   expect(JSON.stringify(board)).not.toContain("data:image");
 
   // Another board and back: the picture is read from the file store again.
-  await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
-  await inModule(app, WHITEBOARD, `${q("board-new")}.click()`);
+  await newBoard(app, "blank");
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Board 2");
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")} === null`)).toBe(true);
   await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
@@ -208,6 +238,9 @@ test("whiteboard: a pasted picture can be dragged into place, is then locked, ke
 
 /** A real click on an element of the module's page, so the host counts it as the user's. */
 async function click(app: ElectronApplication, testId: string) {
+  await expect.poll(() => inModule(app, WHITEBOARD, `(() => { const r=${q(testId)}?.getBoundingClientRect(); return !!r && r.width>0 && r.height>0; })()`)).toBe(true);
+  // Module views use Electron input, so allow Vue/Popper to finish positioning a newly opened menu first.
+  await inModule(app, WHITEBOARD, `new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
   const box = await inModule<{ x: number; y: number }>(app, WHITEBOARD, `(() => { const r = ${q(testId)}.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
   await app.evaluate(
     async ({ webContents }, { moduleId, box }) => {
@@ -384,8 +417,7 @@ test("whiteboard: the style palette can be moved and folded away, and stays so f
   await expect.poll(async () => (await rect(".App-menu__left")).height).toBeLessThan(60);
 
   // Another board: the palette is where it was left, still folded.
-  await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
-  await inModule(app, WHITEBOARD, `${q("board-new")}.click()`);
+  await newBoard(app, "blank");
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Board 2");
   await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
   await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="toolbar-rectangle"]').click()`);
@@ -422,6 +454,7 @@ test("whiteboard: the toolbar can sit at the bottom, chosen once for every works
 
 /** Zooms in with Ctrl and the mouse wheel (a touchpad pinch sends the same), over `at`. */
 async function zoomIn(app: ElectronApplication, at: { x: number; y: number }, notches: number) {
+  await expect.poll(() => inModule(app, WHITEBOARD, `document.elementFromPoint(${Math.round(at.x)},${Math.round(at.y)})?.tagName`)).toBe("CANVAS");
   await app.evaluate(
     async ({ webContents }, { moduleId, at, notches }) => {
       const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
@@ -443,6 +476,7 @@ test("whiteboard: zoomed far in, a pasted picture keeps its size and an empty bo
   await openModule(page, WHITEBOARD);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");
   await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
+  await expect.poll(() => inModule(app, WHITEBOARD, `(() => { const r=document.querySelector('.excalidraw canvas.interactive').getBoundingClientRect(); return r.width>0 && r.height>0; })()`)).toBe(true);
   const area = await inModule<{ x: number; y: number; width: number; height: number }>(app, WHITEBOARD, `(() => { const r = document.querySelector(".excalidraw canvas.interactive").getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
   const middle = { x: area.x + area.width / 2, y: area.y + area.height / 2 };
   const zoom = () => inModule<number>(app, WHITEBOARD, `parseInt(document.querySelector(".excalidraw .reset-zoom-button").textContent, 10)`);
@@ -472,8 +506,7 @@ test("whiteboard: zoomed far in, a pasted picture keeps its size and an empty bo
   await expect.poll(async () => (await picture())?.height ?? 0, { timeout: 15_000 }).toBeCloseTo(Math.floor(area.height * 0.5), 0);
 
   // An empty board left zoomed far in opens at 100% again; one with a drawing comes back where it was left.
-  await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
-  await inModule(app, WHITEBOARD, `${q("board-new")}.click()`);
+  await newBoard(app, "blank");
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Board 2");
   await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
   await zoomIn(app, middle, 25);
@@ -631,4 +664,121 @@ test("a broken picture card reports a localized error without changing the board
     await expect.poll(() => inModule(app, WHITEBOARD, `${NEWEST_TOAST}?.textContent ?? ''`)).toContain("Dieses Bild konnte nicht gelesen werden.");
     expect(Object.values(await storedBoards(userData)).flat()).toEqual([]);
   } finally { await app.close(); }
+});
+
+test("connector modes bind to cards, follow a moved card and edit arrowheads", async () => {
+  const { app, page, userData } = await launch();
+  try {
+    await openModule(page, WHITEBOARD);
+    await expect.poll(() => inModule(app, WHITEBOARD, `${q("add-card")}.disabled`).catch(() => true)).toBe(false);
+    const addNote = async () => { await click(app, "add-card"); await click(app, "add-note-card"); };
+    const scene = async () => (await storedBoard(userData, "Board 1"))?.elements ?? [];
+    await addNote();
+    await expect.poll(async () => (await scene()).length).toBe(3);
+    const first = (await scene())[0]!;
+    const offset = await inModule<{x: number; y: number}>(app, WHITEBOARD, `(() => {const r=document.querySelector('.excalidraw canvas.interactive').getBoundingClientRect();return {x:r.x,y:r.y};})()`);
+    await drag(app, {x:offset.x+first.x+200,y:offset.y+first.y+150}, {x:offset.x+first.x-180,y:offset.y+first.y+150});
+    await expect.poll(async () => (await scene())[0]?.x).toBeCloseTo(first.x-380, 0);
+    await addNote();
+    await expect.poll(async () => (await scene()).length).toBe(6);
+    const [left, right] = (await scene()).filter((element) => element.type === "rectangle");
+    await click(app, "connector-menu");
+    await click(app, "connector-line");
+    await expect.poll(() => inModule(app, WHITEBOARD, `document.querySelector('[data-testid="toolbar-arrow"]')?.checked ?? false`)).toBe(true);
+    await drag(app, {x:offset.x+left!.x+left!.width+4,y:offset.y+left!.y+90}, {x:offset.x+right!.x-4,y:offset.y+right!.y+90});
+    const arrow = async () => (await scene()).find((element) => element.type === "arrow");
+    await expect.poll(async () => !!(await arrow())).toBe(true);
+    await expect.poll(async () => (await arrow())?.startBinding?.elementId).toBe(left!.id);
+    await expect.poll(async () => (await arrow())?.endBinding?.elementId).toBe(right!.id);
+    expect((await arrow())!.startArrowhead).toBeNull();
+    expect((await arrow())!.endArrowhead).toBeNull();
+    await click(app, "connector-menu"); await click(app, "connector-two-way");
+    await expect.poll(async () => (await arrow())?.startArrowhead).toBe("arrow");
+    expect((await arrow())!.endArrowhead).toBe("arrow");
+    await click(app, "connector-menu"); await click(app, "connector-one-way");
+    await expect.poll(async () => (await arrow())?.startArrowhead).toBeNull();
+    expect((await arrow())!.endArrowhead).toBe("arrow");
+    const before = (await arrow())!;
+    await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="toolbar-selection"]').click()`);
+    await drag(app, {x:offset.x+left!.x+200,y:offset.y+left!.y+150}, {x:offset.x+left!.x+160,y:offset.y+left!.y+105});
+    await expect.poll(async () => (await scene()).find((element) => element.id===left!.id)?.x).toBeCloseTo(left!.x-40,0);
+    await expect.poll(async () => {const current=(await arrow())!;return current.x!==before.x||current.y!==before.y;}).toBe(true);
+    expect((await arrow())!.startBinding?.elementId).toBe(left!.id);
+    expect((await arrow())!.endBinding?.elementId).toBe(right!.id);
+    await shootPanels(app, WHITEBOARD, test.info().outputPath("connected-cards.png"));
+  } finally { await app.close(); }
+});
+
+test("idea starters keep the original board and remember the grid per board after restart", async () => {
+  const { app, page, userData } = await launch();
+  let closed = false;
+  try {
+    await openModule(page, WHITEBOARD);
+    await expect.poll(() => inModule(app, WHITEBOARD, `${q("add-card")}.disabled`).catch(() => true)).toBe(false);
+    await newBoard(app, "idea");
+    await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}.textContent`)).toBe("Idea board");
+    const board = await storedBoard(userData, "Idea board");
+    expect(board!.elements).toHaveLength(11);
+    expect(board!.elements.filter((element) => element.type==="arrow").every((arrow) => arrow.startBinding && arrow.endBinding)).toBe(true);
+    expect(board!.grid).toBe(false);
+    expect((await storedBoard(userData,"Board 1"))!.elements).toEqual([]);
+    await click(app,"board-menu"); await click(app,"board-grid");
+    await newBoard(app,"blank");
+    await expect.poll(() => inModule(app,WHITEBOARD,`${q("board-name")}.textContent`)).toBe("Board 3");
+    expect((await storedBoard(userData,"Board 3"))!.grid).toBe(false);
+    await expect.poll(async () => (await storedBoard(userData,"Idea board"))?.grid).toBe(true);
+    await click(app,"board-menu");
+    await inModule(app,WHITEBOARD,`[...document.querySelectorAll('[data-testid^="board-board-"]')].find(item=>item.textContent.includes('Idea board')).click()`);
+    await expect.poll(() => inModule(app,WHITEBOARD,`${q("board-name")}.textContent`)).toBe("Idea board");
+    await shootPanels(app,WHITEBOARD,test.info().outputPath("idea-grid.png"));
+    await app.close();closed=true;
+    const again=await launch(userData);
+    try {
+      await expect.poll(() => inModule(again.app,WHITEBOARD,`${q("board-name")}?.textContent`).catch(()=>"")).toBe("Idea board");
+      await expect.poll(() => inModule(again.app,WHITEBOARD,`${q("add-card")}.disabled`)).toBe(false);
+      await click(again.app,"board-menu");
+      expect(await inModule(again.app,WHITEBOARD,`${q("board-grid")}.getAttribute('aria-checked')`)).toBe("true");
+      await inModule(again.app,WHITEBOARD,`${q("board-menu")}.click()`);
+      await expect.poll(() => inModule(again.app,WHITEBOARD,`!!${q("board-list")}`)).toBe(false);
+      await shootPanels(again.app,WHITEBOARD,test.info().outputPath("idea-restored.png"));
+    } finally {await again.app.close();}
+  } finally {if(!closed) await app.close();}
+});
+
+test("screenshot starter cancellation creates nothing, then a chosen image is locked and kept", async () => {
+  const { app, page, userData } = await launch();
+  let closed=false;
+  try {
+    await openModule(page,WHITEBOARD);
+    await expect.poll(() => inModule(app,WHITEBOARD,`${q("add-card")}.disabled`).catch(()=>true)).toBe(false);
+    // Cancel the native chooser without opening an OS dialog in the test run.
+    await inModule(app,WHITEBOARD,`${q("starter-file")}.addEventListener('click',event=>event.preventDefault(),{once:true})`);
+    await newBoard(app,"screenshot");
+    expect(Object.keys(await storedBoards(userData))).toEqual(["Board 1"]);
+    await inModule(app,WHITEBOARD,`(() => {const files=new DataTransfer();files.items.add(new File(['broken'],'bad.png',{type:'image/png'}));${q("starter-file")}.files=files.files;${q("starter-file")}.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await expect.poll(() => inModule(app,WHITEBOARD,`${NEWEST_TOAST}?.textContent ?? ''`)).toContain("Could not create the board");
+    expect(Object.keys(await storedBoards(userData))).toEqual(["Board 1"]);
+    await inModule(app,WHITEBOARD,`(async()=>{
+      const canvas=document.createElement('canvas');canvas.width=1600;canvas.height=900;
+      const ctx=canvas.getContext('2d');ctx.fillStyle='#285a75';ctx.fillRect(0,0,1600,900);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      const files=new DataTransfer();files.items.add(new File([blob],'map.png',{type:'image/png'}));
+      ${q("starter-file")}.files=files.files;${q("starter-file")}.dispatchEvent(new Event('change',{bubbles:true}));
+    })()`);
+    await expect.poll(() => inModule(app,WHITEBOARD,`${q("board-name")}.textContent`)).toBe("Screenshot annotation");
+    await expect.poll(() => inModule(app,WHITEBOARD,`${q("board")}.dataset.pictures`)).toBe("1");
+    const board=(await storedBoard(userData,"Screenshot annotation"))!;
+    expect(board.elements).toHaveLength(1);
+    expect(board.elements[0]!.locked).toBe(true);
+    expect(board.elements[0]!.width).toBe(1440);
+    expect(Object.keys(board.files)).toHaveLength(1);
+    expect((await storedBoard(userData,"Board 1"))!.elements).toEqual([]);
+    await shootPanels(app,WHITEBOARD,test.info().outputPath("screenshot-starter.png"));
+    await app.close();closed=true;
+    const again=await launch(userData);
+    try {
+      await expect.poll(() => inModule(again.app,WHITEBOARD,`${q("board")}.dataset.pictures`).catch(()=>"")).toBe("1");
+    }
+    finally {await again.app.close();}
+  } finally {if(!closed)await app.close();}
 });
