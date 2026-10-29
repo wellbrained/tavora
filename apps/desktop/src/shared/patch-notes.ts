@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.107",
+    date: "2026-10-29",
+    title: "Themes colour the toasts",
+    notes: [
+      "A theme can set `toast` and `toast-foreground` for the notification pills. Themes without them keep the flipped look.",
+      "The theme cards in Settings show the pill, and the UI Playground lists both tokens.",
+    ],
+    prs: [
+      { number: 461, title: "Themes colour the toasts" },
+    ],
+    tags: ["games", "sdk", "settings", "ui-kit", "website"],
+  },
+  {
     version: "0.21.106",
     date: "2026-10-29",
     title: "Steadier module dialogs",

@@ -1,6 +1,6 @@
 {
   "name": "tavora",
-  "version": "0.21.106",
+  "version": "0.21.107",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
