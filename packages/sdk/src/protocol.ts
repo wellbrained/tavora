@@ -92,9 +92,19 @@ export const THEME_TOKENS = [
   "success",
   "warning",
   "info",
+  "toast",
+  "toast-foreground",
 ] as const;
 
 export type ThemeToken = (typeof THEME_TOKENS)[number];
+
+/**
+ * Tokens a theme may leave out, with the token each one copies then. Toasts
+ * are flipped pills by default: the theme's text colour as the background,
+ * the theme's background as the text. Tavora fills these in, so a module
+ * always gets every token.
+ */
+export const OPTIONAL_THEME_TOKENS = { toast: "foreground", "toast-foreground": "background" } as const satisfies Partial<Record<ThemeToken, ThemeToken>>;
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 

@@ -78,7 +78,7 @@ Methods without params must be sent with `params` left out.
 | `blobs.list` | none | `BlobInfo[]` (`{ id, bytes, type, createdAt }`), oldest first |
 | `blobs.usage` | none | `{ bytes, count, maxBytes, maxFileBytes }` for this module and workspace |
 | `blobs.delete` | `{ id }` | `null` (also when the file did not exist); `INVALID_PARAMS` for an id the host did not make |
-| `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius, toasts }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`), `radius` is in CSS pixels, `toasts` is where the user wants toasts (`bottom-center`, `bottom-right` or `top-center`; older Tavora leaves it out) |
+| `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius, toasts }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`, with `toast` and `toast-foreground` always filled in), `radius` is in CSS pixels, `toasts` is where the user wants toasts (`bottom-center`, `bottom-right` or `top-center`; older Tavora leaves it out) |
 | `network.fetch` | `{ url, method?, headers?, body?, responseType? }` | `{ status, url, headers, body }`; needs the `network` capability, see [Network](#network) |
 | `network.readPage` | `{ url }` | `{ status, url, title, html }`; isolated public page capture, same `network` grant, Tavora 0.19.3+ |
 | `aiUsage.accounts` | none | `AiUsageAccountInfo[]` in the user's order; needs the `aiUsage` capability, see [Connectors](#connectors) |

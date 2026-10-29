@@ -43,6 +43,8 @@
   --success: #8cbf7f;
   --warning: #e3c75f;
   --info: #6fa8dc;
+  --toast: #f2ece0;
+  --toast-foreground: #171412;
 
   --radius: 8px;
   /* How far a disabled control fades: enough to read as off, while its text keeps 3:1 in every official theme. */
@@ -73,6 +75,8 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);
+  --color-toast: var(--toast);
+  --color-toast-foreground: var(--toast-foreground);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

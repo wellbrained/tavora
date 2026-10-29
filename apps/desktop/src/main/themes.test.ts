@@ -82,6 +82,18 @@ describe("validateTheme", () => {
     });
   });
 
+  it("lets a theme colour its toasts, and flips the theme's colours when it doesn't", () => {
+    const { toast: _toast, "toast-foreground": _text, ...plain } = THEME.tokens;
+    expect(validateTheme(manifest({}, { colors: plain }))).toMatchObject({
+      ok: true,
+      theme: { variations: [{ colors: { toast: THEME.tokens.foreground, "toast-foreground": THEME.tokens.background } }] },
+    });
+    const own = validateTheme(manifest({}, { colors: { ...plain, toast: "#2a2521", "toast-foreground": "#f2ece0" } }));
+    expect(own).toMatchObject({ ok: true, theme: { variations: [{ colors: { toast: "#2a2521", "toast-foreground": "#f2ece0" } }] } });
+    const dim = validateTheme(manifest({}, { colors: { ...plain, toast: "#2a2521", "toast-foreground": "#55504a" } }));
+    expect(dim).toMatchObject({ ok: false, error: expect.stringContaining("toast-foreground on toast") });
+  });
+
   it("needs every token as a plain hex colour", () => {
     const { info: _info, ...missing } = THEME.tokens;
     expect(validateTheme(manifest({}, { colors: missing }))).toMatchObject({ ok: false, error: expect.stringContaining("needs info") });

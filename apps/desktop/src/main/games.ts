@@ -33,6 +33,8 @@ export const THEME: TavoraTheme = {
     success: "#8cbf7f",
     warning: "#e3c75f",
     info: "#6fa8dc",
+    toast: "#f2ece0",
+    "toast-foreground": "#171412",
   },
   radius: 8,
   toasts: "bottom-center",

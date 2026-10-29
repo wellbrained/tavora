@@ -120,7 +120,7 @@ const showVariation = computed(() => {
                 <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
                 <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
               </span>
-              <span class="flex flex-1 p-2.5">
+              <span class="relative flex flex-1 p-2.5">
                 <span
                   class="flex flex-1 flex-col gap-1.5 border p-2"
                   :style="{
@@ -135,6 +135,11 @@ const showVariation = computed(() => {
                     <span class="h-3.5 w-10" :style="{ background: previewOf(theme).colors.primary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
                     <span class="h-3.5 w-8" :style="{ background: previewOf(theme).colors.secondary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
                   </span>
+                </span>
+                <!-- A toast pill, as the theme colours it. -->
+                <span class="absolute bottom-1.5 left-1/2 flex h-4 w-14 -translate-x-1/2 items-center gap-1 rounded-full px-1.5" :style="{ background: previewOf(theme).colors.toast }">
+                  <span class="size-2 flex-none rounded-full" :style="{ background: previewOf(theme).colors['toast-foreground'] }" />
+                  <span class="h-1 flex-1 rounded-full" :style="{ background: previewOf(theme).colors['toast-foreground'] }" />
                 </span>
               </span>
             </span>

@@ -7,7 +7,7 @@
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId } from "@tavora/module-schema";
-import { THEME_TOKENS, type TavoraTheme, type ThemeToken, type ToastPosition } from "@tavora/sdk/protocol";
+import { OPTIONAL_THEME_TOKENS, THEME_TOKENS, type TavoraTheme, type ThemeToken, type ToastPosition } from "@tavora/sdk/protocol";
 import { THEME } from "./games";
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
 
@@ -128,6 +128,7 @@ const PAIRS: Pair[] = [
   ["input", "background", "non-text"],
   ["ring", "background", "non-text"],
   ["ring", "card", "non-text"],
+  ["toast-foreground", "toast", "text"],
 ];
 
 /** Every pair below the ratio it needs, as sentences a theme author can act on. */
@@ -148,6 +149,7 @@ type Fields = Record<string, unknown>;
 const isRecord = (value: unknown): value is Fields => typeof value === "object" && value !== null && !Array.isArray(value);
 const optionalText = (value: unknown, max: number) => value === undefined || (typeof value === "string" && value.trim().length > 0 && value.length <= max);
 const name = (value: unknown, max: number): value is string => typeof value === "string" && value.trim().length > 0 && value.length <= max;
+const optionalToken = (token: ThemeToken): ThemeToken | undefined => (OPTIONAL_THEME_TOKENS as Partial<Record<ThemeToken, ThemeToken>>)[token];
 
 function unknownKeys(record: Fields, allowed: string[]): string[] {
   return Object.keys(record).filter((key) => !allowed.includes(key));
@@ -170,9 +172,12 @@ function parseVariation(raw: unknown, where: string): ThemeVariation | string {
   const colors = {} as Record<ThemeToken, string>;
   for (const token of THEME_TOKENS) {
     const value = raw.colors[token];
+    if (value === undefined && optionalToken(token)) continue;
     if (typeof value !== "string" || !HEX.test(value)) return `${where} needs ${token} as a #rrggbb colour`;
     colors[token] = value.toLowerCase();
   }
+  // Toast colours a theme leaves out copy the tokens they default to, so every variation carries the full set.
+  for (const [token, copies] of Object.entries(OPTIONAL_THEME_TOKENS) as [ThemeToken, ThemeToken][]) colors[token] ??= colors[copies];
   const variation: ThemeVariation = {
     id: raw.id,
     name: raw.name.trim(),
