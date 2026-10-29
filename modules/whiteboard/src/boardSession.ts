@@ -4,16 +4,18 @@
 // come back when the board is opened.
 
 import { CaptureUpdateAction, exportToBlob, getCommonBounds } from "@excalidraw/excalidraw";
-import type { ExcalidrawElement, ExcalidrawImageElement, FileId, OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import type { AppState, BinaryFiles, DataURL, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement, ExcalidrawImageElement, OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import type { AppState, BinaryFiles, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { JsonValue, TavoraSDK } from "@tavora/sdk";
 import { MAX_BOARD_BYTES, sceneSignature, type BoardData } from "./boards";
 import { COPY_PADDING, copyScale, elementsToCopy } from "./copy";
 import { isCanvasAt } from "./excalidrawDom";
 import { t } from "./i18n";
 import { noteCard, pictureCard } from "./cards";
+import { connectorHeads, type ConnectorKind } from "./connectors";
 import { lockSpots, spotsKey, type LockSpot } from "./locks";
-import { blobToDataUrl, createPictures, pictureFileIds } from "./pictures";
+import { createPictures, pictureFileIds } from "./pictures";
+import { readBoardPicture } from "./readPicture";
 
 /** How long drawing must pause before the board is saved. */
 const SAVE_DELAY_MS = 600;
@@ -32,6 +34,8 @@ export type SaveState = "idle" | "saving" | "saved" | "error";
 export interface Controls {
   addNote(): void;
   addPicture(file: File): Promise<void>;
+  setConnector(kind: ConnectorKind): void;
+  setGrid(enabled: boolean): void;
   setPicturesLocked(locked: boolean): void;
   /** Locks or frees one picture. */
   setPictureLocked(id: string, locked: boolean): void;
@@ -73,6 +77,9 @@ export interface SessionOptions {
   /** Where the picture locks go. */
   onSpots(spots: LockSpot[]): void;
   onView(view: View): void;
+  onGrid(enabled: boolean): void;
+  /** Fit newly created starter content once; saved views retain their own pan and zoom. */
+  fitOnOpen?: boolean;
 }
 
 export interface BoardSession {
@@ -96,14 +103,14 @@ export function createBoardSession(options: SessionOptions): BoardSession {
   const { sdk, data } = options;
   const pictures = createPictures(sdk, data.files);
   /** The newest drawing, kept outside the page's render so drawing never waits for it. */
-  let latest: { elements: readonly OrderedExcalidrawElement[]; background: string; files: BinaryFiles } | null = null;
+  let latest: { elements: readonly OrderedExcalidrawElement[]; background: string; grid: boolean; files: BinaryFiles } | null = null;
   /**
    * What identifies a drawing: its elements and background, and which of its pictures have their pixels. Excalidraw adds
    * a picture's element first and its pixels a moment later, so the second step must count as a change to save.
    */
-  const signatureOf = (elements: readonly OrderedExcalidrawElement[], background: string, files: BinaryFiles) =>
-    `${sceneSignature(elements, background)}|${pictureFileIds(elements).filter((id) => files[id] || pictures.stored.has(id)).join(",")}`;
-  const first = signatureOf(data.elements as unknown as OrderedExcalidrawElement[], data.background, {});
+  const signatureOf = (elements: readonly OrderedExcalidrawElement[], background: string, files: BinaryFiles, grid: boolean) =>
+    `${sceneSignature(elements, background, grid)}|${pictureFileIds(elements).filter((id) => files[id] || pictures.stored.has(id)).join(",")}`;
+  const first = signatureOf(data.elements as unknown as OrderedExcalidrawElement[], data.background, {}, data.grid);
   /** The drawing last stored, and the drawing last handed to a save (a save may still be running). */
   let stored = first;
   let queued = first;
@@ -111,6 +118,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
   let saving: Promise<void> = Promise.resolve();
   let api: ExcalidrawImperativeAPI | null = null;
   let disposed = false;
+  let fitted = false;
   /** Pictures already on the board when it opened or seen once since; only a new one is locked (once it is placed). */
   const seen = new Set<string>((data.elements as unknown as ExcalidrawElement[]).filter((element) => element.type === "image").map((element) => element.id));
   /** New pictures that are still being placed: they are locked once they are no longer selected. */
@@ -130,7 +138,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     timer = undefined;
     const scene = latest;
     if (!scene) return saving;
-    const signature = signatureOf(scene.elements, scene.background, scene.files);
+    const signature = signatureOf(scene.elements, scene.background, scene.files, scene.grid);
     if (signature === queued) return saving;
     queued = signature;
     options.onState("saving");
@@ -147,6 +155,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
           elements: JSON.parse(JSON.stringify(scene.elements.filter((element) => !element.isDeleted))) as JsonValue[],
           files: synced.files,
           background: scene.background,
+          grid: scene.grid,
         };
         const bytes = JSON.stringify(next).length;
         options.onSize(bytes);
@@ -203,7 +212,12 @@ export function createBoardSession(options: SessionOptions): BoardSession {
   }
 
   function change(elements: readonly OrderedExcalidrawElement[], appState: AppState, files: BinaryFiles) {
-    latest = { elements, background: appState.viewBackgroundColor, files };
+    latest = { elements, background: appState.viewBackgroundColor, grid: appState.gridModeEnabled, files };
+    options.onGrid(appState.gridModeEnabled);
+    if (options.fitOnOpen && !fitted && api && elements.some((element) => !element.isDeleted)) {
+      fitted = true;
+      requestAnimationFrame(() => { if (!disposed) api?.scrollToContent(api.getSceneElements(), { fitToViewport: true, viewportZoomFactor: 0.75, maxZoom: 1, animate: false }); });
+    }
 
     // A picture that was just added stays free while it is selected, so it can be dragged into place first. Once it is
     // let go of (something else is selected, or nothing), it is locked, so scribbling on top of it does not drag it
@@ -237,7 +251,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
       options.onEmpty(nothing);
     }
 
-    if (signatureOf(elements, appState.viewBackgroundColor, files) === queued) return;
+    if (signatureOf(elements, appState.viewBackgroundColor, files, appState.gridModeEnabled) === queued) return;
     options.onDirty(true);
     clearTimeout(timer);
     timer = setTimeout(() => void flush(), SAVE_DELAY_MS);
@@ -297,22 +311,24 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     options.onControls({
       addNote: () => insert(noteCard(0, 0, t("card.heading"), t("card.body"))),
       addPicture: async (file) => {
-        if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) throw new Error(t("card.imageType"));
-        if (file.size > 20 * 1024 * 1024) throw new Error(t("card.imageSize"));
-        const bitmap = await createImageBitmap(file).catch(() => { throw new Error(t("card.imageFailed")); });
-        try {
-          const scale = Math.min(1, 1440 / Math.max(bitmap.width, bitmap.height));
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-          canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-          canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-          const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error(t("card.imageFailed"))), "image/png"));
-          const id = crypto.randomUUID() as FileId;
-          const dataURL = await blobToDataUrl(blob) as DataURL;
-          if (disposed) return;
-          instance.addFiles([{ id, mimeType: "image/png", dataURL, created: Date.now() }]);
-          insert(pictureCard(0, 0, id, canvas.width, canvas.height, t("card.caption")));
-        } finally { bitmap.close(); }
+        const picture = await readBoardPicture(file);
+        if (disposed) return;
+        instance.addFiles([picture.binary]);
+        insert(pictureCard(0, 0, picture.binary.id, picture.width, picture.height, t("card.caption")));
+      },
+      setConnector: (kind) => {
+        const heads = connectorHeads(kind);
+        const selected = instance.getAppState().selectedElementIds;
+        const editing = instance.getSceneElements().some((element) => element.type === "arrow" && selected[element.id] && !element.locked);
+        instance.updateScene({
+          elements: editing ? instance.getSceneElementsIncludingDeleted().map((element) => element.type === "arrow" && selected[element.id] && !element.locked ? { ...element, ...heads, version: element.version + 1, versionNonce: nonce(), updated: Date.now() } : element) : undefined,
+          appState: { currentItemStartArrowhead: heads.startArrowhead, currentItemEndArrowhead: heads.endArrowhead, currentItemRoughness: 0 },
+          captureUpdate: editing ? CaptureUpdateAction.IMMEDIATELY : CaptureUpdateAction.NEVER,
+        });
+        instance.setActiveTool({ type: editing ? "selection" : "arrow" });
+      },
+      setGrid: (enabled) => {
+        instance.updateScene({ appState: { gridModeEnabled: enabled }, captureUpdate: CaptureUpdateAction.NEVER });
       },
       setPicturesLocked: (locked) => setLocked(instance, locked),
       setPictureLocked: (id, locked) => {

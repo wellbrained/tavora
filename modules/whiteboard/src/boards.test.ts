@@ -3,14 +3,21 @@ import { cleanName, formatMegabytes, isBoardId, MAX_BOARD_BYTES, MAX_NAME, newBo
 
 describe("parseBoard", () => {
   it("fills in a missing or damaged board", () => {
-    expect(parseBoard(null, "T")).toEqual({ version: 1, elements: [], files: {}, background: "#ffffff", createdAt: "T" });
-    expect(parseBoard({ elements: "nope", background: 4, createdAt: 7 }, "T")).toEqual({ version: 1, elements: [], files: {}, background: "#ffffff", createdAt: "T" });
+    expect(parseBoard(null, "T")).toEqual({ version: 1, elements: [], files: {}, background: "#ffffff", grid: false, createdAt: "T" });
+    expect(parseBoard({ elements: "nope", background: 4, createdAt: 7 }, "T")).toEqual({ version: 1, elements: [], files: {}, background: "#ffffff", grid: false, createdAt: "T" });
     expect(parseBoard([1, 2] as never, "T").elements).toEqual([]);
   });
 
   it("keeps valid elements and drops anything that is not an object", () => {
     const rectangle = { id: "a", type: "rectangle" };
-    expect(parseBoard({ elements: [rectangle, 4, null, "x", [1]], background: "#fff", createdAt: "C" })).toEqual({ version: 1, elements: [rectangle], files: {}, background: "#fff", createdAt: "C" });
+    expect(parseBoard({ elements: [rectangle, 4, null, "x", [1]], background: "#fff", createdAt: "C" })).toEqual({ version: 1, elements: [rectangle], files: {}, background: "#fff", grid: false, createdAt: "C" });
+  });
+
+  it("opens older boards without a grid and keeps an explicit grid choice", () => {
+    expect(parseBoard({ elements: [] }).grid).toBe(false);
+    expect(parseBoard({ grid: true }).grid).toBe(true);
+    for (const grid of [false, "true", 1, null]) expect(parseBoard({ grid }).grid).toBe(false);
+    expect(sceneSignature([], "#fff", true)).not.toBe(sceneSignature([], "#fff", false));
   });
 
   it("accepts only colours as a background", () => {

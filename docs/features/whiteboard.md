@@ -11,3 +11,20 @@ Nik chose ordinary grouped Whiteboard objects rather than a dedicated card edito
 - Narrow panels move image export/lock actions into Board actions and hide the drawing hint. Existing top/bottom toolbar preference remains.
 
 All new text ships in English and German. Cards use the existing board document format and Excalidraw elements.
+
+## Default card styles (2026-10-29)
+
+New note and picture cards use coordinated warm paper/stone fills, a shared 1 px border and 8 px corners. Note headings are 24 px, bodies 17 px with more line spacing, and picture captions 16 px. Picture cards have 12 px image padding. Colours are stored in the scene and follow Excalidraw's light/dark rendering; the normal style palette remains available. Existing cards and drawings are not restyled.
+
+## Connectors and starter boards (2026-10-29)
+
+Nik chose a type-and-drag Connect menu and three starters under New board.
+
+- **Connect:** Line, One-way arrow and Two-way arrow use Excalidraw's native arrow tool, including attachment to cards. A line is a connector with no arrowheads, so it still attaches. With an existing unlocked connector selected, the menu changes its arrowheads without replacing its geometry or bindings. Activation waits for the menu to close before giving focus to the canvas.
+- **Blank** starts an ordinary empty board. The first automatically created board is still blank.
+- **Idea board** starts three editable note cards and two attached one-way connectors. Each new starter has its own document and name; existing boards are untouched.
+- **Screenshot annotation** asks for a local PNG/JPEG/GIF/WebP before creating anything. It uses the same 20 MB input limit and 1440 px static-image preparation as picture cards, then starts a board with the image locked for drawing over it. Cancelling or an unreadable image creates no board.
+- Newly created Idea and Screenshot boards fit their contents into the panel once. Their saved views then retain pan and zoom normally.
+- **Show grid** in the board menu is off by default, saved per board, and restored with it. The optional `grid` field extends version 1 documents; older boards read it as false and need no migration.
+
+Panel preferences remain plain objects so selected board, palette and viewport can cross the message bridge. Each view's save function retains its own board ID and revision; a closing view cannot flush into the next board during a fast switch.

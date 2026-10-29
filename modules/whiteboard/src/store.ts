@@ -23,9 +23,9 @@ export function createBoards(sdk: TavoraSDK) {
       return document ? { data: parseBoard(document.data), revision: document.revision } : null;
     },
 
-    async create(name: string): Promise<BoardSummary> {
+    async create(name: string, data: BoardData = emptyBoard()): Promise<BoardSummary> {
       const id = newBoardId();
-      const saved = await sdk.documents.put({ id, title: name, data: emptyBoard(), ifRevision: 0 });
+      const saved = await sdk.documents.put({ id, title: name, data, ifRevision: 0 });
       return { id, name, revision: saved.revision };
     },
 
