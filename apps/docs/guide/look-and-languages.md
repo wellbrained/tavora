@@ -60,6 +60,34 @@ tavora.ui.onLanguageChange((language) => {
 });
 ```
 
+## Set it all up in one call
+
+`bootstrapModule` from `@tavora/sdk/bootstrap` connects, applies the theme now and whenever it changes, and tracks the language. It works in any framework:
+
+```ts
+import { bootstrapModule, languageOf } from "@tavora/sdk/bootstrap";
+
+const boot = await bootstrapModule();
+if (boot.status === "failed") return showError("Could not connect"); // boot.error says why
+const t = () => texts[languageOf(boot.language)];
+boot.onLanguage(render);
+// later, when the page goes away:
+boot.dispose();
+```
+
+Besides the `--<token>` variables above, it sets the summary colours as `--host-background`, `--host-surface`, `--host-text`, `--host-text-muted` and `--host-accent`, plus `--radius`, `color-scheme`, the `dark` class and `data-mode` (`"dark"` or `"light"`) on the page. `applyHostTheme(theme)` does only that, and `isGerman(language)` / `languageOf(language)` tell the language: anything but German is English.
+
+A module built on the shared kit (`@tavora/official-ui`) calls `connectModule` instead, which adds the kit's translator, toast position, tooltips and `<html lang>`:
+
+```ts
+import { connectModule } from "@tavora/official-ui";
+
+const { sdk, t, status } = await connectModule({ texts: { en, de } });
+t.t("add"); // follows the language by itself
+```
+
+Test the texts with `checkCatalogs(en, de)` from `@tavora/official-ui/testing`: it fails, naming the key, when a text is missing in one language, has other `{placeholders}`, has a `.one` without `.other` (or the other way round) or is empty.
+
 Store data in one language, not the user's: a default list named "To-Dos" keeps that name, and you show it translated. Then switching the language doesn't change what was saved.
 
 Your module's name, description and panel names come from the manifest. Add [`translations`](../reference/manifest.md#translations) to show them in the user's language too.

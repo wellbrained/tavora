@@ -77,6 +77,7 @@ describe("applyTheme", () => {
     const root = {
       style: { setProperty: (name: string, value: string) => props.set(name, value), colorScheme: "" },
       classList: { toggle: (name: string, on: boolean) => (on ? classes.add(name) : classes.delete(name)) },
+      setAttribute: () => {},
     } as unknown as HTMLElement;
     applyTheme({ mode: "light", radius: 6, tokens: { primary: "#2a5f9e" } } as never, root);
     expect(props.get("--primary")).toBe("#2a5f9e");

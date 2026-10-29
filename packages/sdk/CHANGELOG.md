@@ -1,3 +1,11 @@
+## 0.2.17
+
+The module bootstrap: `@tavora/sdk/bootstrap`. Nothing changes for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `bootstrapModule()` connects, applies the host theme now and whenever it changes, and tracks the language. It returns `{ sdk, theme, language, status, error?, onLanguage(fn), onTheme(fn), dispose() }`; `dispose()` removes every listener it added. A failed connection does not throw: `status` is `"failed"` and `error` says why, so the page can show "Could not connect".
+- `applyHostTheme(theme, root?)` writes the theme to the page: every token as `--<token>`, the summary colours as `--host-background`, `--host-surface`, `--host-text`, `--host-text-muted` and `--host-accent`, `--radius`, `color-scheme`, the `dark` class and `data-mode` (`"dark"` or `"light"`).
+- `isGerman(language)` and `languageOf(language)`: anything but German (`de`, `de-AT`, `de_DE`, …) is English, as in the host.
+
 ## 0.2.16
 
 The document store: `@tavora/sdk/store`. Nothing changes for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).
