@@ -5,8 +5,8 @@ import { expect, test, type ElectronApplication } from "@playwright/test";
 import { inModule, launch, openModule, panels, setContentSize, shootPanels, waitForShown, WHITEBOARD } from "./harness";
 
 const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
-// The shared kit shows notices and the Undo offer as toasts, newest last.
-const NEWEST_TOAST = `[...document.querySelectorAll('[data-slot="toast"]')].at(-1)`;
+// The shared kit shows notices and the Undo offer as toasts, newest last; a dismissed one fades out for a moment.
+const NEWEST_TOAST = `[...document.querySelectorAll('.tavora-toast-slot:not(.tavora-toast-leave-active) [data-slot="toast"]')].at(-1)`;
 const DISMISS_TOASTS = `document.querySelectorAll('[data-slot="toast"] button[title="Dismiss"]').forEach((button) => button.click())`;
 const UNDO_BUTTON = `[...document.querySelectorAll('[data-slot="toast"] button')].find((button) => button.textContent.trim() === "Undo")`;
 

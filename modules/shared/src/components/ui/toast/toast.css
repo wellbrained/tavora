@@ -1,0 +1,154 @@
+/* Toasts as floating pills, after notch-toast (MIT, github.com/Devsethi3/notch-toast): the pill in the
+   theme's text colour with the background colour as its text, Inter at 14px semibold, icons that pop
+   in and draw themselves. Its "fluid" spring (stiffness 400, damping 32, mass 0.62) is close to
+   critically damped, so linear() can follow it point by point. */
+.tavora-toaster {
+  --tavora-toast-spring: linear(0, 0.093 5%, 0.27 10%, 0.45 15%, 0.603 20%, 0.721 25%, 0.808 30%, 0.913 40%, 0.962 50%, 0.984 60%, 0.993 70%, 0.997 80%, 1);
+  --tavora-toast-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  position: fixed;
+  z-index: 50;
+  inset-inline: 0;
+  height: 0;
+  pointer-events: none;
+  font-family: var(--font-sans, "Inter Variable", system-ui, sans-serif);
+}
+.tavora-toaster[data-position^="bottom"] { bottom: 16px; }
+.tavora-toaster[data-position="top-center"] { top: 16px; }
+
+.tavora-toast-slot {
+  position: absolute;
+  inset-inline: 16px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.tavora-toaster[data-position^="bottom"] .tavora-toast-slot { bottom: 0; align-items: flex-end; }
+.tavora-toaster[data-position="top-center"] .tavora-toast-slot { top: 0; align-items: flex-start; }
+.tavora-toaster[data-position="bottom-right"] .tavora-toast-slot { justify-content: flex-end; }
+
+.tavora-toast-layer {
+  max-width: 100%;
+  pointer-events: auto;
+  transform-origin: bottom center;
+  transition: transform 0.45s var(--tavora-toast-spring), opacity 0.3s var(--tavora-toast-ease);
+}
+.tavora-toaster[data-position="top-center"] .tavora-toast-layer { transform-origin: top center; }
+.tavora-toaster[data-position="bottom-right"] .tavora-toast-layer { transform-origin: bottom right; }
+
+/* Coming and going: the slot fades and blurs, the pill grows from 0.96. */
+.tavora-toast-enter-active { animation: tavora-toast-fade-in 0.45s var(--tavora-toast-ease); }
+.tavora-toast-enter-active .tavora-toast { animation: tavora-toast-grow 0.45s var(--tavora-toast-spring); }
+.tavora-toast-leave-active { animation: tavora-toast-fade-out 0.22s var(--tavora-toast-ease) forwards; }
+.tavora-toast-leave-active .tavora-toast { animation: tavora-toast-shrink 0.22s var(--tavora-toast-ease) forwards; }
+@keyframes tavora-toast-fade-in { from { opacity: 0; filter: blur(8px); } }
+@keyframes tavora-toast-fade-out { to { opacity: 0; filter: blur(6px); } }
+@keyframes tavora-toast-grow { from { transform: scale(0.96); } }
+@keyframes tavora-toast-shrink { to { transform: scale(0.96); } }
+
+.tavora-toast {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--foreground);
+  color: var(--background);
+  box-shadow: 0 8px 20px color-mix(in srgb, black 35%, transparent);
+  transition: width 0.45s var(--tavora-toast-spring), height 0.45s var(--tavora-toast-spring);
+}
+.tavora-toast-content {
+  transition: opacity 0.2s var(--tavora-toast-ease);
+  box-sizing: border-box;
+  display: flex;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 32px));
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 20px;
+}
+.tavora-toast[data-behind] .tavora-toast-content { opacity: 0; }
+.tavora-toast-text { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 2px; padding-block: 2px; }
+.tavora-toast-title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.tavora-toast-description { margin: 0; font-size: 12px; font-weight: 500; line-height: 1.3; opacity: 0.7; }
+
+/* Kit buttons, drawn for the pill. */
+.tavora-toast .tavora-toast-button {
+  flex: none;
+  background: transparent;
+  color: color-mix(in srgb, var(--background) 76%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.tavora-toast .tavora-toast-button:hover { background: color-mix(in srgb, var(--background) 12%, transparent); color: var(--background); }
+.tavora-toast .tavora-toast-button:focus-visible { outline: 2px solid var(--background); outline-offset: 2px; box-shadow: none; }
+.tavora-toast .tavora-toast-close { margin-left: -4px; }
+
+/* Icons */
+.tavora-toast-icon { display: grid; width: 16px; height: 16px; flex: none; place-items: center; border-radius: 999px; }
+.tavora-toast-icon[data-icon="success"] { background: var(--background); color: var(--foreground); }
+.tavora-toast-icon[data-icon="error"] { background: var(--destructive); color: #fff; }
+.tavora-toast-icon[data-icon="success"] svg,
+.tavora-toast-icon[data-icon="error"] svg { width: 10px; height: 10px; }
+.tavora-toast-icon[data-icon="warning"] svg,
+.tavora-toast-icon[data-icon="info"] svg { width: 16px; height: 16px; }
+.tavora-toast-glyph { stroke: var(--foreground); }
+.tavora-toast-dot { fill: var(--foreground); }
+.tavora-toast-spinner {
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, currentColor 32%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: tavora-toast-spin 0.8s linear infinite;
+}
+@keyframes tavora-toast-spin { to { transform: rotate(1turn); } }
+
+.tavora-toast-icon-enter-active { animation: tavora-toast-pop 0.5s var(--tavora-toast-ease) 0.12s backwards; }
+.tavora-toast-icon-leave-active { transition: opacity 0.12s var(--tavora-toast-ease), transform 0.12s var(--tavora-toast-ease); }
+.tavora-toast-icon-leave-to { opacity: 0; transform: scale(0.8); }
+@keyframes tavora-toast-pop {
+  0% { transform: scale(0.86) rotate(-4deg); opacity: 0; }
+  45% { transform: scale(1.075) rotate(1.8deg); opacity: 1; }
+  75% { transform: scale(0.985) rotate(-0.6deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+/* The tick and the cross draw themselves. */
+.tavora-toast-icon[data-icon="success"] path,
+.tavora-toast-icon[data-icon="error"] path { stroke-dasharray: 1; animation: tavora-toast-draw 0.4s var(--tavora-toast-ease) 0.16s backwards; }
+.tavora-toast-icon[data-icon="error"] path + path { animation-delay: 0.26s; }
+@keyframes tavora-toast-draw { from { stroke-dashoffset: 1; opacity: 0; } }
+
+/* A new title slides up into place, the old one out above it. */
+.tavora-toast-line-enter-active,
+.tavora-toast-line-leave-active { transition: opacity 0.42s var(--tavora-toast-ease), transform 0.42s var(--tavora-toast-ease), filter 0.42s var(--tavora-toast-ease); }
+.tavora-toast-line-leave-active { position: absolute; inset-inline: 0; top: 2px; }
+.tavora-toast-line-enter-from { opacity: 0; transform: translateY(100%); filter: blur(6px); }
+.tavora-toast-line-leave-to { opacity: 0; transform: translateY(-100%); filter: blur(6px); }
+
+.tavora-toast-action-enter-active,
+.tavora-toast-action-leave-active { transition: opacity 0.42s var(--tavora-toast-ease), transform 0.42s var(--tavora-toast-ease), filter 0.42s var(--tavora-toast-ease); }
+.tavora-toast-action-enter-from,
+.tavora-toast-action-leave-to { opacity: 0; transform: translateX(6px); filter: blur(4px); }
+
+/* Reduced motion: short fades only, the spinner stands still. */
+@media (prefers-reduced-motion: reduce) {
+  .tavora-toast,
+  .tavora-toast-layer { transition: opacity 0.2s linear; }
+  .tavora-toast-enter-active,
+  .tavora-toast-leave-active { animation: none; transition: opacity 0.2s linear; }
+  .tavora-toast-enter-from,
+  .tavora-toast-leave-to { opacity: 0; }
+  .tavora-toast-enter-active .tavora-toast,
+  .tavora-toast-leave-active .tavora-toast,
+  .tavora-toast-icon-enter-active,
+  .tavora-toast-icon[data-icon] path,
+  .tavora-toast-spinner { animation: none; }
+  .tavora-toast-line-enter-active,
+  .tavora-toast-line-leave-active,
+  .tavora-toast-action-enter-active,
+  .tavora-toast-action-leave-active { transition: opacity 0.2s linear; }
+  .tavora-toast-line-enter-from,
+  .tavora-toast-line-leave-to,
+  .tavora-toast-action-enter-from,
+  .tavora-toast-action-leave-to { transform: none; filter: none; }
+}

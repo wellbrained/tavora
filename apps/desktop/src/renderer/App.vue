@@ -23,7 +23,8 @@ import ShareIconsDialog from "./components/ShareIconsDialog.vue";
 import SteamImportDialog from "./components/SteamImportDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
 import InboxDialogs from "./components/messages/InboxDialogs.vue";
-import { dialog, state, toast } from "./host";
+import { Toaster } from "@tavora/official-ui/components/ui/toast";
+import { dialog, state } from "./host";
 import OverlayPage from "./pages/OverlayPage.vue";
 import WorkspacePage from "./pages/WorkspacePage.vue";
 import OnboardingPage from "./pages/OnboardingPage.vue";
@@ -69,10 +70,8 @@ import WelcomePage from "./pages/WelcomePage.vue";
     <PublishDialog />
     <PairingDialog />
 
-    <!-- Over the toolbar: module panels are native views drawn above this
-         page, so anything lower would be hidden behind them. -->
-    <div class="fixed top-2 left-1/2 z-[60] -translate-x-1/2" role="status" aria-live="polite">
-      <p v-if="toast" class="bg-secondary rounded-lg border px-4 py-2 text-sm shadow-lg" data-testid="toast">{{ toast }}</p>
-    </div>
+    <!-- Always at the top, over the toolbar: module panels are native views drawn
+         above this page, so anything lower would be hidden behind them. -->
+    <Toaster position="top-center" class="top-1! z-[60]!" />
   </div>
 </template>

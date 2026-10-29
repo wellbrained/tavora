@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { isGameId, isLeaderboardPeriod, isModuleId, type LeaderboardPeriod } from "@tavora/module-schema";
+import { TOAST_POSITIONS, type ToastPosition } from "@tavora/sdk/protocol";
 import { isWorkspaceId } from "./workspace-id";
 import type { GameStart, RootItem, RootSort, Startup } from "../shared/host-api";
 import { isSite } from "./browser-url";
@@ -93,6 +94,8 @@ export interface Library {
   steamIcons: boolean;
   /** The panel tabs show an icon before the module name. */
   moduleIcons: boolean;
+  /** Where toasts show in every panel. */
+  toasts: ToastPosition;
   /** Stream overlays: Tavora serves module overlays to streaming software on this PC (overlays.ts). Off until the user turns it on. */
   streamOverlays: boolean;
   /** The port Stream overlays listen on, on 127.0.0.1. */
@@ -217,6 +220,7 @@ export function emptyLibrary(): Library {
     autoUpdateModules: false,
     steamIcons: true,
     moduleIcons: true,
+    toasts: "bottom-center",
     streamOverlays: false,
     overlayPort: DEFAULT_OVERLAY_PORT,
     gameOverlays: false,
@@ -753,6 +757,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.autoUpdateModules === "boolean") library.autoUpdateModules = saved.autoUpdateModules;
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
   if (typeof saved.moduleIcons === "boolean") library.moduleIcons = saved.moduleIcons;
+  if (TOAST_POSITIONS.includes(saved.toasts as ToastPosition)) library.toasts = saved.toasts as ToastPosition;
   if (typeof saved.streamOverlays === "boolean") library.streamOverlays = saved.streamOverlays;
   if (typeof saved.gameOverlays === "boolean") library.gameOverlays = saved.gameOverlays;
   if (typeof saved.overlaysStay === "boolean") library.overlaysStay = saved.overlaysStay;

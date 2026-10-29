@@ -7,7 +7,7 @@
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId } from "@tavora/module-schema";
-import { THEME_TOKENS, type TavoraTheme, type ThemeToken } from "@tavora/sdk/protocol";
+import { THEME_TOKENS, type TavoraTheme, type ThemeToken, type ToastPosition } from "@tavora/sdk/protocol";
 import { THEME } from "./games";
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
 
@@ -351,14 +351,15 @@ export function resolveTheme(
   return { theme: fallback, variation: systemMode ? variationForMode(fallback, saved.id, systemMode) : saved };
 }
 
-/** What modules get through ui.getTheme and the ui.theme event. */
-export function moduleTheme(variation: ThemeVariation): TavoraTheme {
+/** What modules get through ui.getTheme and the ui.theme event, with where the user wants toasts. */
+export function moduleTheme(variation: ThemeVariation, toasts: ToastPosition = "bottom-center"): TavoraTheme {
   const { colors } = variation;
   return {
     mode: variation.mode,
     colors: { background: colors.background, surface: colors.card, text: colors.foreground, textMuted: colors["muted-foreground"], accent: colors.primary },
     tokens: { ...colors },
     radius: variation.radius,
+    toasts,
   };
 }
 

@@ -1,6 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { toast } from "@tavora/official-ui/components/ui/toast";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
@@ -180,13 +181,12 @@ export const hiddenSettingIds = computed<ReadonlySet<string>>(
   () => new Set([...(asksFor("discord") ? [] : ["discord-connection"]), ...(asksFor("ai-usage") ? [] : ["ai-usage-accounts"])]),
 );
 
-export const toast = ref<string | null>(null);
-let toastTimer: ReturnType<typeof setTimeout> | undefined;
+let shown: ReturnType<typeof toast> | undefined;
 
+/** One message at a time in the host window: a new one changes the last one in place. */
 export function showToast(message: string): void {
-  toast.value = message;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (toast.value = null), 5000);
+  if (shown?.update({ title: message })) return;
+  shown = toast({ title: message, testid: "toast" });
 }
 
 /** Runs an action. Errors are shown as a toast unless the caller handles them. */

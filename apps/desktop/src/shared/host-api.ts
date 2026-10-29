@@ -571,6 +571,8 @@ export interface HostViewState {
     steamIcons: boolean;
     /** Whether panel tabs show an icon before the module name. */
     moduleIcons: boolean;
+    /** Where toasts show in every panel (the SDK's ToastPosition). */
+    toasts: "bottom-center" | "bottom-right" | "top-center";
     /** The Steam profile the user asked Tavora to remember for the import, or null. */
     steamProfile: string | null;
     /** False until the user finished or skipped the first-run welcome. */

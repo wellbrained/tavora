@@ -229,6 +229,7 @@ export function hostActionTable(c: HostChecks) {
     "set-auto-update-modules": { enabled: bool },
     "set-steam-icons": { enabled: bool },
     "set-module-icons": { enabled: bool },
+    "set-toasts": { position: oneOf("bottom-center", "bottom-right", "top-center") },
 
     // Streaming
     "set-stream-overlays": { enabled: bool },
