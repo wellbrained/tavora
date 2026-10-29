@@ -2,9 +2,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import type { Account, AccountStore } from "./account-store.ts";
+import type { AccountStore } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { fail, requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import { checkReviewText } from "./review-filter.ts";
 
 /**
@@ -403,7 +404,7 @@ export interface ReviewOptions {
   now?: () => number;
 }
 
-type Env = { Variables: { account: Account } };
+type Env = SignedInEnv;
 
 /** The answer for a review: what a user sees, never the account id. */
 function reviewAnswer(review: StoredReview, accounts: AccountStore) {
@@ -439,21 +440,8 @@ export function ownsModule(accounts: AccountStore, accountId: string, moduleId: 
 export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateLimiter, now = Date.now }: ReviewOptions) {
   const writeLimiter = writeRateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const app = new Hono<Env>();
-  const tooMany = (context: Context, wait: number) => {
-    context.header("Retry-After", String(wait));
-    return context.json({ error: "Too many requests. Try again later.", reason: "too-many" }, 429);
-  };
 
-  const signedInWith = (message: string) => async (context: Context<Env>, next: () => Promise<void>) => {
-    const match = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "");
-    const session = match ? accounts.sessionByToken(match[1]!, now()) : null;
-    const account = session ? accounts.account(session.accountId) : null;
-    if (!account) return context.json({ error: message, reason: "signed-out" }, 401);
-    context.set("account", account);
-    context.header("Cache-Control", "no-store");
-    await next();
-  };
-  const signedIn = signedInWith("Sign in to rate modules.");
+  const signedIn = requireSignIn(accounts, now);
   const writes = async (context: Context<Env>, next: () => Promise<void>) => {
     if (context.req.method === "GET") return next();
     const wait = writeLimiter.check(clientKey(context.req.raw));
@@ -480,7 +468,7 @@ export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateL
   // A module's ratings and newest reviews.
   app.get("/modules/:id/reviews", (context) => {
     const id = context.req.param("id");
-    if (!MODULE_ID.test(id) || !catalog.module(id)) return context.json({ error: "Not found." }, 404);
+    if (!MODULE_ID.test(id) || !catalog.module(id)) return fail(context, 404, "not-found", "Not found.");
     context.header("Cache-Control", "public, max-age=60");
     return context.json({ summary: reviews.summary(id), reviews: reviews.reviews(id).map((review) => reviewAnswer(review, accounts)) });
   });
@@ -490,20 +478,20 @@ export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateL
     const id = context.req.param("id");
     const sha = /^([0-9a-f]{64})\.png$/.exec(context.req.param("file"))?.[1];
     const review = REVIEW_ID.test(id) && sha ? reviews.review(id) : null;
-    if (!review || review.text === null || review.hidden || !catalog.module(review.moduleId)) return context.json({ error: "Not found." }, 404);
+    if (!review || review.text === null || review.hidden || !catalog.module(review.moduleId)) return fail(context, 404, "not-found", "Not found.");
     const picture = accounts.profile(review.accountId)?.picture;
-    if (!picture || createHash("sha256").update(picture).digest("hex") !== sha) return context.json({ error: "Not found." }, 404);
+    if (!picture || createHash("sha256").update(picture).digest("hex") !== sha) return fail(context, 404, "not-found", "Not found.");
     return new Response(new Uint8Array(picture), {
       headers: { "Content-Type": "image/png", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'", "Cache-Control": "public, max-age=86400" },
     });
   });
 
   // Report a review: no body. It needs a sign-in (decided 2026-10-27); who reported is kept only while the report is open.
-  app.post("/reviews/:id/report", signedInWith("Sign in to report."), async (context) => {
+  app.post("/reviews/:id/report", signedIn, async (context) => {
     const wait = writeLimiter.check(clientKey(context.req.raw));
     if (wait > 0) return tooMany(context, wait);
     const id = context.req.param("id") ?? "";
-    if (!REVIEW_ID.test(id) || !reviews.report(id, context.get("account").id, now())) return context.json({ error: "Not found." }, 404);
+    if (!REVIEW_ID.test(id) || !reviews.report(id, context.get("account").id, now())) return fail(context, 404, "not-found", "Not found.");
     return context.json({ status: "received" }, 202);
   });
 

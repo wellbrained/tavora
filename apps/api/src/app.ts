@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { accountRoutes, type AccountOptions } from "./accounts.ts";
 import { publishHandlers, type PublishLimits } from "./catalog-publish.ts";
 import type { Scanner } from "./virus-scan.ts";
@@ -19,6 +20,7 @@ import { catalogTrust } from "./catalog-trust.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { fail, signedInAs, signedOut, tooMany } from "./sign-in.ts";
 import { MAX_UPLOAD_BODY, type Submissions } from "./submissions.ts";
 import { DEFAULT_LIMIT, MAX_LIMIT, MAX_QUERY_LENGTH, searchGames } from "./search.ts";
 import { MAX_PROFILE_LENGTH, SteamError, type SteamClient } from "./steam.ts";
@@ -75,6 +77,12 @@ export interface AppOptions {
   siteRateLimiter?: RateLimiter;
 }
 
+/** Why an icon offer was refused, by its status. */
+const SUBMIT_REASONS = { 400: "bad-request", 409: "has-icon", 413: "too-big", 429: "too-many", 503: "unavailable" } as const;
+
+/** Steam import refusals also carry their reason as `code`, which Tavoras from before the sign-in gate read. */
+const steamFail = (context: Context, status: ContentfulStatusCode, reason: string, error: string) => context.json({ error, reason, code: reason }, status);
+
 export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats, countryOf, siteRateLimiter }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
@@ -115,17 +123,14 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
 
   app.get("/v1/games/search", (context) => {
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
-    }
+    if (wait > 0) return tooMany(context, wait);
     const q = context.req.query("q") ?? "";
-    if (q.length > MAX_QUERY_LENGTH) return context.json({ error: "Query too long." }, 400);
+    if (q.length > MAX_QUERY_LENGTH) return fail(context, 400, "bad-request", "Query too long.");
 
     const rawLimit = context.req.query("limit");
     const limit = rawLimit === undefined ? DEFAULT_LIMIT : Number(rawLimit);
     if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
-      return context.json({ error: `limit must be a whole number from 1 to ${MAX_LIMIT}.` }, 400);
+      return fail(context, 400, "bad-request", `limit must be a whole number from 1 to ${MAX_LIMIT}.`);
     }
     return context.json({ results: searchGames(db, q, limit) });
   });
@@ -135,24 +140,18 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   const iconsAvailable = Boolean(takedownContact?.trim());
   app.get("/v1/icons", (context) => {
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
-    }
-    if (!iconsAvailable) return context.json({ error: "Icons are not available right now." }, 503);
+    if (wait > 0) return tooMany(context, wait);
+    if (!iconsAvailable) return fail(context, 503, "unavailable", "Icons are not available right now.");
     context.header("Cache-Control", "public, max-age=300");
     return context.json({ notice: ICON_NOTICE, takedown: takedownContact!.trim(), icons: icons.list() });
   });
 
   app.get("/v1/icons/:file", (context) => {
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
-    }
+    if (wait > 0) return tooMany(context, wait);
     const match = /^([a-z0-9-]+)\.png$/.exec(context.req.param("file"));
     const bytes = iconsAvailable && match && isIconId(match[1]) ? icons.file(match[1]) : null;
-    if (!bytes) return context.json({ error: "Not found." }, 404);
+    if (!bytes) return fail(context, 404, "not-found", "Not found.");
     return new Response(bytes, {
       headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" },
     });
@@ -164,43 +163,37 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   // this service refuses. The account is kept with the offer until it is reviewed.
   app.post(
     "/v1/icons/submit",
-    bodyLimit({ maxSize: MAX_UPLOAD_BODY + 2000, onError: (context) => context.json({ error: "That icon is too big." }, 413) }),
+    bodyLimit({ maxSize: MAX_UPLOAD_BODY + 2000, onError: (context) => fail(context, 413, "too-big", "That icon is too big.") }),
     async (context) => {
       const wait = submitLimiter.check(clientKey ? clientKey(context.req.raw) : "local");
-      if (wait > 0) {
-        context.header("Retry-After", String(wait));
-        return context.json({ error: "Too many requests.", code: "too-many" }, 429);
-      }
-      if (!iconsAvailable || !submissions || !accounts) return context.json({ error: "Sharing icons is not available right now." }, 503);
-      const token = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "")?.[1];
-      const session = token ? accounts.store.sessionByToken(token, (accounts.now ?? Date.now)()) : null;
-      if (!session || !accounts.store.account(session.accountId)) return context.json({ error: "Sign in to share icons.", reason: "signed-out" }, 401);
+      if (wait > 0) return tooMany(context, wait);
+      if (!iconsAvailable || !submissions || !accounts) return fail(context, 503, "unavailable", "Sharing icons is not available right now.");
+      const signedIn = signedInAs(accounts.store, context, (accounts.now ?? Date.now)());
+      if (!signedIn) return signedOut(context);
+      const session = signedIn.session;
       if (!(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
-        return context.json({ error: "Send JSON.", code: "bad-request" }, 415);
+        return fail(context, 415, "bad-request", "Send JSON.");
       }
       let body: unknown;
       try {
         body = JSON.parse(await context.req.text());
       } catch {
-        return context.json({ error: "Send { id, name, source, icon }." }, 400);
+        return fail(context, 400, "bad-request", "Send { id, name, source, icon }.");
       }
       const result = submissions.submit(body, session.accountId);
       if (result.status === 202) return context.json({ status: "received" }, 202);
-      return context.json({ error: result.error }, result.status);
+      return fail(context, result.status, SUBMIT_REASONS[result.status], result.error);
     },
   );
 
   // Steam import. POST, so the profile is in no URL; JSON only, which a web
   // page on another site cannot send without a preflight this service refuses.
-  app.post("/v1/steam/library", bodyLimit({ maxSize: STEAM_BODY, onError: (context) => context.json({ error: "Send { \"profile\": a Steam profile link or SteamID64 }.", code: "bad-request" }, 413) }), async (context) => {
+  app.post("/v1/steam/library", bodyLimit({ maxSize: STEAM_BODY, onError: (context) => steamFail(context, 413, "bad-request", "Send { \"profile\": a Steam profile link or SteamID64 }.") }), async (context) => {
     const wait = steamLimiter.check(clientKey ? clientKey(context.req.raw) : "local");
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
-    }
-    if (!steam) return context.json({ error: "Steam import is not available right now.", code: "unavailable" }, 503);
+    if (wait > 0) return tooMany(context, wait);
+    if (!steam) return steamFail(context, 503, "unavailable", "Steam import is not available right now.");
     if (!(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
-      return context.json({ error: "Send JSON.", code: "bad-request" }, 415);
+      return steamFail(context, 415, "bad-request", "Send JSON.");
     }
     const text = await context.req.text();
     let profile: unknown;
@@ -210,14 +203,14 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
       profile = undefined;
     }
     if (typeof profile !== "string" || profile.length === 0 || profile.length > MAX_PROFILE_LENGTH) {
-      return context.json({ error: "Send { \"profile\": a Steam profile link or SteamID64 }.", code: "bad-request" }, 400);
+      return steamFail(context, 400, "bad-request", "Send { \"profile\": a Steam profile link or SteamID64 }.");
     }
     try {
       const ids = canonicalIds();
       const owned = await steam.ownedGames(profile);
       return context.json({ games: owned.map((game) => ({ appid: game.appid, name: game.name, id: ids.get(game.appid) ?? null })) });
     } catch (error) {
-      if (error instanceof SteamError) return context.json({ error: error.message, code: error.code }, error.status);
+      if (error instanceof SteamError) return steamFail(context, error.status, error.code, error.message);
       throw error;
     }
   });
@@ -264,23 +257,20 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   catalogApp.post("/report", report.limit, report.handler);
   catalogApp.use("*", async (context, next) => {
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
-    }
-    if (!catalog) return context.json({ error: "The module catalog is not available right now." }, 503);
+    if (wait > 0) return tooMany(context, wait);
+    if (!catalog) return fail(context, 503, "unavailable", "The module catalog is not available right now.");
     await next();
   });
   catalogApp.get("/", (context) => {
     const filter = catalogFilter(context.req.query("game"), context.req.query("personal"), context.req.query("workspace"));
-    if (!filter) return context.json({ error: "Ask for ?game=<game id>, ?personal=1 or neither." }, 400);
+    if (!filter) return fail(context, 400, "bad-request", "Ask for ?game=<game id>, ?personal=1 or neither.");
     context.header("Cache-Control", "public, max-age=300");
     const summaries = ratings?.summaries();
     return context.json({ modules: catalog!.index(filter).map((entry) => listed(entry, summaries ?? new Map())) });
   });
   catalogApp.get("/modules/:id", (context) => {
     const found = catalog!.module(context.req.param("id"));
-    if (!found) return context.json({ error: "Not found." }, 404);
+    if (!found) return fail(context, 404, "not-found", "Not found.");
     context.header("Cache-Control", "public, max-age=300");
     const contact = accounts?.conversations?.contact(found.module.id);
     return context.json({ module: { ...listed(found.module), ...(contact ? { contact } : {}) }, versions: found.versions, readme: found.readme });
@@ -289,7 +279,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   catalogApp.post("/installed", async (context) => {
     const body = (await context.req.json().catch(() => null)) as { id?: unknown } | null;
     const id = typeof body?.id === "string" && body.id.length <= 200 ? body.id : null;
-    if (!id || !catalog!.countInstall(id)) return context.json({ error: "Not found." }, 404);
+    if (!id || !catalog!.countInstall(id)) return fail(context, 404, "not-found", "Not found.");
     stats?.count("module-install", id);
     return context.body(null, 204);
   });
@@ -297,14 +287,14 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   catalogApp.post("/updated", async (context) => {
     const body = (await context.req.json().catch(() => null)) as { id?: unknown } | null;
     const id = typeof body?.id === "string" && body.id.length <= 200 ? body.id : null;
-    if (!id || !catalog!.isListed(id)) return context.json({ error: "Not found." }, 404);
+    if (!id || !catalog!.isListed(id)) return fail(context, 404, "not-found", "Not found.");
     stats?.count("module-update", id);
     return context.body(null, 204);
   });
   catalogApp.get("/zips/:file", (context) => {
     const match = /^([0-9a-f]{64})\.zip$/.exec(context.req.param("file"));
     const bytes = match ? catalog!.zip(match[1]!) : null;
-    if (!bytes) return context.json({ error: "Not found." }, 404);
+    if (!bytes) return fail(context, 404, "not-found", "Not found.");
     // Named by its hash, so it never changes.
     return new Response(new Uint8Array(bytes), {
       headers: { "Content-Type": "application/zip", "Content-Disposition": "attachment", "Cache-Control": "public, max-age=31536000, immutable" },
@@ -313,7 +303,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   catalogApp.get("/pictures/:file", (context) => {
     const match = /^([0-9a-f]{64})\.(png|webp)$/.exec(context.req.param("file"));
     const bytes = match ? catalog!.picture(match[1]!, match[2]!) : null;
-    if (!bytes) return context.json({ error: "Not found." }, 404);
+    if (!bytes) return fail(context, 404, "not-found", "Not found.");
     // Checked to be a picture when it was uploaded (C10) and named by its hash, so it never changes.
     return new Response(new Uint8Array(bytes), {
       headers: {
@@ -329,7 +319,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   catalogApp.get("/lists/:file", (context) => {
     const match = /^([a-z]+)\.json$/.exec(context.req.param("file"));
     const bytes = match && isSignedList(match[1]!) ? catalog!.list(match[1]) : null;
-    if (!bytes) return context.json({ error: "Not found." }, 404);
+    if (!bytes) return fail(context, 404, "not-found", "Not found.");
     return new Response(new Uint8Array(bytes), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" } });
   });
   // Ratings and reviews (reviews.ts): reading is open, rating and replying need a sign-in.
@@ -407,12 +397,9 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   // Sent once by the app when a new Tavora version finished downloading: only the version.
   app.post("/v1/app/updated", async (context) => {
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests.", code: "too-many" }, 429);
-    }
+    if (wait > 0) return tooMany(context, wait);
     const body = (await context.req.json().catch(() => null)) as { version?: unknown } | null;
-    if (!isAppVersion(body?.version)) return context.json({ error: "Send { version }." }, 400);
+    if (!isAppVersion(body?.version)) return fail(context, 400, "bad-request", "Send { version }.");
     stats?.count("app-update", body.version);
     return context.body(null, 204);
   });
@@ -447,11 +434,11 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     return context.body(null, 204);
   });
 
-  app.notFound((context) => context.json({ error: "Not found." }, 404));
+  app.notFound((context) => fail(context, 404, "not-found", "Not found."));
   app.onError((error, context) => {
     // Never include the request: it holds what the user typed.
     console.error(`[tavora-api] ${error instanceof Error ? error.message : "unknown error"}`);
-    return context.json({ error: "Something went wrong." }, 500);
+    return fail(context, 500, "internal", "Something went wrong.");
   });
   return app;
 }

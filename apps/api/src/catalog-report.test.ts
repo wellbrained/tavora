@@ -67,7 +67,7 @@ describe("reporting a catalog module", () => {
     const { catalog, of, report, reporter, token, store, clock } = setup();
     const signedOut = await report(of, "application/json", null);
     expect(signedOut.status).toBe(401);
-    expect(await signedOut.json()).toEqual({ error: "Sign in to report.", reason: "signed-out" });
+    expect(await signedOut.json()).toEqual({ error: "Sign in again.", reason: "signed-out" });
     expect((await report(of, "application/json", "x".repeat(30))).status).toBe(401);
     expect(catalog.reports()).toEqual([]);
 

@@ -1,8 +1,9 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { DatabaseSync } from "node:sqlite";
-import type { Account, AccountStore } from "./account-store.ts";
+import type { AccountStore } from "./account-store.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 
 /**
  * The cloud copy (decided 2026-10-19): one copy of a user's Tavora data per account, which only the
@@ -237,7 +238,7 @@ export interface CopyOptions {
   now?: () => number;
 }
 
-type Env = { Variables: { account: Account } };
+type Env = SignedInEnv;
 
 /** The routes under /v1/account/copy. Bodies are application/octet-stream, which a web page cannot send without a preflight this service refuses. */
 export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Date.now }: CopyOptions) {
@@ -247,21 +248,13 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
 
   app.use("*", async (context, next) => {
     const wait = limiter.check(clientKey(context.req.raw));
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests.", reason: "too-many" }, 429);
-    }
+    if (wait > 0) return tooMany(context, wait);
     if ((context.req.method === "POST" || context.req.method === "PUT") && (context.req.header("content-type") ?? "").toLowerCase() !== "application/octet-stream") {
       return context.json({ error: "Send application/octet-stream.", reason: "bad-request" }, 415);
     }
-    const match = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "");
-    const session = match ? accounts.sessionByToken(match[1]!, now()) : null;
-    const account = session ? accounts.account(session.accountId) : null;
-    if (!account) return context.json({ error: "Sign in again.", reason: "signed-out" }, 401);
-    context.set("account", account);
-    context.header("Cache-Control", "no-store");
     await next();
   });
+  app.use("*", requireSignIn(accounts, now));
   app.use("*", bodyLimit({ maxSize: MAX_BODY, onError: (context) => context.json({ error: "Too big.", reason: "too-big" }, 413) }));
   const bytes = async (context: Context) => new Uint8Array(await context.req.arrayBuffer());
 

@@ -164,7 +164,7 @@ describe("rating a catalog module", () => {
     // Reporting needs a sign-in (decided 2026-10-27); the reporter is kept while the report is open.
     const signedOut = await call("POST", `/reviews/${review.id}/report`);
     expect(signedOut.status).toBe(401);
-    expect(await signedOut.json()).toEqual({ error: "Sign in to report.", reason: "signed-out" });
+    expect(await signedOut.json()).toEqual({ error: "Sign in again.", reason: "signed-out" });
     const otto = user("otto@example.com", "Otto");
     expect((await call("POST", `/reviews/${review.id}/report`, otto.token)).status).toBe(202);
     expect((await call("POST", "/reviews/AAAAAAAAAAAAAAAA/report", otto.token)).status).toBe(404);

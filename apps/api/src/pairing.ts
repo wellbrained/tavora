@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import type { Account, AccountStore, Session } from "./account-store.ts";
+import type { AccountStore, Session } from "./account-store.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 
 /**
  * Approving a new PC from an old one (decided 2026-10-20, "one recovery key", step 4). The new PC asks; a
@@ -49,7 +50,7 @@ interface Pairing {
   declined?: boolean;
 }
 
-type Env = { Variables: { account: Account; session: Session } };
+type Env = SignedInEnv;
 
 /** The routes under /v1/account/pairing. */
 export function pairingRoutes({ accounts, clientKey, rateLimiter, now = Date.now }: PairingOptions) {
@@ -67,19 +68,10 @@ export function pairingRoutes({ accounts, clientKey, rateLimiter, now = Date.now
 
   app.use("*", async (context, next) => {
     const wait = limiter.check(clientKey(context.req.raw));
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return context.json({ error: "Too many requests.", reason: "too-many" }, 429);
-    }
-    const match = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "");
-    const session = match ? accounts.sessionByToken(match[1]!, now()) : null;
-    const account = session ? accounts.account(session.accountId) : null;
-    if (!session || !account) return context.json({ error: "Sign in again.", reason: "signed-out" }, 401);
-    context.set("account", account);
-    context.set("session", session);
-    context.header("Cache-Control", "no-store");
+    if (wait > 0) return tooMany(context, wait);
     await next();
   });
+  app.use("*", requireSignIn(accounts, now));
   app.use("*", bodyLimit({ maxSize: 1024, onError: (context) => context.json({ error: "Too big.", reason: "too-big" }, 413) }));
 
   const body = async (context: Context<Env>): Promise<Record<string, unknown> | null> => {

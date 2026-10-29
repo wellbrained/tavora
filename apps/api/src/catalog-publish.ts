@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { PUBLISH_STATEMENT, ZIP_LIMITS } from "@tavora/pack";
 import type { AccountStore } from "./account-store.ts";
+import { bearerToken, fail as refuse, tooMany } from "./sign-in.ts";
 import { MAIL_RESERVED } from "./accounts.ts";
 import { CatalogError, checkCatalogZip, type CatalogStore, type CheckedZip, type ReviewReason } from "./catalog.ts";
 import { catalogTrust } from "./catalog-trust.ts";
@@ -86,8 +87,6 @@ export function catalogFullMail(to: string, usedBytes: number, catalogBytes: num
 export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, maintainer, mail, scanner }: PublishOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const { uploadsPerDay, accountBytes, catalogBytes, keepVersions, waitingPerAccount } = { ...PUBLISH_LIMITS, ...limits };
-  const refuse = (context: Context, status: 400 | 401 | 403 | 404 | 409 | 413 | 415 | 429 | 503 | 507, reason: string, error: string) => context.json({ error, reason }, status);
-
   const limit = bodyLimit({
     maxSize: ZIP_LIMITS.maxArchiveBytes,
     onError: (context) => refuse(context, 413, "too-big", `A module zip may be at most ${ZIP_LIMITS.maxArchiveBytes / 1024 / 1024} MB.`),
@@ -116,11 +115,11 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
 
   /** Who uploads: a signed-in Tavora, or a publish token (with its name). Null without either. */
   const uploader = (store: AccountStore, context: Context, at: number): { accountId: string; token: string | null } | null => {
-    const match = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(context.req.header("authorization") ?? "");
-    if (!match) return null;
-    const byToken = store.publishTokenAccount(match[1]!, at);
+    const bearer = bearerToken(context);
+    if (!bearer) return null;
+    const byToken = store.publishTokenAccount(bearer, at);
     if (byToken) return { accountId: byToken.accountId, token: byToken.name };
-    const session = store.sessionByToken(match[1]!, at);
+    const session = store.sessionByToken(bearer, at);
     return session ? { accountId: session.accountId, token: null } : null;
   };
 
@@ -165,10 +164,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     const signedIn = store ? uploader(store, context, now()) : null;
     if (!(store && signedIn && isMaintainer(store, signedIn.accountId))) {
       const wait = limiter.check(clientKey(context.req.raw));
-      if (wait > 0) {
-        context.header("Retry-After", String(wait));
-        return refuse(context, 429, "too-many", "Too many uploads. Wait a while and try again.");
-      }
+      if (wait > 0) return tooMany(context, wait, "Too many uploads. Wait a while and try again.");
     }
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
     if ((context.req.header("content-type") ?? "").toLowerCase() !== "application/zip") return refuse(context, 415, "bad-request", "Send the zip as application/zip.");
@@ -268,10 +264,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
   /** The signed-in account's versions waiting for review, with their reasons. */
   const waiting = (context: Context) => {
     const wait = limiter.check(clientKey(context.req.raw));
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return refuse(context, 429, "too-many", "Too many requests. Wait a while and try again.");
-    }
+    if (wait > 0) return tooMany(context, wait, "Too many requests. Wait a while and try again.");
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
     const by = uploader(store, context, now());
     if (!by) return refuse(context, 401, "sign-in-needed", "Sign in to see your versions.");
@@ -288,10 +281,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
   /** Takes one of the account's waiting versions back: its row and zip go. Only the account that uploaded it can. */
   const withdraw = (context: Context) => {
     const wait = limiter.check(clientKey(context.req.raw));
-    if (wait > 0) {
-      context.header("Retry-After", String(wait));
-      return refuse(context, 429, "too-many", "Too many requests. Wait a while and try again.");
-    }
+    if (wait > 0) return tooMany(context, wait, "Too many requests. Wait a while and try again.");
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
     const by = uploader(store, context, now());
     if (!by) return refuse(context, 401, "sign-in-needed", "Sign in to withdraw a version.");
