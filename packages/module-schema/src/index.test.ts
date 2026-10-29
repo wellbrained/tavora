@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -114,7 +114,7 @@ describe("validateManifest", () => {
 
 const leaderboards = {
   ...valid,
-  minTavora: "0.21.92",
+  minTavora: "0.21.93",
   permissions: { network: [], connectors: ["leaderboards"] },
   leaderboards: {
     boards: [
@@ -489,6 +489,18 @@ describe("leaderboards", () => {
     expect(validateManifest({ ...leaderboards, leaderboards: { boards: [{ id: "daily", name: "Daily", kind: "streak" }, { id: "daily", name: "Daily", kind: "score" }] } })).toEqual({
       ok: false,
       errors: ["leaderboards lists the board daily twice"],
+    });
+  });
+
+  it("loads an older manifest without board names, naming each board by its id", () => {
+    // Like Sudoku 0.1.0: made for the first leaderboards, before boards had names.
+    const older = { ...leaderboards, minTavora: LAST_TAVORA_WITHOUT_BOARD_NAMES, leaderboards: { boards: [{ id: "daily-easy", kind: "streak", daily: true }, { id: "fastest-easy", kind: "score", order: "low" }] } };
+    const result = validateManifest(older);
+    expect(result.ok && result.manifest.leaderboards!.boards.map((item) => item.name)).toEqual(["daily-easy", "fastest-easy"]);
+    expect(older.leaderboards.boards[0]).not.toHaveProperty("name");
+    expect(validateManifest({ ...older, minTavora: "0.21.93" })).toEqual({
+      ok: false,
+      errors: [0, 1].map((index) => `leaderboards.boards[${index}].name must be a non-empty string of at most 40 characters on one line`),
     });
   });
 

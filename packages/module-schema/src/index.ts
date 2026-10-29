@@ -416,6 +416,11 @@ export const LAST_TAVORA_WITHOUT_OVERLAY_SIZE = "0.21.27";
 export const LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES = "0.21.42";
 /** The last Tavora that refuses `leaderboards` and its connector; a manifest with them needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_LEADERBOARDS = "0.21.91";
+/**
+ * The last Tavora whose boards had no `name`. A manifest for it (`minTavora` at most this, such as Sudoku 0.1.0) may
+ * leave the names out and loads with each board's id as its name; a newer manifest needs them.
+ */
+export const LAST_TAVORA_WITHOUT_BOARD_NAMES = "0.21.92";
 /** Most leaderboards one module may declare. */
 export const MAX_LEADERBOARD_BOARDS = 20;
 const LEADERBOARD_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
@@ -583,6 +588,14 @@ function checkActions(actions: unknown, errors: string[]): void {
   });
 }
 
+/** The manifest with every board named: an older manifest's boards without a name go by their id. */
+function withBoardNames(input: Record<string, unknown>): Record<string, unknown> {
+  const leaderboards = isRecord(input.leaderboards) ? input.leaderboards : null;
+  const boards = leaderboards && Array.isArray(leaderboards.boards) ? (leaderboards.boards as Record<string, unknown>[]) : null;
+  if (!boards || boards.every((board) => board.name !== undefined)) return input;
+  return { ...input, leaderboards: { ...leaderboards, boards: boards.map((board) => (board.name === undefined ? { ...board, name: board.id } : board)) } };
+}
+
 function checkLeaderboards(input: Record<string, unknown>, errors: string[]): void {
   const leaderboards = input.leaderboards;
   const boards: unknown = isRecord(leaderboards) ? leaderboards.boards : undefined;
@@ -592,13 +605,16 @@ function checkLeaderboards(input: Record<string, unknown>, errors: string[]): vo
   const unknown = Object.keys(leaderboards).filter((key) => key !== "boards");
   if (unknown.length > 0) errors.push(`unknown leaderboards fields: ${unknown.join(", ")}`);
   const ids = new Set<string>();
+  const namesNeeded = officialId(input) || needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_BOARD_NAMES);
   boards.forEach((board: unknown, index) => {
     const at = `leaderboards.boards[${index}]`;
     if (!isRecord(board)) return void errors.push(`${at} must be an object`);
     if (!isLeaderboardId(board.id)) errors.push(`${at}.id must be lowercase letters and digits joined by -, starting with a letter, at most ${MAX_LEADERBOARD_ID} characters`);
     else if (ids.has(board.id)) errors.push(`leaderboards lists the board ${board.id} twice`);
     else ids.add(board.id);
-    if (!isText(board.name, MAX_LEADERBOARD_NAME) || /[\u0000-\u001f]/.test(board.name)) errors.push(`${at}.name must be a non-empty string of at most ${MAX_LEADERBOARD_NAME} characters on one line`);
+    // An older manifest may leave the names out; the id stands in (see LAST_TAVORA_WITHOUT_BOARD_NAMES).
+    const named = board.name !== undefined || namesNeeded;
+    if (named && (!isText(board.name, MAX_LEADERBOARD_NAME) || /[\u0000-\u001f]/.test(board.name))) errors.push(`${at}.name must be a non-empty string of at most ${MAX_LEADERBOARD_NAME} characters on one line`);
     const kind = LEADERBOARD_KINDS.includes(board.kind as LeaderboardKind) ? (board.kind as LeaderboardKind) : null;
     if (kind === null) errors.push(`${at}.kind must be one of ${LEADERBOARD_KINDS.map((name) => `"${name}"`).join(", ")}`);
     const fields = ["id", "name", "kind"];
@@ -797,5 +813,5 @@ export function validateManifest(input: unknown): ManifestResult {
   if (extra.length > 0) errors.push(`unknown fields: ${extra.join(", ")}`);
 
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, manifest: input as unknown as ModuleManifest };
+  return { ok: true, manifest: withBoardNames(input) as unknown as ModuleManifest };
 }

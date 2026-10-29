@@ -164,7 +164,7 @@ A module uses only the kinds it needs. Every board can be read for a day, a week
 | --- | --- | --- |
 | `boards` | yes | 1 to 20 boards. |
 | `boards[].id` | yes | Stable identity: lowercase letters and digits in words joined by `-`, starting with a letter, at most 32 characters, unique in the module. Results are kept by it, so never change it after release. |
-| `boards[].name` | yes | The board's name as users see it, such as `Daily streak`, 1 to 40 characters on one line. Tavora shows it in the user's profile. `translations.<language>.boards` names it in other languages, keyed by board id. |
+| `boards[].name` | yes | The board's name as users see it, such as `Daily streak`, 1 to 40 characters on one line. Tavora shows it in the user's profile. `translations.<language>.boards` names it in other languages, keyed by board id. A manifest with `minTavora` `0.21.92` or older may leave it out; its boards then go by their id. |
 | `boards[].kind` | yes | `"streak"`: won and lost games; a user's line has their current and best winning streak, ranked by the best, then the current one. `"score"`: one number per game; a user's line has their best. `"total"`: one number per game, 0 or more; a user's line has the sum, such as puzzles solved (send `1` per game). `"average"`: one number per game; a user's line has the mean. `"rate"`: won and lost games; a user's line has the share won. |
 | `boards[].daily` | no | Streak boards only. `true`: one result per calendar day, and a missed day ends the streak. A result counts only when it ended within its day, so replaying an old puzzle never does. |
 | `boards[].order` | no | Score and average boards. `"high"` (the default): the highest number wins. `"low"`: the lowest wins, such as a time. |
