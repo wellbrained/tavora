@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.101",
+    date: "2026-10-29",
+    title: "Try your notifications",
+    notes: [
+      "Settings > Appearance > Notifications has a Try it button that shows a few right where you picked.",
+    ],
+    prs: [
+      { number: 456, title: "Settings: Try it shows a few toasts where the user picked" },
+    ],
+    tags: ["settings"],
+  },
+  {
     version: "0.21.100",
     date: "2026-10-29",
     title: "New look for notifications",
