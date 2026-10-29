@@ -1,6 +1,6 @@
 {
   "name": "@tavora/sdk",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "description": "Typed client for Tavora modules: talks to the Tavora Desktop host over its bridge.",
   "type": "module",
   "sideEffects": false,
@@ -32,6 +32,11 @@
       "types": "./dist/protocol.d.ts",
       "default": "./dist/protocol.js"
     },
+    "./testing": {
+      "source": "./src/testing.ts",
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -44,6 +49,10 @@
       "./protocol": {
         "types": "./dist/protocol.d.ts",
         "default": "./dist/protocol.js"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.ts",
+        "default": "./dist/testing.js"
       },
       "./package.json": "./package.json"
     }
