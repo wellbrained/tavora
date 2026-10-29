@@ -1,6 +1,6 @@
 {
   "name": "@tavora/sdk",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "description": "Typed client for Tavora modules: talks to the Tavora Desktop host over its bridge.",
   "type": "module",
   "sideEffects": false,

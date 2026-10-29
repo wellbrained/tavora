@@ -60,6 +60,15 @@ export interface BridgePort {
   close(): void;
 }
 
+/** How big a module would like its dialog (panel.setDialog), in CSS pixels; Tavora makes it fit the window. */
+export interface PanelDialogSize {
+  width: number;
+  height: number;
+}
+
+/** panel.setDialog's size range and default. */
+export const PANEL_DIALOG = { min: 240, max: 2000, width: 560, height: 640 } as const;
+
 /**
  * Everything a module may learn about itself. Built by the host from the
  * view that owns the port, never from anything the module sends.
@@ -88,6 +97,8 @@ export interface BridgeContext {
   isMaximized(): boolean;
   /** panel.setMaximized: true throws PERMISSION_DENIED unless the panel just got a click or key press. */
   setMaximized(maximized: boolean): Promise<void>;
+  /** panel.setDialog: opening throws PERMISSION_DENIED unless the panel just got a click or key press. */
+  setDialog(open: boolean, size: PanelDialogSize): Promise<void>;
   /** panel.setLive: what the panel's live view shows over the game (already size-checked); null shows nothing. Needs no click. */
   setLive(state: JsonValue | null): void;
   /** The workspace the panel is in. */
@@ -530,6 +541,25 @@ const handlers = new Map<string, Handler>([
       const maximized = required(object(params), "maximized");
       if (typeof maximized !== "boolean") throw new HostError("INVALID_PARAMS", "params.maximized must be a boolean");
       await s.context.setMaximized(maximized);
+      return null;
+    },
+  ],
+
+  [
+    "panel.setDialog",
+    async (s, params) => {
+      const p = object(params);
+      const open = required(p, "open");
+      if (typeof open !== "boolean") throw new HostError("INVALID_PARAMS", "params.open must be a boolean");
+      const side = (key: "width" | "height") => {
+        const value = p[key];
+        if (value === undefined) return PANEL_DIALOG[key];
+        if (!Number.isSafeInteger(value) || (value as number) < PANEL_DIALOG.min || (value as number) > PANEL_DIALOG.max) {
+          throw new HostError("INVALID_PARAMS", `params.${key} must be a whole number from ${PANEL_DIALOG.min} to ${PANEL_DIALOG.max}`);
+        }
+        return value as number;
+      };
+      await s.context.setDialog(open, { width: side("width"), height: side("height") });
       return null;
     },
   ],

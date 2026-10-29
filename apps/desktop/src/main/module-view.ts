@@ -11,7 +11,7 @@ import { gestureCounts, type Opacity } from "./game-overlays";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
 import { BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH } from "@tavora/sdk/protocol";
-import { BridgeSession, type BridgeContext } from "./bridge";
+import { BridgeSession, type BridgeContext, type PanelDialogSize } from "./bridge";
 import { moduleReadPage } from "./page-import";
 import type { CheckedMenu } from "./module-menu";
 import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
@@ -89,6 +89,8 @@ export interface ModuleViewOptions {
   openPanel(type: string, content: PanelContent | null): Promise<PanelOpenResult>;
   /** panel.setMaximized from this panel (after its click was taken to maximize): asks the host UI to do it. */
   setMaximized(maximized: boolean): void;
+  /** panel.setDialog from this panel (after its click was taken to open): shows it big in a dialog over the app, or back in its slot. */
+  setDialog(open: boolean, size: PanelDialogSize): void;
   /** panel.setLive from this panel (size already checked): what its live view over the game shows; null shows nothing. */
   setLive(state: JsonValue | null): void;
   /** Hosts the user granted this module for network.fetch, as installed now; asked on every call and redirect. */
@@ -587,6 +589,14 @@ export class ModuleView {
           }
           this.options.setMaximized(maximized);
         },
+        setDialog: async (open, size) => {
+          // Covering the app takes a click, as maximizing does.
+          if (open) {
+            this.refuseOverGame("panel.setDialog");
+            await this.takeGesture("panel.setDialog");
+          }
+          this.options.setDialog(open, size);
+        },
         setLive: (state) => this.options.setLive(state),
         workspace,
         data,
@@ -1019,6 +1029,15 @@ export class ModuleView {
 
   /** Whether the panel's group fills the workspace, as the host UI last reported it. */
   private maximized = false;
+  /** Whether the panel is shown big in a dialog over the app (panel.setDialog). */
+  private inDialog = false;
+
+  /** The host opened or closed the panel's dialog; the module hears a change. */
+  setInDialog(open: boolean): void {
+    if (open === this.inDialog) return;
+    this.inDialog = open;
+    this.bridge?.emit("panel.dialog", { open });
+  }
 
   /** The host UI reported whether the panel fills the workspace; the module hears a change. */
   setMaximized(maximized: boolean): void {

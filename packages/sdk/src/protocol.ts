@@ -737,6 +737,13 @@ export interface Methods {
    * only right after a click or key press in the panel. Tavora 0.20.20 and newer.
    */
   "panel.setMaximized": { params: { maximized: boolean }; result: null };
+  /**
+   * Shows the panel big in a dialog centred on the app (open: true), with the module's name and a close button over
+   * the dimmed app, or puts it back in its slot (false). `width` and `height` (240 to 2000, default 560 x 640) are the
+   * page's size in it; Tavora makes it fit the window. Opening only right after a click or key press in the panel.
+   * Tavora 0.21.94 and newer.
+   */
+  "panel.setDialog": { params: { open: boolean; width?: number; height?: number }; result: null };
   /** What this panel's live view (the overlay page shown in its spot over the game) shows; null shows nothing. At most LIMITS.maxOverlayStateBytes. Tavora 0.21.11 and newer. */
   "panel.setLive": { params: { state: JsonValue | null }; result: null };
   /**
@@ -924,6 +931,8 @@ export interface Events {
   "panel.navigate": PanelNavigateRequest;
   /** The panel started or stopped filling the workspace (Maximize and Restore, by the user or panel.setMaximized). */
   "panel.maximized": { maximized: boolean };
+  /** The panel's dialog opened or closed (panel.setDialog, or the user closed it). Tavora 0.21.94 and newer. */
+  "panel.dialog": { open: boolean };
   /** The user pressed a hotkey set for this module (hotkeys.set). Sent to one panel of the module in the workspace shown now, the one used last. */
   "hotkeys.pressed": HotkeyBinding;
   "lifecycle.suspend": null;

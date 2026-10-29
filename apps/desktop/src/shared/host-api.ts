@@ -1044,6 +1044,21 @@ export interface TavoraHostApi {
   onModuleMenu(listener: (menu: ModuleMenu | null) => void): void;
   /** The user chose an item of the module menu, or closed it (null). */
   answerModuleMenu(requestId: number, id: string | null): void;
+  /** A panel asked to be shown big in a dialog over the app (panel.setDialog), or null: its dialog closed. */
+  onPanelDialog(listener: (dialog: PanelDialog | null) => void): void;
+  /** Where the dialog's frame leaves room for the panel's page, in window pixels; the host moves the page there. */
+  placePanelDialog(bounds: { x: number; y: number; width: number; height: number }): void;
+  /** The user closed the panel's dialog (its close button or a click beside it). */
+  closePanelDialog(): void;
+}
+
+/** A panel shown big in a dialog over the app: its module's name and icon for the frame, and the size it asked for. */
+export interface PanelDialog {
+  instanceId: string;
+  title: string;
+  icon: string | null;
+  width: number;
+  height: number;
 }
 
 /**

@@ -1,3 +1,9 @@
+## 0.2.14
+
+Panel dialogs, with Tavora 0.21.94 or newer. `MIN_TAVORA` stays: on an older Tavora `openDialog` throws `METHOD_NOT_FOUND`, so a module can show its settings in the panel instead.
+
+- `panel.openDialog({ width, height })` shows the panel big in a dialog centred on the app, over everything else, with the module's name and a close button: for settings or details that don't fit a small panel. It is the same page, so it keeps all it had. Opening needs a real click or key press. `panel.closeDialog()` puts it back, and `panel.onDialogChange` hears when it opens or closes, also when the user closes it.
+
 ## 0.2.13
 
 Leaderboards, with Tavora 0.21.92 or newer. Everything else still works on every Tavora the SDK supports (Tavora 0.19.32), so `MIN_TAVORA` stays; a module that uses leaderboards sets `minTavora` to 0.21.92.
