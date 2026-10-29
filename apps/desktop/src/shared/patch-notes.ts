@@ -28,6 +28,35 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.99",
+    date: "2026-10-29",
+    title: "Calmer Whiteboard cards",
+    notes: [
+      "New cards use coordinated fills, finer borders and smaller corners.",
+      "Clearer headings and more breathing room make notes and picture captions easier to read.",
+      "Existing boards keep their own styles.",
+    ],
+    prs: [
+      { number: 453, title: "Make Whiteboard planning easier with styles, connectors and starters" },
+    ],
+    tags: ["whiteboard"],
+  },
+  {
+    version: "0.21.98",
+    date: "2026-10-29",
+    title: "Connect ideas and start faster",
+    notes: [
+      "Choose a line, one-way arrow or two-way arrow, then draw between cards. Connections follow cards when you move them.",
+      "Start a blank board, an idea board or a board for marking up a screenshot.",
+      "Show a grid when you want it; each board remembers its choice.",
+      "Your selected board and view come back after restarting.",
+    ],
+    prs: [
+      { number: 453, title: "Make Whiteboard planning easier with styles, connectors and starters" },
+    ],
+    tags: ["whiteboard"],
+  },
+  {
     version: "0.21.97",
     date: "2026-10-29",
     title: "Your ranks in your profile",
