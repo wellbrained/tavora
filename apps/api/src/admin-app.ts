@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { Hono } from "hono";
@@ -83,11 +84,14 @@ export interface AdminOptions {
   /** What the maintainer did, for the Activity page. Absent: nothing is kept and the page is empty. */
   activity?: ActivityLog;
   moderation?: Pick<ModerationAdminOptions, "scanner" | "mailer" | "mailDailyLimit" | "now" | "keepVersions">;
+  /** What suspend and ban reach (account-lifecycle.ts); the server passes the one built over every store. Absent: built from the stores above. */
+  lifecycle?: AccountLifecycle;
 }
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, conversations, leaderboards, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation, ownerEmail, activity }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, conversations, leaderboards, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation, ownerEmail, activity, lifecycle: given }: AdminOptions) {
+  const lifecycle = given ?? (accounts ? accountLifecycle({ accounts, catalog, copies, reviews, conversations, leaderboards, icons: state }) : undefined);
   const app = new Hono();
   const expected = digest(token);
 
@@ -485,7 +489,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     return context.json({ ...range, ...stats.series(range.from, range.to) });
   });
   // Approval: versions waiting for review, Approve, Decline, Ban, and the one-time check of what is live (moderation-admin.ts).
-  if (catalog && accounts) app.route("/api/moderation", moderationRoutes({ catalog, accounts, ...moderation, ownerEmail }));
+  if (catalog && accounts) app.route("/api/moderation", moderationRoutes({ catalog, accounts, ...moderation, ownerEmail, lifecycle }));
 
   // Messages (conversations-admin.ts): Tavora's own conversations and the reported ones, and the editable texts.
   if (conversations && accounts) {
@@ -498,7 +502,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
   if (leaderboards && accounts) app.route("/api/leaderboards", leaderboardsAdminRoutes({ leaderboards, accounts, now: moderation?.now }));
 
   // The account list and Suspend (accounts-admin.ts). The counts at GET /api/accounts stay in admin-panel.ts.
-  if (accounts) app.route("/api/accounts", accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer: moderation?.mailer, mailDailyLimit: moderation?.mailDailyLimit, ownerEmail, now: moderation?.now }));
+  if (accounts) app.route("/api/accounts", accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer: moderation?.mailer, mailDailyLimit: moderation?.mailDailyLimit, ownerEmail, now: moderation?.now, lifecycle }));
 
   app.notFound((context) => context.json({ error: "Not found." }, 404));
   app.onError((error, context) => {

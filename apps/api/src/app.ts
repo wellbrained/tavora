@@ -9,7 +9,7 @@ import { reportHandlers } from "./catalog-report.ts";
 import { copyRoutes } from "./cloud-copy.ts";
 import { pairingRoutes } from "./pairing.ts";
 import { reviewRoutes, type ReviewStore } from "./reviews.ts";
-import { conversationRoutes, createConversationNotifier } from "./conversations.ts";
+import { conversationRoutes, createConversationNotifier, publicContact } from "./conversations.ts";
 import { leaderboardRoutes } from "./leaderboards.ts";
 import { createNotifier } from "./moderation-mail.ts";
 import { vaultRoutes } from "./vault.ts";
@@ -272,7 +272,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const found = catalog!.module(context.req.param("id"));
     if (!found) return fail(context, 404, "not-found", "Not found.");
     context.header("Cache-Control", "public, max-age=300");
-    const contact = accounts?.conversations?.contact(found.module.id);
+    const contact = accounts?.conversations ? publicContact(accounts.conversations, accounts.store, found.module.id, found.module.owner) : undefined;
     return context.json({ module: { ...listed(found.module), ...(contact ? { contact } : {}) }, versions: found.versions, readme: found.readme });
   });
   // Sent once by the app after a user installed a module from Browse: only the module id.

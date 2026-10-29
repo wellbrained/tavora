@@ -24,6 +24,7 @@ import { LeaderboardStore } from "./leaderboards.ts";
 import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
 import { scannerFromEnv } from "./virus-scan.ts";
+import { accountLifecycle } from "./account-lifecycle.ts";
 
 const port = Number(process.env.PORT ?? 4010);
 const datasetPath = process.env.TAVORA_GAMES_DB ?? "data/games.sqlite";
@@ -107,6 +108,8 @@ if (conversations) {
 }
 // Leaderboards (leaderboards.ts): their own file, in the daily backup.
 const leaderboards = accountStore ? new LeaderboardStore(path.join(stateDir, "leaderboards.sqlite")) : undefined;
+// What delete, suspend and ban reach: every store that keeps something of an account (account-lifecycle.ts).
+const lifecycle = accountStore ? accountLifecycle({ accounts: accountStore, catalog, copies, reviews, conversations, leaderboards, icons: state }) : undefined;
 console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
 // Plain daily totals (stats.ts): nothing about a user. Once a day the account numbers are written down too.
 const stats = new StatsStore(path.join(stateDir, "stats.sqlite"));
@@ -156,6 +159,7 @@ const app = createApp({
           ...(reviews ? { reviews } : {}),
           ...(conversations ? { conversations } : {}),
           ...(leaderboards ? { leaderboards } : {}),
+          ...(lifecycle ? { lifecycle } : {}),
           ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
           // Discord login: Tavora's public Discord app, no secret; DISCORD_API only for a pretend Discord in tests.
           discord: createDiscordClient(process.env.DISCORD_API ? { api: process.env.DISCORD_API } : {}),
@@ -191,6 +195,7 @@ if (adminToken && adminToken.length >= 24) {
     ...(conversations ? { conversations } : {}),
     ...(leaderboards ? { leaderboards } : {}),
     ...(copies ? { copies } : {}),
+    ...(lifecycle ? { lifecycle } : {}),
     // The built panel: deployed from wellbrained/tavora-admin to /srv/tavora-admin/current; in development
     // the tavora-admin checkout next to this repo.
     adminDir: process.env.TAVORA_ADMIN_DIR ?? "../../../tavora-admin/dist",

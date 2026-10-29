@@ -155,6 +155,12 @@ export class IconState {
     this.db.prepare("delete from pending where sender = ?").run(account);
   }
 
+  /** The account is deleted: its waiting offers go, and so does its block, which a new account never matches. */
+  forgetSender(account: string): void {
+    this.db.prepare("delete from pending where sender = ?").run(account);
+    this.db.prepare("delete from blocked_senders where account = ?").run(account);
+  }
+
   isSenderBlocked(account: string): boolean {
     return this.db.prepare("select 1 from blocked_senders where account = ?").get(account) !== undefined;
   }

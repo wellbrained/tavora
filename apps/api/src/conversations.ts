@@ -7,7 +7,7 @@ import type { CatalogStore } from "./catalog.ts";
 import { mailLanguage, type Mail, type MailLanguage } from "./mail.ts";
 import type { Notifier } from "./moderation-mail.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
-import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
+import { banned, requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import { checkReviewText } from "./review-filter.ts";
 import { MIN_ACCOUNT_AGE_MS, ownsModule } from "./reviews.ts";
 import { BUILT_IN_TEXTS } from "../../desktop/src/shared/conversations.ts";
@@ -394,6 +394,14 @@ export class ConversationStore {
     return Math.max(1, Math.ceil(left / DAY_MS));
   }
 
+  /**
+   * The developer is banned: the open conversations users have with them close, as if Tavora closed them (`tavora`),
+   * so nobody waits for an answer. They stay closed after an unban. Returns how many closed.
+   */
+  closeForBannedDeveloper(accountId: string, now: number): number {
+    return Number(this.db.prepare("update conversations set state = 'closed', close_reason = 'tavora', closed_at = ? where kind = 'developer' and developer_account_id = ? and state = 'open'").run(now, accountId).changes);
+  }
+
   /** The account is deleted: its conversations close with `left`, its message texts go, its reports go. */
   forget(accountId: string, now = Date.now()): void {
     for (const row of this.db.prepare("select * from conversations where user_account_id = ? or developer_account_id = ?").all(accountId, accountId) as unknown as ConversationSql[]) {
@@ -521,6 +529,18 @@ export function accountName(accounts: AccountStore, accountId: string): string |
 /** The account that takes a module's messages: the one whose publisher key owns it, else the holder of its id prefix. */
 export function developerOf(accounts: AccountStore, moduleId: string, owner: string): string | null {
   return accounts.publisherKey(owner)?.accountId ?? accounts.prefixHolder(moduleId.split(".")[0]!) ?? null;
+}
+
+/**
+ * A module's contact settings as users see them. A suspended developer takes no new conversations, a banned one
+ * none and shows no link either; both come back on their own with unsuspend or unban (account-lifecycle.ts).
+ */
+export function publicContact(conversations: ConversationStore, accounts: AccountStore, moduleId: string, owner: string): { enabled: boolean; link: string | null } {
+  const settings = conversations.contact(moduleId);
+  const developer = developerOf(accounts, moduleId, owner);
+  if (developer && accounts.isBanned(developer)) return { enabled: false, link: null };
+  if (developer && accounts.isSuspended(developer)) return { enabled: false, link: settings.link };
+  return settings;
 }
 
 /** The published modules an account is the developer of. */
@@ -744,7 +764,7 @@ export function conversationRoutes({ conversations, catalog, accounts, clientKey
     const listed = catalog.module(input.moduleId);
     if (!listed) return notFound(context);
     if (ownsModule(accounts, account.id, input.moduleId, listed.module.owner)) return context.json({ error: "You can't write to yourself.", reason: "own-module" }, 403);
-    const settings = conversations.contact(input.moduleId);
+    const settings = publicContact(conversations, accounts, input.moduleId, listed.module.owner);
     const developerId = developerOf(accounts, input.moduleId, listed.module.owner);
     if (!settings.enabled || !developerId) return context.json({ error: "The developer doesn't take messages in Tavora.", reason: "contact-off", link: settings.link }, 403);
     const text = cleanMessage(input.text);
@@ -897,6 +917,8 @@ export function conversationRoutes({ conversations, catalog, accounts, clientKey
   contact.put("/modules/:id/contact", bodyLimit({ maxSize: 1000, onError: (context) => context.json({ error: "Too big.", reason: "bad-request" }, 413) }), async (context) => {
     const checked = developerOnly(context);
     if (checked.error) return checked.error;
+    // A banned developer no longer acts as the publisher (decided 2026-10-29).
+    if (accounts.isBanned(context.get("account").id)) return banned(context);
     const input = await body(context);
     const link = cleanContactLink(input?.link);
     if (!input || Object.keys(input).some((key) => !["enabled", "link"].includes(key)) || typeof input.enabled !== "boolean" || link === undefined) {
