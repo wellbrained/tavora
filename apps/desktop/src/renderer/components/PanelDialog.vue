@@ -9,12 +9,8 @@ import { Dialog, DialogContent, DialogTitle } from "@tavora/official-ui/componen
 import { api, panelDialog } from "../host";
 import { t } from "../i18n";
 
-/** The frame's open animation; the page is placed again once it has settled. */
-const SETTLE_MS = 250;
-
 const body = ref<HTMLElement | null>(null);
 let observer: ResizeObserver | undefined;
-let settle: ReturnType<typeof setTimeout> | undefined;
 
 function place(): void {
   const rect = body.value?.getBoundingClientRect();
@@ -24,7 +20,6 @@ function place(): void {
 function stop(): void {
   observer?.disconnect();
   observer = undefined;
-  clearTimeout(settle);
   removeEventListener("resize", place);
 }
 
@@ -34,11 +29,14 @@ watch(
     stop();
     if (!dialog) return;
     await nextTick();
-    if (!body.value) return;
+    // The frame zooms in; placed during that, the page would show shrunk and then jump to its full size. It goes in
+    // once the frame has settled and follows it from then on.
+    const frame = body.value?.parentElement;
+    await Promise.allSettled(frame?.getAnimations().map((animation) => animation.finished) ?? []);
+    if (!body.value || panelDialog.value !== dialog) return;
     observer = new ResizeObserver(place);
     observer.observe(body.value);
     addEventListener("resize", place);
-    settle = setTimeout(place, SETTLE_MS);
   },
   { flush: "post" },
 );
