@@ -2,9 +2,10 @@
 // Clock & Counter: a toolbar with Add, then the workspace's clocks and counters. Every panel of a workspace shows the same
 // list; which settings are open is each panel's own. Running clocks tick here only while the panel is visible: they
 // keep their start time, so nothing is lost while it is hidden. Hotkeys arrive at the panel used last.
-import { Plus, X } from "@lucide/vue";
+import { Plus } from "@lucide/vue";
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
 import { TavoraError, type GameOverlayResult, type MenuRequest, type TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { plural, setLanguage, t } from "./i18n";
@@ -83,7 +84,8 @@ async function pickKind(event: MouseEvent): Promise<void> {
 
 // ── Delete, with Undo ────────────────────────────────────────────────
 
-const undo = shallowRef<{ item: Item; index: number; timer: ReturnType<typeof setTimeout> } | null>(null);
+// The offer keeps its own time, so the hotkeys go when it ends even if its toast was closed early.
+const undo = shallowRef<{ item: Item; index: number; timer: ReturnType<typeof setTimeout>; toast: { dismiss: () => void } } | null>(null);
 
 /** The undo time ran out: the item's hotkeys go too. */
 function forget(item: Item): void {
@@ -94,13 +96,21 @@ function removeItem(item: Item): void {
   const index = list.value.items.findIndex((other) => other.id === item.id);
   if (undo.value) {
     clearTimeout(undo.value.timer);
+    undo.value.toast.dismiss();
     forget(undo.value.item);
   }
   // Counters linked to it lose the link; Undo brings back the item, not their links.
   void store.value?.apply([item.id], (data) => remove(data, item.id));
   void hideOverGame(item).catch(() => undefined);
   if (editing.value === item.id) editing.value = null;
-  undo.value = { item: structuredClone(item), index, timer: setTimeout(() => dismissUndo(), UNDO_MS) };
+  const shown = toast({
+    title: t("app.deleted", { label: item.label || t(`kind.${item.kind}`) }),
+    duration: UNDO_MS,
+    testid: "undo-toast",
+    actionTestid: "undo",
+    action: { label: t("undo"), onClick: runUndo },
+  });
+  undo.value = { item: structuredClone(item), index, timer: setTimeout(() => dismissUndo(), UNDO_MS), toast: shown };
 }
 
 function dismissUndo(): void {
@@ -108,6 +118,7 @@ function dismissUndo(): void {
   undo.value = null;
   if (offer) {
     clearTimeout(offer.timer);
+    offer.toast.dismiss();
     forget(offer.item);
   }
 }
@@ -117,6 +128,7 @@ function runUndo(): void {
   undo.value = null;
   if (!offer) return;
   clearTimeout(offer.timer);
+  offer.toast.dismiss();
   // Back with the same id, so its OBS link and hotkeys work again.
   void store.value?.apply([offer.item.id], (data) => insert(data, offer.item, offer.index));
 }
@@ -277,17 +289,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div
-      v-if="undo"
-      class="bg-popover text-popover-foreground absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-lg border py-1.5 pr-1.5 pl-3 text-sm shadow-lg"
-      role="status"
-      data-testid="undo-toast"
-    >
-      <span class="min-w-0 truncate">{{ t("app.deleted", { label: undo.item.label || t(`kind.${undo.item.kind}`) }) }}</span>
-      <Button variant="outline" size="sm" data-testid="undo" @click="runUndo">{{ t("undo") }}</Button>
-      <Button variant="ghost" size="icon-sm" :aria-label="t('dismiss')" :title="t('dismiss')" @click="dismissUndo">
-        <X :stroke-width="1.5" />
-      </Button>
-    </div>
+    <Toaster />
   </div>
 </template>
