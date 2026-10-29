@@ -158,6 +158,19 @@ const REASONS: Record<string, MessageKey> = {
   "too-many-waiting": "publish.error.tooManyWaiting",
 };
 
+/**
+ * What the catalog's "Its manifest is invalid: unknown viewport fields: wide; unknown translations.de fields: boards."
+ * names: the fields as `viewport.wide, translations.de.boards`, else its sentence as it is. Null for any other answer.
+ */
+export function refusedManifest(message: string): string | null {
+  const rest = /^Its manifest is invalid: (.+?)\.?$/.exec(message)?.[1];
+  if (!rest) return null;
+  const fields = [...rest.matchAll(/unknown (?:([\w.]+) )?fields: ([^;]+)/g)].flatMap(([, scope, names]) =>
+    names!.split(",").map((name) => `${scope ? `${scope}.` : ""}${name.trim()}`),
+  );
+  return fields.length > 0 ? fields.join(", ") : rest;
+}
+
 /** The prefixes the account holds as the service answers them; null for anything off. */
 function heldPrefixes(value: unknown): { held: AccountPrefix[]; max: number } | null {
   const raw = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
@@ -848,7 +861,11 @@ export class AccountClient {
     if (key) throw new UserError(key);
     // A zip the catalog refused comes with the catalog's own sentence about it.
     if ((json.reason === "invalid" || json.reason === "conflict") && typeof json.error === "string" && json.error.trim()) {
-      throw new UserError("publish.error.refused", { message: json.error.replace(/\s+/g, " ").trim().slice(0, 300) });
+      const message = json.error.replace(/\s+/g, " ").trim().slice(0, 300);
+      const manifest = root === "/v1/catalog" && json.reason === "invalid" ? refusedManifest(message) : null;
+      // Tavora checked this very manifest before uploading, so a refusal here means an older catalog.
+      if (manifest) throw new UserError("publish.error.serverOlder", { detail: manifest });
+      throw new UserError("publish.error.refused", { message });
     }
     // 503: switched off on the service; other 5xx: it failed; 404: a service that has no accounts at all yet.
     if (response.status >= 500 || response.status === 404) throw new UserError("account.error.unavailable");
