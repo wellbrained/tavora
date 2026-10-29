@@ -28,6 +28,7 @@ import {
   type IpcMainInvokeEvent,
   type OpenDialogOptions,
   type WebContents,
+  type WebContentsView,
 } from "electron";
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
@@ -38,9 +39,7 @@ import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
 import { UserError } from "./messages";
 import { buildReport, errorLog, timings } from "./diagnostics";
-import { INSTANCE_ID } from "./ids";
 import { popularGames } from "./catalog";
-import { LAYOUT_LIMITS } from "./layout";
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
@@ -198,14 +197,9 @@ import {
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import type { PanelOpenResult } from "@tavora/sdk/protocol";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
-import { layoutKey, ON_SCREEN_MS, OpenTimes, PanelCover } from "./panel-cover";
-
-interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+import { layoutKey, OpenTimes, PanelCover } from "./panel-cover";
+import { BrowserPanelView, ModulePanelView } from "./panel-view-adapters";
+import { clampRect, PanelViews, type PanelViewAdapter } from "./panel-views";
 
 /**
  * How long a workspace's panels may keep each other waiting when it opens; past it, every panel shows. Each page gives up on
@@ -215,8 +209,6 @@ interface Rect {
 const OPENING_CAP_MS = REVEAL_CAP_MS * 4;
 /** A development run with TAVORA_TIMINGS set logs how long workspaces and panels take to draw. */
 const timingLog = !app.isPackaged && process.env.TAVORA_TIMINGS ? (line: string) => console.log(`[tavora] ${line}`) : null;
-/** How long to wait for a still image of a panel before hiding it anyway. */
-const FREEZE_TIMEOUT_MS = 250;
 /** How long to wait for the host UI to show the panels' still images before hiding the panels anyway. */
 const FROZEN_SHOWN_CAP_MS = 300;
 /** How long a development folder's build must be quiet before its panels reload. */
@@ -352,14 +344,39 @@ const PROFILE_URL = `${HOST_SCHEME}://app/profile/`;
 
 export class Host {
   private readonly data: DataRegistry;
-  private readonly views = new Map<string, ModuleView | BrowserPanel>();
-  private readonly viewsByContents = new Map<number, ModuleView>();
-  /** Browser panels by the contents of their page, for requests the page makes. */
-  private readonly browsersByContents = new Map<number, BrowserPanel>();
-  /** Browser tabs opened from another tab, so the host UI docks them beside it. Only used when a panel is first placed. */
-  private readonly openedFrom = new Map<string, { instanceId: string; background: boolean }>();
-  /** Panels just added, or opened by another panel, whose page has not asked why it opened yet (panel.getLaunch). */
-  private readonly launches = new Map<string, PanelLaunch>();
+  /** Every open panel's native view, place, visibility and clean-up (panel-views.ts). */
+  private readonly panels = new PanelViews({
+    mount: (adapter) => this.window.contentView.addChildView(adapter.view as WebContentsView),
+    unmount: (adapter) => this.window.contentView.removeChildView(adapter.view as WebContentsView),
+    windowSize: () => this.window.getContentBounds(),
+    windowHidden: () => this.windowHidden,
+    floating: (instanceId) => this.floating(instanceId),
+    asking: (instanceId) => this.askingIn(instanceId),
+    releasing: (instanceId, forget) => {
+      this.tooltips.close(instanceId);
+      this.closeModuleMenu(instanceId);
+      // The panel is closing for good: its live state goes, whether or not it was running.
+      if (forget) this.gameOverlays?.forgetLive(instanceId);
+    },
+    stopLent: (instanceId) => {
+      if (this.gameOverlays?.hasPanel(instanceId)) this.gameOverlays.stopPanel(instanceId);
+    },
+    dialogClosed: () => {
+      if (!this.window.isDestroyed()) this.window.webContents.send("host:panel-dialog", null);
+    },
+    openingEnded: (ended) => this.openingEnded(ended),
+    placing: () => this.tooltips?.ensureVisible(),
+    overlayOpening: () => {
+      this.tooltips.close();
+      // The dialog has to be seen; the panels' pictures stand in for them, so the cover goes.
+      this.cover.cancel();
+    },
+    frozen: (images) => this.window.webContents.send("host:frozen", images),
+    frozenOnScreen: () => this.frozenOnScreen(),
+    windowGone: () => this.window.isDestroyed(),
+    shownAgain: (views) => this.logDraws(views, "dialog closed"),
+    ...(timingLog ? { log: timingLog } : {}),
+  });
   /**
    * A panel that panels.open asked to switch could not (it kept its content): the host UI offers to open the
    * content in a new panel instead (navigation-choice). What opens is kept here, never taken from the answer.
@@ -429,8 +446,6 @@ export class Host {
   /** A module's question about its leaderboards (leaderboards.show), shown in the panel that asked until the user answers. */
   private pendingLeaderboard: { id: number; instanceId: string; moduleId: string; question: LeaderboardQuestion; resolve(yes: boolean): void } | null = null;
   private nextLeaderboardAsk = 1;
-  /** Panels added while their module still misses access it needs: they ask first and start once allowed (questionOf). */
-  private readonly awaiting = new Set<string>();
   private readonly gameWatcher = new GameWatcher({
     entries: () => liveWorkspaces(this.library),
     findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
@@ -440,23 +455,12 @@ export class Host {
   });
   /** Where modules keep their pictures. */
   private readonly files: ModuleFilesFolder;
-  /** Where the host UI shows each visible panel, in window content coordinates. */
-  private panelBounds = new Map<string, Rect>();
-  /** True while the host UI shows a menu, dialog or drag that module views would cover. */
-  private overlay = false;
-  /** Counts overlay changes, so a slow freeze does not hide panels after the overlay closed. */
-  private overlayChanges = 0;
   /** True while a dialog backdrop dims the host page, so the window buttons are dimmed too. */
   private dimmed = false;
   /** True once the window has closed. */
   private windowClosed = false;
   /** True while the window is minimized or hidden. */
   private windowHidden = false;
-  /**
-   * Set while a workspace just opened and its panels load: none is shown until every visible one has its data, so
-   * the workspace appears at once rather than panel by panel.
-   */
-  private opening: { startedAt: number; timer: ReturnType<typeof setTimeout>; layout: string } | null = null;
   /** Covers the workspace while it opens, until every panel has drawn (panel-cover.ts). */
   private cover!: PanelCover;
   /** How long each workspace took to open here, so the cover knows whether to show the fire from the start. */
@@ -551,7 +555,7 @@ export class Host {
     });
     this.aiUsage = Host.aiUsageService(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:ai-usage", view);
-      for (const panel of this.views.values()) if (panel instanceof ModuleView) panel.notifyAiUsageAccounts();
+      for (const panel of this.moduleViews()) panel.notifyAiUsageAccounts();
     });
     this.account = Host.accountClient(options, () => this.language, { get: () => this.profileData(), apply: (remote) => this.applyProfile(remote) }, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
@@ -625,10 +629,10 @@ export class Host {
       this.window.once("ready-to-show", () => this.window.show());
     }
     this.tooltips=new TooltipWindow({parent:this.window,preload:path.join(path.dirname(options.modulePreload),"tooltip.cjs"),hidden:!!options.hidden,theme:()=>this.currentTheme,language:()=>this.language,
-      closed:(owner,id)=>{const view=this.views.get(owner);if(view instanceof ModuleView)view.tooltipClosed(id);},
+      closed:(owner,id)=>{this.moduleView(owner)?.tooltipClosed(id);},
       source:owner=>{
-        const view=this.views.get(owner),bounds=this.panelBounds.get(owner);
-        if(!(view instanceof ModuleView)||!bounds||this.overlay||this.opening||this.windowHidden||!view.revealed||this.floating(owner))return undefined;
+        const view=this.moduleView(owner),bounds=this.panels.boundsOf(owner);
+        if(!view||!bounds||!this.panels.isShowing(owner))return undefined;
         const module=this.modules.get(view.moduleId);if(!module)return undefined;
         return{root:module.root,name:this.shown(module.manifest).name,bounds};
       }});
@@ -896,9 +900,9 @@ export class Host {
     const workspace = this.workspace;
     if (!workspace) return;
     for (const record of this.records(workspace.id)) {
-      const open = this.views.has(record.instanceId);
+      const open = this.panels.has(record.instanceId);
       const missing = this.panelTypeOf(record) === undefined;
-      if (open && missing) this.destroyView(record.instanceId);
+      if (open && missing) this.panels.close(record.instanceId);
       else if (!open && !missing) this.createView(record, workspace);
     }
     this.workspaces.save();
@@ -1237,17 +1241,17 @@ export class Host {
 
   /** Starts a module's open panels again, so they load a new version or connect with a new grant. */
   private reloadModuleViews(moduleId: string): void {
-    for (const view of this.views.values()) if (view instanceof ModuleView && view.moduleId === moduleId) view.reload();
+    for (const view of this.moduleViews()) if (view.moduleId === moduleId) view.reload();
     // Panels that asked before they could run start now, in the workspace shown (the others start when it opens).
     const workspace = this.workspace;
     if (!workspace) return;
     if (this.needsAnswer(moduleId)) return;
     for (const record of this.records(workspace.id)) {
-      if (record.moduleId !== moduleId || !this.awaiting.delete(record.instanceId)) continue;
+      if (record.moduleId !== moduleId || !this.panels.stopAwaiting(record.instanceId)) continue;
       this.createView(record, workspace, performance.now());
     }
     // The window already said where these panels are; put the new pages there now, so they load and show.
-    this.applyBounds();
+    this.panels.applyBounds();
     this.pushState();
   }
 
@@ -1267,8 +1271,8 @@ export class Host {
    * keeps running with what was granted and offers a review instead. `records` are the panels of the panel's workspace.
    */
   private questionOf(record: InstanceRecord, records: readonly InstanceRecord[]): "ask" | "wait" | null {
-    if (this.awaiting.has(record.instanceId)) {
-      const asking = records.find((item) => item.moduleId === record.moduleId && this.awaiting.has(item.instanceId));
+    if (this.panels.isAwaiting(record.instanceId)) {
+      const asking = records.find((item) => item.moduleId === record.moduleId && this.panels.isAwaiting(item.instanceId));
       return asking?.instanceId === record.instanceId ? "ask" : "wait";
     }
     // The leaderboards' question shows in the panel that asked for it.
@@ -1545,7 +1549,7 @@ export class Host {
     this.syncNativeTheme();
     this.window.setBackgroundColor(next.colors.background);
     this.applyTitleBarOverlay();
-    for (const view of this.views.values()) view.applyTheme(next);
+    for (const view of this.nativePanels()) view.applyTheme(next);
   }
 
   private async reloadThemes(): Promise<void> {
@@ -1590,7 +1594,7 @@ export class Host {
       chrome: process.versions.chrome ?? "?",
       locale: app.getLocale(),
       workspaces: Object.keys(this.library.workspaces).length,
-      panels: this.views.size,
+      panels: this.panels.size,
       updateLog: log.split("\n").filter(Boolean).slice(-30),
       errors: errorLog.recent(),
       timings: timings.summary(),
@@ -1628,29 +1632,29 @@ export class Host {
     // Module side: the only messages a module renderer can send. Identity is
     // looked up from the sending webContents, never taken from the message.
     ipcMain.on("tavora:hello", (event: IpcMainEvent) => {
-      const view = this.viewsByContents.get(event.sender.id);
+      const view = this.moduleByContents(event.sender.id);
       if (!view || !event.senderFrame || event.senderFrame.parent !== null) return;
       view.connect();
     });
     ipcMain.on("tavora:gesture", (event: IpcMainEvent) => {
       if (event.senderFrame?.parent !== null) return;
-      this.viewsByContents.get(event.sender.id)?.noteGesture();
+      this.moduleByContents(event.sender.id)?.noteGesture();
     });
     ipcMain.on("tavora:pointer",(event:IpcMainEvent,point:unknown)=>{
       if(event.senderFrame?.parent!==null)return;
-      this.viewsByContents.get(event.sender.id)?.notePointer(point);
+      this.moduleByContents(event.sender.id)?.notePointer(point);
     });
     ipcMain.on("tavora:framed", (event: IpcMainEvent, requestId: unknown) => {
       if (event.senderFrame?.parent !== null) return;
-      this.viewsByContents.get(event.sender.id)?.framed(requestId);
+      this.moduleByContents(event.sender.id)?.framed(requestId);
     });
     ipcMain.on("tavora:frame-seen", (event: IpcMainEvent, visibility: unknown) => {
       if (event.senderFrame?.parent !== null) return;
-      this.viewsByContents.get(event.sender.id)?.frameSeen(visibility);
+      this.moduleByContents(event.sender.id)?.frameSeen(visibility);
     });
     ipcMain.on("tavora:pong", (event: IpcMainEvent) => {
       if (event.senderFrame?.parent !== null) return;
-      this.viewsByContents.get(event.sender.id)?.pong();
+      this.moduleByContents(event.sender.id)?.pong();
     });
 
     // Host UI side: only the host window's main frame may call these.
@@ -1765,13 +1769,16 @@ export class Host {
       return this.steamShareIcons(appids);
     });
     ipcMain.on("host:panel-bounds", (event, bounds: unknown) => {
-      if (fromHost(event)) this.setPanelBounds(bounds);
+      if (fromHost(event)) {
+        this.panels.place(bounds);
+        this.openPendingDialog();
+      }
     });
     ipcMain.on("host:workspace-bounds", (event, bounds: unknown) => {
       if (fromHost(event)) this.cover.setBounds(this.windowRect(bounds));
     });
     ipcMain.on("host:overlay", (event, open: unknown) => {
-      if (fromHost(event) && typeof open === "boolean") void this.setOverlay(open);
+      if (fromHost(event) && typeof open === "boolean") void this.panels.freeze(open);
     });
     ipcMain.on("host:frozen-shown", (event) => {
       if (fromHost(event)) this.frozenShown?.();
@@ -1786,10 +1793,10 @@ export class Host {
       if (fromHost(event)) this.answerModuleMenu(answer);
     });
     ipcMain.on("host:panel-dialog-bounds", (event, raw: unknown) => {
-      if (fromHost(event)) this.placePanelDialog(raw);
+      if (fromHost(event)) this.panels.placeDialog(raw);
     });
     ipcMain.on("host:panel-dialog-close", (event) => {
-      if (fromHost(event)) this.closePanelDialog();
+      if (fromHost(event)) this.panels.closeDialog();
     });
   }
 
@@ -1803,7 +1810,7 @@ export class Host {
     });
     const hidden = (value: boolean) => () => {
       this.windowHidden = value;
-      this.applyBounds();
+      this.panels.applyBounds();
     };
     // The host page crashed or ran out of memory: it loads again once. A second crash within a minute loads
     // the error screen instead (?crashed=, see renderer/main.ts), so a page that keeps crashing isn't a loop.
@@ -1825,11 +1832,8 @@ export class Host {
       // The overlay windows (and the keys for arranging) go with the main window; they would keep Tavora running.
       this.closeOverlayWindows();
       void this.gameOverlays.shutdown().catch((error: unknown) => console.error("[tavora]", error));
-      for (const view of this.views.values()) view.dispose();
+      this.panels.disposeAll();
       this.cover.dispose();
-      this.views.clear();
-      this.viewsByContents.clear();
-      this.browsersByContents.clear();
       this.discord.dispose();
       this.systemInfo.dispose();
       this.connection.dispose();
@@ -2144,7 +2148,7 @@ export class Host {
       "leaderboard-answer": (action) => this.answerLeaderboard(action.id, action.allow),
       "set-language": saved((action) => {
         this.library.language = action.language;
-        for (const view of this.views.values()) view.applyLanguage(this.language);
+        for (const view of this.nativePanels()) view.applyLanguage(this.language);
       }),
       "set-profile-ranks": saved((action) => {
         this.library.profileRanks = { hidden: action.hidden ?? this.library.profileRanks.hidden, period: action.period ?? this.library.profileRanks.period };
@@ -2276,8 +2280,8 @@ export class Host {
       "choose-panel-type": (action) => this.choosePanelType(action.instanceId, action.panelType),
       "close-panel": (action) => this.closePanel(action.instanceId),
       "remove-module-from-workspace": (action) => this.removeModuleFromWorkspace(action.moduleId),
-      "reload-panel": (action) => this.views.get(action.instanceId)?.reload(),
-      "stop-panel": (action) => this.views.get(action.instanceId)?.stop(),
+      "reload-panel": (action) => this.nativePanel(action.instanceId)?.reload(),
+      "stop-panel": (action) => this.nativePanel(action.instanceId)?.stop(),
       "show-panel-in-game": (action) => this.showPanelInGame(action.instanceId),
       "stop-panel-in-game": (action) => this.gameOverlays.stopPanel(action.instanceId, action.setup),
       "save-layout": (action) => this.workspaces.saveLayout(this.currentWorkspaceId(), action.layout),
@@ -2499,15 +2503,12 @@ export class Host {
       if (!entry || entry.trashedAt) return false;
       const record = this.records(entry.id).find((item) => (panel.instanceId ? item.instanceId === panel.instanceId : item.moduleId === panel.moduleId));
       if (!record) return false;
-      if (this.screen === "overlay" && !this.views.has(record.instanceId) && this.panelTypeOf(record) !== undefined) {
+      if (this.screen === "overlay" && !this.panels.has(record.instanceId) && this.panelTypeOf(record) !== undefined) {
         this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
       }
-      return this.views.has(record.instanceId);
+      return this.panels.has(record.instanceId);
     });
   }
-
-  /** Panels run for the started overlays (every item of every setup), from any workspace and whether or not it was opened; they stop with Stop. */
-  private readonly overlayKeep = new Set<string>();
 
   /** Started: the panels behind every overlay and panel item run now. Stopped: they are let go of, except those of the workspace shown. */
   private syncOverlayPanels(): void {
@@ -2521,16 +2522,16 @@ export class Host {
           const record = this.records(entry.id).find((item) => (info.ref.kind === "panel" ? item.instanceId === info.ref.instanceId : item.moduleId === info.moduleId));
           if (!record || this.panelTypeOf(record) === undefined || record.moduleId === BROWSER_MODULE_ID) continue;
           wanted.add(record.instanceId);
-          this.overlayKeep.add(record.instanceId);
-          if (!this.views.has(record.instanceId)) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+          this.panels.keepRunning(record.instanceId);
+          if (!this.panels.has(record.instanceId)) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
         }
       }
     }
-    for (const instanceId of [...this.overlayKeep]) {
+    for (const instanceId of this.panels.keptIds()) {
       if (wanted.has(instanceId)) continue;
-      this.overlayKeep.delete(instanceId);
+      this.panels.stopKeeping(instanceId);
       const shownHere = this.workspace && this.records(this.workspace.id).some((record) => record.instanceId === instanceId);
-      if (!shownHere && !this.floating(instanceId)) this.destroyView(instanceId, false);
+      if (!shownHere && !this.floating(instanceId)) this.panels.release(instanceId);
     }
   }
 
@@ -2890,7 +2891,7 @@ export class Host {
   private async forgetWorkspaceData(workspace: WorkspaceEntry): Promise<void> {
     const records = this.workspaces.forgetWorkspace(workspace.id);
     // A panel of this workspace that was over its game closes with it.
-    for (const record of records) this.destroyView(record.instanceId);
+    for (const record of records) this.panels.close(record.instanceId);
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetWorkspace(workspace.id);
     this.streaming.forgetWorkspace(workspace.id);
@@ -2953,9 +2954,9 @@ export class Host {
     }
     const record: InstanceRecord = { instanceId: randomUUID(), moduleId, ...(panelType ? { panelType } : {}) };
     this.workspaces.openPanel(workspace.id, record);
-    if (this.needsAnswer(moduleId)) this.awaiting.add(record.instanceId);
-    if (openedFrom) this.openedFrom.set(record.instanceId, openedFrom);
-    this.launches.set(record.instanceId, options.launch ?? { reason: "add" });
+    if (this.needsAnswer(moduleId)) this.panels.setAwaiting(record.instanceId);
+    if (openedFrom) this.panels.setOpenedFrom(record.instanceId, openedFrom);
+    this.panels.setLaunch(record.instanceId, options.launch ?? { reason: "add" });
     this.createView(record, workspace, performance.now());
     return record.instanceId;
   }
@@ -2984,7 +2985,7 @@ export class Host {
       const browserId = this.records(workspace.id)
         .map((record) => record.instanceId)
         .reverse()
-        .find((id) => this.views.get(id) instanceof BrowserPanel);
+        .find((id) => this.panels.get(id) instanceof BrowserPanelView);
       if (browserId) {
         const panel = this.browser(browserId);
         if (panel.blank) panel.restore(url);
@@ -3095,19 +3096,15 @@ export class Host {
       this.pendingLeaderboard.resolve(false);
       this.pendingLeaderboard = null;
     }
-    this.openedFrom.delete(instanceId);
-    this.awaiting.delete(instanceId);
-    this.launches.delete(instanceId);
-    this.destroyView(instanceId);
-    this.panelBounds.delete(instanceId);
+    this.panels.close(instanceId);
     void this.data.panelState.remove(instanceId).catch((error: unknown) => console.error("[tavora]", error));
   }
 
   // ── Browser ──────────────────────────────────────────────────────────
 
   private browser(instanceId: string): BrowserPanel {
-    const view = this.views.get(instanceId);
-    if (!(view instanceof BrowserPanel)) throw new WorkspaceError("error.panelClosed");
+    const view = this.browserPanel(instanceId);
+    if (!view) throw new WorkspaceError("error.panelClosed");
     return view;
   }
 
@@ -3142,7 +3139,7 @@ export class Host {
 
   /** A site moved between lists: open pages of it switch sessions and ad blocking applies from the next request. */
   private browserSitesChanged(): void {
-    for (const view of this.views.values()) if (view instanceof BrowserPanel) view.siteSettingsChanged();
+    for (const view of this.browserPanels()) view.siteSettingsChanged();
   }
 
   /** Built once: every browser session shares the ad blocker and the lookups. */
@@ -3150,10 +3147,10 @@ export class Host {
     return (this.browserHooks ??= {
       userAgent: browserUserAgent(process.platform, process.versions.chrome ?? "0"),
       ads: Host.adBlocker(),
-      topUrlOf: (id) => (id === undefined ? null : (this.browsersByContents.get(id)?.topUrl ?? null)),
+      topUrlOf: (id) => (id === undefined ? null : (this.browserByContents(id)?.topUrl ?? null)),
       adblockOn: (topUrl) => !this.isSiteListed("adblockOff", topUrl),
-      onAdBlocked: (id) => id !== undefined && this.browsersByContents.get(id)?.adBlocked(),
-      onDownloadRefused: (contents) => contents && this.browsersByContents.get(contents.id)?.downloadRefused(),
+      onAdBlocked: (id) => id !== undefined && this.browserByContents(id)?.adBlocked(),
+      onDownloadRefused: (contents) => contents && this.browserByContents(contents.id)?.downloadRefused(),
     });
   }
 
@@ -3342,7 +3339,7 @@ export class Host {
     await ses.clearStorageData();
     await ses.clearCache();
     await ses.clearAuthCache();
-    for (const view of this.views.values()) if (view instanceof BrowserPanel) view.reload();
+    for (const view of this.browserPanels()) view.reload();
   }
 
   // ── Layouts and snapshots ────────────────────────────────────────────
@@ -3359,7 +3356,7 @@ export class Host {
     const { opened, closed } = this.workspaces.applySnapshot(this.currentWorkspaceId(), snapshotId);
     for (const record of closed) this.closeView(record.instanceId);
     for (const record of opened) {
-      this.launches.set(record.instanceId, { reason: "add" });
+      this.panels.setLaunch(record.instanceId, { reason: "add" });
       this.createView(record, this.workspace!);
     }
   }
@@ -3372,40 +3369,24 @@ export class Host {
     for (const record of this.records(workspace.id)) this.createView(record, workspace);
     this.workspaces.relayout();
     // Only this workspace's own module pages are waited for: a panel in the in-game layer runs on from another workspace.
-    if (this.records(workspace.id).some((record) => this.views.get(record.instanceId) instanceof ModuleView && !this.floating(record.instanceId))) {
-      this.endOpening();
+    if (this.records(workspace.id).some((record) => this.moduleView(record.instanceId) && !this.floating(record.instanceId))) {
       const layout = layoutKey(workspace.id, this.records(workspace.id));
-      this.opening = { startedAt: performance.now(), timer: setTimeout(() => this.endOpening(true), OPENING_CAP_MS), layout };
+      this.panels.startOpening(OPENING_CAP_MS, layout);
       this.cover.start(this.currentTheme, translate(this.language, "panel.loading", { name: workspace.displayName }), this.openTimes.estimate(layout));
       // The host UI covers the panels from now on, not each panel with its own loader.
       this.pushStateSoon();
     }
   }
 
-  /** The workspace has opened once the host UI placed its panels and every visible module page has its data. */
-  private openingDone(): boolean {
-    if (this.panelBounds.size === 0) return false;
-    for (const instanceId of this.panelBounds.keys()) {
-      const view = this.views.get(instanceId);
-      if (view instanceof ModuleView && !view.revealed) return false;
-    }
-    return true;
-  }
-
-  /** Ends the wait for a workspace's panels; `show` places them and tells the host UI, which takes its loading cover away. */
-  private endOpening(show = false): void {
-    if (!this.opening) return;
-    const { startedAt, timer, layout } = this.opening;
-    clearTimeout(timer);
+  /** The wait for a workspace's panels ended; `show`: they are placed now, and the host UI takes its loading cover away. */
+  private openingEnded({ show, startedAt, tag: layout }: { show: boolean; startedAt: number; tag: string }): void {
     const took = performance.now() - startedAt;
-    this.opening = null;
     const opening = ++this.openings;
     if (!show) return this.cover.cancel();
     timings.record("workspace-open", took);
-    this.applyBounds();
     this.pushState();
     // The panels are shown now, under the cover; it goes once every one has drawn.
-    const shown = this.panelsInSlots();
+    const shown = this.panels.inSlots();
     this.logDraws(shown, "workspace open");
     void Promise.all(shown.map((view) => view.drawn)).then(() => {
       if (opening !== this.openings || !this.cover.covering) return;
@@ -3420,10 +3401,10 @@ export class Host {
   /** openedAt is when the user asked for the panel; its time to a loaded page is measured from there. */
   private createView(record: InstanceRecord, workspace: TavoraWorkspace, openedAt?: number): void {
     // Its panel is in the in-game layer and kept running there while another workspace was shown: it comes back when the layer closes.
-    if (this.views.has(record.instanceId)) return;
+    if (this.panels.has(record.instanceId)) return;
     if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, workspace);
     // It was added while its module still asks (questionOf); the page starts once the user allows (reloadModuleViews).
-    if (this.awaiting.has(record.instanceId)) return;
+    if (this.panels.isAwaiting(record.instanceId)) return;
     const panelType = this.panelTypeOf(record);
     // Its type is gone: the slot says so and offers another type; nothing runs.
     if (panelType === undefined) return;
@@ -3445,7 +3426,7 @@ export class Host {
       ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
       onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, workspace.id),
       onReveal: () => {
-        this.applyBounds();
+        this.panels.applyBounds();
         this.pushStateSoon();
       },
       onDrawn: () => this.pushStateSoon(),
@@ -3469,7 +3450,7 @@ export class Host {
       openPanel: (type, content) => this.openRelatedPanel(record, type, content),
       setLive: (state) => this.gameOverlays.setLive(record.instanceId, module.owner, state),
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
-      setDialog: (open, size) => (open ? this.openPanelDialog(record.instanceId, module, size) : this.closePanelDialog(record.instanceId)),
+      setDialog: (open, size) => (open ? this.openPanelDialog(record.instanceId, module, size) : this.panels.closeDialog(record.instanceId)),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
@@ -3496,15 +3477,17 @@ export class Host {
         this.pushStateSoon();
       },
     });
-    const contentsId = view.webContentsId;
-    this.views.set(record.instanceId, view);
-    this.viewsByContents.set(contentsId, view);
-    view.view.webContents.once("destroyed", () => this.viewsByContents.delete(contentsId));
-    this.watchShortcuts(view.view.webContents);
-    // Hidden and paused until the host UI says where the panel goes.
-    view.view.setVisible(false);
-    view.suspend();
-    this.window.contentView.addChildView(view.view);
+    const adapter = new ModulePanelView(view);
+    this.panels.open(record, () => ({
+      adapter,
+      start: () => {
+        const contentsId = view.webContentsId;
+        this.panels.bindContents(adapter, contentsId);
+        view.view.webContents.once("destroyed", () => this.panels.unbindContents(adapter, contentsId));
+        this.watchShortcuts(view.view.webContents);
+        this.window.contentView.addChildView(view.view);
+      },
+    }));
   }
 
   /**
@@ -3512,11 +3495,8 @@ export class Host {
    * what it last showed. A new panel keeps its reason until its page first asks.
    */
   private launchOf(record: InstanceRecord): PanelLaunch {
-    const launch = this.launches.get(record.instanceId);
-    if (launch) {
-      this.launches.delete(record.instanceId);
-      return launch;
-    }
+    const launch = this.panels.takeLaunch(record.instanceId);
+    if (launch) return launch;
     return { reason: "restore", content: record.content ? { ...record.content } : null };
   }
 
@@ -3563,7 +3543,7 @@ export class Host {
   private panelsOfType(workspaceId: string, moduleId: string, type: string | undefined) {
     const usedAt = (view: unknown) => (view instanceof ModuleView ? view.usedAt : 0);
     return this.records(workspaceId)
-      .map((record, order) => ({ record, order, view: this.views.get(record.instanceId) }))
+      .map((record, order) => ({ record, order, view: this.nativePanel(record.instanceId) }))
       .filter((item) => item.record.moduleId === moduleId && item.record.panelType === type)
       .sort((a, b) => usedAt(b.view) - usedAt(a.view) || b.order - a.order);
   }
@@ -3592,8 +3572,8 @@ export class Host {
 
   /** Brings a panel to the front of its dock group; it counts as used. */
   private showPanel(instanceId: string): void {
-    const view = this.views.get(instanceId);
-    if (view instanceof ModuleView) view.usedAt = Date.now();
+    const view = this.moduleView(instanceId);
+    if (view) view.usedAt = Date.now();
     this.window.webContents.send("host:shortcut", `panel:${instanceId}`);
   }
 
@@ -3629,18 +3609,18 @@ export class Host {
       adblockOn: (url) => !this.isSiteListed("adblockOff", url),
       swap: (previous, next) => {
         if (previous) {
-          this.browsersByContents.delete(previous.webContents.id);
+          this.panels.unbindContents(adapter, previous.webContents.id);
           this.window.contentView.removeChildView(previous);
         }
         const id = next.webContents.id;
-        this.browsersByContents.set(id, panel);
-        next.webContents.once("destroyed", () => this.browsersByContents.get(id) === panel && this.browsersByContents.delete(id));
+        this.panels.bindContents(adapter, id);
+        next.webContents.once("destroyed", () => this.panels.unbindContents(adapter, id));
         this.watchShortcuts(next.webContents);
         this.window.contentView.addChildView(next);
-        if (previous) this.applyBounds();
+        if (previous) this.panels.applyBounds();
       },
       onAddress: (url) => {
-        if (this.views.get(instanceId) !== panel) return;
+        if (this.panels.get(instanceId) !== adapter) return;
         void this.data.panelState.set(instanceId, { url }).catch((error: unknown) => console.error("[tavora]", error));
       },
       onOpenTab: (url, background) => {
@@ -3663,11 +3643,11 @@ export class Host {
       },
       onChange: () => this.pushState(),
     });
-    this.views.set(instanceId, panel);
-    panel.attach();
+    const adapter = new BrowserPanelView(panel);
+    this.panels.open(record, () => ({ adapter, start: () => panel.attach() }));
     // The page the panel showed last time opens again.
     void this.data.panelState.get(instanceId).then(
-      (saved) => this.views.get(instanceId) === panel && panel.restore((saved as { url?: unknown } | null)?.url),
+      (saved) => this.panels.get(instanceId) === adapter && panel.restore((saved as { url?: unknown } | null)?.url),
       () => undefined,
     );
   }
@@ -3677,7 +3657,7 @@ export class Host {
     contents.on("before-input-event", (event, input) => {
       if(input.key==="Escape"&&this.tooltips?.state.current){event.preventDefault();this.tooltips.close();return;}
       // Typing in a panel over the game is the panel's: Tavora's shortcuts don't pull the keyboard away to the main window.
-      if (this.viewsByContents.get(contents.id)?.isOverGame) return;
+      if (this.moduleByContents(contents.id)?.isOverGame) return;
       const shortcut = shortcutFor(input);
       if (!shortcut) return;
       event.preventDefault();
@@ -3698,7 +3678,7 @@ export class Host {
     if (this.purging.has(key)) return;
     this.purging.add(key);
     try {
-      const views = [...this.views.values()].filter((view): view is ModuleView => view instanceof ModuleView && view.moduleId === moduleId);
+      const views = this.moduleViews().filter((view) => view.moduleId === moduleId);
       const ses = views[0]?.view.webContents.session;
       // The renderers must be gone first: one still writing would fill the storage
       // again, and a crash reported after the reload would leave the panel crashed.
@@ -3718,37 +3698,62 @@ export class Host {
     }
   }
 
-  /** `forget`: the panel is closing for good, so it is no longer shown in the game; not when only its workspace is left. */
-  private destroyView(instanceId: string, forget = true): void {
-    this.tooltips.close(instanceId);
-    this.closeModuleMenu(instanceId);
-    // The panel is closing for good: its live state goes, whether or not it was running.
-    if (forget) this.gameOverlays?.forgetLive(instanceId);
-    if (forget) this.overlayKeep.delete(instanceId);
-    const view = this.views.get(instanceId);
-    if (!view) return;
-    this.views.delete(instanceId);
-    this.viewsByContents.delete(view.webContentsId);
-    this.browsersByContents.delete(view.webContentsId);
-    if (this.panelDialog?.instanceId === instanceId) this.closePanelDialog();
-    // A panel in the layer is let go of by its window first (the window never closes the page, this does).
-    if (forget && view instanceof ModuleView && this.gameOverlays?.hasPanel(instanceId)) this.gameOverlays.stopPanel(instanceId);
-    this.window.contentView.removeChildView(view.view);
-    view.dispose();
-  }
-
   /** Whether a panel is over the game now (the layer is open): its view is in an overlay window and the workspace slot only says so. */
   private floating(instanceId: string): boolean {
     return this.gameOverlays?.panelOpen(instanceId) ?? false;
   }
 
   private closeAllViews(): void {
-    this.closePanelDialog();
-    this.endOpening();
     this.cover.cancel();
     // A panel in the layer goes on running there, also while another workspace or Home is shown.
-    for (const instanceId of [...this.views.keys()]) if (!this.floating(instanceId) && !this.overlayKeep.has(instanceId)) this.destroyView(instanceId, false);
-    this.panelBounds.clear();
+    this.panels.closeAll();
+  }
+
+  /** Whether the panel shows a question in its place now (questionOf): its page waits, hidden, until it is answered. */
+  private askingIn(instanceId: string): boolean {
+    const shown = this.workspaceId ? this.records(this.workspaceId) : [];
+    const record = shown.find((item) => item.instanceId === instanceId);
+    return !!record && this.questionOf(record, shown) === "ask";
+  }
+
+  /** A panel's module view; undefined for a Browser panel or when it has none. */
+  private moduleView(instanceId: string): ModuleView | undefined {
+    const view = this.panels.get(instanceId);
+    return view instanceof ModulePanelView ? view.panel : undefined;
+  }
+
+  private moduleViews(): ModuleView[] {
+    return this.panels.adapters().flatMap((view) => (view instanceof ModulePanelView ? [view.panel] : []));
+  }
+
+  /** The module view whose page has these contents (what a page's own requests are judged by). */
+  private moduleByContents(contentsId: number): ModuleView | undefined {
+    const view = this.panels.byWebContents(contentsId);
+    return view instanceof ModulePanelView ? view.panel : undefined;
+  }
+
+  private browserPanel(instanceId: string): BrowserPanel | undefined {
+    const view = this.panels.get(instanceId);
+    return view instanceof BrowserPanelView ? view.panel : undefined;
+  }
+
+  private browserPanels(): BrowserPanel[] {
+    return this.panels.adapters().flatMap((view) => (view instanceof BrowserPanelView ? [view.panel] : []));
+  }
+
+  /** The Browser panel whose page has these contents (what the page's requests are judged by). */
+  private browserByContents(contentsId: number): BrowserPanel | undefined {
+    const view = this.panels.byWebContents(contentsId);
+    return view instanceof BrowserPanelView ? view.panel : undefined;
+  }
+
+  private nativePanel(instanceId: string): ModuleView | BrowserPanel | undefined {
+    const view = this.panels.get(instanceId);
+    return view instanceof ModulePanelView || view instanceof BrowserPanelView ? view.panel : undefined;
+  }
+
+  private nativePanels(): (ModuleView | BrowserPanel)[] {
+    return this.panels.adapters().flatMap((view) => (view instanceof ModulePanelView || view instanceof BrowserPanelView ? [view.panel] : []));
   }
 
   /**
@@ -3758,9 +3763,8 @@ export class Host {
   private showPanelInGame(instanceId: string): void {
     const workspace = this.workspace;
     const record = workspace && this.records(workspace.id).find((item) => item.instanceId === instanceId);
-    const view = this.views.get(instanceId);
     const module = record && this.modules.get(record.moduleId);
-    if (!workspace || !record || !module || !(view instanceof ModuleView)) throw new WorkspaceError("error.panelClosed");
+    if (!workspace || !record || !module || !this.moduleView(instanceId)) throw new WorkspaceError("error.panelClosed");
     if (!this.canShowInGame(record)) throw new WorkspaceError("error.panelNotInGame");
     const viewport = this.panelTypeOf(record)?.viewport ?? this.shown(module.manifest).viewport;
     const result = this.gameOverlays.showPanel(
@@ -3772,8 +3776,8 @@ export class Host {
 
   /** The name a panel's tab shows, for Settings > Overlays; null once the panel is gone. */
   private panelName(instanceId: string): string | null {
-    const view = this.views.get(instanceId);
-    if (view instanceof ModuleView) {
+    const view = this.moduleView(instanceId);
+    if (view) {
       const module = this.modules.get(view.moduleId);
       return view.typeName ?? (module ? this.shown(module.manifest).name : null);
     }
@@ -3795,14 +3799,13 @@ export class Host {
 
   /** The view of a panel to put in a window: its own when its workspace is shown, else one made for the layer and closed when it comes back. */
   private panelViewForLayer(instanceId: string, workspaceId: string): ModuleView | null {
-    const existing = this.views.get(instanceId);
-    if (existing) return existing instanceof ModuleView ? existing : null;
+    const existing = this.panels.get(instanceId);
+    if (existing) return existing instanceof ModulePanelView ? existing.panel : null;
     const record = this.recordOf(instanceId, workspaceId);
     const entry = this.library.workspaces[workspaceId];
     if (!record || !entry || record.moduleId === BROWSER_MODULE_ID) return null;
     this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
-    const made = this.views.get(instanceId);
-    return made instanceof ModuleView ? made : null;
+    return this.moduleView(instanceId) ?? null;
   }
 
   /** The overlay window for a panel that moves over its game: the panel's own view goes into it, and no copy is made. */
@@ -3830,119 +3833,15 @@ export class Host {
 
   /** A panel's overlay window let go of it (the layer closed, Stop showing in game, overlays turned off): back into its workspace slot. */
   private panelReturned(instanceId: string, workspaceId: string): void {
-    const view = this.views.get(instanceId);
-    // Not here any more: the panel itself is closing (destroyView), or Tavora is.
-    if (!(view instanceof ModuleView) || this.windowClosed || this.window.isDestroyed() || view.view.webContents.isDestroyed()) return;
+    const view = this.moduleView(instanceId);
+    // Not here any more: the panel itself is closing, or Tavora is.
+    if (!view || this.windowClosed || this.window.isDestroyed() || view.view.webContents.isDestroyed()) return;
     // The slot it comes back to is not on screen: the panel closes like any panel of a workspace that is left, and opens again with its workspace.
-    if (this.workspaceId !== workspaceId) return this.destroyView(instanceId, false);
-    this.window.contentView.addChildView(view.view);
-    view.setVisible(false);
-    // Laid out right now: its overlay window still counts as holding it while this runs, so applyBounds would skip it
-    // and it would wait for the next bounds push from the workspace.
-    this.layOut(instanceId, view);
-    this.applyBounds();
+    if (this.workspaceId !== workspaceId) return this.panels.release(instanceId);
+    // Laid out right now: its overlay window still counts as holding it while this runs.
+    this.panels.returned(instanceId);
     this.pushStateSoon();
     this.openPendingDialog();
-  }
-
-  private forEachView(fn: (view: ModuleView | BrowserPanel) => void): void {
-    for (const view of this.views.values()) fn(view);
-  }
-
-  /** Takes the visible panels' positions from the host UI. Panels it leaves out are hidden. */
-  private setPanelBounds(raw: unknown): void {
-    if (!Array.isArray(raw) || raw.length > LAYOUT_LIMITS.panels) return;
-    const { width, height } = this.window.getContentBounds();
-    const bounds = new Map<string, Rect>();
-    for (const item of raw as Partial<Rect & { instanceId: unknown; maximized: unknown }>[]) {
-      const id = item?.instanceId;
-      // A panel that waits for a permission answer has no page yet; its place is kept for when the page starts.
-      if (typeof id !== "string" || !INSTANCE_ID.test(id) || (!this.views.has(id) && !this.awaiting.has(id))) continue;
-      const numbers = [item.x, item.y, item.width, item.height];
-      if (!numbers.every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0)) continue;
-      const x = Math.min(Math.round(item.x!), width);
-      const y = Math.min(Math.round(item.y!), height);
-      const rect = { x, y, width: Math.min(Math.round(item.width!), width - x), height: Math.min(Math.round(item.height!), height - y) };
-      if (rect.width > 0 && rect.height > 0) bounds.set(id, rect);
-      // Panels left out keep what they knew: a tab behind another in a maximized group still fills the workspace.
-      const view = this.views.get(id);
-      if (view instanceof ModuleView) view.setMaximized(item.maximized === true);
-    }
-    this.panelBounds = bounds;
-    this.applyBounds();
-    this.openPendingDialog();
-  }
-
-  /**
-   * Places every view where the host UI showed it. Panels in a background
-   * tab are hidden and paused, as are all panels while the window is.
-   */
-  private applyBounds(): void {
-    this.tooltips?.ensureVisible();
-    if (this.opening && this.openingDone()) return this.endOpening(true);
-    for (const [instanceId, view] of this.views) {
-      // A panel over the game is placed, shown and paused by its overlay window (game-overlay-window.ts), not by this slot.
-      if (this.floating(instanceId)) continue;
-      this.layOut(instanceId, view);
-    }
-  }
-
-  /** Puts one panel's view where the workspace last said it goes, and shows, pauses or resumes it accordingly. */
-  private layOut(instanceId: string, view: ModuleView | BrowserPanel): void {
-    // A panel in its dialog is placed there and stays in sight above the dimmed app, while the others step aside.
-    const dialog = this.panelDialog?.instanceId === instanceId ? (this.panelDialog.bounds ?? undefined) : undefined;
-    const rect = dialog ?? this.panelBounds.get(instanceId);
-    if (rect) view.setBounds(rect);
-    // Its panel shows a permission question in its place: the page waits, hidden, until it is answered.
-    const shown = this.workspaceId ? this.records(this.workspaceId) : [];
-    const record = shown.find((item) => item.instanceId === instanceId);
-    if (record && this.questionOf(record, shown) === "ask") {
-      view.setVisible(false);
-      view.suspend();
-      return;
-    }
-    // A module page stays hidden until it has its data, so switching workspaces does not show it building itself;
-    // while a workspace opens, every panel waits for the others.
-    view.setVisible(rect !== undefined && (dialog !== undefined || (!this.overlay && !this.opening)) && (!(view instanceof ModuleView) || view.revealed));
-    // A panel kept running for the overlays isn't paused for being out of sight: its overlay goes on being fed.
-    if ((rect || this.overlayKeep.has(instanceId)) && !this.windowHidden) view.resume();
-    else view.suspend();
-  }
-
-  /**
-   * While a menu, dialog or drag is over the workspace, module views (which
-   * are drawn above the host page) are hidden. The host UI first gets a still
-   * image of each, so the workspace looks the same underneath.
-   */
-  private async setOverlay(open: boolean): Promise<void> {
-    if (open === this.overlay) return;
-    if(open)this.tooltips.close();
-    this.overlay = open;
-    const change = ++this.overlayChanges;
-    if (!open) return this.showAfterOverlay(change);
-    // The dialog has to be seen; the panels' pictures stand in for them, so the cover goes.
-    this.cover.cancel();
-    const images: Record<string, string> = {};
-    const freezeStarted = performance.now();
-    await Promise.all(
-      [...this.views].map(async ([instanceId, view]) => {
-        if (this.floating(instanceId) || !this.panelBounds.has(instanceId) || view.status !== "ready" || (view instanceof ModuleView && !view.revealed)) return;
-        if (view instanceof BrowserPanel && !view.capturable) return;
-        const image = await Promise.race([
-          view.view.webContents.capturePage().catch(() => null),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), FREEZE_TIMEOUT_MS)),
-        ]);
-        if (image && !image.isEmpty()) images[instanceId] = `data:image/jpeg;base64,${image.toJPEG(85).toString("base64")}`;
-      }),
-    );
-    if (change !== this.overlayChanges || this.window.isDestroyed()) return;
-    this.window.webContents.send("host:frozen", images);
-    const taken = performance.now();
-    // Hidden before their pictures are on screen, the panels' slots would show empty for a frame.
-    if (Object.keys(images).length) await this.frozenOnScreen();
-    timingLog?.(`overlay: ${Object.keys(images).length} of ${this.panelsInSlots().length} pictures taken in ${Math.round(taken - freezeStarted)} ms, on screen ${Math.round(performance.now() - taken)} ms later`);
-    if (change !== this.overlayChanges || this.window.isDestroyed()) return;
-    for (const [instanceId, view] of this.views) if (!this.floating(instanceId) && !this.inPanelDialog(instanceId)) view.setVisible(false);
   }
 
   private frozenShown: (() => void) | null = null;
@@ -3961,47 +3860,18 @@ export class Host {
     });
   }
 
-  /**
-   * The dialog closed: the panels are shown again. Each stays see-through until it has drawn (ModuleView.drawn), and
-   * its picture stays in the host UI under it until then, so a slow one does not show empty for a moment.
-   */
-  private showAfterOverlay(change: number): void {
-    this.applyBounds();
-    const shown = this.panelsInSlots();
-    this.logDraws(shown, "dialog closed");
-    void Promise.all(shown.map((view) => view.drawn))
-      // Taken away as soon as the panels said they drew, the pictures could leave their slots empty for a frame.
-      .then(() => new Promise((resolve) => setTimeout(resolve, ON_SCREEN_MS)))
-      .then(() => {
-        if (change === this.overlayChanges && !this.window.isDestroyed()) this.window.webContents.send("host:frozen", {});
-      });
-  }
-
-  /** The module panels placed in their workspace slots now. */
-  private panelsInSlots(): ModuleView[] {
-    return [...this.views].flatMap(([instanceId, view]) => (view instanceof ModuleView && this.panelBounds.has(instanceId) && !this.floating(instanceId) ? [view] : []));
-  }
-
   /** With TAVORA_TIMINGS, says how long each panel took to draw once shown: without being covered, it showed empty that long. */
-  private logDraws(views: ModuleView[], what: string): void {
+  private logDraws(views: PanelViewAdapter[], what: string): void {
     if (!timingLog) return;
     const shownAt = performance.now();
-    for (const view of views) {
+    for (const { panel: view } of views.filter((item): item is ModulePanelView => item instanceof ModulePanelView)) {
       void view.drawn.then(() => timingLog?.(`${what}: ${view.moduleId}${view.typeName ? ` (${view.typeName})` : ""} drew ${Math.round(performance.now() - shownAt)} ms after it was shown`));
     }
   }
 
   /** A place on the window from the host UI, or null when it is none. */
-  private windowRect(raw: unknown): Rect | null {
-    const item = raw as Partial<Rect> | null;
-    if (!item || typeof item !== "object") return null;
-    const numbers = [item.x, item.y, item.width, item.height];
-    if (!numbers.every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0)) return null;
-    const { width, height } = this.window.getContentBounds();
-    const x = Math.min(Math.round(item.x!), width);
-    const y = Math.min(Math.round(item.y!), height);
-    const rect = { x, y, width: Math.min(Math.round(item.width!), width - x), height: Math.min(Math.round(item.height!), height - y) };
-    return rect.width > 0 && rect.height > 0 ? rect : null;
+  private windowRect(raw: unknown) {
+    return clampRect(raw, this.window.getContentBounds());
   }
 
   /** Tavora's emblem as a data: URL for the cover's fire, from the built host UI (or its dev server); null when it cannot be read. */
@@ -4028,7 +3898,7 @@ export class Host {
    * new one closes the last. Nothing is shown for a panel that is hidden or under a host menu or dialog.
    */
   private showModuleMenu(instanceId: string, menu: CheckedMenu): Promise<string | null> {
-    if (!this.views.has(instanceId) || !this.panelBounds.has(instanceId) || this.floating(instanceId) || this.overlay || this.window.isDestroyed()) return Promise.resolve(null);
+    if (!this.panels.has(instanceId) || !this.panels.isPlaced(instanceId) || this.floating(instanceId) || this.panels.overlay || this.window.isDestroyed()) return Promise.resolve(null);
     this.closeModuleMenu();
     const requestId = ++this.moduleMenuRequests;
     return new Promise((resolve) => {
@@ -4048,15 +3918,8 @@ export class Host {
     this.moduleMenu = undefined;
     open.resolve(typeof answer.id === "string" && open.choices.has(answer.id) ? answer.id : null);
     // The keyboard goes back to the panel, so an action such as Rename can take it.
-    const view = this.views.get(open.instanceId);
-    if (view instanceof ModuleView && !view.view.webContents.isDestroyed()) view.view.webContents.focus();
-  }
-
-  /** The panel shown big in a dialog over the app (panel.setDialog), how big it asked to be, and where the host UI put it. */
-  private panelDialog: { instanceId: string; width: number; height: number; bounds: Rect | null } | null = null;
-
-  private inPanelDialog(instanceId: string): boolean {
-    return this.panelDialog?.instanceId === instanceId && this.panelDialog.bounds !== null;
+    const view = this.moduleView(open.instanceId);
+    if (view && !view.view.webContents.isDestroyed()) view.view.webContents.focus();
   }
 
   /**
@@ -4066,16 +3929,11 @@ export class Host {
    */
   private openPanelDialog(instanceId: string, module: InstalledModule, size: PanelDialogSize): void {
     if (this.floating(instanceId)) return this.openPanelDialogFromGame(instanceId, module, size);
-    const view = this.views.get(instanceId);
-    if (!(view instanceof ModuleView) || !this.panelBounds.has(instanceId) || this.floating(instanceId) || this.window.isDestroyed()) return;
-    if (this.panelDialog?.instanceId === instanceId) return;
-    this.closePanelDialog();
+    if (this.window.isDestroyed() || !this.panels.openDialog(instanceId, size)) return;
     this.closeModuleMenu();
     this.tooltips.close(instanceId);
-    this.panelDialog = { instanceId, ...size, bounds: null };
     const shown: PanelDialog = { instanceId, title: this.shown(module.manifest).name, icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null, ...size };
     this.window.webContents.send("host:panel-dialog", shown);
-    view.setInDialog(true);
   }
 
   /** A dialog a panel in the in-game layer asked for: it opens once the panel is back in its slot, if that happens soon. */
@@ -4104,35 +3962,9 @@ export class Host {
       this.pendingDialog = null;
       return;
     }
-    if (this.floating(pending.instanceId) || !this.panelBounds.has(pending.instanceId)) return;
+    if (this.floating(pending.instanceId) || !this.panels.isPlaced(pending.instanceId)) return;
     this.pendingDialog = null;
     this.openPanelDialog(pending.instanceId, pending.module, pending.size);
-  }
-
-  /** The host UI's frame is on screen: the panel's page goes into it, above every other view. */
-  private placePanelDialog(raw: unknown): void {
-    const open = this.panelDialog;
-    const view = open && this.views.get(open.instanceId);
-    if (!open || !view) return;
-    const item = (typeof raw === "object" && raw !== null ? raw : {}) as Partial<Record<keyof Rect, unknown>>;
-    const numbers = [item.x, item.y, item.width, item.height];
-    if (!numbers.every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0)) return;
-    const rect = { x: Math.round(item.x as number), y: Math.round(item.y as number), width: Math.round(item.width as number), height: Math.round(item.height as number) };
-    if (rect.width < 1 || rect.height < 1) return;
-    if (open.bounds === null) this.window.contentView.addChildView(view.view);
-    open.bounds = rect;
-    this.layOut(open.instanceId, view);
-  }
-
-  /** Puts the panel in its dialog back in its slot (only `instanceId`'s, when given); the module hears it. */
-  private closePanelDialog(instanceId?: string): void {
-    const open = this.panelDialog;
-    if (!open || (instanceId !== undefined && open.instanceId !== instanceId)) return;
-    this.panelDialog = null;
-    if (!this.window.isDestroyed()) this.window.webContents.send("host:panel-dialog", null);
-    const view = this.views.get(open.instanceId);
-    if (view instanceof ModuleView) view.setInDialog(false);
-    if (view) this.layOut(open.instanceId, view);
   }
 
   /** Closes the module menu shown now (only if it belongs to `instanceId`, when given), as if nothing was chosen. */
@@ -4297,13 +4129,13 @@ export class Host {
         .filter((entry) => this.modules.get(entry.moduleId)?.owner !== entry.owner)
         .map((entry) => ({ ...entry, publisher: entry.owner === LOCAL_OWNER || entry.owner === OFFICIAL_OWNER ? null : entry.owner })),
       panels: workspace.instances.map((record) => {
-        const view = this.views.get(record.instanceId);
+        const view = this.nativePanel(record.instanceId);
         const type = this.panelTypeOf(record);
         const module = this.modules.get(record.moduleId);
         // A development module that cannot load right now is named from its manifest until it loads.
         const name = type?.name ?? (module ? this.shown(module.manifest).name : (waitingModules(this.moduleProblems).get(record.moduleId) ?? movedModule(record.moduleId)?.name ?? record.moduleId));
         const panelType = record.panelType ?? null;
-        const openedFrom = this.openedFrom.get(record.instanceId);
+        const openedFrom = this.panels.openedFrom(record.instanceId);
         if (type === undefined) {
           // A module that left Tavora for the catalog and is not installed yet: its panel offers to install it.
           const moved = !module && movedModule(record.moduleId) !== undefined;
@@ -4341,7 +4173,7 @@ export class Host {
       }),
       layout: workspace.layout,
       layoutEpoch: this.workspaces.epoch,
-      opening: this.opening !== null,
+      opening: this.panels.opening,
       pendingLink: this.pendingLink,
       runningGameId: this.running.filter((id) => id !== this.workspaceId && isLive(this.library, id)).at(-1) ?? null,
       workspaceRunning: this.workspaceId !== null && this.running.includes(this.workspaceId),
@@ -4584,7 +4416,7 @@ export class Host {
     return new Promise<boolean>((resolve) => {
       this.pendingConnector = { id: this.nextConnectorAsk++, moduleId, connector, resolve };
       this.pushState();
-      this.applyBounds();
+      this.panels.applyBounds();
     });
   }
 
@@ -4598,7 +4430,7 @@ export class Host {
     if (granted) await this.grants.grant(module, { network: [], connectors: [pending.connector] });
     pending.resolve(granted);
     this.pushState();
-    this.applyBounds();
+    this.panels.applyBounds();
   }
 
   /** A module's leaderboards (leaderboards.ts); `ask` shows Tavora's question in the panel that asks. */
@@ -4645,7 +4477,7 @@ export class Host {
     return new Promise<boolean>((resolve) => {
       this.pendingLeaderboard = { id: this.nextLeaderboardAsk++, instanceId, moduleId, question, resolve };
       this.pushState();
-      this.applyBounds();
+      this.panels.applyBounds();
     });
   }
 
@@ -4656,7 +4488,7 @@ export class Host {
     this.pendingLeaderboard = null;
     pending.resolve(yes);
     this.pushState();
-    this.applyBounds();
+    this.panels.applyBounds();
   }
 
   /** Resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
@@ -4782,8 +4614,7 @@ export class Host {
           return !record || host.panelTypeOf(record) === undefined || host.canShowInGame(record);
         },
         usedAt: (instanceId) => {
-          const view = host.views.get(instanceId);
-          return view instanceof ModuleView ? view.usedAt : 0;
+          return host.moduleView(instanceId)?.usedAt ?? 0;
         },
         openWindow: (request) => host.openPanelWindow(request),
         preferred: (workspaceId, instanceId) => {
@@ -4854,7 +4685,7 @@ export class Host {
       askConnector: (moduleId, connector) => host.askConnector(moduleId, connector),
       workspaceId: () => host.workspaceId,
       workspaceName: (workspaceId) => host.library.workspaces[workspaceId]?.name ?? null,
-      panels: () => [...host.views.values()].filter((view): view is ModuleView => view instanceof ModuleView),
+      panels: () => host.moduleViews(),
       shortcuts: globalShortcut,
       writeClipboard: (text) => clipboard.writeText(text),
       openSetting: (setting) => {
