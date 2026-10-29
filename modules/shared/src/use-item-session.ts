@@ -12,6 +12,10 @@ export interface UseItemSession<T> {
   /** The open item's data, edits included; null for none. Replaced, never mutated. */
   current: Readonly<ShallowRef<T | null>>;
   status: Readonly<Ref<DocumentStatus>>;
+  /** A `job` is running: `panels.open` and the automatic fallback wait for it. */
+  busy: Readonly<Ref<boolean>>;
+  /** The open item was deleted by another panel (`onDeleted: "keep"`); `restoreDeleted()` brings it back. */
+  deleted: Readonly<Ref<boolean>>;
   /** The last error (a failed save, list or pick, or the session not opening), until the next edit. */
   error: Readonly<Ref<unknown>>;
   /** True once the list is read and the first item is open (or there is none). */
@@ -25,6 +29,11 @@ export interface UseItemSession<T> {
   rename(id: string, title: string): Promise<void>;
   remove(id: string): Promise<() => Promise<void>>;
   job<R>(fn: () => Promise<R>): Promise<R>;
+  refresh(): Promise<void>;
+  /** Drops unsaved edits and shows the other panel's copy of the open item. */
+  adoptRemote(): Promise<void>;
+  /** Puts a deleted open item back with its last copy and opens it again. */
+  restoreDeleted(): Promise<void>;
   /** Never rejects; does nothing before the session is open. */
   flush(): Promise<void>;
 }
@@ -38,6 +47,8 @@ export function useItemSession<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>):
   const currentId = ref<string | null>(null);
   const current = shallowRef<T | null>(null);
   const status = ref<DocumentStatus>("idle");
+  const busy = ref(false);
+  const deleted = ref(false);
   const error = shallowRef<unknown>(undefined);
   const loaded = ref(false);
   let session: ItemSession<T> | undefined;
@@ -55,6 +66,8 @@ export function useItemSession<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>):
         currentId.value = opened.currentId;
         current.value = opened.current?.data ?? null;
         status.value = opened.status;
+        busy.value = opened.busy;
+        deleted.value = opened.deleted;
       };
       sync();
       loaded.value = true;
@@ -89,6 +102,8 @@ export function useItemSession<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>):
     currentId,
     current,
     status,
+    busy,
+    deleted,
     error,
     loaded,
     ready,
@@ -98,6 +113,9 @@ export function useItemSession<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>):
     rename: (id, title) => use((opened) => opened.rename(id, title)),
     remove: (id) => use((opened) => opened.remove(id)),
     job: (fn) => use((opened) => opened.job(fn)),
+    refresh: () => use((opened) => opened.refresh()),
+    adoptRemote: () => use((opened) => opened.adoptRemote()),
+    restoreDeleted: () => use((opened) => opened.restoreDeleted()),
     flush: () => (session ? session.flush() : ready.then((opened) => opened.flush(), () => undefined)),
   };
 }

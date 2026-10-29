@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { JsonValue, TavoraSDK } from "./index.js";
-import { ItemNotFoundError, openItems, type ItemSessionEvent, type OpenItemsOptions } from "./store.js";
+import { ItemNotFoundError, ItemSaveError, openItems, type ItemSessionEvent, type OpenItemsOptions } from "./store.js";
 import { createMemoryHost, type MemoryHost } from "./testing.js";
 
 interface Plan {
@@ -296,7 +296,7 @@ describe("other panels", () => {
     const b = createMemoryHost({ share: a.host });
     seed(a.host, "a", "A");
     seed(a.host, "b", "B");
-    const session = await openItems(a.sdk, options({ onAdd: "none" }));
+    const session = await openItems(a.sdk, options({ onAdd: "none", onDeleted: "fallback" }));
     await session.pick("plan-a");
     await b.sdk.documents.delete("plan-a");
     await vi.waitFor(() => expect(session.currentId).toBe("plan-b"));
@@ -305,12 +305,12 @@ describe("other panels", () => {
     await vi.waitFor(() => expect(session.currentId).toBeNull());
   });
 
-  it('keeps the paused handle with onDeleted: "keep", and its next flush brings the item back', async () => {
+  it("stays on a deleted item by default and does not create it again on its own", async () => {
     const a = createMemoryHost();
     const b = createMemoryHost({ share: a.host });
     seed(a.host, "a", "A");
     seed(a.host, "b", "B");
-    const session = await openItems(a.sdk, options({ onAdd: "none", onDeleted: "keep", debounceMs: 60_000 }));
+    const session = await openItems(a.sdk, options({ onAdd: "none", debounceMs: 60_000 }));
     await session.pick("plan-a");
     const events: ItemSessionEvent[] = [];
     session.onChange((event) => events.push(event));
@@ -318,11 +318,83 @@ describe("other panels", () => {
     await b.sdk.documents.delete("plan-a");
     await vi.waitFor(() => expect(events).toContainEqual({ type: "current", id: "plan-a", source: "remote", deleted: true }));
     expect(session.currentId).toBe("plan-a");
+    expect(session.deleted).toBe(true);
     await vi.waitFor(() => expect(names(session)).toEqual(["B"]));
-    await session.flush(); // "bring it back"
-    expect(storedPlan(a.host, "plan-a")?.items).toEqual(["unsaved"]);
-    // the store re-applies the edit to an empty document, so the item comes back with parse(null)'s name
-    await vi.waitFor(() => expect(names(session)).toEqual(["B", "New plan"]));
+    await session.flush();
+    await wait(20);
+    expect(a.host.documents.get("plan-a")).toBeNull();
+    expect(names(session)).toEqual(["B"]);
+  });
+
+  it("restoreDeleted puts the last copy back, edits included, and opens it again", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    seed(a.host, "a", "A", ["one"]);
+    const session = await openItems(a.sdk, options({ debounceMs: 60_000 }));
+    await session.rename("plan-a", "Renamed"); // saved
+    session.current!.update(add("two")); // not saved yet
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(session.deleted).toBe(true));
+    await session.restoreDeleted();
+    expect(session.deleted).toBe(false);
+    expect(session.currentId).toBe("plan-a");
+    expect(storedPlan(a.host, "plan-a")).toEqual({ name: "Renamed", items: ["one", "two"] });
+    expect(session.current?.data).toEqual({ name: "Renamed", items: ["one", "two"] });
+    expect(names(session)).toEqual(["Renamed"]);
+    await session.restoreDeleted(); // nothing to restore: no-op
+  });
+
+  it("restoreDeleted rejects with CONFLICT when another panel made the item again", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    seed(a.host, "a", "A");
+    const session = await openItems(a.sdk, options());
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(session.deleted).toBe(true));
+    a.host.documents.put({ id: "plan-a", title: "Theirs", data: { name: "Theirs", items: [] }, ifRevision: 0 });
+    await expect(session.restoreDeleted()).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(storedPlan(a.host, "plan-a")?.name).toBe("Theirs");
+  });
+
+  it("does not bring a deleted item back when picking away from it (both modes)", async () => {
+    for (const onDeleted of ["keep", "fallback"] as const) {
+      const a = createMemoryHost();
+      const b = createMemoryHost({ share: a.host });
+      seed(a.host, "a", "A");
+      seed(a.host, "b", "B");
+      const session = await openItems(a.sdk, options({ onAdd: "none", onDeleted, debounceMs: 60_000 }));
+      await session.pick("plan-a");
+      session.current!.update(add("unsaved"));
+      await b.sdk.documents.delete("plan-a");
+      if (onDeleted === "fallback") await vi.waitFor(() => expect(session.currentId).toBe("plan-b"));
+      else {
+        await vi.waitFor(() => expect(session.deleted).toBe(true));
+        await session.pick("plan-b");
+      }
+      await session.refresh();
+      await wait(20);
+      expect(a.host.documents.get("plan-a")).toBeNull();
+      expect(names(session)).toEqual(["B"]);
+      await session.dispose();
+      expect(a.host.documents.get("plan-a")).toBeNull();
+    }
+  });
+
+  it("says so when the open item is deleted elsewhere, before it falls back", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    seed(a.host, "a", "A");
+    seed(a.host, "b", "B");
+    const session = await openItems(a.sdk, options({ onAdd: "none", onDeleted: "fallback" }));
+    await session.pick("plan-a");
+    const events: ItemSessionEvent[] = [];
+    session.onChange((event) => events.push(event));
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(session.currentId).toBe("plan-b"));
+    const deleted = events.findIndex((event) => event.type === "current" && event.deleted && event.id === "plan-a" && event.source === "remote");
+    const switched = events.findIndex((event) => event.type === "current" && event.id === "plan-b");
+    expect(deleted).toBeGreaterThanOrEqual(0);
+    expect(deleted).toBeLessThan(switched);
   });
 });
 
@@ -373,7 +445,7 @@ describe("job", () => {
     const b = createMemoryHost({ share: a.host });
     seed(a.host, "a", "A");
     seed(a.host, "b", "B");
-    const session = await openItems(a.sdk, options({ onAdd: "none" }));
+    const session = await openItems(a.sdk, options({ onAdd: "none", onDeleted: "fallback" }));
     await session.pick("plan-a");
     let finish!: () => void;
     const running = session.job(() => new Promise<void>((resolve) => (finish = resolve)));
@@ -428,5 +500,235 @@ describe("errors and dispose", () => {
     expect(storedPlan(host, "plan-a")?.items).toEqual(["last"]);
     await expect(session.pick("plan-a")).rejects.toThrow("closed");
     expect(await host.navigate({ id: "plan-a", title: "x" })).toEqual({ handled: false, ok: false });
+  });
+});
+
+/** Holds `documents.delete` until `release()`. */
+function gateDelete(sdk: TavoraSDK) {
+  const remove = sdk.documents.delete.bind(sdk.documents);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  sdk.documents.delete = (async (...args: Parameters<typeof remove>) => {
+    await gate;
+    return remove(...args);
+  }) as typeof sdk.documents.delete;
+  return release;
+}
+
+describe("switching safely", () => {
+  it("keeps the item open and answers failed when the previous item cannot be saved", async () => {
+    const { sdk, host } = createMemoryHost();
+    seed(host, "a", "A");
+    seed(host, "b", "B");
+    const session = await openItems(sdk, options({ onAdd: "none", debounceMs: 60_000 }));
+    await session.pick("plan-a");
+    session.current!.update(add("x"));
+    const put = sdk.documents.put.bind(sdk.documents);
+    sdk.documents.put = async () => {
+      throw new Error("no disk");
+    };
+    await expect(session.pick("plan-b")).rejects.toBeInstanceOf(ItemSaveError);
+    expect(session.currentId).toBe("plan-a");
+    expect(await host.navigate({ id: "plan-b", title: "x" })).toEqual({ handled: true, ok: false });
+    expect(session.currentId).toBe("plan-a");
+    sdk.documents.put = put;
+    session.current!.update(add("again"));
+    expect(await session.pick("plan-b")).toBe(true);
+  });
+
+  it("lets a pick made during remove(current) win over remove's fallback", async () => {
+    const { sdk, host } = createMemoryHost({ now: ticking() });
+    seed(host, "a", "A");
+    seed(host, "b", "B");
+    seed(host, "c", "C"); // list: C, B, A
+    const session = await openItems(sdk, options({ onAdd: "none" }));
+    await session.pick("plan-a");
+    const release = gateDelete(sdk);
+    const removing = session.remove("plan-a");
+    await session.pick("plan-c");
+    release();
+    await removing;
+    expect(session.currentId).toBe("plan-c");
+    expect(host.content?.id).toBe("plan-c");
+  });
+
+  it("has no open item while remove(current) is waiting, so nothing writes to a closed handle", async () => {
+    const { sdk, host } = createMemoryHost();
+    seed(host, "a", "A");
+    const session = await openItems(sdk, options({ debounceMs: 60_000 }));
+    const removing = session.remove("plan-a");
+    expect(session.current).toBeNull();
+    expect(session.currentId).toBeNull();
+    await removing;
+    expect(session.current).toBeNull();
+  });
+
+  it("holds panels.open until a running job is done", async () => {
+    const { sdk, host } = createMemoryHost({ now: ticking() });
+    seed(host, "a", "A");
+    seed(host, "b", "B");
+    const session = await openItems(sdk, options({ onAdd: "first" }));
+    const first = session.currentId!;
+    const other = first === "plan-a" ? "plan-b" : "plan-a";
+    expect(session.busy).toBe(false);
+    let finish!: () => void;
+    const running = session.job(() => new Promise<void>((resolve) => (finish = resolve)));
+    expect(session.busy).toBe(true);
+    const navigating = host.navigate({ id: other, title: "x" });
+    await wait(20);
+    expect(session.currentId).toBe(first);
+    finish();
+    await running;
+    expect(await navigating).toEqual({ handled: true, ok: true });
+    expect(session.currentId).toBe(other);
+    expect(session.busy).toBe(false);
+  });
+
+  it("tells listeners when it gets busy and when it is done", async () => {
+    const { sdk } = createMemoryHost();
+    const session = await openItems(sdk, options());
+    const events: string[] = [];
+    session.onChange((event) => events.push(event.type));
+    await session.job(async () => 1);
+    expect(events.filter((type) => type === "busy")).toHaveLength(2);
+  });
+
+  it("does not replay held changes onto another item picked during the job", async () => {
+    const a = createMemoryHost({ now: ticking() });
+    const b = createMemoryHost({ share: a.host });
+    seed(a.host, "a", "A");
+    seed(a.host, "b", "B");
+    const session = await openItems(a.sdk, options({ onAdd: "none" }));
+    await session.pick("plan-a");
+    const events: ItemSessionEvent[] = [];
+    session.onChange((event) => events.push(event));
+    let finish!: () => void;
+    const running = session.job(async () => {
+      await new Promise<void>((resolve) => (finish = resolve));
+    });
+    await b.sdk.documents.put({ id: "plan-a", title: "A", data: { name: "A", items: ["theirs"] }, ifRevision: 1 });
+    await wait(20);
+    await session.pick("plan-b");
+    finish();
+    await running;
+    await wait(20);
+    expect(events.filter((event) => event.type === "current" && event.source === "remote")).toEqual([]);
+    expect(session.currentId).toBe("plan-b");
+  });
+
+  it("does not cancel a pending pick when a foreign or the same id is picked", async () => {
+    const { sdk, host } = createMemoryHost();
+    seed(host, "a", "A");
+    seed(host, "b", "B");
+    const session = await openItems(sdk, options({ onAdd: "none" }));
+    await session.pick("plan-a");
+    const release = gateGet(sdk, "plan-b");
+    const slow = session.pick("plan-b");
+    await expect(session.pick("note-x")).rejects.toBeInstanceOf(ItemNotFoundError);
+    expect(await session.pick("plan-a")).toBe(true); // already open
+    release();
+    expect(await slow).toBe(true);
+    expect(session.currentId).toBe("plan-b");
+  });
+
+  it("lists the final save of the item it leaves", async () => {
+    const { sdk, host } = createMemoryHost();
+    seed(host, "a", "A");
+    seed(host, "b", "B");
+    const session = await openItems(sdk, options({ onAdd: "none", debounceMs: 60_000 }));
+    await session.pick("plan-a");
+    session.current!.update(add("x"));
+    const release = gateGet(sdk, "plan-b");
+    const switching = session.pick("plan-b");
+    await wait(20); // the first save is done
+    session.current!.update(add("late")); // saved by the closing dispose
+    release();
+    await switching;
+    const stored = host.documents.get("plan-a")!;
+    expect(stored.data).toEqual({ name: "A", items: ["x", "late"] });
+    expect(session.items.find((item) => item.id === "plan-a")?.revision).toBe(stored.revision);
+  });
+
+  it("writes the last used item once per change", async () => {
+    const { sdk, host } = createMemoryHost();
+    seed(host, "a", "A");
+    seed(host, "b", "B");
+    const set = vi.spyOn(sdk.storage, "set");
+    const session = await openItems(sdk, options({ onAdd: "none" }));
+    await session.pick("plan-a");
+    await session.pick(null);
+    await session.pick("plan-a");
+    await session.pick("plan-b");
+    await session.pick("plan-b");
+    expect(set.mock.calls.map(([, value]) => value)).toEqual(["plan-a", "plan-b"]);
+    expect(host.storage.get("items.last.plan-")).toBe("plan-b");
+  });
+});
+
+describe("restore option", () => {
+  it("lets the module choose from the launch and the panel state", async () => {
+    const { sdk, host } = createMemoryHost({ launch: { reason: "restore", content: null } });
+    seed(host, "a", "A");
+    seed(host, "b", "B");
+    await sdk.panel.setState({ item: "plan-b" });
+    const seen: unknown[] = [];
+    const session = await openItems(
+      sdk,
+      options({
+        onAdd: "none",
+        restore: async (launch, state) => {
+          seen.push(launch.reason, state);
+          return (state as { item: string } | null)?.item ?? null;
+        },
+      }),
+    );
+    expect(seen).toEqual(["restore", { item: "plan-b" }]);
+    expect(session.currentId).toBe("plan-b");
+  });
+
+  it("falls back to the add rule when restore answers null or a missing item", async () => {
+    const { sdk, host } = createMemoryHost();
+    seed(host, "a", "A");
+    const nothing = await openItems(sdk, options({ onAdd: "none", restore: () => null }));
+    expect(nothing.currentId).toBeNull();
+    const gone = await openItems(sdk, options({ restore: () => "plan-gone" }));
+    expect(gone.currentId).toBe("plan-a");
+  });
+});
+
+describe("whenEmpty", () => {
+  it("creates and opens the starter item once the list is empty", async () => {
+    const { sdk, host } = createMemoryHost();
+    const session = await openItems(sdk, options({ whenEmpty: () => ({ data: { name: "Start", items: ["hi"] }, title: "First" }) }));
+    expect(session.current?.data).toEqual({ name: "First", items: ["hi"] });
+    expect(names(session)).toEqual(["First"]);
+    expect(host.documents.list()).toHaveLength(1);
+    // a second panel finds the list filled and creates nothing
+    const again = await openItems(createMemoryHost({ share: host }).sdk, options({ whenEmpty: () => ({ data: { name: "Other", items: [] } }) }));
+    expect(host.documents.list()).toHaveLength(1);
+    expect(again.currentId).toBe(session.currentId);
+    // not when there are items already
+    const filled = createMemoryHost();
+    seed(filled.host, "a", "A");
+    await openItems(filled.sdk, options({ whenEmpty: () => ({ data: { name: "Start", items: [] } }) }));
+    expect(filled.host.documents.list()).toHaveLength(1);
+  });
+
+  it("makes one starter when two panels open at the same time", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    const whenEmpty = () => ({ data: { name: "Start", items: [] as string[] } });
+    const [one, two] = await Promise.all([openItems(a.sdk, options({ whenEmpty })), openItems(b.sdk, options({ whenEmpty }))]);
+    expect(a.host.documents.list()).toHaveLength(1);
+    expect(one.currentId).toBe(two.currentId);
+    expect(one.currentId).not.toBeNull();
+  });
+});
+
+describe("adoptRemote", () => {
+  it("is the open item's adoptRemote, and does nothing for none", async () => {
+    const { sdk } = createMemoryHost();
+    const session = await openItems(sdk, options());
+    await expect(session.adoptRemote()).resolves.toBeUndefined();
   });
 });

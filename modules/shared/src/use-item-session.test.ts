@@ -60,4 +60,28 @@ describe("useItemSession", () => {
     expect((broken.error.value as Error).message).toBe("cannot list");
     expect(broken.loaded.value).toBe(false);
   });
+
+  it("shows busy and deleted, and brings a deleted item back", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    a.host.documents.put({ id: "plan-a", title: "A", data: { name: "A", items: [] } });
+    const plans = useItemSession(a.sdk, options);
+    await plans.ready;
+    let finish!: () => void;
+    const running = plans.job(() => new Promise<void>((resolve) => (finish = resolve)));
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    await vi.waitFor(() => expect(plans.busy.value).toBe(true));
+    finish();
+    await running;
+    expect(plans.busy.value).toBe(false);
+
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(plans.deleted.value).toBe(true));
+    expect(plans.currentId.value).toBe("plan-a");
+    await plans.restoreDeleted();
+    expect(plans.deleted.value).toBe(false);
+    expect(a.host.documents.get("plan-a")).not.toBeNull();
+    await plans.refresh();
+    await plans.adoptRemote();
+  });
 });
