@@ -12,7 +12,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { HostViewState, ThemeVariationView, ThemeView } from "../../../shared/host-api";
-import { act, state } from "../../host";
+import { act, state, tryToasts } from "../../host";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
@@ -182,7 +182,10 @@ const showVariation = computed(() => {
       <Switch v-model="moduleIcons" :aria-label="t('settings.module-icons.label')" data-testid="module-icons" />
     </SettingRow>
     <SettingRow :label="t('settings.toasts.label')" :description="t('settings.toasts.description')" setting="toasts" :highlighted="highlight === 'toasts'">
-      <SegmentedControl v-model="toasts" :label="t('settings.toasts.label')" :options="toastOptions" />
+      <span class="flex flex-none flex-wrap items-center justify-end gap-2">
+        <Button variant="secondary" data-testid="try-toasts" @click="tryToasts">{{ t("settings.toasts.try") }}</Button>
+        <SegmentedControl v-model="toasts" :label="t('settings.toasts.label')" :options="toastOptions" />
+      </span>
     </SettingRow>
     <SettingRow
       :label="t('settings.grayscale-text.label')"
