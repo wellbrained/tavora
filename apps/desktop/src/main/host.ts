@@ -46,7 +46,8 @@ import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./module-data";
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
-import { applyOwners, checkZipData, readOwnerRecords } from "./installer";
+import { checkZipData, readOwnerRecords } from "./installer";
+import { loadInstalledModules, type InstalledModules } from "./installed-modules";
 import { readModulePage } from "./module-page";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
@@ -112,7 +113,7 @@ import { countAppUpdate } from "./usage-counts";
 import { PublisherNames } from "./publisher-names";
 import { UpdateManager, type UpdaterLike } from "./updates";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
-import { CATALOGUE_PUBLIC_KEY, SAFETY_REFRESH_MS, SafetyLists, stopBlocked } from "./safety-lists";
+import { CATALOGUE_PUBLIC_KEY, SAFETY_REFRESH_MS, SafetyLists } from "./safety-lists";
 import { createToneReader, iconVersion } from "./icon-tone";
 import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
@@ -145,7 +146,7 @@ import { supportTarget } from "./module-support";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { BROWSER_MODULE_ID, browserModule, describeModules, developmentProjects, discoverModules, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, waitingModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { BROWSER_MODULE_ID, developmentProjects, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, waitingModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
@@ -645,10 +646,6 @@ export class Host {
     // A file saved by a newer Tavora is copied aside before this one can overwrite it.
     await savedData.keepNewerFiles();
     const library = await savedData.loadLibrary();
-    const moduleProblems: ModuleProblem[] = [];
-    const modules = await discoverModules({ ...Host.moduleSources(options, library.developmentFolders), tavoraVersion: app.getVersion() }, moduleProblems);
-    const ownerRecords = await readOwnerRecords(userData);
-    applyOwners(modules, await realUserModulesDir(options), ownerRecords);
     const safetyLists = new SafetyLists({
       file: path.join(userData, "catalog-lists.json"),
       baseUrl: options.apiUrl ?? DEFAULT_API_URL,
@@ -656,9 +653,8 @@ export class Host {
       online: () => library.onlineSearch,
     });
     await safetyLists.load();
-    const blockedModules = stopBlocked(modules, await realUserModulesDir(options), ownerRecords, safetyLists, moduleProblems);
-    modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
-    const moduleInfo = await describeModules(userModulesDir(options), modules);
+    const installed = await Host.loadModules(options, library.developmentFolders, safetyLists);
+    const { modules, info: moduleInfo, problems: moduleProblems } = installed;
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     // Before any module session or store is opened (S5: data is keyed by owner and id).
     await migrateModuleData(userData, (line) => console.warn(`[tavora] ${line}`), library.moduleFilesFolder ?? defaultFilesRoot(userData)).catch((error: unknown) =>
@@ -692,6 +688,9 @@ export class Host {
 
     const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspaces, profile, windowState, themes, themeProblems, savedData);
     created = host;
+    host.safetyLists = safetyLists;
+    host.blockedModules = installed.blocked;
+    host.catalogModules = installed.catalog;
     host.openedAtStart = openedTimes(library);
     host.copySync = copySync;
     host.developerKeys = new DeveloperKeys({
@@ -729,8 +728,6 @@ export class Host {
     host.gameOverlays = await Host.gameOverlayService(host);
     host.previews = Host.previewService(host);
     host.layout = Host.layoutService(host);
-    host.safetyLists = safetyLists;
-    host.blockedModules = blockedModules;
     await host.moveAiUsagePanelData();
     await host.moveDiscordPanelData();
     // Native menus, dialogs and scrollbars follow the theme's mode.
@@ -869,20 +866,17 @@ export class Host {
     return { official: options.officialModuleDirs, development: developmentFolders, local: [...options.moduleDirs, userModulesDir(options)] };
   }
 
+  /** The one step that finds the installed modules, at startup and on every reload. */
+  private static loadModules(options: HostOptions, developmentFolders: string[], safety: SafetyLists): Promise<InstalledModules> {
+    return loadInstalledModules({ userData: options.userData, userModules: userModulesDir(options), sources: Host.moduleSources(options, developmentFolders), tavoraVersion: app.getVersion(), safety });
+  }
+
   /** Looks for modules again; panels of modules that are gone are closed. */
   private async reloadModules(): Promise<void> {
-    const problems: ModuleProblem[] = [];
-    const modules = await discoverModules({ ...Host.moduleSources(this.options, this.library.developmentFolders), tavoraVersion: app.getVersion() }, problems);
-    const records = await readOwnerRecords(this.options.userData);
-    applyOwners(modules, await realUserModulesDir(this.options), records);
-    this.blockedModules = stopBlocked(modules, await realUserModulesDir(this.options), records, this.safetyLists, problems);
-    this.catalogModules = new Set(
-      [...this.blockedModules.values(), ...modules.values()]
-        .filter((module) => module.provenance === "local" && records[path.basename(module.root)]?.catalog && records[path.basename(module.root)]?.id === module.manifest.id)
-        .map((module) => module.manifest.id),
-    );
-    modules.set(BROWSER_MODULE_ID, browserModule(app.getVersion()));
-    this.moduleInfo = await describeModules(userModulesDir(this.options), modules);
+    const { modules, blocked, catalog, info, problems } = await Host.loadModules(this.options, this.library.developmentFolders, this.safetyLists);
+    this.blockedModules = blocked;
+    this.catalogModules = catalog;
+    this.moduleInfo = info;
     this.moduleProblems = problems;
     this.modules = modules;
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
