@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.21.103",
+    date: "2026-10-29",
+    title: "Clearer publish errors",
+    notes: [
+      "If the server doesn't know a field your manifest uses yet, publishing now names the field and says to try again once the server is updated.",
+    ],
+    prs: [
+      { number: 457, title: "Say plainly when the catalog server is older than the manifest" },
+    ],
+    tags: ["accounts"],
+  },
+  {
     version: "0.21.102",
     date: "2026-10-29",
     title: "Your To-Dos, your way",
