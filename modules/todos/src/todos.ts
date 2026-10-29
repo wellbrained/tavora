@@ -230,16 +230,39 @@ export function childCount(tasks: Task[], taskId: string): { done: number; total
 }
 
 /**
- * The parent a task added at the end of a group gets when it is indented to
- * `level`: the last task's ancestor (or the last task itself) one level up.
- * The level is limited to what the last task allows.
+ * The levels a task added at `index` can take: at least the level of the
+ * task now there, which must keep its parent, and at most one deeper than
+ * the task above, within MAX_DEPTH.
  */
-export function parentAtEnd(group: Group, level: number): string | null {
+export function levelsAt(tasks: Task[], index: number): { min: number; max: number } {
+  const depth = depths(tasks);
+  const above = tasks[index - 1];
+  const below = tasks[index];
+  const max = above ? Math.min(depth.get(above.id)! + 1, MAX_DEPTH) : 0;
+  return { min: below ? Math.min(depth.get(below.id)!, max) : 0, max };
+}
+
+/**
+ * The parent a task added at `index` gets at `level`: the task above, or
+ * its ancestor, one level up. The level is pulled into what `levelsAt` allows.
+ */
+export function parentAt(tasks: Task[], index: number, level: number): string | null {
+  const { min, max } = levelsAt(tasks, index);
   const chain: string[] = [];
-  const last = group.tasks.at(-1);
-  for (let id = last?.id ?? null; id; id = group.tasks.find((task) => task.id === id)?.parentId ?? null) chain.unshift(id);
-  const clamped = Math.min(level, chain.length, MAX_DEPTH);
+  for (let id = tasks[index - 1]?.id ?? null; id; id = tasks.find((task) => task.id === id)?.parentId ?? null) chain.unshift(id);
+  const clamped = clamp(level, min, max);
   return clamped ? chain[clamped - 1]! : null;
+}
+
+/** The parent a task added at the end of a group gets when it is indented to `level`. */
+export function parentAtEnd(group: Group, level: number): string | null {
+  return parentAt(group.tasks, group.tasks.length, level);
+}
+
+/** Where a task added after `afterId` goes: right after its sub-to-dos; at the end of the group when it is gone or null. */
+export function indexAfter(tasks: Task[], afterId: string | null): number {
+  const at = tasks.findIndex((task) => task.id === afterId);
+  return at === -1 ? tasks.length : blockEnd(tasks, at);
 }
 
 // ── Changes ──────────────────────────────────────────────────────────
@@ -312,7 +335,30 @@ export function addTask(data: TodoList, groupId: string | null, task: NewTask, n
   tidy(group.tasks);
 }
 
-export type TaskPatch = Partial<Pick<Task, "title" | "details" | "pinned">>;
+/**
+ * Adds a task right after another one and its sub-to-dos, at `level`
+ * (pulled into what fits there). Does nothing when the group is gone; when
+ * the task it follows is gone, it goes to the end of the group.
+ */
+export function insertTask(data: TodoList, groupId: string, afterId: string | null, level: number, task: Omit<NewTask, "parentId">): void {
+  const title = task.title.trim().slice(0, MAX.title);
+  const group = data.groups.find((item) => item.id === groupId);
+  if (!title || !group || findTask(data, task.id)) return;
+  const at = indexAfter(group.tasks, afterId);
+  group.tasks.splice(at, 0, {
+    id: task.id,
+    title,
+    done: false,
+    details: "",
+    pinned: false,
+    parentId: parentAt(group.tasks, at, level),
+    createdAt: task.createdAt,
+    doneAt: null,
+  });
+  tidy(group.tasks);
+}
+
+export type TaskPatch =Partial<Pick<Task, "title" | "details" | "pinned">>;
 
 export function updateTask(data: TodoList, taskId: string, patch: TaskPatch): void {
   const found = findTask(data, taskId);

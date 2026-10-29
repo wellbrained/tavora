@@ -14,6 +14,9 @@ import type { TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
 import {
   addTask,
+  indexAfter,
+  insertTask,
+  levelsAt,
   clearDone,
   depths,
   GROUP_COLORS,
@@ -194,11 +197,51 @@ function onHeaderContextMenu(event: MouseEvent) {
   void openMenu({ x: event.clientX, y: event.clientY });
 }
 
+// ── A new to-do typed between others (Enter in a title, or Add below) ──
+
+/** Where the draft sits in the group's tasks, and which levels it can take there. */
+const draft = computed(() => {
+  const open = panel.draft.value;
+  if (!open || open.groupId !== props.group.id || props.collapsed) return null;
+  const index = indexAfter(props.group.tasks, open.afterId);
+  return { index, ...levelsAt(props.group.tasks, index) };
+});
+
+/** The rows with the draft among them: in front of the first row shown that comes after it. */
+const entries = computed(() => {
+  const list: ({ row: Row; at: number } | { draft: true })[] = rows.value.map((row, at) => ({ row, at }));
+  if (!draft.value) return list;
+  const before = rows.value.findIndex((row) => row.index >= draft.value!.index);
+  list.splice(before === -1 ? list.length : before, 0, { draft: true });
+  return list;
+});
+
+const draftLevel = computed({
+  get: () => panel.draft.value?.level ?? 0,
+  set: (level: number) => panel.draft.value && (panel.draft.value = { ...panel.draft.value, level }),
+});
+
+function addDraft(text: string, level: number) {
+  const open = panel.draft.value;
+  if (!open) return;
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const { groupId, afterId } = open;
+  change((data) => insertTask(data, groupId, afterId, level, { id, title: text, createdAt }));
+  // The next one follows the new one, at the same level.
+  panel.draft.value = { groupId, afterId: id, level };
+}
+
+function closeDraft() {
+  if (panel.draft.value?.groupId === props.group.id) panel.draft.value = null;
+}
+
 function add(text: string, level: number) {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
   const parentId = parentAtEnd(props.group, level);
-  change((data) => addTask(data, props.group.id, { id, title: text, createdAt, parentId }, crypto.randomUUID()));
+  const newGroupId = crypto.randomUUID();
+  change((data) => addTask(data, props.group.id, { id, title: text, createdAt, parentId }, newGroupId));
 }
 
 /** Dropping on a row's lower half puts the task in front of the next row shown, or at the end. */
@@ -308,17 +351,32 @@ function dropMark(position: number): "before" | "after" | null {
 
     <div v-if="!collapsed" class="p-1">
       <TransitionGroup tag="ul" role="list" :css="false" @leave="collapse">
-        <li v-for="(row, at) in rows" :key="row.task.id" @dragover="overTask($event, at)">
+        <li v-for="entry in entries" :key="'draft' in entry ? 'draft' : entry.row.task.id" @dragover="'draft' in entry || overTask($event, entry.at)">
+          <AddInput
+            v-if="'draft' in entry"
+            v-model:level="draftLevel"
+            draft
+            align-to-tasks
+            :min-level="draft!.min"
+            :max-level="draft!.max"
+            :placeholder="Math.max(Math.min(draftLevel, draft!.max), draft!.min) ? t('group.addSub') : t('app.addTodo')"
+            :title="draft!.max > draft!.min ? t('group.addHint') : undefined"
+            :maxlength="MAX.title"
+            data-testid="draft-task"
+            @add="addDraft"
+            @close="closeDraft"
+          />
           <TaskRow
+            v-else
             :store="store"
-            :task="row.task"
+            :task="entry.row.task"
             :group="group"
             :groups="groups"
-            :index="row.index"
-            :depth="row.depth"
-            :children="row.children"
-            :drop="dropMark(at)"
-            @dragstart="(event) => emit('dragstart', row.task.id, event)"
+            :index="entry.row.index"
+            :depth="entry.row.depth"
+            :children="entry.row.children"
+            :drop="dropMark(entry.at)"
+            @dragstart="(event) => emit('dragstart', entry.row.task.id, event)"
             @dragend="emit('dragend')"
           />
         </li>

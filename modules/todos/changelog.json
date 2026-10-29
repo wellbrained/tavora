@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.2.0",
+    "date": "2026-10-29",
+    "notes": [
+      "Press Enter while editing a to-do to start a new one right below it. Its ⋯ menu can add a to-do below or a sub-to-do too.",
+      "Live view settings open in a big window: pick a font and size, bold, text color, outline and background color.",
+      "Choose what sits between groups in the live view (nothing, a line or the group name) and whether finished to-dos show, ticked and struck through."
+    ]
+  },
+  {
     "version": "0.1.0",
     "date": "2026-10-18",
     "notes": [

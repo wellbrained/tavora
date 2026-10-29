@@ -1,0 +1,126 @@
+/* The live view's plate (plate.ts sets the variables and classes from the look). Nothing on it can be clicked. */
+.live-plate {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 100%;
+  margin: 0;
+  padding: var(--padding, 8px);
+  overflow: hidden;
+  list-style: none;
+  /* The panel's theme would give it an outline in the settings preview. */
+  outline: none;
+  border-radius: 10px;
+  background: var(--plate, rgb(0 0 0 / 0.33));
+  color: var(--text, #fff);
+  font-weight: 500;
+  line-height: 1.35;
+  user-select: none;
+}
+
+.live-plate[hidden] {
+  display: none;
+}
+
+.live-plate.bold {
+  font-weight: 700;
+}
+
+.live-plate.outline {
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.85),
+    0 0 4px rgb(0 0 0 / 0.5);
+}
+
+.live-plate li {
+  display: flex;
+  gap: 0.5em;
+  align-items: baseline;
+}
+
+/* An empty box for an open to-do, a ticked one for a finished one. */
+.live-plate .mark {
+  flex: none;
+  width: 0.9em;
+  text-align: center;
+}
+
+.live-plate .box {
+  align-self: center;
+  box-sizing: border-box;
+  width: 0.8em;
+  height: 0.8em;
+  margin: 0 0.05em;
+  border: 0.1em solid currentColor;
+  border-radius: 0.2em;
+}
+
+.live-plate.outline .box {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.7),
+    inset 0 1px 2px rgb(0 0 0 / 0.5);
+}
+
+.live-plate .done .box {
+  background: currentColor;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")
+      center / 85% no-repeat,
+    linear-gradient(black, black);
+  mask-composite: exclude;
+}
+
+.live-plate .done {
+  opacity: 0.55;
+}
+
+.live-plate .done .text {
+  text-decoration: line-through;
+}
+
+.live-plate .text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.live-plate .progress,
+.live-plate .more {
+  opacity: 0.6;
+}
+
+.live-plate .progress {
+  flex: none;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-plate .more {
+  padding-left: 1.4em;
+}
+
+/* Group names: small and set apart from the group before. */
+.live-plate .head {
+  display: block;
+  margin-top: 0.45em;
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.live-plate .head.first {
+  margin-top: 0;
+}
+
+/* Or only a line between groups. */
+.live-plate.lines .head {
+  height: 0;
+  margin: 0.35em 0;
+  overflow: hidden;
+  border-top: 1px solid currentColor;
+  opacity: 0.35;
+}
+
+.live-plate.lines .head.first {
+  display: none;
+}

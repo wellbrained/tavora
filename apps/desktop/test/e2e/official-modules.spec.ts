@@ -403,6 +403,41 @@ test("to-dos: groups, sub-to-dos, editing in place, objectives and finished task
   await again.app.close();
 });
 
+test("to-dos: Enter in a to-do starts a new one right below it", async () => {
+  const { app, page } = await launch();
+  await openModule(page, TODOS);
+  await ready(app, TODOS, "empty");
+  await addInto(app, TODOS, $(`[data-testid="first-task"]`), "Craft a bow");
+  for (const title of ["Tame a wolf", "Build a hut"]) await addInto(app, TODOS, $(`form[data-testid^="add-task-"]`), title);
+  await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Tame a wolf", "Build a hut"]);
+
+  // Enter while editing opens an empty row under the to-do, focused, and every Enter there adds one and moves on.
+  // Editing right away also checks that the first to-do's group keeps its id once saved: a new id redraws the group and closes the editor.
+  await inModule(app, TODOS, `${taskTitled("Craft a bow")}.querySelector('[data-testid="task-open"]').click()`);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  await expect.poll(() => inModule(app, TODOS, `!!${q("task-title-input")}`)).toBe(true);
+  await inModule(app, TODOS, `${q("task-title-input")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }))`);
+  await expect.poll(() => inModule(app, TODOS, `document.activeElement === ${q("draft-task")}?.querySelector("input")`)).toBe(true);
+  await addInto(app, TODOS, $(`[data-testid="draft-task"]`), "Gather wood");
+  await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Tame a wolf", "Build a hut"]);
+  // Tab there makes the next one a sub-to-do of the one above.
+  await inModule(app, TODOS, `${q("draft-task")}.querySelector("input").dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }))`);
+  await addInto(app, TODOS, $(`[data-testid="draft-task"]`), "Find flint");
+  await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Tame a wolf", "Build a hut"]);
+  await expect.poll(() => inModule(app, TODOS, `${taskTitled("Find flint")}?.dataset.depth`)).toBe("1");
+  // Enter on the empty row closes it.
+  await inModule(app, TODOS, `${q("draft-task")}.requestSubmit()`);
+  await expect.poll(() => inModule(app, TODOS, `!${q("draft-task")}`)).toBe(true);
+
+  // The menu adds a sub-to-do as the last one under a to-do.
+  await pickFromMenu(app, TODOS, `${taskTitled("Tame a wolf")}.querySelector('[data-testid="task-menu"]')`, "menu-add-sub");
+  await expect.poll(() => inModule(app, TODOS, `document.activeElement === ${q("draft-task")}?.querySelector("input")`)).toBe(true);
+  await addInto(app, TODOS, $(`[data-testid="draft-task"]`), "Bring meat");
+  await expect.poll(() => inModule(app, TODOS, `${taskTitled("Bring meat")}?.dataset.depth`)).toBe("1");
+  await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Tame a wolf", "Bring meat", "Build a hut"]);
+  await app.close();
+});
+
 test("to-dos: two panels share one list and both keep their changes", async () => {
   const { app, page } = await launch();
   await openModule(page, TODOS);
