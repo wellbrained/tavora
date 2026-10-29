@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { Bold, ChevronDown, ChevronRight, CircleHelp, Copy, Italic, Loader2, MoreHorizontal, Pencil, Pin, Plus, Settings, Trash2 } from "@lucide/vue";
+import { Bold, ChevronDown, ChevronRight, CircleHelp, Copy, Folder, FolderInput, FolderPlus, Italic, Loader2, MoreHorizontal, Pencil, Pin, Plus, Settings, Trash2 } from "@lucide/vue";
 import { ConfirmDialog, Tooltip, TooltipRows, type TooltipRow } from "@tavora/official-ui";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@tavora/official-ui/components/ui/context-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@tavora/official-ui/components/ui/context-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import {
   DropdownMenu,
@@ -133,7 +142,7 @@ const renaming = ref(false);
         </Tooltip>
       </DemoSection>
 
-<DemoSection v-if="visible.has('menus')" id="menus" :title="title('menus')" description="Every menu opens from a visible ⋯ button. Destructive items sit last, in red, after a separator.">
+<DemoSection v-if="visible.has('menus')" id="menus" :title="title('menus')" description="Every menu opens from a visible ⋯ button. Icons go on every entry or on none. Destructive items sit last, in red, after a separator.">
         <Specimen label="Dropdown menu">
           <DropdownMenu>
             <DropdownMenuTrigger as-child>
@@ -141,11 +150,11 @@ const renaming = ref(false);
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" class="w-56">
               <DropdownMenuLabel>Note</DropdownMenuLabel>
-              <DropdownMenuItem><Pencil :stroke-width="1.5" /> Rename <DropdownMenuShortcut>F2</DropdownMenuShortcut></DropdownMenuItem>
-              <DropdownMenuItem><Copy :stroke-width="1.5" /> Duplicate <DropdownMenuShortcut>Ctrl+D</DropdownMenuShortcut></DropdownMenuItem>
-              <DropdownMenuItem disabled><Pin :stroke-width="1.5" /> Pin (already pinned)</DropdownMenuItem>
+              <DropdownMenuItem><Pencil /> Rename <DropdownMenuShortcut>F2</DropdownMenuShortcut></DropdownMenuItem>
+              <DropdownMenuItem><Copy /> Duplicate <DropdownMenuShortcut>Ctrl+D</DropdownMenuShortcut></DropdownMenuItem>
+              <DropdownMenuItem disabled><Pin /> Pin (already pinned)</DropdownMenuItem>
               <DropdownMenuSub>
-                <DropdownMenuSubTrigger>Move to group</DropdownMenuSubTrigger>
+                <DropdownMenuSubTrigger><FolderInput /> Move to group</DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
                   <DropdownMenuItem>Act 1</DropdownMenuItem>
                   <DropdownMenuItem>Act 2</DropdownMenuItem>
@@ -161,7 +170,7 @@ const renaming = ref(false);
                 <DropdownMenuRadioItem value="name">Name</DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive"><Trash2 :stroke-width="1.5" /> Delete note</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive"><Trash2 /> Delete note</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
@@ -182,10 +191,18 @@ const renaming = ref(false);
               Right-click here
             </ContextMenuTrigger>
             <ContextMenuContent class="w-48">
-              <ContextMenuItem><Pencil :stroke-width="1.5" /> Rename</ContextMenuItem>
-              <ContextMenuItem><Copy :stroke-width="1.5" /> Duplicate</ContextMenuItem>
+              <ContextMenuItem><Pencil /> Rename</ContextMenuItem>
+              <ContextMenuItem><Copy /> Duplicate</ContextMenuItem>
+              <ContextMenuSub>
+                <ContextMenuSubTrigger><FolderInput /> Move to folder</ContextMenuSubTrigger>
+                <ContextMenuSubContent class="w-44">
+                  <ContextMenuItem><Folder /> Act 1</ContextMenuItem>
+                  <ContextMenuItem><Folder /> Endgame</ContextMenuItem>
+                  <ContextMenuItem><FolderPlus /> New folder…</ContextMenuItem>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
               <ContextMenuSeparator />
-              <ContextMenuItem variant="destructive"><Trash2 :stroke-width="1.5" /> Delete</ContextMenuItem>
+              <ContextMenuItem variant="destructive"><Trash2 /> Delete</ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
         </Specimen>

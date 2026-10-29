@@ -64,7 +64,10 @@ function run(item: MenuItem) {
       <span class="truncate">{{ item.label }}</span>
     </component>
     <component :is="parts.Sub" v-else-if="item.submenu">
-      <component :is="parts.SubTrigger" :data-testid="item.testid" :disabled="item.disabled">{{ item.label }}</component>
+      <component :is="parts.SubTrigger" :data-testid="item.testid" :disabled="item.disabled">
+        <component :is="item.glyph" v-if="item.glyph" aria-hidden="true" />
+        {{ item.label }}
+      </component>
       <component :is="parts.SubContent" class="max-w-72 min-w-48">
         <MenuEntries :items="item.submenu()" :kind="kind" />
       </component>
@@ -81,8 +84,9 @@ function run(item: MenuItem) {
       @select="run(item)"
     >
       <span v-if="hasChecks" class="inline-flex size-4 flex-none items-center justify-center" aria-hidden="true">
-        <Check v-if="item.checked" class="size-4" />
+        <Check v-if="item.checked" class="text-primary size-4" />
       </span>
+      <component :is="item.glyph" v-if="item.glyph" aria-hidden="true" />
       <ModuleIcon v-if="item.icon && icons" :module-id="item.icon.moduleId" :panel-type="item.icon.panelType" />
       <span v-if="item.icon" class="min-w-0 truncate">{{ item.label }}</span>
       <template v-else>{{ item.label }}</template>

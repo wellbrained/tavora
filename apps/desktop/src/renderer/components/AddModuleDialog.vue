@@ -17,7 +17,7 @@ import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-li
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
 import { t } from "../i18n";
-import { Blocks, ChevronDown, CloudDownload, Code, Download, LayoutGrid, Search, Settings2, ShieldCheck, Store, X } from "@lucide/vue";
+import { Blocks, ChevronDown, CloudDownload, Code, Download, FileArchive, LayoutGrid, Search, Settings2, ShieldCheck, Store, Upload, X } from "@lucide/vue";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
@@ -193,8 +193,8 @@ function closeMenuFirst(event: KeyboardEvent) {
 /** A module from a project folder can be published or saved as a zip from its menu (with accounts on). */
 function projectMenu(module: ModuleView): MenuItem[] {
   return [
-    { label: t("publish.button"), testid: `menu-publish-${module.id}`, run: () => publishModule(module.id) },
-    { label: t("publish.saveZip"), testid: `menu-save-zip-${module.id}`, run: () => saveModuleZip(module.id) },
+    { label: t("publish.button"), testid: `menu-publish-${module.id}`, glyph: Upload, run: () => publishModule(module.id) },
+    { label: t("publish.saveZip"), testid: `menu-save-zip-${module.id}`, glyph: FileArchive, run: () => saveModuleZip(module.id) },
   ];
 }
 const accounts = computed(() => account.value?.enabled === true);

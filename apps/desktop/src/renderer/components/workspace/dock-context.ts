@@ -1,5 +1,6 @@
 // Shared between the workspace and the components the docking library
 // renders inside it (panel content, tabs and group actions).
+import { ArrowLeftToLine, ArrowRightToLine, Columns2, Layers, Maximize2, Minimize2, Rows2, Trash2, X } from "@lucide/vue";
 import type { DockviewApi, DockviewGroupPanel, IDockviewPanel } from "dockview-vue";
 import type { InjectionKey } from "vue";
 import { act, confirmAction, showOrAddPanel, state, submitAction, type MenuItem } from "../../host";
@@ -81,25 +82,26 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
   // moving and maximizing take a second group.
   const several = api.groups.length > 1;
   const arrange: MenuItem[] = [];
-  if (canSplit(group, "right", info)) arrange.push({ label: t("dock.splitRight"), testid: "panel-split-right", run: split("right") });
-  if (canSplit(group, "below", info)) arrange.push({ label: t("dock.splitDown"), testid: "panel-split-down", run: split("below") });
+  if (canSplit(group, "right", info)) arrange.push({ label: t("dock.splitRight"), testid: "panel-split-right", glyph: Columns2, run: split("right") });
+  if (canSplit(group, "below", info)) arrange.push({ label: t("dock.splitDown"), testid: "panel-split-down", glyph: Rows2, run: split("below") });
   if (several) {
-    arrange.push({ label: t("dock.moveNext"), testid: "panel-move-next", run: move(1) });
-    arrange.push({ label: t("dock.movePrevious"), testid: "panel-move-previous", run: move(-1) });
+    arrange.push({ label: t("dock.moveNext"), testid: "panel-move-next", glyph: ArrowRightToLine, run: move(1) });
+    arrange.push({ label: t("dock.movePrevious"), testid: "panel-move-previous", glyph: ArrowLeftToLine, run: move(-1) });
   }
   if (arrange[0]) arrange[0].separator = true;
   const size: MenuItem[] = maximized
-    ? [{ label: t("dock.restore"), testid: "panel-restore", separator: true, run: () => group.api.exitMaximized() }]
+    ? [{ label: t("dock.restore"), testid: "panel-restore", glyph: Minimize2, separator: true, run: () => group.api.exitMaximized() }]
     : several
-      ? [{ label: t("dock.maximize"), testid: "panel-maximize", separator: true, run: () => group.api.maximize() }]
+      ? [{ label: t("dock.maximize"), testid: "panel-maximize", glyph: Maximize2, separator: true, run: () => group.api.maximize() }]
       : [];
   return [
-    { label: t("workspace.inWorkspace"), testid: "panel-in-game", submenu: () => workspaceModulesMenu(group) },
+    { label: t("workspace.inWorkspace"), testid: "panel-in-game", glyph: Layers, submenu: () => workspaceModulesMenu(group) },
     ...arrange,
     ...size,
     {
       label: t("dock.closePanel"),
       testid: "panel-close",
+      glyph: X,
       separator: true,
       run: () => act({ type: "close-panel", instanceId: panel.id }),
     },
@@ -109,6 +111,7 @@ export function panelMenu(panel: IDockviewPanel, api: DockviewApi, info: DockCon
           {
             label: t("dock.removeModule", { name: module.name }),
             testid: "panel-remove-module",
+            glyph: Trash2,
             danger: true,
             separator: true,
             run: () =>

@@ -1,6 +1,6 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
 import { toast } from "@tavora/official-ui/components/ui/toast";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
@@ -235,6 +235,8 @@ export interface MenuItem {
   heading?: boolean;
   /** A module's (or one of its panel types') icon in front of the label. */
   icon?: { moduleId: string; panelType?: string | null };
+  /** A Lucide icon in front of the label. A menu gives one to every entry or to none, so the labels line up. */
+  glyph?: Component;
   run?: () => unknown;
 }
 
