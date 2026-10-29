@@ -7,10 +7,11 @@ import { DatabaseSync } from "node:sqlite";
  * were updated and modules installed, per version or module and per UTC day, and once a day how many
  * accounts there are and how many were active. Nothing about a user is kept: no address, no id, no
  * request log, and a user without an account is never counted as a person. A count is a number that
- * goes up by one.
+ * goes up by one. Installers downloaded from the GitHub releases are a kind of their own: GitHub only keeps a
+ * running total per file, so once an hour the server asks for it and counts what was added since (github-releases.ts).
  */
 
-export const STAT_KINDS = ["app-installer", "app-update", "module-install", "module-update"] as const;
+export const STAT_KINDS = ["app-installer", "app-installer-github", "app-update", "module-install", "module-update"] as const;
 export type StatKind = (typeof STAT_KINDS)[number];
 
 /** Most different versions or modules counted per kind and day, so made-up names cannot grow the file. */
@@ -52,18 +53,32 @@ export class StatsStore {
       pragma journal_mode = wal;
       create table if not exists daily_counts (day text not null, kind text not null, key text not null, count integer not null, primary key (day, kind, key)) without rowid;
       create table if not exists account_days (day text primary key, total integer not null, active7 integer not null, active30 integer not null);
+      create table if not exists github_totals (key text primary key, total integer not null) without rowid;
     `);
   }
 
-  /** Counts one thing on the day of `now`. False when the day already has too many different keys. */
-  count(kind: StatKind, key: string, now: number = Date.now()): boolean {
+  /** Counts one thing (or `amount` of them) on the day of `now`. False when the day already has too many different keys. */
+  count(kind: StatKind, key: string, now: number = Date.now(), amount = 1): boolean {
     const day = utcDay(now);
     const known = this.db.prepare("select 1 from daily_counts where day = ? and kind = ? and key = ?").get(day, kind, key);
     if (!known && (this.db.prepare("select count(*) as n from daily_counts where day = ? and kind = ?").get(day, kind) as { n: number }).n >= MAX_KEYS_PER_DAY) return false;
     this.db
-      .prepare("insert into daily_counts (day, kind, key, count) values (?, ?, ?, 1) on conflict (day, kind, key) do update set count = count + 1")
-      .run(day, kind, key);
+      .prepare("insert into daily_counts (day, kind, key, count) values (?, ?, ?, ?) on conflict (day, kind, key) do update set count = count + excluded.count")
+      .run(day, kind, key, amount);
     return true;
+  }
+
+  /**
+   * GitHub's running download totals per version: what was added since the last call is counted on the day of
+   * `now`. A version seen for the first time counts its whole total that day. A total that went down (the file
+   * was uploaded again) only becomes the new starting point.
+   */
+  countGithubTotals(totals: Record<string, number>, now: number = Date.now()): void {
+    for (const [version, total] of Object.entries(totals)) {
+      const seen = (this.db.prepare("select total from github_totals where key = ?").get(version) as { total: number } | undefined)?.total ?? 0;
+      if (total > seen && !this.count("app-installer-github", version, now, total - seen)) continue;
+      if (total !== seen) this.db.prepare("insert into github_totals (key, total) values (?, ?) on conflict (key) do update set total = excluded.total").run(version, total);
+    }
   }
 
   /** Writes the day's account numbers unless the day already has them. Returns whether it wrote. */

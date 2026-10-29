@@ -9,6 +9,7 @@ import { createAdminApp } from "./admin-app.ts";
 import { ActivityLog } from "./activity-log.ts";
 import { createDiscordClient } from "./discord.ts";
 import { createApp } from "./app.ts";
+import { githubInstallerTotals } from "./github-releases.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
 import { normalize } from "./ids.ts";
@@ -114,6 +115,13 @@ const snapshotAccounts = () => {
 };
 snapshotAccounts();
 setInterval(snapshotAccounts, 60 * 60_000).unref();
+// Installers downloaded from the GitHub releases: GitHub's running totals, once an hour (github-releases.ts).
+const countGithubDownloads = () =>
+  githubInstallerTotals()
+    .then((totals) => stats.countGithubTotals(totals))
+    .catch((error: unknown) => console.error(`[tavora-api] Can't read the GitHub downloads: ${error instanceof Error ? error.message : "unknown error"}`));
+void countGithubDownloads();
+setInterval(() => void countGithubDownloads(), 60 * 60_000).unref();
 
 // The virus scan every new catalog version goes through (ClamAV). Without one, or when it fails, every new version waits for review.
 const scanner = scannerFromEnv(process.env);
