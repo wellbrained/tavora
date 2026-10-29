@@ -198,6 +198,22 @@ test("workspaces are renamed, favorited and put in folders from their menu", asy
   await again.app.close();
 });
 
+test("a workspace's menu opens beside it, not at the pointer", async () => {
+  const { app, page } = await launch();
+  const tile = page.getByTestId("rail-workspace-poe2");
+  const box = (await tile.boundingBox())!;
+  // Clicked near the bottom right corner, the menu still lines up with the tile's top, just past its right edge.
+  await tile.click({ button: "right", position: { x: box.width - 3, y: box.height - 3 } });
+  const menu = page.locator('[role="menu"][data-state="open"]');
+  await expect(async () => {
+    const at = (await menu.boundingBox())!;
+    expect(at.x).toBeGreaterThan(box.x + box.width);
+    expect(at.x).toBeLessThan(box.x + box.width + 16);
+    expect(Math.abs(at.y - box.y)).toBeLessThan(2);
+  }).toPass();
+  await app.close();
+});
+
 test("dropping a workspace on a folder leaves the folder open or closed as it was", async () => {
   const { app, page } = await launch();
   await fromMenu(page, "satisfactory", "menu-move-to-folder", "menu-new-folder");
