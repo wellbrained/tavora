@@ -170,7 +170,7 @@ function menuEntries(): MenuEntry[] {
   ];
 }
 
-/** The ⋯ button's menu opens below it; a right-click on the header opens it at the pointer. */
+/** The ⋯ button's menu opens below it; a right-click on the header opens the same menu below the header's end. */
 const menuOpen = ref(false);
 async function openMenu(at: { x: number; y: number; width?: number; height?: number }) {
   menuOpen.value = true;
@@ -194,7 +194,8 @@ function onMenuButton(event: MouseEvent) {
 function onHeaderContextMenu(event: MouseEvent) {
   if (renaming.value || (event.target as Element).closest("input")) return;
   event.preventDefault();
-  void openMenu({ x: event.clientX, y: event.clientY });
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  void openMenu({ x: box.left, y: box.top, width: box.width, height: box.height });
 }
 
 // ── A new to-do typed between others (Enter in a title, or Add below) ──
