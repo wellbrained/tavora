@@ -8,7 +8,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { desktopDir, inModule, launch, newUserData, panels } from "./harness";
+import { desktopDir, inModule, launch, layOutColumns, newUserData, panels } from "./harness";
 
 const NETWORK = "local.test.network-module";
 const FIXTURE = path.join(desktopDir, "test/network-fixture");
@@ -107,6 +107,8 @@ test("adding a module asks first, adding it again does not, and taking it back r
 test("a second panel added before the answer waits for it, and both start once allowed", async () => {
   const { app, page } = await launch(undefined, [FIXTURE], { env: ENV });
   try {
+    // Side by side, so both panels show what they wait for.
+    await layOutColumns(page, 2);
     await pressAdd(page, NETWORK);
     await expect(page.getByTestId("grant-question")).toBeVisible();
     await pressAdd(page, NETWORK);

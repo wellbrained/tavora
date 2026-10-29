@@ -5,13 +5,14 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { HOSTILE, launch, newUserData, openModule, panels } from "./harness";
+import { HOSTILE, launch, layOutColumns, newUserData, openModule, panels } from "./harness";
 
 test("panels of the old Discord and AI Usage modules say they moved, and their settings stay hidden", async () => {
   const userData = await newUserData();
 
   // A workspace with two panels, then pointed at the old official modules the way an older Tavora saved them.
   const first = await launch(userData);
+  await layOutColumns(first.page, 2);
   await openModule(first.page, HOSTILE);
   await openModule(first.page, HOSTILE);
   await expect(panels(first.page, HOSTILE)).toHaveCount(2);

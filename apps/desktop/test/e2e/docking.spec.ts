@@ -4,6 +4,7 @@ import {
   expectModuleText,
   inModule,
   launch,
+  layOutColumns,
   openModule,
   panels,
   RAIL_WIDTH,
@@ -94,38 +95,47 @@ async function layoutMenu(page: Page, name: string, item: string) {
   await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
 }
 
-test("panels open side by side, and as tabs once there is no room", async () => {
-  const { app, page } = await launch();
+test("a module added goes in as a tab where you work, nothing else moves, and that is kept", async () => {
+  const { app, page, userData } = await launch();
   await setContentSize(app, RAIL_WIDTH + 1000, 500);
-  // minWidth is 320, so three columns fit in 1000px and a fourth does not.
-  // minHeight is 240, so there is no room to split one either.
+  await layOutColumns(page, 3);
   for (let i = 0; i < 3; i++) await openModule(page, VANILLA);
-  await expect(groups(page)).toHaveCount(3);
-  // The fourth becomes a tab in the focused group: the third one, once its tab is clicked.
-  await panels(page).nth(2).click();
+  await expect(page.locator("[data-testid^='empty-slot-']")).toHaveCount(0);
+  const before = await Promise.all([0, 1, 2].map(async (index) => (await groups(page).nth(index).boundingBox())!));
+  // The fourth becomes a tab in the focused group: the first one, once its tab is clicked.
+  await panels(page).nth(0).click();
   await openModule(page, VANILLA);
   await expect(panels(page)).toHaveCount(4);
   await expect(groups(page)).toHaveCount(3);
-  await expect(groups(page).nth(2).locator("[data-panel-tab]")).toHaveCount(2);
+  await expect(groups(page).nth(0).locator("[data-panel-tab]")).toHaveCount(2);
+  const after = await Promise.all([0, 1, 2].map(async (index) => (await groups(page).nth(index).boundingBox())!));
+  after.forEach((box, index) => expect(box).toEqual(before[index]));
   for (const index of [0, 1, 2, 3]) await expectModuleText(app, VANILLA, "status", "Connected", index);
 
   // The newest panel is the selected tab; the one behind it is hidden and paused.
-  await expectModuleText(app, VANILLA, "lifecycle", "suspended", 2);
+  await expectModuleText(app, VANILLA, "lifecycle", "suspended", 0);
   await expectModuleText(app, VANILLA, "lifecycle", "active", 3);
-  await panels(page, VANILLA).nth(2).click();
-  await expectModuleText(app, VANILLA, "lifecycle", "active", 2);
+  await panels(page, VANILLA).nth(0).click();
+  await expectModuleText(app, VANILLA, "lifecycle", "active", 0);
   await expectModuleText(app, VANILLA, "lifecycle", "suspended", 3);
+
+  // The group last worked in is kept: after a restart a new module still goes there.
+  await panels(page).nth(3).click();
+  await page.waitForTimeout(500); // the layout is saved once it has been still briefly
   await app.close();
+  const again = await launch(userData);
+  await expect(groups(again.page)).toHaveCount(3);
+  await openModule(again.page, REACT);
+  await expect(groups(again.page)).toHaveCount(3);
+  await expect(groups(again.page).nth(2).locator("[data-panel-tab]")).toHaveCount(2);
+  await again.app.close();
 });
 
 test("panels are moved, split and maximized from their menu, and the layout is kept", async () => {
   const { app, page, userData } = await launch();
   await openModule(page, VANILLA);
+  // React opens as a second tab in the vanilla panel's group.
   await openModule(page, REACT);
-  await expect(groups(page)).toHaveCount(2);
-
-  // React joins the vanilla panel's group as a second tab.
-  await panelMenu(page, REACT, "panel-move-previous");
   await expect(groups(page)).toHaveCount(1);
   // With one group there is nowhere to move a panel or maximize it, so those items don't show.
   await panels(page, REACT).click({ button: "right" });
@@ -168,6 +178,7 @@ test("panels are moved, split and maximized from their menu, and the layout is k
 
 test("a module maximizes its own panel after a key press, and it stays maximized after a restart", async () => {
   const { app, page, userData } = await launch();
+  await layOutColumns(page, 2);
   await openModule(page, VANILLA);
   await openModule(page, REACT);
   await expect(groups(page)).toHaveCount(2);
@@ -204,10 +215,11 @@ test("a module maximizes its own panel after a key press, and it stays maximized
 test("a module is removed from one workspace from its panel menu, leaving empty slots", async () => {
   const { app, page } = await launch();
   await setContentSize(app, RAIL_WIDTH + 1000, 500);
+  await layOutColumns(page, 3);
   await openModule(page, VANILLA);
   await openModule(page, REACT);
   await openModule(page, VANILLA);
-  await expect(groups(page)).toHaveCount(3);
+  await expect(page.locator("[data-testid^='empty-slot-']")).toHaveCount(0);
   const react = (await panels(page, REACT).boundingBox())!;
 
   // Both vanilla panels go; their columns stay as empty slots, so React keeps its place.
@@ -227,7 +239,6 @@ test("a tab dragged to the edge of another group splits it", async () => {
   const { app, page } = await launch();
   await openModule(page, VANILLA);
   await openModule(page, REACT);
-  await panelMenu(page, REACT, "panel-move-previous");
   await expect(groups(page)).toHaveCount(1);
 
   // Playwright's mouse does not drive HTML drag and drop in Electron, so
@@ -261,10 +272,11 @@ test("a tab dragged to the edge of another group splits it", async () => {
 test("dragging a column beside another in its row moves it there and shows a bar, keeping widths", async () => {
   const { app, page } = await launch();
   await setContentSize(app, RAIL_WIDTH + 1500, 800);
+  await layOutColumns(page, 3);
   await openModule(page, VANILLA);
   await openModule(page, REACT);
   await openModule(page, VUE);
-  await expect(groups(page)).toHaveCount(3);
+  await expect(page.locator("[data-testid^='empty-slot-']")).toHaveCount(0);
   const column = (id: string) => groups(page).filter({ has: panels(page, id) });
   const width = (await column(VANILLA).boundingBox())!.width;
 
@@ -308,6 +320,7 @@ test("module views are replaced by still images while a menu is open", async () 
 
 test("named layouts are saved, applied, renamed and deleted", async () => {
   const { app, page, userData } = await launch();
+  await layOutColumns(page, 2);
   await openModule(page, VANILLA);
   await openModule(page, REACT);
   await expectModuleText(app, VANILLA, "status", "Connected");

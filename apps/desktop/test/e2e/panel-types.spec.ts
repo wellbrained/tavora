@@ -7,7 +7,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { expectModuleText, hintOf, inModule, launch, newUserData, panels, typeInModule } from "./harness";
+import { expectModuleText, hintOf, inModule, launch, layOutColumns, newUserData, panels, typeInModule } from "./harness";
 
 const PANELS = "local.example.panels-module";
 
@@ -191,6 +191,7 @@ test("the modules menu adds the panel types not open yet and brings open ones to
   const front = (type: string) => page.locator(`.dv-tab.dv-active-tab [data-panel-type="${type}"]`);
   // Nothing in the game yet: the ▾ is there, but off.
   await expect(page.getByTestId("modules-in-game")).toBeDisabled();
+  await layOutColumns(page, 2);
   await addPanel(page, "planner");
 
   // The toolbar's ▾ lists the module with its panel types; the open one is checked.

@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -130,6 +130,10 @@ const cases: [string, unknown, boolean][] = [
   ["translated panel name too long", { ...valid, minTavora: "0.21.0", panels: [{ id: "planner", name: "Planner" }], translations: { de: { panels: { planner: "x".repeat(25) } } } }, false],
   ["translated action name on two lines", { ...valid, minTavora: "0.21.0", actions: [{ id: "reset", name: "Reset" }], translations: { de: { actions: { reset: "Zurück\nsetzen" } } } }, false],
   ["leaderboards", leaderboards, true],
+  ["a wide layout", { ...valid, minTavora: "0.21.94", viewport: { minWidth: 320, minHeight: 440, wide: { minWidth: 500, minHeight: 300 } } }, true],
+  ["a panel type's wide layout", { ...valid, minTavora: "0.21.94", panels: [{ id: "grid", name: "Grid", viewport: { minWidth: 320, minHeight: 440, wide: { minWidth: 500, minHeight: 300 } } }] }, true],
+  ["a wide layout without a height", { ...valid, minTavora: "0.21.94", viewport: { minWidth: 320, minHeight: 440, wide: { minWidth: 500 } } }, false],
+  ["a wide layout with a preferred size", { ...valid, minTavora: "0.21.94", viewport: { minWidth: 320, minHeight: 440, wide: { minWidth: 500, minHeight: 300, preferredWidth: 800 } } }, false],
   ["leaderboards without the connector", { ...leaderboards, permissions: { network: [] } }, false],
   ["the leaderboards connector without leaderboards", { ...leaderboards, leaderboards: undefined }, false],
   ["leaderboards without boards", { ...leaderboards, leaderboards: { boards: [] } }, false],
@@ -468,6 +472,38 @@ describe("leaderboards", () => {
   });
 });
 
+
+describe("viewport.wide", () => {
+  const tall = { minWidth: 320, minHeight: 440 };
+  const wide = (viewport: object, extra: object = {}) => ({ ...valid, minTavora: "0.21.94", viewport, ...extra });
+
+  it("needs a minTavora newer than the last Tavora that refuses it, except Tavora's own modules", () => {
+    const viewport = { ...tall, wide: { minWidth: 500, minHeight: 300 } };
+    const error = { ok: false, errors: [`viewport.wide needs a minTavora newer than ${LAST_TAVORA_WITHOUT_WIDE_LAYOUT}, because older Tavoras refuse it`] };
+    expect(validateManifest(wide(viewport, { minTavora: undefined }))).toEqual(error);
+    expect(validateManifest(wide(viewport, { minTavora: LAST_TAVORA_WITHOUT_WIDE_LAYOUT }))).toEqual(error);
+    expect(validateManifest(wide(viewport)).ok).toBe(true);
+    expect(validateManifest(wide(viewport, { id: "tavora.puzzle", minTavora: undefined })).ok).toBe(true);
+    expect(validateManifest(wide(tall, { minTavora: undefined, panels: [{ id: "grid", name: "Grid", viewport }] }))).toEqual({
+      ok: false,
+      errors: [`panels[0].viewport.wide needs a minTavora newer than ${LAST_TAVORA_WITHOUT_WIDE_LAYOUT}, because older Tavoras refuse it`],
+    });
+  });
+
+  it("refuses a wide minimum that is not wide, or a tall one that is wide", () => {
+    expect(validateManifest(wide({ ...tall, wide: { minWidth: 300, minHeight: 300 } }))).toEqual({ ok: false, errors: ["viewport.wide.minWidth must be larger than viewport.wide.minHeight"] });
+    expect(validateManifest(wide({ minWidth: 500, minHeight: 440, wide: { minWidth: 600, minHeight: 300 } }))).toEqual({
+      ok: false,
+      errors: ["viewport.minWidth must not be larger than viewport.minHeight when viewport.wide is set: it is the minimum while the panel is taller than wide"],
+    });
+    // A square tall minimum is fine: a square panel counts as tall.
+    expect(validateManifest(wide({ minWidth: 400, minHeight: 400, wide: { minWidth: 600, minHeight: 300 } })).ok).toBe(true);
+  });
+
+  it("leaves a single minimum of any shape alone", () => {
+    expect(validateManifest({ ...valid, viewport: { minWidth: 500, minHeight: 300 } }).ok).toBe(true);
+  });
+});
 describe("JSON Schema", () => {
   const ajv = new Ajv({ allErrors: true, strict: true });
   const validate = ajv.compile(schema);

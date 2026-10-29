@@ -187,6 +187,16 @@ export async function openModule(page: Page, moduleId: string): Promise<void> {
   await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
 }
 
+
+/**
+ * Lays out `count` empty columns side by side in the workspace shown, which the next modules added fill in
+ * order. Without it a module added goes in as a tab in the group the user works in.
+ */
+export async function layOutColumns(page: Page, count: number) {
+  await page.getByTestId("layouts").click();
+  await page.locator(`[role="menu"][data-state="open"] [data-testid="layout-grid-${count}x1"]`).click();
+  await expect(page.locator("[data-testid^='empty-slot-']")).toHaveCount(count);
+}
 /** The tabs of open panels, optionally of one module. */
 export function panels(page: Page, moduleId?: string) {
   return page.locator(moduleId ? `[data-panel-tab][data-module-id="${moduleId}"]` : "[data-panel-tab]");

@@ -7,6 +7,7 @@ import {
   expectModuleText,
   inModule,
   launch,
+  layOutColumns,
   newUserData,
   openWorkspace,
   openModule,
@@ -102,6 +103,7 @@ test("React and vanilla modules load, get trusted workspace context and persist 
 
 test("modules receive resize events matching their panel size", async () => {
   const { app, page } = await launch();
+  await layOutColumns(page, 2);
   await openModule(page, VANILLA);
   await openModule(page, REACT);
   await expectModuleText(app, VANILLA, "status", "Connected");
@@ -135,6 +137,7 @@ test("a workspace opens with all its panels at once, behind one loader until the
   }
   const { app, page } = await launch(undefined, [root]);
   try {
+    await layOutColumns(page, 2);
     await openModule(page, "devtest.quick");
     await openModule(page, "devtest.slow");
     await waitForShown(app, "devtest.slow");

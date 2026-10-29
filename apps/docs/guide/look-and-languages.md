@@ -67,6 +67,22 @@ Your module's name, description and panel names come from the manifest. Add [`tr
 ## Shortcuts and size
 
 - Tavora takes Ctrl+K (Cmd+K on macOS) for its own search before your page sees it. Choose other shortcuts.
-- Panels can be narrow. Set `viewport.minWidth` and `minHeight` in the manifest to what your module really needs, and follow `tavora.workspace.onResize`.
+- Panels can be narrow. Set `viewport.minWidth` and `minHeight` in the manifest to what your module really needs, and follow `tavora.workspace.onResize`. A module that looks different when wide can set a second minimum for that, see [Tall and wide](#tall-and-wide).
 - Pause timers and animations on `tavora.lifecycle.onSuspend` and start them again on `onResume`: a hidden panel shouldn't use the user's CPU while they play.
 - Use `tavora.ui.showMenu` for menus, so they aren't cut off at your panel's edge and look like Tavora's own. See [Menus](../reference/protocol.md#menus).
+
+## Tall and wide
+
+A panel may be docked tall and narrow or wide and low. When your module has a layout for each, say a grid above its controls and a grid beside them, give each its own minimum:
+
+```json
+"viewport": { "minWidth": 320, "minHeight": 440, "wide": { "minWidth": 500, "minHeight": 300 } }
+```
+
+- `minWidth` and `minHeight` hold while the panel is taller than wide or square, `wide` while it is wider than tall. Tavora never lets the panel go below the one for its shape.
+- Where your panel can't take the other layout yet, a resize stops at square instead. A panel 450 high in the example above stops at 450 wide: at 451 it would be wide but narrower than 500. Make it taller first.
+- Switch the layout in CSS: `@media (orientation: landscape)` is true exactly while your panel is wider than tall. A container query on your page's root works too. There is no call to make.
+- Leave `wide` out and one minimum applies to every shape, as before. A module that only has a wide layout just sets a wide minimum, such as `"minWidth": 500, "minHeight": 300`.
+- A panel type with its own `viewport` sets its own `wide`.
+
+Needs Tavora 0.21.94 or newer, so set `minTavora` to a version newer than `0.21.93`.
