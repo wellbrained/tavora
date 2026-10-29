@@ -4,11 +4,19 @@ import type { HTMLAttributes } from "vue"
 import { Check } from "@lucide/vue"
 import { reactiveOmit } from "@vueuse/core"
 import { SelectItem, SelectItemIndicator, SelectItemText, useForwardProps } from "reka-ui"
+import { computed, inject, onBeforeUnmount, onMounted } from "vue"
 import { cn } from "../../../lib/utils"
+import { EMPTY_CHOICE, emptyChoicesKey } from "./empty"
 
 const props = defineProps<SelectItemProps & { class?: HTMLAttributes["class"] }>()
 
-const delegatedProps = reactiveOmit(props, "class")
+// value="" is the empty choice: the Select clears to "" when it is picked.
+const isEmpty = computed(() => props.value === "")
+const choices = inject(emptyChoicesKey, null)
+onMounted(() => isEmpty.value && choices?.add())
+onBeforeUnmount(() => isEmpty.value && choices?.remove())
+
+const delegatedProps = reactiveOmit(props, "class", "value")
 
 const forwardedProps = useForwardProps(delegatedProps)
 </script>
@@ -17,6 +25,7 @@ const forwardedProps = useForwardProps(delegatedProps)
   <SelectItem
     data-slot="select-item"
     v-bind="forwardedProps"
+    :value="isEmpty ? EMPTY_CHOICE : value"
     :class="cn(
       'focus:bg-accent focus:text-accent-foreground [&_svg:not([class*=\'text-\'])]:text-muted-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=\'size-\'])]:size-4',
       props.class,

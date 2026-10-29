@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSepa
 import { Slider, SliderField } from "@tavora/official-ui/components/ui/slider";
 import { StyleTiles } from "@tavora/official-ui/components/ui/style-tiles";
 import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
-import { Switch } from "@tavora/official-ui/components/ui/switch";
+import { Switch, SwitchField } from "@tavora/official-ui/components/ui/switch";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { Toggle, ToggleGroup } from "@tavora/official-ui/components/ui/toggle";
 import { ref } from "vue";
@@ -35,6 +35,9 @@ const switchOff = ref(false);
 const radio = ref("normal");
 const segment = ref<"day" | "week" | "month">("week");
 const select = ref("poe2");
+const optional = ref("ranger");
+const notify = ref(true);
+const quiet = ref(false);
 const picked = ref<string>();
 const pickedGame = ref("satisfactory");
 const pickedLanguage = ref("en");
@@ -130,6 +133,11 @@ const name = ref("Waystone");
           <Label><Switch v-model="switchOn" :disabled="off" /> Show finished to-dos</Label>
           <Label><Switch v-model="switchOff" :disabled="off" /> Start on Home</Label>
         </Specimen>
+        <Specimen label="Switch field (label, optional line, click the label)" column>
+          <SwitchField v-model="notify" label="Show finished to-dos" description="Done to-dos stay in the list, crossed out." data-testid="switch-field" :disabled="off" />
+          <SwitchField v-model="quiet" label="Start on Home" :disabled="off" />
+          <SwitchField :model-value="true" label="Locked by your admin" disabled />
+        </Specimen>
         <Specimen label="Radio group">
           <RadioGroup v-model="radio" :disabled="off">
             <Label><RadioGroupItem value="compact" /> Compact</Label>
@@ -178,6 +186,19 @@ const name = ref("Waystone");
               <SelectItem value="name">Name</SelectItem>
             </SelectContent>
           </Select>
+        </Specimen>
+        <Specimen label="Select with an empty choice (SelectItem value=&quot;&quot;)">
+          <Select v-model="optional" :disabled="off">
+            <SelectTrigger class="w-56" aria-label="Class" data-testid="select-empty">
+              <SelectValue placeholder="Pick a class" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">No class</SelectItem>
+              <SelectItem value="warrior">Warrior</SelectItem>
+              <SelectItem value="ranger">Ranger</SelectItem>
+            </SelectContent>
+          </Select>
+          <span class="text-muted-foreground text-xs" data-testid="select-empty-value">Value: {{ optional === "" ? "(empty)" : optional }}</span>
         </Specimen>
         <Specimen label="Combobox (type to search)">
           <Combobox v-model="picked" :disabled="off">

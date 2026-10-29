@@ -541,6 +541,50 @@ test("ui playground: the name dialog selects its text, counts and locks while bu
   await app.close();
 });
 
+test("ui playground: a select can pick an empty choice, a switch field toggles from its label and menu rows show a line under the name", async () => {
+  const { app, page } = await launch();
+  await openModule(page, PLAYGROUND);
+  await ready(app, PLAYGROUND, "section-colours");
+  // The panel loads its saved tab once connected; switching before that would be undone.
+  await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
+  await page.waitForTimeout(500);
+  const tab = async (id: string, section: string) => {
+    await inModule(app, PLAYGROUND, `${q("tab-" + id)}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+    await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("section-" + section)}`)).toBe(true);
+  };
+  const text = (testId: string) => inModule<string>(app, PLAYGROUND, `${q(testId)}.textContent.trim()`);
+
+  // Inputs: the empty choice clears the select to "", and its own text shows in the trigger.
+  await tab("inputs", "choices");
+  expect(await text("select-empty")).toContain("Ranger");
+  await inModule(app, PLAYGROUND, `${q("select-empty")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelectorAll('[data-slot="select-item"]').length`)).toBe(3);
+  await inModule(app, PLAYGROUND, `(() => { const item = [...document.querySelectorAll('[data-slot="select-item"]')].find((el) => el.textContent.trim() === "No class"); item.focus(); item.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); })()`);
+  await expect.poll(() => text("select-empty-value")).toBe("Value: (empty)");
+  expect(await text("select-empty")).toContain("No class");
+
+  // The label toggles the switch, and the line under it describes it.
+  const field = q("switch-field");
+  expect(await inModule(app, PLAYGROUND, `${field}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("true");
+  await inModule(app, PLAYGROUND, `${field}.querySelector("label").click()`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `${field}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("false");
+  expect(await inModule(app, PLAYGROUND, `document.getElementById(${field}.querySelector('[role="switch"]').getAttribute("aria-describedby")).textContent.trim()`)).toBe("Done to-dos stay in the list, crossed out.");
+
+  // Actions: a menu item with a description shows an icon tile, its name and the line.
+  await tab("actions", "menus");
+  await inModule(app, PLAYGROUND, `[...${q("section-menus")}.querySelectorAll("button")].find((el) => el.textContent.trim() === "Add").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelectorAll('[data-slot="dropdown-menu-item"]').length`)).toBe(3);
+  expect(await inModule(app, PLAYGROUND, `(() => { const item = document.querySelector('[data-slot="dropdown-menu-item"]'); return [!!item.querySelector('[data-slot="action-row-icon"]'), item.textContent.trim()]; })()`)).toEqual([true, "Import a build Start from a file on your PC."]);
+
+  // Display: the empty state's action list reports the entry that was picked and disables the unavailable one.
+  await inModule(app, PLAYGROUND, `document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
+  await tab("display", "empty");
+  expect(await inModule(app, PLAYGROUND, `[...${q("section-empty")}.querySelectorAll('[data-slot="action-list"] button')].map((el) => el.disabled)`)).toEqual([false, false, true]);
+  await click(app, PLAYGROUND, `[data-testid="start-import"]`);
+  await expect.poll(() => text("action-list-picked")).toBe("Picked: import");
+  await app.close();
+});
+
 test("to-dos: an open menu stays open when a save comes back", async () => {
   const { app, page } = await launch();
   await openModule(page, TODOS);

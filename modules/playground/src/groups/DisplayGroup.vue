@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { AlertTriangle, Blocks, CheckCircle2, Info, LayoutGrid, Loader2, MoreHorizontal, Plus, StickyNote, Store, XCircle } from "@lucide/vue";
+import { AlertTriangle, Blocks, FolderOpen, Download, CheckCircle2, Info, LayoutGrid, Loader2, MoreHorizontal, Plus, StickyNote, Store, XCircle } from "@lucide/vue";
 import { SegmentedControl } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
 import { Expandable } from "@tavora/official-ui/components/ui/expandable";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
+import { ActionList, type ActionEntry } from "@tavora/official-ui/components/ui/action-list";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
@@ -22,6 +23,12 @@ import { type SectionId, sectionTitle as title } from "../sections";
 
 defineProps<{ visible: Set<SectionId>; off: boolean }>();
 
+const started = ref("");
+const startActions: ActionEntry[] = [
+  { id: "import", label: "Import a build", description: "Start from a file on your PC.", icon: FolderOpen, testid: "start-import" },
+  { id: "export", label: "Browse shared builds", description: "Find one other players made.", icon: Download },
+  { id: "later", label: "Not yet available", description: "Comes with a later update.", icon: StickyNote, disabled: true },
+];
 const progress = ref(45);
 const spark = Array.from({ length: 60 }, (_, i) => Math.round(50 + 30 * Math.sin(i / 5) + 12 * Math.sin(i * 1.7)));
 const switchOn = ref(true);
@@ -105,6 +112,13 @@ function bump(by: number) {
           <template #icon><StickyNote :stroke-width="1.5" /></template>
           <template #action><Button :disabled="off"><Plus :stroke-width="1.5" /> New note</Button></template>
         </EmptyState>
+        <Specimen label="With a list of actions (ActionList)" column>
+          <EmptyState title="No build yet" description="Start in one of these ways.">
+            <template #icon><StickyNote :stroke-width="1.5" /></template>
+            <template #action><ActionList :entries="startActions" @select="started = $event" /></template>
+          </EmptyState>
+          <p class="text-muted-foreground text-xs" data-testid="action-list-picked">Picked: {{ started || "nothing yet" }}</p>
+        </Specimen>
       </DemoSection>
 
 <DemoSection v-if="visible.has('expandable')" id="expandable" :title="title('expandable')" description="Long text cut to a set height, with Show more below. Short text shows in full.">
