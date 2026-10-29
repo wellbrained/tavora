@@ -8,7 +8,7 @@ export interface TitleTooltipOptions {
   onOpenChange?: (open: boolean) => void;
 }
 
-/** One readable hover layer for title hints, in official modules and in the host. */
+/** One readable hover layer for title hints, in official modules and in the host: the compact card, as the rail's. */
 export function installTitleTooltips(doc: Document = document, options: TitleTooltipOptions = {}): () => void {
   const existing = installed.get(doc);
   if (existing) return existing;
@@ -33,7 +33,7 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     }
     current = null;
   }
-  const app = createApp({ render: () => h(Tooltip, { ...state, title: "", description: state.title, id, onDismiss: hide }) });
+  const app = createApp({ render: () => h(Tooltip, { ...state, title: "", description: state.title, id, compact: true, onDismiss: hide }) });
   app.mount(container);
 
   function remember(element: Element, value: string) {
