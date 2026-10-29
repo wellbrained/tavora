@@ -1,5 +1,15 @@
 import { DatabaseSync } from "node:sqlite";
-import { isLeaderboardId, isModuleId, type LeaderboardBoard } from "@tavora/module-schema";
+import {
+  isLeaderboardId,
+  isLeaderboardPeriod,
+  isModuleId,
+  LEADERBOARD_MIN_GAMES,
+  LEADERBOARD_PERIODS,
+  MAX_LEADERBOARD_BOARDS,
+  type LeaderboardBoard,
+  type LeaderboardKind,
+  type LeaderboardPeriod,
+} from "@tavora/module-schema";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { Account, AccountStore } from "./account-store.ts";
@@ -10,13 +20,22 @@ import { checkReviewText } from "./review-filter.ts";
 /**
  * Leaderboards (decided 2026-10-28, "Puzzle games: leaderboards and names"): a host feature any module can use. A module
  * declares its boards in its manifest; Tavora sends what the user played, through the user's account, and reads the
- * boards back. Two kinds:
+ * boards back. Five kinds (the manifest's LeaderboardBoard):
  *
  * - `streak`: won and lost results. A user's line has their current and best winning streak, ranked by the best, then
  *   the current one. On a `daily` board each result belongs to a calendar day, one per day, and a missed day ends the
- *   streak. A daily result counts only when it ended within its day as some time zone on earth saw it (dayWindow), so
- *   replaying an old puzzle from an archive never counts.
+ *   streak.
  * - `score`: one number per result. A user's line has their best, the highest or the lowest by the board's `order`.
+ * - `total`: one number per result, 0 or more. The line is their sum, highest first, and how many results made it.
+ * - `average`: one number per result. The line is their mean, highest or lowest by `order`; on the board only from
+ *   `minGames` results, so one lucky game doesn't top it.
+ * - `rate`: won and lost results. The line is the share won (0 to 100), on the board only from `minGames` results.
+ *
+ * Every result carries the `day` the user played it on (their local day) and counts only when it ended within that day
+ * as some time zone on earth saw it (dayWindow), so replaying an old puzzle from an archive never counts. Every board
+ * can be read per period (day, week, month, year, all): a result lands in the period that holds its `day`, and the
+ * server keeps one standing per user and period, worked out from that period's results alone. Results are kept, so
+ * past periods stay readable.
  *
  * The server keeps every result (idempotent by the module's UUID) and works the lines out from them, so a result sent
  * twice or late still lands right. Each result is taken or refused on its own: one bad result never blocks the rest.
@@ -49,8 +68,10 @@ export const LIMITS = {
   /** How far in the past and the future a result's time may be. */
   oldestMs: 365 * 24 * 3_600_000,
   futureMs: 5 * 60_000,
-  /** A score's size, either way. */
+  /** A value's size, either way (a total's must be 0 or more). */
   maxValue: 1e12,
+  /** Boards one `mine` read may ask about. */
+  maxMineBoards: MAX_LEADERBOARD_BOARDS,
 };
 
 const HOUR = 3_600_000;
@@ -59,14 +80,42 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DAY_TEXT = /^\d{4}-\d{2}-\d{2}$/;
 /** Module ids of development copies (module-schema's LOCAL_OWNER): test boards, no allowing needed. */
 export const DEV_PREFIX = "local.";
+/** The version of the tables below; an older file is dropped and rebuilt (the service held no real data then). */
+const SCHEMA_VERSION = 2;
 
 export type Rejection = "invalid" | "time" | "archive" | "day-taken" | "full";
 
-/** How a board works out its lines; a standing worked out another way (the declaration changed) is not shown. */
-export type Shape = "streak" | "streak-daily" | "score-high" | "score-low";
+/**
+ * How a board works out its lines; a standing worked out another way (the declaration changed) is rebuilt. `minGames`
+ * is not part of it: it only decides who is shown.
+ */
+export type Shape = "streak" | "streak-daily" | "score-high" | "score-low" | "total" | "average-high" | "average-low" | "rate";
 
-export const shapeOf = (board: LeaderboardBoard): Shape =>
-  board.kind === "streak" ? (board.daily ? "streak-daily" : "streak") : board.order === "low" ? "score-low" : "score-high";
+export const shapeOf = (board: LeaderboardBoard): Shape => {
+  switch (board.kind) {
+    case "streak":
+      return board.daily ? "streak-daily" : "streak";
+    case "score":
+      return board.order === "low" ? "score-low" : "score-high";
+    case "total":
+      return "total";
+    case "average":
+      return board.order === "low" ? "average-low" : "average-high";
+    case "rate":
+      return "rate";
+  }
+};
+
+/** Results of won and lost, against results with a number. */
+const isOutcomeShape = (shape: Shape) => shape === "streak" || shape === "streak-daily" || shape === "rate";
+const isStreakShape = (shape: Shape) => shape === "streak" || shape === "streak-daily";
+const isLowShape = (shape: Shape) => shape === "score-low" || shape === "average-low";
+const isMeanShape = (shape: Shape) => shape === "average-high" || shape === "average-low";
+/** Shapes whose lines show only from `minGames` results. */
+const isMinGamesShape = (shape: Shape) => isMeanShape(shape) || shape === "rate";
+
+/** How many results a user needs to be on the board: only average and rate boards ask for any. */
+export const minGamesOf = (board: LeaderboardBoard): number => (board.kind === "average" || board.kind === "rate" ? (board.minGames ?? LEADERBOARD_MIN_GAMES.default) : 1);
 
 /** Whether a YYYY-MM-DD text names a real day. */
 export function isDay(value: unknown): value is string {
@@ -80,12 +129,56 @@ const dayBefore = (day: string) => dayOf(dayStart(day) - DAY);
 
 /**
  * When a game of `day` may have ended: from that day's midnight in the earliest time zone (UTC+14) to the next midnight
- * in the latest one (UTC−12). A daily result outside it was played on another day: from an archive.
+ * in the latest one (UTC−12). A result outside it was played on another day: from an archive.
  */
 export function dayWindow(day: string): { from: number; to: number } {
   const start = dayStart(day);
   return { from: start - 14 * HOUR, to: start + DAY + 12 * HOUR };
 }
+
+/** The Monday of the week a day is in. */
+function mondayOf(day: string): string {
+  const weekday = new Date(dayStart(day)).getUTCDay();
+  return dayOf(dayStart(day) - ((weekday + 6) % 7) * DAY);
+}
+
+/** The key of the period of a kind that holds a day: the day, the week's Monday, YYYY-MM, YYYY, or "" for all. */
+export function periodKey(period: LeaderboardPeriod, day: string): string {
+  switch (period) {
+    case "day":
+      return day;
+    case "week":
+      return mondayOf(day);
+    case "month":
+      return day.slice(0, 7);
+    case "year":
+      return day.slice(0, 4);
+    case "all":
+      return "";
+  }
+}
+
+/** The first and last day (both inclusive) a period key covers; null for `all`, which covers everything. */
+export function periodRange(period: LeaderboardPeriod, key: string): { from: string; to: string } | null {
+  switch (period) {
+    case "day":
+      return { from: key, to: key };
+    case "week":
+      return { from: key, to: dayOf(dayStart(key) + 6 * DAY) };
+    case "month": {
+      const month = Number(key.slice(5, 7));
+      const next = month === 12 ? `${String(Number(key.slice(0, 4)) + 1).padStart(4, "0")}-01` : `${key.slice(0, 4)}-${String(month + 1).padStart(2, "0")}`;
+      return { from: `${key}-01`, to: dayBefore(`${next}-01`) };
+    }
+    case "year":
+      return { from: `${key}-01-01`, to: `${key}-12-31` };
+    case "all":
+      return null;
+  }
+}
+
+/** The periods a board of this shape keeps standings for: a streak needs more than one day, so it has no `day`. */
+const periodsOf = (shape: Shape) => LEADERBOARD_PERIODS.filter((period) => !(period === "day" && isStreakShape(shape)));
 
 export interface Played {
   id: string;
@@ -94,13 +187,13 @@ export interface Played {
   day: string | null;
 }
 
-/** A result as it is kept: `outcome` and `day` for streaks, `value` for scores. */
+/** A result as it is kept: `outcome` for streaks and rates, `value` for the rest; `day` for all. */
 interface Checked {
   id: string;
   at: number;
   outcome: "won" | "lost" | null;
   value: number | null;
-  day: string | null;
+  day: string;
 }
 
 /**
@@ -113,23 +206,22 @@ export function checkResult(input: unknown, shape: Shape, now: number): { ok: Ch
   const id = raw.id;
   const at = raw.at;
   if (!UUID.test(id) || typeof at !== "number" || !Number.isSafeInteger(at)) return { id, reason: "invalid" };
-  const streak = shape === "streak" || shape === "streak-daily";
-  if (streak && raw.outcome !== "won" && raw.outcome !== "lost") return { id, reason: "invalid" };
-  if (!streak && (typeof raw.value !== "number" || !Number.isFinite(raw.value) || Math.abs(raw.value) > LIMITS.maxValue)) return { id, reason: "invalid" };
-  if (shape === "streak-daily" && !isDay(raw.day)) return { id, reason: "invalid" };
+  const outcomes = isOutcomeShape(shape);
+  if (outcomes && raw.outcome !== "won" && raw.outcome !== "lost") return { id, reason: "invalid" };
+  if (!outcomes && (typeof raw.value !== "number" || !Number.isFinite(raw.value) || Math.abs(raw.value) > LIMITS.maxValue)) return { id, reason: "invalid" };
+  // A total only adds up: a negative number would let a module (or a bug) take points away.
+  if (shape === "total" && (raw.value as number) < 0) return { id, reason: "invalid" };
+  if (!isDay(raw.day)) return { id, reason: "invalid" };
   if (at > now + LIMITS.futureMs || at < now - LIMITS.oldestMs) return { id, reason: "time" };
-  const day = shape === "streak-daily" ? (raw.day as string) : null;
-  if (day !== null) {
-    const window = dayWindow(day);
-    if (at < window.from || at >= window.to) return { id, reason: "archive" };
-  }
+  const window = dayWindow(raw.day);
+  if (at < window.from || at >= window.to) return { id, reason: "archive" };
   return {
     ok: {
       id: id.toLowerCase(),
       at,
-      outcome: streak ? (raw.outcome as "won" | "lost") : null,
-      value: streak ? null : (raw.value as number),
-      day,
+      outcome: outcomes ? (raw.outcome as "won" | "lost") : null,
+      value: outcomes ? null : (raw.value as number),
+      day: raw.day,
     },
   };
 }
@@ -175,17 +267,70 @@ export interface BoardLine {
   rank: number;
   /** The pseudonym's label for this account and module ("K7"). */
   label: string;
-  best: number;
+  /** The number the board ranks by: the best streak, the best, the sum, the mean or the share won. */
+  value: number;
   /** Streak boards: the current streak, 0 once it ended. */
-  current: number | null;
+  current: number;
+  games: number;
+  wins: number;
+}
+
+/** What a user's results in one period come to, before it is stored as a standing. */
+interface Line {
+  value: number;
+  reachedAt: number;
+  current: number;
+  lastDay: string | null;
+  games: number;
+  wins: number;
+}
+
+interface ResultRow {
+  id: string;
+  outcome: "won" | "lost" | null;
+  value: number | null;
+  at: number;
+  day: string;
+  daily_day: string | null;
+}
+
+/** The line a set of results comes to on a board of this shape, or null when none of them counts for it. */
+function lineOf(shape: Shape, rows: readonly ResultRow[]): Line | null {
+  const latest = (list: readonly ResultRow[]) => list.reduce((at, row) => Math.max(at, row.at), 0);
+  if (isOutcomeShape(shape)) {
+    const played = rows.filter((row) => row.outcome !== null && (shape !== "streak-daily" || row.daily_day !== null));
+    if (played.length === 0) return null;
+    const wins = played.filter((row) => row.outcome === "won").length;
+    if (shape === "rate") return { value: Math.round((wins / played.length) * 1000) / 10, reachedAt: latest(played), current: 0, lastDay: null, games: played.length, wins };
+    const daily = shape === "streak-daily";
+    const streak = streakOf(
+      played.map((row) => ({ id: row.id, outcome: row.outcome!, at: row.at, day: daily ? row.daily_day : row.day })),
+      daily,
+    );
+    return { value: streak.best, reachedAt: streak.reachedAt, current: streak.current, lastDay: streak.lastDay, games: played.length, wins };
+  }
+  const valued = rows.filter((row) => row.value !== null);
+  if (valued.length === 0) return null;
+  const base = { current: 0, lastDay: null, games: valued.length, wins: 0 };
+  if (shape === "total") {
+    // The sum was last changed by the newest result that added anything.
+    const adding = valued.filter((row) => row.value! > 0);
+    return { ...base, value: valued.reduce((sum, row) => sum + row.value!, 0), reachedAt: latest(adding.length > 0 ? adding : valued) };
+  }
+  // A mean is reached by the newest game: the one that made it what it is.
+  if (isMeanShape(shape)) return { ...base, value: valued.reduce((sum, row) => sum + row.value!, 0) / valued.length, reachedAt: latest(valued) };
+  const low = isLowShape(shape);
+  const best = valued.reduce((a, b) => (b.value! === a.value! ? (b.at < a.at ? b : a) : (b.value! < a.value!) === low ? b : a));
+  return { ...base, value: best.value!, reachedAt: best.at };
 }
 
 interface StandingSql {
   account_id: string;
   label: string;
-  best: number;
-  current: number;
-  last_day: string | null;
+  value: number;
+  live: number;
+  games: number;
+  wins: number;
 }
 
 /** The leaderboards: members, results, standings, allowed modules and hidden names, in `leaderboards.sqlite` of the state directory. */
@@ -197,30 +342,38 @@ export class LeaderboardStore {
   constructor(path: string, storedResults = LIMITS.storedResults) {
     this.storedResults = storedResults;
     this.db = new DatabaseSync(path);
+    this.db.exec("pragma journal_mode = wal; pragma foreign_keys = on;");
+    // The tables changed shape before anything was deployed: an older file is rebuilt, not migrated.
+    const version = (this.db.prepare("pragma user_version").get() as { user_version: number }).user_version;
+    if (version < SCHEMA_VERSION) this.db.exec("drop table if exists results; drop table if exists standings;");
     this.db.exec(`
-      pragma journal_mode = wal;
-      pragma foreign_keys = on;
       -- One row per account and module once the account asked: its pseudonym label, and when it agreed to be shown (null: not shown).
       create table if not exists members (
         account_id text not null, module_id text not null, label text not null, shown_at integer,
         primary key (account_id, module_id)
       );
+      -- \`day\` is the user's local day of every result; \`daily_day\` repeats it for a daily streak's results only, which
+      -- may be one a day.
       create table if not exists results (
         account_id text not null, module_id text not null, board text not null, id text not null,
-        outcome text, value real, day text, at integer not null,
+        outcome text, value real, day text not null, daily_day text, at integer not null,
         primary key (account_id, module_id, board, id)
       );
-      create unique index if not exists results_day on results (account_id, module_id, board, day) where day is not null;
-      -- Each account's line on a board, worked out from its results when they change.
+      create unique index if not exists results_daily on results (account_id, module_id, board, daily_day) where daily_day is not null;
+      create index if not exists results_by_day on results (account_id, module_id, board, day);
+      -- Each account's line on a board in one period (period_key: the day, the week's Monday, YYYY-MM, YYYY or ""),
+      -- worked out from that period's results when they change. \`value\` is what the board ranks by.
       create table if not exists standings (
-        account_id text not null, module_id text not null, board text not null, shape text not null,
-        best real not null, reached_at integer not null, current integer not null, last_day text,
-        primary key (account_id, module_id, board)
+        account_id text not null, module_id text not null, board text not null, period text not null, period_key text not null,
+        shape text not null, value real not null, reached_at integer not null, current integer not null, last_day text,
+        games integer not null, wins integer not null,
+        primary key (account_id, module_id, board, period, period_key)
       );
-      create index if not exists standings_board on standings (module_id, board, shape);
+      create index if not exists standings_board on standings (module_id, board, period, period_key, shape);
       create table if not exists allowed_modules (module_id text primary key, allowed_at integer not null);
       create table if not exists hidden_names (account_id text primary key, hidden_at integer not null);
     `);
+    if (version < SCHEMA_VERSION) this.db.exec(`pragma user_version = ${SCHEMA_VERSION}`);
   }
 
   close(): void {
@@ -314,17 +467,18 @@ export class LeaderboardStore {
   // ── Results ────────────────────────────────────────────────────────────
 
   /**
-   * Keeps the results of a shown member on one board, each on its own, and works out the account's line again. A
-   * result id the board has already counts as taken, whatever it holds now, so sending again is safe.
+   * Keeps the results of a shown member on one board, each on its own, and works out the account's standings again,
+   * one for every period the new results touch. A result id the board has already counts as taken, whatever it holds
+   * now, so sending again is safe.
    */
   submit(accountId: string, moduleId: string, board: string, shape: Shape, input: readonly unknown[], now: number): { accepted: string[]; rejected: { id: string; reason: Rejection }[] } {
     const accepted: string[] = [];
     const rejected: { id: string; reason: Rejection }[] = [];
     const has = this.db.prepare("select 1 from results where account_id = ? and module_id = ? and board = ? and id = ?");
-    const dayTaken = this.db.prepare("select 1 from results where account_id = ? and module_id = ? and board = ? and day = ?");
-    const insert = this.db.prepare("insert into results (account_id, module_id, board, id, outcome, value, day, at) values (?, ?, ?, ?, ?, ?, ?, ?)");
+    const dayTaken = this.db.prepare("select 1 from results where account_id = ? and module_id = ? and board = ? and daily_day = ?");
+    const insert = this.db.prepare("insert into results (account_id, module_id, board, id, outcome, value, day, daily_day, at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)");
     let stored = (this.db.prepare("select count(*) as n from results where account_id = ? and module_id = ?").get(accountId, moduleId) as { n: number }).n;
-    let changed = false;
+    const touched = new Map<string, { period: LeaderboardPeriod; key: string }>();
     this.db.exec("begin");
     try {
       for (const item of input) {
@@ -342,17 +496,33 @@ export class LeaderboardStore {
         }
         const sent = id as string;
         const result = checked.ok;
+        const dailyDay = shape === "streak-daily" ? result.day : null;
         if (stored >= this.storedResults) rejected.push({ id: sent, reason: "full" });
-        else if (result.day !== null && dayTaken.get(accountId, moduleId, board, result.day)) rejected.push({ id: sent, reason: "day-taken" });
+        else if (dailyDay !== null && dayTaken.get(accountId, moduleId, board, dailyDay)) rejected.push({ id: sent, reason: "day-taken" });
         else {
-          insert.run(accountId, moduleId, board, result.id, result.outcome, result.value, result.day, result.at);
+          insert.run(accountId, moduleId, board, result.id, result.outcome, result.value, result.day, dailyDay, result.at);
           stored++;
-          changed = true;
+          for (const period of periodsOf(shape)) {
+            const key = periodKey(period, result.day);
+            touched.set(`${period}:${key}`, { period, key });
+          }
           accepted.push(sent);
         }
       }
-      const standing = this.db.prepare("select shape from standings where account_id = ? and module_id = ? and board = ?").get(accountId, moduleId, board) as { shape: string } | undefined;
-      if (changed || (standing && standing.shape !== shape)) this.workOut(accountId, moduleId, board, shape);
+      // A declaration that changed the shape leaves standings worked out another way: all of them are made again.
+      const stale = this.db.prepare("select 1 from standings where account_id = ? and module_id = ? and board = ? and shape <> ?").get(accountId, moduleId, board, shape);
+      if (stale) {
+        this.db.prepare("delete from standings where account_id = ? and module_id = ? and board = ?").run(accountId, moduleId, board);
+        const days = this.db.prepare("select distinct day from results where account_id = ? and module_id = ? and board = ?").all(accountId, moduleId, board) as { day: string }[];
+        for (const { day } of days) {
+          for (const period of periodsOf(shape)) {
+            const key = periodKey(period, day);
+            touched.set(`${period}:${key}`, { period, key });
+          }
+        }
+        touched.set("all:", { period: "all", key: "" });
+      }
+      for (const { period, key } of touched.values()) this.workOut(accountId, moduleId, board, shape, period, key);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
@@ -361,74 +531,86 @@ export class LeaderboardStore {
     return { accepted, rejected };
   }
 
-  /** The account's line on a board from all its results there. */
-  private workOut(accountId: string, moduleId: string, board: string, shape: Shape): void {
-    let line: { best: number; reachedAt: number; current: number; lastDay: string | null } | null = null;
-    if (shape === "streak" || shape === "streak-daily") {
-      const results = this.db
-        .prepare("select id, outcome, at, day from results where account_id = ? and module_id = ? and board = ? and outcome is not null")
-        .all(accountId, moduleId, board) as unknown as Played[];
-      const daily = shape === "streak-daily";
-      if (results.length > 0) line = streakOf(daily ? results.filter((result) => result.day !== null) : results, daily);
-    } else {
-      const row = this.db
-        .prepare(`select value, at from results where account_id = ? and module_id = ? and board = ? and value is not null order by value ${shape === "score-low" ? "asc" : "desc"}, at asc limit 1`)
-        .get(accountId, moduleId, board) as { value: number; at: number } | undefined;
-      if (row) line = { best: row.value, reachedAt: row.at, current: 0, lastDay: null };
-    }
+  /** The account's line on a board in one period, from all its results there. */
+  private workOut(accountId: string, moduleId: string, board: string, shape: Shape, period: LeaderboardPeriod, key: string): void {
+    const range = periodRange(period, key);
+    const rows = this.db
+      .prepare(`select id, outcome, value, at, day, daily_day from results where account_id = ? and module_id = ? and board = ?${range ? " and day between ? and ?" : ""}`)
+      .all(accountId, moduleId, board, ...(range ? [range.from, range.to] : [])) as unknown as ResultRow[];
+    const line = lineOf(shape, rows);
     if (!line) {
-      this.db.prepare("delete from standings where account_id = ? and module_id = ? and board = ?").run(accountId, moduleId, board);
+      this.db.prepare("delete from standings where account_id = ? and module_id = ? and board = ? and period = ? and period_key = ?").run(accountId, moduleId, board, period, key);
       return;
     }
     this.db
       .prepare(
-        `insert into standings (account_id, module_id, board, shape, best, reached_at, current, last_day) values (?, ?, ?, ?, ?, ?, ?, ?)
-         on conflict (account_id, module_id, board) do update set shape = excluded.shape, best = excluded.best, reached_at = excluded.reached_at, current = excluded.current, last_day = excluded.last_day`,
+        `insert into standings (account_id, module_id, board, period, period_key, shape, value, reached_at, current, last_day, games, wins) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         on conflict (account_id, module_id, board, period, period_key) do update set shape = excluded.shape, value = excluded.value, reached_at = excluded.reached_at,
+           current = excluded.current, last_day = excluded.last_day, games = excluded.games, wins = excluded.wins`,
       )
-      .run(accountId, moduleId, board, shape, line.best, line.reachedAt, line.current, line.lastDay);
+      .run(accountId, moduleId, board, period, key, shape, line.value, line.reachedAt, line.current, line.lastDay, line.games, line.wins);
   }
 
   /**
-   * The best lines of a board, ranked (equal lines share a rank), leaving out `skip` (suspended and banned accounts).
-   * With `viewer` on the board further down, their line comes last. `only` keeps one account's line alone (test
-   * boards). `today` decides which daily streaks still run.
+   * The best lines of a board in one period (`period` and the `key` of the one asked, all by default), ranked (equal
+   * lines share a rank), leaving out `skip` (suspended and banned accounts) and, on average and rate boards, users
+   * under `minGames`. With `viewer` on the board further down, their line comes last (limit 0 gives only theirs).
+   * `only` keeps one account's line alone (test boards). `today` decides which daily streaks still run. `of` is how
+   * many users the board has in that period.
    */
-  top(moduleId: string, board: string, shape: Shape, options: { limit: number; today: string; viewer: string | null; only?: string; skip: ReadonlySet<string> }): BoardLine[] {
-    const streak = shape === "streak" || shape === "streak-daily";
+  top(
+    moduleId: string,
+    board: string,
+    shape: Shape,
+    options: { limit: number; today: string; viewer: string | null; only?: string; skip: ReadonlySet<string>; period?: LeaderboardPeriod; key?: string; minGames?: number },
+  ): { lines: BoardLine[]; of: number } {
+    const streak = isStreakShape(shape);
+    const mean = isMeanShape(shape) || shape === "rate";
     // A daily streak whose last day is before yesterday has ended: it counts as 0 for the order too.
     const live = shape === "streak-daily" ? "case when s.last_day >= ? then s.current else 0 end" : "s.current";
-    const order = streak ? `s.best desc, live desc, s.reached_at asc` : `s.best ${shape === "score-low" ? "asc" : "desc"}, s.reached_at asc`;
+    const direction = isLowShape(shape) ? "asc" : "desc";
+    const order = streak ? "s.value desc, live desc, s.reached_at asc" : mean ? `s.value ${direction}, s.games desc, s.reached_at asc` : `s.value ${direction}, s.reached_at asc`;
     const params: (string | number)[] = [];
     if (shape === "streak-daily") params.push(dayBefore(options.today));
-    params.push(moduleId, board, shape);
+    params.push(moduleId, board, shape, options.period ?? "all", options.key ?? "");
+    const minimum = isMinGamesShape(shape);
+    if (minimum) params.push(options.minGames ?? LEADERBOARD_MIN_GAMES.default);
     if (options.only) params.push(options.only);
     const rows = this.db
       .prepare(
-        `select s.account_id, m.label, s.best, ${live} as live, s.last_day from standings s
+        `select s.account_id, m.label, s.value, ${live} as live, s.games, s.wins from standings s
          join members m on m.account_id = s.account_id and m.module_id = s.module_id and m.shown_at is not null
-         where s.module_id = ? and s.board = ? and s.shape = ?${options.only ? " and s.account_id = ?" : ""}
+         where s.module_id = ? and s.board = ? and s.shape = ? and s.period = ? and s.period_key = ?${minimum ? " and s.games >= ?" : ""}${options.only ? " and s.account_id = ?" : ""}
          order by ${order}, s.account_id limit ${LIMITS.scanRows}`,
       )
-      .iterate(...params) as Iterable<Omit<StandingSql, "current"> & { live: number }>;
+      .iterate(...params) as Iterable<StandingSql>;
     const lines: BoardLine[] = [];
     let place = 0;
     let rank = 0;
     let previous: string | null = null;
-    let viewerSeen = options.viewer === null;
     for (const row of rows) {
       if (options.skip.has(row.account_id)) continue;
       place++;
-      const key = streak ? `${row.best}:${row.live}` : String(row.best);
+      const key = streak ? `${row.value}:${row.live}` : mean ? `${row.value}:${row.games}` : String(row.value);
       if (key !== previous) rank = place;
       previous = key;
-      const mine = row.account_id === options.viewer;
-      if (lines.length < options.limit || mine) {
-        lines.push({ accountId: row.account_id, rank, label: row.label, best: row.best, current: streak ? row.live : null });
-        if (mine) viewerSeen = true;
+      if (lines.length < options.limit || row.account_id === options.viewer) {
+        lines.push({ accountId: row.account_id, rank, label: row.label, value: row.value, current: streak ? row.live : 0, games: row.games, wins: row.wins });
       }
-      if (lines.length >= options.limit && viewerSeen) break;
     }
-    return lines;
+    return { lines, of: place };
+  }
+
+  /** One account's standing on a board in a period (rank among `of` users), or null when it has none there. */
+  standing(accountId: string, moduleId: string, board: string, shape: Shape, options: { period: LeaderboardPeriod; key: string; today: string; only?: boolean; skip: ReadonlySet<string>; minGames: number }): (BoardLine & { of: number }) | null {
+    // Most users have no line in most periods: look before walking the board.
+    const has = this.db
+      .prepare("select 1 from standings where account_id = ? and module_id = ? and board = ? and period = ? and period_key = ? and shape = ?")
+      .get(accountId, moduleId, board, options.period, options.key, shape);
+    if (!has) return null;
+    const { lines, of } = this.top(moduleId, board, shape, { limit: 0, today: options.today, viewer: accountId, ...(options.only ? { only: accountId } : {}), skip: options.skip, period: options.period, key: options.key, minGames: options.minGames });
+    const line = lines.find((entry) => entry.accountId === accountId);
+    return line ? { ...line, of } : null;
   }
 }
 
@@ -449,14 +631,45 @@ export interface LeaderboardOptions {
 
 /** A board declaration as a development copy's Tavora sends it (its manifest's), or null when it is off. */
 function sentBoard(id: string, input: Record<string, unknown>): LeaderboardBoard | null {
-  if (input.kind === "streak") return { id, kind: "streak", daily: input.daily === true || input.daily === "1" };
-  if (input.kind === "score") return input.order === "low" ? { id, kind: "score", order: "low" } : { id, kind: "score" };
-  return null;
+  // From a query string a number arrives as text; anything but a whole number in range reads as "not set".
+  const asked = typeof input.minGames === "string" && /^\d{1,4}$/.test(input.minGames) ? Number(input.minGames) : input.minGames;
+  const minGames = Number.isInteger(asked) && (asked as number) >= 1 && (asked as number) <= LEADERBOARD_MIN_GAMES.max ? { minGames: asked as number } : {};
+  const order = input.order === "low" ? ({ order: "low" } as const) : {};
+  // The name is for the people who read the board; a test board is read by its developer only, who knows the id.
+  switch (input.kind) {
+    case "streak":
+      return { id, name: id, kind: "streak", daily: input.daily === true || input.daily === "1" };
+    case "score":
+      return { id, name: id, kind: "score", ...order };
+    case "total":
+      return { id, name: id, kind: "total" };
+    case "average":
+      return { id, name: id, kind: "average", ...order, ...minGames };
+    case "rate":
+      return { id, name: id, kind: "rate", ...minGames };
+    default:
+      return null;
+  }
+}
+
+/** The numbers a line shows for a board of this kind. */
+function numbers(kind: LeaderboardKind, line: BoardLine): Record<string, number> {
+  switch (kind) {
+    case "streak":
+      return { current: line.current, best: line.value };
+    case "score":
+      return { value: line.value };
+    case "total":
+    case "average":
+      return { value: line.value, games: line.games };
+    case "rate":
+      return { value: line.value, games: line.games, wins: line.wins };
+  }
 }
 
 /**
- * The leaderboard routes under /v1/leaderboards. Reading a board and the status need no sign-in (signed in, they know
- * which line is the reader's); everything else does. Errors carry a `reason` the app reads.
+ * The leaderboard routes under /v1/leaderboards. Reading a board, the status and the reader's own standings need no
+ * sign-in (signed in, they know which line is the reader's); everything else does. Errors carry a `reason` the app reads.
  */
 export function leaderboardRoutes({ leaderboards, accounts, boards, clientKey, writeRateLimiter, readRateLimiter, now = Date.now }: LeaderboardOptions) {
   const writeLimiter = writeRateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
@@ -507,6 +720,18 @@ export function leaderboardRoutes({ leaderboards, accounts, boards, clientKey, w
     if (!leaderboards.isAvailable(moduleId, accountId)) return { available: false, shown: false, name, label: null };
     const member = leaderboards.member(accountId, moduleId);
     return { available: true, shown: member.shown, name, label: member.label };
+  };
+  /**
+   * The day a read is about (`day`, the server's today by default), which picks the period that holds it, and the day
+   * daily streaks are judged on: the asked one within a day of the server's today (time zones), else today. Null for a
+   * day that isn't one or is later than tomorrow.
+   */
+  const dayOfRead = (context: Context): { day: string; live: string } | null => {
+    const today = dayOf(now());
+    const asked = context.req.query("day");
+    if (asked === undefined) return { day: today, live: today };
+    if (!isDay(asked) || dayStart(asked) > dayStart(today) + DAY) return null;
+    return { day: asked, live: Math.abs(dayStart(asked) - dayStart(today)) <= DAY ? asked : today };
   };
 
   app.get("/:module", (context) => {
@@ -566,34 +791,83 @@ export function leaderboardRoutes({ leaderboards, accounts, boards, clientKey, w
     if (!moduleId) return fail(context, 404, "not-found", "Not found.");
     const board = boardOf(moduleId, context.req.param("board"), context.req.query());
     if (!board) return fail(context, 404, "unknown-board", "This board isn't live yet.");
+    const period = context.req.query("period") ?? "all";
+    if (!isLeaderboardPeriod(period)) return fail(context, 400, "bad-request", `period is one of ${LEADERBOARD_PERIODS.join(", ")}.`);
+    const read = dayOfRead(context);
+    if (!read) return fail(context, 400, "bad-request", "day is a day (YYYY-MM-DD) no later than tomorrow.");
     const account = signedIn(context);
     const dev = moduleId.startsWith(DEV_PREFIX);
+    const shape = shapeOf(board);
     // Test boards show their developer's own line only; nobody else's, and nothing signed out.
-    if (!leaderboards.isAvailable(moduleId, account?.id ?? null) || (dev && !account)) return context.json({ rows: [] });
+    if (!leaderboards.isAvailable(moduleId, account?.id ?? null) || (dev && !account) || !periodsOf(shape).includes(period)) return context.json({ rows: [] });
     const limit = Number(context.req.query("limit") ?? LIMITS.defaultRows);
-    const asked = context.req.query("day");
-    const today = dayOf(now());
-    // The reader's own day, within a day of the server's (time zones); anything else reads as today.
-    const day = isDay(asked) && Math.abs(dayStart(asked) - dayStart(today)) <= DAY ? asked : today;
     const hidden = new Set(leaderboards.hiddenNames().map((entry) => entry.accountId));
-    const lines = leaderboards.top(moduleId, board.id, shapeOf(board), {
+    const { lines, of } = leaderboards.top(moduleId, board.id, shape, {
       limit: Number.isInteger(limit) ? Math.min(Math.max(limit, 1), LIMITS.maxRows) : LIMITS.defaultRows,
-      today: day,
+      today: read.live,
       viewer: account?.id ?? null,
       ...(dev ? { only: account!.id } : {}),
       skip: accounts.suspendedOrBanned(),
+      period,
+      key: periodKey(period, read.day),
+      minGames: minGamesOf(board),
     });
     const rows = lines.map((line) => {
       const name = boardName(accounts.profileName(line.accountId), hidden.has(line.accountId));
-      const self = line.accountId === account?.id;
       return {
         rank: line.rank,
+        of,
         ...(name === null ? { name: null, label: line.label } : { name }),
-        self,
-        ...(board.kind === "streak" ? { current: line.current, best: line.best } : { value: line.best }),
+        self: line.accountId === account?.id,
+        ...numbers(board.kind, line),
       };
     });
     return context.json({ rows });
+  });
+
+  // The reader's own standing on each board of a module, in every period. A development copy's Tavora sends its
+  // manifest's boards in `boards` (a JSON list of declarations), a catalog module's come from its listing.
+  app.get("/:module/mine", (context) => {
+    const moduleId = moduleOf(context);
+    if (!moduleId) return fail(context, 404, "not-found", "Not found.");
+    const read = dayOfRead(context);
+    if (!read) return fail(context, 400, "bad-request", "day is a day (YYYY-MM-DD) no later than tomorrow.");
+    const dev = moduleId.startsWith(DEV_PREFIX);
+    let list: readonly LeaderboardBoard[] = [];
+    if (!dev) list = boards(moduleId) ?? [];
+    else {
+      const text = context.req.query("boards");
+      let sent: unknown = [];
+      try {
+        if (text !== undefined) sent = JSON.parse(text);
+      } catch {
+        sent = null;
+      }
+      if (!Array.isArray(sent) || sent.length > LIMITS.maxMineBoards) return fail(context, 400, "bad-request", `boards is a JSON list of at most ${LIMITS.maxMineBoards} board declarations.`);
+      list = sent.flatMap((entry) => {
+        const declaration = record(entry);
+        const board = isLeaderboardId(declaration.id) ? sentBoard(declaration.id, declaration) : null;
+        return board ? [board] : [];
+      });
+    }
+    const account = signedIn(context);
+    const live = account !== null && leaderboards.isAvailable(moduleId, account.id);
+    const skip = live ? accounts.suspendedOrBanned() : new Set<string>();
+    return context.json({
+      boards: list.map((board) => {
+        const shape = shapeOf(board);
+        const periods = Object.fromEntries(
+          LEADERBOARD_PERIODS.map((period) => {
+            const line =
+              live && periodsOf(shape).includes(period)
+                ? leaderboards.standing(account.id, moduleId, board.id, shape, { period, key: periodKey(period, read.day), today: read.live, only: dev, skip, minGames: minGamesOf(board) })
+                : null;
+            return [period, line ? { rank: line.rank, of: line.of, ...numbers(board.kind, line) } : null];
+          }),
+        );
+        return { id: board.id, periods };
+      }),
+    });
   });
 
   return app;

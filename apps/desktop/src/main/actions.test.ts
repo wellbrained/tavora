@@ -208,6 +208,8 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "set-folder-label", folderId: FOLDER, label: null }],
   [{ type: "delete-folder", folderId: FOLDER }],
   [{ type: "set-language", language: "de" }],
+  [{ type: "set-profile-ranks", hidden: true }],
+  [{ type: "set-profile-ranks", period: "week" }],
   [{ type: "create-starter-theme" }],
   [{ type: "open-developer-link", link: "docs" }],
   [{ type: "open-developer-link", link: "discussions" }],

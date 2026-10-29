@@ -53,6 +53,8 @@ import {
   type HotkeyBinding,
   type HotkeySetResult,
   type JsonValue,
+  type LeaderboardMine,
+  type LeaderboardPeriod,
   type LeaderboardResult,
   type LeaderboardRow,
   type LeaderboardStatus,
@@ -79,14 +81,18 @@ import {
 
 export type {
   ReadOnlyFile,
+  LeaderboardMine,
+  LeaderboardMineBoard,
+  LeaderboardOutcomeResult,
+  LeaderboardPeriod,
   LeaderboardRejection,
   LeaderboardResult,
   LeaderboardRow,
-  LeaderboardScoreResult,
+  LeaderboardStanding,
   LeaderboardStatus,
-  LeaderboardStreakResult,
   LeaderboardSubmitResult,
   LeaderboardTop,
+  LeaderboardValueResult,
   HotkeyBinding,
   HotkeySetResult,
   OverlayLinkResult,
@@ -146,6 +152,13 @@ export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;
+
+/** The local calendar day of a time, as YYYY-MM-DD: what a leaderboard result counts for without its own `day`. */
+function localDay(at: number): string {
+  const date = new Date(at);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 
 /** Version of this SDK package, sent to the host during the handshake. */
 export const SDK_VERSION = "0.2.14";
@@ -511,15 +524,22 @@ export interface TavoraSDK {
     hide(): Promise<LeaderboardStatus>;
     /**
      * Sends finished games to a board of the manifest, up to LIMITS.maxLeaderboardResults at once. Each result is taken or
-     * refused on its own; a refused one never counts, so drop it. Throws PERMISSION_DENIED while the user is signed out or
-     * not shown, NETWORK_ERROR while Tavora's service can't be reached: keep the results and send them later.
+     * refused on its own; a refused one never counts, so drop it. A result without a `day` gets the local calendar day of
+     * its `at`. Throws PERMISSION_DENIED while the user is signed out or not shown, NETWORK_ERROR while Tavora's service
+     * can't be reached: keep the results and send them later.
      */
     submit(board: string, results: LeaderboardResult[]): Promise<LeaderboardSubmitResult>;
     /**
      * The best lines of a board (`limit`: default 20, at most LIMITS.maxLeaderboardRows); the user's own line comes last
-     * when they are further down. On a daily board, pass the user's local `day` (YYYY-MM-DD) so streaks that ended show as 0.
+     * when they are further down. `period` picks a day, week, month, year or all time (the default); `day` (the user's
+     * local day, YYYY-MM-DD, default today) picks which one, and on a daily board shows streaks that ended as 0.
      */
-    top(board: string, options?: { day?: string; limit?: number }): Promise<LeaderboardTop>;
+    top(board: string, options?: { period?: LeaderboardPeriod; day?: string; limit?: number }): Promise<LeaderboardTop>;
+    /**
+     * The user's own standing on every board of the manifest, in every period, in one call: rank, how many users the
+     * board has, and their numbers; null where they aren't on it. Every standing is null while signed out or not shown. Tavora 0.21.97 and newer.
+     */
+    mine(options?: { day?: string }): Promise<LeaderboardMine>;
   };
   /**
    * Pages for streaming software such as OBS (the manifest's `overlay`), one per key: an item, a scoreboard, whatever
@@ -1002,8 +1022,9 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       // Waits for the user's answer in the panel.
       show: () => call("leaderboards.show", undefined, MENU_TIMEOUT_MS),
       hide: () => call("leaderboards.hide"),
-      submit: (board, results) => call("leaderboards.submit", { board, results }),
+      submit: (board, results) => call("leaderboards.submit", { board, results: results.map((result) => (result.day === undefined ? { ...result, day: localDay(result.at) } : result)) }),
       top: (board, options = {}) => call("leaderboards.top", { board, ...options }),
+      mine: (options = {}) => call("leaderboards.mine", { ...options }),
     },
     overlay: {
       publish: async (key, state) => {
