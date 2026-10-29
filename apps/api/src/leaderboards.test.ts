@@ -479,6 +479,26 @@ describe("the leaderboard routes", () => {
     ]);
   });
 
+  it("lists the names users show on boards with what the boards do with each, and leaves out those suspended or banned", async () => {
+    const { accounts, user, show, allow, adminCall } = setup();
+    await allow();
+    const rude = user("rude@example.com", "kys now");
+    const mara = user("mara@example.com", "Mara");
+    const ida = user("ida@example.com", "Ida");
+    const gone = user("gone@example.com", "Gone");
+    const quiet = user("quiet@example.com", "Quiet");
+    for (const person of [rude, mara, ida, gone]) await show(person.token);
+    expect(quiet.id).toBeTruthy();
+    await adminCall("POST", "/hidden-names", { accountId: mara.id, hidden: true });
+    accounts.suspend(gone.id, "spam", null, NOW);
+    const states = async (query = "") => Object.fromEntries(((await adminCall("GET", `/names${query}`)) as { names: { name: string; state: string }[] }).names.map((entry) => [entry.name, entry.state]));
+    // Quiet never agreed to be shown, Gone is suspended: neither is listed.
+    expect(await states()).toEqual({ "kys now": "filtered", Mara: "hidden", Ida: "shown" });
+    expect(await adminCall("GET", "/names")).toMatchObject({ counts: { all: 3, filtered: 1, hidden: 1 } });
+    expect(await states("?q=ma")).toEqual({ Mara: "hidden" });
+    expect(await adminCall("GET", "/names?q=ma")).toMatchObject({ names: [{ accountId: mara.id, modules: 1, since: "2026-10-28T12:00:00.000Z" }] });
+  });
+
   it("deletes a user's results for the module when they switch it off", async () => {
     const { user, show, allow, submit, top, call, mine } = setup();
     await allow();

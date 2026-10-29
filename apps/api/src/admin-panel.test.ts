@@ -68,7 +68,7 @@ describe("the panel's own pages", () => {
     submissions.submit({ id: "diablo-iv", name: "Diablo 4", source: "installed", icon: Buffer.from(pixels).toString("base64") }, "account-1");
     const summary = await ask(make(), "/api/summary");
     const counts = Object.fromEntries(summary.waiting.map((kind: { id: string; count: number }) => [kind.id, kind.count]));
-    expect(counts).toEqual({ approval: 0, icons: 1, reports: 1, reviews: 0, "review-queue": 0, keys: 0, blocks: 0, "catalog-full": 0, messages: 0, "conversation-reports": 0 });
+    expect(counts).toEqual({ approval: 0, icons: 1, reports: 1, reviews: 0, "review-queue": 0, keys: 0, blocks: 0, "catalog-full": 0, messages: 0, "conversation-reports": 0, leaderboards: 0 });
     expect(summary.waiting.find((kind: { id: string }) => kind.id === "icons")).toMatchObject({ section: "review", tab: "pending" });
     expect(summary.waiting.find((kind: { id: string }) => kind.id === "approval")).toMatchObject({ section: "approval" });
     expect(summary.numbers).toMatchObject({ modules: 1, listedModules: 1, installs: 2, accounts: 3 });

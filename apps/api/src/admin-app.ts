@@ -466,6 +466,10 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     reviews,
     conversations,
     probes: probes ?? createProbes(),
+    leaderboardsWaiting: () => {
+      const allowed = new Set(leaderboards?.allowedModules().map((entry) => entry.moduleId));
+      return (catalog?.adminModules() ?? []).filter((module) => module.leaderboards !== null && !allowed.has(module.id)).length;
+    },
     blocksToSign: () => (catalog ? blocksToSign(catalog, trust()).length : 0),
     keysWaiting: () => (accounts?.allKeyRequests() ?? []).filter((request) => keyRequestStatus(request, trust()) === "waiting").length,
     dataset: dataset ?? (() => ({ games: 0, builtAt: null })),

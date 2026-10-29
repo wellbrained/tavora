@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { allowsPersonalWorkspaces, isGameId, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, isGameId, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, SIGNATURE_FILE, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
 
@@ -281,6 +281,8 @@ export interface AdminModule {
   storedBytes: number;
   /** The newest version's listing icon, if it has one: shown in the admin lists. */
   icon: CatalogScreenshot | null;
+  /** The boards the newest version's manifest declares for leaderboards; null when it declares none. */
+  leaderboards: { boards: LeaderboardBoard[] } | null;
   /** status: listed once approved; waiting while a person still has to review it. notes: that version's patch notes from the module's changelog (empty when it has none). */
   versions: { version: string; sha256: string; publishedAt: string; size: number; zipKept: boolean; status: VersionStatus; notes: string[] }[];
 }
@@ -955,15 +957,17 @@ export class CatalogStore {
     const installs = new Map((this.db.prepare("select module_id, count from installs").all() as unknown as { module_id: string; count: number }[]).map((row) => [row.module_id, row.count]));
     return rows.map((row) => {
       const own = versions.filter((version) => version.module_id === row.id);
+      const newest = own[0] ? (JSON.parse(own[0].manifest) as ModuleManifest) : null;
       return {
         id: row.id,
-        name: own[0] ? (JSON.parse(own[0].manifest) as ModuleManifest).name : row.id,
+        name: newest?.name ?? row.id,
         owner: row.owner,
         listed: row.listed === 1,
         createdAt: row.created_at,
         installs: installs.get(row.id) ?? 0,
         storedBytes: own.filter((version) => version.zip_removed === null).reduce((sum, version) => sum + version.size, 0),
         icon: own[0]?.icon ? (JSON.parse(own[0].icon) as CatalogScreenshot) : null,
+        leaderboards: newest?.leaderboards ?? null,
         versions: own.map((version) => ({
           version: version.version,
           sha256: version.sha256,
