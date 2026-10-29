@@ -395,6 +395,16 @@ export class GameOverlays {
     return this.store.panelOf(instanceId) !== undefined;
   }
 
+  /** The workspace of a panel in some setup, or null. */
+  panelWorkspace(instanceId: string): string | null {
+    return this.store.panelOf(instanceId)?.workspaceId ?? null;
+  }
+
+  /** Closes the in-game layer without giving the keyboard back to the game: Tavora is about to come to the front. */
+  endLayer(): void {
+    this.closeLayer(false);
+  }
+
   /** Whether the panel is over the game right now (the layer is open): its view is in an overlay window. */
   panelOpen(instanceId: string): boolean {
     return this.open.has(panelWindowId(instanceId));

@@ -247,6 +247,8 @@ async function realUserModulesDir(options: HostOptions): Promise<string> {
 const TITLE_BAR_HEIGHT = 47;
 /** How dark the kit's dialog backdrop is (bg-black/80 in DialogOverlay). */
 const DIALOG_BACKDROP_OPACITY = 0.8;
+/** How long a dialog asked for from the in-game layer waits for its panel to be back in Tavora. */
+const PENDING_DIALOG_MS = 5000;
 /** What a game workspace the user adds starts with, side by side in this order (startWorkspace). */
 const STARTER_MODULES = ["tavora.notes", "tavora.todos"] as const;
 
@@ -3844,6 +3846,7 @@ export class Host {
     this.layOut(instanceId, view);
     this.applyBounds();
     this.pushStateSoon();
+    this.openPendingDialog();
   }
 
   private forEachView(fn: (view: ModuleView | BrowserPanel) => void): void {
@@ -3871,6 +3874,7 @@ export class Host {
     }
     this.panelBounds = bounds;
     this.applyBounds();
+    this.openPendingDialog();
   }
 
   /**
@@ -4065,6 +4069,7 @@ export class Host {
    * Only a panel in sight in the workspace, one at a time; a new one closes the last.
    */
   private openPanelDialog(instanceId: string, module: InstalledModule, size: PanelDialogSize): void {
+    if (this.floating(instanceId)) return this.openPanelDialogFromGame(instanceId, module, size);
     const view = this.views.get(instanceId);
     if (!(view instanceof ModuleView) || !this.panelBounds.has(instanceId) || this.floating(instanceId) || this.window.isDestroyed()) return;
     if (this.panelDialog?.instanceId === instanceId) return;
@@ -4075,6 +4080,37 @@ export class Host {
     const shown: PanelDialog = { instanceId, title: this.shown(module.manifest).name, icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null, ...size };
     this.window.webContents.send("host:panel-dialog", shown);
     view.setInDialog(true);
+  }
+
+  /** A dialog a panel in the in-game layer asked for: it opens once the panel is back in its slot, if that happens soon. */
+  private pendingDialog: { instanceId: string; module: InstalledModule; size: PanelDialogSize; until: number } | null = null;
+
+  /**
+   * A panel over the game opens its dialog: the layer closes, Tavora comes to the front on the panel's workspace, and the
+   * dialog opens as soon as the panel is back in its slot.
+   */
+  private openPanelDialogFromGame(instanceId: string, module: InstalledModule, size: PanelDialogSize): void {
+    const workspaceId = this.gameOverlays.panelWorkspace(instanceId);
+    if (!workspaceId || this.window.isDestroyed() || !isLive(this.library, workspaceId)) return;
+    this.pendingDialog = { instanceId, module, size, until: Date.now() + PENDING_DIALOG_MS };
+    // From Home or the Overlay page too: no workspace counts as shown there.
+    if (this.workspaceId !== workspaceId) this.openWorkspace(workspaceId);
+    this.gameOverlays.endLayer();
+    this.bringToFront();
+    this.openPendingDialog();
+  }
+
+  /** Opens the dialog a panel asked for from the layer once the panel is back in its slot; a panel that took too long misses it. */
+  private openPendingDialog(): void {
+    const pending = this.pendingDialog;
+    if (!pending) return;
+    if (Date.now() > pending.until) {
+      this.pendingDialog = null;
+      return;
+    }
+    if (this.floating(pending.instanceId) || !this.panelBounds.has(pending.instanceId)) return;
+    this.pendingDialog = null;
+    this.openPanelDialog(pending.instanceId, pending.module, pending.size);
   }
 
   /** The host UI's frame is on screen: the panel's page goes into it, above every other view. */

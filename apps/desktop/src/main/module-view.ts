@@ -590,11 +590,8 @@ export class ModuleView {
           this.options.setMaximized(maximized);
         },
         setDialog: async (open, size) => {
-          // Covering the app takes a click, as maximizing does.
-          if (open) {
-            this.refuseOverGame("panel.setDialog");
-            await this.takeGesture("panel.setDialog");
-          }
+          // Covering the app takes a click, as maximizing does. Over the game too: the host brings Tavora to the front for it.
+          if (open) await this.takeGesture("panel.setDialog");
           this.options.setDialog(open, size);
         },
         setLive: (state) => this.options.setLive(state),
