@@ -35,4 +35,5 @@ export const THEME: TavoraTheme = {
     info: "#6fa8dc",
   },
   radius: 8,
+  toasts: "bottom-center",
 };

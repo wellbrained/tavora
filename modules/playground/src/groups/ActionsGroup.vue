@@ -35,6 +35,8 @@ function showTooltipDemo(e: PointerEvent | FocusEvent) {
   const b = (e.currentTarget as HTMLElement).getBoundingClientRect();
   tooltipDemo.value = { open: true, at: e instanceof PointerEvent ? { x: e.clientX, y: e.clientY } : { x: b.right, y: b.top } };
 }
+/** A pretend save for the loading toast: done, or failed, after a moment. */
+const wait = (ms: number, fail = false) => new Promise<void>((resolve, reject) => setTimeout(() => (fail ? reject(new Error("failed")) : resolve()), ms));
 const showRead = ref(true);
 const sort = ref("recent");
 const name = ref("Waystone");
@@ -173,16 +175,25 @@ const renaming = ref(false);
         </Specimen>
       </DemoSection>
 
-<DemoSection v-if="visible.has('toasts')" id="toasts" :title="title('toasts')" description="A short message at the bottom that goes away on its own. It waits while you hover it, and may carry one button.">
-        <Specimen label="Show a toast">
-          <Button variant="secondary" :disabled="off" @click="toast({ title: 'Saved' })">Plain</Button>
-          <Button
-            variant="secondary"
-            :disabled="off"
-            @click="toast({ title: 'To-do deleted', description: 'It is gone from this group.', action: { label: 'Undo', onClick: () => toast({ title: 'Brought back' }) } })"
-          >
-            With Undo
-          </Button>
+<DemoSection
+        v-if="visible.has('toasts')"
+        id="toasts"
+        :title="title('toasts')"
+        description="A short message in a pill, where the user wants it (Settings > Appearance). Up to three stack; pointing at them spreads them out and stops their time."
+      >
+        <Specimen label="Kinds">
+          <Button variant="secondary" :disabled="off" @click="toast({ title: 'Copied' })">Plain</Button>
+          <Button variant="secondary" :disabled="off" @click="toast.success('Saved')">Success</Button>
+          <Button variant="secondary" :disabled="off" @click="toast.info('Update ready', { action: { label: 'Restart', onClick: () => toast({ title: 'Restarting' }) } })">Info</Button>
+          <Button variant="secondary" :disabled="off" @click="toast.warning('Almost out of space')">Warning</Button>
+          <Button variant="secondary" :disabled="off" @click="toast.error('Can’t save right now')">Error</Button>
+        </Specimen>
+        <Specimen label="Loading, then done">
+          <Button variant="secondary" :disabled="off" @click="toast.promise(wait(1500), { loading: 'Saving…', success: 'Saved', error: 'Can’t save' })">Works</Button>
+          <Button variant="secondary" :disabled="off" @click="toast.promise(wait(1500, true), { loading: 'Saving…', success: 'Saved', error: 'Can’t save' }).catch(() => undefined)">Fails</Button>
+        </Specimen>
+        <Specimen label="With a button">
+          <Button variant="secondary" :disabled="off" @click="toast({ title: 'To-do deleted', action: { label: 'Undo', onClick: () => toast({ title: 'Brought back' }) } })">With Undo</Button>
           <Button
             variant="secondary"
             :disabled="off"
@@ -190,7 +201,7 @@ const renaming = ref(false);
           >
             Long Undo (10 s)
           </Button>
-          <Button variant="secondary" :disabled="off" @click="toast({ title: 'Could not save', description: 'Try again in a moment.', variant: 'error' })">Error</Button>
+          <Button variant="secondary" :disabled="off" @click="toast({ title: 'Note deleted', description: '“Boss route” is gone.' })">Second line</Button>
         </Specimen>
       </DemoSection>
 

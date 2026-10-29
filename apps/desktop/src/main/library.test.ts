@@ -234,6 +234,9 @@ describe("Steam icons", () => {
     expect(emptyLibrary().moduleIcons).toBe(true);
     expect(sanitizeLibrary({ moduleIcons: false }).moduleIcons).toBe(false);
     expect(sanitizeLibrary({ moduleIcons: "no" }).moduleIcons).toBe(true);
+    expect(emptyLibrary().toasts).toBe("bottom-center");
+    expect(sanitizeLibrary({ toasts: "top-center" }).toasts).toBe("top-center");
+    expect(sanitizeLibrary({ toasts: "left" }).toasts).toBe("bottom-center");
     expect(emptyLibrary().moduleFilesFolder).toBeNull();
     const folder = process.platform === "win32" ? "D:\\Pictures\\Tavora module files" : "/mnt/pictures/Tavora module files";
     expect(sanitizeLibrary({ moduleFilesFolder: folder }).moduleFilesFolder).toBe(folder);

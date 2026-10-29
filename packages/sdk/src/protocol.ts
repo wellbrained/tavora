@@ -59,7 +59,13 @@ export interface TavoraTheme {
   tokens: Record<ThemeToken, string>;
   /** Corner radius for buttons, inputs and cards, in CSS pixels. */
   radius: number;
+  /** Where the user wants toasts in a panel. Older Tavora leaves it out, which means bottom center. */
+  toasts?: ToastPosition;
 }
+
+/** Where toasts show in a panel (Settings > Appearance > Notifications). */
+export type ToastPosition = "bottom-center" | "bottom-right" | "top-center";
+export const TOAST_POSITIONS = ["bottom-center", "bottom-right", "top-center"] as const satisfies readonly ToastPosition[];
 
 /** Names of the semantic colour tokens in TavoraTheme.tokens. */
 export const THEME_TOKENS = [

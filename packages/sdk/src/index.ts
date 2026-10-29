@@ -147,8 +147,9 @@ export type {
   TavoraViewport,
   TavoraWorkspace,
   ThemeToken,
+  ToastPosition,
 } from "./protocol.js";
-export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, THEME_TOKENS } from "./protocol.js";
+export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, THEME_TOKENS, TOAST_POSITIONS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;

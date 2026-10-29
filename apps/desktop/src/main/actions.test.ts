@@ -35,6 +35,7 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "add-workspace", online: { id: "elden-ring", name: "Elden Ring", steamAppId: 1245620 } }],
   [{ type: "set-steam-icons", enabled: true }],
   [{ type: "set-module-icons", enabled: false }],
+  [{ type: "set-toasts", position: "bottom-right" }],
   [{ type: "set-stream-overlays", enabled: true }],
   [{ type: "set-overlay-port", port: 47820 }],
   [{ type: "set-game-overlays", enabled: true }],

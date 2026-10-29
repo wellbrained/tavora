@@ -11,7 +11,7 @@ import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { ThemeVariationView, ThemeView } from "../../../shared/host-api";
+import type { HostViewState, ThemeVariationView, ThemeView } from "../../../shared/host-api";
 import { act, state } from "../../host";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
@@ -45,6 +45,17 @@ const moduleIcons = computed({
   get: () => state.value!.library.moduleIcons,
   set: (enabled: boolean) => void act({ type: "set-module-icons", enabled }),
 });
+
+type ToastPosition = HostViewState["library"]["toasts"];
+
+// Where toasts show in every panel; the app's own messages stay at the top, over the toolbar.
+const toasts = computed({
+  get: () => state.value!.library.toasts,
+  set: (position: ToastPosition) => void act({ type: "set-toasts", position }),
+});
+const toastOptions = computed(() =>
+  (["bottom-center", "bottom-right", "top-center"] as const).map((value) => ({ value, label: t(`settings.toasts.${value}`), testid: `toasts-${value}` })),
+);
 
 type Mode = "system" | "dark" | "light";
 
@@ -169,6 +180,9 @@ const showVariation = computed(() => {
       :highlighted="highlight === 'module-icons'"
     >
       <Switch v-model="moduleIcons" :aria-label="t('settings.module-icons.label')" data-testid="module-icons" />
+    </SettingRow>
+    <SettingRow :label="t('settings.toasts.label')" :description="t('settings.toasts.description')" setting="toasts" :highlighted="highlight === 'toasts'">
+      <SegmentedControl v-model="toasts" :label="t('settings.toasts.label')" :options="toastOptions" />
     </SettingRow>
     <SettingRow
       :label="t('settings.grayscale-text.label')"

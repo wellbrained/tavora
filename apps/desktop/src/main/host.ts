@@ -494,7 +494,7 @@ export class Host {
     /** Reads and writes library.json and the other data files (saved-data.ts). */
     private readonly savedData: SavedData,
   ) {
-    this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation);
+    this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation, library.toasts);
     this.files = new ModuleFilesFolder({
       userData: options.userData,
       defaultFolder: options.picturesFolder ?? defaultFilesRoot(options.userData),
@@ -1540,7 +1540,7 @@ export class Host {
 
   /** Shows the theme the library names, in the host window, native controls and every open module. */
   private applyTheme(): void {
-    const next = moduleTheme(this.currentChoice().variation);
+    const next = moduleTheme(this.currentChoice().variation, this.library.toasts);
     if (JSON.stringify(next) === JSON.stringify(this.currentTheme)) {
       this.syncNativeTheme();
       return;
@@ -2086,6 +2086,11 @@ export class Host {
       }),
       "set-module-icons": saved((action) => {
         this.library.moduleIcons = action.enabled;
+      }),
+      // Every open panel moves its toasts at once: the position goes out with the theme.
+      "set-toasts": saved((action) => {
+        this.library.toasts = action.position;
+        this.applyTheme();
       }),
       "set-stream-overlays": (action) => this.streaming.setOverlays(action.enabled),
       "set-game-overlays": saved((action) => {
@@ -4179,6 +4184,7 @@ export class Host {
         autoUpdateModules: library.autoUpdateModules,
         steamIcons: library.steamIcons,
         moduleIcons: library.moduleIcons,
+        toasts: library.toasts,
         steamProfile: library.steamProfile,
         onboarded: library.onboarded,
         makesModules: library.makesModules,
