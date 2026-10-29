@@ -211,7 +211,9 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     };
 
     const prefix = checked.manifest.id.split(".")[0]!;
-    const held = store.prefixCheck(key.accountId, prefix);
+    // Modules of the key this one succeeds count as the account's own, even once the lost key is unlinked.
+    const succeeded = firstKey(checked.owner);
+    const held = store.prefixCheck(key.accountId, prefix, { ownersUnder: (under) => catalog.ownersUnder(under).filter((owner) => owner !== succeeded) });
     if (held === "taken") return refuse(context, 403, "prefix-taken", `The id prefix "${prefix}" belongs to another developer.`);
     if (held === "reserved") return refuse(context, 403, "prefix-reserved", `The id prefix "${prefix}" is reserved.`);
     if (held === "too-many") return refuse(context, 403, "too-many-prefixes", "Your account holds as many id prefixes as it can. Publish under one of them.");

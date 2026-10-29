@@ -464,6 +464,36 @@ describe("claiming an id prefix before the first publish", () => {
     expect((await send(key, moduleZip(key), ci)).status).toBe(201);
   });
 
+  it("calls a prefix with a module nobody holds taken, except for the account whose key owns the module", async () => {
+    const { store, catalog, clock, developer, prefixes, send, reason } = setup();
+    // Added by hand (catalog add) or published before prefixes were kept: the prefix has no holder.
+    const stranger = generateKeyPairSync("ed25519").privateKey;
+    catalog.add(moduleZip(stranger, "community.timer"), new Date(clock.now));
+    const other = developer("other@example.com");
+    const state = async (token: string) => ((await (await prefixes("GET", token, "community")).json()) as { state: string }).state;
+    expect(await state(other.token)).toBe("taken");
+    expect(await reason(await prefixes("POST", other.token, "community"))).toBe("prefix-taken");
+    expect(await reason(await send(other.key, moduleZip(other.key, "community.notes")))).toBe("prefix-taken");
+    expect(store.prefixHolder("community")).toBeNull();
+
+    // Once the module's own key is linked, its account may claim the prefix.
+    const owner = store.createAccount({ email: "owner@example.com" }, clock.now);
+    store.linkKey(owner.id, keyFingerprint(rawKey(stranger)), rawKey(stranger).toString("base64"), clock.now);
+    const { token } = store.createSession(owner.id, "windows", clock.now);
+    expect(await state(token)).toBe("free");
+    expect(await (await prefixes("POST", token, "community")).json()).toEqual({ prefix: "community", state: "held" });
+    expect(await state(other.token)).toBe("taken");
+  });
+
+  it("lets the owner of a module under an unheld prefix publish its next version, which reserves the prefix", async () => {
+    const { store, catalog, clock, developer, send } = setup();
+    const { key, accountId } = developer("dev@example.com");
+    catalog.add(moduleZip(key, "community.timer"), new Date(clock.now));
+    expect(store.prefixHolder("community")).toBeNull();
+    expect((await send(key, moduleZip(key, "community.timer", "1.0.1"))).status).toBe(201);
+    expect(store.prefixHolder("community")).toBe(accountId);
+  });
+
   it("needs a sign-in, never a publish token, and limits claims per client", async () => {
     const { store, clock, developer, prefixes, reason } = setup({}, undefined, createRateLimiter({ limit: 2, windowMs: 3_600_000 }));
     const { accountId, token } = developer("dev@example.com");

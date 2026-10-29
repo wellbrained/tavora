@@ -935,6 +935,11 @@ export class CatalogStore {
     return this.db.prepare("select 1 from modules where substr(id, 1, ?) = ? limit 1").get(prefix.length + 1, `${prefix}.`) !== undefined;
   }
 
+  /** The publisher keys of every module, listed or not, whose id is under this prefix. */
+  ownersUnder(prefix: string): string[] {
+    return (this.db.prepare("select distinct owner from modules where substr(id, 1, ?) = ?").all(prefix.length + 1, `${prefix}.`) as unknown as { owner: string }[]).map((row) => row.owner);
+  }
+
   /** Every module, listed or not, for the maintainer. */
   modules(): CatalogModuleRow[] {
     return (

@@ -9,17 +9,26 @@
 //
 // It works on the catalog in TAVORA_STATE_DIR (default data/state). On the server it is
 // `tavora-api-catalog`, which runs the release's catalog.mjs as the service's user; `add -` reads the zip from stdin.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { AccountStore } from "../src/account-store.ts";
+import { addByHand } from "../src/catalog-add.ts";
 import { CatalogError, CatalogStore, isSignedList, SIGNED_LISTS } from "../src/catalog.ts";
 
 const [command, argument, ...rest] = process.argv.slice(2);
-const store = new CatalogStore(path.join(process.env.TAVORA_STATE_DIR ?? "data/state", "catalog"));
+const stateDir = process.env.TAVORA_STATE_DIR ?? "data/state";
+const store = new CatalogStore(path.join(stateDir, "catalog"));
+// Accounts exist only where the server sends mail; without them nobody holds a prefix.
+const accountsFile = path.join(stateDir, "accounts.sqlite");
+const accounts = existsSync(accountsFile) ? new AccountStore(accountsFile) : undefined;
 
 try {
   if (command === "add" && argument && rest.length === 0) {
-    const added = store.add(readFileSync(argument === "-" ? 0 : argument));
+    const { added, reservedFor, unheld } = addByHand(store, accounts, readFileSync(argument === "-" ? 0 : argument));
     console.log(`Added ${added.manifest.id} ${added.manifest.version} by key ${added.owner} (${added.size} bytes, sha256 ${added.sha256}).`);
+    const prefix = added.manifest.id.split(".")[0];
+    if (reservedFor) console.log(`Reserved the prefix "${prefix}" for account ${reservedFor}, which the key is linked to.`);
+    else if (unheld) console.log(`Nobody holds the prefix "${prefix}": it stays taken until the key is linked to an account, which may then claim it.`);
   } else if ((command === "delist" || command === "relist") && argument && rest.length === 0) {
     const changed = store.setListed(argument, command === "relist");
     console.log(changed ? `${command === "relist" ? "Listed" : "Delisted"} ${argument}.` : `There is no module ${argument} in the catalog.`);
@@ -41,4 +50,5 @@ try {
   process.exitCode = 1;
 } finally {
   store.close();
+  accounts?.close();
 }

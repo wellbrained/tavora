@@ -125,6 +125,12 @@ export interface KeyRequest {
 
 export type NameChange = { ok: true; developer: Developer } | { ok: false; reason: "name-taken" | "name-reserved" | "name-too-soon"; nextChangeAt?: number };
 
+/** What prefixCheck asks the module catalog (CatalogStore). */
+export interface PublishedModules {
+  /** The publisher keys of every module, listed or not, whose id is under this prefix. */
+  ownersUnder(prefix: string): string[];
+}
+
 /** How long a checked Discord login waits for the user's yes to a new account. */
 export const DISCORD_TICKET_TTL_MS = 10 * 60_000;
 
@@ -730,11 +736,15 @@ export class AccountStore {
    * First come; words reserved for developer names (anything with "tavora", "official", "local", …)
    * are refused, and an account holds at most MAX_PREFIXES. Prefixes are not kept with the account:
    * a deleted account's prefixes stay held, so nobody can publish new modules under its name.
+   * A prefix nobody holds is still taken while the catalog has a module under it whose key isn't
+   * linked to this account (added by hand, or published before prefixes were kept): holding a
+   * prefix makes an account the publisher of every module under it.
    */
-  prefixCheck(accountId: string, prefix: string): "held" | "free" | "taken" | "reserved" | "too-many" {
+  prefixCheck(accountId: string, prefix: string, catalog: PublishedModules | undefined): "held" | "free" | "taken" | "reserved" | "too-many" {
     const owner = this.db.prepare("select account_id from module_prefixes where prefix = ?").get(prefix) as { account_id: string } | undefined;
     if (owner) return owner.account_id === accountId ? "held" : "taken";
     if (isReservedName(nameKey(prefix))) return "reserved";
+    if (catalog?.ownersUnder(prefix).some((key) => this.publisherKey(key)?.accountId !== accountId)) return "taken";
     return this.prefixes(accountId).length >= MAX_PREFIXES ? "too-many" : "free";
   }
 

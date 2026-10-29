@@ -355,7 +355,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   });
 
   /** What a prefix is to this account: held, free, taken, reserved, too-many or invalid. */
-  const prefixState = (accountId: string, prefix: string) => (PREFIX.test(prefix) ? store.prefixCheck(accountId, prefix) : "invalid");
+  const prefixState = (accountId: string, prefix: string) => (PREFIX.test(prefix) ? store.prefixCheck(accountId, prefix, options.catalog) : "invalid");
 
   signedIn.get("/prefixes/:prefix", (context) => {
     const prefix = context.req.param("prefix") ?? "";
