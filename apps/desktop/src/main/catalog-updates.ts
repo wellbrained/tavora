@@ -22,6 +22,8 @@ export interface CatalogInstalled {
   version: string;
   /** What the installed version asks for. */
   asks: Permissions;
+  /** One of Tavora's own modules that ships with the app: its listing counts when a trusted Tavora key signed it (no owner to match). */
+  official?: true;
 }
 
 /** An update that asks for more than the installed version, checked and waiting for the user. */
@@ -62,12 +64,14 @@ export function findUpdates(
   installed: readonly CatalogInstalled[],
   tavoraVersion: string,
   firstKey: (key: string) => string = (key) => key,
+  officialSigner: (key: string, sha256: string) => boolean = () => false,
 ): CatalogEntry[] {
   const listed = new Map(index.map((entry) => [entry.id, entry]));
   const updates: CatalogEntry[] = [];
   for (const module of installed) {
     const entry = listed.get(module.id);
-    if (!entry || firstKey(entry.owner) !== module.owner) continue;
+    if (!entry) continue;
+    if (module.official ? !officialSigner(entry.owner, entry.zip.sha256) : firstKey(entry.owner) !== module.owner) continue;
     if (compareModuleVersions(entry.version, module.version) <= 0) continue;
     if (entry.minTavora && compareModuleVersions(entry.minTavora, tavoraVersion) > 0) continue;
     updates.push(entry);
@@ -105,12 +109,16 @@ export function notesSince(versions: readonly CatalogVersion[], from: string, to
 export interface CatalogUpdaterOptions {
   /** Whether updates that ask for nothing new install by themselves (a setting, off unless the user turned it on). */
   autoInstall?(): boolean;
-  client: Pick<CatalogClient, "index" | "details" | "download">;
+  client: Pick<CatalogClient, "details" | "download"> & { index(options?: { official?: boolean }): Promise<CatalogEntry[] | null> };
   /** The modules installed from the catalog, as they are now. */
   installed(): CatalogInstalled[];
   tavoraVersion: string;
   /** The first key of a key's account by its successions (safety-lists.ts); without it, every key is its own. */
   firstKey?(key: string): string;
+  /** Whether a key may sign Tavora's own modules (official-updates.ts); without it none do. */
+  officialSigner?(key: string, sha256: string): boolean;
+  /** Tavora's own modules are updated too: the index is asked for with them. */
+  official?(): boolean;
   /** Every installer check, nothing written (installer.ts `checkZipData`), against what is installed now. */
   check(zip: Buffer, expect: { id: string; owner: string }): Promise<CheckedZip>;
   /** Installs a zip by every installer rule, as a catalog module, and reloads its panels. */
@@ -161,9 +169,9 @@ export class CatalogUpdater {
       if (!module || module.owner !== pending.owner || compareModuleVersions(pending.version, module.version) <= 0) this.pendingUpdates.delete(id);
     }
     if (installed.length === 0) return outcome;
-    const index = await this.options.client.index();
+    const index = await this.options.client.index(this.options.official?.() ? { official: true } : undefined);
     if (!index) return { ...outcome, unreachable: true };
-    for (const entry of findUpdates(index, installed, this.options.tavoraVersion, this.options.firstKey?.bind(this.options))) {
+    for (const entry of findUpdates(index, installed, this.options.tavoraVersion, this.options.firstKey?.bind(this.options), this.options.officialSigner?.bind(this.options))) {
       const module = installed.find((item) => item.id === entry.id)!;
       const waiting = this.pendingUpdates.get(entry.id);
       if (waiting?.sha256 === entry.zip.sha256) {

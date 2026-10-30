@@ -9,6 +9,9 @@
 // tavora-pack publish <file.zip> --key <key file>
 //   Publishes a zip packed with your key to Tavora's module catalog. TAVORA_PUBLISH_TOKEN holds a publish
 //   token from Tavora. The key must be linked; its first module id prefix is yours from then on.
+// tavora-pack key <file>
+//   Makes a new Ed25519 publisher key in a file that must not exist yet, and prints its fingerprint.
+//   For keys that sign outside Tavora (such as Tavora's own); keep the file safe and never commit it.
 // tavora-pack withdraw <file.zip | sha256>
 //   Takes back a version that is waiting for review (TAVORA_PUBLISH_TOKEN). No key needed.
 // Installed from npm as @tavora/pack; in Tavora's own repository: pnpm tavora-pack ...
@@ -16,7 +19,7 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { loadExistingKey } from "./keys.ts";
+import { createKeyFile, loadExistingKey } from "./keys.ts";
 import { DEFAULT_API_URL, LinkError, linkKey } from "./link.ts";
 import { packModule, PackError } from "./pack.ts";
 import { CATALOG_RULES_URL, PublishError, publishZip, withdrawVersion } from "./publish.ts";
@@ -25,6 +28,7 @@ import { fingerprint } from "./signature.ts";
 const USAGE = [
   "usage: tavora-pack <module folder> --key <key file> [--out <file.zip>]",
   "       tavora-pack link <code> --key <key file>",
+  "       tavora-pack key <new key file>",
   "       tavora-pack publish <file.zip> --key <key file>",
   "       tavora-pack withdraw <file.zip | sha256>",
 ].join("\n");
@@ -56,10 +60,24 @@ async function main(): Promise<number> {
   const linking = positionals[0] === "link";
   const publishing = positionals[0] === "publish";
   const withdrawing = positionals[0] === "withdraw";
-  const command = linking || publishing || withdrawing;
+  const making = positionals[0] === "key";
+  const command = linking || publishing || withdrawing || making;
   if (values.help || positionals.length !== (command ? 2 : 1) || (command && values.out) || (!command && values.api)) {
     console.error(USAGE);
     return values.help ? 0 : 2;
+  }
+  if (making) {
+    if (values.key || values.api) {
+      console.error(USAGE);
+      return 2;
+    }
+    const file = path.resolve(positionals[1]!);
+    const { key } = await createKeyFile(file).catch((error: unknown) => {
+      throw new PackError((error as Error).message);
+    });
+    console.log(`Made a new publisher key in ${file}. Keep it safe and never commit it.`);
+    console.log(`Fingerprint ${fingerprint(key)}`);
+    return 0;
   }
   if (withdrawing) {
     const target = positionals[1]!;

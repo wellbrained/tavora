@@ -62,6 +62,8 @@ const makesModules = computed(
     Boolean(account.value?.developer) ||
     (props.highlight !== null && props.highlight !== "developer-docs"),
 );
+/** Built-in modules that can update from the catalogue; a dev build with that switched on can publish them. */
+const builtIn = computed(() => modules.value.filter((module) => module.provenance === "official" && module.updatable).sort((a, b) => a.name.localeCompare(b.name)));
 const examples = computed(() => modules.value.filter((module) => module.origin.kind === "example").sort((a, b) => a.name.localeCompare(b.name)));
 const moduleById = (id: string) => modules.value.find((module) => module.id === id);
 
@@ -84,6 +86,11 @@ function folderKind(entry: (typeof folders.value)[number]): "local" | "release" 
   return null;
 }
 const folderTint = { local: "bg-info/15 shadow-[inset_3px_0_0_var(--info)]", release: "bg-success/15 shadow-[inset_3px_0_0_var(--success)]" } as const;
+
+async function publishOfficial(moduleId: string) {
+  const result = await act({ type: "publish-official-module", moduleId });
+  if (result.ok && result.id) showToast(t("officialPublish.done", { name: result.id }));
+}
 
 async function addFolder() {
   const result = await act({ type: "add-development-folder" });
@@ -333,6 +340,21 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
         </ModuleRow>
       </ul>
     </div>
+  </SettingGroup>
+
+  <SettingGroup v-if="state!.officialPublish.available && builtIn.length" :title="t('officialPublish.title')" :description="t('officialPublish.description')">
+    <ul class="flex flex-col" :aria-label="t('officialPublish.title')" data-testid="official-publish">
+      <ModuleRow v-for="module in builtIn" :key="module.id" :module="module" hide-origin>
+        <Button
+          variant="secondary"
+          :disabled="state!.officialPublish.busy !== null"
+          :data-testid="`publish-official-${module.id}`"
+          @click="publishOfficial(module.id)"
+        >
+          <Upload :stroke-width="1.5" /> {{ state!.officialPublish.busy === module.id ? t("officialPublish.working") : t("officialPublish.button") }}
+        </Button>
+      </ModuleRow>
+    </ul>
   </SettingGroup>
 
   <template v-if="accounts && account?.account">

@@ -1,5 +1,6 @@
 import { realpath } from "node:fs/promises";
 import path from "node:path";
+import type { OfficialUpdates } from "./official-updates";
 import { applyOwners, readOwnerRecords } from "./installer";
 import { BROWSER_MODULE_ID, browserModule, describeModules, discoverModules, type InstalledModule, type ModuleInfo, type ModuleProblem, type ModuleSources } from "./registry";
 import { stopBlocked, type SafetyCheck } from "./safety-lists";
@@ -11,6 +12,8 @@ export interface InstalledModulesOptions {
   sources: Omit<ModuleSources, "tavoraVersion">;
   tavoraVersion: string;
   safety: Pick<SafetyCheck, "blocked">;
+  /** Tavora's own modules downloaded from the catalogue (official-updates.ts); absent or off: only the shipped copies load. */
+  official?: OfficialUpdates;
 }
 
 export interface InstalledModules {
@@ -31,7 +34,16 @@ export interface InstalledModules {
  */
 export async function loadInstalledModules(options: InstalledModulesOptions): Promise<InstalledModules> {
   const problems: ModuleProblem[] = [];
-  const modules = await discoverModules({ ...options.sources, tavoraVersion: options.tavoraVersion }, problems);
+  const { official } = options;
+  if (official?.on) await official.load();
+  const downloads = official?.on ? { officialUpdates: { dir: official.dir, trusted: (id: string, dir: string) => official.trusted(id, dir) } } : {};
+  const modules = await discoverModules({ ...options.sources, ...downloads, tavoraVersion: options.tavoraVersion }, problems);
+  if (official?.on) {
+    // Copies the shipped one makes useless (or that are blocked, revoked or no longer shipped) go; their high-water mark stays.
+    const shipped = new Map([...modules].flatMap(([id, module]) => (module.shippedVersion === undefined ? [] : [[id, module.shippedVersion] as const])));
+    const unsure = new Set(problems.flatMap((problem) => (problem.official && problem.about?.id ? [problem.about.id] : [])));
+    await official.cleanup(shipped, unsure);
+  }
   const userRoot = await realpath(options.userModules).catch(() => path.resolve(options.userModules));
   const records = await readOwnerRecords(options.userData);
   applyOwners(modules, userRoot, records);

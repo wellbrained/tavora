@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -642,5 +642,28 @@ describe("validateChangelog", () => {
     expect(validateChangelog([{ version: "1.0.0", notes: ["two\nlines"] }]).ok).toBe(false);
     expect(validateChangelog([{ version: "1.0.0", notes: ["x".repeat(CHANGELOG_LIMITS.maxNoteLength + 1)] }]).ok).toBe(false);
     expect(validateChangelog([{ version: "1.0.0", notes: ["x"], html: "<b>" }]).ok).toBe(false);
+  });
+});
+
+describe("the shared official-signer rules", () => {
+  const pins = { key: "k0", account: "acc" };
+  const succession = (old: string, next: string, account = "acc") => ({ old, new: next, account });
+
+  it("follows successions to the first key, one account only", () => {
+    expect(firstKeyOf([], "k0")).toEqual({ key: "k0", account: null });
+    expect(firstKeyOf([succession("k0", "k1"), succession("k1", "k2")], "k2")).toEqual({ key: "k0", account: "acc" });
+    // A step in another account stops the chain there.
+    expect(firstKeyOf([succession("k0", "k1"), succession("k1", "k2", "other")], "k2")).toEqual({ key: "k1", account: "other" });
+    // A key named as the successor of two keys has no clear owner.
+    expect(firstKeyOf([succession("a", "k9"), succession("b", "k9")], "k9")).toEqual({ key: "k9", account: null });
+  });
+
+  it("trusts the pinned key and its successors in the pinned account, and nobody with empty pins or a revocation", () => {
+    expect(isOfficialSigner({ key: "k0", account: null }, false, pins)).toBe(true);
+    expect(isOfficialSigner({ key: "k0", account: "acc" }, false, pins)).toBe(true);
+    expect(isOfficialSigner({ key: "k0", account: "other" }, false, pins)).toBe(false);
+    expect(isOfficialSigner({ key: "k5", account: null }, false, pins)).toBe(false);
+    expect(isOfficialSigner({ key: "k0", account: null }, true, pins)).toBe(false);
+    expect(isOfficialSigner({ key: "", account: null }, false, { key: "", account: "" })).toBe(false);
   });
 });

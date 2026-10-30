@@ -1,4 +1,5 @@
 import path from "node:path";
+import { firstKeyOf } from "@tavora/module-schema";
 import {
   CATALOG_LIST_KINDS,
   isNewerCatalogList,
@@ -36,8 +37,6 @@ export const CATALOGUE_PUBLIC_KEY = "u44xg/sgGpnPfBN5o8n/xyBU5Xrv3G/ZJC20+phjWIU
 export const SAFETY_TIMEOUT_MS = 10_000;
 /** How often a running Tavora asks again. */
 export const SAFETY_REFRESH_MS = 6 * 60 * 60_000;
-/** Longest chain of successions followed; more is not a real account's history. */
-const MAX_SUCCESSIONS = 16;
 
 export interface SafetyListsOptions {
   /** Where the signed files are kept on this PC. */
@@ -115,25 +114,12 @@ export class SafetyLists implements SafetyCheck {
   }
 
   firstKey(fingerprint: string): string {
-    const statements = this.list("successions")?.successions ?? [];
-    // A key named as the new key of two different old keys has no clear owner: neither is followed.
-    const before = new Map<string, { old: string; account: string } | null>();
-    for (const { old, new: next, account } of statements) {
-      const known = before.get(next);
-      before.set(next, known === undefined || (known?.old === old && known.account === account) ? { old, account } : null);
-    }
-    let key = fingerprint;
-    let account: string | undefined;
-    const seen = new Set([key]);
-    for (let i = 0; i < MAX_SUCCESSIONS; i++) {
-      const step = before.get(key);
-      // Every step stays in the one account, and a loop goes nowhere.
-      if (!step || (account !== undefined && step.account !== account) || seen.has(step.old)) break;
-      account = step.account;
-      key = step.old;
-      seen.add(key);
-    }
-    return key;
+    return this.firstKeyChain(fingerprint).key;
+  }
+
+  /** The first key and the account the succession steps on the way belong to (null without a step); shared with the catalogue service. */
+  firstKeyChain(fingerprint: string): { key: string; account: string | null } {
+    return firstKeyOf(this.list("successions")?.successions ?? [], fingerprint);
   }
 
   private async fetchList(kind: CatalogListKind): Promise<string | null> {

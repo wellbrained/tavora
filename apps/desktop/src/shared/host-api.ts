@@ -610,6 +610,8 @@ export interface HostViewState {
     removable: boolean;
     /** Installed from Tavora's module catalog, so it can be reported from Settings. */
     fromCatalog: boolean;
+    /** The catalog keeps it up to date: it came from the catalog, or it is one of Tavora's own modules and those may update too. */
+    updatable?: true;
     /** The support link from the module's manifest (an https address or an email address), or null. */
     support: string | null;
     /** The fingerprint of the key that signed it, for a module installed from a signed zip; null otherwise. */
@@ -640,6 +642,8 @@ export interface HostViewState {
    * set when the folder itself has none or is gone; each project says the module it loads or why not.
    * `kind` lets Settings suggest the fix: "not-built", "no-module" or "missing".
    */
+  /** Settings > Development in a dev build with Tavora's own modules updating: the built-in modules can be published. `busy` is the id being published. */
+  officialPublish: { available: boolean; busy: string | null };
   developmentFolders: {
     folder: string;
     /** The user closed it: Settings shows only its heading. */

@@ -1,4 +1,4 @@
-import { TAVORA_ACCOUNT_ID, TAVORA_PUBLISHER_KEY } from "@tavora/module-schema";
+import { firstKeyOf, isOfficialSigner, officialOn, OFFICIAL_PINS, type OfficialPins } from "@tavora/module-schema";
 import { readCatalogList, type CatalogListKind, type CatalogListOf } from "@tavora/pack";
 import type { CatalogStore } from "./catalog.ts";
 
@@ -12,19 +12,7 @@ import type { CatalogStore } from "./catalog.ts";
 /** Tavora's catalogue public key, the same as the app's (apps/desktop/src/main/safety-lists.ts). */
 export const CATALOGUE_PUBLIC_KEY = "u44xg/sgGpnPfBN5o8n/xyBU5Xrv3G/ZJC20+phjWIU=";
 
-/** Longest chain of successions followed, as in the app. */
-const MAX_SUCCESSIONS = 16;
-
-/** The one publisher key and the one account allowed to publish Tavora's own modules; either empty: nobody is. */
-export interface OfficialPins {
-  key: string;
-  account: string;
-}
-
-export const OFFICIAL_PINS: Readonly<OfficialPins> = { key: TAVORA_PUBLISHER_KEY, account: TAVORA_ACCOUNT_ID };
-
-/** Whether publishing Tavora's own modules is switched on: both pins are set. */
-export const officialOn = (pins: OfficialPins) => pins.key !== "" && pins.account !== "";
+export { officialOn, OFFICIAL_PINS, type OfficialPins };
 
 export interface CatalogTrust {
   /** Whether a key is revoked and this zip is not one it signed before. */
@@ -52,32 +40,10 @@ export function catalogTrust(catalog: CatalogStore, publicKey: string = CATALOGU
       return revocation !== undefined && !revocation.allow.includes(sha256);
     },
     officialSigner(fingerprint, sha256, pins) {
-      if (!officialOn(pins)) return false;
-      const first = trust.firstKey(fingerprint);
-      return first.key === pins.key && (first.account === null || first.account === pins.account) && !trust.revoked(fingerprint, sha256);
+      return isOfficialSigner(trust.firstKey(fingerprint), trust.revoked(fingerprint, sha256), pins);
     },
-    // The same rules as the app's SafetyLists.firstKey, so the catalog lists what users' Tavora installs.
-    firstKey(fingerprint) {
-      const statements = list("successions")?.successions ?? [];
-      // A key named as the new key of two different old keys has no clear owner: neither is followed.
-      const before = new Map<string, { old: string; account: string } | null>();
-      for (const { old, new: next, account } of statements) {
-        const known = before.get(next);
-        before.set(next, known === undefined || (known?.old === old && known.account === account) ? { old, account } : null);
-      }
-      let key = fingerprint;
-      let account: string | null = null;
-      const seen = new Set([key]);
-      for (let i = 0; i < MAX_SUCCESSIONS; i++) {
-        const step = before.get(key);
-        // Every step stays in the one account, and a loop goes nowhere.
-        if (!step || (account !== null && step.account !== account) || seen.has(step.old)) break;
-        account = step.account;
-        key = step.old;
-        seen.add(key);
-      }
-      return { key, account };
-    },
+    // The same rules as the app's SafetyLists.firstKey (shared in module-schema), so the catalog lists what users' Tavora installs.
+    firstKey: (fingerprint) => firstKeyOf(list("successions")?.successions ?? [], fingerprint),
   };
   return trust;
 }

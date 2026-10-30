@@ -8,6 +8,10 @@
 - 1.0.0 is reserved for the first public release.
 - While a release is being prepared or published, nothing merges into main: a new commit there makes the release start over. The release session creates `D:\Github\Tavora\releases\RELEASE-RUNNING` (one line: version and start time) and deletes it when done. Before merging a pull request, check for that file; if it is there, wait and say so.
 
+## Built-in modules
+
+A change to a built-in module (`modules/*`, ids `tavora.*`) raises its own version in its `tavora.module.json` in the same pull request: a patch for fixes and small things, a minor for a finished feature on the owner's word, a major only when asked. Built-in modules can update from the catalogue without an app release, so their version is what tells copies apart. What they save must stay readable by the previous version: a newer copy may write data, and the shipped copy has to open it after a fallback. Don't rename or restructure saved data in one step; add to it, and read both forms.
+
 ## Writing
 
 Texts in the app are short and friendly, talking to the user as "you" (German: "du").

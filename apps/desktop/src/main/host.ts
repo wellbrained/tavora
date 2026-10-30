@@ -111,6 +111,8 @@ import { countAppUpdate } from "./usage-counts";
 import { PublisherNames } from "./publisher-names";
 import { UpdateManager, type UpdaterLike } from "./updates";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
+import { OfficialPublisher } from "./official-publish";
+import { OfficialUpdates, resolveOfficialPins } from "./official-updates";
 import { CATALOGUE_PUBLIC_KEY, SAFETY_REFRESH_MS, SafetyLists } from "./safety-lists";
 import { createToneReader, iconVersion } from "./icon-tone";
 import { syncIcons } from "./icon-sync";
@@ -356,6 +358,7 @@ interface Prepared {
   copySync: CopySync;
   installed: Installed;
   safetyLists: SafetyLists;
+  official: OfficialUpdates;
   grants: GrantStore;
   connection: ConnectionWatcher;
   systemInfo: SystemMonitorThread;
@@ -452,6 +455,10 @@ export class Host {
   private readonly grants: GrantStore;
   /** The catalog's signed safety lists (revoked keys, blocked zips, successions). */
   private readonly safetyLists: SafetyLists;
+  /** Tavora's own modules downloaded from the catalogue (official-updates.ts); off while the pins are empty. */
+  private readonly official: OfficialUpdates;
+  /** The built-in module being published from a dev build (publishOfficialModule). */
+  private officialPublishing: string | null = null;
   /** Stream overlays and hotkeys for module actions (streaming.ts); made by Host.create once the Host is there, before any module panel opens. */
   private streaming!: Streaming;
   /** Module overlay pages shown over the game in front (game-overlay-service.ts). */
@@ -541,6 +548,7 @@ export class Host {
     this.installed = prepared.installed;
     this.copySync = prepared.copySync;
     this.safetyLists = prepared.safetyLists;
+    this.official = prepared.official;
     this.grants = prepared.grants;
     this.connection = prepared.connection;
     this.systemInfo = prepared.systemInfo;
@@ -583,6 +591,7 @@ export class Host {
       online: () => this.library.onlineSearch,
       autoUpdateModules: () => this.library.autoUpdateModules,
       firstKey: (key) => this.safetyLists.firstKey(key),
+      official: this.official,
       panels: { reload: (moduleId) => this.reloadModuleViews(moduleId), close: (moduleId) => this.removeModulePanels(moduleId) },
       grantsChanged: () => this.syncConnection(),
       removed: (owner, moduleId) => {
@@ -744,7 +753,8 @@ export class Host {
       online: () => library.onlineSearch,
     });
     await safetyLists.load();
-    const installed = new Installed(await Host.loadModules(options, library.developmentFolders, safetyLists), (manifest) => translateManifest(manifest, Host.languageOf(library, options)));
+    const official = new OfficialUpdates({ userData, pins: resolveOfficialPins(app.isPackaged), safety: safetyLists });
+    const installed = new Installed(await Host.loadModules(options, library.developmentFolders, safetyLists, official), (manifest) => translateManifest(manifest, Host.languageOf(library, options)));
     const { modules, problems: moduleProblems } = installed;
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     // Before any module session or store is opened (S5: data is keyed by owner and id).
@@ -795,7 +805,7 @@ export class Host {
     await openTimes.load();
     const emblem = await Host.readEmblem(options);
 
-    const host = new Host(options, { encryptor, signIn, copySync, installed, safetyLists, grants, connection, systemInfo, openTimes, emblem }, library, workspaces, profile, windowState, themes, themeProblems, savedData);
+    const host = new Host(options, { encryptor, signIn, copySync, installed, safetyLists, official, grants, connection, systemInfo, openTimes, emblem }, library, workspaces, profile, windowState, themes, themeProblems, savedData);
     host.openedAtStart = openedTimes(library);
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
@@ -937,13 +947,13 @@ export class Host {
   }
 
   /** The one step that finds the installed modules, at startup and on every reload. */
-  private static loadModules(options: HostOptions, developmentFolders: string[], safety: SafetyLists): Promise<InstalledModules> {
-    return loadInstalledModules({ userData: options.userData, userModules: userModulesDir(options), sources: Host.moduleSources(options, developmentFolders), tavoraVersion: app.getVersion(), safety });
+  private static loadModules(options: HostOptions, developmentFolders: string[], safety: SafetyLists, official: OfficialUpdates): Promise<InstalledModules> {
+    return loadInstalledModules({ userData: options.userData, userModules: userModulesDir(options), sources: Host.moduleSources(options, developmentFolders), tavoraVersion: app.getVersion(), safety, official });
   }
 
   /** Looks for modules again; panels of modules that are gone are closed. */
   private async reloadModules(): Promise<void> {
-    this.installed.replace(await Host.loadModules(this.options, this.library.developmentFolders, this.safetyLists));
+    this.installed.replace(await Host.loadModules(this.options, this.library.developmentFolders, this.safetyLists, this.official));
     const { modules } = this.installed;
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
@@ -1303,7 +1313,8 @@ export class Host {
 
   /** Starts a module's open panels again, so they load a new version or connect with a new grant. */
   private reloadModuleViews(moduleId: string): void {
-    for (const view of this.moduleViews()) if (view.moduleId === moduleId) view.reload();
+    const current = this.modules.get(moduleId);
+    for (const view of this.moduleViews()) if (view.moduleId === moduleId) view.reload(current);
     // Panels that asked before they could run start now, in the workspace shown (the others start when it opens).
     const workspace = this.workspace;
     if (!workspace) return;
@@ -1940,6 +1951,41 @@ export class Host {
     });
   }
 
+  /**
+   * Dev builds only: publishes a built-in module's update (official-publish.ts). The Tavora key file is picked here each
+   * time, handed to the publisher for this one upload and kept nowhere (no remembered folder, no key vault, no cache).
+   */
+  private async publishOfficialModule(moduleId: string): Promise<string | void> {
+    const module = this.modules.get(moduleId);
+    if (app.isPackaged || !this.official.on || module?.provenance !== "official" || module.shippedVersion === undefined) throw new UserError("officialPublish.error.notBuiltIn");
+    const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.tavoraKey"), properties: ["openFile"] });
+    const keyFile = picked.filePaths[0];
+    if (picked.canceled || !keyFile) return;
+    const publisher = new OfficialPublisher({
+      repo: path.resolve(__dirname, "../../../.."),
+      userData: this.options.userData,
+      listed: async (id) => {
+        try {
+          return { version: (await this.catalog.details(id)).entry.version };
+        } catch (error) {
+          if (error instanceof UserError && error.key === "error.catalogNotListed") return null;
+          throw error;
+        }
+      },
+      trusted: (fingerprint, sha256) => this.official.signerTrusted(fingerprint, sha256),
+      upload: (key, zip) => this.account.uploadModule(key, zip),
+    });
+    this.officialPublishing = moduleId;
+    this.pushState();
+    try {
+      const published = await publisher.publish(moduleId, keyFile);
+      return `${published.id} ${published.version}`;
+    } finally {
+      this.officialPublishing = null;
+      this.pushState();
+    }
+  }
+
   /** The project folder a dev module was loaded from, for Publish and Save as zip. */
   private projectOf(moduleId: string): string {
     const project = this.modules.get(moduleId)?.developmentProject;
@@ -2282,6 +2328,7 @@ export class Host {
       "collapse-development-folder": saved((action) => setDevelopmentFolderCollapsed(this.library, action.folder, action.collapsed)),
       "copy-example": (action) => this.copyExampleModule(action.moduleId, action.name, action.folder),
       "open-example-folder": (action) => this.openExampleFolder(action.moduleId),
+      "publish-official-module": (action) => this.publishOfficialModule(action.moduleId),
       "open-development-project": (action) => this.openDevelopmentProject(action.project),
       "open-developer-link": (action) => this.openDeveloperLink(action.link),
       "reload-modules": () => this.reloadModules(),
@@ -4062,6 +4109,7 @@ export class Host {
         origin: this.moduleInfo.get(module.manifest.id)?.origin ?? { kind: "dev" as const, folder: "" },
         removable: this.moduleInfo.get(module.manifest.id)?.removable ?? false,
         fromCatalog: this.catalogModules.has(module.manifest.id),
+        ...(this.catalogModules.has(module.manifest.id) || (this.official.on && module.shippedVersion !== undefined) ? { updatable: true as const } : {}),
         support: module.manifest.support ?? null,
         publisher: this.publisherOf(module),
         publisherName: ((key) => (key ? this.publisherNames.name(key) : null))(this.publisherOf(module)),
@@ -4079,6 +4127,7 @@ export class Host {
         ),
       })),
       moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder && !problem.official).map(({ folder, path: full, message, kind, values }) => ({ folder, path: full, message, ...(kind ? { kind } : {}), ...(values ? { values } : {}) })),
+      officialPublish: { available: !app.isPackaged && this.official.on, busy: this.officialPublishing },
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
         const projects = new Map<string, HostViewState["developmentFolders"][number]["projects"][number]>();
