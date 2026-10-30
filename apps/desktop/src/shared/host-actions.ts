@@ -335,6 +335,8 @@ export function hostActionTable(c: HostChecks) {
     "collapse-development-folder": { folder: filled(500), collapsed: bool },
     /** Copies an example into a new project in a development folder, or in a folder the user picks (null); answers with the new project. */
     "copy-example": { moduleId: c.moduleId, name: named(80), folder: nullable(filled(500)) },
+    /** Dev builds only: builds a built-in module from origin/main, signs it with a Tavora key file the user picks and uploads it. Answers with "id version". */
+    "publish-official-module": { moduleId: c.moduleId },
     /** Opens a module project of a development folder (a `developmentFolders` project) in the file manager. */
     "open-development-project": { project: filled(500) },
     /** Opens an example's folder in the file manager, to look at its sources. */

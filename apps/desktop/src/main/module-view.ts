@@ -142,6 +142,8 @@ export function moduleOrigin(moduleId: string): string {
 }
 
 const hardened = new WeakSet<Session>();
+/** The module each session serves its files from: updated when a panel reloads with a new copy. */
+const serving = new WeakMap<Session, InstalledModule>();
 
 /**
  * When the user last clicked or pressed a key in a page of this session (one module in one workspace). The clipboard
@@ -215,14 +217,17 @@ export function documentsFolder(): string {
  */
 function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blobs: BlobStore, files: Pick<ModuleViewOptions, "savePicture" | "saveJson" | "openJson">): Session {
   const ses = session.fromPartition(modulePartition(module.owner, module.manifest.id, workspace.id));
+  // The folder a session serves from follows the module as installed now: a built-in module's downloaded copy lives elsewhere than the shipped one.
+  serving.set(ses, module);
   if (hardened.has(ses)) return ses;
   hardened.add(ses);
 
   const origin = moduleOrigin(module.manifest.id);
-  // WebAssembly only for a module of Tavora's own that asked for it (the registry refuses the request from any other).
-  const csp = moduleCsp(module.provenance === "official" && module.manifest.permissions.webAssembly === true);
 
   ses.protocol.handle(MODULE_SCHEME, async (request) => {
+    const module = serving.get(ses)!;
+    // WebAssembly only for a module of Tavora's own that asked for it (the registry refuses the request from any other).
+    const csp = moduleCsp(module.provenance === "official" && module.manifest.permissions.webAssembly === true);
     // URL.origin is "null" for custom schemes in Node, so compare the host.
     const url = new URL(request.url);
     if (url.host !== module.manifest.id) return new Response("Not found", { status: 404 });
@@ -1169,7 +1174,12 @@ export class ModuleView {
     this.heartbeat = undefined;
   }
 
-  reload(): void {
+  /** Loads the page again; with `next`, from the module as installed now (an update may be in another folder). */
+  reload(next?: InstalledModule): void {
+    if (next && next.manifest.id === this.options.module.manifest.id && next.owner === this.options.module.owner) {
+      this.options.module = next;
+      serving.set(this.view.webContents.session, next);
+    }
     this.setStatus("loading");
     this.view.webContents.reload();
   }

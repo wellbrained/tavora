@@ -869,4 +869,58 @@ export function validateManifest(input: unknown): ManifestResult {
 export const TAVORA_PUBLISHER_KEY = "";
 export const TAVORA_ACCOUNT_ID = "";
 
+/** The pinned key and account as a pair; either empty: nobody may publish Tavora's own modules. */
+export interface OfficialPins {
+  key: string;
+  account: string;
+}
+
+export const OFFICIAL_PINS: Readonly<OfficialPins> = { key: TAVORA_PUBLISHER_KEY, account: TAVORA_ACCOUNT_ID };
+
+/** Whether Tavora's own modules may update from the catalogue: both pins are set. */
+export const officialOn = (pins: OfficialPins) => pins.key !== "" && pins.account !== "";
+
+/** Longest chain of successions followed; more is not a real account's history. */
+const MAX_SUCCESSIONS = 16;
+
+/** A signed statement that `new` replaces `old` in an account. */
+export interface SuccessionStatement {
+  old: string;
+  new: string;
+  account: string;
+}
+
+/**
+ * The first key of a key's account by its signed successions, and that account (null for a key with no succession).
+ * The one rule behind whose data a key's modules use, shared by the app and the catalogue service.
+ */
+export function firstKeyOf(statements: readonly SuccessionStatement[], fingerprint: string): { key: string; account: string | null } {
+  // A key named as the new key of two different old keys has no clear owner: neither is followed.
+  const before = new Map<string, { old: string; account: string } | null>();
+  for (const { old, new: next, account } of statements) {
+    const known = before.get(next);
+    before.set(next, known === undefined || (known?.old === old && known.account === account) ? { old, account } : null);
+  }
+  let key = fingerprint;
+  let account: string | null = null;
+  const seen = new Set([key]);
+  for (let i = 0; i < MAX_SUCCESSIONS; i++) {
+    const step = before.get(key);
+    // Every step stays in the one account, and a loop goes nowhere.
+    if (!step || (account !== null && step.account !== account) || seen.has(step.old)) break;
+    account = step.account;
+    key = step.old;
+    seen.add(key);
+  }
+  return { key, account };
+}
+
+/**
+ * Whether a signer may sign Tavora's own modules: its first key is the pinned key, every succession step on the way
+ * belongs to the pinned account, and it is not revoked for this zip. Never with an empty pin.
+ */
+export function isOfficialSigner(first: { key: string; account: string | null }, revoked: boolean, pins: OfficialPins): boolean {
+  return officialOn(pins) && first.key === pins.key && (first.account === null || first.account === pins.account) && !revoked;
+}
+
 export * from "./api-reasons.ts";
