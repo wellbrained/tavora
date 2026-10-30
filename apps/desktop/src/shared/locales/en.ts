@@ -1921,7 +1921,6 @@ export const en = {
   "contactSettings.title": "Messages from users",
   "contactSettings.description": "Users can write to you about your modules without you seeing who they are.",
   "contactSettings.none": "You have no published modules yet.",
-  "contactSettings.on": "Users can write to you",
   "contactSettings.off": "Messages are off",
   "contactSettings.switch": "Take messages for {name}",
   "contactSettings.link": "Public link instead (https://…)",
