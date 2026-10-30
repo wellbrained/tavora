@@ -77,14 +77,14 @@ export interface PanelViewsDeps {
   unmount(adapter: PanelViewAdapter): void;
   windowSize(): { width: number; height: number };
   windowHidden(): boolean;
-  /** Whether the panel is lent to the in-game layer: its overlay window places, shows and pauses it. */
-  floating(instanceId: string): boolean;
   /** Whether the panel shows a question in its place: its page waits, hidden. */
   asking(instanceId: string): boolean;
   /** A panel is about to go (tooltips, menus and its live state belong to the host). `forget`: for good. */
   releasing(instanceId: string, forget: boolean): void;
-  /** A panel that closes for good is let go of by the in-game layer, if it holds it. */
-  stopLent(instanceId: string): void;
+  /** Whether the panel belongs to the workspace shown (a panel back from the in-game layer to another workspace is let go of). */
+  shownHere(instanceId: string): boolean;
+  /** A panel is back in its slot from the in-game layer (the host UI shows it, a waiting dialog may open). */
+  returned?(instanceId: string): void;
   /** The panel dialog closed (the host UI takes its frame away). */
   dialogClosed(): void;
   /** The wait for a workspace's panels ended; `show`: the panels are placed now. */
@@ -104,13 +104,20 @@ export interface PanelViewsDeps {
   now?(): number;
 }
 
+/** A panel's view lent to the in-game layer: it holds the view until `return` puts it back in its slot. */
+export interface PanelLease {
+  readonly view: PanelViewAdapter;
+  /** Gives the view back, laid out where its workspace last put it; does nothing when it was given back or the panel closed. */
+  return(): void;
+}
+
 export interface PanelViewState {
   kind: "module" | "browser";
   status: InstanceStatus;
   revealed: boolean;
   firstDrawn: boolean;
   /** Lent to the in-game layer. */
-  floating: boolean;
+  lent: boolean;
   /** Has a place in its workspace slot. */
   placed: boolean;
   awaiting: boolean;
@@ -143,6 +150,8 @@ export class PanelViews {
   private readonly launches = new Map<string, PanelLaunch>();
   private readonly opened = new Map<string, OpenedFrom>();
   private readonly keep = new Set<string>();
+  /** Panels lent to the in-game layer, with what to tell it when the panel closes for good. */
+  private readonly lent = new Map<string, () => void>();
   private openingState: { startedAt: number; timer: ReturnType<typeof setTimeout>; tag: string } | null = null;
   private overlayOpen = false;
   private overlayChanges = 0;
@@ -267,7 +276,7 @@ export class PanelViews {
   closeAll(): void {
     this.closeDialog();
     this.endOpening(false);
-    for (const instanceId of this.entries.keys()) if (!this.deps.floating(instanceId) && !this.keep.has(instanceId)) this.remove(instanceId, false);
+    for (const instanceId of this.entries.keys()) if (!this.lent.has(instanceId) && !this.keep.has(instanceId)) this.remove(instanceId, false);
     this.bounds.clear();
   }
 
@@ -276,6 +285,7 @@ export class PanelViews {
     for (const { adapter } of this.entries.values()) adapter.dispose();
     this.entries.clear();
     this.byContents.clear();
+    this.lent.clear();
   }
 
   private remove(instanceId: string, forget: boolean): void {
@@ -292,7 +302,11 @@ export class PanelViews {
       this.byContents.delete(adapter.webContentsId);
       if (this.dialogState?.instanceId === instanceId) this.closeDialog();
       // A panel in the layer is let go of by its window first (the window never closes the page, this does).
-      if (forget && adapter.kind === "module") this.deps.stopLent(instanceId);
+      if (forget) {
+        const revoked = this.lent.get(instanceId);
+        this.lent.delete(instanceId);
+        revoked?.();
+      }
       this.deps.unmount(adapter);
       adapter.dispose();
     }
@@ -341,7 +355,7 @@ export class PanelViews {
     this.deps.placing?.();
     if (this.openingState && this.openingDone()) return this.endOpening(true);
     for (const [instanceId, { adapter }] of this.entries) {
-      if (this.deps.floating(instanceId)) continue;
+      if (this.lent.has(instanceId)) continue;
       this.layOut(instanceId, adapter);
     }
   }
@@ -370,17 +384,48 @@ export class PanelViews {
   /** Whether a panel's page may show a tooltip's source now (placed, revealed, nothing over it). */
   isShowing(instanceId: string): boolean {
     const adapter = this.get(instanceId);
-    return !!adapter && this.bounds.has(instanceId) && !this.overlayOpen && !this.openingState && !this.deps.windowHidden() && adapter.revealed && !this.deps.floating(instanceId);
+    return !!adapter && this.bounds.has(instanceId) && !this.overlayOpen && !this.openingState && !this.deps.windowHidden() && adapter.revealed && !this.lent.has(instanceId);
   }
 
-  /** A panel returns from the in-game layer: back in the window and laid out at once. */
-  returned(instanceId: string): void {
+  // ── The in-game layer ───────────────────────────────────────────────
+
+  /**
+   * Hands the panel's view to the in-game layer, which places, shows and pauses it in its own window until the lease is
+   * returned (`layOut` and the pictures skip a lent panel). `revoked` is called when the panel closes for good while lent.
+   * Nothing when the panel has no view or is lent already.
+   */
+  lend(instanceId: string, revoked: () => void): PanelLease | undefined {
     const adapter = this.get(instanceId);
-    if (!adapter) return;
+    if (!adapter || this.lent.has(instanceId)) return undefined;
+    this.lent.set(instanceId, revoked);
+    this.deps.unmount(adapter);
+    return { view: adapter, return: () => this.takeBack(instanceId) };
+  }
+
+  /** Whether the panel is lent to the in-game layer. */
+  isLent(instanceId: string): boolean {
+    return this.lent.has(instanceId);
+  }
+
+  /** Whether the panel with these contents is lent to the in-game layer. */
+  isLentContents(contentsId: number): boolean {
+    const adapter = this.byContents.get(contentsId);
+    return !!adapter && [...this.entries].some(([instanceId, entry]) => entry.adapter === adapter && this.lent.has(instanceId));
+  }
+
+  /** Back in the window and laid out at once; a panel whose workspace is not shown is let go of instead. */
+  private takeBack(instanceId: string): void {
+    if (!this.lent.delete(instanceId)) return;
+    const adapter = this.get(instanceId);
+    // Not here any more: the panel itself is closing, or Tavora is.
+    if (!adapter || this.deps.windowGone()) return;
+    // The slot it comes back to is not on screen: the panel closes like any panel of a workspace that is left, and opens again with its workspace.
+    if (!this.deps.shownHere(instanceId)) return this.remove(instanceId, false);
     this.deps.mount(adapter);
     adapter.setVisible(false);
     this.layOut(instanceId, adapter);
     this.applyBounds();
+    this.deps.returned?.(instanceId);
   }
 
   // ── Opening ─────────────────────────────────────────────────────────
@@ -417,7 +462,7 @@ export class PanelViews {
 
   /** The module panels placed in their workspace slots now. */
   inSlots(): PanelViewAdapter[] {
-    return [...this.entries].flatMap(([instanceId, { adapter }]) => (adapter.kind === "module" && this.bounds.has(instanceId) && !this.deps.floating(instanceId) ? [adapter] : []));
+    return [...this.entries].flatMap(([instanceId, { adapter }]) => (adapter.kind === "module" && this.bounds.has(instanceId) && !this.lent.has(instanceId) ? [adapter] : []));
   }
 
   // ── Host menus and dialogs over the workspace ───────────────────────
@@ -440,7 +485,7 @@ export class PanelViews {
     const started = (this.deps.now ?? performance.now.bind(performance))();
     await Promise.all(
       [...this.entries].map(async ([instanceId, { adapter }]) => {
-        if (this.deps.floating(instanceId) || !this.bounds.has(instanceId) || adapter.status !== "ready" || !adapter.revealed || !adapter.capturable) return;
+        if (this.lent.has(instanceId) || !this.bounds.has(instanceId) || adapter.status !== "ready" || !adapter.revealed || !adapter.capturable) return;
         const image = await Promise.race([adapter.capture().catch(() => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), FREEZE_TIMEOUT_MS))]);
         if (image) images[instanceId] = image;
       }),
@@ -452,7 +497,7 @@ export class PanelViews {
     if (Object.keys(images).length) await this.deps.frozenOnScreen();
     this.deps.log?.(`overlay: ${Object.keys(images).length} of ${this.inSlots().length} pictures taken in ${Math.round(taken - started)} ms`);
     if (change !== this.overlayChanges || this.deps.windowGone()) return;
-    for (const [instanceId, { adapter }] of this.entries) if (!this.deps.floating(instanceId) && !this.inDialog(instanceId)) adapter.setVisible(false);
+    for (const [instanceId, { adapter }] of this.entries) if (!this.lent.has(instanceId) && !this.inDialog(instanceId)) adapter.setVisible(false);
   }
 
   /**
@@ -486,7 +531,7 @@ export class PanelViews {
   /** The panel may go in a dialog: it is in sight in the workspace. Opens it (a dialog already open closes) unless the panel has it. */
   openDialog(instanceId: string, size: { width: number; height: number }): boolean {
     const adapter = this.get(instanceId);
-    if (!adapter || adapter.kind !== "module" || !this.bounds.has(instanceId) || this.deps.floating(instanceId)) return false;
+    if (!adapter || adapter.kind !== "module" || !this.bounds.has(instanceId) || this.lent.has(instanceId)) return false;
     if (this.dialogState?.instanceId === instanceId) return false;
     this.closeDialog();
     this.dialogState = { instanceId, ...size, bounds: null };
@@ -528,7 +573,7 @@ export class PanelViews {
         status: adapter.status,
         revealed: adapter.revealed,
         firstDrawn: adapter.firstDrawn,
-        floating: this.deps.floating(instanceId),
+        lent: this.lent.has(instanceId),
         placed: this.bounds.has(instanceId),
         awaiting: this.waiting.has(instanceId),
         kept: this.keep.has(instanceId),

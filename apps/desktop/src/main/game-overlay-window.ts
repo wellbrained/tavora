@@ -52,10 +52,8 @@ export interface GameOverlayWindowOptions {
   ended(): void;
   /** The name and the close button's label the frame shows. */
   frameText(): { name: string; closeLabel: string; layoutLabel: string };
-  /** A panel to hold instead of an overlay page. */
+  /** A panel to hold instead of an overlay page (lent by Panel views, which takes it back when GameOverlays returns the loan). */
   panel?: OverlayPanel;
-  /** The window let go of its panel; the host puts it back in its workspace slot (unless the panel itself is going). */
-  released?(): void;
 }
 
 type Edges = { left?: boolean; right?: boolean; top?: boolean; bottom?: boolean };
@@ -319,7 +317,6 @@ export class GameOverlayWindow {
     if (!panel) return;
     if (!this.window.isDestroyed()) this.window.contentView.removeChildView(panel.view);
     panel.leaveGame();
-    this.options.released?.();
   }
 
   destroy(): void {

@@ -130,7 +130,6 @@ function make() {
     ended: () => calls.push("ended"),
     frameText: () => ({ name: "To-Dos", closeLabel: "Bring back", layoutLabel: "Layout" }),
     panel: panel as never,
-    released: () => calls.push("released"),
   });
   const raw = world.windows.at(-1) as { emit(name: string, ...args: unknown[]): void; log: string[] };
   return { window, raw, calls };
@@ -142,14 +141,14 @@ describe("a game overlay window holding a panel", () => {
     const event = { preventDefault: vi.fn() };
     raw.emit("close", event);
     expect(event.preventDefault).toHaveBeenCalled();
-    expect(calls).not.toContain("released");
+    expect(calls).not.toContain("leave");
   });
 
   it("lets Tavora destroy it, and lets an app quit close it", () => {
     world.quit.length = 0;
     const { window, raw, calls } = make();
     window.destroy();
-    expect(calls).toEqual(expect.arrayContaining(["leave", "released"]));
+    expect(calls).toEqual(expect.arrayContaining(["leave"]));
     expect(world.quit).toHaveLength(0);
 
     const quitting = make();
@@ -163,7 +162,7 @@ describe("a game overlay window holding a panel", () => {
   it("lets go of the panel and tells the service when it was closed all the same", () => {
     const { window, raw, calls } = make();
     raw.emit("closed");
-    expect(calls).toEqual(expect.arrayContaining(["leave", "released", "ended"]));
+    expect(calls).toEqual(expect.arrayContaining(["leave", "ended"]));
     expect(window.isDestroyed).toBe(true);
     // Nothing is released twice by a later destroy.
     const before = calls.length;

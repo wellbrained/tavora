@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
 import { placeLegacy } from "../shared/overlay-anchor";
 import type { Foreground, ForegroundProbe } from "./foreground";
-import { GameOverlays, isOverlayAction, layerBinding, toggleBinding, type OverlayWindow, type OverlayWindowRequest } from "./game-overlay-service";
+import { GameOverlays, isOverlayAction, layerBinding, toggleBinding, type OverlayWindow, type OverlayWindowRequest, type PanelLoan } from "./game-overlay-service";
+import type { OverlayPanel } from "./game-overlay-window";
 import type { VeilWindow } from "./game-veil-window";
 import { ALL_GAMES, GameOverlayStore, OVERLAY_LAYER_ACTION, OVERLAY_TOGGLE_ACTION, type OverlayScope, type Rect } from "./game-overlays";
 import type { HotkeyRecord, ShortcutRegistry } from "./hotkeys";
@@ -49,7 +50,11 @@ class FakeWindow implements OverlayWindow {
   /** What the service asked of it, in order. */
   log: string[] = [];
   focusedPanel = 0;
-  constructor(readonly request: OverlayWindowRequest & { instanceId?: string }) {}
+  constructor(
+    readonly request: OverlayWindowRequest,
+    /** The lent view of a panel, for the window of a panel. */
+    readonly panel?: OverlayPanel,
+  ) {}
   setRect(rect: Rect) {
     this.rect = rect;
     this.log.push("rect");
@@ -80,6 +85,39 @@ class FakeWindow implements OverlayWindow {
   }
   destroy() {
     this.destroyed = true;
+  }
+}
+
+/** Panel views as GameOverlays sees it: lends a panel's view once, and remembers what was given back. */
+class FakePanelViews {
+  /** Panels lent now, with what to tell the layer when they close. */
+  readonly lent = new Map<string, () => void>();
+  /** Every lend and return, in order. */
+  readonly log: string[] = [];
+  readonly asked: { instanceId: string; workspaceId: string }[] = [];
+  /** Panels that can't be lent (their view is gone). */
+  readonly refused = new Set<string>();
+
+  lend(instanceId: string, workspaceId: string, revoked: () => void): PanelLoan | null {
+    this.asked.push({ instanceId, workspaceId });
+    if (this.refused.has(instanceId) || this.lent.has(instanceId)) return null;
+    this.lent.set(instanceId, revoked);
+    this.log.push(`lend ${instanceId}`);
+    return {
+      panel: { instanceId } as unknown as OverlayPanel,
+      return: () => {
+        if (this.lent.delete(instanceId)) this.log.push(`return ${instanceId}`);
+      },
+    };
+  }
+
+  isLent(instanceId: string): boolean {
+    return this.lent.has(instanceId);
+  }
+
+  /** The panel closes for good while lent. */
+  close(instanceId: string): void {
+    this.lent.get(instanceId)?.();
   }
 }
 
@@ -133,6 +171,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     panelNames: new Map<string, string>([[PANEL, "To-Dos"]]),
     /** The size each panel's module prefers (its viewport, in pixels). */
     preferred: new Map<string, { width: number; height: number }>(),
+    views: new FakePanelViews(),
     /** How often the Overlay layout was asked to look at the games' windows again. */
     windowsChanged: 0,
   };
@@ -161,25 +200,19 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     scopeOf: (id) => world.kinds.get(id) ?? "game",
     gamesOf: (program) => new Set(program === GAME_EXE ? ["elden"] : program.startsWith("D:\\Games\\Other\\") ? ["other"] : []),
     panels: {
-      name: (instanceId) => world.panelNames.get(instanceId) ?? null,
-      exists: (_workspaceId, instanceId) => !world.gone.has(instanceId),
-      allowed: (_workspaceId, instanceId) => !world.notAllowed.has(instanceId),
-      usedAt: (instanceId) => world.panelUsed.get(instanceId) ?? 0,
-      preferred: (_workspaceId, instanceId) => world.preferred.get(instanceId) ?? null,
-      openWindow: (request) => {
-        if (!world.panelNames.has(request.instanceId)) return null;
-        const window = new FakeWindow(request);
-        world.windows.push(window);
-        return window;
-      },
+      info: (instanceId) =>
+        world.gone.has(instanceId)
+          ? null
+          : { name: world.panelNames.get(instanceId) ?? null, allowed: !world.notAllowed.has(instanceId), usedAt: world.panelUsed.get(instanceId) ?? 0, preferred: world.preferred.get(instanceId) ?? null },
+      lend: (instanceId, workspaceId, revoked) => (world.panelNames.has(instanceId) ? world.views.lend(instanceId, workspaceId, revoked) : null),
     },
     probe: () => probe,
     toDip: (rect) => rect,
     screen: () => ({ ...SCREEN }),
     tavoraInFront: () => world.tavora,
     stay: () => world.stay,
-    openWindow: (request) => {
-      const window = new FakeWindow(request);
+    openWindow: (request, panel) => {
+      const window = new FakeWindow(request, panel);
       world.windows.push(window);
       return window;
     },
@@ -1009,7 +1042,7 @@ describe("hotkey actions", () => {
 
 describe("a panel in the game", () => {
   const add = (service: GameOverlays, instanceId = PANEL, workspaceId = "elden") => service.showPanel({ owner: "official", moduleId: TODOS.manifest.id, workspaceId, instanceId });
-  const panelWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.request.instanceId !== undefined);
+  const panelWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.panel !== undefined);
   const SECOND = "0a1b2c3d-0000-4000-8000-000000000002";
 
   it("is not over the game until the layer opens, and goes back to its slot when it closes", async () => {
@@ -1017,21 +1050,89 @@ describe("a panel in the game", () => {
     expect(add(service)).toBe("shown");
     expect(service.hasPanel(PANEL)).toBe(true);
     expect(panelWindows(world)).toHaveLength(0);
-    expect(service.panelOpen(PANEL)).toBe(false);
+    expect(world.views.isLent(PANEL)).toBe(false);
 
     service.pressed(layerKey(key));
     const [window] = panelWindows(world);
     expect(window).toMatchObject({ shown: true, arranging: true, destroyed: false });
-    expect(service.panelOpen(PANEL)).toBe(true);
+    expect(world.views.isLent(PANEL)).toBe(true);
     expect(window!.focusedPanel).toBe(1);
 
     world.registered.get("Escape")!();
     expect(window!.destroyed).toBe(true);
-    expect(service.panelOpen(PANEL)).toBe(false);
+    expect(world.views.isLent(PANEL)).toBe(false);
     // Still one the user shows in the game: it comes up again with the next layer.
     expect(service.hasPanel(PANEL)).toBe(true);
     service.pressed(layerKey(key));
     expect(panelWindows(world)).toHaveLength(2);
+  });
+
+  it("asks Panel views for the panel's view when the layer opens, holds it in the window, and gives it back when the layer closes", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    // Nothing is lent until the layer opens: the panel stays in its slot.
+    expect(world.views.log).toEqual([]);
+    service.pressed(layerKey(key));
+    expect(world.views.asked).toEqual([{ instanceId: PANEL, workspaceId: "elden" }]);
+    const [window] = panelWindows(world);
+    expect(window!.panel).toEqual({ instanceId: PANEL });
+    expect(world.views.log).toEqual([`lend ${PANEL}`]);
+    // The layer's later looks do not lend it again.
+    service.tick();
+    expect(world.views.log).toEqual([`lend ${PANEL}`]);
+    world.registered.get("Escape")!();
+    expect(world.views.log).toEqual([`lend ${PANEL}`, `return ${PANEL}`]);
+    // Lent again, once, with the next layer.
+    service.pressed(layerKey(key));
+    expect(world.views.log).toEqual([`lend ${PANEL}`, `return ${PANEL}`, `lend ${PANEL}`]);
+  });
+
+  it("gives the view back when the user stops showing the panel, and when overlays are switched off", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.pressed(layerKey(key));
+    panelWindows(world)[0]!.request.closeRequested();
+    expect(service.hasPanel(PANEL)).toBe(false);
+    expect(world.views.isLent(PANEL)).toBe(false);
+    expect(world.views.log.at(-1)).toBe(`return ${PANEL}`);
+
+    add(service);
+    service.pressed(layerKey(key));
+    expect(world.views.isLent(PANEL)).toBe(true);
+    world.enabled = false;
+    service.tick();
+    expect(world.views.isLent(PANEL)).toBe(false);
+    expect(world.views.log.filter((line) => line.startsWith("return"))).toHaveLength(2);
+  });
+
+  it("lets go of the panel when it closes for good while lent, and gives the view back only once", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.pressed(layerKey(key));
+    const [window] = panelWindows(world);
+    world.views.close(PANEL);
+    expect(service.hasPanel(PANEL)).toBe(false);
+    expect(window!.destroyed).toBe(true);
+    expect(world.views.log).toEqual([`lend ${PANEL}`, `return ${PANEL}`]);
+  });
+
+  it("gives the view back when its window ended on its own, and keeps the panel for the next layer", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.pressed(layerKey(key));
+    panelWindows(world)[0]!.request.ended();
+    expect(world.views.isLent(PANEL)).toBe(false);
+    expect(service.hasPanel(PANEL)).toBe(true);
+  });
+
+  it("makes no window and lends nothing the second time when Panel views refuses the panel", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    world.views.refused.add(PANEL);
+    service.pressed(layerKey(key));
+    expect(panelWindows(world)).toHaveLength(0);
+    expect(world.views.log).toEqual([]);
+    expect(service.hasPanel(PANEL)).toBe(false);
   });
 
   it("comes back to Tavora when it opens its dialog: the layer closes and the game doesn't get the keyboard", async () => {
@@ -1045,7 +1146,7 @@ describe("a panel in the game", () => {
     service.endLayer();
     expect(service.layerOpen).toBe(false);
     expect(window!.destroyed).toBe(true);
-    expect(service.panelOpen(PANEL)).toBe(false);
+    expect(world.views.isLent(PANEL)).toBe(false);
     expect(world.focused).toBe(0);
     expect(service.hasPanel(PANEL)).toBe(true);
   });
@@ -1064,7 +1165,7 @@ describe("a panel in the game", () => {
     show(service);
     service.pressed(layerKey(key));
     const [panel] = panelWindows(world);
-    const overlay = world.windows.find((window) => window.request.instanceId === undefined)!;
+    const overlay = world.windows.find((window) => window.panel === undefined)!;
     expect(world.veils).toHaveLength(1);
     // Overlays are raised first, panels last.
     expect(overlay.log).toContain("raise");
@@ -1273,7 +1374,7 @@ describe("a panel's live view", () => {
   // A panel of a module with an overlay page, shown in the game.
   const add = (service: GameOverlays, module = CLOCK, instanceId = PANEL) => service.showPanel({ owner: module.owner, moduleId: module.manifest.id, workspaceId: "elden", instanceId });
   const liveWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.request.id.startsWith("live\n") && !window.destroyed);
-  const panelWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.request.instanceId !== undefined);
+  const panelWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.panel !== undefined);
   const flush = () => new Promise((resolve) => setTimeout(resolve, 5));
   const feed = async (service: GameOverlays, state: JsonValue | null, owner = "official") => {
     service.setLive(PANEL, owner, state);
@@ -1714,7 +1815,7 @@ describe("setups on screen", () => {
   const panelItem = (instanceId = PANEL, workspaceId = "personal", extra: object = {}) => ({ owner: "official", moduleId: TODOS.manifest.id, workspaceId, instanceId, mode: "always", opacity: 100, hideFromCapture: false, anchor: anchored(), ...extra });
   const file = (setups: { id: string; overlays?: unknown[]; panels?: unknown[] }[]) => ({ version: 5, setups: setups.map((setup) => ({ overlays: [], panels: [], ...setup })) });
   const byKey = (windows: FakeWindow[], key: string) => windows.find((window) => window.request.id.endsWith(`\n${key}`));
-  const panelWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.request.instanceId !== undefined && !window.destroyed);
+  const panelWindows = (world: { windows: FakeWindow[] }) => world.windows.filter((window) => window.panel !== undefined && !window.destroyed);
 
   it("shows Everywhere over any app and the desktop, on the main screen, and hides it while Tavora's own window is in front", async () => {
     const { service, world, live } = await setup({ file: file([{ id: "$everywhere", overlays: [item("clock")] }]) });
@@ -1790,7 +1891,7 @@ describe("setups on screen", () => {
     service.pressed(layer);
     expect(service.layerOpen).toBe(true);
     expect(world.veils[0]).toMatchObject({ rect: SCREEN, destroyed: false });
-    expect(live().find((window) => window.request.instanceId === undefined)).toMatchObject({ shown: true, arranging: true });
+    expect(live().find((window) => window.panel === undefined)).toMatchObject({ shown: true, arranging: true });
     expect(panelWindows(world)).toHaveLength(1);
     expect(panelWindows(world)[0]).toMatchObject({ shown: true, arranging: true, rect: { x: 54, y: 54 } });
     // A panel that took the keyboard keeps the layer open.

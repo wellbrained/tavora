@@ -125,7 +125,7 @@ describe("visibility", () => {
     const rig = panelViewsRig();
     const a = rig.add(A);
     rig.views.place([place(A)]);
-    rig.world.floating.add(A);
+    rig.lend(A);
     a.visible = false;
     a.bounds = null;
     rig.views.applyBounds();
@@ -134,16 +134,89 @@ describe("visibility", () => {
     expect(rig.views.isShowing(A)).toBe(false);
   });
 
-  it("lays a returned panel out at once, even though its overlay window still held it", () => {
+  it("takes a lent panel's view out of the window and puts it back, laid out at once, when it is returned", () => {
     const rig = panelViewsRig();
     const a = rig.add(A);
     rig.views.place([place(A)]);
-    rig.world.floating.add(A);
-    rig.mounted.delete(a.view);
-    rig.views.returned(A);
+    rig.views.bindContents(a, a.webContentsId);
+    const lease = rig.lend(A);
+    expect(lease.view).toBe(a);
+    expect(rig.mounted.has(a.view)).toBe(false);
+    expect(rig.views.isLent(A)).toBe(true);
+    expect(rig.views.isLentContents(a.webContentsId)).toBe(true);
+    // Lent once: nobody else can take it, nothing is lent that has no view.
+    expect(rig.views.lend(A, () => {})).toBeUndefined();
+    expect(rig.views.lend(B, () => {})).toBeUndefined();
+    lease.return();
+    expect(rig.views.isLent(A)).toBe(false);
+    expect(rig.views.isLentContents(a.webContentsId)).toBe(false);
     expect(rig.mounted.has(a.view)).toBe(true);
     expect(a.visible).toBe(true);
-    rig.views.returned(B);
+    expect(rig.calls).toContain(`returned ${A}`);
+    // Returned twice, nothing more happens.
+    rig.calls.length = 0;
+    lease.return();
+    expect(rig.calls).toEqual([]);
+  });
+
+  it("lets go of a returned panel whose workspace is not shown any more", () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    const lease = rig.lend(A);
+    rig.world.away.add(A);
+    lease.return();
+    expect(rig.views.has(A)).toBe(false);
+    expect(a.disposed).toBe(true);
+    expect(rig.calls).toContain(`releasing ${A} false`);
+    expect(rig.calls).not.toContain(`returned ${A}`);
+    // Its place stays for when its workspace comes back.
+    expect(rig.views.isPlaced(A)).toBe(true);
+  });
+
+  it("closing a lent panel tells the layer and leaves nothing lent", () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    const lease = rig.lend(A);
+    rig.views.close(A);
+    expect(rig.calls).toContain(`revoked ${A}`);
+    expect(rig.views.isLent(A)).toBe(false);
+    expect(a.disposed).toBe(true);
+    // The layer gives the view back afterwards, to a panel that is gone.
+    lease.return();
+    expect(rig.mounted.has(a.view)).toBe(false);
+    expect(rig.calls).not.toContain(`returned ${A}`);
+  });
+
+  it("only releasing a lent panel does not tell the layer", () => {
+    const rig = panelViewsRig();
+    rig.add(A);
+    rig.lend(A);
+    rig.views.release(A);
+    expect(rig.calls).not.toContain(`revoked ${A}`);
+  });
+
+  it("disposing everything while lent forgets the loans and returns nothing to a gone window", () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    const lease = rig.lend(A);
+    rig.views.disposeAll();
+    expect(a.disposed).toBe(true);
+    expect(rig.views.isLent(A)).toBe(false);
+    lease.return();
+    expect(rig.mounted.has(a.view)).toBe(false);
+    expect(rig.calls).not.toContain(`revoked ${A}`);
+  });
+
+  it("does not put a returned panel back into a window that is gone", () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    const lease = rig.lend(A);
+    rig.world.gone = true;
+    lease.return();
+    expect(rig.mounted.has(a.view)).toBe(false);
+    expect(rig.views.isLent(A)).toBe(false);
   });
 
   it("says whether a panel may show a tooltip", () => {
@@ -241,7 +314,7 @@ describe("host menus and dialogs over the workspace (freeze)", () => {
     const lent = rig.add(C);
     loading.status = "loading";
     hidden.revealed = false;
-    rig.world.floating.add(C);
+    rig.lend(C);
     rig.views.place([place(A), place(B), place(C)]);
     await rig.views.freeze(true);
     expect(rig.frozen).toEqual([{}]);
@@ -296,9 +369,9 @@ describe("panel dialog", () => {
     rig.views.place([place(A), place(B)]);
     expect(rig.views.openDialog(B, { width: 1, height: 1 })).toBe(false);
     expect(rig.views.openDialog(C, { width: 1, height: 1 })).toBe(false);
-    rig.world.floating.add(A);
+    const lease = rig.lend(A);
     expect(rig.views.openDialog(A, { width: 1, height: 1 })).toBe(false);
-    rig.world.floating.delete(A);
+    lease.return();
     expect(rig.views.openDialog(A, { width: 600, height: 400 })).toBe(true);
     expect(rig.views.openDialog(A, { width: 600, height: 400 })).toBe(false);
   });
@@ -380,7 +453,7 @@ describe("cleanup", () => {
     expect(rig.views.openedFrom(A)).toBeUndefined();
     expect(rig.views.isKept(A)).toBe(false);
     expect(rig.views.dialog).toBeNull();
-    expect(rig.calls).toEqual(expect.arrayContaining(["releasing " + A + " true", "stopLent " + A, "dialogClosed"]));
+    expect(rig.calls).toEqual(expect.arrayContaining(["releasing " + A + " true", "dialogClosed"]));
     expect(b.disposed).toBe(false);
     expect(rig.views.has(B)).toBe(true);
     expect(rig.views.isPlaced(B)).toBe(true);
@@ -409,14 +482,7 @@ describe("cleanup", () => {
     expect(rig.views.isAwaiting(A)).toBe(true);
     expect(rig.views.isKept(A)).toBe(true);
     expect(rig.calls).toContain(`releasing ${A} false`);
-    expect(rig.calls).not.toContain(`stopLent ${A}`);
-  });
-
-  it("does not let go of the game layer for a browser panel", () => {
-    const rig = panelViewsRig();
-    rig.add(A, "browser");
-    rig.views.close(A);
-    expect(rig.calls).not.toContain(`stopLent ${A}`);
+    expect(rig.calls).not.toContain(`revoked ${A}`);
   });
 
   it("closing all keeps panels lent to the layer or kept for overlays, and forgets places", () => {
@@ -424,7 +490,7 @@ describe("cleanup", () => {
     const a = rig.add(A);
     const b = rig.add(B);
     const c = rig.add(C);
-    rig.world.floating.add(A);
+    rig.lend(A);
     rig.views.keepRunning(B);
     rig.views.place([place(A), place(B), place(C)]);
     rig.views.openDialog(C, { width: 1, height: 1 });
@@ -488,7 +554,7 @@ describe("snapshot", () => {
     const rig = panelViewsRig();
     const a = rig.add(A);
     rig.add(B, "browser");
-    rig.world.floating.add(B);
+    rig.lend(B);
     rig.views.setAwaiting(C);
     rig.views.setOpenedFrom(B, { instanceId: A, background: false });
     rig.views.keepRunning(A);
@@ -500,8 +566,8 @@ describe("snapshot", () => {
       overlay: false,
       dialog: null,
       panels: {
-        [A]: { kind: "module", status: "ready", revealed: true, firstDrawn: false, floating: false, placed: true, awaiting: false, kept: true, openedFrom: null },
-        [B]: { kind: "browser", status: "ready", revealed: true, firstDrawn: true, floating: true, placed: false, awaiting: false, kept: false, openedFrom: { instanceId: A, background: false } },
+        [A]: { kind: "module", status: "ready", revealed: true, firstDrawn: false, lent: false, placed: true, awaiting: false, kept: true, openedFrom: null },
+        [B]: { kind: "browser", status: "ready", revealed: true, firstDrawn: true, lent: true, placed: false, awaiting: false, kept: false, openedFrom: { instanceId: A, background: false } },
       },
     });
     rig.views.endOpening(false);
