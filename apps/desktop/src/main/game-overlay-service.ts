@@ -60,7 +60,12 @@ import type { GameOverlaySource } from "./game-overlay-page";
 import type { VeilWindow } from "./game-veil-window";
 import type { HotkeyRecord, ShortcutRegistry } from "./hotkeys";
 import type { OverlayPage, OverlayStore, OverlaySubject } from "./overlays";
-import type { StreamingModule } from "./streaming";
+import type { Streaming, StreamingModule } from "./streaming";
+import type { WorkspaceNames } from "./workspace-lookup";
+import type { Library } from "./library";
+import type { GameWatcher } from "./game-watch";
+import type { OverlayLayout } from "./overlay-layout";
+import type { Shell } from "./shell";
 
 /** The part of a game overlay's window the service drives (a test stands in for Electron). */
 export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "setArranging" | "setHideFromCapture" | "setOpacity" | "destroy" | "dragging"> &
@@ -159,29 +164,14 @@ export interface OverlayWindowRequest {
   frameText(): { name: string; closeLabel: string; layoutLabel: string };
 }
 
-export interface GameOverlayServiceOptions {
-  userData: string;
-  overlays: OverlayStore;
+/** What the service needs of the screen, the keyboard and the windows Electron draws (a test stands in for them). */
+export interface OverlayPlatform {
   /** Whether Tavora can show game overlays here (Windows). */
   supported: boolean;
-  /** The Game overlays switch in Settings > Overlays. */
-  enabled(): boolean;
-  module(moduleId: string): StreamingModule | undefined;
-  /** A workspace's name. */
-  workspaceName(workspaceId: string): string | null;
-  gameIds?(): string[];
-  /** Whether a workspace is a game workspace (kind "game"), not a personal one. Something made in the latter may go into any setup. */
-  scopeOf(workspaceId: string): OverlayScope;
-  /** The library games a program belongs to (game-watch.ts). */
-  gamesOf(program: string): Set<string>;
   /** Looks at the window in front; made when first needed. */
   probe(): ForegroundProbe;
   /** Physical pixels of the screen to the DIPs windows are placed in. */
   toDip(rect: Rect): Rect;
-  /** Overlays stay over the game window's spot while the user is in another window (Settings > Overlays). */
-  stay?(): boolean;
-  /** Which side of the Overlay page the sidebar sits on (Settings > Overlays). */
-  sidebar?(): "left" | "right";
   /** The main screen (DIPs): Everywhere's area, and what a new item is sized against before any game window was seen. */
   screen?(): Rect;
   /** Whether one of Tavora's windows has the keyboard (its main window, a dialog); the service tells its own overlay windows apart. Everywhere hides then. */
@@ -190,6 +180,22 @@ export interface GameOverlayServiceOptions {
   openWindow(request: OverlayWindowRequest, panel?: OverlayPanel): OverlayWindow;
   /** The veil over the game window (or the screen) while the layer is open. */
   openVeil(): VeilWindow;
+  shortcuts: ShortcutRegistry;
+}
+
+export interface GameOverlayServiceOptions {
+  userData: string;
+  /** Stream overlays' store of overlays and the hotkeys of Streaming, which the overlays' keys live in. */
+  streaming: Pick<Streaming, "overlayStore" | "removeKeys" | "moveKey" | "keyOf">;
+  /** The modules installed now. */
+  installed: { shown(moduleId: string): StreamingModule | undefined };
+  /** The library's workspaces: names, and whether one is a game workspace (something made in a personal one may go into any setup). */
+  workspaces: Pick<WorkspaceNames, "name" | "scopeOf">;
+  /** The Settings > Overlays switches, read as they are now. */
+  settings: Pick<Library, "gameOverlays" | "overlaysStay" | "overlaySidebar">;
+  /** The game watcher: the library games a program belongs to (game-watch.ts). */
+  watcher: Pick<GameWatcher, "gamesOf">;
+  platform: OverlayPlatform;
   /** The host's side of panels in the game; Tavora without it has none. */
   panels?: {
     /** What the host knows of a panel (in this workspace, or wherever it is); null once the panel is gone. */
@@ -197,27 +203,17 @@ export interface GameOverlayServiceOptions {
     /** Panel views lends the panel's view (made for the layer when its workspace isn't shown); null when the panel is gone or can't be. `revoked`: the panel closes for good while lent. */
     lend(instanceId: string, workspaceId: string, revoked: () => void): PanelLoan | null;
   };
-  shortcuts: ShortcutRegistry;
-  /** Opens Settings at one of its settings. */
-  openSetting(setting: string): void;
-  /** Opens the Overlay page on a setup (the button on the in-game layer's frames). */
-  openLayout?(setupId: string | null): void;
-  /** Tells the user something (Tavora's notice and a system notification). */
-  notify(message: string): void;
-  /** Takes away the hotkeys matching `test`. */
-  removeKeys(test: (record: HotkeyRecord) => boolean): void;
-  /** Takes away the hotkeys matching `test`, but gives the layer key the key of the one set last, if the layer has none. */
-  moveKey(test: (record: HotkeyRecord) => boolean, to: Pick<HotkeyRecord, "owner" | "moduleId" | "workspaceId" | "action" | "target">): void;
-  /** The key set for a binding, as Streaming holds it. */
-  keyOf(binding: Pick<HotkeyRecord, "owner" | "moduleId" | "workspaceId" | "action" | "target">): { accelerator: string; taken: boolean } | null;
+  /** Opens Settings at one of its settings, and tells the user something (Tavora's notice and a system notification). */
+  shell: Pick<Shell, "openSetting" | "notify">;
   language(): Language;
   /** Something the Settings page or the hotkeys depend on changed. */
   changed(): void;
-  /** What the Overlay layout shows of the games' windows changed (a window was seen, a game stopped): it looks again. */
-  windowsChanged?(): void;
   /** How often the window in front is looked at. */
   everyMs?: number;
 }
+
+/** The Overlay layout, which asks for the layer's items and is told when a game's window was seen or a game stopped (`useLayout`). */
+export type LayoutPort = Pick<OverlayLayout, "open" | "refresh">;
 
 export const LOOK_MS = 400;
 /** A window whose setup is not on screen is closed after this long (it is made again when the setup is back). */
@@ -258,6 +254,7 @@ interface Open {
 type Placed<T> = { setup: string; item: T };
 
 export class GameOverlays {
+  private layoutPort: LayoutPort | undefined;
   private readonly open = new Map<string, Open>();
   private readonly toggled = new Set<string>();
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -308,7 +305,12 @@ export class GameOverlays {
   ) {}
 
   static async create(options: GameOverlayServiceOptions): Promise<GameOverlays> {
-    return new GameOverlays(options, await GameOverlayStore.load(options.userData, options.scopeOf));
+    return new GameOverlays(options, await GameOverlayStore.load(options.userData, (workspaceId) => options.workspaces.scopeOf(workspaceId)));
+  }
+
+  /** The Overlay layout, once it exists (it is made from this service's layout source, so it comes after). */
+  useLayout(layout: LayoutPort): void {
+    this.layoutPort = layout;
   }
 
   /** Starts looking at the window in front; called once Tavora is up. */
@@ -316,19 +318,19 @@ export class GameOverlays {
     // Coming from Tavora 0.21.0 or before (file version 1): its per-game arrange keys are gone (the key set last becomes
     // the layer key, if there is none), and so are the keys of panels that were over the game then.
     if (this.store.migrated) {
-      this.options.moveKey((record) => record.action === LEGACY_ARRANGE_ACTION, layerBinding());
-      this.options.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.target.startsWith(RESERVED_KEY_PREFIX));
+      this.options.streaming.moveKey((record) => record.action === LEGACY_ARRANGE_ACTION, layerBinding());
+      this.options.streaming.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.target.startsWith(RESERVED_KEY_PREFIX));
     }
     // The move to setups (and the one above) is written now; a start that stopped before this does it again.
     if (this.store.migrated || this.store.moved) void this.store.save();
-    if (this.timer || !this.options.supported) return;
+    if (this.timer || !this.options.platform.supported) return;
     this.timer = setInterval(() => this.tick(), this.options.everyMs ?? LOOK_MS);
     this.timer.unref?.();
   }
 
   /** Whether overlays and the layer may show now: Tavora can, the switch is on, and the user didn't hide them for now. */
   private active(): boolean {
-    return this.options.supported && this.options.enabled() && !this.suspended;
+    return this.options.platform.supported && this.options.settings.gameOverlays && !this.suspended;
   }
 
   // ── What a module panel gets ─────────────────────────────────────────
@@ -341,19 +343,19 @@ export class GameOverlays {
   show(module: StreamingModule, workspaceId: string, key: string): GameOverlayResult {
     if (!module.manifest.overlay) throw new HostError("INVALID_PARAMS", "this module has no overlay page in its manifest");
     if (key.startsWith(RESERVED_KEY_PREFIX)) throw new HostError("INVALID_PARAMS", "this overlay key is reserved");
-    if (!this.options.supported || !this.options.enabled()) {
-      if (this.options.supported) this.options.openSetting("game-overlays");
+    if (!this.options.platform.supported || !this.options.settings.gameOverlays) {
+      if (this.options.platform.supported) this.options.shell.openSetting("game-overlays");
       return "off";
     }
     const subject: GameOverlaySubject = { owner: module.owner, moduleId: module.manifest.id, workspaceId, key };
-    const setup = landingSetup(workspaceId, this.options.scopeOf(workspaceId));
+    const setup = landingSetup(workspaceId, this.options.workspaces.scopeOf(workspaceId));
     const made = !this.store.hasSetup(setup);
     const added = this.store.find(subject) ? "exists" : this.store.add(setup, subject, startRect(module.manifest.overlaySize ?? null, this.startArea(), DEFAULT_RECT));
     if (added === "full" || added === "refused") return "full";
     try {
       // The link holds what the module publishes for the key; making it now means the page hears it from the start.
       // When it can't be made (too many for the module) nothing of the overlay is kept, nor the setup made for it.
-      this.options.overlays.link(subject);
+      this.options.streaming.overlayStore.link(subject);
     } catch (error) {
       if (added === "added") this.store.forget((overlay, id) => id === setup && sameOverlay(overlay, subject));
       if (made) this.store.removeSetup(setup);
@@ -384,11 +386,11 @@ export class GameOverlays {
    * at the size its module prefers (`preferred`, the panel's viewport).
    */
   showPanel(panel: { owner: string; moduleId: string; workspaceId: string; instanceId: string }, preferred: { width?: number | undefined; height?: number | undefined } | null = null): GameOverlayResult {
-    if (!this.options.supported || !this.options.enabled()) {
-      if (this.options.supported) this.options.openSetting("game-overlays");
+    if (!this.options.platform.supported || !this.options.settings.gameOverlays) {
+      if (this.options.platform.supported) this.options.shell.openSetting("game-overlays");
       return "off";
     }
-    const setup = landingSetup(panel.workspaceId, this.options.scopeOf(panel.workspaceId));
+    const setup = landingSetup(panel.workspaceId, this.options.workspaces.scopeOf(panel.workspaceId));
     const added = this.hasPanel(panel.instanceId) ? "exists" : this.store.addPanel(setup, panel, startRect(preferred, this.startArea()));
     if (added === "full" || added === "refused") return "full";
     // The user asked for it: a live view whose page crashed too often gets another chance.
@@ -400,7 +402,7 @@ export class GameOverlays {
 
   /** What a new overlay or panel is sized against: the game window in front, else the one seen last, else the main screen. */
   private startArea(): Rect | null {
-    return this.game ?? this.lastGame ?? this.options.screen?.() ?? null;
+    return this.game ?? this.lastGame ?? this.options.platform.screen?.() ?? null;
   }
 
   /** Whether the panel is in some setup. */
@@ -487,7 +489,7 @@ export class GameOverlays {
   liveFor(instanceId: string, owner: string, moduleId: string, workspaceId: string): boolean {
     const overlays = this.store
       .all()
-      .filter((overlay) => overlay.owner === owner && overlay.moduleId === moduleId && (overlay.workspaceId === workspaceId || this.options.scopeOf(overlay.workspaceId) === "all")).length;
+      .filter((overlay) => overlay.owner === owner && overlay.moduleId === moduleId && (overlay.workspaceId === workspaceId || this.options.workspaces.scopeOf(overlay.workspaceId) === "all")).length;
     return isLive(this.hasPanel(instanceId), overlays);
   }
 
@@ -508,14 +510,14 @@ export class GameOverlays {
   gamesRunning(running: ReadonlySet<string>): void {
     this.running = new Set(running);
     for (const id of [...this.handles.keys()]) if (!running.has(id)) this.handles.delete(id);
-    this.options.windowsChanged?.();
+    this.layoutPort?.refresh();
   }
 
   /** A workspace left the library for good: its items leave every setup, and a game workspace's setup and window go too. */
   forgetWorkspace(workspaceId: string): void {
     this.store.forgetSeen(workspaceId);
     this.handles.delete(workspaceId);
-    this.options.windowsChanged?.();
+    this.layoutPort?.refresh();
     // Items from elsewhere leave its setup the same way, so one in no setup any more loses its key.
     this.forget((overlay, setupId) => overlay.workspaceId === workspaceId || setupId === workspaceId);
     this.forgetPanels((panel) => panel.workspaceId === workspaceId, true);
@@ -569,7 +571,7 @@ export class GameOverlays {
     const gone = new Map(before.filter((panel) => !this.hasPanel(panel.instanceId)).map((panel) => [panel.instanceId, panel]));
     for (const panel of gone.values()) {
       if (clearLive) this.clearLive(panel.instanceId);
-      this.options.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === panel.owner && record.moduleId === panel.moduleId && record.workspaceId === panel.workspaceId && record.target === panel.instanceId);
+      this.options.streaming.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === panel.owner && record.moduleId === panel.moduleId && record.workspaceId === panel.workspaceId && record.target === panel.instanceId);
       this.toggled.delete(liveWindowId(panel.instanceId));
       this.revive(liveWindowId(panel.instanceId));
     }
@@ -582,7 +584,7 @@ export class GameOverlays {
     if (!this.store.forget(test)) return false;
     const gone = new Map(before.filter((overlay) => !this.store.find(overlay)).map((overlay) => [overlayId(overlay), overlay]));
     for (const overlay of gone.values()) {
-      this.options.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === overlay.owner && record.moduleId === overlay.moduleId && record.workspaceId === overlay.workspaceId && record.target === overlay.key);
+      this.options.streaming.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === overlay.owner && record.moduleId === overlay.moduleId && record.workspaceId === overlay.workspaceId && record.target === overlay.key);
       this.toggled.delete(overlayId(overlay));
       this.revive(overlayId(overlay));
     }
@@ -610,7 +612,7 @@ export class GameOverlays {
 
   /** Where the items of a setup sit: Everywhere's on the main screen, the others on the game's window (the one in front, or the one they stay over). */
   private areaOf(setupId: string): Rect | null {
-    if (setupId === EVERYWHERE) return this.options.screen?.() ?? null;
+    if (setupId === EVERYWHERE) return this.options.platform.screen?.() ?? null;
     return this.game ?? this.away?.bounds ?? null;
   }
 
@@ -674,7 +676,7 @@ export class GameOverlays {
       if (this.layer !== null) this.closeLayer(true);
       else if (this.front !== null && looksExclusive(this.notification)) {
         // No window can be drawn over a game that owns the screen exclusively: say so instead of opening nothing.
-        this.options.notify(translate(this.options.language(), "overlays.exclusiveHint"));
+        this.options.shell.notify(translate(this.options.language(), "overlays.exclusiveHint"));
       } else this.openLayer(this.front);
       return;
     }
@@ -698,7 +700,7 @@ export class GameOverlays {
     // The layer belongs to this window: another window of the program (a restart), or another app, is not the one it opened over.
     this.layerWindow = gameId !== null ? this.frontWindow : this.foregroundWindow;
     // Esc ends it too; the key is the game's again afterwards.
-    this.escape = this.options.shortcuts.register("Escape", () => this.closeLayer(true));
+    this.escape = this.options.platform.shortcuts.register("Escape", () => this.closeLayer(true));
     this.tick();
   }
 
@@ -706,7 +708,7 @@ export class GameOverlays {
   private closeLayer(refocus: boolean): void {
     if (this.layer === null) return;
     this.layer = null;
-    if (this.escape) this.options.shortcuts.unregister("Escape");
+    if (this.escape) this.options.platform.shortcuts.unregister("Escape");
     this.escape = false;
     if (refocus) {
       // Only a panel takes the keyboard, but a click on an overlay's frame may have left the game without focus.
@@ -744,7 +746,7 @@ export class GameOverlays {
   private look(): void {
     let foreground: Foreground | null = null;
     try {
-      this.probe ??= this.options.probe();
+      this.probe ??= this.options.platform.probe();
       foreground = this.probe.look();
     } catch (error) {
       // Windows' functions could not be loaded; looking again won't help.
@@ -760,22 +762,22 @@ export class GameOverlays {
       this.apply();
       return;
     }
-    this.tavoraFront = (this.options.tavoraInFront?.() ?? false) && !this.ownWindowFocused();
+    this.tavoraFront = (this.options.platform.tavoraInFront?.() ?? false) && !this.ownWindowFocused();
     const withSetups = new Set(this.store.gameSetups());
     const general = this.store.count(ALL_GAMES) > 0;
-    const front = foreground?.program ? gameInFront(this.options.gamesOf(foreground.program), withSetups, general, (id) => this.options.scopeOf(id) === "game") : null;
-    this.setFront(front, front && foreground ? this.options.toDip(foreground.bounds) : null);
+    const front = foreground?.program ? gameInFront(this.options.watcher.gamesOf(foreground.program), withSetups, general, (id) => this.options.workspaces.scopeOf(id) === "game") : null;
+    this.setFront(front, front && foreground ? this.options.platform.toDip(foreground.bounds) : null);
     this.frontWindow = front && foreground?.handle ? foreground.handle : null;
     this.foregroundWindow = foreground?.handle ?? null;
     if (front && this.frontWindow && this.handles.get(front) !== this.frontWindow) {
       this.handles.set(front, this.frontWindow);
-      this.options.windowsChanged?.();
+      this.layoutPort?.refresh();
     }
     this.notification = front && foreground ? foreground.notification : null;
     this.away = this.stayingAway(front);
     if (front && foreground && looksExclusive(foreground.notification) && !this.store.exclusiveHintShown) {
       this.store.markExclusiveHintShown();
-      this.options.notify(translate(this.options.language(), "overlays.exclusiveHint"));
+      this.options.shell.notify(translate(this.options.language(), "overlays.exclusiveHint"));
     }
     // The layer ends (and gives the keyboard to nobody) when its game window is gone, minimized, another one, or the game
     // went exclusive full screen; one over the screen ends when a game, another window or Tavora's own comes in front.
@@ -797,13 +799,13 @@ export class GameOverlays {
       this.probe?.keep?.();
       return null;
     }
-    if (this.left === null || !this.options.stay?.()) return null;
+    if (this.left === null || !this.options.settings.overlaysStay) return null;
     const kept = this.probe?.kept?.() ?? null;
     if (!kept) {
       this.left = null;
       return null;
     }
-    return { gameId: this.left, bounds: this.options.toDip(kept) };
+    return { gameId: this.left, bounds: this.options.platform.toDip(kept) };
   }
 
   private setFront(gameId: string | null, bounds: Rect | null): void {
@@ -847,7 +849,7 @@ export class GameOverlays {
     const veilArea = layerOpen ? (front !== null ? this.game : this.areaOf(EVERYWHERE)) : null;
     if (veilArea) {
       if (!this.veil) {
-        this.veil = this.options.openVeil();
+        this.veil = this.options.platform.openVeil();
         veilNew = true;
       }
       this.veil.place(veilArea);
@@ -860,7 +862,7 @@ export class GameOverlays {
     for (const [id, overlay] of every) {
       live.add(id);
       const placed = overlays.get(id);
-      const module = this.options.module(overlay.moduleId);
+      const module = this.options.installed.shown(overlay.moduleId);
       const usable = module !== undefined && module.owner === overlay.owner && !!module.manifest.overlay;
       const area = placed ? this.areaOf(placed.setup) : null;
       const settings = placed?.item ?? overlay;
@@ -931,7 +933,7 @@ export class GameOverlays {
       const id = liveWindowId(instanceId);
       live.add(id);
       const placed = panels.get(instanceId);
-      const module = this.options.module(panel.moduleId);
+      const module = this.options.installed.shown(panel.moduleId);
       const usable = module !== undefined && module.owner === panel.owner && !!module.manifest.overlay;
       const area = placed ? this.areaOf(placed.setup) : null;
       const settings = placed?.item ?? panel;
@@ -1010,7 +1012,7 @@ export class GameOverlays {
     closeRequested: () => void,
     frameText: () => { name: string; closeLabel: string },
   ): OverlayWindowRequest {
-    const store = this.options.overlays;
+    const store = this.options.streaming.overlayStore;
     return {
       id,
       page: () => this.pageOf(subject),
@@ -1022,7 +1024,7 @@ export class GameOverlays {
       gameBounds: () => this.areaOf(this.open.get(id)?.setup ?? ALL_GAMES),
       moved,
       closeRequested,
-      layoutRequested: () => this.options.openLayout?.(this.open.get(id)?.setup ?? null),
+      layoutRequested: () => this.layoutPort?.open(this.open.get(id)?.setup ?? null),
       ended: () => this.crashed(id),
       frameText: () => ({ ...frameText(), layoutLabel: translate(this.options.language(), "overlays.layoutLabel") }),
     };
@@ -1030,14 +1032,14 @@ export class GameOverlays {
 
   /** The overlay page of a module, looked up at every request: a module that was removed or replaced by another publisher's stops being served. */
   private pageOf(subject: Pick<OverlaySubject, "owner" | "moduleId">): OverlayPage | null {
-    const now = this.options.module(subject.moduleId);
+    const now = this.options.installed.shown(subject.moduleId);
     return now && now.owner === subject.owner && now.manifest.overlay ? { root: now.root, entry: now.manifest.overlay } : null;
   }
 
   /** The window of a panel's live view: the module's overlay page, fed by what the panel passes to panel.setLive. */
   private createLive(panel: InGamePanel, id: string, setup: string): Open {
     const instanceId = panel.instanceId;
-    const window = this.options.openWindow({
+    const window = this.options.platform.openWindow({
       id,
       ...this.liveSource(panel),
       gameBounds: () => this.areaOf(this.open.get(id)?.setup ?? setup),
@@ -1068,7 +1070,7 @@ export class GameOverlays {
       () => this.remove(subject, this.open.get(id)?.setup),
       () => ({ name: this.nameOf(overlay), closeLabel: translate(this.options.language(), "overlays.closeLabel") }),
     );
-    const window = this.options.openWindow(request);
+    const window = this.options.platform.openWindow(request);
     // A new window is fully opaque, click-through and visible to capture; apply sets the rest.
     const entry: Open = { kind: "overlay", window, setup, opacity: 100, hideFromCapture: false, arranging: false, shown: false, shownOrder: 0, zoom: 1, idleSince: null };
     this.open.set(id, entry);
@@ -1088,7 +1090,7 @@ export class GameOverlays {
     if (!loan) return null;
     let window: OverlayWindow;
     try {
-      window = this.options.openWindow(request, loan.panel);
+      window = this.options.platform.openWindow(request, loan.panel);
     } catch (error) {
       loan.return();
       throw error;
@@ -1109,7 +1111,7 @@ export class GameOverlays {
     this.crashes.set(id, lately);
     if (lately.length < MAX_CRASHES || this.stopped.has(id)) return;
     this.stopped.add(id);
-    this.options.notify(translate(this.options.language(), "overlays.stopped"));
+    this.options.shell.notify(translate(this.options.language(), "overlays.stopped"));
   }
 
   private dropWindow(id: string): void {
@@ -1134,7 +1136,7 @@ export class GameOverlays {
   /** Overlays of a module that another publisher's module replaced can't be shown and are forgotten; so are panels that no longer exist. */
   private prune(): void {
     const replaced = (item: { moduleId: string; owner: string }) => {
-      const module = this.options.module(item.moduleId);
+      const module = this.options.installed.shown(item.moduleId);
       return module !== undefined && module.owner !== item.owner;
     };
     const overlays = this.drop(replaced);
@@ -1153,7 +1155,7 @@ export class GameOverlays {
 
   private endLayerQuietly(): void {
     this.layer = null;
-    if (this.escape) this.options.shortcuts.unregister("Escape");
+    if (this.escape) this.options.platform.shortcuts.unregister("Escape");
     this.escape = false;
     this.veil?.destroy();
     this.veil = null;
@@ -1206,7 +1208,7 @@ export class GameOverlays {
         const start =
           ref.kind === "panel"
             ? startRect(this.options.panels?.info(ref.instanceId, this.store.panelOf(ref.instanceId)?.workspaceId ?? "")?.preferred ?? null, area)
-            : startRect(this.options.module(ref.subject.moduleId)?.manifest.overlaySize ?? null, area, DEFAULT_RECT);
+            : startRect(this.options.installed.shown(ref.subject.moduleId)?.manifest.overlaySize ?? null, area, DEFAULT_RECT);
         return { width: start.width, height: start.height };
       },
       setOverlay: (setupId, subject, change) => this.update(subject, change, setupId),
@@ -1267,7 +1269,7 @@ export class GameOverlays {
   private layoutItems(setupId: string): LayoutItemInfo[] {
     const items: LayoutItemInfo[] = [];
     for (const overlay of this.store.overlaysIn(setupId)) {
-      const module = this.options.module(overlay.moduleId);
+      const module = this.options.installed.shown(overlay.moduleId);
       const subject: OverlaySubject = { owner: overlay.owner, moduleId: overlay.moduleId, workspaceId: overlay.workspaceId, key: overlay.key };
       const id = overlayId(overlay);
       items.push({
@@ -1275,33 +1277,33 @@ export class GameOverlays {
         ref: { kind: "overlay", subject },
         name: this.nameOf(overlay),
         moduleId: overlay.moduleId,
-        scope: this.options.scopeOf(overlay.workspaceId),
+        scope: this.options.workspaces.scopeOf(overlay.workspaceId),
         mode: overlay.mode,
         opacity: overlay.opacity,
         hideFromCapture: overlay.hideFromCapture,
         rect: overlay.rect,
         ...(overlay.legacy ? { legacy: overlay.legacy } : {}),
-        hotkey: this.options.keyOf(toggleBinding(overlay)),
+        hotkey: this.options.streaming.keyOf(toggleBinding(overlay)),
         toggledOn: this.toggled.has(id),
         source: module?.manifest.overlay && module.owner === overlay.owner ? this.overlaySource(subject) : null,
         keyTarget: subject,
       });
     }
     for (const panel of this.store.panelsIn(setupId)) {
-      const module = this.options.module(panel.moduleId);
+      const module = this.options.installed.shown(panel.moduleId);
       const keyTarget = { owner: panel.owner, moduleId: panel.moduleId, workspaceId: panel.workspaceId, key: panel.instanceId };
       items.push({
         id: itemId(panel),
         ref: { kind: "panel", instanceId: panel.instanceId },
         name: this.options.panels?.info(panel.instanceId)?.name ?? module?.manifest.name ?? panel.moduleId,
         moduleId: panel.moduleId,
-        scope: this.options.scopeOf(panel.workspaceId),
+        scope: this.options.workspaces.scopeOf(panel.workspaceId),
         mode: panel.mode,
         opacity: panel.opacity,
         hideFromCapture: panel.hideFromCapture,
         rect: panel.rect,
         ...(panel.legacy ? { legacy: panel.legacy } : {}),
-        hotkey: this.options.keyOf(toggleBinding(keyTarget)),
+        hotkey: this.options.streaming.keyOf(toggleBinding(keyTarget)),
         toggledOn: this.toggled.has(liveWindowId(panel.instanceId)),
         // A panel without an overlay page in its module is drawn as a box with its name.
         source: module?.manifest.overlay && module.owner === panel.owner ? this.liveSource(panel) : null,
@@ -1313,7 +1315,7 @@ export class GameOverlays {
 
   /** What an overlay page is served from: the same lookups as the overlay's window makes. */
   private overlaySource(subject: OverlaySubject): GameOverlaySource {
-    const store = this.options.overlays;
+    const store = this.options.streaming.overlayStore;
     return {
       page: () => this.pageOf(subject),
       state: () => store.peek(subject)?.state ?? null,
@@ -1346,12 +1348,12 @@ export class GameOverlays {
 
   /** What Settings shows for an overlay: its module's name, and the key when the module has several from the same place. */
   private nameOf(overlay: GameOverlaySubject): string {
-    const name = this.options.module(overlay.moduleId)?.manifest.name ?? overlay.moduleId;
-    const general = this.options.scopeOf(overlay.workspaceId) === "all";
+    const name = this.options.installed.shown(overlay.moduleId)?.manifest.name ?? overlay.moduleId;
+    const general = this.options.workspaces.scopeOf(overlay.workspaceId) === "all";
     const ids = new Set(
       this.store
         .all()
-        .filter((item) => item.moduleId === overlay.moduleId && (general ? this.options.scopeOf(item.workspaceId) === "all" : item.workspaceId === overlay.workspaceId))
+        .filter((item) => item.moduleId === overlay.moduleId && (general ? this.options.workspaces.scopeOf(item.workspaceId) === "all" : item.workspaceId === overlay.workspaceId))
         .map((item) => overlayId(item)),
     );
     return ids.size > 1 ? `${name} · ${overlay.key}` : name;
@@ -1359,14 +1361,14 @@ export class GameOverlays {
 
   view(): GameOverlaysView {
     return {
-      supported: this.options.supported,
-      enabled: this.options.enabled(),
-      stay: this.options.stay?.() ?? false,
-      sidebar: this.options.sidebar?.() ?? "right",
+      supported: this.options.platform.supported,
+      enabled: this.options.settings.gameOverlays,
+      stay: this.options.settings.overlaysStay ?? false,
+      sidebar: this.options.settings.overlaySidebar,
       hidden: this.suspended,
       showing: this.windowsShown,
       gameSetups: this.store.gameSetups(),
-      layerKey: this.options.keyOf(layerBinding()),
+      layerKey: this.options.streaming.keyOf(layerBinding()),
     };
   }
 
@@ -1374,7 +1376,7 @@ export class GameOverlays {
   dialogNames(binding: Pick<HotkeyRecord, "owner" | "moduleId" | "workspaceId" | "action" | "target">): { label: string; module: string; action: string } {
     const language = this.options.language();
     if (binding.action === OVERLAY_LAYER_ACTION) return { label: translate(language, "overlays.layerLabel"), module: "Tavora", action: translate(language, "overlays.layerAction") };
-    const where = (workspaceId: string) => (this.options.scopeOf(workspaceId) === "all" ? translate(language, "overlays.allGames") : (this.options.workspaceName(workspaceId) ?? workspaceId));
+    const where = (workspaceId: string) => (this.options.workspaces.scopeOf(workspaceId) === "all" ? translate(language, "overlays.allGames") : (this.options.workspaces.name(workspaceId) ?? workspaceId));
     const overlay = this.store.find({ owner: binding.owner, moduleId: binding.moduleId, workspaceId: binding.workspaceId, key: binding.target });
     const panel = overlay ? undefined : this.panelOfKey(binding);
     if (panel) return { label: this.options.panels?.info(panel.instanceId)?.name ?? panel.moduleId, module: where(panel.workspaceId), action: translate(language, "overlays.toggleAction") };

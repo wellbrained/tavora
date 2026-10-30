@@ -14,6 +14,10 @@ export class ModulePanelView implements PanelViewAdapter {
   readonly kind = "module";
   readonly capturable = true;
 
+  get hotkeys(): ModuleView {
+    return this.panel;
+  }
+
   constructor(readonly panel: ModuleView) {}
 
   get view(): WebContentsView {

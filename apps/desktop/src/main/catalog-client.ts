@@ -13,7 +13,7 @@ import { catalogGame } from "./catalog";
 import type { MessageKey } from "../shared/i18n";
 import { UserError } from "./messages";
 import { MAX_MODULE_ICON, pictureDataUrl } from "./module-icon";
-import { DEFAULT_API_URL } from "./online";
+import { serviceUrl } from "./service-url";
 import { isPublisherName } from "./publisher-names";
 
 export const LIST_TIMEOUT_MS = 8000;
@@ -300,7 +300,7 @@ export class CatalogClient {
   private readonly icons = new Map<string, string | null>();
 
   constructor(options: CatalogClientOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? DEFAULT_API_URL).replace(/\/+$/, "");
+    this.baseUrl = serviceUrl(options.baseUrl);
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.listTimeoutMs = options.listTimeoutMs ?? LIST_TIMEOUT_MS;
     this.downloadTimeoutMs = options.downloadTimeoutMs ?? DOWNLOAD_TIMEOUT_MS;

@@ -14,6 +14,8 @@ import type { GameOverlaySource } from "./game-overlay-page";
 import type { LayoutItemInfo, LayoutSource } from "./game-overlay-service";
 import { DEFAULT_GAME_SIZE, allowedIn, isGameSetup, panelWindowId, placeItem, type OverlayScope } from "./game-overlays";
 import { captureSize, type LayoutPictures } from "./layout-pictures";
+import type { Library } from "./library";
+import type { WorkspaceNames } from "./workspace-lookup";
 
 /** A live page on the canvas, as the window puts it: where, how big the content is drawn, how faded, and whether it shows. */
 export interface LayoutFrame {
@@ -52,21 +54,19 @@ export interface LayoutWindow {
   place(frames: LayoutFrame[], layer: Rect | null, covered: boolean): void;
 }
 
-export interface OverlayLayoutOptions {
+export interface OverlayLayoutOptions<W extends LayoutWindow = LayoutWindow> {
   source: LayoutSource;
   pictures: LayoutPictures;
-  /** A workspace's name; null once it is gone. */
-  gameName(gameId: string): string | null;
-  /** The game workspaces, by their ids (a game workspace's id is its game's). */
-  games(): { id: string; name: string }[];
+  /** The library's workspaces: a game's name, null once it is gone. */
+  workspaces: Pick<WorkspaceNames, "name">;
   /** The main screen's work area (DIPs): the canvas takes its shape for a game whose window was never seen. */
   screen(): Rect;
-  /** Game overlays are on. */
-  enabled(): boolean;
+  /** The Game overlays switch in Settings > Overlays, read as it is now. */
+  settings: Pick<Library, "gameOverlays">;
   language(): Language;
   /** Every panel from every workspace. */
   sources(): SourcePanel[];
-  openWindow(request: { closed(): void }): LayoutWindow;
+  openWindow(request: { closed(): void }): W;
   /** The panels behind the items shown: they have to run for their pages to have anything to show, whichever workspace they are in. */
   keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): boolean[];
   /** The page asked to go back to the workspace. */
@@ -96,8 +96,8 @@ const IDLE_CHECK_MS = 1000;
 const sameRect = (a: AnchoredRect, b: AnchoredRect) => a.h === b.h && a.v === b.v && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 
 
-export class OverlayLayout {
-  private window: LayoutWindow | null = null;
+export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
+  private window: W | null = null;
   /** The setup shown (its id: Everywhere, All games, or a game's). */
   private gameId = "";
   private selection: string | null = null;
@@ -120,7 +120,12 @@ export class OverlayLayout {
   /** Whether the panel behind each item runs, as of the last look. */
   private running = new Map<string, boolean>();
 
-  constructor(private readonly options: OverlayLayoutOptions) {}
+  constructor(private readonly options: OverlayLayoutOptions<W>) {}
+
+  /** The canvas window while the page is open. */
+  get canvas(): W | null {
+    return this.window;
+  }
 
   get isOpen(): boolean {
     return this.window !== null;
@@ -185,7 +190,7 @@ export class OverlayLayout {
 
   /** The setups: Everywhere and All games, then the games that have one, in name order. */
   private games(): { id: string; name: string }[] {
-    const list = this.options.source.setups().filter(isGameSetup).map((id) => ({ id, name: this.options.gameName(id) ?? id })).sort((a, b) => a.name.localeCompare(b.name));
+    const list = this.options.source.setups().filter(isGameSetup).map((id) => ({ id, name: this.options.workspaces.name(id) ?? id })).sort((a, b) => a.name.localeCompare(b.name));
     return [{ id: LAYOUT_EVERYWHERE, name: this.text("overlays.everywhere") }, { id: LAYOUT_ALL_GAMES, name: this.text("overlays.allGames") }, ...list];
   }
 
@@ -269,7 +274,7 @@ export class OverlayLayout {
       target: info.ref.kind === "panel" ? { kind: "panel", instanceId: info.ref.instanceId } : { kind: "overlay", ...info.ref.subject },
       keyTarget: { owner: info.keyTarget.owner, moduleId: info.keyTarget.moduleId, workspaceId: info.keyTarget.workspaceId, key: info.keyTarget.key },
       name: info.name,
-      from: this.options.gameName(info.keyTarget.workspaceId) ?? "",
+      from: this.options.workspaces.name(info.keyTarget.workspaceId) ?? "",
       moduleId: info.moduleId,
       kind: info.ref.kind,
       moveTo: this.moveTarget(info, gameId),
@@ -301,7 +306,7 @@ export class OverlayLayout {
       pictureHint: canTakePicture ? null : isGameSetup(gameId) && this.options.source.gameRunning(gameId) ? "switch" : "start",
       canUndo: this.undo.canUndo,
       canRedo: this.undo.canRedo,
-      enabled: this.options.enabled(),
+      enabled: this.options.settings.gameOverlays,
       notice: this.notice,
     };
   }

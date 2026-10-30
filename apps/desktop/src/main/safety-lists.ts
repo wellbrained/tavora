@@ -12,6 +12,7 @@ import { writeFileAtomic } from "./fsutil";
 import type { OwnerRecords } from "./installer";
 import { readJsonOrSetAside } from "./json";
 import type { InstalledModule, ModuleProblem } from "./registry";
+import { serviceUrl } from "./service-url";
 
 // The catalog's safety lists (catalog threat model, C6, C7, C14), signed
 // offline with Tavora's catalogue key by scripts/catalog-sign.ts and served by

@@ -2,8 +2,9 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { readdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { PairingView } from "../shared/host-api";
-import type { AccountKey } from "./account-key";
+import type { CopySync } from "./cloud-copy-sync";
 import { CopyError } from "./cloud-copy";
+import type { AccountKey } from "./account-key";
 import { newPairingKey, openFromPc, pairingCode, pairingCommit, sealForPc, type PairingKey } from "./copy-crypto";
 import { FOLDER_NAME } from "./copy-folder";
 import { writeFileAtomic } from "./fsutil";
@@ -54,13 +55,19 @@ export interface PairingTransport {
 }
 
 export interface PairingOptions {
-  accountKey: AccountKey;
-  /** Tavora's service, while signed in. */
-  service: () => PairingTransport | null;
-  /** The cloud copy's folder, while the copy is kept in one. */
-  folder: () => PairingTransport | null;
-  /** The key another PC sent: checked and kept by the caller, which throws when it doesn't fit. */
-  received: (key: Buffer, via: PairingTransport["via"]) => Promise<void>;
+  /** The cloud copy: its account key is what is sent and received, and its folder (when it has one) is a way to ask. */
+  copySync: Pick<CopySync, "accountKey" | "place" | "keyArrived">;
+  /** The account: signed in, the messages go through Tavora's service. */
+  account: { token(): string | null };
+  /** The account service, ending in /v1/account. */
+  serviceUrl: string;
+  fetch?: typeof fetch;
+  /** This PC's name, which a request in the copy's folder goes by. */
+  deviceName: string;
+  /** The key came and was kept: whatever depends on the account's key (the publisher keys) looks again. */
+  keyKept?: () => Promise<void>;
+  /** The messages in the copy's folder; the folder's files unless a test says otherwise. */
+  folderTransport?: (folder: string, deviceName: string) => PairingTransport;
   onChange: (view: PairingView) => void;
   /** Brings Tavora to the front: another PC asks. */
   focus: () => void;
@@ -101,7 +108,42 @@ export class Pairing {
   private followTimer: ReturnType<typeof setTimeout> | undefined;
   private looking = false;
 
-  constructor(private readonly options: PairingOptions) {}
+  private readonly servicePairing: ServicePairing;
+  /** One per folder, so it remembers what it asked and answered. */
+  private folderPairing: PairingTransport | null = null;
+  private folderOf: string | null = null;
+
+  constructor(private readonly options: PairingOptions) {
+    this.servicePairing = new ServicePairing({ baseUrl: options.serviceUrl, fetch: options.fetch ?? ((input, init) => fetch(input, init)), token: () => options.account.token() });
+  }
+
+  private get accountKey(): AccountKey {
+    return this.options.copySync.accountKey;
+  }
+
+  /** Tavora's service, while signed in. */
+  private service(): PairingTransport | null {
+    return this.options.account.token() ? this.servicePairing : null;
+  }
+
+  /** The cloud copy's folder, while the copy is kept in one. */
+  private folder(): PairingTransport | null {
+    const place = this.options.copySync.place;
+    if (!place) return null;
+    if (this.folderOf !== place || !this.folderPairing) {
+      this.folderOf = place;
+      this.folderPairing = (this.options.folderTransport ?? ((folder, name) => new FolderPairing(folder, name)))(place, this.options.deviceName);
+    }
+    return this.folderPairing;
+  }
+
+  /** The key another PC sent: checked like a typed one, then the copy and whatever depends on the key go on with it. */
+  private async received(key: Buffer, via: PairingTransport["via"]): Promise<void> {
+    if (via === "service") await this.accountKey.take(key);
+    else await this.accountKey.takeHere(key);
+    await this.options.copySync.keyArrived();
+    await this.options.keyKept?.();
+  }
 
   private now(): number {
     return this.options.now?.() ?? Date.now();
@@ -125,7 +167,7 @@ export class Pairing {
   /** Asks the account's other PCs for the key: through the service when signed in, else the copy's folder. */
   async start(): Promise<void> {
     await this.cancel();
-    const transport = this.options.service() ?? this.options.folder();
+    const transport = this.service() ?? this.folder();
     if (!transport) throw new UserError("pairing.error.nowhere");
     const key = newPairingKey();
     let asked: { id: string; expiresAt: number };
@@ -162,7 +204,7 @@ export class Pairing {
     const asking = this.asking;
     if (!asking) return;
     // The recovery key was typed in meanwhile.
-    if (this.options.accountKey.get()) return this.cancel();
+    if (this.accountKey.get()) return this.cancel();
     let request: PairingRequest | null;
     try {
       request = await asking.transport.read();
@@ -191,7 +233,7 @@ export class Pairing {
       if (request.sealed && asking.oldKey) {
         const root = openFromPc(asking.key, asking.oldKey, unb64(request.sealed));
         await asking.transport.end(asking.id, false).catch(() => undefined);
-        await this.options.received(root, asking.transport.via);
+        await this.received(root, asking.transport.via);
         if (this.asking === asking) this.asking = null;
         clearTimeout(this.askTimer);
         this.changed();
@@ -230,11 +272,11 @@ export class Pairing {
 
   /** One look for a PC that asks. Public for tests. */
   async lookForRequests(): Promise<void> {
-    if (this.looking || this.asking || !this.options.accountKey.get()) return;
+    if (this.looking || this.asking || !this.accountKey.get()) return;
     this.looking = true;
     try {
       // While answering one request, only its way is looked at.
-      const ways = this.answering ? [this.answering.transport] : [this.options.service(), this.options.folder()];
+      const ways = this.answering ? [this.answering.transport] : [this.service(), this.folder()];
       for (const transport of ways) {
         if (transport) await this.lookAt(transport);
         if (this.answering) break;
@@ -301,7 +343,7 @@ export class Pairing {
     this.answering = null;
     this.refused.add(id);
     this.changed();
-    const key = this.options.accountKey.get();
+    const key = this.accountKey.get();
     try {
       if (allow && key) await answering.transport.sendKey(id, b64(sealForPc(answering.key, answering.reveal, key)));
       else await answering.transport.end(id, true);

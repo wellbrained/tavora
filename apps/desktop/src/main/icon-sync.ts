@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fetchHostedList, matchHosted, saveHostedIcon, type HostedList } from "./hosted-icons";
 import { findInstalledGames, matchInstalled, type InstalledGame } from "./launcher-games";
-import { DEFAULT_API_URL } from "./online";
+import { DEFAULT_API_URL } from "./service-url";
 import { icoFramesAgree, readIcoFromFile } from "./pe-icon";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
 import { readShortcutIcons, saveShortcutIcon, shortcutFolders } from "./steam-shortcuts";

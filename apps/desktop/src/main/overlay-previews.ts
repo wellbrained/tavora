@@ -27,7 +27,7 @@ export interface PreviewRequest {
 export interface OverlayPreviewsOptions {
   overlays: OverlayStore;
   /** The module as installed now (with its manifest in the user's language). */
-  module(moduleId: string): StreamingModule | undefined;
+  installed: { shown(moduleId: string): StreamingModule | undefined };
   openWindow(request: PreviewRequest): PreviewWindow;
 }
 
@@ -42,7 +42,7 @@ export class OverlayPreviews {
    * `overlay` in its manifest; the caller checked the key and, for a module, the click.
    */
   show(subject: OverlaySubject): void {
-    const module = this.options.module(subject.moduleId);
+    const module = this.options.installed.shown(subject.moduleId);
     if (!module || module.owner !== subject.owner) throw new HostError("INVALID_PARAMS", "this module is not installed");
     if (!module.manifest.overlay) throw new HostError("INVALID_PARAMS", "this module has no overlay page in its manifest");
     const id = overlayId(subject);
@@ -56,7 +56,7 @@ export class OverlayPreviews {
       title: module.manifest.name,
       source: {
         page: (): OverlayPage | null => {
-          const now = this.options.module(subject.moduleId);
+          const now = this.options.installed.shown(subject.moduleId);
           return now && now.owner === subject.owner && now.manifest.overlay ? { root: now.root, entry: now.manifest.overlay } : null;
         },
         state: (): JsonValue | null => store.peek(subject)?.state ?? null,

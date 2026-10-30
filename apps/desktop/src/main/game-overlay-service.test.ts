@@ -192,13 +192,51 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
   const overlays = await OverlayStore.load(dir);
   const service = await GameOverlays.create({
     userData: dir,
-    overlays,
-    supported,
-    enabled: () => world.enabled,
-    module: (id) => world.modules.get(id),
-    workspaceName: (id) => (id === "elden" ? "Elden Ring" : id === "personal" ? "Personal" : null),
-    scopeOf: (id) => world.kinds.get(id) ?? "game",
-    gamesOf: (program) => new Set(program === GAME_EXE ? ["elden"] : program.startsWith("D:\\Games\\Other\\") ? ["other"] : []),
+    streaming: {
+      overlayStore: overlays,
+      removeKeys: (test) => {
+        for (const record of [...keys]) if (test(record)) world.removedKeys.push(record);
+      },
+      moveKey: (test, to) => {
+        const matches = keys.filter(test);
+        world.movedKeys.push({ from: matches.at(-1), to });
+        for (const record of matches) world.removedKeys.push(record);
+      },
+      keyOf: () => null,
+    },
+    installed: { shown: (id) => world.modules.get(id) },
+    workspaces: {
+      name: (id) => (id === "elden" ? "Elden Ring" : id === "personal" ? "Personal" : null),
+      scopeOf: (id) => world.kinds.get(id) ?? "game",
+    },
+    settings: {
+      get gameOverlays() {
+        return world.enabled;
+      },
+      get overlaysStay() {
+        return world.stay;
+      },
+      overlaySidebar: "right",
+    },
+    watcher: { gamesOf: (program) => new Set(program === GAME_EXE ? ["elden"] : program.startsWith("D:\\Games\\Other\\") ? ["other"] : []) },
+    platform: {
+      supported,
+      probe: () => probe,
+      toDip: (rect) => rect,
+      screen: () => ({ ...SCREEN }),
+      tavoraInFront: () => world.tavora,
+      openWindow: (request, panel) => {
+        const window = new FakeWindow(request, panel);
+        world.windows.push(window);
+        return window;
+      },
+      openVeil: () => {
+        const veil = new FakeVeil();
+        world.veils.push(veil);
+        return veil;
+      },
+      shortcuts,
+    },
     panels: {
       info: (instanceId) =>
         world.gone.has(instanceId)
@@ -206,37 +244,16 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
           : { name: world.panelNames.get(instanceId) ?? null, allowed: !world.notAllowed.has(instanceId), usedAt: world.panelUsed.get(instanceId) ?? 0, preferred: world.preferred.get(instanceId) ?? null },
       lend: (instanceId, workspaceId, revoked) => (world.panelNames.has(instanceId) ? world.views.lend(instanceId, workspaceId, revoked) : null),
     },
-    probe: () => probe,
-    toDip: (rect) => rect,
-    screen: () => ({ ...SCREEN }),
-    tavoraInFront: () => world.tavora,
-    stay: () => world.stay,
-    openWindow: (request, panel) => {
-      const window = new FakeWindow(request, panel);
-      world.windows.push(window);
-      return window;
+    shell: {
+      openSetting: (setting) => void world.opened.push(setting),
+      notify: (message) => void world.notices.push(message),
     },
-    openVeil: () => {
-      const veil = new FakeVeil();
-      world.veils.push(veil);
-      return veil;
-    },
-    shortcuts,
-    openSetting: (setting) => void world.opened.push(setting),
-    openLayout: (gameId) => void world.layouts.push(gameId),
-    notify: (message) => void world.notices.push(message),
-    removeKeys: (test) => {
-      for (const record of [...keys]) if (test(record)) world.removedKeys.push(record);
-    },
-    moveKey: (test, to) => {
-      const matches = keys.filter(test);
-      world.movedKeys.push({ from: matches.at(-1), to });
-      for (const record of matches) world.removedKeys.push(record);
-    },
-    keyOf: () => null,
     language: () => "en",
     changed: () => void world.changes++,
-    windowsChanged: () => void world.windowsChanged++,
+  });
+  service.useLayout({
+    open: (gameId) => void world.layouts.push(gameId ?? null),
+    refresh: () => void world.windowsChanged++,
   });
   // Overlays start stopped until the user presses Start in the header; these tests begin after that. Started with no
   // game in front, so nothing is placed before a test picks its window.

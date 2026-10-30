@@ -138,15 +138,15 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
   const layout = new OverlayLayout({
     source,
     pictures,
-    gameName: (id) => ({ elden: "Elden Ring", poe2: "Path of Exile 2", personal: "Personal" })[id] ?? null,
-    games: () => [
-      { id: "elden", name: "Elden Ring" },
-      { id: "poe2", name: "Path of Exile 2" },
-    ],
+    workspaces: { name: (id) => ({ elden: "Elden Ring", poe2: "Path of Exile 2", personal: "Personal" })[id] ?? null },
     sources: () => options.sources ?? [],
     leave: () => void world.left++,
     screen: () => ({ x: 0, y: 0, width: 2560, height: 1440 }),
-    enabled: () => world.enabled,
+    settings: {
+      get gameOverlays() {
+        return world.enabled;
+      },
+    },
     language: () => "en",
     keepRunning: (panels) => panels.map(() => true),
     openWindow: (request) => {

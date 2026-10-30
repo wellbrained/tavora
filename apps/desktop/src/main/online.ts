@@ -1,9 +1,9 @@
 import { isGameId } from "@tavora/module-schema";
 import type { OnlineGame, OnlineSearchResult } from "../shared/host-api";
 import { isSteamAppId } from "./steam-icons";
+import { serviceUrl } from "./service-url";
 
-/** The Tavora service. The app talks to no one else; the desktop never holds keys. */
-export const DEFAULT_API_URL = "https://api.mytavora.app";
+export { DEFAULT_API_URL } from "./service-url";
 export const SEARCH_TIMEOUT_MS = 2000;
 export const MIN_ONLINE_QUERY = 2;
 const MAX_RESULTS = 20;
@@ -44,7 +44,7 @@ export class OnlineSearch {
   private pending: AbortController | null = null;
 
   constructor(options: OnlineSearchOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? DEFAULT_API_URL).replace(/\/+$/, "");
+    this.baseUrl = serviceUrl(options.baseUrl);
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.timeoutMs = options.timeoutMs ?? SEARCH_TIMEOUT_MS;
   }

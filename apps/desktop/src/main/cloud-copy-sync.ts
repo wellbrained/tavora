@@ -4,6 +4,7 @@ import type { CloudCopyProblem, CloudCopyView } from "../shared/host-api";
 import { backupsDir } from "./backup";
 import {
   CloudCopy,
+  ServiceStorage,
   CopyError,
   copyRoots,
   EMPTY_STATE,
@@ -16,7 +17,8 @@ import {
   type CopyStorage,
   type SyncedFile,
 } from "./cloud-copy";
-import type { AccountKey } from "./account-key";
+import { AccountKey } from "./account-key";
+import type { Encryptor } from "./discord-store";
 import { checkFolder, FolderStorage } from "./copy-folder";
 import { writeFileAtomic } from "./fsutil";
 import { UserError } from "./messages";
@@ -61,19 +63,26 @@ export interface CopySyncOptions {
   /** A development run in its own desktop-dev folder: the UI asks before turning the copy on. */
   devData?: boolean;
   /** The folder modules keep pictures in, which may be anywhere. */
-  moduleFiles: () => string;
-  /** The copy on Tavora's service. */
-  service: CopyStorage;
+  files: { root(): string };
+  /** The account: its sign-in token seals nothing, but lets the copy and the key reach Tavora's service. */
+  account: { token(): string | null };
+  /** The account service, ending in /v1/account. */
+  serviceUrl: string;
+  fetch?: typeof fetch;
+  /** The system's key store, which keeps the account's key on this PC. */
+  encryptor: Encryptor;
   /** The copy in a folder the user picked; FolderStorage unless a test says otherwise. */
   folderStorage?: (folder: string) => CopyStorage;
-  /** The account's key, which seals the copy; this PC may have it with the copy off. */
-  accountKey: AccountKey;
-  /** Writes what Tavora still holds in memory (library, layout) to disk. */
-  flush: () => Promise<void>;
   restart: () => void;
-  onChange: (view: CloudCopyView) => void;
   now?: () => Date;
   log?: (line: string) => void;
+}
+
+/** What the window around the copy answers to; given once it exists (the copy starts before it does). */
+export interface CopyHooks {
+  /** Writes what Tavora still holds in memory (library, layout) to disk. */
+  flush: () => Promise<void>;
+  onChange: (view: CloudCopyView) => void;
 }
 
 export class CopySync {
@@ -99,8 +108,29 @@ export class CopySync {
   private mayClose = false;
   private closeStarted = false;
 
+  /** The copy on Tavora's service. */
+  private readonly service: CopyStorage;
+  /** The account's key, which seals the copy; this PC may have it with the copy off. */
+  private readonly accountKeys: AccountKey;
+  /** Given by `attach`; until then the copy tells no one and flushes nothing. */
+  private hooks: CopyHooks | null = null;
+
   constructor(private readonly options: CopySyncOptions) {
-    this.cloud = new CloudCopy(options.service);
+    const service = { baseUrl: options.serviceUrl, fetch: options.fetch ?? ((input, init) => fetch(input, init)), token: () => options.account.token() };
+    this.service = new ServiceStorage(service);
+    this.accountKeys = new AccountKey({
+      file: path.join(options.userData, "account-key.json"),
+      legacyFile: path.join(options.userData, "cloud-copy-key.json"),
+      cacheFile: path.join(options.userData, "account-vault.bin"),
+      encryptor: options.encryptor,
+      ...service,
+    });
+    this.cloud = new CloudCopy(this.service);
+  }
+
+  /** Whoever owns the window and the saved data listens from now on. */
+  attach(hooks: CopyHooks): void {
+    this.hooks = hooks;
   }
 
   /** Where the copy is kept from now on: a folder, or null for the service. */
@@ -110,12 +140,12 @@ export class CopySync {
   }
 
   private storageFor(folder: string | null): CopyStorage {
-    return folder === null ? this.options.service : (this.options.folderStorage ?? ((picked) => new FolderStorage(picked)))(folder);
+    return folder === null ? this.service : (this.options.folderStorage ?? ((picked) => new FolderStorage(picked)))(folder);
   }
 
   /** Signed out with the copy in a folder: the key stays on this PC, without the account's vault. */
   private get keyHere(): boolean {
-    return this.folder !== null && !this.options.accountKey.signedIn;
+    return this.folder !== null && !this.accountKeys.signedIn;
   }
 
   private get stateFile() {
@@ -134,7 +164,7 @@ export class CopySync {
     return path.join(this.stagingDir, "staged.json");
   }
   private roots(): CopyRoot[] {
-    return copyRoots(this.options.userData, this.options.moduleFiles());
+    return copyRoots(this.options.userData, this.options.files.root());
   }
   private now(): Date {
     return this.options.now?.() ?? new Date();
@@ -144,7 +174,7 @@ export class CopySync {
   }
 
   private get key(): Buffer | null {
-    return this.options.accountKey.get();
+    return this.accountKeys.get();
   }
 
   /** The folder the copy is kept in (or is being turned on in), or null for the service. */
@@ -154,7 +184,7 @@ export class CopySync {
 
   /** The account's key, which the publisher keys use too (developer-keys.ts). */
   get accountKey(): AccountKey {
-    return this.options.accountKey;
+    return this.accountKeys;
   }
 
   get on(): boolean {
@@ -163,7 +193,7 @@ export class CopySync {
 
   view(): CloudCopyView {
     return {
-      canKeepKey: this.options.accountKey.canKeep,
+      canKeepKey: this.accountKeys.canKeep,
       devData: this.options.devData === true,
       on: this.on,
       busy: this.busy,
@@ -182,7 +212,7 @@ export class CopySync {
   }
 
   private changed(): void {
-    this.options.onChange(this.view());
+    this.hooks?.onChange(this.view());
   }
 
   /** Runs one thing after the one before it, showing what it does. */
@@ -231,7 +261,7 @@ export class CopySync {
   async beforeLoad(budgetMs = START_BUDGET_MS): Promise<void> {
     if (!this.options.enabled) return;
     try {
-      await this.options.accountKey.load();
+      await this.accountKeys.load();
       this.copyOn = await stat(this.stateFile).then(
         () => true,
         () => false,
@@ -288,9 +318,9 @@ export class CopySync {
       copy = await this.cloud.download(this.key!, this.roots(), this.stagedData);
     } catch (error) {
       // Another PC started over with a new key: this one's key and copy are forgotten, and turning on asks for the new key.
-      if (error instanceof CopyError && error.reason === "damaged" && !this.keyHere && !(await this.options.accountKey.fits())) {
+      if (error instanceof CopyError && error.reason === "damaged" && !this.keyHere && !(await this.accountKeys.fits())) {
         await this.forget("new-key");
-        await this.options.accountKey.forget();
+        await this.accountKeys.forget();
         throw new KeyChanged();
       }
       throw error;
@@ -368,7 +398,7 @@ export class CopySync {
     }
     // A key from before the account kept a vault gets one, so other PCs ask for it instead of making their own.
     // A key the account no longer has (another PC started over) stops the copy here before anything goes up.
-    void this.options.accountKey
+    void this.accountKeys
       .setUp()
       .then(async (setUp) => {
         if (setUp.status === "ask") return this.forget("new-key");
@@ -396,7 +426,7 @@ export class CopySync {
     await this.exclusive("uploading", async () => {
       // What ran before (a download at start) may have left a question.
       if (!this.on || (this.waiting && !loud)) return;
-      await this.options.flush();
+      await this.hooks?.flush();
       try {
         const result = await this.cloud.upload(this.key!, this.roots(), this.state, (done, total) => {
           this.progress = { done, total };
@@ -434,12 +464,12 @@ export class CopySync {
    */
   async turnOn(folder: string | null = null): Promise<void> {
     if (this.on) return;
-    if (!this.options.accountKey.canKeep) throw new UserError("cloudCopy.error.cantKeep");
+    if (!this.accountKeys.canKeep) throw new UserError("cloudCopy.error.cantKeep");
     this.use(folder);
     const setUp = await this.exclusive("checking", async () => {
       if (folder !== null) await checkFolder(folder);
       // Signed out, a folder's copy keeps its key here; signed in, the key is the account's.
-      return this.keyHere ? this.options.accountKey.setUpHere((await this.cloud.remote()) !== null) : this.options.accountKey.setUp();
+      return this.keyHere ? this.accountKeys.setUpHere((await this.cloud.remote()) !== null) : this.accountKeys.setUp();
     }).catch((error: unknown) => {
       this.use(null);
       if (error instanceof UserError) throw error;
@@ -450,14 +480,14 @@ export class CopySync {
       this.changed();
       return;
     }
-    if (setUp.created) this.shownKey = this.options.accountKey.recoveryKey();
+    if (setUp.created) this.shownKey = this.accountKeys.recoveryKey();
     await this.startCopy();
   }
 
   /** The recovery key typed in when another PC made the account's key: checked against the account, then the copy goes on. */
   async enterKey(text: string): Promise<void> {
     const here = this.keyHere;
-    await this.exclusive("checking", () => (here ? this.options.accountKey.enterHere(text) : this.options.accountKey.enter(text))).catch((error: unknown) => {
+    await this.exclusive("checking", () => (here ? this.accountKeys.enterHere(text) : this.accountKeys.enter(text))).catch((error: unknown) => {
       if (error instanceof UserError) throw error;
       throw CopySync.userError(this.noteProblem(error));
     });
@@ -476,7 +506,7 @@ export class CopySync {
     } catch (error) {
       // Signed out, the folder's copy is the only check: a key that doesn't open it is not kept.
       if (here && error instanceof UserError && error.key === "cloudCopy.error.wrongKey") {
-        await this.options.accountKey.forget();
+        await this.accountKeys.forget();
         this.askKey = true;
         this.changed();
       }
@@ -492,7 +522,7 @@ export class CopySync {
   async startOver(): Promise<void> {
     const base = await this.exclusive("checking", async () => {
       const remote = await this.cloud.remote();
-      await (this.keyHere ? this.options.accountKey.startOverHere() : this.options.accountKey.startOver());
+      await (this.keyHere ? this.accountKeys.startOverHere() : this.accountKeys.startOver());
       return remote?.version ?? 0;
     }).catch((error: unknown) => {
       if (error instanceof UserError) throw error;
@@ -502,7 +532,7 @@ export class CopySync {
     await this.forget(null);
     this.use(folder);
     await savePlace(this.placeFile, folder);
-    this.shownKey = this.options.accountKey.recoveryKey();
+    this.shownKey = this.accountKeys.recoveryKey();
     this.copyOn = true;
     // Nothing of the old copy is reused: every file goes up again under the new key.
     this.state = { ...EMPTY_STATE, version: base };
@@ -550,7 +580,7 @@ export class CopySync {
   }
 
   showKey(): void {
-    this.shownKey = this.options.accountKey.recoveryKey();
+    this.shownKey = this.accountKeys.recoveryKey();
     this.changed();
   }
 
@@ -571,7 +601,7 @@ export class CopySync {
     const problem = this.problem;
     await this.exclusive("uploading", async () => {
       try {
-        await this.options.flush();
+        await this.hooks?.flush();
         if (folder !== null) await checkFolder(folder);
         const to = new CloudCopy(this.storageFor(folder));
         if (await to.remote()) throw new UserError("cloudCopy.error.moveTaken");
@@ -671,7 +701,7 @@ export class CopySync {
     // A copy in the user's own folder needs no account: it stays on, with its key.
     if (this.folder !== null && (this.copyOn || this.askKey)) return;
     if (this.copyOn || this.askKey) await this.forget(null);
-    await this.options.accountKey.forget();
+    await this.accountKeys.forget();
     this.changed();
   }
 

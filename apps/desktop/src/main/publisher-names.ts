@@ -1,5 +1,6 @@
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
+import { serviceUrl } from "./service-url";
 
 // The developer names users see for publisher keys ("by wellbrained" instead of a fingerprint).
 // Tavora's service says which name a key's account chose; the answer is kept on this PC in

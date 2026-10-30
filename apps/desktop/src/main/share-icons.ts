@@ -11,6 +11,7 @@
 
 import type { SteamImportGame } from "../shared/host-api";
 import { matchHosted, type HostedList } from "./hosted-icons";
+import { serviceUrl } from "./service-url";
 
 export const SHARE_TIMEOUT_MS = 10_000;
 

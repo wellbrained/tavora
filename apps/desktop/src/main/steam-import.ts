@@ -4,6 +4,7 @@ import { hasMessage, translate, type Language, type MessageKey } from "../shared
 import { normalizeName } from "./launcher-games";
 import { addWorkspace, type Library } from "./library";
 import { isSteamAppId } from "./steam-icons";
+import { serviceUrl } from "./service-url";
 
 export const MAX_PROFILE_LENGTH = 200;
 export const MAX_IMPORT_GAMES = 5000;
