@@ -34,8 +34,8 @@ export interface UseItemSession<T> {
   refresh(): Promise<void>;
   /** Drops unsaved edits and shows the other panel's copy of the open item. */
   adoptRemote(): Promise<void>;
-  /** Puts a deleted open item back with its last copy and opens it again. */
-  restoreDeleted(): Promise<void>;
+  /** Puts a deleted open item back and opens it again: with `copy` (your edits since the notice), else with its last copy. */
+  restoreDeleted(copy?: T): Promise<void>;
   /** Reads the open item again after something other than its handle wrote it (this panel's own `documents.put`). */
   reload(): Promise<void>;
   /** Never rejects; does nothing before the session is open. */
@@ -123,7 +123,7 @@ export function useItemSession<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>):
     refresh: () => use((opened) => opened.refresh()),
     reload: () => use((opened) => opened.reload()),
     adoptRemote: () => use((opened) => opened.adoptRemote()),
-    restoreDeleted: () => use((opened) => opened.restoreDeleted()),
+    restoreDeleted: (copy) => use((opened) => opened.restoreDeleted(copy)),
     flush: () => (session ? session.flush() : ready.then((opened) => opened.flush(), () => undefined)),
   };
 }

@@ -1,3 +1,12 @@
+## 0.3.1
+
+The last gaps of the item session, and the kit's last deprecated helpers go. Nothing changes on the wire, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `session.restoreDeleted(copy?)` puts back `copy` instead of `deletedCopy`, so edits made after the "deleted elsewhere" notice are not lost. Without an argument it works as before (the kept copy; `onDeleted` stays "keep" by default). The kit's `useItemSession` passes it through.
+- `restoreDeleted` no longer cancels a `pick` that is still opening: the item is put back in storage, and the pick wins. `reload()` was checked for the same race and the "deleted, re-created by this panel's own `documents.put`, then `reload()`" case: it does not cancel a pick, and the unsaved edits are applied on top of the newer copy.
+- A `parse` that throws for `null` now fails with a message that says so (`parse(null) must return a valid empty value …`), where the raw error hid that the document was missing or deleted.
+- The kit no longer exports `serial` (the document store saves one after another), and `connectModule` no longer accepts no argument or a callback: use `connectModule({ texts })` (or `{}`) and read `handle.sdk`, `handle.language` and `handle.onLanguage`.
+
 ## 0.3.0
 
 The helper entries are complete: `testing`, `store` (document store, item session, result queue, run store), `bootstrap` and the generated protocol table. Nothing changes on the wire, so `MIN_TAVORA` stays (Tavora 0.19.32).
@@ -5,7 +14,7 @@ The helper entries are complete: `testing`, `store` (document store, item sessio
 - Item session: `reload()` reads the open item again after something other than its handle wrote it (the panel's own `documents.put` is not reported back to it), keeping unsaved edits on top; `deletedCopy` is the last copy of an item deleted by another panel (unsaved edits included, null otherwise), so a panel can keep showing it. `parse(null)` must return a valid placeholder: the docs say so now.
 - Document store: `reload()` on the handle is the same for one document.
 - The kit's `useItemSession` returns `deletedCopy` and `reload`.
-- The kit no longer exports `updateDocument`, `readDocument`, `applyTheme`, `Versioned` and `UpdateOptions`; use `openDocument` / `useDocument`, and `connectModule({ texts })`. `serial` and the callback form of `connectModule` are still there, deprecated, for modules that have not moved.
+- The kit no longer exports `updateDocument`, `readDocument`, `applyTheme`, `Versioned` and `UpdateOptions`; use `openDocument` / `useDocument`, and `connectModule({ texts })`. `serial` and the callback form of `connectModule` stayed one more version (removed in 0.3.1).
 
 ## 0.2.21
 

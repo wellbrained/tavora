@@ -123,6 +123,8 @@ export interface ItemSession<T> {
   /**
    * Reads the open item again after something other than its handle wrote it (this panel's own `documents.put`, which
    * Tavora does not report back): its title and content show the new copy, unsaved edits stay on top. Does nothing for none.
+   * It does not interrupt a `pick` that is still opening. Unsaved edits of an item that was deleted elsewhere and
+   * made again by this panel's own `documents.put` are applied on top of the newer copy (and `deleted` ends).
    */
   reload(): Promise<void>;
   /** Saves the open item. Never rejects; does nothing for an item deleted elsewhere (see `restoreDeleted`). */
@@ -130,11 +132,13 @@ export interface ItemSession<T> {
   /** The open item's `adoptRemote`: drops unsaved edits and shows the other panel's copy. Does nothing for none or a deleted item. */
   adoptRemote(): Promise<void>;
   /**
-   * After the open item was deleted elsewhere: puts back the last copy the session had (unsaved edits included) with
-   * `ifRevision: 0` and opens it again. Rejects with CONFLICT when another panel has made the id again. Does nothing
-   * when the open item is not deleted.
+   * After the open item was deleted elsewhere: puts `copy` back with `ifRevision: 0` and opens it again. Without
+   * `copy` it is `deletedCopy`, the last copy the session had (unsaved edits included); give your own copy when the
+   * user went on editing after the notice, or those edits are lost. Rejects with CONFLICT when another panel has made
+   * the id again. Does nothing when the open item is not deleted. When a `pick` (or `remove`) started meanwhile, the
+   * item is put back in storage but that switch wins: it is not opened again.
    */
-  restoreDeleted(): Promise<void>;
+  restoreDeleted(copy?: T): Promise<void>;
   onChange(fn: (event: ItemSessionEvent) => void): () => void;
   onStatus(fn: (status: DocumentStatus) => void): () => void;
   onError(fn: (error: unknown, kind: ItemErrorKind) => void): () => void;
@@ -478,13 +482,16 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
     await refresh();
   }
 
-  async function restoreDeleted(): Promise<void> {
+  async function restoreDeleted(copy?: T): Promise<void> {
     if (closed) throw new Error("the item session is closed");
     const id = currentId;
-    const copy = lastCopy;
-    if (!deleted || !id || copy === null) return;
-    await sdk.documents.put({ id, title: title(copy), data: copy as JsonValue, ifRevision: 0 });
+    const restored = copy ?? lastCopy;
+    if (!deleted || !id || restored === null) return;
+    const mine = generation;
+    await sdk.documents.put({ id, title: title(restored), data: restored as JsonValue, ifRevision: 0 });
     await refresh();
+    // A switch that started meanwhile wins: opening this item again would cancel it.
+    if (picking > 0 || mine !== generation || currentId !== id) return;
     await pick(id, true);
   }
 

@@ -52,7 +52,9 @@ onMounted(async () => {
   // The page also works outside Tavora (for example opened from dist/ in a
   // browser); it then keeps the default theme.
   try {
-    const connected = await connectModule();
+    const module = await connectModule({});
+    const connected = module.sdk;
+    if (!connected) throw module.error;
     readTokens();
     cleanup.push(connected.ui.onThemeChange(() => requestAnimationFrame(readTokens)));
     const state = await connected.panel.getState<Partial<PanelState>>();

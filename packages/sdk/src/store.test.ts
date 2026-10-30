@@ -717,3 +717,52 @@ describe("re-check fixes", () => {
     expect(events.at(-1)).toMatchObject({ source: "remote", data: { items: ["remote"] } });
   });
 });
+
+describe("parse(null)", () => {
+  it("is the placeholder for a missing document, also after it was deleted elsewhere", async () => {
+    const calls: Array<JsonValue | null> = [];
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    const placeholder = { items: ["(empty)"] };
+    const handle = await openDocument(a.sdk, "plan", options({ parse: (raw) => (calls.push(raw), raw ? (raw as unknown as Plan) : placeholder) }));
+    expect(handle.data).toEqual(placeholder);
+    expect(handle.revision).toBe(0);
+    handle.update(add("one"));
+    await handle.flush();
+    const events: DocumentChangeEvent<Plan>[] = [];
+    handle.onChange((event) => events.push(event));
+    await b.sdk.documents.delete("plan");
+    await vi.waitFor(() => expect(events.at(-1)?.deleted).toBe(true));
+    expect(events.at(-1)?.data).toEqual(placeholder);
+    expect(calls).toContain(null);
+    await handle.dispose();
+  });
+
+  it("must not throw: a parse that cannot make a placeholder fails with a message that says so", async () => {
+    const { sdk } = createMemoryHost();
+    const strict = (raw: JsonValue | null): Plan => {
+      if (!raw) throw new Error("nothing to parse");
+      return raw as unknown as Plan;
+    };
+    await expect(openDocument(sdk, "plan", options({ parse: strict }))).rejects.toThrow(/parse\(null\) must return a valid empty value/);
+  });
+
+  it("reports a parse that cannot make a placeholder when the document is deleted elsewhere", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    a.host.documents.put({ id: "plan", title: "Plan", data: { items: [] } });
+    let strict = false;
+    const handle = await openDocument(a.sdk, "plan", options({ parse: (raw) => (raw ? (raw as unknown as Plan) : strict ? failNull() : { items: [] }) }));
+    const errors: unknown[] = [];
+    handle.onError((error, kind) => kind === "reload" && errors.push(error));
+    strict = true;
+    await b.sdk.documents.delete("plan");
+    await vi.waitFor(() => expect(errors).toHaveLength(1));
+    expect(String(errors[0])).toMatch(/parse\(null\) must return a valid empty value/);
+    await handle.dispose();
+  });
+});
+
+function failNull(): never {
+  throw new Error("nothing to parse");
+}
