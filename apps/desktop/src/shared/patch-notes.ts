@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.22.10",
+    date: "2026-10-30",
+    title: "Back to 100% zoom",
+    notes: [
+      "In the PDF Viewer, click the zoom number to go back to 100%.",
+      "Pictures have a 1:1 button next to the zoom buttons (or press 1).",
+    ],
+    prs: [
+      { number: 510, title: "Zoom back to 100%: PDF Viewer zoom number resets, ZoomPane gets 1:1" },
+    ],
+    tags: ["pdf-viewer", "ui-kit"],
+  },
+  {
     version: "0.22.9",
     date: "2026-10-30",
     title: "PDF Viewer",
