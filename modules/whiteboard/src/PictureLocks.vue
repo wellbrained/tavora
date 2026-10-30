@@ -4,6 +4,7 @@
 import { Lock, LockOpen } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@tavora/official-ui";
+import { LOCKS_CLASS } from "./excalidrawDom";
 import { t } from "./i18n";
 import type { LockSpot } from "./locks";
 
@@ -12,7 +13,7 @@ const emit = defineEmits<{ toggle: [id: string, locked: boolean] }>();
 </script>
 
 <template>
-  <div v-if="spots.length > 0" class="picture-locks pointer-events-none absolute inset-0 z-[2] overflow-hidden">
+  <div v-if="spots.length > 0" :class="LOCKS_CLASS" class="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
     <Button
       v-for="spot in spots"
       :key="spot.id"

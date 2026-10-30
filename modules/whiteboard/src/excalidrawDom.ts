@@ -232,12 +232,15 @@ export function watchHints(board: HTMLElement, panning: () => string): () => voi
 
 // --- What covers a picture's lock --------------------------------------------------------------------------------
 
-/** Whether the drawing itself (not one of Excalidraw's menus) is what shows at this point; `ignore` matches the page's own overlays. */
-export function isCanvasAt(x: number, y: number, ignore: string): boolean {
+/** The class of the page's own overlay of picture locks (PictureLocks.vue), which is not Excalidraw's. */
+export const LOCKS_CLASS = "picture-locks";
+
+/** Whether the drawing itself (not one of Excalidraw's menus, and not the page's picture locks) is what shows at this point. */
+export function isDrawingAt(x: number, y: number): boolean {
   return (
     document
       .elementsFromPoint(x, y)
-      .find((element) => !element.closest(ignore))
+      .find((element) => !element.closest(`.${LOCKS_CLASS}`))
       ?.matches("canvas") ?? false
   );
 }

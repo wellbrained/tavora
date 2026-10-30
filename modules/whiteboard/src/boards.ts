@@ -19,6 +19,8 @@ export interface BoardData {
   elements: JsonValue[];
   /** Picture file id → its stored file, for the pictures on the board. */
   files: Record<string, StoredFile>;
+  /** The board's name; it is also the document's title, so the list needs no board to be opened. */
+  name: string;
   /** The colour of the board's background. */
   background: string;
   /** Whether this board shows the alignment grid. Older boards start with it off. */
@@ -41,7 +43,7 @@ export const MAX_NAME = 60;
 export const DEFAULT_BACKGROUND = "#ffffff";
 
 export function emptyBoard(now = new Date().toISOString()): BoardData {
-  return { version: 1, elements: [], files: {}, background: DEFAULT_BACKGROUND, grid: false, createdAt: now };
+  return { version: 1, elements: [], files: {}, name: "", background: DEFAULT_BACKGROUND, grid: false, createdAt: now };
 }
 
 /** The stored files in a board's data, keeping only well-formed entries. */
@@ -65,6 +67,7 @@ export function parseBoard(raw: JsonValue | null, now = new Date().toISOString()
     version: 1,
     elements: Array.isArray(value.elements) ? value.elements.filter((element) => element !== null && typeof element === "object" && !Array.isArray(element)) : [],
     files: parseFiles(value.files),
+    name: typeof value.name === "string" ? cleanName(value.name) : "",
     background: typeof value.background === "string" && /^#[0-9a-fA-F]{3,8}$|^transparent$/.test(value.background) ? value.background : DEFAULT_BACKGROUND,
     grid: value.grid === true,
     createdAt: typeof value.createdAt === "string" ? value.createdAt : now,
@@ -88,17 +91,27 @@ export function isBoardId(id: string): boolean {
   return /^board-[a-z0-9]{9}-[a-z0-9]{4}$/.test(id);
 }
 
-/** The first "Board 1", "Board 2" … that no board in the list has. */
-export function nextBoardName(names: readonly string[], word: string): string {
+/**
+ * A board name no board in the list has (compared without case): `base` itself, then "base 2", "base 3" …; with `from`,
+ * only the numbered names, counting up from there ("Board 3" when two boards exist).
+ */
+export function uniqueName(names: readonly string[], base: string, from?: number): string {
   const taken = new Set(names.map((name) => name.toLocaleLowerCase()));
-  for (let n = names.length + 1; ; n++) {
-    if (!taken.has(`${word} ${n}`.toLocaleLowerCase())) return `${word} ${n}`;
+  for (let n = from ?? 1; ; n++) {
+    const name = n === 1 && from === undefined ? base : `${base} ${n}`;
+    if (!taken.has(name.toLocaleLowerCase())) return name;
   }
 }
 
-/** The boards in the order they were made. */
+const DEFAULT_TITLE = "Board";
+
+/** The title a board's document gets. */
+export const boardTitle = (data: BoardData): string => data.name || DEFAULT_TITLE;
+
+/** The boards in the order they were made; the starter board, whose id has no time in it, is the oldest. */
 export function sortBoards<T extends { id: string }>(boards: readonly T[]): T[] {
-  return [...boards].sort((a, b) => a.id.localeCompare(b.id));
+  const key = (id: string) => (isBoardId(id) ? id : "");
+  return [...boards].sort((a, b) => key(a.id).localeCompare(key(b.id)));
 }
 
 export type SizeLevel = "ok" | "warn" | "full";
