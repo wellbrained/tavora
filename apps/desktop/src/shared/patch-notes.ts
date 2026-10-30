@@ -30,126 +30,29 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.23.9",
     date: "2026-10-30",
-    title: "Your modules, in their own menu",
+    title: "Built-in modules update on their own",
     notes: [
+      "Notes, PDF Viewer and the other modules that come with Tavora can now get fixes between Tavora versions, like modules from the catalog. They update the same way: automatically if you turned on module updates, otherwise when you say so.",
+      "PDF Viewer: small pictures of every page on the side, and Page Up, Page Down, Home, End and the arrow keys move by whole pages.",
+      "PDF Viewer: links work, a PDF with a password asks for it, and Fit width and Fit page stay the same across pages of different sizes.",
+      "PDF Viewer: files stay linked to their original. When it changes, a bar lets you reload it; when it is gone, you can remove the file or keep your copy.",
       "Settings has a Development group for module developers: Your modules, Project folders, Publishing, and Examples and help.",
-      "Your modules lists each module once, even with a Local and a Release copy, and says in words where it stands in the catalog.",
-      "Publish shows up only when there is something to publish. Show only what waits with To publish.",
-      "Open a module to see its folders and choose how users can reach you: in Tavora, by email, on GitHub, on your Discord server, as your Discord user, on your website, or nobody.",
-      "Publishing sets what your other modules use, and says what users will see for each choice.",
+      "Your modules lists each module once and says where it stands in the catalog. Open one to choose how users can reach you.",
+      "Modules now publish only plain versions like 1.2.0, no more alpha or beta.",
+      "When you make your publisher key, Tavora now says what happens if you lose your recovery key.",
     ],
     prs: [
       { number: 527, title: "Settings: Development pages, and how users reach you" },
-    ],
-    tags: ["accounts", "development", "messages", "privacy", "publishing", "service", "settings", "ui-kit", "website"],
-  },
-  {
-    version: "0.23.8",
-    date: "2026-10-30",
-    title: "Built-in modules update on their own",
-    notes: [
-      "Notes, PDF Viewer and the other modules that come with Tavora can now get fixes between Tavora versions, like modules from the catalog.",
-      "They update the same way: automatically if you turned on module updates, otherwise when you say so.",
-    ],
-    prs: [
       { number: 526, title: "Turn on updates of Tavora's own modules" },
-    ],
-    tags: ["catalog", "publishing", "service"],
-  },
-  {
-    version: "0.23.7",
-    date: "2026-10-30",
-    title: "Ready for built-in module updates",
-    notes: [
-      "Tavora's own modules are ready to get fixes without a new Tavora version. It isn't switched on yet.",
-    ],
-    prs: [
-      { number: 524, title: "Let built-in modules update from the catalogue" },
-    ],
-    tags: ["catalog", "catalogue", "modules", "privacy", "publishing", "service", "settings", "updates", "website"],
-  },
-  {
-    version: "0.23.6",
-    date: "2026-10-30",
-    title: "PDF Viewer keeps track of your originals",
-    notes: [
-      "Files you open in the PDF Viewer stay linked to the original. You can pick several at once.",
-      "When the original changes, a bar lets you reload it. Your page and zoom stay.",
-      "When the original is gone, you can remove the file or keep your copy.",
-      "Show in folder, in the file list, opens where the original is.",
-    ],
-    prs: [
       { number: 525, title: "PDF Viewer: files stay linked to their original" },
-    ],
-    tags: ["modules", "pdf-viewer", "privacy", "publishing", "sdk", "website"],
-  },
-  {
-    version: "0.23.5",
-    date: "2026-10-30",
-    title: "A shorter Development page",
-    notes: [
-      "Your modules in Settings > Development take one line each, so a few projects fit on one screen.",
-      "Examples fold away once you have modules of your own. Show brings them back.",
-      "Messages from users only says something for a module where messages are off.",
-      "On a new PC, getting your recovery key is now at the top of Development.",
-    ],
-    prs: [
+      { number: 524, title: "Let built-in modules update from the catalogue" },
       { number: 523, title: "Settings > Development: shorter with many modules" },
-    ],
-    tags: ["development", "publishing", "settings"],
-  },
-  {
-    version: "0.23.4",
-    date: "2026-10-30",
-    title: "Plain module versions",
-    notes: [
-      "Modules now publish only plain versions like 1.2.0, no more alpha or beta.",
-      "On a test version, the Publish screen lets you pick a release version instead.",
-    ],
-    prs: [
       { number: 522, title: "Publish only plain module versions" },
-    ],
-    tags: ["catalog", "modules", "publishing", "service", "website"],
-  },
-  {
-    version: "0.23.3",
-    date: "2026-10-30",
-    title: "Links and passwords in the PDF Viewer",
-    notes: [
-      "Links in a PDF work: a link to another page jumps there, a web link opens in the Browser.",
-      "A PDF with a password asks for it. Typed it wrong? Just try again, or cancel.",
-      "Fit width and Fit page stay the same while you scroll through pages of different sizes.",
-    ],
-    prs: [
-      { number: 519, title: "PDF Viewer: working links, a password prompt, and a fit for mixed page sizes" },
-    ],
-    tags: ["pdf-viewer"],
-  },
-  {
-    version: "0.23.2",
-    date: "2026-10-30",
-    title: "Clearer recovery key warning",
-    notes: [
-      "When you make your publisher key, Tavora now says what happens if you lose your recovery key: you could never update your modules again.",
-    ],
-    prs: [
       { number: 520, title: "Say what losing the recovery key costs a developer" },
-    ],
-  },
-  {
-    version: "0.23.1",
-    date: "2026-10-30",
-    title: "Page pictures in the PDF Viewer",
-    notes: [
-      "Show small pictures of every page on the side and click one to jump there.",
-      "Page Up and Page Down, Home and End, and the left and right arrows move by whole pages.",
-      "On a narrow panel the pages or the contents take the place of the document until you pick a page.",
-      "Your files list has a ⋯ menu on every row, and opening a file shows its progress.",
-    ],
-    prs: [
+      { number: 519, title: "PDF Viewer: working links, a password prompt, and a fit for mixed page sizes" },
       { number: 513, title: "PDF Viewer: page pictures on the side, page keys" },
     ],
-    tags: ["pdf-viewer", "ui-kit"],
+    tags: ["accounts", "catalog", "catalogue", "development", "messages", "modules", "pdf-viewer", "privacy", "publishing", "sdk", "service", "settings", "ui-kit", "updates", "website"],
   },
   {
     version: "0.23.0",
