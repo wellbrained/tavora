@@ -84,6 +84,8 @@ export interface PanelViewsDeps {
   asking(instanceId: string): boolean;
   /** A panel is about to go (tooltips, menus and its live state belong to the host). `forget`: for good. */
   releasing(instanceId: string, forget: boolean): void;
+  /** The last view of a module went (closed or released): nothing of it is on screen or running now. */
+  moduleGone?(moduleId: string): void;
   /** Whether the panel belongs to the workspace shown (a panel back from the in-game layer to another workspace is let go of). */
   shownHere(instanceId: string): boolean;
   /** A panel is back in its slot from the in-game layer (the host UI shows it, a waiting dialog may open). */
@@ -299,8 +301,9 @@ export class PanelViews {
       this.waiting.delete(instanceId);
       this.launches.delete(instanceId);
     }
-    const adapter = this.entries.get(instanceId)?.adapter;
-    if (adapter) {
+    const entry = this.entries.get(instanceId);
+    const adapter = entry?.adapter;
+    if (entry && adapter) {
       this.entries.delete(instanceId);
       this.byContents.delete(adapter.webContentsId);
       if (this.dialogState?.instanceId === instanceId) this.closeDialog();
@@ -312,6 +315,8 @@ export class PanelViews {
       }
       this.deps.unmount(adapter);
       adapter.dispose();
+      const { moduleId } = entry.record;
+      if (![...this.entries.values()].some((other) => other.record.moduleId === moduleId)) this.deps.moduleGone?.(moduleId);
     }
     if (forget) this.bounds.delete(instanceId);
   }

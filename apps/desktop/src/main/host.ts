@@ -382,6 +382,15 @@ export class Host {
         this.gameOverlays?.forgetLive(instanceId);
       }
     },
+    // A connector question outlives the panel that asked only while the module still has one.
+    moduleGone: (moduleId) => {
+      if (this.questions.cancel({ module: moduleId }) === 0) return;
+      queueMicrotask(() => {
+        if (this.window.isDestroyed()) return;
+        this.pushState();
+        this.panels.applyBounds();
+      });
+    },
     shownHere: (instanceId) => !!this.workspaceId && this.records(this.workspaceId).some((record) => record.instanceId === instanceId),
     returned: () => {
       this.pushStateSoon();
@@ -4379,10 +4388,10 @@ export class Host {
 
   /**
    * Shows Tavora's consent dialog for one connector a module asks for on request, after a click in its panel; resolves
-   * with whether the user allowed it. A newer request closes an older one as not allowed.
+   * with whether the user allowed it. A newer request closes an older one as not allowed, and so does closing the module's last panel.
    */
   private askConnector(moduleId: string, connector: Connector): Promise<boolean> {
-    const { answer } = this.questions.ask("connector", { app: true }, { moduleId, connector });
+    const { answer } = this.questions.ask("connector", { module: moduleId }, { moduleId, connector });
     this.pushState();
     this.panels.applyBounds();
     return answer;
