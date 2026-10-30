@@ -26,6 +26,7 @@ export const en = {
   "list.more": "More for {name}",
   "menu.rename": "Rename",
   "menu.remove": "Remove",
+  "menu.showInFolder": "Show in folder",
   "files.title": "Files",
   "list.usage": "{used} of {total} used",
 
@@ -42,6 +43,15 @@ export const en = {
   "add.tooBig": "“{name}” is bigger than {max}.",
   "add.full": "There's no room left for “{name}”. Remove a file first.",
   "add.error": "Couldn't add “{name}”: {error}",
+
+  "original.changed": "The original file changed.",
+  "original.reload": "Reload",
+  "original.notNow": "Not now",
+  "original.gone": "The original file is gone.",
+  "original.remove": "Remove",
+  "original.keep": "Keep my copy",
+  "original.reloadFailed": "Couldn't reload “{name}”: {error}",
+  "original.notFound": "Can't find the original file. It may have moved.",
 
   "pdf.opening": "Opening…",
   "pdf.progress": "Opening this PDF",
@@ -113,6 +123,7 @@ export const de: Record<keyof typeof en, string> = {
   "list.more": "Mehr für {name}",
   "menu.rename": "Umbenennen",
   "menu.remove": "Entfernen",
+  "menu.showInFolder": "Im Ordner zeigen",
   "files.title": "Dateien",
   "list.usage": "{used} von {total} belegt",
 
@@ -129,6 +140,15 @@ export const de: Record<keyof typeof en, string> = {
   "add.tooBig": "„{name}“ ist größer als {max}.",
   "add.full": "Für „{name}“ ist kein Platz mehr. Entferne zuerst eine Datei.",
   "add.error": "„{name}“ ließ sich nicht hinzufügen: {error}",
+
+  "original.changed": "Die Originaldatei hat sich geändert.",
+  "original.reload": "Neu laden",
+  "original.notNow": "Nicht jetzt",
+  "original.gone": "Die Originaldatei ist weg.",
+  "original.remove": "Entfernen",
+  "original.keep": "Meine Kopie behalten",
+  "original.reloadFailed": "„{name}“ ließ sich nicht neu laden: {error}",
+  "original.notFound": "Die Originaldatei ist nicht zu finden. Vielleicht wurde sie verschoben.",
 
   "pdf.opening": "Öffne…",
   "pdf.progress": "Diese PDF wird geöffnet",

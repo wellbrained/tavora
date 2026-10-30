@@ -1,3 +1,13 @@
+## 0.3.3
+
+Files a module linked can be checked and shown in their folder. The new calls need Tavora 0.23.6 (`later`), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `files.pickReadOnly({ extensions, multiple: true })` lets the user pick several files in one go and answers with a list (empty when the dialog was closed). Without `multiple` it works as before.
+- `files.check(id)` says whether a linked file is still there, with its size and last change (`{ found: true, size, modifiedAt }`), or why not (`{ found: false, reason: "gone" | "unlinked" }`), without reading it. `unlinked` means this PC has no link for the id, such as one made on another PC.
+- `files.showInFolder(id)` opens the folder of a linked file with the file selected. It needs a click or key press.
+- `files.read` reads files up to 50 MiB (was 32 MiB).
+- The memory host (`@tavora/sdk/testing`) answers the new calls and defaults to Tavora 0.23.6.
+
 ## 0.3.2
 
 Two rare item-session cases. Nothing changes on the wire, so `MIN_TAVORA` stays (Tavora 0.19.32).

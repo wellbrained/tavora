@@ -68,3 +68,81 @@ describe("renaming, remembering and removing", () => {
     expect(first.find(entry.id)?.name).toBe("Shared");
   });
 });
+
+describe("files linked to their original", () => {
+  const REF = "a".repeat(32);
+  /** A host with one original on disk that the test can change or delete. */
+  function linkedHost() {
+    const memory = createMemoryHost();
+    const original = { bytes: new TextEncoder().encode("%PDF-1.7 first"), modifiedAt: 1000, there: true };
+    const forgotten: string[] = [];
+    memory.host.answer("files.check", ({ id }) => (id !== REF || forgotten.includes(id) ? { found: false, reason: "unlinked" } : original.there ? { found: true, size: original.bytes.byteLength, modifiedAt: original.modifiedAt } : { found: false, reason: "gone" }));
+    memory.host.answer("files.read", () => original.bytes);
+    memory.host.answer("files.forget", ({ id }) => (forgotten.push(id), null));
+    return { ...memory, original, forgotten, picked: { id: REF, name: "Rules.pdf", size: original.bytes.byteLength } };
+  }
+
+  it("keeps a copy with the version of the original it came from", async () => {
+    const { sdk, picked } = linkedHost();
+    const store = await open(sdk);
+    const entry = await store.addLinked(picked);
+    expect(entry).toMatchObject({ name: "Rules.pdf", kind: "pdf", link: { ref: REF, size: 14, modifiedAt: 1000 } });
+    expect(await store.check(entry.id)).toBe("same");
+  });
+
+  it("reloads a changed original in place, keeping the file's name, place and page under the new copy's id", async () => {
+    const { sdk, original, picked } = linkedHost();
+    const store = await open(sdk);
+    const entry = await store.addLinked(picked);
+    store.setView(entry.id, { page: 7 });
+    original.bytes = new TextEncoder().encode("%PDF-1.7 second version");
+    original.modifiedAt = 2000;
+    expect(await store.check(entry.id)).toBe("changed");
+    const id = await store.reload(entry.id);
+    expect(id).not.toBe(entry.id);
+    expect(store.files.value).toHaveLength(1);
+    expect(store.find(id)).toMatchObject({ previous: entry.id, name: "Rules.pdf", view: { page: 7 }, link: { size: 23, modifiedAt: 2000 } });
+    expect((await sdk.blobs.list()).map((blob) => blob.id)).toEqual([id]);
+    expect(await store.check(id)).toBe("same");
+  });
+
+  it("asks no more about a version the user skipped, but does about the next one", async () => {
+    const { sdk, original, picked } = linkedHost();
+    const store = await open(sdk);
+    const entry = await store.addLinked(picked);
+    original.modifiedAt = 2000;
+    await store.skip(entry.id);
+    expect(await store.check(entry.id)).toBe("skipped");
+    original.modifiedAt = 3000;
+    expect(await store.check(entry.id)).toBe("changed");
+  });
+
+  it("tells a gone original apart from one this PC has no link for, and can keep the copy alone", async () => {
+    const { sdk, original, forgotten, picked } = linkedHost();
+    const store = await open(sdk);
+    const entry = await store.addLinked(picked);
+    original.there = false;
+    expect(await store.check(entry.id)).toBe("gone");
+    await store.unlink(entry.id);
+    expect(store.find(entry.id)?.link).toBeUndefined();
+    expect(forgotten).toEqual([REF]);
+    expect(await store.check(entry.id)).toBeNull();
+  });
+
+  it("drops the link when the file is removed", async () => {
+    const { sdk, forgotten, picked } = linkedHost();
+    const store = await open(sdk);
+    const entry = await store.addLinked(picked);
+    await store.remove(entry.id);
+    expect(store.files.value).toEqual([]);
+    expect(forgotten).toEqual([REF]);
+  });
+
+  it("forgets the link of a picked file it could not keep", async () => {
+    const { sdk, forgotten, picked } = linkedHost();
+    const store = await open(sdk);
+    await expect(store.addLinked({ ...picked, name: "notes.docx" })).rejects.toMatchObject({ kind: "type" });
+    expect(forgotten).toEqual([REF]);
+    expect(store.files.value).toEqual([]);
+  });
+});

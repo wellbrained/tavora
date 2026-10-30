@@ -743,10 +743,24 @@ export type HotkeySetResult = "set" | "removed" | "cancelled";
 
 /** Request methods and their params/result types. */
 export interface ReadOnlyFile { id: string; name: string; size: number }
+/**
+ * What files.check found. `found`: the file is where it was, with its size in bytes and when it last changed (ms since
+ * 1970). `gone`: it was deleted, moved or renamed. `unlinked`: this PC has no link for the id (another PC made it, or
+ * it was forgotten).
+ */
+export type ReadOnlyFileState = { found: true; size: number; modifiedAt: number } | { found: false; reason: "gone" | "unlinked" };
 export const READ_ONLY_FILE_PATH = '/_read-only-files/';
 export interface Methods {
-  "files.pickReadOnly": { params: { extensions: string[] }; result: ReadOnlyFile | null };
+  /**
+   * Opens Tavora's open dialog after a click and remembers read-only access to the file picked. With `multiple: true`
+   * the user can pick several, and the answer is a list (empty when the dialog was closed). `multiple` needs Tavora 0.23.6.
+   */
+  "files.pickReadOnly": { params: { extensions: string[]; multiple?: boolean }; result: ReadOnlyFile | ReadOnlyFile[] | null };
   "files.forget": { params: { id: string }; result: null };
+  /** Whether a file this module linked in this workspace is still there, without reading it. Tavora 0.23.6 and newer. */
+  "files.check": { params: { id: string }; result: ReadOnlyFileState };
+  /** Opens the folder of a file this module linked, with the file selected. Only right after a click. Tavora 0.23.6 and newer. */
+  "files.showInFolder": { params: { id: string }; result: null };
   "bridge.handshake": { params: { protocol: number; sdkVersion: string }; result: HandshakeResult };
   /** The workspace the panel is in. Tavora 0.21.43 and newer. */
   "workspace.getCurrent": { params: undefined; result: TavoraWorkspace };
@@ -1383,6 +1397,8 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "clipboard.writeImage": call("0.14.1", null, true),
   "files.pickReadOnly": later("0.21.13", null, true),
   "files.forget": later("0.21.13"),
+  "files.check": later("0.23.6"),
+  "files.showInFolder": later("0.23.6", null, true),
   "files.read": later("0.21.13"),
   "files.exportJson": call("0.19.17", null, true),
   "files.saveJson": later("0.21.13", null, true),

@@ -3431,10 +3431,10 @@ export class Host {
       savePicture: (png, name) => this.savePictureAs(png, name),
       saveJson: (data, name) => this.saveJsonAs(module, data, name),
       openJson: () => this.openJsonFrom(module),
-      pickReadOnlyFile: async extensions => {
+      pickReadOnlyFile: async (extensions, multiple) => {
         const defaultPath=await saveDialogDirectory(new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id),this.library.workspaces[workspace.id]?.catalogId ?? workspace.id);
-        const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+this.shown(module.manifest).name+' verknüpfen':'Link a file to '+this.shown(module.manifest).name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
-        return picked.canceled ? null : picked.filePaths[0] ?? null;
+        const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+this.shown(module.manifest).name+' verknüpfen':'Link a file to '+this.shown(module.manifest).name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:multiple?['openFile','multiSelections']:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
+        return picked.canceled ? [] : multiple ? picked.filePaths : picked.filePaths.slice(0,1);
       },
       tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at),close:(id,hoverOnly)=>this.tooltips.close(record.instanceId,id,hoverOnly)},
       launch: () => this.launchOf(record),

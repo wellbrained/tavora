@@ -75,7 +75,12 @@ export const PANEL_DIALOG = { min: 240, max: 2000, width: 560, height: 640 } as 
  * view that owns the port, never from anything the module sends.
  */
 export interface BridgeContext {
-  readOnlyFiles?: { pick(extensions: string[]): Promise<import('@tavora/sdk/protocol').ReadOnlyFile | null>; forget(id:string):Promise<void> };
+  readOnlyFiles?: {
+    pick(extensions: string[], multiple: boolean): Promise<import('@tavora/sdk/protocol').ReadOnlyFile[]>;
+    forget(id:string):Promise<void>;
+    check(id:string):Promise<import('@tavora/sdk/protocol').ReadOnlyFileState>;
+    showInFolder(id:string):Promise<void>;
+  };
   hostVersion: string;
   moduleId: string;
   moduleVersion: string;
@@ -247,6 +252,13 @@ function actionId(value: unknown): string {
   return value;
 }
 
+/** The id of a file the module linked (files.pickReadOnly). */
+function fileReference(params: unknown): string {
+  const id = object(params).id;
+  if (typeof id!=='string'|| !/^[a-f0-9]{32}$/.test(id)) throw new HostError('INVALID_PARAMS','Invalid file reference.');
+  return id;
+}
+
 /** A workspace as game.getCurrent says it. */
 function legacyGame({ id, displayName, kind }: TavoraWorkspace): TavoraGame {
   return { id, displayName, kind: kind === "personal" ? "workspace" : "game" };
@@ -256,14 +268,26 @@ const handlers = new Map<string, Handler>([
   ['files.pickReadOnly', async (s,params) => {
     const extensions = object(params).extensions;
     if (!Array.isArray(extensions) || !extensions.length || extensions.length>10 || extensions.some(e=>typeof e!=='string'|| !/^[a-z0-9]{1,12}$/.test(e))) throw new HostError('INVALID_PARAMS','Choose up to ten file extensions.');
+    const multiple = object(params).multiple;
+    if (multiple !== undefined && typeof multiple !== 'boolean') throw new HostError('INVALID_PARAMS','multiple must be true or false.');
     if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to remember files.');
-    return s.context.readOnlyFiles.pick(extensions);
+    const picked = await s.context.readOnlyFiles.pick(extensions, multiple === true);
+    return multiple === true ? picked : (picked[0] ?? null);
   }],
   ['files.forget', async (s,params) => {
-    const id = object(params).id;
-    if (typeof id!=='string'|| !/^[a-f0-9]{32}$/.test(id)) throw new HostError('INVALID_PARAMS','Invalid file reference.');
+    const id = fileReference(params);
     if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to remember files.');
     await s.context.readOnlyFiles.forget(id); return null;
+  }],
+  ['files.check', async (s,params) => {
+    const id = fileReference(params);
+    if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to check files.');
+    return s.context.readOnlyFiles.check(id);
+  }],
+  ['files.showInFolder', async (s,params) => {
+    const id = fileReference(params);
+    if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to show files in their folder.');
+    await s.context.readOnlyFiles.showInFolder(id); return null;
   }],
   ["workspace.getCurrent", (s, params) => (noParams(params), { ...s.context.workspace })],
   // Deprecated: the same in the words of Tavora before 0.21.43 (a personal workspace's kind was "workspace"). Answered

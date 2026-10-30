@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The files kept for this game: open one, rename it or remove it. It sits in a popover next to the button that opened it.
 // Each row is the kit's list row (as in ActionList) with a visible ⋯ menu beside it; ActionList has no place for that.
-import { Ellipsis, FileText, Image as ImageIcon, Pencil, Trash2 } from "@lucide/vue";
+import { Ellipsis, FileText, FolderSearch, Image as ImageIcon, Pencil, Trash2 } from "@lucide/vue";
 import { ActionRow } from "@tavora/official-ui/components/ui/action-row";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
@@ -9,8 +9,9 @@ import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import type { FileEntry } from "./files";
 import { locale, t } from "./i18n";
 
-defineProps<{ files: FileEntry[]; activeId: string | null; usage: string }>();
-const emit = defineEmits<{ open: [id: string]; rename: [id: string]; remove: [id: string] }>();
+/** `located`: the files whose original Tavora can show in its folder (linked on this PC and not known to be gone). */
+defineProps<{ files: FileEntry[]; activeId: string | null; usage: string; located: ReadonlySet<string> }>();
+const emit = defineEmits<{ open: [id: string]; rename: [id: string]; remove: [id: string]; showInFolder: [id: string] }>();
 
 function meta(file: FileEntry): string {
   const kind = file.kind === "pdf" ? t("list.kindPdf") : t("list.kindImage");
@@ -52,6 +53,10 @@ function meta(file: FileEntry): string {
             <DropdownMenuItem data-testid="file-rename" @select="emit('rename', file.id)">
               <Pencil :stroke-width="1.5" />
               {{ t("menu.rename") }}
+            </DropdownMenuItem>
+            <DropdownMenuItem v-if="located.has(file.id)" data-testid="file-show-in-folder" @select="emit('showInFolder', file.id)">
+              <FolderSearch :stroke-width="1.5" />
+              {{ t("menu.showInFolder") }}
             </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" data-testid="file-remove" @select="emit('remove', file.id)">
               <Trash2 :stroke-width="1.5" />

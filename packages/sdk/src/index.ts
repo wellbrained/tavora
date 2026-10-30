@@ -17,6 +17,7 @@ import {
   JSON_OPEN_PATH,
   READ_ONLY_FILE_PATH,
   type ReadOnlyFile,
+  type ReadOnlyFileState,
   HELLO_MESSAGE,
   LIMITS,
   OVERLAY_STATE_PATH,
@@ -85,6 +86,7 @@ import {
 
 export type {
   ReadOnlyFile,
+  ReadOnlyFileState,
   LeaderboardMine,
   LeaderboardMineBoard,
   LeaderboardOutcomeResult,
@@ -167,7 +169,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.2";
+export const SDK_VERSION = "0.3.3";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -370,9 +372,15 @@ export interface TavoraSDK {
   };
   files: {
     /** Opens Tavora's native picker after a real click and remembers read-only access on this PC. */
-    pickReadOnly(options: { extensions: string[] }): Promise<ReadOnlyFile | null>;
-    /** Rereads only a file previously picked by this module in this workspace. At most 32 MiB. */
+    pickReadOnly(options: { extensions: string[]; multiple?: false }): Promise<ReadOnlyFile | null>;
+    /** The same, letting the user pick several files; an empty list when the dialog was closed. Tavora 0.23.6+. */
+    pickReadOnly(options: { extensions: string[]; multiple: true }): Promise<ReadOnlyFile[]>;
+    /** Rereads only a file previously picked by this module in this workspace. At most 50 MiB (32 MiB before Tavora 0.23.6). */
     read(id: string): Promise<Uint8Array>;
+    /** Whether a picked file is still there, with its size and last change, without reading it. Tavora 0.23.6+. */
+    check(id: string): Promise<ReadOnlyFileState>;
+    /** Opens the folder of a picked file with the file selected. Call it from a click or key press. Tavora 0.23.6+. */
+    showInFolder(id: string): Promise<void>;
     /** Revokes a remembered file reference; never deletes the user's file. */
     forget(id: string): Promise<void>;
     /**
@@ -912,8 +920,10 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       },
     },
     files: {
-      pickReadOnly: options => call('files.pickReadOnly',options,MENU_TIMEOUT_MS),
+      pickReadOnly: ((options: { extensions: string[]; multiple?: boolean }) => call('files.pickReadOnly',options,MENU_TIMEOUT_MS)) as TavoraSDK['files']['pickReadOnly'],
       forget: async id => { await call('files.forget',{id}); },
+      check: id => call('files.check',{id}),
+      showInFolder: async id => { await call('files.showInFolder',{id}); },
       read: async id => {
         if (!/^[a-f0-9]{32}$/.test(id)) throw new TavoraError({code:'INVALID_PARAMS',message:'Invalid file reference.'});
         const response = await fetch(new URL(READ_ONLY_FILE_PATH+id,window.location.href),{method:'POST'});
