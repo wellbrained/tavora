@@ -1,7 +1,7 @@
 // The files a PDF Viewer keeps for one workspace, as the `files` document holds them, and the pure steps that change it.
 // Every step runs again on a newer copy after a conflict (see `openDocument`), so each one is safe to repeat.
 
-import { BLOB_TYPES } from "@tavora/sdk";
+import { BLOB_TYPES, type ReadOnlyFileState } from "@tavora/sdk";
 
 export const FILES_ID = "files";
 /** The longest display name a file can have. */
@@ -24,9 +24,27 @@ export interface FileView {
   side: SideMode;
 }
 
+/**
+ * The original a file was copied from, when it was picked through Tavora's open dialog. Tavora keeps where it is; the
+ * module only has `ref`, which works on the PC that picked it. `size` and `modifiedAt` are what the copy was made from.
+ */
+export interface FileLink {
+  ref: string;
+  size: number;
+  modifiedAt: number;
+  /** The version of the original whose "reload?" the user said Not now to (see `versionOf`). */
+  skipped?: string;
+}
+
+/** What a check of the original found: nothing new, a newer version, a newer one the user skipped, it's gone, or it isn't linked on this PC. */
+export type LinkStatus = "same" | "changed" | "skipped" | "gone" | "unlinked";
+
 export interface FileEntry {
-  /** The id of the stored file; also what a tab is called. */
+  /** What the file and its tab are called; the id of its first stored copy. */
   id: string;
+  /** The stored copy, when a reload replaced the first one. */
+  blob?: string;
+  link?: FileLink;
   name: string;
   /** The type the host found by looking at the file. */
   type: string;
@@ -63,6 +81,26 @@ export function parseView(raw: unknown, kind: FileKind): FileView {
   return { page, zoom, fit, side };
 }
 
+const isCount = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
+
+export function parseLink(raw: unknown): FileLink | undefined {
+  if (!isRecord(raw) || typeof raw.ref !== "string" || !/^[a-f0-9]{32}$/.test(raw.ref) || !isCount(raw.size) || !isCount(raw.modifiedAt)) return undefined;
+  return { ref: raw.ref, size: raw.size, modifiedAt: raw.modifiedAt, ...(typeof raw.skipped === "string" ? { skipped: raw.skipped } : {}) };
+}
+
+/** The stored copy a file shows. */
+export const blobOf = (file: FileEntry): string => file.blob ?? file.id;
+
+/** One version of an original, as a short text to compare. */
+export const versionOf = (found: { size: number; modifiedAt: number }): string => `${found.size}:${found.modifiedAt}`;
+
+export function linkStatus(link: FileLink, state: ReadOnlyFileState): LinkStatus {
+  if (!state.found) return state.reason;
+  const version = versionOf(state);
+  if (version === versionOf(link)) return "same";
+  return version === link.skipped ? "skipped" : "changed";
+}
+
 export function parseFiles(raw: unknown): FilesData {
   const list = isRecord(raw) && Array.isArray(raw.files) ? raw.files : [];
   const seen = new Set<string>();
@@ -72,8 +110,11 @@ export function parseFiles(raw: unknown): FilesData {
     if (typeof item.type !== "string" || !(BLOB_TYPES as readonly string[]).includes(item.type)) continue;
     seen.add(item.id);
     const kind = kindOf(item.type);
+    const link = parseLink(item.link);
     files.push({
       id: item.id,
+      ...(typeof item.blob === "string" && item.blob && item.blob !== item.id ? { blob: item.blob } : {}),
+      ...(link ? { link } : {}),
       name: typeof item.name === "string" && item.name.trim() ? cleanName(item.name) : item.id.slice(0, 8),
       type: item.type,
       kind,
@@ -108,6 +149,29 @@ export function setFileView(data: FilesData, id: string, view: Partial<FileView>
   file.view = parseView({ ...file.view, ...view }, file.kind);
 }
 
+/** A reload put a new copy in place: the file shows it, and the link remembers the version it came from. */
+export function replaceCopy(data: FilesData, id: string, blob: string, type: string, link: FileLink): void {
+  const file = data.files.find((other) => other.id === id);
+  if (!file) return;
+  if (blob === file.id) delete file.blob;
+  else file.blob = blob;
+  file.type = type;
+  file.kind = kindOf(type);
+  file.link = { ref: link.ref, size: link.size, modifiedAt: link.modifiedAt };
+}
+
+/** Not now: this version of the original asks no more. */
+export function skipVersion(data: FilesData, id: string, version: string): void {
+  const file = data.files.find((other) => other.id === id);
+  if (file?.link) file.link.skipped = version;
+}
+
+/** Keep my copy: the file stays and forgets its original. */
+export function dropLink(data: FilesData, id: string): void {
+  const file = data.files.find((other) => other.id === id);
+  if (file) delete file.link;
+}
+
 // ── Telling what the user gave us
 
 const TYPE_BY_EXTENSION: Record<string, string> = {
@@ -118,6 +182,9 @@ const TYPE_BY_EXTENSION: Record<string, string> = {
   gif: "image/gif",
   webp: "image/webp",
 };
+
+/** The extensions Tavora's open dialog offers. */
+export const PICK_EXTENSIONS = Object.keys(TYPE_BY_EXTENSION);
 
 /** What `accept` allows in the file picker: the types and the extensions (a few systems send no type). */
 export const ACCEPT_ATTRIBUTE = [...BLOB_TYPES, ...Object.keys(TYPE_BY_EXTENSION).map((extension) => `.${extension}`)].join(",");

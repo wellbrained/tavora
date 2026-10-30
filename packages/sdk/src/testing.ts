@@ -165,16 +165,17 @@ export interface MemoryHost {
 }
 
 /** Newest Tavora the SDK knows, and the default version of a memory host. */
-export const LATEST_TAVORA = "0.21.97";
+export const LATEST_TAVORA = "0.23.6";
 
 /** Calls that answer with nothing when nobody scripted them. */
 const SILENT = new Set<CallName>([
-  "files.forget", "links.open", "ui.tooltip.show", "ui.tooltip.move", "ui.tooltip.hide", "ui.tooltip.close", "ui.showMenu",
+  "files.forget", "files.showInFolder", "files.check", "links.open", "ui.tooltip.show", "ui.tooltip.move", "ui.tooltip.hide", "ui.tooltip.close", "ui.showMenu",
   "systemInfo.watch", "systemInfo.clearConnectionLog", "media.watch", "media.control", "discord.connect", "discord.allowControl",
   "discord.subscribe", "discord.unsubscribe", "overlay.resetLink", "overlay.preview", "clipboard.writeImage", "files.pickReadOnly",
   "files.openJson", "discord.image", "hotkeys.set", "overlay.copyLink", "overlay.showOverGame", "panel.navigated",
 ]);
 const SILENT_ANSWER: Partial<Record<CallName, unknown>> = {
+  "files.check": { found: false, reason: "unlinked" },
   "ui.tooltip.show": true,
   "media.control": true,
   "hotkeys.set": "set",
@@ -675,6 +676,7 @@ async function invoke<M extends CallName>(panel: Panel, method: M, params?: Para
   if (script) return structuredClone(await (script as (params: unknown) => Result<M>)(params));
   const handler = handlers[method] as ((panel: Panel, params: Params<M>) => Result<M> | Promise<Result<M>>) | undefined;
   if (handler) return structuredClone(await handler(panel, params as Params<M>));
+  if (method === "files.pickReadOnly" && (params as { multiple?: boolean } | undefined)?.multiple === true) return [] as Result<M>;
   if (SILENT.has(method)) return (method in SILENT_ANSWER ? SILENT_ANSWER[method] : null) as Result<M>;
   if (EMPTY_LISTS.has(method)) return [] as Result<M>;
   return fail("INTERNAL", `${method}: nothing is scripted for it; call host.answer("${method}", …)`);
@@ -841,9 +843,11 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     },
     clipboard: { writeImage: async (png) => void (await call("clipboard.writeImage", { png })) },
     files: {
-      pickReadOnly: (opts) => call("files.pickReadOnly", opts),
+      pickReadOnly: ((opts: { extensions: string[]; multiple?: boolean }) => call("files.pickReadOnly", opts)) as TavoraSDK["files"]["pickReadOnly"],
       read: (id) => call("files.read", { id }),
       forget: async (id) => void (await call("files.forget", { id })),
+      check: (id) => call("files.check", { id }),
+      showInFolder: async (id) => void (await call("files.showInFolder", { id })),
       exportJson: (value, name = "Build") => call("files.exportJson", { value, name }),
       saveJson: (value, name = "") => call("files.saveJson", { value, ...(name ? { name } : {}) }),
       openJson: () => call("files.openJson"),

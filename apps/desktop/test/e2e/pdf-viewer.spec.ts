@@ -1,5 +1,8 @@
 // The official PDF Viewer module: a PDF is added, drawn with its text, searched, and comes back as a tab after a restart.
 import { createHash } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { inModule, launch, openModule, openWorkspace, panels, PDF_VIEWER } from "./harness";
 
@@ -251,4 +254,85 @@ test("pdf viewer: a locked PDF asks for its password, again after a wrong one, a
   await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("file-list")}`)).toBe(true);
   await expect.poll(() => inModule<string>(app, PDF_VIEWER, `[...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent.trim()).join()`)).not.toContain("Locked again.pdf");
   await app.close();
+});
+
+/** A real click in the module's page on the element `selector` finds, so the host counts it as the user's. */
+async function press(app: ElectronApplication, selector: string) {
+  const where = () => inModule<string>(app, PDF_VIEWER, `(() => { const element = document.querySelector(${JSON.stringify(selector)}); element.scrollIntoView({ block: "center" }); const r = element.getBoundingClientRect(); return r.width ? JSON.stringify({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }) : ""; })()`);
+  // Wait until it stands still: a panel that just opened is still laying itself out.
+  let box = "";
+  await expect.poll(async () => { const last = box; box = await where(); return box !== "" && box === last; }).toBe(true);
+  await app.evaluate(({ webContents }, { moduleId, x, y }) => {
+    const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`))!;
+    for (const type of ["mouseDown", "mouseUp"] as const) target.sendInputEvent({ type, x, y, button: "left", clickCount: 1 });
+  }, { moduleId: PDF_VIEWER, ...(JSON.parse(box) as { x: number; y: number }) });
+}
+
+test("pdf viewer: files picked in Tavora's dialog stay linked to their original", async () => {
+  const folder = await mkdtemp(path.join(tmpdir(), "tavora-pdf-originals-"));
+  const rules = path.join(folder, "Rules.pdf");
+  const map = path.join(folder, "Map.pdf");
+  await writeFile(rules, Buffer.from(samplePdf(), "base64"));
+  await writeFile(map, Buffer.from(longPdf(2), "base64"));
+  const { app, page } = await launch();
+  try {
+    await app.evaluate(({ dialog, shell }, picked) => {
+      const seen = globalThis as { dialogOptions?: unknown; shownInFolder?: string[] };
+      seen.shownInFolder = [];
+      dialog.showOpenDialog = (async (_window: unknown, options: unknown) => ((seen.dialogOptions = options), { canceled: false, filePaths: picked })) as unknown as typeof dialog.showOpenDialog;
+      shell.showItemInFolder = (place: string) => void seen.shownInFolder!.push(place);
+    }, [rules, map]);
+    await openModule(page, PDF_VIEWER);
+    await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("empty")}`).catch(() => false), { timeout: 15_000 }).toBe(true);
+
+    // One pick, two files: both get a tab, and the dialog let the user choose several.
+    await press(app, '[data-testid="empty-open"]');
+    const tabNames = () => inModule<string>(app, PDF_VIEWER, `[...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent.trim()).join()`);
+    await expect.poll(tabNames, { timeout: 20_000 }).toBe("Rules.pdf,Map.pdf");
+    expect(await app.evaluate(() => ((globalThis as { dialogOptions?: { properties?: string[] } }).dialogOptions?.properties ?? []))).toContain("multiSelections");
+    const tabAt = async (name: string) => inModule<number>(app, PDF_VIEWER, `[...document.querySelectorAll('[role="tab"]')].findIndex((tab) => tab.textContent.trim() === ${JSON.stringify(name)})`);
+    const select = async (name: string) => {
+      const index = await tabAt(name);
+      await inModule(app, PDF_VIEWER, `document.querySelectorAll('[role="tab"]')[${index}].setAttribute("data-e2e-target", "")`);
+      await press(app, "[data-e2e-target]");
+      await inModule(app, PDF_VIEWER, `document.querySelector("[data-e2e-target]")?.removeAttribute("data-e2e-target")`);
+    };
+
+    // The original changes: back on its tab, the bar offers to reload, and Reload shows the new version.
+    await writeFile(rules, Buffer.from(longPdf(3), "base64"));
+    await select("Rules.pdf");
+    await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("original-changed")}`), { timeout: 15_000 }).toBe(true);
+    await inModule(app, PDF_VIEWER, `${q("original-reload")}.click()`);
+    await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("original-changed")}`)).toBe(false);
+    await expect.poll(() => inModule<string>(app, PDF_VIEWER, `document.querySelector('.textLayer')?.textContent ?? ""`), { timeout: 20_000 }).toContain("Page 1");
+    await expect.poll(() => inModule<number>(app, PDF_VIEWER, `document.querySelectorAll('[data-testid="pdf-page"]').length`), { timeout: 20_000 }).toBe(3);
+
+    // Show in folder, from the file list's menu, hands Tavora the original's place.
+    await press(app, '[data-testid="file-list-toggle"]');
+    await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("file-list")}`)).toBe(true);
+    await press(app, '[data-testid="file-list"] li:first-child [data-testid="file-menu"]');
+    await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("file-show-in-folder")}`)).toBe(true);
+    await press(app, '[data-testid="file-show-in-folder"]');
+    await expect.poll(() => app.evaluate(() => (globalThis as { shownInFolder?: string[] }).shownInFolder ?? [])).toEqual([rules]);
+    await page.keyboard.press("Escape");
+
+    // The original is gone: the bar offers to remove the file, and Keep my copy keeps it without the link.
+    await rm(rules);
+    await select("Map.pdf");
+    await select("Rules.pdf");
+    await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("original-gone")}`), { timeout: 15_000 }).toBe(true);
+    await inModule(app, PDF_VIEWER, `${q("original-keep")}.click()`);
+    await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("original-gone")}`)).toBe(false);
+    expect(await tabNames()).toBe("Rules.pdf,Map.pdf");
+
+    // Gone again for the other file: Remove closes its tab and takes it off the list.
+    await rm(map);
+    await select("Map.pdf");
+    await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("original-gone")}`), { timeout: 15_000 }).toBe(true);
+    await inModule(app, PDF_VIEWER, `${q("original-remove")}.click()`);
+    await expect.poll(tabNames).toBe("Rules.pdf");
+  } finally {
+    await app.close();
+    await rm(folder, { recursive: true, force: true });
+  }
 });

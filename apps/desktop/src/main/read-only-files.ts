@@ -4,10 +4,10 @@ import path from 'node:path';
 import { isGameId, isModuleId, isOwnerId } from '@tavora/module-schema';
 import { HostError } from './errors';
 import { writeFileAtomic } from './fsutil';
-import type { ReadOnlyFile } from '@tavora/sdk/protocol';
+import type { ReadOnlyFile, ReadOnlyFileState } from '@tavora/sdk/protocol';
 
 export const READ_ONLY_FILES_DIR = 'read-only-files';
-export const MAX_READ_ONLY_BYTES = 32 * 1024 * 1024;
+export const MAX_READ_ONLY_BYTES = 50 * 1024 * 1024;
 const ID = /^[a-f0-9]{32}$/;
 type Entry = { path: string; target: string; name: string };
 const queues = new Map<string, Promise<unknown>>();
@@ -91,13 +91,37 @@ export class ReadOnlyFiles {
     try {
       const stat = await handle.stat();
       if (!stat.isFile()) throw new HostError('INVALID_PARAMS','Choose a file, not a folder.');
-      if (stat.size > MAX_READ_ONLY_BYTES) throw new HostError('QUOTA_EXCEEDED','Choose a file smaller than 32 MB.');
+      if (stat.size > MAX_READ_ONLY_BYTES) throw new HostError('QUOTA_EXCEEDED','Choose a file smaller than 50 MB.');
       const bytes = Buffer.alloc(stat.size + 1);
       let size = 0;
       while (size < bytes.length) { const part = await handle.read(bytes,size,bytes.length-size,size); if (!part.bytesRead) break; size += part.bytesRead; }
       if (size !== stat.size || (await handle.stat()).mtimeMs !== stat.mtimeMs || await realpath(entry.path) !== entry.target) throw new HostError('BAD_REQUEST','The file changed while being read. Try again after saving your game.');
       return bytes.subarray(0,size);
     } finally { await handle.close(); }
+  }
+  /** Whether a remembered file is still where it was, with its size and last change; never reads it. */
+  async check(id: string): Promise<ReadOnlyFileState> {
+    if (!ID.test(id)) throw new HostError('INVALID_PARAMS','Invalid file reference.');
+    const entry=(await this.entries())[id];
+    if(!entry)return {found:false,reason:'unlinked'};
+    const stat=await this.located(entry);
+    return stat?{found:true,size:stat.size,modifiedAt:Math.floor(stat.mtimeMs)}:{found:false,reason:'gone'};
+  }
+  /** The place of a remembered file that is still there, for Tavora to show in its folder. Never given to a module. */
+  async locate(id: string): Promise<string> {
+    if (!ID.test(id)) throw new HostError('INVALID_PARAMS','Invalid file reference.');
+    const entry=(await this.entries())[id];
+    if(!entry)throw new HostError('BAD_REQUEST','This file is no longer linked. Choose it again.');
+    if(!await this.located(entry))throw new HostError('BAD_REQUEST',"Can't find this file. It may have moved.");
+    return entry.path;
+  }
+  /** The file's details while it is still the file that was picked, else null (gone, moved or now pointing elsewhere). */
+  private async located(entry: Entry) {
+    try {
+      if (await realpath(entry.path) !== entry.target) return null;
+      const found=await stat(entry.path);
+      return found.isFile()?found:null;
+    } catch { return null; }
   }
   async forget(id: string): Promise<void> {
     if (!ID.test(id)) throw new HostError('INVALID_PARAMS','Invalid file reference.');
