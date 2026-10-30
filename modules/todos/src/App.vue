@@ -13,12 +13,13 @@ import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch }
 import AddInput from "./AddInput.vue";
 import GroupSection, { type DropTarget } from "./GroupSection.vue";
 import { plural, setLanguage, t } from "./i18n";
+import { de, en } from "./locales";
 import { buildLiveState, fontStack, LIVE_DEFAULTS, PANEL_LOOK_DEFAULTS, PANEL_SIZES, parseLook, parsePanelLook, throttle, type LiveLook, type LiveState, type PanelLook } from "./live";
 import { collapse, LINGER_MS, PANEL, UNDO_MS, type Draft, type FinishedMode } from "./panel";
 import Settings from "./Settings.vue";
 import { createTodoStore, type TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
-import { addGroup, addTask, childCount, deleteGroup, findTask, LIST_ID, MAX, moveTask, parseList, type Group, type TodoList } from "./todos";
+import { addGroup, addTask, childCount, deleteGroup, findTask, MAX, moveTask, parseList, type Group, type TodoList } from "./todos";
 
 const EMPTY = parseList(null);
 
@@ -162,9 +163,13 @@ const cleanup: (() => void)[] = [];
 
 onMounted(async () => {
   try {
-    const connected = await connectModule(setLanguage);
-    const todos = createTodoStore(connected);
-    const [state] = await Promise.all([connected.panel.getState<Partial<PanelState> & OldPanelState>(), todos.load()]);
+    const connection = await connectModule({ texts: { en, de } });
+    if (connection.status !== "ready" || !connection.sdk) throw connection.error;
+    const connected = connection.sdk;
+    // The components read the module's own translator; it follows the language the handle reports.
+    setLanguage(connection.language);
+    cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
+    const [state, todos] = await Promise.all([connected.panel.getState<Partial<PanelState> & OldPanelState>(), createTodoStore(connected)]);
     const ids = (value: unknown) => (Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []);
     // Panels saved by the version before had a "hide finished" switch instead.
     finished.value = state?.finished === "vanish" || (state?.finished === undefined && state?.hideDone === true) ? "vanish" : "stay";
@@ -175,7 +180,7 @@ onMounted(async () => {
     cleanup.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
     addEventListener("keydown", onKey);
     cleanup.push(() => removeEventListener("keydown", onKey));
-    cleanup.push(connected.documents.onChange((change) => change.id === LIST_ID && void todos.reload()));
+    cleanup.push(() => void todos.dispose());
     sdk.value = connected;
     store.value = todos;
   } catch (reason) {

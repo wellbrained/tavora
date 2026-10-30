@@ -38,7 +38,8 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import type { DocumentHandle } from "@tavora/sdk/store";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ImageBar from "./ImageBar.vue";
 import ImageLightbox from "./ImageLightbox.vue";
 import { ImageNode } from "./ImageNode";
@@ -46,6 +47,8 @@ import LinkDialog from "./LinkDialog.vue";
 import LinkPopover from "./LinkPopover.vue";
 import { t } from "./i18n";
 import {
+  cleanTitle,
+  collectImageIds,
   contentFromText,
   FONTS,
   fontStack,
@@ -62,12 +65,12 @@ import {
   type TextStyle,
 } from "./notes";
 import { useNoteImages } from "./noteImages";
-import { type NotePatch, type NotesStore } from "./store";
+import type { NotesStore } from "./store";
 
 const props = defineProps<{ store: NotesStore; noteId: string; entry: NoteEntry | undefined; narrow: boolean; look: TextStyle }>();
 const emit = defineEmits<{ back: []; togglePin: []; clear: []; saveAsNote: []; setStyle: [patch: Partial<TextStyle>]; openLink: [href: string]; notice: [message: string] }>();
 
-/** How long typing must pause before the note is saved. */
+/** How long typing must pause before the note is handed to the document store, which saves it at once. */
 const SAVE_DELAY_MS = 400;
 
 type SaveState = "idle" | "pending" | "saving" | "saved" | "error";
@@ -75,23 +78,26 @@ const saveState = ref<SaveState>("idle");
 const saveError = ref("");
 /** The note shown and editable right now, for the page and its tests. */
 const loadedNote = ref<string | null>(null);
-/** Which note the editor currently holds; null while one is loading. */
-let loadedId: string | null = null;
+/** The note's document the editor holds; null while none is bound. */
+let handle: DocumentHandle<NoteData> | null = null;
+let boundId: string | null = null;
+let unbind: (() => void)[] = [];
 /** The title field's text; empty means the first line is the title. */
 const titleDraft = ref("");
 const titleInput = ref<HTMLInputElement | null>(null);
 let titleFocused = false;
-/** Which parts of the note have changes that are not saved yet. */
+/** Which parts of the note have changes that were not handed to the document store yet. */
 let contentDirty = false;
 let titleDirty = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
-let saving: Promise<void> = Promise.resolve();
-let loading: Promise<void> = Promise.resolve();
+
+/** The editor has typing of its own that another panel's copy must not replace: waiting for the store, or being saved. */
+const busy = () => contentDirty || titleDirty || saveState.value === "pending" || saveState.value === "saving";
 
 const { adding, lightbox, fileInput, imageUsage, imageBar, onFiles, onFilePicked, refreshImageUsage, updateImageBar, setImage, openSelectedImage, removeSelectedImage } = useNoteImages({
   store: () => props.store,
   editor: () => editor.value,
-  loadedNote: () => loadedId,
+  loadedNote: () => loadedNote.value,
   notice: (message) => emit("notice", message),
 });
 
@@ -124,42 +130,42 @@ const editor = useEditor({
   onUpdate: () => {
     linkPopover.value = null;
     updateImageBar();
-    if (loadedId === null) return;
+    if (!handle || props.store.deleted.value) return;
     contentDirty = true;
     saveState.value = "pending";
-    clearTimeout(timer);
-    timer = setTimeout(() => void flush(), SAVE_DELAY_MS);
+    schedule();
   },
 });
 
-/** Saves pending changes now. Resolves once they are stored (or failed). */
-function flush(): Promise<void> {
+function schedule() {
+  clearTimeout(timer);
+  timer = setTimeout(() => void flush().catch(() => undefined), SAVE_DELAY_MS);
+}
+
+/** Hands pending changes to the document store and saves now. Resolves once they are stored (or failed). */
+async function flush(): Promise<void> {
   clearTimeout(timer);
   timer = undefined;
   const instance = editor.value;
-  const id = loadedId;
-  if (!instance || id === null || saveState.value !== "pending") return saving;
-  const patch: NotePatch = {};
-  if (contentDirty) {
-    patch.content = instance.getJSON() as RichText;
-    patch.text = instance.getText({ blockSeparator: "\n" });
+  const open = handle;
+  if (!open || props.store.deleted.value) return;
+  if (instance && (contentDirty || titleDirty)) {
+    const content = contentDirty ? (instance.getJSON() as RichText) : null;
+    const text = contentDirty ? instance.getText({ blockSeparator: "\n" }) : "";
+    const title = titleDirty ? titleDraft.value : null;
+    contentDirty = false;
+    titleDirty = false;
+    saveState.value = "saving";
+    open.update((draft) => {
+      if (content) {
+        draft.content = content;
+        draft.images = collectImageIds(content);
+        draft.text = text;
+      }
+      if (title !== null) draft.title = cleanTitle(title);
+    });
   }
-  if (titleDirty) patch.title = titleDraft.value;
-  contentDirty = false;
-  titleDirty = false;
-  saveState.value = "saving";
-  saving = saving
-    .then(() => props.store.save(id, patch))
-    .then(
-      () => {
-        if (saveState.value === "saving") saveState.value = "saved";
-      },
-      (error: unknown) => {
-        saveError.value = errorMessage(error);
-        saveState.value = "error";
-      },
-    );
-  return saving;
+  await open.flush();
 }
 
 /** Shows a note's formatting; a stored note the editor cannot read shows its plain text instead of breaking the panel. */
@@ -171,73 +177,88 @@ function showContent(instance: NonNullable<typeof editor.value>, note: NoteData)
   }
 }
 
-async function load(id: string) {
-  loadedId = null;
-  loadedNote.value = null;
-  saveState.value = "idle";
-  // Nothing typed while the note loads would be kept, so take no input.
-  editor.value?.setEditable(false, false);
-  try {
-    const note = await props.store.open(id);
-    // Another note was picked while this one loaded.
-    if (props.noteId !== id || !editor.value) return;
-    showContent(editor.value, note.data);
-    titleDraft.value = note.data.title;
-    contentDirty = false;
-    titleDirty = false;
-    loadedId = id;
-    loadedNote.value = id;
-  } finally {
-    if (props.noteId === id) editor.value?.setEditable(true, false);
-  }
-}
-
-watch(
-  [() => props.noteId, editor],
-  ([id], old) => {
-    const previous = old?.[0];
-    loading = (async () => {
-      if (previous !== undefined && previous !== id) await flush();
-      if (editor.value) await load(id);
-    })();
-  },
-  { immediate: true },
-);
-
-/**
- * Another panel saved this note. Take its text unless this panel has
- * unsaved typing of its own, which then wins on its next save.
- */
-async function reloadFromOtherPanel() {
-  const instance = editor.value;
-  const busy = () => saveState.value === "pending" || saveState.value === "saving";
-  if (!instance || loadedId !== props.noteId || busy()) return;
-  const note = await props.store.open(props.noteId);
-  if (busy()) return;
-  const { from, to } = instance.state.selection;
-  if (!titleFocused) titleDraft.value = note.data.title;
-  showContent(instance, note.data);
-  const end = instance.state.doc.content.size;
-  instance.commands.setTextSelection({ from: Math.min(from, end), to: Math.min(to, end) });
-}
-
-/** Drops unsaved typing, e.g. when another panel deleted the note. */
-function discard() {
+/** Holds a note's document: shows it and follows its save state. Runs again when another note is shown. */
+function bind(next: DocumentHandle<NoteData> | null) {
+  for (const off of unbind.splice(0)) off();
   clearTimeout(timer);
   timer = undefined;
   contentDirty = false;
   titleDirty = false;
-  loadedId = null;
+  handle = next;
+  boundId = next ? props.store.selectedId.value : null;
   loadedNote.value = null;
   saveState.value = "idle";
+  const instance = editor.value;
+  if (!next || !instance) return;
+  showContent(instance, next.data);
+  titleDraft.value = next.data.title;
+  instance.setEditable(!props.store.deleted.value, false);
+  loadedNote.value = boundId;
+  unbind.push(
+    next.onStatus((status) => {
+      if (status === "error") saveState.value = "error";
+      else if (status === "idle") saveState.value = saveState.value === "saving" || saveState.value === "error" ? "saved" : saveState.value;
+      else if (saveState.value !== "pending") saveState.value = "saving";
+    }),
+    next.onError((error, kind) => {
+      if (kind === "save") saveError.value = errorMessage(error);
+    }),
+  );
+}
+
+watch(
+  [() => props.store.current.value, editor],
+  async ([next], old) => {
+    // Typing in the note that is being left goes into its own document first.
+    if (old?.[0] && old[0] !== next && !props.store.deleted.value) await flush().catch(() => undefined);
+    bind(next);
+  },
+  { immediate: true },
+);
+
+/** Another panel saved the shown note: take its text unless this panel has typing of its own, which then wins on its next save. */
+const stopFollowing = props.store.onChange((change) => {
+  const instance = editor.value;
+  if (!instance || change.id !== boundId) return;
+  if (change.deleted) {
+    // It stays open, but nothing typed now would be kept: the banner offers to bring it back.
+    clearTimeout(timer);
+    timer = undefined;
+    instance.setEditable(false, false);
+    return;
+  }
+  if (change.source !== "remote" || busy()) return;
+  const { from, to } = instance.state.selection;
+  if (!titleFocused) titleDraft.value = change.data.title;
+  showContent(instance, change.data);
+  const end = instance.state.doc.content.size;
+  instance.commands.setTextSelection({ from: Math.min(from, end), to: Math.min(to, end) });
+});
+
+/** Brings a note deleted elsewhere back; the editor then holds the new document. */
+async function restoreDeleted() {
+  try {
+    await props.store.restoreDeleted();
+  } catch (error) {
+    emit("notice", t("editor.restoreFailed", { error: errorMessage(error) }));
+  }
+}
+
+/** Shows the document's text again, e.g. after the scratchpad was cleared or Undo brought it back. */
+function reload() {
+  const instance = editor.value;
+  if (!instance || !handle) return;
+  contentDirty = false;
+  titleDirty = false;
+  showContent(instance, handle.data);
+  titleDraft.value = handle.data.title;
 }
 
 function onTitleInput() {
-  if (loadedId === null) return;
+  if (!handle || props.store.deleted.value) return;
   titleDirty = true;
   saveState.value = "pending";
-  clearTimeout(timer);
-  timer = setTimeout(() => void flush(), SAVE_DELAY_MS);
+  schedule();
 }
 
 function onTitleFocus() {
@@ -246,15 +267,15 @@ function onTitleFocus() {
 
 function onTitleBlur() {
   titleFocused = false;
-  void flush();
+  void flush().catch(() => undefined);
 }
 
 /** Another panel or the list renamed the note: show its title, unless this field is being typed in. */
 watch(
   () => props.entry?.fixedTitle,
   (title) => {
-    if (title === undefined || titleFocused || titleDirty || saveState.value === "pending" || saveState.value === "saving") return;
-    if (loadedId === props.noteId) titleDraft.value = title;
+    if (title === undefined || titleFocused || busy()) return;
+    if (boundId === props.noteId) titleDraft.value = title;
   },
 );
 
@@ -266,14 +287,16 @@ const derivedTitle = computed(() => {
 
 /** Puts the cursor in the note once it has loaded. */
 async function focus() {
-  await loading;
+  await nextTick();
   editor.value?.commands.focus("end");
 }
 
-defineExpose({ flush, reloadFromOtherPanel, discard, focus, reload: () => (loading = load(props.noteId)) });
+defineExpose({ flush, focus, reload });
 
 onBeforeUnmount(() => {
-  void flush();
+  stopFollowing();
+  void flush().catch(() => undefined);
+  for (const off of unbind.splice(0)) off();
   editor.value?.destroy();
 });
 
@@ -613,6 +636,10 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         <Pin v-else :stroke-width="1.5" />
       </Button>
     </header>
+    <div v-if="store.deleted.value" class="bg-muted flex flex-none items-center gap-2 border-b px-3 py-1.5 text-sm" role="status" data-testid="deleted-banner">
+      <span class="text-muted-foreground min-w-0 flex-1 truncate">{{ t("editor.deleted") }}</span>
+      <Button variant="outline" size="sm" data-testid="restore-note" @click="restoreDeleted">{{ t("editor.restore") }}</Button>
+    </div>
     <div class="min-h-0 flex-1 overflow-y-auto" :style="lookVars" @scroll.passive="(linkPopover = null), updateImageBar()">
       <div class="mx-auto max-w-[760px] px-4 py-3">
         <input

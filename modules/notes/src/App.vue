@@ -5,11 +5,12 @@
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
 import type { TavoraSDK } from "@tavora/sdk";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import NoteEditor from "./NoteEditor.vue";
 import NoteList from "./NoteList.vue";
 import { setLanguage, t } from "./i18n";
-import { emptyContent, nudged, ORDER_ID, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteEntry } from "./notes";
+import { de, en } from "./locales";
+import { collectImageIds, emptyContent, nudged, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
 import { createNotesStore, type NotesStore } from "./store";
 
 /** Below this width the list and the editor take turns. */
@@ -26,7 +27,6 @@ const clampSidebar = (value: number) => Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_M
 const sdk = shallowRef<TavoraSDK | null>(null);
 const store = shallowRef<NotesStore | null>(null);
 const error = ref<string | null>(null);
-const selectedId = ref(SCRATCHPAD_ID);
 const sidebarWidth = ref(SIDEBAR_DEFAULT);
 const collapsed = ref(false);
 const query = ref("");
@@ -46,6 +46,7 @@ const editor = ref<InstanceType<typeof NoteEditor> | null>(null);
 /** A note made with New note that has no text yet; it is dropped if left empty. */
 let freshId: string | null = null;
 
+const selectedId = computed(() => store.value?.selectedId.value ?? SCRATCHPAD_ID);
 const entries = computed(() => store.value?.entries.value ?? new Map<string, NoteEntry>());
 const selected = computed(() => entries.value.get(selectedId.value));
 const order = computed(() => store.value?.order.value ?? []);
@@ -108,18 +109,18 @@ onMounted(async () => {
   addEventListener("pagehide", flushNow);
   cleanup.push(() => removeEventListener("resize", onResize), () => removeEventListener("pagehide", flushNow));
   try {
-    const connected = await connectModule(setLanguage);
-    const notes = createNotesStore(connected);
+    const connection = await connectModule({ texts: { en, de } });
+    if (connection.status !== "ready" || !connection.sdk) throw connection.error;
+    const connected = connection.sdk;
+    // The components read the module's own translator; it follows the language the handle reports.
+    setLanguage(connection.language);
+    cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
+    const notes = await createNotesStore(connected);
     const [state] = await Promise.all([connected.panel.getState<PanelState>(), notes.load(), notes.loadAppearance(), notes.loadImageQuality()]);
-    const saved = state?.selected;
-    if (typeof saved === "string" && notes.entries.value.has(saved)) selectedId.value = saved;
     if (typeof state?.sidebarWidth === "number" && Number.isFinite(state.sidebarWidth)) sidebarWidth.value = clampSidebar(state.sidebarWidth);
     collapsed.value = state?.collapsed === true;
-    cleanup.push(
-      connected.documents.onChange((change) => void onOtherPanel(change.id, change.deleted)),
-      connected.lifecycle.onSuspend(flushNow),
-      connected.lifecycle.onDispose(flushNow),
-    );
+    notes.onBeforeSwitch(() => editor.value?.flush());
+    cleanup.push(connected.lifecycle.onSuspend(flushNow), connected.lifecycle.onDispose(flushNow));
     sdk.value = connected;
     store.value = notes;
     // Pictures no note uses any more (a deleted note's, or one removed from the text) are cleared out when a panel opens.
@@ -129,60 +130,57 @@ onMounted(async () => {
   }
 });
 
-onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
+// A note shown by another panel's request (panels.open) or restored after a restart is this panel's note too.
+watch(selectedId, () => {
+  if (narrow.value) showList.value = false;
+  saveLayout();
+});
 
-async function onOtherPanel(id: string, deleted: boolean) {
-  const notes = store.value!;
-  if (id === ORDER_ID) {
-    await notes.refresh(id);
-    return;
+onBeforeUnmount(() => {
+  cleanup.forEach((fn) => fn());
+  const notes = store.value;
+  // The editor hands its last typing to the note's document first; then the documents are saved and closed.
+  if (notes) void (editor.value?.flush() ?? Promise.resolve()).catch(() => undefined).then(() => notes.dispose());
+});
+
+/** Saves what the editor holds, then drops a note made with New note that stayed empty. */
+async function leaveCurrent(keep: string | null) {
+  await editor.value?.flush();
+  const fresh = freshId;
+  if (fresh && fresh !== keep) {
+    freshId = null;
+    const entry = store.value!.entries.value.get(fresh);
+    if (entry && !entry.text.trim()) await store.value!.remove(fresh).catch(() => undefined);
   }
-  if (deleted) {
-    notes.forget(id);
-    if (id === selectedId.value) {
-      editor.value?.discard();
-      await select(SCRATCHPAD_ID);
-    }
-    return;
-  }
-  await notes.refresh(id);
-  if (id === selectedId.value) await editor.value?.reloadFromOtherPanel();
 }
 
 async function select(id: string) {
   if (narrow.value) showList.value = false;
   if (id === selectedId.value) return;
-  await editor.value?.flush();
-  const fresh = freshId;
-  if (fresh && fresh !== id) {
-    freshId = null;
-    const entry = store.value!.entries.value.get(fresh);
-    if (entry && !entry.text.trim()) await store.value!.remove(fresh).catch(() => undefined);
-  }
-  selectedId.value = id;
-  saveLayout();
+  await leaveCurrent(id);
+  // A note that is gone, or one that could not be saved first, leaves the panel where it is.
+  await store.value!.select(id).catch(() => undefined);
 }
 
 async function rename(id: string, title: string) {
-  await store.value!.save(id, { title }).catch(() => undefined);
+  await store.value!.rename(id, title).catch(() => undefined);
 }
 
 /** Moves the scratchpad's text into a note of its own and leaves the scratchpad empty. */
 async function saveAsNote() {
   const notes = store.value!;
   await editor.value?.flush();
-  const { data } = await notes.open(SCRATCHPAD_ID);
-  if (!data.text.trim()) return;
-  const id = await notes.create({ content: data.content, text: data.text });
-  await notes.saveContent(SCRATCHPAD_ID, emptyContent(), "");
-  await select(id);
+  const { content, text } = notes.scratchpad.data;
+  if (!text.trim()) return;
+  await notes.create({ content, text });
+  setScratchpad(emptyContent(), "");
+  await notes.scratchpad.flush();
 }
 
 async function create() {
   query.value = "";
-  const id = await store.value!.create();
-  await select(id);
-  freshId = id;
+  await leaveCurrent(null);
+  freshId = await store.value!.create();
   await nextTick();
   await editor.value?.focus();
 }
@@ -190,6 +188,15 @@ async function create() {
 async function togglePin(id: string) {
   const entry = entries.value.get(id);
   if (entry) await store.value!.setPinned(id, !entry.pinned);
+}
+
+/** Replaces the scratchpad's text. */
+function setScratchpad(content: RichText, text: string) {
+  store.value!.scratchpad.update((draft: NoteData) => {
+    draft.content = content;
+    draft.images = collectImageIds(content);
+    draft.text = text;
+  });
 }
 
 function offerUndo(message: string, run: () => Promise<void>) {
@@ -209,23 +216,21 @@ async function removeNote(entry: NoteEntry) {
   const open = entry.id === selectedId.value;
   // What is typed but not yet saved belongs in the copy that Undo brings back.
   if (open) await editor.value?.flush();
-  const before = (await notes.open(entry.id)).data;
-  if (open) editor.value?.discard();
   if (entry.id === SCRATCHPAD_ID) {
-    await notes.saveContent(SCRATCHPAD_ID, emptyContent(), "");
-    if (open) await editor.value?.reload();
+    const before = notes.scratchpad.data;
+    setScratchpad(emptyContent(), "");
+    if (open) editor.value?.reload();
     offerUndo(t("undo.cleared"), async () => {
-      await notes.saveContent(SCRATCHPAD_ID, before.content, before.text);
-      if (selectedId.value === SCRATCHPAD_ID) await editor.value?.reload();
+      setScratchpad(before.content, before.text);
+      if (selectedId.value === SCRATCHPAD_ID) editor.value?.reload();
     });
     return;
   }
-  await notes.remove(entry.id);
+  const undo = await notes.remove(entry.id);
   if (freshId === entry.id) freshId = null;
-  if (open) await select(SCRATCHPAD_ID);
   const title = entry.title === UNTITLED ? t("untitled") : entry.title;
   offerUndo(t("undo.deleted", { title }), async () => {
-    await notes.restore(entry.id, before);
+    await undo();
     await select(entry.id);
   });
 }
