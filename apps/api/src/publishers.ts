@@ -2,6 +2,7 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { LINK_CODE, type AccountStore } from "./account-store.ts";
+import { OFFICIAL_PINS, type OfficialPins } from "./catalog-trust.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { tooMany } from "./sign-in.ts";
 
@@ -50,11 +51,14 @@ export interface PublisherOptions {
   /** Link attempts per client: 20 in 15 minutes by default, so codes cannot be guessed. */
   linkRateLimiter?: RateLimiter;
   now?: () => number;
+  /** Tavora's pinned publisher key and account (OFFICIAL_PINS by default): the key links to that account only. */
+  officialPins?: OfficialPins;
 }
 
 export function publisherRoutes(options: PublisherOptions, limiter: RateLimiter, clientKey: (request: Request) => string) {
   const { store } = options;
   const now = options.now ?? Date.now;
+  const pins = options.officialPins ?? OFFICIAL_PINS;
   const linkLimiter = options.linkRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 15 * 60_000 });
   const app = new Hono();
 
@@ -93,6 +97,8 @@ export function publisherRoutes(options: PublisherOptions, limiter: RateLimiter,
     const accountId = store.takeLinkCode(code, now());
     if (!accountId) return context.json({ error: "That code is wrong or has expired. Get a new one in Tavora.", reason: "wrong-code" }, 400);
     const fingerprint = keyFingerprint(raw);
+    // Tavora's publisher key belongs to Tavora's account alone; anyone else gets the answer for a key that is taken.
+    if (pins.key !== "" && fingerprint === pins.key && accountId !== pins.account) return context.json({ error: "This key is linked to another Tavora account.", reason: "key-taken" }, 409);
     const result = store.linkKey(accountId, fingerprint, raw.toString("base64"), now());
     if (result === "taken") return context.json({ error: "This key is linked to another Tavora account.", reason: "key-taken" }, 409);
     if (result === "too-many") return context.json({ error: "This account has as many keys as it can link. Unlink one in Tavora first.", reason: "too-many-keys" }, 409);

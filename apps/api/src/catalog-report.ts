@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { MAIL_RESERVED, type AccountOptions } from "./accounts.ts";
 import { cleanMessage } from "./conversations.ts";
-import type { CatalogStore } from "./catalog.ts";
+import { isOfficialId, type CatalogStore } from "./catalog.ts";
 import type { Mail } from "./mail.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { fail, signedInAs, signedOut, tooMany } from "./sign-in.ts";
@@ -99,6 +99,8 @@ export function reportHandlers({ catalog, accounts, clientKey, rateLimiter, now 
     ) {
       return fail(context, 400, "bad-request", "Send { id, owner, sha256, reason?, note? }.");
     }
+    // Tavora's own modules take no reports.
+    if (isOfficialId(input.id)) return fail(context, 404, "not-found", "The catalog lists no such module.");
     const report = { id: input.id, owner: input.owner, sha256: input.sha256 };
     const reason = typeof input.reason === "string" ? input.reason : null;
     if (!catalog.report(report, new Date(now()), { accountId: sender.id, reason, note })) return fail(context, 404, "not-found", "The catalog lists no such module.");

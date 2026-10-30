@@ -4,11 +4,11 @@ import { PUBLISH_STATEMENT, ZIP_LIMITS } from "@tavora/pack";
 import type { AccountStore } from "./account-store.ts";
 import { bearerToken, fail as refuse, tooMany } from "./sign-in.ts";
 import { MAIL_RESERVED } from "./accounts.ts";
-import { CatalogError, checkCatalogZip, checkReleaseVersion, type CatalogStore, type CheckedZip, type ReviewReason } from "./catalog.ts";
-import { catalogTrust } from "./catalog-trust.ts";
+import { CatalogError, checkCatalogZip, checkReleaseVersion, isOfficialId, type CatalogStore, type CheckedZip, type ReviewReason } from "./catalog.ts";
+import { catalogTrust, OFFICIAL_PINS, officialOn, type OfficialPins } from "./catalog-trust.ts";
 import { mailLanguage, publishedMail, type Mail, type MailLanguage, type Mailer } from "./mail.ts";
 import { createNotifier, waitingMail, waitingNoticeMail } from "./moderation-mail.ts";
-import { reviewUpload } from "./moderation.ts";
+import { reviewUpload, runChecks } from "./moderation.ts";
 import { signedStatement } from "./publishers.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import type { Scanner } from "./virus-scan.ts";
@@ -23,6 +23,12 @@ import type { Scanner } from "./virus-scan.ts";
  * by whoever received it; only the key's holder decides what lists. A revoked key publishes nothing
  * new (C6), and a successor key publishes the modules of the key it replaces (C7), both by the lists
  * signed with the catalogue key.
+ *
+ * Tavora's own modules (ids starting with `tavora.`) are the exception to the id rules: an update is taken only when the pins are set,
+ * the zip is signed by the pinned publisher key (or a successor in the pinned account), the pinned account uploads it with its
+ * sign-in (never a publish token) and the manifest names `minTavora`. It lists at once, without waiting for a person; the automatic
+ * checks still run and their reasons are kept with the version. Without pins every `tavora.*` upload is refused. The prefix `tavora`
+ * is never reserved for an account.
  *
  * Review before listing (decided 2026-10-26): every new version runs the automatic checks of moderation.ts. All pass: it lists at once
  * (201). Any fails, it is the first module of an account that has had nothing approved, or its pictures are new: it waits (202), not
@@ -60,6 +66,8 @@ export interface PublishOptions {
   now?: () => number;
   /** The catalogue public key the signed lists are checked against (CATALOGUE_PUBLIC_KEY outside tests). */
   catalogueKey?: string;
+  /** The pinned key and account that may publish `tavora.*` modules (OFFICIAL_PINS by default; empty: nobody). */
+  officialPins?: OfficialPins;
   /**
    * Who is told when the catalog is full (MAINTAINER_EMAIL), and how. Absent: only the review page shows it.
    * The account with this address has no daily upload limit.
@@ -84,7 +92,7 @@ export function catalogFullMail(to: string, usedBytes: number, catalogBytes: num
 }
 
 /** The middleware and handler for POST /v1/catalog/publish. */
-export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, maintainer, mail, scanner }: PublishOptions) {
+export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, officialPins = OFFICIAL_PINS, maintainer, mail, scanner }: PublishOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const { uploadsPerDay, accountBytes, catalogBytes, keepVersions, waitingPerAccount } = { ...PUBLISH_LIMITS, ...limits };
   const limit = bodyLimit({
@@ -177,7 +185,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
 
     let checked: CheckedZip;
     try {
-      checked = checkCatalogZip(bytes);
+      checked = checkCatalogZip(bytes, { official: officialOn(officialPins) });
       checkReleaseVersion(checked.manifest);
     } catch (error) {
       if (error instanceof CatalogError) return refuse(context, 400, "invalid", error.message);
@@ -207,10 +215,25 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
       return first.account === key.accountId ? first.key : fingerprint;
     };
 
+    // Tavora's own modules: only the pinned key (or its successor in the pinned account), uploaded with the pinned account's sign-in.
+    // This comes before the prefix rules, so the prefix "tavora" is never reserved or checked for anyone.
+    const official = isOfficialId(checked.manifest.id);
+    if (official) {
+      if (
+        !trust.officialSigner(checked.owner, checked.sha256, officialPins) ||
+        key.accountId !== officialPins.account ||
+        by.accountId !== officialPins.account ||
+        by.token !== null
+      ) {
+        return refuse(context, 400, "invalid", "Its id is reserved for Tavora's own modules, which stay bundled with the app.");
+      }
+      if (!checked.manifest.minTavora) return refuse(context, 400, "invalid", "A Tavora module names the oldest Tavora it needs (minTavora).");
+    }
+
     const prefix = checked.manifest.id.split(".")[0]!;
     // Modules of the key this one succeeds count as the account's own, even once the lost key is unlinked.
     const succeeded = firstKey(checked.owner);
-    const held = store.prefixCheck(key.accountId, prefix, { ownersUnder: (under) => catalog.ownersUnder(under).filter((owner) => owner !== succeeded) });
+    const held = official ? "held" : store.prefixCheck(key.accountId, prefix, { ownersUnder: (under) => catalog.ownersUnder(under).filter((owner) => owner !== succeeded) });
     if (held === "taken") return refuse(context, 403, "prefix-taken", `The id prefix "${prefix}" belongs to another developer.`);
     if (held === "reserved") return refuse(context, 403, "prefix-reserved", `The id prefix "${prefix}" is reserved.`);
     if (held === "too-many") return refuse(context, 403, "too-many-prefixes", "Your account holds as many id prefixes as it can. Publish under one of them.");
@@ -221,7 +244,8 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     const at = now();
     // The maintainer's own account (MAINTAINER_EMAIL) ships as often and as much as it needs: no hourly, daily, waiting
     // or account limit (decided 2026-10-29). The catalog's own size limit still holds, as it guards the server's disk.
-    const owner = isMaintainer(store, key.accountId);
+    // Tavora's own account has none of the account limits either.
+    const owner = official || isMaintainer(store, key.accountId);
     if (!owner && catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
       return refuse(context, 429, "daily-limit", `An account can publish ${uploadsPerDay} versions a day. Try again tomorrow.`);
     }
@@ -241,15 +265,17 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     }
 
     // The automatic checks. They never throw: one that cannot run is a reason to wait.
-    const reasons = await reviewUpload({ catalog, scanner }, checked, bytes, { accountId: key.accountId, fingerprints: store.keys(key.accountId).map((linked) => linked.fingerprint) });
+    // Tavora's own modules skip the first-module and new-picture rules; the other checks still run and are kept for the admin page.
+    const subject = { accountId: key.accountId, fingerprints: store.keys(key.accountId).map((linked) => linked.fingerprint) };
+    const reasons = official ? await runChecks({ catalog, scanner }, checked, bytes, subject) : await reviewUpload({ catalog, scanner }, checked, bytes, subject);
     try {
-      catalog.add(bytes, new Date(at), key.accountId, checked, firstKey, { reasons, language: languageOf(context), token: by.token });
+      catalog.add(bytes, new Date(at), key.accountId, checked, firstKey, { reasons, language: languageOf(context), token: by.token, ...(official ? { official: true } : {}) });
     } catch (error) {
       if (error instanceof CatalogError) return refuse(context, 409, "conflict", error.message);
       throw error;
     }
     if (held === "free") store.reservePrefix(key.accountId, prefix, at);
-    if (reasons.length > 0) {
+    if (reasons.length > 0 && !official) {
       await tellWaiting(store, context, key.accountId, checked, reasons, at);
       return context.json(
         { status: "waiting", id: checked.manifest.id, version: checked.manifest.version, sha256: checked.sha256, reasons: reasons.map(({ check, text }) => ({ check, text })) },

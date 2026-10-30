@@ -861,4 +861,12 @@ export function validateManifest(input: unknown): ManifestResult {
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, manifest: withBoardNames(input) as unknown as ModuleManifest };
 }
+/**
+ * Who may publish updates for Tavora's own modules (ids starting with `tavora.`) through the catalogue: one pinned
+ * publisher key (its 32-hex fingerprint) and the one account it is linked to. Both empty means the catalogue
+ * accepts none, which is how they ship until Tavora turns the feature on.
+ */
+export const TAVORA_PUBLISHER_KEY = "";
+export const TAVORA_ACCOUNT_ID = "";
+
 export * from "./api-reasons.ts";

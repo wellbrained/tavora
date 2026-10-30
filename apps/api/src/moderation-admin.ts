@@ -2,7 +2,7 @@ import { readZip } from "@tavora/pack";
 import { Hono } from "hono";
 import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
 import type { AccountStore } from "./account-store.ts";
-import { CatalogError, checkCatalogZip, type CatalogStore, type ReviewReason, type WaitingVersion } from "./catalog.ts";
+import { CatalogError, checkCatalogZip, isOfficialId, type CatalogStore, type ReviewReason, type WaitingVersion } from "./catalog.ts";
 import { PUBLISH_LIMITS } from "./catalog-publish.ts";
 import { mailLanguage, publishedMail, type Mailer } from "./mail.ts";
 import { bannedMail, createNotifier, declinedMail, DECLINE_REASONS, isDeclineReason, type Notifier } from "./moderation-mail.ts";
@@ -231,7 +231,7 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
           continue;
         }
         try {
-          const checked = checkCatalogZip(bytes);
+          const checked = checkCatalogZip(bytes, { official: isOfficialId(live.id) });
           const fingerprints = developer ? accounts.keys(developer).map((key) => key.fingerprint) : [live.owner];
           const reasons = await runChecks({ catalog, scanner }, checked, bytes, { accountId: developer, fingerprints }, live.sha256);
           results.push({ ...base, reasons });

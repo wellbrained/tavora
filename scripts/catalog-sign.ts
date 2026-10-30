@@ -28,6 +28,7 @@ import { createPrivateKey, generateKeyPairSync, type KeyObject } from "node:cryp
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { TAVORA_PUBLISHER_KEY } from "../packages/module-schema/src/index.ts";
 import { CATALOG_LIST_KINDS, catalogPublicKey, nextCatalogList, readCatalogList, signCatalogList, type CatalogListKind } from "../packages/pack/src/catalog-lists.ts";
 
 const USAGE = [
@@ -50,6 +51,31 @@ async function readIfThere(file: string): Promise<string | null> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
+}
+
+/**
+ * A succession that starts at Tavora's pinned publisher key, or continues from a key that replaced it, hands the
+ * power to publish Tavora's own modules to the new key. Say so loudly, so it is never signed by accident.
+ */
+function warnPinnedChain(entries: unknown, previous: { successions?: { old: string; new: string }[] } | null): void {
+  const statements = Array.isArray(entries) ? (entries as { old?: unknown; new?: unknown }[]) : [];
+  const chain = new Set([TAVORA_PUBLISHER_KEY]);
+  const all = [...(previous?.successions ?? []), ...statements];
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const { old, new: next } of all) {
+      if (typeof old === "string" && typeof next === "string" && chain.has(old) && !chain.has(next)) {
+        chain.add(next);
+        grew = true;
+      }
+    }
+  }
+  const touching = statements.filter(({ old, new: next }) => (typeof old === "string" && chain.has(old)) || (typeof next === "string" && chain.has(next)));
+  if (touching.length === 0) return;
+  console.error("\n!!! WARNING: this list touches the pinned Tavora publisher key's chain. !!!");
+  console.error("!!! Whoever holds the new key may then publish Tavora's own modules. Sign it only if you meant that. !!!");
+  for (const { old, new: next } of touching) console.error(`!!!   ${String(old)} -> ${String(next)}`);
+  console.error("");
 }
 
 async function main(): Promise<number> {
@@ -103,6 +129,7 @@ async function main(): Promise<number> {
   const previousText = await readIfThere(values.out);
   const previous = previousText === null ? null : readCatalogList(kind, previousText, publicKey);
   if (previousText !== null && previous === null) throw new Error(`${values.out} is not a ${kind} list signed by this key; move it away or pass another --out`);
+  if (kind === "successions" && TAVORA_PUBLISHER_KEY !== "") warnPinnedChain(entries, previous);
   const list = nextCatalogList(kind, entries, previous, new Date());
   await writeFile(values.out, signCatalogList(list, key));
   console.log(`Signed ${kind} list ${list.sequence} (${list.issued}) into ${path.resolve(values.out)}. Upload it as ${kind}.json.`);

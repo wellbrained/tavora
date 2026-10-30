@@ -1,3 +1,4 @@
+import { TAVORA_ACCOUNT_ID, TAVORA_PUBLISHER_KEY } from "@tavora/module-schema";
 import { readCatalogList, type CatalogListKind, type CatalogListOf } from "@tavora/pack";
 import type { CatalogStore } from "./catalog.ts";
 
@@ -14,11 +15,27 @@ export const CATALOGUE_PUBLIC_KEY = "u44xg/sgGpnPfBN5o8n/xyBU5Xrv3G/ZJC20+phjWIU
 /** Longest chain of successions followed, as in the app. */
 const MAX_SUCCESSIONS = 16;
 
+/** The one publisher key and the one account allowed to publish Tavora's own modules; either empty: nobody is. */
+export interface OfficialPins {
+  key: string;
+  account: string;
+}
+
+export const OFFICIAL_PINS: Readonly<OfficialPins> = { key: TAVORA_PUBLISHER_KEY, account: TAVORA_ACCOUNT_ID };
+
+/** Whether publishing Tavora's own modules is switched on: both pins are set. */
+export const officialOn = (pins: OfficialPins) => pins.key !== "" && pins.account !== "";
+
 export interface CatalogTrust {
   /** Whether a key is revoked and this zip is not one it signed before. */
   revoked(fingerprint: string, sha256: string): boolean;
   /** The first key of a key's account by its successions, and that account; the key itself and null without one. */
   firstKey(fingerprint: string): { key: string; account: string | null };
+  /**
+   * Whether a signer may publish `tavora.*` modules: its first key is the pinned key, every succession step on the way
+   * belongs to the pinned account, and it is not revoked for this zip. Never with an empty pin.
+   */
+  officialSigner(fingerprint: string, sha256: string, pins: OfficialPins): boolean;
   /** The signed list of a kind as it is served, or null without a validly signed one. */
   signed<K extends CatalogListKind>(kind: K): CatalogListOf<K> | null;
 }
@@ -28,11 +45,16 @@ export function catalogTrust(catalog: CatalogStore, publicKey: string = CATALOGU
     const bytes = catalog.list(kind);
     return bytes ? readCatalogList(kind, bytes.toString("utf8"), publicKey) : null;
   };
-  return {
+  const trust: CatalogTrust = {
     signed: list,
     revoked(fingerprint, sha256) {
       const revocation = list("revocations")?.revoked.find((entry) => entry.fingerprint === fingerprint);
       return revocation !== undefined && !revocation.allow.includes(sha256);
+    },
+    officialSigner(fingerprint, sha256, pins) {
+      if (!officialOn(pins)) return false;
+      const first = trust.firstKey(fingerprint);
+      return first.key === pins.key && (first.account === null || first.account === pins.account) && !trust.revoked(fingerprint, sha256);
     },
     // The same rules as the app's SafetyLists.firstKey, so the catalog lists what users' Tavora installs.
     firstKey(fingerprint) {
@@ -57,4 +79,5 @@ export function catalogTrust(catalog: CatalogStore, publicKey: string = CATALOGU
       return { key, account };
     },
   };
+  return trust;
 }

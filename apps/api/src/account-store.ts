@@ -696,8 +696,25 @@ export class AccountStore {
    * asking again changes nothing, except that "leaked" can be added, and a turned-down request can be
    * asked again.
    */
-  requestReplacement(accountId: string, old: string, next: string, leaked: boolean, now: number): "ok" | "same" | "not-linked" | "open" {
+  requestReplacement(
+    accountId: string,
+    old: string,
+    next: string,
+    leaked: boolean,
+    now: number,
+    pins?: { key: string; account: string },
+    signed: ReadonlyArray<{ old: string; new: string }> = [],
+  ): "ok" | "same" | "not-linked" | "open" | "pinned" {
     if (old === next) return "same";
+    // Tavora's pinned publisher key (and the keys that succeeded it) moves only inside Tavora's own account, and nothing
+    // moves onto it: its chain is changed by hand, never by a request.
+    if (pins && pins.key !== "") {
+      if (next === pins.key) return "pinned";
+      if (accountId !== pins.account) {
+        const chain = this.pinnedChain(pins.key, signed);
+        if (chain.has(old) || chain.has(next)) return "pinned";
+      }
+    }
     const linked = new Set(this.keys(accountId).map((key) => key.fingerprint));
     if (!linked.has(old) || !linked.has(next)) return "not-linked";
     const current = this.keyRequest(old);
@@ -712,6 +729,22 @@ export class AccountStore {
       )
       .run(old, accountId, next, leaked ? 1 : 0, now);
     return "ok";
+  }
+
+  /** The pinned key and every key a request or a signed succession put in its place, directly or one after another. */
+  private pinnedChain(pinned: string, signed: ReadonlyArray<{ old: string; new: string }>): Set<string> {
+    const chain = new Set([pinned]);
+    const steps = [...this.allKeyRequests(), ...signed];
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const request of steps) {
+        if (chain.has(request.old) && !chain.has(request.new)) {
+          chain.add(request.new);
+          grew = true;
+        }
+      }
+    }
+    return chain;
   }
 
   keyRequest(old: string): KeyRequest | null {

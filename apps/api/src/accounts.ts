@@ -3,7 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
 import { cleanDeveloperName, DEVICE_OS, MAX_PREFIXES, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type StoredProfile } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
-import type { CatalogTrust } from "./catalog-trust.ts";
+import { OFFICIAL_PINS, type CatalogTrust, type OfficialPins } from "./catalog-trust.ts";
 import type { CopyStore } from "./cloud-copy.ts";
 import { DiscordError, isDiscordCode, isPkceVerifier, type DiscordClient, type DiscordIdentity } from "./discord.ts";
 import { keyRequestStatus } from "./key-requests.ts";
@@ -46,6 +46,8 @@ export interface AccountOptions {
   trust?: CatalogTrust;
   /** The module catalog, to tell which held prefixes have a module. Absent: none has. */
   catalog?: CatalogStore;
+  /** Tavora's pinned publisher key and account (OFFICIAL_PINS by default): no key request touches the pinned key's chain from another account. */
+  officialPins?: OfficialPins;
   /** Prefix claims per client: 30 an hour by default, like uploads. */
   prefixRateLimiter?: RateLimiter;
   /** What deleting the account reaches (account-lifecycle.ts); the server passes the one built over every store. Absent: built from the stores above. */
@@ -374,9 +376,10 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       return context.json({ error: "Send { new, leaked, language }.", reason: "bad-request" }, 400);
     }
     const before = store.keyRequest(old);
-    const result = store.requestReplacement(account.id, old, input.new, input.leaked, now());
+    const result = store.requestReplacement(account.id, old, input.new, input.leaked, now(), options.officialPins ?? OFFICIAL_PINS, options.trust?.signed("successions")?.successions ?? []);
     if (result === "same") return context.json({ error: "Pick another key to replace it with.", reason: "bad-request" }, 400);
     if (result === "not-linked") return context.json({ error: "Both keys must be linked to this account.", reason: "not-found" }, 404);
+    if (result === "pinned") return context.json({ error: "Both keys must be linked to this account.", reason: "not-found" }, 404);
     if (result === "open") return context.json({ error: "This key already waits to be replaced.", reason: "key-in-request" }, 409);
     const after = store.keyRequest(old);
     const isNew = !before || before.declinedAt !== null || before.leaked !== after?.leaked;
