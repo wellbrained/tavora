@@ -413,7 +413,8 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
 
   async function removeItem(id: string): Promise<() => Promise<void>> {
     if (closed) throw new Error("the item session is closed");
-    if (restoring && id === currentId) await restoring.catch(() => undefined);
+    const waited = restoring !== null && id === currentId;
+    if (waited) await restoring!.catch(() => undefined);
     const before = items;
     const wasCurrent = id === currentId && handle !== null;
     let mine = generation;
@@ -437,6 +438,13 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
       await open.dispose(); // saves what is pending, so the revision below is the last one
       revision = open.revision;
       data = (alreadyGone ? copy : open.data) as JsonValue;
+      // A restore that failed after its put left the item stored again although it still reads as deleted here.
+      const stored = alreadyGone && waited ? await sdk.documents.get(id) : null;
+      if (stored) {
+        alreadyGone = false;
+        revision = stored.revision;
+        data = stored.data;
+      }
     } else {
       const stored = await sdk.documents.get(id);
       if (!stored) throw new ItemNotFoundError(id);

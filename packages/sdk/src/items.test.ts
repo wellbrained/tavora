@@ -429,6 +429,33 @@ describe("other panels", () => {
     await session.dispose();
   });
 
+  it("remove still deletes the item when the restore put it back but could not open it", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    seed(a.host, "a", "A", ["one"]);
+    seed(a.host, "b", "B");
+    const session = await openItems(a.sdk, options({ onAdd: "none" }));
+    await session.pick("plan-a");
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(session.deleted).toBe(true));
+    const get = a.sdk.documents.get.bind(a.sdk.documents);
+    let failOnce = true;
+    a.sdk.documents.get = (async (wanted: string) => {
+      if (wanted === "plan-a" && failOnce) {
+        failOnce = false;
+        throw new Error("offline");
+      }
+      return get(wanted);
+    }) as typeof a.sdk.documents.get;
+    const restoring = session.restoreDeleted();
+    const removing = session.remove("plan-a");
+    await expect(restoring).rejects.toThrow("offline");
+    await removing;
+    expect(storedPlan(a.host, "plan-a")).toBeUndefined();
+    expect(session.currentId).toBe("plan-b");
+    await session.dispose();
+  });
+
   it("pick of a missing item rejects with ItemNotFoundError, even when parse refuses null", async () => {
     const { sdk, host } = createMemoryHost();
     seed(host, "a", "A");
