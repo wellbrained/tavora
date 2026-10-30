@@ -7,6 +7,7 @@ import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
 import { Combobox, ComboboxAnchor, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@tavora/official-ui/components/ui/combobox";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { NumberField } from "@tavora/official-ui/components/ui/number-field";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
@@ -51,6 +52,7 @@ const LANGUAGE_OPTIONS = [
 const code = ref("");
 const GAMES = ["Path of Exile 2", "Diablo IV", "Final Fantasy XIV", "Guild Wars 2", "Satisfactory", "Stardew Valley", "Enshrouded"];
 const volume = ref([60]);
+const copies = ref(10);
 const opacity = ref(70);
 const bold = ref(true);
 const italic = ref(false);
@@ -237,6 +239,10 @@ const name = ref("Waystone");
         </Specimen>
         <Specimen label="Slider with its value (steps of 5)" column>
           <SliderField v-model="opacity" :min="0" :max="100" :step="5" unit="%" label="Opacity" class="max-w-56" :disabled="off" />
+        </Specimen>
+        <Specimen label="Number field (plus and minus, 1 to 99)" column>
+          <NumberField v-model="copies" :min="1" :max="99" label="Copies" decrease-label="One less" increase-label="One more" :disabled="off" />
+          <span class="text-muted-foreground text-xs tabular-nums">{{ copies }} copies</span>
         </Specimen>
         <Specimen label="Select with pictures" column>
           <Select v-model="style" :disabled="off">
