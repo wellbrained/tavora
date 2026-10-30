@@ -119,6 +119,17 @@ describe("ModulePublisher", () => {
     expect(JSON.parse(await readFile(path.join(dir, "package.json"), "utf8")).version).toBe("1.2.4");
   });
 
+  it("offers release versions for a pre-release, packs nothing until one is picked, and never writes a pre-release", async () => {
+    const dir = await project({ ...MANIFEST, version: "0.1.0-alpha.44" });
+    const { publisher: reviewer } = publisher({ listed: { version: "0.1.0-alpha.43", owner: "x" } });
+    await reviewer.open(dir);
+    expect(reviewer.view()).toMatchObject({ problems: [{ kind: "version", listed: null, next: { patch: "0.1.0", minor: "0.2.0", major: "1.0.0" } }], size: null });
+    await expect(reviewer.writeVersion("0.1.0-alpha.45", ["More."])).rejects.toMatchObject({ key: "publish.error.version" });
+
+    await reviewer.writeVersion("0.2.0", ["Out of alpha."]);
+    expect(reviewer.view()).toMatchObject({ problems: [], module: { version: "0.2.0" } });
+  });
+
   it("lets a module whose prefix isn't the developer's take a new id before its first publish", async () => {
     const dir = await project({ ...MANIFEST, id: "local.tracker" });
     const { publisher: reviewer, setPrefix } = publisher({ prefix: "reserved" });

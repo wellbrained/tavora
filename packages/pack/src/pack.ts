@@ -1,7 +1,7 @@
 import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { CHANGELOG_LIMITS, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { CHANGELOG_LIMITS, isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { fileHashes, SIGNATURE_FILE, signatureFile } from "./signature.ts";
 import { asSigner, type Signer } from "./signer.ts";
 import { isSafeEntryName, readZip, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./zip.ts";
@@ -25,6 +25,9 @@ export async function collectFiles(dir: string): Promise<{ manifest: ModuleManif
   const result = validateManifest(raw);
   if (!result.ok) throw new PackError(`${MANIFEST_FILE} is not valid: ${result.errors.join("; ")}`);
   const { manifest } = result;
+  if (!isReleaseVersion(manifest.version)) {
+    throw new PackError(`version ${manifest.version} is a pre-release; module versions are plain major.minor.patch, e.g. ${manifest.version.split("-")[0]}`);
+  }
 
   const names = new Set<string>([MANIFEST_FILE]);
   const { entries, icons, screenshots } = manifestFiles(manifest);

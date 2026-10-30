@@ -4,7 +4,7 @@ import { PUBLISH_STATEMENT, ZIP_LIMITS } from "@tavora/pack";
 import type { AccountStore } from "./account-store.ts";
 import { bearerToken, fail as refuse, tooMany } from "./sign-in.ts";
 import { MAIL_RESERVED } from "./accounts.ts";
-import { CatalogError, checkCatalogZip, isOfficialId, type CatalogStore, type CheckedZip, type ReviewReason } from "./catalog.ts";
+import { CatalogError, checkCatalogZip, checkReleaseVersion, isOfficialId, type CatalogStore, type CheckedZip, type ReviewReason } from "./catalog.ts";
 import { catalogTrust, OFFICIAL_PINS, officialOn, type OfficialPins } from "./catalog-trust.ts";
 import { mailLanguage, publishedMail, type Mail, type MailLanguage, type Mailer } from "./mail.ts";
 import { createNotifier, waitingMail, waitingNoticeMail } from "./moderation-mail.ts";
@@ -186,6 +186,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     let checked: CheckedZip;
     try {
       checked = checkCatalogZip(bytes, { official: officialOn(officialPins) });
+      checkReleaseVersion(checked.manifest);
     } catch (error) {
       if (error instanceof CatalogError) return refuse(context, 400, "invalid", error.message);
       throw error;

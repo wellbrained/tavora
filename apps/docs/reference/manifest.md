@@ -30,7 +30,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `id` | yes | `publisher.module-name`: 2 to 5 dot-separated parts, lowercase letters, digits and `-`, starting with a letter, at most 128 characters. Data and (later) permissions are keyed on it, so never change it after release. |
 | `name` | yes | 1 to 80 characters, not only spaces. |
 | `description` | no | 1 to 300 characters, not only spaces. |
-| `version` | yes | Semver, e.g. `1.0.0` or `2.0.0-beta.1`. |
+| `version` | yes | `major.minor.patch`, e.g. `1.0.0`. Only plain versions can be packed and published; a pre-release such as `2.0.0-beta.1` still loads from a folder, but `tavora-pack` and the catalog refuse it. |
 | `apiVersion` | yes | `"1"` (a string). The [bridge protocol](./protocol.md) major version the module was built for. |
 | `minTavora` | no | The oldest Tavora the module works with, as `major.minor.patch` (e.g. `0.18.0`). An older Tavora refuses to install the zip or load the folder and tells the user which version is needed. Set it to the Tavora version that added the newest SDK feature you use (see the [changelog](./changelog.md)). |
 | `entry` | yes | The HTML page to load, as a path inside the package. Must end in `.html`. |
