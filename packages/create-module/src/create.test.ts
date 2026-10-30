@@ -52,6 +52,18 @@ describe("createModule", () => {
     }
   });
 
+  it.each(TEMPLATES)("starts the %s project on the module bootstrap and the shared build settings", async (template) => {
+    await createModule({ dir: root, id: "example.notes", name: "Notes", template });
+    const entry = template === "vanilla" ? "src/main.ts" : template === "react" ? "src/main.tsx" : "src/App.vue";
+    const code = await readFile(path.join(root, entry), "utf8");
+    expect(code).toContain('from "@tavora/sdk/bootstrap"');
+    expect(code).not.toMatch(/applyTheme|connect\(\)/);
+    const config = await readFile(path.join(root, "vite.config.ts"), "utf8");
+    expect(config).toContain('from "@tavora/pack/vite"');
+    expect(config).not.toContain("chrome130");
+    expect(JSON.parse(await readFile(path.join(root, "tsconfig.json"), "utf8"))).toMatchObject({ extends: "@tavora/pack/tsconfig.module.json" });
+  });
+
   it("writes npm commands into DEVELOP.md unless another manager ran it", async () => {
     await createModule({ dir: root, id: "example.notes", name: "Notes", template: "vanilla" });
     const readme = await readFile(path.join(root, "DEVELOP.md"), "utf8");

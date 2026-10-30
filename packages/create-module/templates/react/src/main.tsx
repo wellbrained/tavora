@@ -1,8 +1,9 @@
-import { connect, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
+import { bootstrapModule, languageOf } from "@tavora/sdk/bootstrap";
+import type { TavoraSDK } from "@tavora/sdk";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-// This page runs inside a Tavora panel; in a normal browser connect() fails. Build it and add this
+// This page runs inside a Tavora panel; in a normal browser the connection fails. Build it and add this
 // folder in Tavora (Settings > Development > Add a development folder) to see it.
 
 /** Your texts in English and German; Tavora says which language the user uses. */
@@ -12,15 +13,7 @@ const TEXTS = {
 };
 type Language = keyof typeof TEXTS;
 const text = (language: Language, key: keyof (typeof TEXTS)["en"], params: Record<string, string | number> = {}) =>
-  TEXTS[language][key].replace(/\{(\w+)\}/g, (match, name: string) => String(params[name] ?? match));
-
-/** Tavora's theme as CSS variables (--background, --foreground, --primary, ...), so the module looks like Tavora. */
-function applyTheme(theme: TavoraTheme) {
-  const root = document.documentElement;
-  for (const [name, value] of Object.entries(theme.tokens)) root.style.setProperty(`--${name}`, value);
-  root.style.setProperty("--radius", `${theme.radius}px`);
-  root.style.colorScheme = theme.mode;
-}
+  TEXTS[language][key].replace(/{(w+)}/g, (match, name: string) => String(params[name] ?? match));
 
 function App() {
   const [tavora, setTavora] = useState<TavoraSDK | null>(null);
@@ -30,20 +23,26 @@ function App() {
   const [failed, setFailed] = useState<string | null>(null);
 
   useEffect(() => {
-    const pick = (code: string): Language => (code.startsWith("de") ? "de" : "en");
-    connect().then(
-      async (sdk) => {
-        applyTheme(await sdk.ui.getTheme());
-        sdk.ui.onThemeChange(applyTheme);
-        setLanguage(pick(await sdk.ui.getLanguage()));
-        sdk.ui.onLanguageChange((code) => setLanguage(pick(code)));
-        setWorkspace((await sdk.workspace.getCurrent()).displayName);
-        // storage keeps small settings for this module in the current workspace.
-        setCount((await sdk.storage.get<number>("count")) ?? 0);
-        setTavora(sdk);
-      },
-      (error: unknown) => setFailed(`Not connected to Tavora: ${error instanceof Error ? error.message : String(error)}`),
-    );
+    let cancelled = false;
+    let stop = () => {};
+    // Connects, applies Tavora's theme as CSS variables (--background, --foreground, --primary, ...) and keeps
+    // following it, so the module looks like Tavora.
+    bootstrapModule().then(async (boot) => {
+      if (cancelled) return boot.dispose();
+      stop = boot.dispose;
+      const sdk = boot.sdk;
+      if (!sdk) return setFailed(`Not connected to Tavora: ${boot.error instanceof Error ? boot.error.message : String(boot.error)}`);
+      setLanguage(languageOf(boot.language));
+      boot.onLanguage((code) => setLanguage(languageOf(code)));
+      setWorkspace((await sdk.workspace.getCurrent()).displayName);
+      // storage keeps small settings for this module in the current workspace.
+      setCount((await sdk.storage.get<number>("count")) ?? 0);
+      setTavora(sdk);
+    });
+    return () => {
+      cancelled = true;
+      stop();
+    };
   }, []);
 
   const add = () => {

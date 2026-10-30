@@ -2,7 +2,6 @@ import { StrictMode, useCallback, useEffect, useRef, useState, type CSSPropertie
 import { createRoot } from "react-dom/client";
 import "./style.css";
 import {
-  connect,
   TavoraError,
   type TavoraDocument,
   type TavoraWorkspace,
@@ -10,6 +9,7 @@ import {
   type TavoraTheme,
   type TavoraViewport,
 } from "@tavora/sdk";
+import { bootstrapModule } from "@tavora/sdk/bootstrap";
 
 // Same features and data-testid values as the vanilla example, so one set of
 // end-to-end tests covers both.
@@ -31,11 +31,13 @@ interface Initial {
 }
 
 async function load(): Promise<Initial> {
-  const tavora = await connect();
-  const [workspace, viewport, theme, count, note, panel] = await Promise.all([
+  const boot = await bootstrapModule();
+  const tavora = boot.sdk;
+  if (!tavora) throw boot.error;
+  const theme = boot.theme!;
+  const [workspace, viewport, count, note, panel] = await Promise.all([
     tavora.workspace.getCurrent(),
     tavora.workspace.getViewport(),
-    tavora.ui.getTheme(),
     tavora.storage.get<number>("count"),
     tavora.documents.get<Note>("note"),
     tavora.panel.getState<{ view: View }>(),

@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { validateManifest } from "@tavora/module-schema";
+import packPackage from "@tavora/pack/package.json" with { type: "json" };
 import sdkPackage from "@tavora/sdk/package.json" with { type: "json" };
 import { MANIFEST } from "./registry";
 import { UserError } from "./messages";
@@ -43,6 +44,9 @@ export const BASE_COMPILER_OPTIONS = {
 
 /** The SDK version range a copy depends on: the SDK that ships with this Tavora, or newer. */
 export const SDK_RANGE = `^${sdkPackage.version}`;
+
+/** The pack version range a copy depends on (its build config is `@tavora/pack/vite`): the pack that ships with this Tavora, or newer. */
+export const PACK_RANGE = `^${packPackage.version}`;
 
 /** A folder and package name from a module name, and the part of its id after the prefix: lowercase letters, digits and dashes. */
 export function slugOf(name: string): string {
@@ -160,12 +164,13 @@ const REWRITES: Record<string, (text: string, copy: Context) => string> = {
   },
 };
 
-/** Dependencies with the Tavora workspace's own packages taken from npm instead; only the SDK is on npm. */
+/** Dependencies with the Tavora workspace's own packages taken from npm instead; only the SDK and pack are on npm. */
 function fromNpm(value: unknown): Record<string, string> {
   const dependencies: Record<string, string> = {};
   for (const [name, range] of Object.entries((value ?? {}) as Record<string, string>)) {
     if (!range.startsWith("workspace:")) dependencies[name] = range;
     else if (name === "@tavora/sdk") dependencies[name] = SDK_RANGE;
+    else if (name === "@tavora/pack") dependencies[name] = PACK_RANGE;
     else throw new UserError("error.copyWorkspace", { name });
   }
   return dependencies;

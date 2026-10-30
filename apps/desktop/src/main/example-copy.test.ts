@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { validateManifest } from "@tavora/module-schema";
 import { SDK_VERSION } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
-import { BASE_COMPILER_OPTIONS, copyExample, SDK_RANGE, slugOf } from "./example-copy";
+import { BASE_COMPILER_OPTIONS, copyExample, PACK_RANGE, SDK_RANGE, slugOf } from "./example-copy";
 import { isExampleModule } from "./registry";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
@@ -41,11 +41,11 @@ describe("copyExample", () => {
     expect(Object.keys(manifest)[0]).toBe("$schema");
 
     const pkg = await readJson(path.join(target, "package.json"));
-    expect(pkg).toMatchObject({ name: "my-module", version: "0.1.0", dependencies: { "@tavora/sdk": SDK_RANGE }, scripts: { dev: "vite build --watch" } });
+    expect(pkg).toMatchObject({ name: "my-module", version: "0.1.0", dependencies: { "@tavora/sdk": SDK_RANGE }, devDependencies: { "@tavora/pack": PACK_RANGE }, scripts: { dev: "vite build --watch" } });
     expect(JSON.stringify(pkg)).not.toContain("workspace:");
     expect((pkg.devDependencies as Record<string, string>).typescript).toBeDefined();
-    // The panels example's build config uses Node's path module.
-    expect(Boolean((pkg.devDependencies as Record<string, string>)["@types/node"])).toBe(folder === "panels-module");
+    // The build config comes from @tavora/pack and imports nothing from Node itself.
+    expect((pkg.devDependencies as Record<string, string>)["@types/node"]).toBeUndefined();
 
     const tsconfig = await readJson(path.join(target, "tsconfig.json"));
     expect(tsconfig.extends).toBeUndefined();
@@ -84,8 +84,9 @@ describe("copyExample", () => {
     expect(existsSync(target)).toBe(false);
   });
 
-  it("depends on the SDK that ships with this Tavora", () => {
+  it("depends on the SDK and pack that ship with this Tavora", async () => {
     expect(SDK_RANGE).toBe(`^${SDK_VERSION}`);
+    expect(PACK_RANGE).toBe(`^${(await readJson(path.join(repo, "packages/pack/package.json"))).version}`);
   });
 
   it("has the repository's TypeScript settings, without what only the repository uses", async () => {

@@ -1,19 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
+import { moduleConfig } from "@tavora/pack/vite";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 
-// Modules ship as self-contained bundles: relative asset paths, no remote code.
-export default defineConfig({
-  root: "src",
-  base: "./",
-  plugins: [vue(), tailwindcss()],
-  resolve: { conditions: ["source"], dedupe: ["vue"] },
-  build: {
-    outDir: "../dist",
-    emptyOutDir: true,
-    target: "chrome130",
-    modulePreload: { polyfill: false },
-    // Loaded from disk, never over a network, so one bundle is fine.
-    chunkSizeWarningLimit: 1500,
-  },
-});
+// Loaded from disk, never over a network, so one bundle is fine.
+export default defineConfig(moduleConfig({ plugins: [vue(), tailwindcss()], chunkSizeWarningLimit: 1500 }));

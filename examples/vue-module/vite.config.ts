@@ -1,15 +1,5 @@
-import { defineConfig } from "vite";
+import { moduleConfig } from "@tavora/pack/vite";
 import vue from "@vitejs/plugin-vue";
+import { defineConfig } from "vite";
 
-// Modules ship as self-contained bundles: relative asset paths, no remote code.
-export default defineConfig({
-  root: "src",
-  base: "./",
-  plugins: [vue()],
-  build: {
-    outDir: "../dist",
-    emptyOutDir: true,
-    target: "chrome130",
-    modulePreload: { polyfill: false },
-  },
-});
+export default defineConfig(moduleConfig({ plugins: [vue()] }));

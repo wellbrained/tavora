@@ -12,6 +12,7 @@
     "vue": "3.5.43"
   },
   "devDependencies": {
+    "@tavora/pack": "workspace:*",
     "@vitejs/plugin-vue": "6.0.9",
     "vite": "8.3.4",
     "vue-tsc": "3.3.11"

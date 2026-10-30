@@ -2,6 +2,11 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.15
+
+- New projects start the page with `bootstrapModule` from `@tavora/sdk/bootstrap` (in all three templates), which applies Tavora's theme and follows the language. The copied `applyTheme` function is gone.
+- `vite.config.ts` is a `moduleConfig()` call from `@tavora/pack/vite` (0.3.1), and `tsconfig.json` extends `@tavora/pack/tsconfig.module.json`. The build settings no longer sit in the project.
+
 ## 0.1.14
 
 - New projects start on `@tavora/sdk` 0.2.20, which adds the result queue and the run store.

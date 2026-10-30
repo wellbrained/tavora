@@ -2,7 +2,8 @@
 // Same features and data-testid values as the vanilla and React examples,
 // so one set of end-to-end tests covers all three.
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef } from "vue";
-import { connect, TavoraError, type TavoraSDK, type TavoraTheme, type TavoraViewport, type TavoraWorkspace } from "@tavora/sdk";
+import { TavoraError, type TavoraSDK, type TavoraTheme, type TavoraViewport, type TavoraWorkspace } from "@tavora/sdk";
+import { bootstrapModule, type ModuleBootstrap } from "@tavora/sdk/bootstrap";
 
 interface Note {
   text: string;
@@ -22,7 +23,11 @@ const noteStatus = ref("");
 const view = ref<View>("list");
 
 const unsubscribe: (() => void)[] = [];
-onUnmounted(() => unsubscribe.forEach((fn) => fn()));
+let boot: ModuleBootstrap | undefined;
+onUnmounted(() => {
+  unsubscribe.forEach((fn) => fn());
+  boot?.dispose();
+});
 
 async function loadNote(sdk: TavoraSDK) {
   const doc = await sdk.documents.get<Note>("note");
@@ -34,23 +39,24 @@ async function loadNote(sdk: TavoraSDK) {
 
 onMounted(async () => {
   try {
-    const sdk = await connect();
-    const [currentWorkspace, initialViewport, initialTheme, savedCount, noteText, panel] = await Promise.all([
+    boot = await bootstrapModule();
+    const sdk = boot.sdk;
+    if (!sdk) throw boot.error;
+    const [currentWorkspace, initialViewport, savedCount, noteText, panel] = await Promise.all([
       sdk.workspace.getCurrent(),
       sdk.workspace.getViewport(),
-      sdk.ui.getTheme(),
       sdk.storage.get<number>("count"),
       loadNote(sdk),
       sdk.panel.getState<{ view: View }>(),
     ]);
     workspace.value = currentWorkspace;
     viewport.value = initialViewport;
-    theme.value = initialTheme;
+    theme.value = boot.theme!;
     count.value = savedCount ?? 0;
     view.value = panel?.view ?? "list";
     unsubscribe.push(
       sdk.workspace.onResize((next) => (viewport.value = next)),
-      sdk.ui.onThemeChange((next) => (theme.value = next)),
+      boot.onTheme((next) => (theme.value = next)),
       sdk.lifecycle.onSuspend(() => (lifecycle.value = "suspended")),
       sdk.lifecycle.onResume(() => (lifecycle.value = "active")),
       sdk.documents.onChange(async (change) => {

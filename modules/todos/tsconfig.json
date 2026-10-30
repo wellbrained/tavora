@@ -11,6 +11,7 @@
     // them from their builds and only the SDK from its sources.
     "customConditions": [],
     "paths": {
+      "@tavora/pack/vite": ["../../packages/pack/src/vite.ts"],
       "@tavora/sdk": ["../../packages/sdk/src/index.ts"],
       "@tavora/sdk/bootstrap": ["../../packages/sdk/src/bootstrap.ts"],
       "@tavora/sdk/store": ["../../packages/sdk/src/store.ts"],

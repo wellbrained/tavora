@@ -1,6 +1,6 @@
 {
   "name": "@tavora/pack",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Packs and publishes Tavora modules from CI with a publisher key file, and reads and checks module zips. Developers publish from Tavora itself.",
   "type": "module",
   "keywords": [
@@ -30,6 +30,12 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./vite": {
+      "source": "./src/vite.ts",
+      "types": "./dist/vite.d.ts",
+      "default": "./dist/vite.js"
+    },
+    "./tsconfig.module.json": "./tsconfig.module.json",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -39,11 +45,17 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
       },
+      "./vite": {
+        "types": "./dist/vite.d.ts",
+        "default": "./dist/vite.js"
+      },
+      "./tsconfig.module.json": "./tsconfig.module.json",
       "./package.json": "./package.json"
     }
   },
   "files": [
     "dist",
+    "tsconfig.module.json",
     "README.md",
     "CHANGELOG.md"
   ],
