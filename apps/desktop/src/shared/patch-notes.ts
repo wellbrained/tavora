@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.22.8",
+    date: "2026-10-30",
+    title: "Connector questions",
+    notes: [
+      "A stream overlay question goes away when you close the last panel of the module that asked.",
+    ],
+    prs: [
+      { number: 506, title: "Desktop: a connector question ends with the module's last panel" },
+    ],
+    tags: ["privacy", "website", "workspace"],
+  },
+  {
     version: "0.22.7",
     date: "2026-10-30",
     title: "Safer module packages",
