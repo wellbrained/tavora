@@ -512,9 +512,11 @@ export class AccountStore {
     const name = this.developer(accountId)?.name ?? null;
     this.db.exec("begin");
     try {
+      // Banning again (to finish a ban that stopped halfway) keeps the first ban: its reason, its time and the modules it named.
+      const all = [...new Set([...(this.bannedModules(accountId) ?? []), ...modules])];
       this.db
-        .prepare("insert into bans (account_id, reason, note, banned_at, modules, email, name) values (?, ?, ?, ?, ?, ?, ?) on conflict (account_id) do update set reason = excluded.reason, note = excluded.note, banned_at = excluded.banned_at, modules = excluded.modules")
-        .run(accountId, reason, note, now, JSON.stringify(modules), email, name);
+        .prepare("insert into bans (account_id, reason, note, banned_at, modules, email, name) values (?, ?, ?, ?, ?, ?, ?) on conflict (account_id) do update set modules = excluded.modules")
+        .run(accountId, reason, note, now, JSON.stringify(all), email, name);
       this.db.prepare("insert into banned_keys (fingerprint, account_id) select fingerprint, account_id from publisher_keys where account_id = ? on conflict (fingerprint) do nothing").run(accountId);
       this.db.exec("commit");
     } catch (error) {
@@ -523,13 +525,26 @@ export class AccountStore {
     }
   }
 
+  /** The module ids a ban delisted, or null when the account is not banned. */
+  bannedModules(accountId: string): string[] | null {
+    const row = this.db.prepare("select modules from bans where account_id = ?").get(accountId) as { modules: string } | undefined;
+    return row ? (JSON.parse(row.modules) as string[]) : null;
+  }
+
   /** Lifts a ban; returns the module ids the ban delisted, or null when the account was not banned. */
   unban(accountId: string): string[] | null {
-    const row = this.db.prepare("select modules from bans where account_id = ?").get(accountId) as { modules: string } | undefined;
-    if (!row) return null;
-    this.db.prepare("delete from banned_keys where account_id = ?").run(accountId);
-    this.db.prepare("delete from bans where account_id = ?").run(accountId);
-    return JSON.parse(row.modules) as string[];
+    const modules = this.bannedModules(accountId);
+    if (modules === null) return null;
+    this.db.exec("begin");
+    try {
+      this.db.prepare("delete from banned_keys where account_id = ?").run(accountId);
+      this.db.prepare("delete from bans where account_id = ?").run(accountId);
+      this.db.exec("commit");
+    } catch (error) {
+      this.db.exec("rollback");
+      throw error;
+    }
+    return modules;
   }
 
   /** Whether an account is banned. */

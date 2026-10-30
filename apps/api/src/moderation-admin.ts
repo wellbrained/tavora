@@ -179,7 +179,8 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
     }
     const id = typeof accountId === "string" ? accountId : catalog.waitingVersion(sha256 as string)?.accountId;
     if (!id) return context.json({ error: "No such developer." }, 404);
-    if (accounts.isBanned(id)) return context.json({ error: "This developer is banned already." }, 409);
+    // A ban that stopped halfway (a module still listed or a version waiting) may be run again to finish it.
+    if (accounts.isBanned(id) && !lifecycle.banUnfinished(id)) return context.json({ error: "This developer is banned already." }, 409);
     const email = accounts.account(id)?.email;
     if (email && ownerEmail?.trim() && email.toLowerCase() === ownerEmail.trim().toLowerCase()) return context.json({ error: "This is the owner's account. It can't be banned." }, 403);
     if (!email && !accounts.developer(id) && accounts.keys(id).length === 0 && catalog.modulesOfAccount(id, []).length === 0) return context.json({ error: "No such developer." }, 404);

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { signFiles, writeZip, type ZipFile } from "@tavora/pack";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { accountLifecycle, type AccountStores } from "./account-lifecycle.ts";
 import { AccountStore } from "./account-store.ts";
 import { ActivityLog } from "./activity-log.ts";
@@ -123,6 +123,28 @@ describe("deleting an account", () => {
     expect(source).toMatch(/\.\.\.\(lifecycle \? \{ lifecycle \} : \{\}\),\n\s*\.\.\.\(mailDailyLimit/);
     expect(source.match(/\.\.\.\(lifecycle \? \{ lifecycle \} : \{\}\)/g)).toHaveLength(2);
   });
+
+  it("removes the account last, so a store that fails leaves it to delete again, and the retry finishes", () => {
+    const accounts = new AccountStore(":memory:");
+    const reviews = new ReviewStore(":memory:");
+    const account = accounts.createAccount({ email: "gone@example.com" }, 1);
+    reviews.rate(account.id, "wellbrained.timer", { stars: 4, text: "Nice timer.", version: "1.0.0" }, 1);
+    let failing = true;
+    const leaderboards = {
+      forget: () => {
+        if (failing) throw new Error("disk full");
+      },
+    };
+    const lifecycle = accountLifecycle({ accounts, catalog: undefined, copies: undefined, reviews, conversations: undefined, leaderboards: leaderboards as never, icons: undefined });
+
+    expect(() => lifecycle.delete(account.id, 2)).toThrow("disk full");
+    expect(accounts.account(account.id)).not.toBeNull();
+
+    failing = false;
+    lifecycle.delete(account.id, 3);
+    expect(accounts.account(account.id)).toBeNull();
+    expect(reviews.own(account.id, "wellbrained.timer")).toBeNull();
+  });
 });
 
 describe("suspending an account", () => {
@@ -170,5 +192,49 @@ describe("banning a developer", () => {
     expect(await contact()).toEqual({ enabled: true, link: "https://github.com/wellbrained/timer/issues" });
     const after = (await (await call("GET", `/v1/conversations/${opened}`, mara.token)).json()) as { conversation: { state: string } };
     expect(after.conversation.state).toBe("closed");
+  });
+
+  it("writes the ban before anything else: when that fails, every module stays listed", async () => {
+    const { store, catalog, developer, adminCall } = setup();
+    const ban = vi.spyOn(store, "ban").mockImplementationOnce(() => {
+      throw new Error("disk full");
+    });
+    expect((await adminCall("/api/moderation/ban", { accountId: developer.id, reason: "spam" })).status).toBe(500);
+    expect(store.isBanned(developer.id)).toBe(false);
+    expect(catalog.isListed("wellbrained.timer")).toBe(true);
+    ban.mockRestore();
+  });
+
+  it("keeps the modules on the ban when unlisting fails, so banning again finishes and unban relists them", async () => {
+    const { store, catalog, developer, adminCall } = setup();
+    const unlist = vi.spyOn(catalog, "unlistAll").mockImplementationOnce(() => {
+      throw new Error("disk full");
+    });
+    expect((await adminCall("/api/moderation/ban", { accountId: developer.id, reason: "spam" })).status).toBe(500);
+    expect(store.isBanned(developer.id)).toBe(true);
+    expect(store.bans()[0]?.modules).toEqual(["wellbrained.timer"]);
+    expect(catalog.isListed("wellbrained.timer")).toBe(true);
+    unlist.mockRestore();
+
+    // Something is left to do, so a second ban isn't refused as "banned already"; it keeps the modules of the first.
+    expect(await (await adminCall("/api/moderation/ban", { accountId: developer.id, reason: "unsafe" })).json()).toMatchObject({ ok: true, unlisted: ["wellbrained.timer"] });
+    expect(catalog.isListed("wellbrained.timer")).toBe(false);
+    expect(store.bans()[0]).toMatchObject({ reason: "spam", modules: ["wellbrained.timer"] });
+    expect((await adminCall("/api/moderation/ban", { accountId: developer.id, reason: "spam" })).status).toBe(409);
+
+    expect(await (await adminCall("/api/moderation/unban", { accountId: developer.id })).json()).toMatchObject({ ok: true, relisted: ["wellbrained.timer"] });
+  });
+
+  it("lifts the ban only after the modules are listed again, so a failed unban can be repeated", async () => {
+    const { store, catalog, developer, adminCall } = setup();
+    await adminCall("/api/moderation/ban", { accountId: developer.id, reason: "spam" });
+    const relist = vi.spyOn(catalog, "setListed").mockImplementationOnce(() => {
+      throw new Error("disk full");
+    });
+    expect((await adminCall("/api/moderation/unban", { accountId: developer.id })).status).toBe(500);
+    expect(store.isBanned(developer.id)).toBe(true);
+    relist.mockRestore();
+    expect(await (await adminCall("/api/moderation/unban", { accountId: developer.id })).json()).toMatchObject({ ok: true, relisted: ["wellbrained.timer"] });
+    expect(catalog.isListed("wellbrained.timer")).toBe(true);
   });
 });
