@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.7",
+    date: "2026-10-30",
+    title: "Ready for built-in module updates",
+    notes: [
+      "Tavora's own modules are ready to get fixes without a new Tavora version. It isn't switched on yet.",
+    ],
+    prs: [
+      { number: 524, title: "Let built-in modules update from the catalogue" },
+    ],
+    tags: ["catalog", "catalogue", "modules", "privacy", "publishing", "service", "settings", "updates", "website"],
+  },
+  {
     version: "0.23.6",
     date: "2026-10-30",
     title: "PDF Viewer keeps track of your originals",
