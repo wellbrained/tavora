@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { closeTab, emptyTabs, keepExisting, openTab, parseTabState, reorderTabs } from "./tabs";
+import { closeTab, emptyTabs, followRenamed, keepExisting, openTab, parseTabState, reorderTabs } from "./tabs";
 
 describe("parseTabState", () => {
   it("reads what was saved and repairs the rest", () => {
@@ -47,5 +47,13 @@ describe("reorderTabs", () => {
     const state = { tabs: ["a", "b", "c"], active: "a" };
     expect(reorderTabs(state, ["c", "a", "b"]).tabs).toEqual(["c", "a", "b"]);
     expect(reorderTabs(state, ["c", "x", "a"]).tabs).toEqual(["c", "a", "b"]);
+  });
+});
+
+describe("followRenamed", () => {
+  it("moves open and shown tabs to a file's new id, in place", () => {
+    const state = { tabs: ["a", "b", "c"], active: "b" };
+    expect(followRenamed(state, new Map([["b", "b2"]]))).toEqual({ tabs: ["a", "b2", "c"], active: "b2" });
+    expect(followRenamed(state, new Map([["x", "y"]]))).toBe(state);
   });
 });

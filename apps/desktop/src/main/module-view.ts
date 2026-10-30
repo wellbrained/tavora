@@ -3,8 +3,8 @@ import { serveReadOnlyFile } from './read-only-files-http';
 import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
-import type { CallName, Capability, GameOverlayResult, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
+import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, shell, WebContentsView, type Session } from "electron";
+import type { CallName, Capability, GameOverlayResult, ReadOnlyFile, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
 import { gestureCounts, type Opacity } from "./game-overlays";
@@ -69,7 +69,8 @@ export interface ModuleViewOptions {
   onNeedsTavora?(): void;
   /** Shows a module's menu in the host UI, over this panel (host.ts); resolves with the chosen id, or null. */
   showMenu(menu: CheckedMenu): Promise<string | null>;
-  pickReadOnlyFile?(extensions:string[]):Promise<string|null>;
+  /** files.pickReadOnly, after its click was taken: Tavora's open dialog; the chosen paths (one unless `multiple`), empty when closed. */
+  pickReadOnlyFile?(extensions:string[], multiple:boolean):Promise<string[]>;
   /** pictures.save, after its click was taken: Tavora's save dialog for the checked PNG; the file name, or null when the user closed it. */
   savePicture(png: Buffer, name: string): Promise<string | null>;
   /** files.saveJson, after its click was taken: Tavora's save dialog for the formatted JSON; the file name, or null when the user closed it. */
@@ -141,6 +142,8 @@ export function moduleOrigin(moduleId: string): string {
 }
 
 const hardened = new WeakSet<Session>();
+/** The module each session serves its files from: updated when a panel reloads with a new copy. */
+const serving = new WeakMap<Session, InstalledModule>();
 
 /**
  * When the user last clicked or pressed a key in a page of this session (one module in one workspace). The clipboard
@@ -214,14 +217,17 @@ export function documentsFolder(): string {
  */
 function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blobs: BlobStore, files: Pick<ModuleViewOptions, "savePicture" | "saveJson" | "openJson">): Session {
   const ses = session.fromPartition(modulePartition(module.owner, module.manifest.id, workspace.id));
+  // The folder a session serves from follows the module as installed now: a built-in module's downloaded copy lives elsewhere than the shipped one.
+  serving.set(ses, module);
   if (hardened.has(ses)) return ses;
   hardened.add(ses);
 
   const origin = moduleOrigin(module.manifest.id);
-  // WebAssembly only for a module of Tavora's own that asked for it (the registry refuses the request from any other).
-  const csp = moduleCsp(module.provenance === "official" && module.manifest.permissions.webAssembly === true);
 
   ses.protocol.handle(MODULE_SCHEME, async (request) => {
+    const module = serving.get(ses)!;
+    // WebAssembly only for a module of Tavora's own that asked for it (the registry refuses the request from any other).
+    const csp = moduleCsp(module.provenance === "official" && module.manifest.permissions.webAssembly === true);
     // URL.origin is "null" for custom schemes in Node, so compare the host.
     const url = new URL(request.url);
     if (url.host !== module.manifest.id) return new Response("Not found", { status: 404 });
@@ -666,14 +672,30 @@ export class ModuleView {
           close:(id,hoverOnly)=>this.options.tooltip?.close(id,hoverOnly),
         },
         readOnlyFiles: {
-          pick: async extensions => {
+          pick: async (extensions, multiple) => {
             this.refuseOverGame('files.pickReadOnly');
             await this.takeGesture('files.pickReadOnly');
-            const selected = await this.options.pickReadOnlyFile?.(extensions);
-            if (!selected || this.bridge !== bridge) return null;
-            return new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).remember(selected,()=>this.bridge===bridge);
+            const selected = (await this.options.pickReadOnlyFile?.(extensions, multiple)) ?? [];
+            if (!selected.length || this.bridge !== bridge) return [];
+            const files = new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id);
+            const picked: ReadOnlyFile[] = [];
+            try {
+              for (const path of selected) picked.push(await files.remember(path,()=>this.bridge===bridge));
+            } catch (error) {
+              // All or nothing: a pick that fails part-way leaves no links behind that the module never heard of.
+              await Promise.all(picked.map(file=>files.forget(file.id).catch(()=>undefined)));
+              throw error;
+            }
+            return picked;
           },
           forget: id => new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).forget(id),
+          check: id => new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).check(id),
+          showInFolder: async id => {
+            this.refuseOverGame('files.showInFolder');
+            await this.takeGesture('files.showInFolder');
+            const place = await new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).locate(id);
+            if (this.bridge === bridge) shell.showItemInFolder(place);
+          },
         },
         showMenu: async (menu) => {
           // One click opens one menu, so a page cannot keep menus coming on its own.
@@ -1152,7 +1174,12 @@ export class ModuleView {
     this.heartbeat = undefined;
   }
 
-  reload(): void {
+  /** Loads the page again; with `next`, from the module as installed now (an update may be in another folder). */
+  reload(next?: InstalledModule): void {
+    if (next && next.manifest.id === this.options.module.manifest.id && next.owner === this.options.module.owner) {
+      this.options.module = next;
+      serving.set(this.view.webContents.session, next);
+    }
     this.setStatus("loading");
     this.view.webContents.reload();
   }

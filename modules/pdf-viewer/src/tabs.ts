@@ -45,3 +45,11 @@ export function reorderTabs(state: TabState, ids: readonly string[]): TabState {
   const missing = state.tabs.filter((id) => !known.includes(id));
   return { ...state, tabs: [...known, ...missing] };
 }
+
+/** Tabs of files that got a new id (a reloaded original, see `previous`) follow it. */
+export function followRenamed(state: TabState, renamed: ReadonlyMap<string, string>): TabState {
+  if (!state.tabs.some((id) => renamed.has(id))) return state;
+  const to = (id: string) => renamed.get(id) ?? id;
+  const tabs = [...new Set(state.tabs.map(to))];
+  return { tabs, active: state.active === null ? null : to(state.active) };
+}

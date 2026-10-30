@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // PDF Viewer: a tab per open file, and a list of every file kept for this game. Files are picked or dropped, copied
 // into the module's file store and listed in one document that every panel of the workspace shares. Which files a
-// panel has open, and which one it shows, is that panel's own state.
+// panel has open, and which one it shows, is that panel's own state. A file picked in Tavora's open dialog stays linked
+// to its original: when the tab is shown, a bar offers to reload it after it changed, or to remove it once it's gone.
 import { FilePlus2, FolderOpen, Upload } from "@lucide/vue";
 import { connectModule, ConfirmDialog, errorMessage, NameDialog } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -11,16 +12,16 @@ import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
 import { TabStrip, type StripTab } from "@tavora/official-ui/components/ui/tabs";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
-import type { TavoraSDK } from "@tavora/sdk";
+import { TavoraError, type TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import FileList from "./FileList.vue";
 import ImagePane from "./ImagePane.vue";
 import PdfPane from "./PdfPane.vue";
-import { ACCEPT_ATTRIBUTE, formatBytes, sortPicked, type FileEntry } from "./files";
+import { ACCEPT_ATTRIBUTE, formatBytes, PICK_EXTENSIONS, sortPicked, versionOf, type FileEntry, type LinkStatus } from "./files";
 import { setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
 import { createFilesStore, FileProblem, type FilesStore } from "./store";
-import { closeTab, emptyTabs, keepExisting, openTab, parseTabState, reorderTabs, type TabState } from "./tabs";
+import { closeTab, emptyTabs, followRenamed, keepExisting, openTab, parseTabState, reorderTabs, type TabState } from "./tabs";
 
 const TOAST_MS = 8000;
 
@@ -35,6 +36,11 @@ const picker = ref<HTMLInputElement | null>(null);
 const renaming = ref<FileEntry | null>(null);
 const removing = ref<FileEntry | null>(null);
 const busy = ref(false);
+/** What the last check of each file's original found, by file id. */
+const statuses = ref(new Map<string, LinkStatus>());
+const reloading = ref(false);
+/** Whether this Tavora links picked files to their originals (files.check and the rest). */
+const canLink = ref(false);
 /** How far the start is, for the bar shown until the panel is ready. */
 const starting = ref(20);
 
@@ -49,6 +55,9 @@ const tabs = computed<StripTab[]>(() =>
   }),
 );
 const active = computed(() => (tabState.value.active ? (byId.value.get(tabState.value.active) ?? null) : null));
+const activeStatus = computed(() => (active.value?.link ? statuses.value.get(active.value.id) : undefined));
+/** Files whose original can be shown in its folder: linked, and not found gone or unlinked on this PC. */
+const located = computed(() => new Set(files.value.filter((file) => file.link && !["gone", "unlinked"].includes(statuses.value.get(file.id) ?? "")).map((file) => file.id)));
 
 function notice(message: string) {
   toast({ title: message, duration: TOAST_MS, testid: "notice-toast" });
@@ -65,11 +74,19 @@ onMounted(async () => {
     const opened = await createFilesStore(connected, { title: () => t("files.title") });
     const saved = parseTabState(await connected.panel.getState<unknown>());
     tabState.value = keepExisting(saved, (id) => opened.find(id) !== undefined);
+    // Asking about an id nobody linked tells whether this Tavora has the call at all; an older one doesn't know it.
+    canLink.value = await connected.files.check("0".repeat(32)).then(
+      () => true,
+      (reason) => !(reason instanceof TavoraError && reason.code === "UNKNOWN_METHOD"),
+    );
     sdk.value = connected;
     store.value = opened;
     // Hidden or closed: what the panel remembers is written now. The file list and the page and zoom of each file
     // are saved by the document store on its own.
     cleanup.push(connected.lifecycle.onSuspend(flushNow), connected.lifecycle.onDispose(flushNow));
+    // Back from hidden: the original may have changed meanwhile.
+    cleanup.push(connected.lifecycle.onResume(() => tabState.value.active && void checkOriginal(tabState.value.active)));
+    for (const id of tabState.value.tabs) void checkOriginal(id);
   } catch (reason) {
     error.value = errorMessage(reason);
   }
@@ -80,10 +97,11 @@ onBeforeUnmount(() => {
   void store.value?.dispose();
 });
 
-// Another panel removed a file: its tab goes too.
+// Another panel reloaded a file's original: its tab follows the new copy. Another panel removed a file: its tab goes too.
 watch(files, () => {
   if (!store.value) return;
-  const next = keepExisting(tabState.value, (id) => byId.value.has(id));
+  const renamed = new Map(files.value.flatMap((file) => (file.previous ? [[file.previous, file.id] as const] : [])));
+  const next = keepExisting(followRenamed(tabState.value, renamed), (id) => byId.value.has(id));
   if (next !== tabState.value) tabState.value = next;
 });
 
@@ -101,8 +119,29 @@ watch(tabState, () => void saveTabs(), { deep: true });
 
 // ── Opening files
 
-function chooseFiles() {
-  picker.value?.click();
+/** Tavora's open dialog, so the files stay linked to their originals; the plain picker on a Tavora without it. */
+async function chooseFiles() {
+  const connected = sdk.value;
+  if (!connected || !canLink.value) {
+    picker.value?.click();
+    return;
+  }
+  let picked;
+  try {
+    picked = await connected.files.pickReadOnly({ extensions: PICK_EXTENSIONS, multiple: true });
+  } catch (reason) {
+    notice(errorMessage(reason));
+    return;
+  }
+  for (const file of picked) {
+    try {
+      const entry = await store.value!.addLinked(file);
+      statuses.value.set(entry.id, "same");
+      tabState.value = openTab(tabState.value, entry.id);
+    } catch (reason) {
+      notice(problemText(reason, file.name));
+    }
+  }
 }
 
 async function addFiles(list: File[]) {
@@ -157,6 +196,77 @@ function onDrop(event: DragEvent) {
   if (!hasFiles(event)) return;
   event.preventDefault();
   void addFiles([...(event.dataTransfer?.files ?? [])]);
+}
+
+// ── The original file
+
+/** Looks whether a file's original changed or is gone; a file without one is left alone. */
+async function checkOriginal(id: string) {
+  const opened = store.value;
+  if (!opened?.find(id)?.link) return;
+  try {
+    const status = await opened.check(id);
+    if (status) statuses.value.set(id, status);
+  } catch {
+    // Can't tell right now: no bar, the next look tries again.
+  }
+}
+
+// A tab brought to the front, or its original reloaded or skipped (here or in another panel), is looked at again.
+watch(
+  () => (active.value?.link ? `${active.value.id}|${versionOf(active.value.link)}|${active.value.link.skipped ?? ""}` : ""),
+  () => active.value && void checkOriginal(active.value.id),
+);
+
+async function reloadActive() {
+  const file = active.value;
+  if (!file || !store.value) return;
+  reloading.value = true;
+  try {
+    const id = await store.value.reload(file.id);
+    statuses.value.set(id, "same");
+    tabState.value = followRenamed(tabState.value, new Map([[file.id, id]]));
+  } catch (reason) {
+    notice(t("original.reloadFailed", { name: file.name, error: errorMessage(reason) }));
+    void checkOriginal(file.id);
+  } finally {
+    reloading.value = false;
+  }
+}
+
+async function skipActive() {
+  const file = active.value;
+  if (!file) return;
+  statuses.value.set(file.id, "skipped");
+  await store.value?.skip(file.id).catch(() => undefined);
+}
+
+async function keepActive() {
+  const file = active.value;
+  if (!file) return;
+  statuses.value.delete(file.id);
+  await store.value?.unlink(file.id).catch((reason) => notice(errorMessage(reason)));
+}
+
+async function removeActive() {
+  const file = active.value;
+  if (!file || !store.value) return;
+  try {
+    await store.value.remove(file.id);
+    tabState.value = closeTab(tabState.value, file.id);
+    statuses.value.delete(file.id);
+  } catch (reason) {
+    notice(errorMessage(reason));
+  }
+}
+
+async function showInFolder(id: string) {
+  try {
+    await store.value?.showInFolder(id);
+  } catch {
+    notice(t("original.notFound"));
+    void checkOriginal(id);
+  }
 }
 
 // ── Links and passwords
@@ -251,10 +361,27 @@ async function remove() {
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" class="w-80 max-w-[calc(100vw-1rem)]">
-          <FileList :files="files" :active-id="tabState.active" :usage="usage" @open="show" @rename="askRename" @remove="askRemove" />
+          <FileList :files="files" :active-id="tabState.active" :usage="usage" :located="located" @open="show" @rename="askRename" @remove="askRemove" @show-in-folder="showInFolder" />
         </PopoverContent>
       </Popover>
     </header>
+
+    <Notice v-if="activeStatus === 'changed'" variant="info" class="m-1 mb-0 items-center py-1.5" :title="t('original.changed')" data-testid="original-changed">
+      <template #action>
+        <div class="flex gap-1">
+          <Button size="sm" :disabled="reloading" data-testid="original-reload" @click="reloadActive">{{ t("original.reload") }}</Button>
+          <Button size="sm" variant="ghost" :disabled="reloading" data-testid="original-not-now" @click="skipActive">{{ t("original.notNow") }}</Button>
+        </div>
+      </template>
+    </Notice>
+    <Notice v-else-if="activeStatus === 'gone'" variant="warning" class="m-1 mb-0 items-center py-1.5" :title="t('original.gone')" data-testid="original-gone">
+      <template #action>
+        <div class="flex gap-1">
+          <Button size="sm" variant="destructive" data-testid="original-remove" @click="removeActive">{{ t("original.remove") }}</Button>
+          <Button size="sm" variant="ghost" data-testid="original-keep" @click="keepActive">{{ t("original.keep") }}</Button>
+        </div>
+      </template>
+    </Notice>
 
     <main class="relative isolate min-h-0 flex-1">
       <PdfPane

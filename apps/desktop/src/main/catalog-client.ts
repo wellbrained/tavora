@@ -334,11 +334,11 @@ export class CatalogClient {
   /**
    * Every listed module, for the update check (catalog-updates.ts). It asks for the whole index with
    * no filter, so the service never learns which modules this user has (C11). Null when there is
-   * no usable answer.
+   * no usable answer. `official` also asks for Tavora's own modules (`tavora.*`), which the public index leaves out.
    */
-  async index(): Promise<CatalogEntry[] | null> {
+  async index({ official = false }: { official?: boolean } = {}): Promise<CatalogEntry[] | null> {
     try {
-      const response = await this.get("/v1/catalog", this.listTimeoutMs, "application/json");
+      const response = await this.get(official ? "/v1/catalog?include=official" : "/v1/catalog", this.listTimeoutMs, "application/json");
       if (failure(response.status)) return null;
       const body = (await response.json()) as { modules?: unknown } | null;
       const raw = Array.isArray(body?.modules) ? body.modules.slice(0, MAX_MODULES) : [];

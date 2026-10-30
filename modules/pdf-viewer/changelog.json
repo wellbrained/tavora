@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.1.1",
+    "date": "2026-10-30",
+    "notes": [
+      "Files you open stay linked to the original. You can pick several at once.",
+      "When the original changes, you can reload it. Your page and zoom stay.",
+      "When the original is gone, you can remove the file or keep your copy.",
+      "Show in folder, in the file list, opens where the original is."
+    ]
+  },
+  {
     "version": "0.1.0",
     "date": "2026-10-30",
     "notes": [

@@ -6,15 +6,16 @@
 // then, and Let's go shows them, kept in the library (so in backups and the cloud copy). Once we know publishing
 // isn't set up, a card offers the developer onboarding; on a new PC of a developer, a line points to the recovery key
 // on Publishing instead.
-import { CircleAlert, KeyRound, Rocket } from "@lucide/vue";
+import { CircleAlert, KeyRound, Rocket, Upload } from "@lucide/vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import type { SettingsSection } from "./settings-index";
-import { account, act, developerKeys, developerState, dialog, inbox, makesModules, releaseStatus, state } from "../../host";
+import { account, act, developerKeys, developerState, dialog, inbox, makesModules, releaseStatus, showToast, state } from "../../host";
 import { t } from "../../i18n";
 import DevModuleRow from "../developer/DevModuleRow.vue";
 import { devModules, waitsForPublish } from "../developer/dev-modules";
+import ModuleRow from "./ModuleRow.vue";
 import SettingGroup from "./SettingGroup.vue";
 
 const props = defineProps<{ highlight: string | null }>();
@@ -75,6 +76,13 @@ watch(
   },
   { immediate: true },
 );
+/** Built-in modules that can update from the catalogue; a dev build with that switched on can publish them. */
+const builtIn = computed(() => state.value!.modules.filter((module) => module.provenance === "official" && module.updatable).sort((a, b) => a.name.localeCompare(b.name)));
+
+async function publishOfficial(moduleId: string) {
+  const result = await act({ type: "publish-official-module", moduleId });
+  if (result.ok && result.id) showToast(t("officialPublish.done", { name: result.id }));
+}
 
 onMounted(() => {
   // The developer side and the contact settings as the service has them now; quietly, offline is fine.
@@ -145,5 +153,20 @@ onMounted(() => {
       {{ t("devModules.problems") }}
       <Button variant="link" class="h-auto p-0" @click="emit('show', 'dev-folders')">{{ t("settings.section.dev-folders") }}</Button>
     </p>
+
+    <SettingGroup v-if="state!.officialPublish.available && builtIn.length" :title="t('officialPublish.title')" :description="t('officialPublish.description')">
+      <ul class="flex flex-col" :aria-label="t('officialPublish.title')" data-testid="official-publish">
+        <ModuleRow v-for="module in builtIn" :key="module.id" :module="module" hide-origin>
+          <Button
+            variant="secondary"
+            :disabled="state!.officialPublish.busy !== null"
+            :data-testid="`publish-official-${module.id}`"
+            @click="publishOfficial(module.id)"
+          >
+            <Upload :stroke-width="1.5" /> {{ state!.officialPublish.busy === module.id ? t("officialPublish.working") : t("officialPublish.button") }}
+          </Button>
+        </ModuleRow>
+      </ul>
+    </SettingGroup>
   </template>
 </template>

@@ -1,6 +1,7 @@
 import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ChangelogEntry, type ModuleManifest } from "@tavora/module-schema";
+import { compareModuleVersions } from "../shared/module-version";
 import { resolveAsset } from "./assets";
 import { readModuleChangelog } from "./module-changelog";
 import { moduleIconUrl } from "./module-icon";
@@ -26,6 +27,13 @@ export interface InstalledModule {
   owner: string;
   /** Part of the host (the Browser), not a package on disk. */
   builtIn?: true;
+  /**
+   * The version of the copy that ships with Tavora, set on every module shipped in the app, also while a newer copy
+   * downloaded from the catalogue runs instead (official-updates.ts).
+   */
+  shippedVersion?: string;
+  /** This is the copy downloaded from the catalogue, not the shipped one. */
+  downloaded?: true;
   /** Loaded from this development folder, as the user added it in Settings > Development. */
   developmentFolder?: string;
   /** The module's project folder: the development folder itself, or a folder directly inside it. */
@@ -97,6 +105,11 @@ export interface ModuleSources {
    */
   development?: string[];
   local?: string[];
+  /**
+   * Copies of the shipped modules downloaded from the catalogue, one folder per id in `dir`. One runs instead of the
+   * shipped copy only when `trusted` says so and it is newer; otherwise the shipped copy stays.
+   */
+  officialUpdates?: { dir: string; trusted(id: string, dir: string): Promise<boolean> };
   /** This Tavora's version; a module whose `minTavora` is newer is not loaded. */
   tavoraVersion?: string;
 }
@@ -109,7 +122,7 @@ export interface ModuleSources {
  * cannot pass itself off as official.
  */
 export async function discoverModules(
-  { official = [], development = [], local = [], tavoraVersion }: ModuleSources,
+  { official = [], development = [], local = [], officialUpdates, tavoraVersion }: ModuleSources,
   problems: ModuleProblem[] = [],
 ): Promise<Map<string, InstalledModule>> {
   const modules = new Map<string, InstalledModule>();
@@ -163,10 +176,29 @@ export async function discoverModules(
         if (provenance === "local") report("another module with the same id is already loaded", "duplicate-id", about);
         continue;
       }
+      if (provenance === "official") installed.shippedVersion = installed.manifest.version;
       modules.set(id, installed);
     }
   }
+  if (officialUpdates) await useDownloaded(modules, officialUpdates, tavoraVersion);
   return modules;
+}
+
+/**
+ * Puts the newest trusted copy downloaded from the catalogue in place of a shipped module. Only a shipped id can be
+ * updated, only to a newer version, and only when the copy passes `trusted`; the shipped copy stays the fallback.
+ * The result is as official as the shipped copy (same owner, so the same data), with the same rights.
+ */
+async function useDownloaded(modules: Map<string, InstalledModule>, { dir, trusted }: NonNullable<ModuleSources["officialUpdates"]>, tavoraVersion: string | undefined): Promise<void> {
+  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const shipped = modules.get(entry.name);
+    if (!entry.isDirectory() || shipped?.shippedVersion === undefined || shipped.downloaded) continue;
+    const folder = path.join(dir, entry.name);
+    if (!(await trusted(entry.name, folder))) continue;
+    const copy = await loadModule(folder, "official", tavoraVersion, () => undefined);
+    if (!copy || copy.manifest.id !== entry.name || compareModuleVersions(copy.manifest.version, shipped.shippedVersion) <= 0) continue;
+    modules.set(entry.name, { ...copy, shippedVersion: shipped.shippedVersion, downloaded: true });
+  }
 }
 
 /** A folder directly inside a development folder that may be a module project: not hidden, not node_modules. */

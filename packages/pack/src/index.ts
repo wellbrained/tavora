@@ -1,4 +1,4 @@
-export { loadExistingKey } from "./keys.ts";
+export { createKeyFile, loadExistingKey } from "./keys.ts";
 export { cleanLinkCode, DEFAULT_API_URL, LINK_STATEMENT, LinkError, linkKey, linkRequest } from "./link.ts";
 export { collectFiles, MANIFEST_FILE, packModule, PackError } from "./pack.ts";
 export { CATALOG_RULES_URL, PUBLISH_STATEMENT, PublishError, publishSignature, publishZip, withdrawVersion, type Published } from "./publish.ts";

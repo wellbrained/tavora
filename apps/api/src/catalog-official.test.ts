@@ -97,10 +97,10 @@ function setup(pinned: "on" | "off" = "on") {
 }
 
 describe("Tavora's own modules in the catalogue", () => {
-  it("ships with empty pins, which refuses every tavora.* upload as before", async () => {
-    expect(TAVORA_PUBLISHER_KEY).toBe("");
-    expect(TAVORA_ACCOUNT_ID).toBe("");
-    expect(OFFICIAL_PINS).toEqual({ key: "", account: "" });
+  it("pins a key fingerprint and an account, and refuses every tavora.* upload when the pins are empty", async () => {
+    expect(TAVORA_PUBLISHER_KEY).toMatch(/^[0-9a-f]{32}$/);
+    expect(TAVORA_ACCOUNT_ID).not.toBe("");
+    expect(OFFICIAL_PINS).toEqual({ key: TAVORA_PUBLISHER_KEY, account: TAVORA_ACCOUNT_ID });
     const { tavora, pinnedKey, send, reason, catalog } = setup("off");
     const answer = await send(pinnedKey, moduleZip(pinnedKey, "tavora.notes"), tavora.token);
     expect(answer.status).toBe(400);

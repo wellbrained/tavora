@@ -203,3 +203,16 @@ function renamed(zip: Buffer, name: string): Buffer {
   }
   return out;
 }
+
+describe("createKeyFile", () => {
+  it("writes a new Ed25519 key that loads again, readable by its owner only, and never overwrites a file", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "tavora-key-"));
+    const file = path.join(dir, "tavora.key");
+    const { createKeyFile, loadExistingKey } = await import("./index.ts");
+    const { key } = await createKeyFile(file);
+    expect(fingerprint(key)).toBe(fingerprint((await loadExistingKey(file)).key));
+    if (process.platform !== "win32") expect((await stat(file)).mode & 0o077).toBe(0);
+    await expect(createKeyFile(file)).rejects.toThrow(/already exists/);
+    expect(fingerprint((await loadExistingKey(file)).key)).toBe(fingerprint(key));
+  });
+});

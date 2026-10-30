@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.21
+
+- New projects start on `@tavora/sdk` 0.3.3: linked files can be picked several at once, checked and shown in their folder.
+
 ## 0.1.20
 
 - New projects pack with `@tavora/pack` 0.3.2, which refuses pre-release versions such as `1.0.0-beta.1`: module versions are plain `major.minor.patch`.

@@ -4,14 +4,15 @@
 // that asks for more is granted only what the user was shown. The host lends it its panels, the
 // recycle bin and the module list; the steps and their order live here.
 import path from "node:path";
-import { LOCAL_OWNER, type Connector } from "@tavora/module-schema";
+import { LOCAL_OWNER, OFFICIAL_OWNER, type Connector } from "@tavora/module-schema";
 import type { CatalogClient } from "./catalog-client";
 import { CatalogUpdater, type CatalogInstalled } from "./catalog-updates";
 import type { GrantStore } from "./grants";
 import { checkZipData, forgetOwner, installZip, installZipData, type InstallOptions, type Installed } from "./installer";
 import { LibraryError } from "./library";
 import { UserError } from "./messages";
-import type { InstalledModule } from "./registry";
+import type { OfficialUpdates } from "./official-updates";
+import { OFFICIAL_PREFIX, type InstalledModule } from "./registry";
 import type { SafetyCheck } from "./safety-lists";
 
 /** What the lifecycle may do to a module's open panels. */
@@ -44,6 +45,8 @@ export interface ModuleLifecycleOptions {
   autoUpdateModules(): boolean;
   /** The first key of a key's account by its successions (safety-lists.ts). */
   firstKey(key: string): string;
+  /** Tavora's own modules downloaded from the catalogue (official-updates.ts); absent: they never update. */
+  official?: OfficialUpdates;
   panels: ModulePanels;
   /** A module was removed from the user's modules folder: whatever Tavora keeps only while it is installed (game overlays) goes. */
   removed?(owner: string, moduleId: string): void;
@@ -69,9 +72,11 @@ export class ModuleLifecycle {
       autoInstall: () => options.autoUpdateModules(),
       tavoraVersion: options.tavoraVersion,
       firstKey: (key) => options.firstKey(key),
-      check: async (zip, expect) => checkZipData(zip, { ...(await this.installOptions()), expect }),
+      officialSigner: (key, sha256) => options.official?.signerTrusted(key, sha256) === true,
+      official: () => options.official?.on === true,
+      check: async (zip, expect) => checkZipData(zip, { ...(await this.installOptions(expect.id)), expect }),
       install: async (zip, expect) => {
-        const installed = await installZipData(zip, { ...(await this.installOptions()), expect, catalog: true });
+        const installed = await installZipData(zip, { ...(await this.installOptions(expect.id)), expect, catalog: true });
         await this.finishInstall(installed);
         // Counted as an update, not an install: only the module id, once, so the totals per day can be charted.
         void this.options.catalog.updated(installed.manifest.id);
@@ -168,7 +173,7 @@ export class ModuleLifecycle {
   }
 
   /** What every install goes by. A module stopped by a block still counts as installed, so a fixed zip is its update. */
-  private async installOptions(): Promise<InstallOptions> {
+  private async installOptions(updating?: string): Promise<InstallOptions> {
     const { userModules, safety } = await this.options.installRules();
     return {
       userData: this.options.userData,
@@ -176,12 +181,14 @@ export class ModuleLifecycle {
       modules: new Map([...this.options.blocked(), ...this.options.modules()]),
       tavoraVersion: this.options.tavoraVersion,
       ...(safety ? { safety } : {}),
+      // Only the catalogue updater, and only for a `tavora.*` id, takes the official path (installer.ts).
+      ...(updating?.startsWith(OFFICIAL_PREFIX) && this.options.official ? { official: this.options.official } : {}),
     };
   }
 
   private async finishInstall(installed: Installed): Promise<string> {
     // The developer name comes with the install, so it is said at once (it waits for the service at most a few seconds).
-    if (installed.owner !== LOCAL_OWNER) await this.options.introduce(installed.owner).catch(() => undefined);
+    if (installed.owner !== LOCAL_OWNER && installed.owner !== OFFICIAL_OWNER) await this.options.introduce(installed.owner).catch(() => undefined);
     await this.options.reload();
     if (installed.updated) this.options.panels.reload(installed.manifest.id);
     return installed.manifest.id;
@@ -190,6 +197,14 @@ export class ModuleLifecycle {
   /** The modules installed from the catalog, as they are now, for the update check. */
   private catalogInstalled(): CatalogInstalled[] {
     const installed: CatalogInstalled[] = [];
+    // Tavora's own shipped modules, while the pins are set: whatever copy runs now is what an update must beat.
+    if (this.options.official?.on) {
+      for (const [id, module] of this.options.modules()) {
+        if (module.provenance !== "official" || module.builtIn || module.shippedVersion === undefined) continue;
+        const { network, connectors = [] } = module.manifest.permissions;
+        installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors] }, official: true });
+      }
+    }
     for (const id of this.options.catalogIds()) {
       // A module stopped by a block counts too: an update that is not blocked brings it back (C14).
       const module = this.options.modules().get(id) ?? this.options.blocked().get(id);
