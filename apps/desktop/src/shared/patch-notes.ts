@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.5",
+    date: "2026-10-30",
+    title: "A shorter Development page",
+    notes: [
+      "Your modules in Settings > Development take one line each, so a few projects fit on one screen.",
+      "Examples fold away once you have modules of your own. Show brings them back.",
+      "Messages from users only says something for a module where messages are off.",
+      "On a new PC, getting your recovery key is now at the top of Development.",
+    ],
+    prs: [
+      { number: 523, title: "Settings > Development: shorter with many modules" },
+    ],
+    tags: ["development", "publishing", "settings"],
+  },
+  {
     version: "0.23.4",
     date: "2026-10-30",
     title: "Plain module versions",
