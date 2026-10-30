@@ -6,6 +6,9 @@ export type { AnchorTarget, MenuOptions, TooltipMoveOptions, TooltipShowOptions 
 // Protocol reference: apps/docs/reference/protocol.md.
 
 import {
+  MIN_TAVORA,
+  supportsCall,
+  type SupportedCall,
   BLOB_PATH,
   CLIPBOARD_PATH,
   PICTURES_PATH,
@@ -163,14 +166,16 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.20";
+export const SDK_VERSION = "0.2.21";
 
 /**
- * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
- * `minTavora`, so an older Tavora says it needs an update instead of loading a module it cannot run
- * (the starter, `npm create @tavora/module`, does). The changelog names it for every version.
+ * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
+ * (`METHOD_INFO` in `@tavora/sdk/protocol`). Put it in your manifest as `minTavora`, so an older Tavora says it
+ * needs an update instead of loading a module it cannot run (the starter, `npm create @tavora/module`, does). The
+ * changelog names it for every version.
  */
-export const MIN_TAVORA = "0.19.32";
+export { MIN_TAVORA };
+export type { SupportedCall } from "./protocol.js";
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -208,6 +213,11 @@ export interface KeyValueStore {
 export interface TavoraSDK {
   /** What the host reported when this module connected. */
   readonly host: HandshakeResult;
+  /**
+   * Whether the Tavora this module runs in has a call, by the table in `@tavora/sdk/protocol`: `supports("storage.compareAndSet")`,
+   * `supports("panel.openDialog")`. Use it to pick a fallback before calling; a call the Tavora does not have throws `UNKNOWN_METHOD`.
+   */
+  supports(call: SupportedCall): boolean;
   /** @deprecated Use `workspace.getCurrent`. Tavora answers it until its 1.0 preparation. */
   game: {
     /** @deprecated Use `workspace.getCurrent`. */
@@ -272,7 +282,7 @@ export interface TavoraSDK {
      * 240 to 2000 a side, default 560 x 640; Tavora makes it fit the window), so it keeps all it had. Call it from the
      * click or key press that asked for it: the host refuses it otherwise. The user closes it with the close button or a
      * click beside it (Esc in the page is the module's to handle); onDialogChange says so. From a panel over the game, Tavora closes the
-     * in-game layer and comes to the front with the dialog open. Needs Tavora 0.21.95 or newer (older ones throw METHOD_NOT_FOUND).
+     * in-game layer and comes to the front with the dialog open. Needs Tavora 0.21.95 or newer (older ones throw UNKNOWN_METHOD).
      */
     openDialog(size?: { width?: number; height?: number }): Promise<void>;
     /** Puts this panel back in its slot after openDialog. Needs Tavora 0.21.95 or newer. */
@@ -762,6 +772,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
 
   return {
     host,
+    supports: (call) => supportsCall(host.host.version, call),
     game: {
       getCurrent: () => call("game.getCurrent"),
     },

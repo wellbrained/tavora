@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.16
+
+- New projects start on `@tavora/sdk` 0.2.21, which adds `sdk.supports` and the table of calls.
+
 ## 0.1.15
 
 - New projects start the page with `bootstrapModule` from `@tavora/sdk/bootstrap` (in all three templates), which applies Tavora's theme and follows the language. The copied `applyTheme` function is gone.

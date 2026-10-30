@@ -1,3 +1,13 @@
+## 0.2.21
+
+The protocol table: every call declared once. Nothing changes on the wire or for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `METHOD_INFO` in `@tavora/sdk/protocol` holds, for each call, the first Tavora that answers it (`since`), the permission it needs (`capability`) and whether it needs a click or key press (`gesture`). The memory host (`@tavora/sdk/testing`) reads it instead of its own copy, and so does `apps/docs/reference/protocol.md`, whose method index is generated from it. `needsGesture(call, params)`, `supportsCall(version, call)` and `versionAtLeast(version, wanted)` are exported with it, and `HttpCalls` types the file, picture and blob calls that go over HTTP.
+- `sdk.supports(call)` says whether the Tavora the module runs in has a call: `sdk.supports("storage.compareAndSet")`, `sdk.supports("panel.openDialog")`. Use it to pick a fallback before calling.
+- `MIN_TAVORA` is worked out from the table (the newest call not marked `later`, and `permissions.onRequest`), not written by hand.
+- The memory host now agrees with Tavora about capabilities: `clipboard.writeImage`, `files.*` and `overlay.publish`/`overlay.remove` need no grant there, as in the real host (they answered `PERMISSION_DENIED` in tests before).
+- Doc comments and the changelog name the real error code `UNKNOWN_METHOD`, where they said `METHOD_NOT_FOUND`.
+
 ## 0.2.20
 
 The result queue and the run store: `openResults` and `openRuns` in `@tavora/sdk/store`. Nothing changes for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).
@@ -43,7 +53,7 @@ A test host: `@tavora/sdk/testing`. Nothing changes for a running module, so `MI
 
 ## 0.2.14
 
-Panel dialogs, with Tavora 0.21.95 or newer. `MIN_TAVORA` stays (Tavora 0.19.32): on an older Tavora `openDialog` throws `METHOD_NOT_FOUND`, so a module can show its settings in the panel instead.
+Panel dialogs, with Tavora 0.21.95 or newer. `MIN_TAVORA` stays (Tavora 0.19.32): on an older Tavora `openDialog` throws `UNKNOWN_METHOD`, so a module can show its settings in the panel instead.
 
 - `panel.openDialog({ width, height })` shows the panel big in a dialog centred on the app, over everything else, with the module's name and a close button: for settings or details that don't fit a small panel. It is the same page, so it keeps all it had. Opening needs a real click or key press. `panel.closeDialog()` puts it back, and `panel.onDialogChange` hears when it opens or closes, also when the user closes it. From a panel over the game, Tavora closes the in-game layer and comes to the front with the dialog open.
 - Toasts follow the user: `theme.toasts` (`ToastPosition`, one of `TOAST_POSITIONS`: `"bottom-center"`, `"bottom-right"` or `"top-center"`) says where they want toasts in a panel; an older Tavora leaves it out, which means bottom center. The new theme tokens `toast` and `toast-foreground` colour them; a theme may leave them out (`OPTIONAL_THEME_TOKENS`) and Tavora fills them in as flipped pills, so a module always gets every token.
