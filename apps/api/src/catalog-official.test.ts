@@ -150,8 +150,30 @@ describe("Tavora's own modules in the catalogue", () => {
     const missing = await send(pinnedKey, moduleZip(pinnedKey, "tavora.notes", "1.0.0", { minTavora: null }), tavora.token);
     expect(missing.status).toBe(400);
     expect(await reason(missing)).toBe("invalid");
+    expect(((await (await send(pinnedKey, moduleZip(pinnedKey, "tavora.notes", "1.0.0", { minTavora: null }), tavora.token)).json()) as { error: string }).error).toContain("minTavora");
     setList("revocations", [{ fingerprint: fingerprint(pinnedKey), revoked: "2026-10-30T11:00:00Z", allow: [] }]);
     expect(await reason(await send(pinnedKey, moduleZip(pinnedKey, "tavora.notes"), tavora.token))).toBe("key-revoked");
+  });
+
+  it("still takes a zip a revoked pinned key signed before, by the allowlist", async () => {
+    const { tavora, pinnedKey, send, setList } = setup();
+    const zip = moduleZip(pinnedKey, "tavora.notes");
+    const sha256 = createHash("sha256").update(zip).digest("hex");
+    setList("revocations", [{ fingerprint: fingerprint(pinnedKey), revoked: "2026-10-30T11:00:00Z", allow: [sha256] }]);
+    expect((await send(pinnedKey, zip, tavora.token)).status).toBe(201);
+  });
+
+  it("lets every later key of the chain update a module a successor published first", async () => {
+    const { tavora, pinnedKey, send, store, clock, setList } = setup();
+    const [next, third] = [newKey(), newKey()];
+    for (const key of [next, third]) store.linkKey(tavora.id, fingerprint(key), rawKey(key).toString("base64"), clock.now);
+    setList("successions", [{ old: fingerprint(pinnedKey), new: fingerprint(next), account: tavora.id }]);
+    expect((await send(next, moduleZip(next, "tavora.notes"), tavora.token)).status).toBe(201);
+    setList("successions", [
+      { old: fingerprint(pinnedKey), new: fingerprint(next), account: tavora.id },
+      { old: fingerprint(next), new: fingerprint(third), account: tavora.id },
+    ]);
+    expect((await send(third, moduleZip(third, "tavora.notes", "1.1.0"), tavora.token)).status).toBe(201);
   });
 
   it("follows a succession inside the pinned account, and refuses a step through another account", async () => {
@@ -251,6 +273,20 @@ describe("Tavora's own modules in the catalogue", () => {
     // The pinned key's own account may replace it; another account may not.
     expect(store.requestReplacement(a, fingerprint(pinned), fingerprint(y), false, now, pins)).toBe("pinned");
     expect(store.requestReplacement(a, fingerprint(x), fingerprint(y), false, now, pins)).toBe("ok");
+    // The pinned account replaces its own key.
+    expect(store.requestReplacement(a, fingerprint(pinned), fingerprint(y), false, now, { key: fingerprint(pinned), account: a })).toBe("ok");
+    // A key put in the pinned key's place by a signed succession, without any request, is part of its chain too.
+    const [s, t] = [newKey(), newKey()];
+    link(b, s);
+    link(b, t);
+    expect(store.requestReplacement(b, fingerprint(s), fingerprint(t), false, now, { key: fingerprint(pinned), account: a })).toBe("ok");
+    const c = store.createAccount({ email: "c@example.com" }, now).id;
+    const [u, v] = [newKey(), newKey()];
+    link(c, u);
+    link(c, v);
+    const signed = [{ old: fingerprint(pinned), new: fingerprint(u) }];
+    expect(store.requestReplacement(c, fingerprint(u), fingerprint(v), false, now, { key: fingerprint(pinned), account: a }, signed)).toBe("pinned");
+    expect(store.requestReplacement(c, fingerprint(u), fingerprint(v), false, now, { key: fingerprint(pinned), account: a })).toBe("ok");
     // With the pins empty nothing changes.
     expect(store.requestReplacement(a, fingerprint(pinned), fingerprint(y), false, now, { key: "", account: "" })).toBe("ok");
   });

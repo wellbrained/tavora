@@ -477,10 +477,13 @@ export class CatalogStore {
     const screenshots = checked.screenshots.map(({ sha256: hash, type, size }) => ({ sha256: hash, type, size }));
     const icon = checked.icon ? { sha256: checked.icon.sha256, type: checked.icon.type, size: checked.icon.size } : null;
     const at = now.toISOString();
-    const waits = review !== undefined && review.reasons.length > 0 && review.official !== true;
+    // Tavora's own modules belong to the pinned key even when a later key of it signs the first upload, so every later key
+    // of the chain can update them.
+    const stored = module?.owner ?? (isOfficialId(manifest.id) ? firstKey(owner) : owner);
+    const waits = review !== undefined && review.reasons.length > 0 && !(review.official === true && isOfficialId(manifest.id));
     this.db.exec("begin");
     try {
-      if (!module) this.db.prepare("insert into modules (id, owner, created_at) values (?, ?, ?)").run(manifest.id, owner, at);
+      if (!module) this.db.prepare("insert into modules (id, owner, created_at) values (?, ?, ?)").run(manifest.id, stored, at);
       this.db
         .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer, screenshots, icon, readme, status, review, file_hashes) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .run(
@@ -492,7 +495,7 @@ export class CatalogStore {
           JSON.stringify(checked.notes),
           at,
           uploadedBy,
-          module && module.owner !== owner ? owner : null,
+          stored !== owner ? owner : null,
           screenshots.length ? JSON.stringify(screenshots) : null,
           icon ? JSON.stringify(icon) : null,
           checked.readme,
@@ -675,7 +678,8 @@ export class CatalogStore {
 
   /**
    * Whether an account has had a version approved or listed: it has a listed version of its own, or a listed module
-   * whose key it holds (accounts from before the review count as approved), or the maintainer approved one.
+   * whose key it holds (accounts from before the review count as approved), or the maintainer approved one. Tavora's
+   * own account counts once one of its modules is listed, its community modules included.
    */
   accountApproved(accountId: string, fingerprints: readonly string[]): boolean {
     if (this.db.prepare("select 1 from trusted_accounts where account_id = ?").get(accountId)) return true;

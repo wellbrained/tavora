@@ -696,14 +696,22 @@ export class AccountStore {
    * asking again changes nothing, except that "leaked" can be added, and a turned-down request can be
    * asked again.
    */
-  requestReplacement(accountId: string, old: string, next: string, leaked: boolean, now: number, pins?: { key: string; account: string }): "ok" | "same" | "not-linked" | "open" | "pinned" {
+  requestReplacement(
+    accountId: string,
+    old: string,
+    next: string,
+    leaked: boolean,
+    now: number,
+    pins?: { key: string; account: string },
+    signed: ReadonlyArray<{ old: string; new: string }> = [],
+  ): "ok" | "same" | "not-linked" | "open" | "pinned" {
     if (old === next) return "same";
     // Tavora's pinned publisher key (and the keys that succeeded it) moves only inside Tavora's own account, and nothing
     // moves onto it: its chain is changed by hand, never by a request.
     if (pins && pins.key !== "") {
       if (next === pins.key) return "pinned";
       if (accountId !== pins.account) {
-        const chain = this.pinnedChain(pins.key);
+        const chain = this.pinnedChain(pins.key, signed);
         if (chain.has(old) || chain.has(next)) return "pinned";
       }
     }
@@ -723,12 +731,13 @@ export class AccountStore {
     return "ok";
   }
 
-  /** The pinned key and every key a request asked to put in its place, directly or one after another. */
-  private pinnedChain(pinned: string): Set<string> {
+  /** The pinned key and every key a request or a signed succession put in its place, directly or one after another. */
+  private pinnedChain(pinned: string, signed: ReadonlyArray<{ old: string; new: string }>): Set<string> {
     const chain = new Set([pinned]);
+    const steps = [...this.allKeyRequests(), ...signed];
     for (let grew = true; grew; ) {
       grew = false;
-      for (const request of this.allKeyRequests()) {
+      for (const request of steps) {
         if (chain.has(request.old) && !chain.has(request.new)) {
           chain.add(request.new);
           grew = true;

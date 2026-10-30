@@ -376,7 +376,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       return context.json({ error: "Send { new, leaked, language }.", reason: "bad-request" }, 400);
     }
     const before = store.keyRequest(old);
-    const result = store.requestReplacement(account.id, old, input.new, input.leaked, now(), options.officialPins ?? OFFICIAL_PINS);
+    const result = store.requestReplacement(account.id, old, input.new, input.leaked, now(), options.officialPins ?? OFFICIAL_PINS, options.trust?.signed("successions")?.successions ?? []);
     if (result === "same") return context.json({ error: "Pick another key to replace it with.", reason: "bad-request" }, 400);
     if (result === "not-linked") return context.json({ error: "Both keys must be linked to this account.", reason: "not-found" }, 404);
     if (result === "pinned") return context.json({ error: "Both keys must be linked to this account.", reason: "not-found" }, 404);

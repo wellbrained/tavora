@@ -31,12 +31,12 @@ export interface CatalogTrust {
   revoked(fingerprint: string, sha256: string): boolean;
   /** The first key of a key's account by its successions, and that account; the key itself and null without one. */
   firstKey(fingerprint: string): { key: string; account: string | null };
-  /** The signed list of a kind as it is served, or null without a validly signed one. */
   /**
    * Whether a signer may publish `tavora.*` modules: its first key is the pinned key, every succession step on the way
    * belongs to the pinned account, and it is not revoked for this zip. Never with an empty pin.
    */
   officialSigner(fingerprint: string, sha256: string, pins: OfficialPins): boolean;
+  /** The signed list of a kind as it is served, or null without a validly signed one. */
   signed<K extends CatalogListKind>(kind: K): CatalogListOf<K> | null;
 }
 
