@@ -13,6 +13,7 @@ import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { Sparkline } from "@tavora/official-ui/components/ui/sparkline";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@tavora/official-ui/components/ui/table";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger, TabStrip, type StripTab } from "@tavora/official-ui/components/ui/tabs";
 import { ref } from "vue";
@@ -223,6 +224,38 @@ function bump(by: number) {
         </Specimen>
         <Specimen label="Too many for the width: the wheel scrolls, the edges fade" column>
           <TabStrip v-model="crowdActive" :tabs="crowdTabs" class="w-72" aria-label="Many tabs" data-testid="tab-strip-crowd" @close="(id) => (crowdTabs = crowdTabs.filter((tab) => tab.id !== id))" />
+        </Specimen>
+      </DemoSection>
+
+<DemoSection v-if="visible.has('table')" id="table" :title="title('table')" description="Rows of facts that share columns. Put numbers in a right-aligned column. A table wider than its panel scrolls sideways.">
+        <Specimen label="Plain, with a selected row and a caption" column>
+          <Table class="max-w-md">
+            <TableCaption>Ingredients for 10 portions</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Item</TableHead>
+                <TableHead>Where</TableHead>
+                <TableHead class="text-right">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell>Flour</TableCell>
+                <TableCell class="text-muted-foreground">Oven</TableCell>
+                <TableCell class="text-right tabular-nums">10</TableCell>
+              </TableRow>
+              <TableRow data-state="selected">
+                <TableCell>Mushrooms</TableCell>
+                <TableCell class="text-muted-foreground">Forest</TableCell>
+                <TableCell class="text-right tabular-nums">10</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>Salt</TableCell>
+                <TableCell class="text-muted-foreground">Shop</TableCell>
+                <TableCell class="text-right tabular-nums">4</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </Specimen>
       </DemoSection>
 
