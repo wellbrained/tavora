@@ -1,0 +1,27 @@
+{
+  "name": "@tavora/module-pdf-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Official Tavora PDF Viewer module, built on pdf.js.",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@lucide/vue": "1.57.0",
+    "@tavora/official-ui": "workspace:*",
+    "@tavora/sdk": "workspace:*",
+    "pdfjs-dist": "6.4.299",
+    "vue": "3.5.43"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@tavora/pack": "workspace:*",
+    "@vitejs/plugin-vue": "6.0.9",
+    "tailwindcss": "4.3.3",
+    "vite": "8.3.4",
+    "vue-tsc": "3.3.11"
+  },
+  "license": "MIT"
+}

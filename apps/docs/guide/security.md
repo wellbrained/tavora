@@ -211,10 +211,10 @@ Modules can name actions in their manifest, and the user can bind a key to each 
 
 ## Module files
 
-`blobs` keeps pictures for a module, per workspace:
+`blobs` keeps pictures and PDF files for a module, per workspace:
 
 - The host picks every file name (a random 128-bit id). A module never names a path.
-- Only PNG, JPEG, GIF and WebP are stored, judged by their first bytes. SVG and everything else is refused. Files are served with `nosniff` and a content security policy that runs nothing.
+- Only PNG, JPEG, GIF and WebP pictures and PDF files are stored, judged by their first bytes. SVG and everything else is refused. Files are served with `nosniff` and a content security policy that runs nothing. A PDF is served as an attachment: Tavora never renders it as a page, and only the module that stored it reads it.
 - Limits are 50 MB per file and 500 MB per module and workspace. Files are deleted along with the workspace.
 - Only the user can move the folder, in the system's own dialog. A module cannot trigger the move or learn the path.
 

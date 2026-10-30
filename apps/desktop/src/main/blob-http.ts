@@ -47,6 +47,8 @@ export async function serveBlobs(store: BlobStore, request: Request, url: URL): 
       "Content-Type": found.type,
       "Content-Length": String(found.bytes),
       "X-Content-Type-Options": "nosniff",
+      // A PDF is data for the module to read, never a page the host shows.
+      ...(found.type === "application/pdf" ? { "Content-Disposition": "attachment" } : {}),
       // A picture is shown, never run: nothing in it can load or script anything.
       "Content-Security-Policy": "default-src 'none'; sandbox",
       "Cross-Origin-Resource-Policy": "same-origin",

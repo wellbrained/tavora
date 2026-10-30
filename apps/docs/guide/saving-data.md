@@ -163,7 +163,7 @@ const info = await tavora.blobs.put(file); // a File or Blob from an <input> or 
 img.src = tavora.blobs.url(info.id);
 ```
 
-PNG, JPEG, GIF and WebP only, up to 50 MB each and 500 MB per module and workspace. Keep the returned `id` in a document. Tavora picks the ids; you never name a file.
+PNG, JPEG, GIF and WebP pictures and PDF files only, up to 50 MB each and 500 MB per module and workspace. Keep the returned `id` in a document. Tavora picks the ids; you never name a file.
 
 ## Panel state
 

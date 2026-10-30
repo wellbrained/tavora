@@ -1184,8 +1184,12 @@ export interface MenuRequest {
   align?: "start" | "center" | "end";
 }
 
-/** The kinds of file a module can keep with blobs.put, found by looking at the file itself. */
-export const BLOB_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+/** The kinds of picture a module can keep with blobs.put. */
+export const PICTURE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+export type PictureType = (typeof PICTURE_TYPES)[number];
+
+/** The kinds of file a module can keep with blobs.put (pictures and PDFs), found by looking at the file itself. */
+export const BLOB_TYPES = [...PICTURE_TYPES, "application/pdf"] as const;
 export type BlobType = (typeof BLOB_TYPES)[number];
 
 /** A stored file. */

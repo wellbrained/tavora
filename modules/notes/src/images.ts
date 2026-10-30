@@ -1,10 +1,10 @@
 // Getting a picture ready to be stored: telling what the user picked, and for the Optimized
 // quality shrinking it. Original keeps the file exactly as it is.
 
-import { BLOB_TYPES } from "@tavora/sdk";
+import { PICTURE_TYPES } from "@tavora/sdk";
 
 /** The kinds of picture the host stores (it checks the file itself again). */
-export const ACCEPTED_TYPES = BLOB_TYPES;
+export const ACCEPTED_TYPES = PICTURE_TYPES;
 export const ACCEPT_ATTRIBUTE = ACCEPTED_TYPES.join(",");
 
 /** Optimized: the longest side is at most this many pixels, saved as WebP at this quality. */

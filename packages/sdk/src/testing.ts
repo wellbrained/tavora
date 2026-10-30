@@ -525,7 +525,7 @@ const handlers: Handlers = {
   "ui.getLanguage": ({ shared }) => shared.language,
 
   "blobs.put": ({ shared }, { file }) => {
-    if (!(BLOB_TYPES as readonly string[]).includes(file.type)) fail("INVALID_PARAMS", "only PNG, JPEG, GIF and WebP pictures can be stored");
+    if (!(BLOB_TYPES as readonly string[]).includes(file.type)) fail("INVALID_PARAMS", "only PNG, JPEG, GIF and WebP pictures and PDF files can be stored");
     if (file.size > shared.limits.maxBlobBytes) fail("QUOTA_EXCEEDED", `a file is limited to ${shared.limits.maxBlobBytes} bytes`);
     const used = [...shared.blobs.values()].reduce((sum, blob) => sum + blob.bytes, 0);
     if (used + file.size > shared.limits.maxBlobsBytes) fail("QUOTA_EXCEEDED", `files are limited to ${shared.limits.maxBlobsBytes} bytes per module and workspace`);
