@@ -47,6 +47,7 @@ import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
 import { checkZipData, readOwnerRecords } from "./installer";
 import { loadInstalledModules, type InstalledModules } from "./installed-modules";
+import { PendingQuestions } from "./pending-questions";
 import { readModulePage } from "./module-page";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
@@ -355,8 +356,11 @@ export class Host {
     releasing: (instanceId, forget) => {
       this.tooltips.close(instanceId);
       this.closeModuleMenu(instanceId);
-      // The panel is closing for good: its live state goes, whether or not it was running.
-      if (forget) this.gameOverlays?.forgetLive(instanceId);
+      // The panel is closing for good: its questions (a leaderboard question, a waiting dialog) end with it, and its live state goes, whether or not it was running.
+      if (forget) {
+        this.questions.cancel({ panel: instanceId });
+        this.gameOverlays?.forgetLive(instanceId);
+      }
     },
     stopLent: (instanceId) => {
       if (this.gameOverlays?.hasPanel(instanceId)) this.gameOverlays.stopPanel(instanceId);
@@ -377,11 +381,8 @@ export class Host {
     shownAgain: (views) => this.logDraws(views, "dialog closed"),
     ...(timingLog ? { log: timingLog } : {}),
   });
-  /**
-   * A panel that panels.open asked to switch could not (it kept its content): the host UI offers to open the
-   * content in a new panel instead (navigation-choice). What opens is kept here, never taken from the answer.
-   */
-  private pendingNavigation: { workspaceId: string; moduleId: string; panelType: string; panelName: string; content: PanelContent } | null = null;
+  /** Every open question to the user: link, navigation, game switch, connector, leaderboard, waiting panel dialog and module menu (pending-questions.ts). */
+  private readonly questions = new PendingQuestions();
   /** What every browser session is made safe with; built when the first Browser panel opens. */
   private browserHooks: BrowserSessionHooks | undefined;
   /** The Discord connector: Tavora's Discord sign-in and the connection to the Discord app, for modules granted it. */
@@ -432,20 +433,10 @@ export class Host {
   private canvas: OverlayCanvas | null = null;
   /** Modules in the user's folder whose zip Tavora blocked: not loaded, data kept. */
   private blockedModules = new Map<string, InstalledModule>();
-  /** A link a module asked to open when no Browser panel exists; waits for the user's answer. */
-  private pendingLink: string | null = null;
   /** The games of the library running on this PC (by their workspaces' ids), in the order they started, while "When a game starts" is not off (game-watch.ts). */
   private running: string[] = [];
   /** When each workspace was last opened as of startup: the rail keeps this order until the next start. */
   private openedAtStart: Record<string, string> = {};
-  /** A game that started while the user chose to be asked; waits for the answer. */
-  private pendingGameSwitch: string | null = null;
-  /** A connector a module asks for on request (permissions.onRequest), waiting for the user's answer in the consent dialog. */
-  private pendingConnector: { id: number; moduleId: string; connector: Connector; resolve(allowed: boolean): void } | null = null;
-  private nextConnectorAsk = 1;
-  /** A module's question about its leaderboards (leaderboards.show), shown in the panel that asked until the user answers. */
-  private pendingLeaderboard: { id: number; instanceId: string; moduleId: string; question: LeaderboardQuestion; resolve(yes: boolean): void } | null = null;
-  private nextLeaderboardAsk = 1;
   private readonly gameWatcher = new GameWatcher({
     entries: () => liveWorkspaces(this.library),
     findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
@@ -1276,9 +1267,10 @@ export class Host {
       return asking?.instanceId === record.instanceId ? "ask" : "wait";
     }
     // The leaderboards' question shows in the panel that asked for it.
-    if (this.pendingLeaderboard?.instanceId === record.instanceId) return "ask";
+    const board = this.questions.peek("leaderboard");
+    if (board && "panel" in board.scope && board.scope.panel === record.instanceId) return "ask";
     const first = records.find((item) => item.moduleId === record.moduleId)?.instanceId === record.instanceId;
-    return first && this.pendingConnector?.moduleId === record.moduleId ? "ask" : null;
+    return first && this.questions.peek("connector")?.payload.moduleId === record.moduleId ? "ask" : null;
   }
 
   /** The workspaces, by id in the library, with a panel of this module. */
@@ -2053,7 +2045,7 @@ export class Host {
       }),
       "set-game-start": saved((action) => {
         this.library.gameStart = action.gameStart;
-        if (action.gameStart !== "ask") this.pendingGameSwitch = null;
+        if (action.gameStart !== "ask") this.questions.cancelKind("gameSwitch");
         this.syncGameWatcher();
       }),
       "set-game-end": saved((action) => {
@@ -2482,8 +2474,8 @@ export class Host {
   private showScreen(next: Screen): void {
     if (this.screen === next && next !== "workspace") return;
     this.notice = null;
-    this.pendingLink = null;
-    this.pendingNavigation = null;
+    // The workspace being left takes its questions (a link, a navigation) with it.
+    if (this.workspaceId !== null) this.questions.cancel({ workspace: this.workspaceId });
     this.closeAllViews();
     // The Overlay page's views leave the window with the page.
     if (this.screen === "overlay") this.closeOverlayPage();
@@ -2584,7 +2576,7 @@ export class Host {
 
   private openWorkspace(workspaceId: string): void {
     if (!isLive(this.library, workspaceId)) throw new LibraryError("error.workspaceGone");
-    if (this.pendingGameSwitch === workspaceId) this.pendingGameSwitch = null;
+    this.questions.cancel({ workspace: workspaceId }, "gameSwitch");
     if (this.workspaceId === workspaceId) return;
     this.showScreen("workspace");
     markOpened(this.library, workspaceId, new Date());
@@ -2992,7 +2984,7 @@ export class Host {
         else this.openBrowserTab(browserId, url, false);
       } else {
         // Nothing to open it in yet: the user picks a new Browser panel or the system browser.
-        this.pendingLink = url;
+        this.questions.ask("link", { workspace: workspace.id }, { url });
       }
     } catch (error) {
       // The workspace is full; the user is told, as for Add module.
@@ -3005,9 +2997,11 @@ export class Host {
 
   /** The user's answer to pendingLink. The address is the one the host kept, never one sent with the answer. */
   private chooseLink(choice: "panel" | "system" | "cancel"): void {
-    const url = this.pendingLink;
-    this.pendingLink = null;
-    if (!url || choice === "cancel" || !isWebUrl(url) || isPrivateUrl(url)) return;
+    const pending = this.questions.peek("link");
+    if (!pending) return;
+    this.questions.answer(pending.id, choice);
+    const { url } = pending.payload;
+    if (choice === "cancel" || !isWebUrl(url) || isPrivateUrl(url)) return;
     if (choice === "system") {
       void shell.openExternal(url).catch((error: unknown) => console.error("[tavora]", error));
       return;
@@ -3045,12 +3039,12 @@ export class Host {
   private gameStarted(gameId: string): void {
     if (this.workspaceId === gameId) return;
     if (this.library.gameStart === "switch") this.openWorkspaceQuietly(gameId);
-    else if (this.library.gameStart === "ask") this.pendingGameSwitch = gameId;
+    else if (this.library.gameStart === "ask") this.questions.ask("gameSwitch", { workspace: gameId }, { gameId });
   }
 
   /** Goes back to the chosen personal workspace, but only from the game that closed. */
   private gameClosed(gameId: string): void {
-    if (this.pendingGameSwitch === gameId) this.pendingGameSwitch = null;
+    this.questions.cancel({ workspace: gameId }, "gameSwitch");
     const back = this.library.gameEndWorkspaceId;
     if (back && this.workspaceId === gameId && isLive(this.library, back) && this.library.workspaces[back]!.kind === "personal") this.openWorkspaceQuietly(back);
   }
@@ -3066,9 +3060,11 @@ export class Host {
 
   /** The user's answer to pendingGameSwitch. */
   private chooseGameSwitch(choice: "switch" | "cancel"): void {
-    const gameId = this.pendingGameSwitch;
-    this.pendingGameSwitch = null;
-    if (choice === "switch" && gameId && isLive(this.library, gameId)) this.openWorkspace(gameId);
+    const pending = this.questions.peek("gameSwitch");
+    if (!pending) return;
+    this.questions.answer(pending.id, choice);
+    const { gameId } = pending.payload;
+    if (choice === "switch" && isLive(this.library, gameId)) this.openWorkspace(gameId);
   }
 
   /** A panel whose type is gone becomes another type of the same module, and starts. */
@@ -3092,10 +3088,6 @@ export class Host {
 
   /** Removes a panel's view and its UI state; module settings and documents stay. */
   private closeView(instanceId: string): void {
-    if (this.pendingLeaderboard?.instanceId === instanceId) {
-      this.pendingLeaderboard.resolve(false);
-      this.pendingLeaderboard = null;
-    }
     this.panels.close(instanceId);
     void this.data.panelState.remove(instanceId).catch((error: unknown) => console.error("[tavora]", error));
   }
@@ -3530,7 +3522,7 @@ export class Host {
         return "switched";
       }
       if (outcome === "failed") {
-        this.pendingNavigation = { workspaceId: workspace.id, moduleId: from.moduleId, panelType: type, panelName: target.name, content };
+        this.questions.ask("navigation", { workspace: workspace.id }, { workspaceId: workspace.id, moduleId: from.moduleId, panelType: type, panelName: target.name, content });
         this.pushState();
         return "failed";
       }
@@ -3564,9 +3556,10 @@ export class Host {
 
   /** The user's answer to pendingNavigation. */
   private chooseNavigation(choice: "new-panel" | "cancel"): void {
-    const pending = this.pendingNavigation;
-    this.pendingNavigation = null;
-    if (pending && choice === "new-panel" && this.workspace?.id === pending.workspaceId) this.openPanelOn(pending.moduleId, pending.panelType, pending.content);
+    const pending = this.questions.peek("navigation");
+    if (pending) this.questions.answer(pending.id, choice);
+    const open = pending?.payload;
+    if (open && choice === "new-panel" && this.workspace?.id === open.workspaceId) this.openPanelOn(open.moduleId, open.panelType, open.content);
     else this.pushState();
   }
 
@@ -3889,10 +3882,6 @@ export class Host {
 
   // ── Module menus ─────────────────────────────────────────────────────
 
-  /** The module menu the host UI shows now (ui.showMenu), and how to answer the module. */
-  private moduleMenu: { requestId: number; instanceId: string; choices: ReadonlySet<string>; resolve(id: string | null): void } | undefined;
-  private moduleMenuRequests = 0;
-
   /**
    * Draws a module's menu in the host UI, over its panel and every other one. Only one at a time: a
    * new one closes the last. Nothing is shown for a panel that is hidden or under a host menu or dialog.
@@ -3900,25 +3889,22 @@ export class Host {
   private showModuleMenu(instanceId: string, menu: CheckedMenu): Promise<string | null> {
     if (!this.panels.has(instanceId) || !this.panels.isPlaced(instanceId) || this.floating(instanceId) || this.panels.overlay || this.window.isDestroyed()) return Promise.resolve(null);
     this.closeModuleMenu();
-    const requestId = ++this.moduleMenuRequests;
-    return new Promise((resolve) => {
-      this.moduleMenu = { requestId, instanceId, choices: menu.choices, resolve };
-      // The menu is drawn by the host page, so the keyboard goes there while it is open.
-      this.window.webContents.focus();
-      const shown: ModuleMenu = { requestId, instanceId, ...menu.request };
-      this.window.webContents.send("host:module-menu", shown);
-    });
+    const { id: requestId, answer } = this.questions.ask("menu", { panel: instanceId }, { choices: menu.choices });
+    // The menu is drawn by the host page, so the keyboard goes there while it is open.
+    this.window.webContents.focus();
+    const shown: ModuleMenu = { requestId, instanceId, ...menu.request };
+    this.window.webContents.send("host:module-menu", shown);
+    return answer;
   }
 
   /** The user chose an item or closed the menu. Only an item the module offered (and did not disable) counts. */
   private answerModuleMenu(raw: unknown): void {
     const answer = (typeof raw === "object" && raw !== null ? raw : {}) as { requestId?: unknown; id?: unknown };
-    const open = this.moduleMenu;
-    if (!open || answer.requestId !== open.requestId) return;
-    this.moduleMenu = undefined;
-    open.resolve(typeof answer.id === "string" && open.choices.has(answer.id) ? answer.id : null);
+    const open = this.questions.peek("menu");
+    if (!open || answer.requestId !== open.id) return;
+    this.questions.answer(open.id, typeof answer.id === "string" && open.payload.choices.has(answer.id) ? answer.id : null);
     // The keyboard goes back to the panel, so an action such as Rename can take it.
-    const view = this.moduleView(open.instanceId);
+    const view = "panel" in open.scope ? this.moduleView(open.scope.panel) : undefined;
     if (view && !view.view.webContents.isDestroyed()) view.view.webContents.focus();
   }
 
@@ -3936,9 +3922,6 @@ export class Host {
     this.window.webContents.send("host:panel-dialog", shown);
   }
 
-  /** A dialog a panel in the in-game layer asked for: it opens once the panel is back in its slot, if that happens soon. */
-  private pendingDialog: { instanceId: string; module: InstalledModule; size: PanelDialogSize; until: number } | null = null;
-
   /**
    * A panel over the game opens its dialog: the layer closes, Tavora comes to the front on the panel's workspace, and the
    * dialog opens as soon as the panel is back in its slot.
@@ -3946,7 +3929,8 @@ export class Host {
   private openPanelDialogFromGame(instanceId: string, module: InstalledModule, size: PanelDialogSize): void {
     const workspaceId = this.gameOverlays.panelWorkspace(instanceId);
     if (!workspaceId || this.window.isDestroyed() || !isLive(this.library, workspaceId)) return;
-    this.pendingDialog = { instanceId, module, size, until: Date.now() + PENDING_DIALOG_MS };
+    // It opens once the panel is back in its slot, if that happens soon.
+    void this.questions.ask("dialog", { panel: instanceId }, { module, size, until: Date.now() + PENDING_DIALOG_MS });
     // From Home or the Overlay page too: no workspace counts as shown there.
     if (this.workspaceId !== workspaceId) this.openWorkspace(workspaceId);
     this.gameOverlays.endLayer();
@@ -3956,24 +3940,22 @@ export class Host {
 
   /** Opens the dialog a panel asked for from the layer once the panel is back in its slot; a panel that took too long misses it. */
   private openPendingDialog(): void {
-    const pending = this.pendingDialog;
-    if (!pending) return;
-    if (Date.now() > pending.until) {
-      this.pendingDialog = null;
+    const pending = this.questions.peek("dialog");
+    if (!pending || !("panel" in pending.scope)) return;
+    const instanceId = pending.scope.panel;
+    if (Date.now() > pending.payload.until) {
+      this.questions.cancel(pending.id);
       return;
     }
-    if (this.floating(pending.instanceId) || !this.panels.isPlaced(pending.instanceId)) return;
-    this.pendingDialog = null;
-    this.openPanelDialog(pending.instanceId, pending.module, pending.size);
+    if (this.floating(instanceId) || !this.panels.isPlaced(instanceId)) return;
+    this.questions.answer(pending.id, true);
+    this.openPanelDialog(instanceId, pending.payload.module, pending.payload.size);
   }
 
   /** Closes the module menu shown now (only if it belongs to `instanceId`, when given), as if nothing was chosen. */
   private closeModuleMenu(instanceId?: string): void {
-    const open = this.moduleMenu;
-    if (!open || (instanceId !== undefined && open.instanceId !== instanceId)) return;
-    this.moduleMenu = undefined;
-    open.resolve(null);
-    if (!this.window.isDestroyed()) this.window.webContents.send("host:module-menu", null);
+    const ended = instanceId === undefined ? this.questions.cancelKind("menu") : this.questions.cancel({ panel: instanceId }, "menu");
+    if (ended && !this.window.isDestroyed()) this.window.webContents.send("host:module-menu", null);
   }
 
   // ── State ────────────────────────────────────────────────────────────
@@ -4024,6 +4006,7 @@ export class Host {
     for (const entry of Object.values(library.workspaces)) {
       if (entry.trashedAt === null) workspaces[entry.id] = this.workspaceView(entry);
     }
+    const pending = this.questions.snapshot();
     return {
       screen: this.screen,
       currentWorkspaceId: current?.id ?? null,
@@ -4174,21 +4157,13 @@ export class Host {
       layout: workspace.layout,
       layoutEpoch: this.workspaces.epoch,
       opening: this.panels.opening,
-      pendingLink: this.pendingLink,
+      ...pending,
       runningGameId: this.running.filter((id) => id !== this.workspaceId && isLive(this.library, id)).at(-1) ?? null,
       workspaceRunning: this.workspaceId !== null && this.running.includes(this.workspaceId),
-      pendingGameSwitch: this.pendingGameSwitch && isLive(this.library, this.pendingGameSwitch) ? this.pendingGameSwitch : null,
+      pendingGameSwitch: pending.pendingGameSwitch && isLive(this.library, pending.pendingGameSwitch) ? pending.pendingGameSwitch : null,
       streaming: this.streaming.view(),
       gameOverlays: this.gameOverlays.view(),
-      pendingConnector: this.pendingConnector && { id: this.pendingConnector.id, moduleId: this.pendingConnector.moduleId, connectors: [this.pendingConnector.connector] },
-      pendingLeaderboard: this.pendingLeaderboard && {
-        id: this.pendingLeaderboard.id,
-        instanceId: this.pendingLeaderboard.instanceId,
-        moduleId: this.pendingLeaderboard.moduleId,
-        ...this.pendingLeaderboard.question,
-      },
       hotkeyRequest: this.streaming.request(),
-      pendingNavigation: this.pendingNavigation && { panel: this.pendingNavigation.panelName, content: this.pendingNavigation.content.title },
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
       notice: this.notice,
@@ -4412,23 +4387,27 @@ export class Host {
    * with whether the user allowed it. A newer request closes an older one as not allowed.
    */
   private askConnector(moduleId: string, connector: Connector): Promise<boolean> {
-    this.pendingConnector?.resolve(false);
-    return new Promise<boolean>((resolve) => {
-      this.pendingConnector = { id: this.nextConnectorAsk++, moduleId, connector, resolve };
-      this.pushState();
-      this.panels.applyBounds();
-    });
+    const { answer } = this.questions.ask("connector", { app: true }, { moduleId, connector });
+    this.pushState();
+    this.panels.applyBounds();
+    return answer;
   }
 
   /** The user's answer; allowing grants that connector alone, and the module's panels go on running with it. */
   private async answerConnector(id: number, allow: boolean): Promise<void> {
-    const pending = this.pendingConnector;
+    const pending = this.questions.peek("connector");
     if (!pending || pending.id !== id) return;
-    this.pendingConnector = null;
-    const module = this.modules.get(pending.moduleId);
-    const granted = allow && module !== undefined && (module.manifest.permissions.onRequest ?? []).includes(pending.connector);
-    if (granted) await this.grants.grant(module, { network: [], connectors: [pending.connector] });
-    pending.resolve(granted);
+    const { moduleId, connector } = pending.payload;
+    const module = this.modules.get(moduleId);
+    const grant = async (): Promise<boolean> => {
+      const granted = allow && module !== undefined && (module.manifest.permissions.onRequest ?? []).includes(connector);
+      if (granted) await this.grants.grant(module, { network: [], connectors: [connector] });
+      return granted;
+    };
+    // The question is gone now; the module hears the answer once the grant is stored.
+    const result = grant();
+    this.questions.answer(id, result);
+    await result;
     this.pushState();
     this.panels.applyBounds();
   }
@@ -4473,20 +4452,16 @@ export class Host {
    * there); resolves with the user's answer. A newer question closes an older one as no.
    */
   private askLeaderboard(instanceId: string, moduleId: string, question: LeaderboardQuestion): Promise<boolean> {
-    this.pendingLeaderboard?.resolve(false);
-    return new Promise<boolean>((resolve) => {
-      this.pendingLeaderboard = { id: this.nextLeaderboardAsk++, instanceId, moduleId, question, resolve };
-      this.pushState();
-      this.panels.applyBounds();
-    });
+    const { answer } = this.questions.ask("leaderboard", { panel: instanceId }, { moduleId, question });
+    this.pushState();
+    this.panels.applyBounds();
+    return answer;
   }
 
   /** The user's answer; the panel's page comes back either way. */
   private answerLeaderboard(id: number, yes: boolean): void {
-    const pending = this.pendingLeaderboard;
-    if (!pending || pending.id !== id) return;
-    this.pendingLeaderboard = null;
-    pending.resolve(yes);
+    if (this.questions.peek("leaderboard")?.id !== id) return;
+    this.questions.answer(id, yes);
     this.pushState();
     this.panels.applyBounds();
   }
