@@ -36,15 +36,19 @@ export interface AccountStores {
  */
 export function accountLifecycle(stores: AccountStores) {
   const { accounts, catalog, copies, reviews, conversations, leaderboards, icons } = stores;
+  /** The account's modules that are in the catalog and listed now. */
+  const listedModules = (accountId: string): string[] =>
+    catalog ? catalog.modulesOfAccount(accountId, accounts.keys(accountId).map((key) => key.fingerprint)).filter((id) => catalog.isListed(id)) : [];
   return {
+    /** The account goes last: should a store fail before it, the account is still there and deleting it again finishes. */
     delete(accountId: string, now: number): void {
-      accounts.deleteAccount(accountId, now);
       copies?.remove(accountId, true);
       reviews?.forget(accountId);
       conversations?.forget(accountId, now);
       leaderboards?.forget(accountId);
       catalog?.forgetReporter(accountId);
       icons?.forgetSender(accountId);
+      accounts.deleteAccount(accountId, now);
     },
 
     /** A retry of a suspension that already holds only finishes hiding the reviews: no new reason, nobody signed out twice. */
@@ -60,28 +64,40 @@ export function accountLifecycle(stores: AccountStores) {
       return { was, shownReviews: reviews?.showAfterSuspension(accountId) ?? 0 };
     },
 
-    /** Needs the catalog: a ban is about publishing. */
+    /**
+     * Needs the catalog: a ban is about publishing. The ban, with the modules it is about to unlist, is written first, in
+     * its own store: should a later step fail, the account is banned already, unban knows what to list again, and banning
+     * again finishes (`banUnfinished`). The modules leave last, so a ban that didn't finish always has one still listed.
+     */
     ban(accountId: string, reason: string, note: string | null, now: number): { unlisted: string[]; declined: number; closedConversations: number } {
       if (!catalog) throw new Error("A ban needs the module catalog.");
-      const keys = accounts.keys(accountId).map((key) => key.fingerprint);
+      const listed = listedModules(accountId);
+      accounts.ban(accountId, reason, note, listed, now);
+      const closedConversations = conversations?.closeForBannedDeveloper(accountId, now) ?? 0;
       let declined = 0;
       for (const waiting of catalog.waitingVersions().filter((version) => version.accountId === accountId)) {
         catalog.recordDeclined(waiting, reason, note, new Date(now));
         catalog.removeWaiting(waiting.sha256);
         declined++;
       }
-      const unlisted = catalog.unlistAll(catalog.modulesOfAccount(accountId, keys));
-      accounts.ban(accountId, reason, note, unlisted, now);
-      const closedConversations = conversations?.closeForBannedDeveloper(accountId, now) ?? 0;
+      const unlisted = catalog.unlistAll(listed);
       return { unlisted, declined, closedConversations };
     },
 
-    /** The modules the ban unlisted come back, nothing else; null when the account wasn't banned. */
+    /** A banned account that still has a module listed or a version waiting: its ban stopped halfway. */
+    banUnfinished(accountId: string): boolean {
+      if (!catalog || !accounts.isBanned(accountId)) return false;
+      return listedModules(accountId).length > 0 || catalog.waitingVersions().some((version) => version.accountId === accountId);
+    },
+
+    /** The modules the ban unlisted come back, nothing else; null when the account wasn't banned. The ban goes last, so a failed unban can be repeated. */
     unban(accountId: string): { relisted: string[] } | null {
       if (!catalog) throw new Error("A ban needs the module catalog.");
-      const modules = accounts.unban(accountId);
+      const modules = accounts.bannedModules(accountId);
       if (modules === null) return null;
-      return { relisted: modules.filter((id) => catalog.setListed(id, true)) };
+      const relisted = modules.filter((id) => catalog.setListed(id, true));
+      accounts.unban(accountId);
+      return { relisted };
     },
   };
 }
