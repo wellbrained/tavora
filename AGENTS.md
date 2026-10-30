@@ -23,6 +23,10 @@ The app and the official modules share one kit: `@tavora/official-ui` (`modules/
 - Use what the kit has. Restyle with classes where it's used, not with a copy of the component.
 - A missing control or variant is a decision for the maintainer: ask before building it. Once agreed, it goes into the kit and gets a specimen in the UI Playground (`modules/playground`).
 
+## Modules
+
+Before building a new module, or a new panel or feature in one (here or in `tavora-modules`), read [docs/module-rules.md](docs/module-rules.md): which kit control to use for what, the theme's colours, sizes and spacing, and how a panel saves, translates and sizes itself. Go through its Done checklist before calling the work done, and name in your summary any item you could not check.
+
 ## Menus and tooltips
 
 Context menus, dropdowns and tooltips, in the app and in every module (game modules too), open next to the element they are for, with a small gap: never at the pointer and never on top of the element. A right-click anchors to the clicked element, as the kit's `ContextMenu` and `Tooltip` do; with `ui.showMenu`, pass the element's box, not the pointer's position.
