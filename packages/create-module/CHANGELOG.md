@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.19
+
+- New projects start on `@tavora/sdk` 0.3.2: the item session's `remove` during `restoreDeleted`, and a `pick` of a missing item with a strict `parse`, now work as documented.
+
 ## 0.1.18
 
 - New projects start on `@tavora/sdk` 0.3.1, which adds `restoreDeleted(copy?)` to the item session and drops the kit's `serial` and the callback form of `connectModule`.
