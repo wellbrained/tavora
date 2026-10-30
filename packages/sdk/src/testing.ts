@@ -1,6 +1,7 @@
 // @tavora/sdk/testing: a test adapter for module tests. It implements the whole `TavoraSDK` and keeps its state in
 // memory, so a module can be tested without Tavora; it follows the real host's rules (limits, revisions, errors).
 // Not for use in a module's shipped code.
+import { menuParams, tooltipParams } from "./anchor.js";
 import { SDK_VERSION, TavoraError, type KeyValueStore, type TavoraSDK } from "./index.js";
 import {
   BLOB_PATH,
@@ -919,10 +920,10 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       onThemeChange: (fn) => on("ui.theme", fn),
       getLanguage: () => call("ui.getLanguage"),
       onLanguageChange: (fn) => on("ui.language", fn),
-      showMenu: (request) => call("ui.showMenu", request),
+      showMenu: async (request) => call("ui.showMenu", menuParams(request)),
       tooltip: {
-        show: (request) => call("ui.tooltip.show", request),
-        move: async (anchor) => void (await call("ui.tooltip.move", anchor)),
+        show: async (request) => call("ui.tooltip.show", tooltipParams(request)),
+        move: async (anchor) => void (await call("ui.tooltip.move", tooltipParams(anchor))),
         hide: async (id) => void (await call("ui.tooltip.hide", { id })),
         close: async (id) => void (await call("ui.tooltip.close", { id })),
         onClose: (fn) => on("ui.tooltipClosed", fn),

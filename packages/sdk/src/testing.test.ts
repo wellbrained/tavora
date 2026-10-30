@@ -339,6 +339,47 @@ describe("workspace and ui", () => {
     expect(await sdk.game.getCurrent()).toMatchObject({ kind: "workspace" });
   });
 
+  describe("anchors", () => {
+    const element = (box: { x: number; y: number; width: number; height: number }) =>
+      ({ getBoundingClientRect: () => ({ ...box, left: box.x, top: box.y }) }) as unknown as Element;
+
+    it("sends an element's box as the menu's `at`, read when called", async () => {
+      const { sdk, host } = createMemoryHost();
+      const box = { x: 10, y: 20, width: 30, height: 40 };
+      let current = box;
+      const el = { getBoundingClientRect: () => current } as unknown as Element;
+      current = { x: 1, y: 2, width: 3, height: 4 };
+      await sdk.ui.showMenu({ anchor: el, items: [], align: "end" });
+      expect(host.calls["ui.showMenu"]).toEqual([{ items: [], align: "end", at: { x: 1, y: 2, width: 3, height: 4 } }]);
+    });
+
+    it("passes a box anchor and a bare `at` through", async () => {
+      const { sdk, host } = createMemoryHost();
+      await sdk.ui.showMenu({ anchor: { x: 5, y: 6, width: 7, height: 8 }, items: [] });
+      await sdk.ui.showMenu({ at: { x: 1, y: 2 }, items: [] });
+      expect(host.calls["ui.showMenu"]).toEqual([
+        { items: [], at: { x: 5, y: 6, width: 7, height: 8 } },
+        { items: [], at: { x: 1, y: 2 } },
+      ]);
+    });
+
+    it("rejects a menu with neither anchor nor at", async () => {
+      const { sdk, host } = createMemoryHost();
+      expect(await failure(sdk.ui.showMenu({ items: [] } as never))).toMatchObject({ code: "INVALID_PARAMS" });
+      expect(host.calls["ui.showMenu"] ?? []).toEqual([]);
+    });
+
+    it("puts a tooltip next to its element: the middle of the right edge", async () => {
+      const { sdk, host } = createMemoryHost();
+      await sdk.ui.tooltip.move({ id: "t", anchor: element({ x: 10, y: 20, width: 30, height: 40 }) });
+      await sdk.ui.tooltip.move({ id: "t", at: { x: 1, y: 2 } });
+      await sdk.ui.tooltip.show({ id: "t", anchor: { x: 0, y: 0, width: 10, height: 10 }, content: { title: "T" } });
+      expect(host.calls["ui.tooltip.move"]).toEqual([{ id: "t", at: { x: 40, y: 40 } }, { id: "t", at: { x: 1, y: 2 } }]);
+      expect(host.calls["ui.tooltip.show"]).toEqual([{ id: "t", content: { title: "T" }, at: { x: 10, y: 5 } }]);
+      expect(await failure(sdk.ui.tooltip.move({ id: "t" } as never))).toMatchObject({ code: "INVALID_PARAMS" });
+    });
+  });
+
   it("records menus and tooltips and answers them as scripted", async () => {
     const { sdk, host } = createMemoryHost();
     const request = { items: [{ id: "a", label: "A" }], at: { x: 1, y: 2, width: 3, height: 4 } } as never;

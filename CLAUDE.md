@@ -26,7 +26,7 @@ The app and the official modules share one kit: `@tavora/official-ui` (`modules/
 
 ## Menus and tooltips
 
-Context menus, dropdowns and tooltips, in the app and in every module (game modules too), open next to the element they are for, with a small gap: never at the pointer and never on top of the element. A right-click anchors to the clicked element, as the kit's `ContextMenu` and `Tooltip` do; with `ui.showMenu`, pass the element's box, not the pointer's position.
+Context menus, dropdowns and tooltips, in the app and in every module (game modules too), open next to the element they are for, with a small gap: never at the pointer and never on top of the element. A right-click anchors to the clicked element, as the kit's `ContextMenu` and `Tooltip` do; with `ui.showMenu`, pass the element as `anchor` (the SDK reads its box), never the pointer's position.
 
 ## Save as image
 

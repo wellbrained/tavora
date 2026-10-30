@@ -6,7 +6,7 @@ import { Plus } from "@lucide/vue";
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
-import { TavoraError, type GameOverlayResult, type MenuRequest, type TavoraSDK } from "@tavora/sdk";
+import { TavoraError, type GameOverlayResult, type MenuOptions, type TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { plural, setLanguage, t } from "./i18n";
 import ItemCard from "./ItemCard.vue";
@@ -73,10 +73,9 @@ function addItem(kind: ItemKind): void {
 }
 
 async function pickKind(event: MouseEvent): Promise<void> {
-  const button = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const picked = await showMenu({
     items: KINDS.map((kind) => ({ type: "item" as const, id: kind, label: t(`kind.${kind}`) })),
-    at: { x: button.left, y: button.top, width: button.width, height: button.height },
+    anchor: event.currentTarget as HTMLElement,
     align: "end",
   });
   if (picked) addItem(picked as ItemKind);
@@ -198,7 +197,7 @@ async function resetLink(item: Item): Promise<void> {
 }
 
 /** Before the panel is connected there is nothing to show a menu with. */
-const showMenu = (request: MenuRequest) => sdk.value?.ui.showMenu(request) ?? Promise.resolve(null);
+const showMenu = (request: MenuOptions) => sdk.value?.ui.showMenu(request) ?? Promise.resolve(null);
 
 // The cards only show once the store is there.
 provide(PANEL, {

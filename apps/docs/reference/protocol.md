@@ -153,7 +153,7 @@ A module can keep pictures that are too big for a document: up to 50 MB each and
 `sdk.ui.showMenu(request)` shows a menu that Tavora draws above every panel, in its own style and theme. A menu inside your page is cut off at the panel's edge; this one is not.
 
 - **Only after the user did something:** call it from the click, right-click or key press that asked for it (within 2 seconds); each press opens one menu, otherwise `PERMISSION_DENIED`. One menu shows at a time: a new one closes the last, and Esc, a click elsewhere or switching workspaces closes it too. It resolves with the chosen item's `id`, or `null`.
-- **Where:** `at` is in your panel's CSS pixels from its top left corner (`getBoundingClientRect()` values). Give the box (`{ x, y, width, height }`) of the element the menu is for: the button for a dropdown, the right-clicked row for a context menu. The menu opens next to it, never on top of it or at the pointer. `side` (`"bottom"`, `"top"`, `"right"`, `"left"`; default bottom) and `align` (`"start"`, `"center"`, `"end"`; default start) say where it opens when there is room; Tavora keeps it inside the window.
+- **Where:** pass the element the menu is for as `anchor` (the button for a dropdown, the right-clicked row for a context menu); the SDK reads its box when you call. On the wire that box is `at`, in your panel's CSS pixels from its top left corner (`getBoundingClientRect()` values: `{ x, y, width, height }`), and `at` still works if you have no element. The menu opens next to it, never on top of it or at the pointer. `side` (`"bottom"`, `"top"`, `"right"`, `"left"`; default bottom) and `align` (`"start"`, `"center"`, `"end"`; default start) say where it opens when there is room; Tavora keeps it inside the window.
 - **What:** `items` is a list of entries:
   - `{ type: "item", id, label, hint?, color?, checked?, radio?, disabled?, danger? }`: `id` is what you get back (unique in the menu, up to 64 letters, digits, `.`, `_`, `:` or `-`). `hint` is small text on the right, such as a shortcut. `color` adds a dot: `#rgb`/`#rrggbb`, a colour function of numbers such as `oklch(0.7 0.17 150)`, or `transparent` for an empty ring. `checked` shows a check mark (a dot with `radio`); in a list where any item sets it, the others keep the column so labels line up. `danger` makes it red.
   - `{ type: "separator" }` and `{ type: "heading", label }`.
@@ -162,9 +162,8 @@ A module can keep pictures that are too big for a document: up to 50 MB each and
 
 ```ts
 button.addEventListener("click", async () => {
-  const box = button.getBoundingClientRect();
   const choice = await tavora.ui.showMenu({
-    at: { x: box.left, y: box.top, width: box.width, height: box.height },
+    anchor: button,
     align: "end",
     items: [
       { type: "item", id: "rename", label: "Rename", hint: "F2" },
@@ -466,7 +465,7 @@ Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain
   a genuine click/key press; hover must follow trusted source input. A current pin
   rejects ordinary hover. The host prefers the right side, then left, bounded to
   the application window.
-- `ui.tooltip.move({ id, at })` moves only the owner's matching unpinned tooltip.
+- `ui.tooltip.move({ id, at })` moves only the owner's matching unpinned tooltip. In the SDK, `anchor` (an element or its box) can take the place of `at` in `show` and `move`; the SDK sends the middle of its right edge.
 - `ui.tooltip.hide({ id })` ends hover, leaving a pin unchanged.
 - `ui.tooltip.close({ id })` explicitly closes the owner's matching tooltip.
 - `ui.tooltipClosed` carries `{ id }` when the host dismisses or replaces details.

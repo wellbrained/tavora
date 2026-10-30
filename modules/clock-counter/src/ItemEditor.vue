@@ -85,10 +85,9 @@ function saveFormat(next = format.value) {
 }
 
 async function pickFormat(event: MouseEvent) {
-  const button = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const picked = await panel.showMenu({
     items: FORMAT_PRESETS.map((preset) => ({ type: "item" as const, id: preset, label: `${preset}  ·  ${formatSeconds(4 * 3600 + 5 * 60 + 9, preset)}`, checked: format.value === preset })),
-    at: { x: button.left, y: button.top, width: button.width, height: button.height },
+    anchor: event.currentTarget as HTMLElement,
     align: "end",
   });
   if (picked) saveFormat(picked);
@@ -129,10 +128,9 @@ const links = computed(() =>
 const unlinked = computed(() => (props.item.kind === "counter" ? counters.value.filter((counter) => !(props.item as Counter).links.some((link) => link.target === counter.id)) : []));
 
 async function addLink(event: MouseEvent) {
-  const button = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const picked = await panel.showMenu({
     items: [{ type: "heading", label: t("edit.linkPick") }, ...unlinked.value.map((counter) => ({ type: "item" as const, id: counter.id, label: counter.label || t("kind.counter") }))],
-    at: { x: button.left, y: button.top, width: button.width, height: button.height },
+    anchor: event.currentTarget as HTMLElement,
   });
   if (picked) updateCounter((counter) => counter.links.length < MAX.links && !counter.links.some((link) => link.target === picked) && counter.links.push({ target: picked, amount: 1 }));
 }

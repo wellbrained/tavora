@@ -172,9 +172,9 @@ function menuEntries(): MenuEntry[] {
 
 /** The ⋯ button's menu opens below it; a right-click on the header opens the same menu below the header's end. */
 const menuOpen = ref(false);
-async function openMenu(at: { x: number; y: number; width?: number; height?: number }) {
+async function openMenu(anchor: Element) {
   menuOpen.value = true;
-  const choice = await panel.showMenu({ items: menuEntries(), at, align: at.width ? "end" : "start" }).catch(() => null);
+  const choice = await panel.showMenu({ items: menuEntries(), anchor, align: "end" }).catch(() => null);
   menuOpen.value = false;
   if (choice === "rename") void startRename();
   else if (choice === "up") change((data) => moveGroup(data, props.group.id, -1));
@@ -188,14 +188,12 @@ async function openMenu(at: { x: number; y: number; width?: number; height?: num
   }
 }
 function onMenuButton(event: MouseEvent) {
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  void openMenu({ x: box.left, y: box.top, width: box.width, height: box.height });
+  void openMenu(event.currentTarget as HTMLElement);
 }
 function onHeaderContextMenu(event: MouseEvent) {
   if (renaming.value || (event.target as Element).closest("input")) return;
   event.preventDefault();
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  void openMenu({ x: box.left, y: box.top, width: box.width, height: box.height });
+  void openMenu(event.currentTarget as HTMLElement);
 }
 
 // ── A new to-do typed between others (Enter in a title, or Add below) ──
