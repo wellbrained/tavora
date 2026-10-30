@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.22.7",
+    date: "2026-10-30",
+    title: "Safer module packages",
+    notes: [
+      "Packing a module now stops with a clear message if a folder or file in it is a link, instead of pulling in files from elsewhere.",
+    ],
+    prs: [
+      { number: 501, title: "Packer refuses links inside a module folder" },
+    ],
+    tags: ["publishing"],
+  },
+  {
     version: "0.22.6",
     date: "2026-10-30",
     title: "Whiteboard keeps a deleted board open",
