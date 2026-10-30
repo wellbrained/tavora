@@ -430,6 +430,7 @@ export const en = {
   "publish.notesLabel": "Patch notes for {version}",
   "publish.notesPlaceholder": "What people will notice, one per line",
   "publish.versionTaken": "{version} is already published. Pick the next version:",
+  "publish.versionPrerelease": "{version} is a test version. Pick a release version:",
   "publish.version.patch": "Fixes · {version}",
   "publish.version.minor": "New features · {version}",
   "publish.version.major": "Big changes · {version}",

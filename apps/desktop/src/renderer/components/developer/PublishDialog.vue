@@ -208,7 +208,7 @@ function browse() {
 
         <!-- What stops it, each with its fix. -->
         <section v-if="versionProblem" class="flex flex-col gap-3 rounded-lg border p-3" data-testid="publish-problem-version">
-          <p class="flex gap-2 text-sm"><CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ t("publish.versionTaken", { version: versionProblem.listed }) }}</p>
+          <p class="flex gap-2 text-sm"><CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ versionProblem.listed ? t("publish.versionTaken", { version: versionProblem.listed }) : t("publish.versionPrerelease", { version: module?.version ?? "" }) }}</p>
           <RadioGroup v-model="version" class="gap-2 pl-6">
             <Label v-for="kind in ['patch', 'minor', 'major'] as const" :key="kind" class="font-normal">
               <RadioGroupItem :value="versionProblem.next[kind]" :data-testid="`publish-next-${kind}`" />

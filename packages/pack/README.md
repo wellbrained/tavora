@@ -44,7 +44,7 @@ The upload carries the signature over the zip's SHA-256 by the key that packed i
 Every new version is checked automatically. If all is well it is listed at once. If not, or if it's your first module or has new pictures, the command prints **Waiting for review** with the reasons: the version is uploaded but not listed until a person at Tavora has looked at it, and you get an email either way. That is not an error (the exit code is 0). `tavora-pack withdraw <file.zip | sha256>` takes a waiting version back; it needs only `TAVORA_PUBLISH_TOKEN`. What's not allowed: https://docs.mytavora.app/guide/catalog-rules
 
 - The part of the module id before the first dot (`wellbrained` in `wellbrained.timer`) is your prefix. An account holds at most 3; prefixes with `tavora` and a few other reserved words are refused.
-- A module stays with the key that published its first version. Every new version must be newer.
+- A module stays with the key that published its first version. Every new version must be newer, and plain `major.minor.patch`: pre-releases such as `1.0.0-beta.1` are refused.
 - An account can publish 10 versions a day and store 200 MB of zips.
 - The catalog checks each zip the way Tavora's installer does, and Tavora checks it again on the user's PC.
 

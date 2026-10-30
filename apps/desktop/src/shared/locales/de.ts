@@ -432,6 +432,7 @@ export const de: Record<keyof typeof en, string> = {
   "publish.notesLabel": "Patchnotes für {version}",
   "publish.notesPlaceholder": "Was andere merken, eins pro Zeile",
   "publish.versionTaken": "{version} ist schon veröffentlicht. Wähl die nächste Version:",
+  "publish.versionPrerelease": "{version} ist eine Testversion. Wähl eine Release-Version:",
   "publish.version.patch": "Fixes · {version}",
   "publish.version.minor": "Neue Features · {version}",
   "publish.version.major": "Große Änderungen · {version}",

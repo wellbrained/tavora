@@ -343,8 +343,8 @@ export interface PublishView {
 }
 
 export type PublishProblem =
-  /** The catalog lists this version or a newer one: the screen offers the next versions. */
-  | { kind: "version"; listed: string; next: { patch: string; minor: string; major: string } }
+  /** The catalog lists this version or a newer one (`listed`), or it is a pre-release such as 1.0.0-beta.1 (`listed` null): the screen offers the next versions. */
+  | { kind: "version"; listed: string | null; next: { patch: string; minor: string; major: string } }
   /** The id's prefix isn't the account's; the id can be changed while nothing is published under it. */
   | { kind: "prefix"; prefix: string; state: Exclude<PrefixState, "held" | "free"> }
   | { kind: "not-built" }

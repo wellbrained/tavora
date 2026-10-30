@@ -96,7 +96,7 @@
     "version": {
       "type": "string",
       "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[0-9A-Za-z.-]+)?$",
-      "description": "Module version, semver.",
+      "description": "Module version, semver. Only plain major.minor.patch (1.2.0) can be packed and published; a pre-release such as 2.0.0-beta.1 still loads.",
       "examples": [
         "1.0.0"
       ]

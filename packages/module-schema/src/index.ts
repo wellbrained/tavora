@@ -198,6 +198,7 @@ export type ManifestResult =
 const MODULE_ID = /^[a-z][a-z0-9]*(\.[a-z0-9][a-z0-9-]*){1,4}$/;
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
+const RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const MAX_VIEWPORT = 10_000;
 const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "personalWorkspaces", "workspaces", "viewport", "panels", "inGame", "overlay", "overlaySize", "actions", "translations", "leaderboards", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight", "wide"];
@@ -342,6 +343,14 @@ export function manifestFiles(manifest: ModuleManifest): { entries: string[]; ic
     if (type.icon !== undefined) icons.add(type.icon);
   }
   return { entries: [...entries], icons: [...icons], screenshots: [...(manifest.screenshots ?? [])] };
+}
+
+/**
+ * Whether a module version may be published: plain major.minor.patch, no pre-release like 1.0.0-beta.1.
+ * A manifest with a pre-release still loads, so modules installed at one keep working and update.
+ */
+export function isReleaseVersion(value: unknown): boolean {
+  return typeof value === "string" && RELEASE_VERSION.test(value);
 }
 
 export function isModuleId(value: unknown): value is string {

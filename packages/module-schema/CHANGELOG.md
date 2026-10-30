@@ -2,6 +2,10 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.1.8
+
+- `isReleaseVersion`: whether a module version is plain `major.minor.patch`, the only kind that can be packed and published. `validateManifest` still accepts a pre-release such as `2.0.0-beta.1`, so modules installed at one keep loading.
+
 ## 0.1.7
 
 - `API_REASONS` (`ApiReason`, `isApiReason`, `apiReason`): every `reason` code Tavora's service sends with a refusal.

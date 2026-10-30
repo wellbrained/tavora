@@ -41,6 +41,7 @@ Build the module (`npm run dev` keeps `dist/` up to date), then press **Publish*
 If something blocks the upload, the screen says what and offers the fix:
 
 - **The catalog has this version already:** pick the next one (Fixes, New features or Big changes), add its patch notes, and press **Save to project**. Tavora writes both into `tavora.module.json` and `changelog.json`.
+- **The version is a test version** (a pre-release such as `0.2.0-beta.1`): pick a plain one the same way. Module versions are always `major.minor.patch`.
 - **The id doesn't start with one of your prefixes:** type a new id and press **Use it**. A prefix you don't hold yet is claimed when you publish.
 - **Nothing is built yet:** run `npm run build`, then press **Check again**.
 
@@ -96,6 +97,7 @@ An account can publish 10 versions a day and keep 200 MB of zips in the catalog.
 | This id prefix is reserved | Pick another prefix; reserved words such as `tavora` and `local` are refused. |
 | Your account already publishes under 3 id prefixes | Use one of the prefixes you have. |
 | … already has 1.2.0; a new version must be newer | Raise `version` (the review screen does it for you). Also shown when another key published the module's first version. |
+| Its version 1.2.0-beta.1 is a pre-release | Use a plain `major.minor.patch` version such as `1.2.0`. |
 | Your account has published as many versions as it can today | Wait a day. |
 | Your modules take as much room in the catalog as an account may have | Make the zip smaller. |
 | The zip was refused: … | The zip failed a check; the message names it. |
