@@ -387,7 +387,7 @@ export const en = {
   "devStart.name.prefix": "Every module has an id made of a prefix and its name, and the prefix is usually your developer name. Yours will look like {prefix}.my-module. The prefix stays yours for good, even if you change your name later, and you can add two more later on.",
   "devStart.key.title": "Your publisher key",
   "devStart.recovery.title": "Save your account's recovery key",
-  "devStart.recovery.text": "Tavora made you a publisher key, the proof your modules come from you. Save the recovery key below to publish from another PC too.",
+  "devStart.recovery.text": "Tavora made you a publisher key, the proof your modules come from you. Save the recovery key below to publish from another PC: without it and this PC, you can never update your modules again.",
   "devStart.key.text": "A publisher key is the proof that your modules really come from you. Tavora makes one for you and keeps it safe with your account.",
   "devStart.key.make": "Make my key",
   "devStart.key.linkedFile": "You made a publisher key before, and it's saved as a file on your PC. Pick that file so Tavora can use it: modules you already published can only be updated with that same key.",
