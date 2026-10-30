@@ -63,3 +63,66 @@ export function lockSpots(elements: readonly Picture[], view: Viewport): LockSpo
 export function spotsKey(spots: readonly LockSpot[]): string {
   return spots.map((spot) => `${spot.id}:${spot.locked ? 1 : 0}:${spot.x}:${spot.y}:${spot.selected ? 1 : 0}`).join("|");
 }
+
+/** How long a lock that is covered waits before it is looked at again. */
+const RETRY_MS = 400;
+
+export interface LockWatcherOptions {
+  /** Whether the drawing itself, not one of Excalidraw's menus, shows at this point of the page. */
+  drawingAt(x: number, y: number): boolean;
+  onSpots(spots: LockSpot[]): void;
+  /** Where the board starts on the page. */
+  origin(): { left: number; top: number };
+  frame?: { request(run: () => void): number; cancel(id: number): void };
+}
+
+/**
+ * Keeps the list of locks the page shows: only those that are really on the drawing and not under Excalidraw's menus
+ * (the palette, the toolbar, …). What covers a lock comes and goes with the tool, the selection and the panel's size, so
+ * the page is only asked what is where when one of those or a lock itself changed, not on every stroke.
+ */
+export function createLockWatcher(options: LockWatcherOptions) {
+  const frame = options.frame ?? { request: (run: () => void) => requestAnimationFrame(run), cancel: (id: number) => cancelAnimationFrame(id) };
+  let spots: LockSpot[] = [];
+  let layout = "";
+  let shown = "";
+  let nextFrame = 0;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+
+  function show(again = false) {
+    const origin = options.origin();
+    const visible = spots.filter((spot) => options.drawingAt(origin.left + spot.x, origin.top + spot.y));
+    // Something may cover a lock only for a moment (Excalidraw redrawing its menus); a lock that is covered is looked
+    // at again after the next change and a little later, so it is not missed.
+    const covered = visible.length < spots.length;
+    if (covered) layout = "";
+    if (covered && again) {
+      clearTimeout(retry);
+      retry = setTimeout(() => show(), RETRY_MS);
+    }
+    const key = spotsKey(visible);
+    if (key === shown) return;
+    shown = key;
+    options.onSpots(visible);
+  }
+
+  return {
+    /** The board changed: its locks, and `surroundings` (whatever else decides what covers them). */
+    update(next: LockSpot[], surroundings: string): void {
+      spots = next;
+      const now = `${spotsKey(next)}#${surroundings}`;
+      if (now === layout) return;
+      layout = now;
+      show(true);
+      // The menus have drawn themselves by the next frame; look once more then.
+      frame.cancel(nextFrame);
+      nextFrame = frame.request(() => show());
+    },
+    /** Looks again, after the palette moved, say. */
+    recheck: () => show(true),
+    dispose(): void {
+      frame.cancel(nextFrame);
+      clearTimeout(retry);
+    },
+  };
+}

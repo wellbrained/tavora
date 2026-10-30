@@ -15,7 +15,8 @@
       "@tavora/pack/vite": ["../../packages/pack/src/vite.ts"],
       "@tavora/sdk": ["../../packages/sdk/src/index.ts"],
       "@tavora/sdk/bootstrap": ["../../packages/sdk/src/bootstrap.ts"],
-      "@tavora/sdk/store": ["../../packages/sdk/src/store.ts"]
+      "@tavora/sdk/store": ["../../packages/sdk/src/store.ts"],
+      "@tavora/sdk/testing": ["../../packages/sdk/src/testing.ts"]
     }
   },
   "include": ["src", "stubs", "vite.config.ts", "../shared/src/env.d.ts"]

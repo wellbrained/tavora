@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// The Whiteboard: a header with the board menu and the picture buttons, and the board below. Every Whiteboard panel
-// of a workspace shows the same boards; which board a panel shows, its views and where its palette sits are its own state.
+// The Whiteboard: a header with the board menu and the picture buttons, and the board below. Every Whiteboard panel of
+// a workspace shows the same boards; which board a panel shows, its views and where its palette sits are its own state.
+// This page only shows: the boards are the library's (board-library.ts), the open board's drawing and saving the
+// board session's (boardSession.ts).
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
@@ -9,18 +11,20 @@ import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { toast, Toaster } from "@tavora/official-ui/components/ui/toast";
 import { TavoraError, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
-import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import type { DocumentHandle } from "@tavora/sdk/store";
+import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import BoardMenu from "./BoardMenu.vue";
-import { cleanName, formatMegabytes, MAX_BOARD_BYTES, nextBoardName, sizeLevel, type BoardData, type BoardSummary } from "./boards";
-import type { Controls, Pictures, SaveState, View } from "./boardSession";
+import { openBoardLibrary, type BoardKind, type BoardLibrary } from "./board-library";
+import { initialBoardState, type BoardState, type View } from "./boardState";
+import type { BoardSession } from "./boardSession";
+import { cleanName, emptyBoard, formatMegabytes, MAX_BOARD_BYTES, newBoardId, sizeLevel, type BoardData, type BoardSummary } from "./boards";
 import { pictureName } from "./copy";
-import { language, setLanguage, t } from "./i18n";
+import { setLanguage, t } from "./i18n";
+import { de, en } from "./locales";
 import { DEFAULT_PALETTE, palettePlace, type PalettePlace } from "./palette";
 import { unusedFiles } from "./pictures";
-import { createBoards, type Boards } from "./store";
 import { toolbarPlace, type ToolbarPlace } from "./toolbar";
 import type { ConnectorKind } from "./connectors";
-import type { StarterKind } from "./starters";
 
 // Excalidraw is large; the page shows the header first and the board when it has loaded.
 const BoardView = defineAsyncComponent({
@@ -38,49 +42,42 @@ interface PanelState {
 
 interface Shown {
   id: string;
-  name: string;
-  data: BoardData;
+  document: DocumentHandle<BoardData>;
   /** Bumped to show the board again from what is stored (another panel changed it). */
   nonce: number;
-  save(data: BoardData): Promise<void>;
 }
 
 /** How long a notice (and the Undo offer) stays when left alone. */
 const NOTICE_MS = 10_000;
 
 const sdk = shallowRef<TavoraSDK | null>(null);
-const boards = shallowRef<Boards | null>(null);
+const library = shallowRef<BoardLibrary | null>(null);
 const error = ref<string | null>(null);
 const mode = ref<"light" | "dark">("dark");
-const list = ref<BoardSummary[]>([]);
+const list = shallowRef<BoardSummary[]>([]);
 const shown = shallowRef<Shown | null>(null);
-const saveState = ref<SaveState>("idle");
-const bytes = ref(0);
-const pictures = ref<Pictures>({ count: 0, allLocked: false });
-const picturesLoaded = ref(0);
-const empty = ref(true);
+/** The open board's session and what it reports; null while the board loads. */
+const board = shallowRef<BoardSession | null>(null);
+const boardState = shallowRef<BoardState>(initialBoardState(emptyBoard()));
+const deleted = ref(false);
 const copying = ref(false);
 // Panel state crosses a MessagePort; keep this object plain rather than sending a Vue proxy.
 const palette = shallowRef<PalettePlace>(DEFAULT_PALETTE);
 const toolbar = ref<ToolbarPlace>("top");
 const pictureInput = ref<HTMLInputElement | null>(null);
-const boardReady = ref(false);
-const grid = ref(false);
 const creatingBoard = ref(false);
 const screenshotInput = ref<HTMLInputElement | null>(null);
 const fitBoardId = ref<string | null>(null);
 const connectorOpen = ref(false);
 let connectorChoice: ConnectorKind | null = null;
-let controls: Controls | null = null;
 
-let dirty = false;
-let selectedId: string | null = null;
-let names = new Map<string, string>();
 let views: Record<string, View> = {};
 let viewTimer: ReturnType<typeof setTimeout> | undefined;
+let stopSession: (() => void) | undefined;
 const cleanup: (() => void)[] = [];
 
-const level = computed(() => sizeLevel(bytes.value));
+const level = computed(() => sizeLevel(boardState.value.bytes));
+const name = computed(() => list.value.find((entry) => entry.id === shown.value?.id)?.name ?? "");
 
 /** A short message to the user, such as a picture that cannot be kept. */
 function notify(message: string) {
@@ -93,129 +90,132 @@ function offerUndo(message: string, run: () => Promise<void>) {
 }
 
 function saveSelection() {
-  void sdk.value?.panel.setState({ selected: selectedId, views, palette: palette.value } as unknown as never).catch(() => undefined);
+  void sdk.value?.panel.setState({ selected: shown.value?.id ?? null, views, palette: palette.value } as unknown as never).catch(() => undefined);
 }
 
-async function refreshList() {
-  if (!boards.value) return [];
-  const next = await boards.value.list();
-  names = new Map(next.map((board) => [board.id, board.name]));
-  list.value = next;
-  return next;
+/** Shows the library's open board; `again` shows the same board anew, from what another panel saved. */
+function show(again: boolean) {
+  const open = library.value?.current;
+  const id = library.value?.currentId;
+  if (!open || !id) {
+    shown.value = null;
+    return;
+  }
+  board.value = null;
+  boardState.value = initialBoardState(open.data);
+  shown.value = { id, document: open, nonce: (shown.value?.nonce ?? 0) + 1 };
+  if (!again) saveSelection();
 }
 
-/** Shows a board; what the current one has unsaved is stored first, when its view closes. */
-async function show(id: string) {
-  const store = boards.value;
-  const opened = await store?.open(id);
-  if (!opened || !store) return;
-  selectedId = id;
-  let revision = opened.revision;
-  dirty = false;
-  saveState.value = "idle";
-  pictures.value = { count: 0, allLocked: false };
-  picturesLoaded.value = 0;
-  bytes.value = JSON.stringify(opened.data).length;
-  grid.value = opened.data.grid;
-  shown.value = {
-    id, name: names.get(id) ?? "", data: opened.data, nonce: (shown.value?.nonce ?? 0) + 1,
-    // A closing view can still flush after the new one opens. Always save to its own board.
-    save: async (data) => { revision = await store.save(id, names.get(id) ?? "", data, revision); },
-  };
-  saveSelection();
+/** The board's session arrives once its view has mounted, and goes when the view does. */
+function sessionOpened(session: BoardSession) {
+  stopSession?.();
+  board.value = session;
+  boardState.value = session.state;
+  library.value?.attach(session);
+  const offs = [session.onState((next) => (boardState.value = next)), session.onNotice(notify), session.onCopyShortcut(() => void copyAsPicture())];
+  stopSession = () => offs.forEach((off) => off());
 }
 
-async function createBoard(kind: StarterKind = "blank") {
+function sessionClosed(session: BoardSession) {
+  library.value?.detach(session);
+  if (board.value !== session) return;
+  stopSession?.();
+  stopSession = undefined;
+  board.value = null;
+}
+
+// What the board was last scrolled to is remembered for this panel.
+watch(
+  () => boardState.value.view,
+  (view) => view && rememberView(view),
+);
+
+async function createBoard(kind: BoardKind = "blank") {
   if (kind === "screenshot") { screenshotInput.value?.click(); return; }
-  const store = boards.value;
-  if (!store || creatingBoard.value) return;
+  const lib = library.value;
+  if (!lib || creatingBoard.value) return;
   creatingBoard.value = true;
   try {
     const data = kind === "idea" ? (await import("./starters")).ideaBoard() : undefined;
-    const created = await store.create(kind === "blank" ? nextBoardName([...names.values()], t("boardWord")) : starterName("starter.idea"), data);
-    fitBoardId.value = kind === "idea" ? created.id : null;
-    await refreshList();
-    await show(created.id);
+    // The id is needed before the board opens: only a starter is fitted to the view once.
+    const id = newBoardId();
+    fitBoardId.value = kind === "idea" ? id : null;
+    await lib.create(kind, data, id);
   } catch (reason) { notify(t("starter.failed", { error: errorMessage(reason) })); }
   finally { creatingBoard.value = false; }
-}
-
-function starterName(key: "starter.idea" | "starter.screenshotName") {
-  const base = t(key);
-  const taken = new Set([...names.values()].map((name) => name.toLocaleLowerCase()));
-  let name = base;
-  for (let n = 2; taken.has(name.toLocaleLowerCase()); n++) name = `${base} ${n}`;
-  return name;
 }
 
 async function createScreenshot(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   input.value = "";
-  const store = boards.value;
+  const lib = library.value;
   const connected = sdk.value;
-  if (!file || !store || !connected || creatingBoard.value) return;
+  if (!file || !lib || !connected || creatingBoard.value) return;
   creatingBoard.value = true;
   try {
     const { readBoardPicture } = await import("./readPicture");
     const picture = await readBoardPicture(file);
     const blob = await connected.blobs.put(picture.blob);
     const data = (await import("./starters")).screenshotBoard(picture, blob.id);
-    const created = await store.create(starterName("starter.screenshotName"), data);
-    fitBoardId.value = created.id;
-    await refreshList();
-    await show(created.id);
+    const id = newBoardId();
+    fitBoardId.value = id;
+    await lib.create("screenshot", data, id);
   } catch (reason) { notify(t("starter.failed", { error: errorMessage(reason) })); }
   finally { creatingBoard.value = false; }
 }
 
-/** Shows the first board, making one when there is none. */
-async function showFallback(next: BoardSummary[]) {
-  const fallback = next[0]?.id;
-  if (fallback) await show(fallback);
-  else await createBoard();
+async function select(id: string) {
+  try {
+    await library.value?.open(id);
+  } catch (reason) {
+    // A board another panel deleted meanwhile is gone from the list already.
+    if (!(reason instanceof Error && reason.name === "ItemNotFoundError")) notify(t("save.error"));
+  }
 }
 
 onMounted(async () => {
   try {
-    const connected = await connectModule((code) => setLanguage(code));
+    const connection = await connectModule({ texts: { en, de } });
+    if (connection.status !== "ready" || !connection.sdk) throw connection.error;
+    const connected = connection.sdk;
+    // The components read the module's own translator; it follows the language the handle reports.
+    setLanguage(connection.language);
+    cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
     // The board needs the mode for Excalidraw; the shared styles already follow the theme.
-    const modeOf = (theme: TavoraTheme) => (theme.mode === "light" ? "light" : "dark");
-    mode.value = modeOf(await connected.ui.getTheme());
-    cleanup.push(connected.ui.onThemeChange((theme) => (mode.value = modeOf(theme))));
-    const store = createBoards(connected);
-    boards.value = store;
+    const modeOf = (theme: TavoraTheme | undefined) => (theme?.mode === "light" ? "light" : "dark");
+    mode.value = modeOf(connection.theme);
+    cleanup.push(connection.onTheme((theme) => (mode.value = modeOf(theme))));
     sdk.value = connected;
     // Where the toolbar goes is one choice for every workspace.
     toolbar.value = toolbarPlace(await connected.storage.app.get("toolbar").catch(() => null));
 
-    const [state, existing] = await Promise.all([connected.panel.getState<PanelState>(), refreshList()]);
+    const state = await connected.panel.getState<PanelState>();
     views = state?.views && typeof state.views === "object" ? state.views : {};
     palette.value = palettePlace(state?.palette);
-    let id = existing.find((board) => board.id === state?.selected)?.id ?? existing[0]?.id;
-    if (!id) {
-      const created = await store.create(`${t("boardWord")} 1`);
-      await refreshList();
-      id = created.id;
-    }
-    await show(id);
 
-    // Another panel changed, renamed or deleted a board.
+    const lib = await openBoardLibrary(connected, { words: () => ({ board: t("boardWord"), idea: t("starter.idea"), screenshot: t("starter.screenshotName") }) });
+    cleanup.push(() => void lib.dispose());
+    library.value = lib;
+    list.value = lib.boards;
+    // Another panel (or this one) changed the boards, or the open one.
     cleanup.push(
-      connected.documents.onChange((change) => {
-        void (async () => {
-          const next = await refreshList();
-          if (change.id !== selectedId) return;
-          if (change.deleted) await showFallback(next);
+      lib.onChange((event) => {
+        if (event.type === "list") list.value = lib.boards;
+        else if (event.type === "current") {
+          deleted.value = lib.deleted;
+          if (event.source === "pick") show(false);
           // This panel has nothing unsaved, so it takes over what the other panel saved.
-          else if (!dirty) await show(change.id);
-        })();
+          else if (event.source === "remote" && !event.deleted && !boardState.value.dirty) show(true);
+        }
       }),
     );
+    show(false);
 
     // Pictures that no board uses any more (of a deleted board, or taken off a board) are cleared out when a panel opens.
     void (async () => {
-      const used = await store.usedFiles();
+      const used = await lib.usedFiles();
       for (const file of unusedFiles(await connected.blobs.list(), used)) await connected.blobs.delete(file.id);
     })().catch(() => undefined);
   } catch (reason) {
@@ -226,7 +226,7 @@ onMounted(async () => {
 onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
 
 function rememberView(view: View) {
-  const id = selectedId;
+  const id = shown.value?.id;
   if (!id) return;
   views[id] = view;
   clearTimeout(viewTimer);
@@ -245,26 +245,22 @@ function placePalette(place: PalettePlace) {
 
 async function rename(value: string) {
   const id = shown.value?.id;
-  const name = cleanName(value);
-  if (!id || !boards.value || !name || name === names.get(id)) return;
+  const next = cleanName(value);
+  if (!id || !library.value || !next || next === name.value) return;
   try {
-    await boards.value.rename(id, name);
+    await library.value.rename(id, next);
   } catch {
     notify(t("board.renameFailed"));
-    return;
   }
-  names.set(id, name);
-  if (shown.value?.id === id) shown.value = { ...shown.value, name };
-  await refreshList();
 }
 
 /** Runs a picture action from a click or key press; the host only takes the picture right after that press. */
-async function pictureAction(run: (board: Controls) => Promise<void>, failed: (reason: unknown) => string) {
-  const board = controls;
-  if (!board || copying.value) return;
+async function pictureAction(run: (session: BoardSession) => Promise<void>, failed: (reason: unknown) => string) {
+  const session = board.value;
+  if (!session || copying.value) return;
   copying.value = true;
   try {
-    await run(board);
+    await run(session);
   } catch (reason) {
     notify(failed(reason));
   } finally {
@@ -283,8 +279,8 @@ function pictureProblem(reason: unknown, fallback: "copy.failed" | "savePicture.
 /** Copy as picture, from the header button or Shift+Alt+C. */
 function copyAsPicture() {
   return pictureAction(
-    async (board) => {
-      const copied = await board.copyAsPicture();
+    async (session) => {
+      const copied = await session.copyAsPicture();
       notify(t(copied === "selection" ? "copy.selection" : "copy.board"));
     },
     (reason) => pictureProblem(reason, "copy.failed"),
@@ -294,8 +290,8 @@ function copyAsPicture() {
 /** Save as picture: the same picture as Copy as picture, handed to Tavora's save dialog right after the click. */
 function saveAsPicture() {
   return pictureAction(
-    async (board) => {
-      const saved = await board.saveAsPicture(pictureName(names.get(selectedId ?? "") ?? t("boardWord")));
+    async (session) => {
+      const saved = await session.saveAsPicture(pictureName(name.value || t("boardWord")));
       if (saved) notify(t(saved.what === "selection" ? "savePicture.selection" : "savePicture.board", { name: saved.fileName }));
     },
     (reason) => pictureProblem(reason, "savePicture.failed"),
@@ -304,27 +300,31 @@ function saveAsPicture() {
 
 /** Clear board: everything off the board, with Undo in the notice (Ctrl+Z works too). */
 function clearBoard() {
-  const restore = controls?.clear();
+  const restore = board.value?.clear();
   if (restore) offerUndo(t("clear.done"), async () => restore());
 }
 
 async function remove() {
   const id = shown.value?.id;
-  const store = boards.value;
-  if (!id || !store) return;
-  const opened = await store.open(id);
-  const name = names.get(id) ?? "";
-  await store.remove(id);
+  if (!id || !library.value) return;
+  const label = name.value;
+  let undo: () => Promise<void>;
+  try {
+    undo = await library.value.remove(id);
+  } catch {
+    notify(t("board.deleteFailed"));
+    return;
+  }
   delete views[id];
-  const next = await refreshList();
-  dirty = false;
-  await showFallback(next);
-  if (opened) {
-    offerUndo(t("undo.deleted", { name }), async () => {
-      await store.restore(id, name, opened.data);
-      await refreshList();
-      await show(id);
-    });
+  offerUndo(t("undo.deleted", { name: label }), undo);
+}
+
+/** The board was deleted in another panel: bring it back as this panel last saw it. */
+async function restore() {
+  try {
+    await library.value?.restoreDeleted();
+  } catch (reason) {
+    notify(t("deleted.restoreFailed", { error: errorMessage(reason) }));
   }
 }
 
@@ -333,35 +333,26 @@ function reload() {
 }
 
 function togglePictureLocks() {
-  controls?.setPicturesLocked(!pictures.value.allLocked);
+  board.value?.setPicturesLocked(!boardState.value.pictures.allLocked);
 }
 
-function setDirty(value: boolean) {
-  dirty = value;
-}
-
-function setControls(value: Controls | null) {
-  controls = value;
-  boardReady.value = value !== null;
-}
-
-function addNote() { controls?.addNote(); }
+function addNote() { board.value?.addNote(); }
 function setConnector(kind: ConnectorKind) { connectorChoice = kind; connectorOpen.value = false; }
 function finishConnector(event: Event) {
   if (!connectorChoice) return;
   event.preventDefault();
   const kind = connectorChoice;
   connectorChoice = null;
-  controls?.setConnector(kind);
+  board.value?.setConnector(kind);
 }
-function setGrid(enabled: boolean) { controls?.setGrid(enabled); }
+function setGrid(enabled: boolean) { board.value?.setGrid(enabled); }
 
 async function addPicture(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   input.value = "";
-  if (!file || !controls) return;
-  try { await controls.addPicture(file); }
+  if (!file || !board.value) return;
+  try { await board.value.addPicture(file); }
   catch (reason) { notify(t("card.failed", { error: errorMessage(reason) })); }
 }
 </script>
@@ -382,12 +373,12 @@ async function addPicture(event: Event) {
         <BoardMenu
           :boards="list"
           :current-id="shown.id"
-          :current-name="shown.name"
-          :can-clear="!empty"
-          :grid="grid"
-          :ready="boardReady"
+          :current-name="name"
+          :can-clear="!boardState.empty"
+          :grid="boardState.grid"
+          :ready="boardState.ready"
           :creating="creatingBoard"
-          @select="show"
+          @select="select"
           @create="createBoard"
           @rename="rename"
           @clear="clearBoard"
@@ -397,7 +388,7 @@ async function addPicture(event: Event) {
       </div>
       <span class="flex-1" />
       <DropdownMenu v-model:open="connectorOpen">
-        <DropdownMenuTrigger as-child><Button variant="ghost" size="sm" :disabled="!boardReady" :aria-label="t('connector.button')" :title="t('connector.button')" data-testid="connector-menu"><Waypoints class="size-4" aria-hidden="true" /><span class="toolbar-label">{{ t("connector.button") }}</span></Button></DropdownMenuTrigger>
+        <DropdownMenuTrigger as-child><Button variant="ghost" size="sm" :disabled="!boardState.ready" :aria-label="t('connector.button')" :title="t('connector.button')" data-testid="connector-menu"><Waypoints class="size-4" aria-hidden="true" /><span class="toolbar-label">{{ t("connector.button") }}</span></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="start" @close-auto-focus="finishConnector">
           <DropdownMenuItem data-testid="connector-line" @select="setConnector('line')"><Minus class="size-4" aria-hidden="true" />{{ t("connector.line") }}</DropdownMenuItem>
           <DropdownMenuItem data-testid="connector-one-way" @select="setConnector('one-way')"><ArrowRight class="size-4" aria-hidden="true" />{{ t("connector.one") }}</DropdownMenuItem>
@@ -406,7 +397,7 @@ async function addPicture(event: Event) {
       </DropdownMenu>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="sm" :disabled="!boardReady" data-testid="add-card" :aria-label="t('card.add')" :title="t('card.add')"><Plus class="size-4" aria-hidden="true" /><span class="toolbar-label">{{ t("card.add") }}</span></Button>
+          <Button variant="ghost" size="sm" :disabled="!boardState.ready" data-testid="add-card" :aria-label="t('card.add')" :title="t('card.add')"><Plus class="size-4" aria-hidden="true" /><span class="toolbar-label">{{ t("card.add") }}</span></Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem data-testid="add-note-card" @select="addNote"><StickyNote class="size-4" aria-hidden="true" />{{ t("card.note") }}</DropdownMenuItem>
@@ -416,60 +407,55 @@ async function addPicture(event: Event) {
       <input ref="pictureInput" class="hidden" type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-testid="card-file" :aria-label="t('card.picture')" @change="addPicture" />
       <input ref="screenshotInput" class="hidden" type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-testid="starter-file" :aria-label="t('starter.screenshot')" @change="createScreenshot" />
       <Button
-        v-if="pictures.count > 0"
+        v-if="boardState.pictures.count > 0"
         type="button"
         variant="ghost"
         size="sm"
         class="board-image-action text-muted-foreground"
-        :title="t(pictures.allLocked ? 'image.unlockHint' : 'image.lockHint')"
+        :title="t(boardState.pictures.allLocked ? 'image.unlockHint' : 'image.lockHint')"
         data-testid="picture-lock"
-        :data-locked="pictures.allLocked"
+        :data-locked="boardState.pictures.allLocked"
         @click="togglePictureLocks"
       >
-        {{ t(pictures.allLocked ? "image.unlock" : "image.lock") }}
+        {{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}
       </Button>
-      <Button class="board-image-action" type="button" variant="outline" size="sm" :title="t('copy.hint')" data-testid="copy-picture" :disabled="empty || copying" @click="copyAsPicture">{{ t("copy.button") }}</Button>
-      <Button class="board-image-action" type="button" variant="outline" size="sm" :title="t('savePicture.hint')" data-testid="save-picture" :disabled="empty || copying" @click="saveAsPicture">{{ t("savePicture.button") }}</Button>
+      <Button class="board-image-action" type="button" variant="outline" size="sm" :title="t('copy.hint')" data-testid="copy-picture" :disabled="boardState.empty || copying" @click="copyAsPicture">{{ t("copy.button") }}</Button>
+      <Button class="board-image-action" type="button" variant="outline" size="sm" :title="t('savePicture.hint')" data-testid="save-picture" :disabled="boardState.empty || copying" @click="saveAsPicture">{{ t("savePicture.button") }}</Button>
       <DropdownMenu>
         <DropdownMenuTrigger as-child><Button class="board-actions-menu" variant="ghost" size="icon-sm" :aria-label="t('board.actions')" :title="t('board.actions')" data-testid="board-actions"><MoreHorizontal class="size-4" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem data-testid="compact-copy-picture" :disabled="empty || copying" @select="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
-          <DropdownMenuItem data-testid="compact-save-picture" :disabled="empty || copying" @select="saveAsPicture">{{ t("savePicture.button") }}</DropdownMenuItem>
-          <DropdownMenuSeparator v-if="pictures.count > 0" />
-          <DropdownMenuItem v-if="pictures.count > 0" @select="togglePictureLocks">{{ t(pictures.allLocked ? "image.unlock" : "image.lock") }}</DropdownMenuItem>
+          <DropdownMenuItem data-testid="compact-copy-picture" :disabled="boardState.empty || copying" @select="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
+          <DropdownMenuItem data-testid="compact-save-picture" :disabled="boardState.empty || copying" @select="saveAsPicture">{{ t("savePicture.button") }}</DropdownMenuItem>
+          <DropdownMenuSeparator v-if="boardState.pictures.count > 0" />
+          <DropdownMenuItem v-if="boardState.pictures.count > 0" @select="togglePictureLocks">{{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
-    <Notice v-if="level !== 'ok'" :variant="level === 'full' ? 'error' : 'warning'" class="mx-2 mt-2 flex-none" data-testid="board-size">
-      {{ t(level === "full" ? "size.full" : "size.warn", { used: formatMegabytes(bytes), max: formatMegabytes(MAX_BOARD_BYTES) }) }}
+    <Notice v-if="deleted" variant="warning" class="mx-2 mt-2 flex-none" data-testid="board-deleted">
+      {{ t("deleted.notice") }}
+      <template #action>
+        <Button type="button" size="sm" variant="secondary" data-testid="board-restore" @click="restore">{{ t("deleted.restore") }}</Button>
+      </template>
     </Notice>
-    <main class="relative min-h-0 flex-1" :data-board="shown.id" :data-pictures="picturesLoaded" data-testid="board">
+    <Notice v-if="level !== 'ok'" :variant="level === 'full' ? 'error' : 'warning'" class="mx-2 mt-2 flex-none" data-testid="board-size">
+      {{ t(level === "full" ? "size.full" : "size.warn", { used: formatMegabytes(boardState.bytes), max: formatMegabytes(MAX_BOARD_BYTES) }) }}
+    </Notice>
+    <main class="relative min-h-0 flex-1" :data-board="shown.id" :data-pictures="boardState.picturesLoaded" data-testid="board">
       <BoardView
         :key="`${shown.id}:${shown.nonce}`"
         :sdk="sdk"
-        :data="shown.data"
+        :document="shown.document"
         :view="views[shown.id]"
         :mode="mode"
-        :save-state="saveState"
-        :save="shown.save"
         :toolbar="toolbar"
         :palette="palette"
         :fit-on-open="fitBoardId === shown.id"
-        @view="rememberView"
-        @state="saveState = $event"
-        @size="bytes = $event"
-        @dirty="setDirty"
-        @pictures="pictures = $event"
-        @empty="empty = $event"
-        @copy-shortcut="copyAsPicture"
-        @pictures-loaded="picturesLoaded = $event"
-        @notice="notify"
-        @controls="setControls"
+        @session="sessionOpened"
+        @closed="sessionClosed"
         @toolbar="placeToolbar"
         @palette="placePalette"
-        @grid="grid = $event"
       />
-      <EmptyState v-if="empty" :title="t('empty.hint')" class="text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-[1] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0" data-testid="empty-hint" />
+      <EmptyState v-if="boardState.empty" :title="t('empty.hint')" class="text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-[1] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0" data-testid="empty-hint" />
     </main>
     <Toaster />
   </div>

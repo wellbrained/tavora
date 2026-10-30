@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { cleanName, formatMegabytes, isBoardId, MAX_BOARD_BYTES, MAX_NAME, newBoardId, nextBoardName, parseBoard, sceneSignature, sizeLevel, sortBoards, WARN_BOARD_BYTES } from "./boards";
+import { boardTitle, cleanName, formatMegabytes, isBoardId, MAX_BOARD_BYTES, MAX_NAME, newBoardId, uniqueName, parseBoard, sceneSignature, sizeLevel, sortBoards, WARN_BOARD_BYTES } from "./boards";
 
 describe("parseBoard", () => {
   it("fills in a missing or damaged board", () => {
-    expect(parseBoard(null, "T")).toEqual({ version: 1, elements: [], files: {}, background: "#ffffff", grid: false, createdAt: "T" });
-    expect(parseBoard({ elements: "nope", background: 4, createdAt: 7 }, "T")).toEqual({ version: 1, elements: [], files: {}, background: "#ffffff", grid: false, createdAt: "T" });
+    expect(parseBoard(null, "T")).toEqual({ version: 1, elements: [], files: {}, name: "", background: "#ffffff", grid: false, createdAt: "T" });
+    expect(parseBoard({ elements: "nope", background: 4, createdAt: 7 }, "T")).toEqual({ version: 1, elements: [], files: {}, name: "", background: "#ffffff", grid: false, createdAt: "T" });
     expect(parseBoard([1, 2] as never, "T").elements).toEqual([]);
   });
 
   it("keeps valid elements and drops anything that is not an object", () => {
     const rectangle = { id: "a", type: "rectangle" };
-    expect(parseBoard({ elements: [rectangle, 4, null, "x", [1]], background: "#fff", createdAt: "C" })).toEqual({ version: 1, elements: [rectangle], files: {}, background: "#fff", grid: false, createdAt: "C" });
+    expect(parseBoard({ elements: [rectangle, 4, null, "x", [1]], background: "#fff", createdAt: "C" })).toEqual({ version: 1, elements: [rectangle], files: {}, name: "", background: "#fff", grid: false, createdAt: "C" });
   });
 
   it("opens older boards without a grid and keeps an explicit grid choice", () => {
@@ -50,9 +50,28 @@ describe("board names and ids", () => {
   });
 
   it("numbers a new board after the existing ones, skipping names that are taken", () => {
-    expect(nextBoardName([], "Board")).toBe("Board 1");
-    expect(nextBoardName(["Board 1"], "Board")).toBe("Board 2");
-    expect(nextBoardName(["Atlas", "board 2"], "Board")).toBe("Board 3");
+    expect(uniqueName([], "Board", 1)).toBe("Board 1");
+    expect(uniqueName(["Board 1"], "Board", 2)).toBe("Board 2");
+    expect(uniqueName(["Atlas", "board 2"], "Board", 3)).toBe("Board 3");
+  });
+
+  it("gives a starter its plain name first, then numbers it", () => {
+    expect(uniqueName(["Board 1"], "Idea board")).toBe("Idea board");
+    expect(uniqueName(["idea board"], "Idea board")).toBe("Idea board 2");
+    expect(uniqueName(["Idea board", "Idea board 2"], "Idea board")).toBe("Idea board 3");
+  });
+
+  it("keeps the starter board, which has no time in its id, first", () => {
+    const later = newBoardId(1_700_000_005_000, 0.5);
+    const earlier = newBoardId(1_700_000_000_000, 0.1);
+    expect(sortBoards([{ id: later }, { id: "board-start" }, { id: earlier }]).map((board) => board.id)).toEqual(["board-start", earlier, later]);
+  });
+
+  it("reads a board's name as one clean line, and titles a nameless board", () => {
+    expect(parseBoard({ name: "  Atlas \n map " }).name).toBe("Atlas map");
+    expect(parseBoard({ name: 4 }).name).toBe("");
+    expect(boardTitle(parseBoard({ name: "Atlas" }))).toBe("Atlas");
+    expect(boardTitle(parseBoard(null))).toBe("Board");
   });
 });
 
