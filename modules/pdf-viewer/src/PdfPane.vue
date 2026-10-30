@@ -347,7 +347,7 @@ const setPageRef = (number: number) => (element: unknown) => {
         <Button variant="ghost" size="icon-sm" :title="t('pdf.zoomOut')" :aria-label="t('pdf.zoomOut')" data-testid="pdf-zoom-out" @click="setZoom(stepZoom(zoom, -1), null)">
           <Minus :stroke-width="1.5" />
         </Button>
-        <span class="text-muted-foreground w-11 text-center text-sm tabular-nums" :aria-label="t('pdf.zoomLevel', { percent })" data-testid="pdf-zoom">{{ percent }}%</span>
+        <Button variant="ghost" size="sm" class="text-muted-foreground h-7 w-12 px-0 text-sm tabular-nums" :title="t('pdf.zoomReset')" :aria-label="t('pdf.zoomLevel', { percent }) + ', ' + t('pdf.zoomReset')" data-testid="pdf-zoom" @click="setZoom(1, null)">{{ percent }}%</Button>
         <Button variant="ghost" size="icon-sm" :title="t('pdf.zoomIn')" :aria-label="t('pdf.zoomIn')" data-testid="pdf-zoom-in" @click="setZoom(stepZoom(zoom, 1), null)">
           <Plus :stroke-width="1.5" />
         </Button>

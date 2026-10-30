@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // A viewport that pans and zooms what is inside it. Drag pans, Ctrl + wheel or a pinch
 // zooms, a plain wheel keeps scrolling the page (with a short hint), and the buttons in
-// the corner zoom in, out and fit. With focus: + and - zoom, 0 fits, arrow keys pan.
+// the corner zoom in, out, fit and show at real size (1:1). With focus: + and - zoom, 0 fits, 1 shows 100 %, arrow keys pan.
 // The content is fitted when it first shows and whenever its size changes. With autoFit off
 // only when it first shows, so content that grows (a box dragged past the edge) keeps the view.
 // With fit "width" the content fills the width and is read top to bottom like a page: a
@@ -64,6 +64,10 @@ function fit() {
 const middle = () => ({ x: paneSize.value.width / 2, y: paneSize.value.height / 2 })
 function zoomBy(factor: number, at = middle()) {
   view.value = zoomAt(view.value, factor, at, limits.value, paneSize.value, contentSize.value)
+}
+/** Shows the content at its real size (100 %), around the middle of the pane. */
+function actualSize() {
+  zoomBy(1 / view.value.zoom)
 }
 function panBy(dx: number, dy: number, from = view.value) {
   view.value = clampPan({ ...from, x: from.x + dx, y: from.y + dy }, paneSize.value, contentSize.value)
@@ -211,6 +215,7 @@ function onKeyDown(event: KeyboardEvent) {
     "=": zoomIn,
     "-": zoomOut,
     "0": fit,
+    "1": actualSize,
     "ArrowLeft": () => panBy(PAN_STEP, 0),
     "ArrowRight": () => panBy(-PAN_STEP, 0),
     "ArrowUp": () => panBy(0, PAN_STEP),
@@ -251,7 +256,7 @@ onBeforeUnmount(() => {
   clearTimeout(hintTimer)
 })
 
-defineExpose({ fit, zoomIn, zoomOut, moveOrigin, setView, showArea, zoom: computed(() => view.value.zoom), view: computed(() => view.value) })
+defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, zoom: computed(() => view.value.zoom), view: computed(() => view.value) })
 </script>
 
 <template>
@@ -285,6 +290,9 @@ defineExpose({ fit, zoomIn, zoomOut, moveOrigin, setView, showArea, zoom: comput
       </Button>
       <Button variant="outline" size="icon-sm" :aria-label="uiText.zoomFit" :title="uiText.zoomFit" @click="fit">
         <Maximize />
+      </Button>
+      <Button variant="outline" size="icon-sm" class="w-auto px-1.5 text-xs tabular-nums" :aria-label="uiText.zoomActual" :title="uiText.zoomActual" @click="actualSize">
+        1:1
       </Button>
     </div>
     <Transition enter-from-class="opacity-0" leave-to-class="opacity-0" enter-active-class="transition-opacity" leave-active-class="transition-opacity">
