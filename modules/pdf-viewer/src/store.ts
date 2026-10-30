@@ -4,7 +4,7 @@
 import { TavoraError, type ReadOnlyFile, type TavoraSDK } from "@tavora/sdk";
 import { openDocument } from "@tavora/sdk/store";
 import { ref } from "vue";
-import { addFile, blobOf, cleanName, detectType, dropLink, emptyFiles, FILES_ID, kindOf, linkStatus, parseFiles, parseView, removeFile, renameFile, replaceCopy, setFileView, skipVersion, versionOf, type FileEntry, type FileLink, type FileView, type FilesData, type LinkStatus } from "./files";
+import { addFile, cleanName, detectType, dropLink, emptyFiles, FILES_ID, kindOf, linkStatus, parseFiles, parseView, removeFile, renameFile, replaceCopy, setFileView, skipVersion, versionOf, type FileEntry, type FileLink, type FileView, type FilesData, type LinkStatus } from "./files";
 
 /** A file that was not added, and why: its kind, its size, or the host (with its message). */
 export class FileProblem extends Error {
@@ -90,16 +90,20 @@ export async function createFilesStore(sdk: TavoraSDK, options: { /** The docume
     return link ? linkStatus(link, await sdk.files.check(link.ref)) : null;
   }
 
-  /** Copies the original again, in place of the copy the file shows now. The tab, name and place stay. */
-  async function reload(id: string): Promise<void> {
+  /**
+   * Copies the original again, in place of the copy the file shows now. Name, place and view stay; the file gets the
+   * new copy's id, which this answers with (the same id when nothing was new).
+   */
+  async function reload(id: string): Promise<string> {
     const file = find(id);
-    if (!file?.link) return;
-    const before = blobOf(file);
+    if (!file?.link) return id;
     const { bytes, link } = await readOriginal(file.link.ref, file.name);
     const info = await store(bytes, file.name, detectType({ name: file.name, type: "" }) ?? file.type);
-    doc.update((data) => replaceCopy(data, id, info.id, info.type, link));
+    if (info.id === id) return id;
+    doc.update((data) => replaceCopy(data, id, info, link));
     await doc.flush();
-    if (info.id !== before) await sdk.blobs.delete(before).catch(() => undefined);
+    await sdk.blobs.delete(id).catch(() => undefined);
+    return info.id;
   }
 
   /** Not now: the original's current version asks no more. */
@@ -135,10 +139,7 @@ export async function createFilesStore(sdk: TavoraSDK, options: { /** The docume
       const link = find(id)?.link;
       if (link) await sdk.files.showInFolder(link.ref);
     },
-    url: (id: string) => {
-      const file = find(id);
-      return sdk.blobs.url(file ? blobOf(file) : id);
-    },
+    url: (id: string) => sdk.blobs.url(id),
     usage: () => sdk.blobs.usage(),
     rename: (id: string, name: string) => {
       doc.update((data) => renameFile(data, id, name));
@@ -147,7 +148,7 @@ export async function createFilesStore(sdk: TavoraSDK, options: { /** The docume
     /** Deletes the stored file and its entry, and drops the link to its original. */
     async remove(id: string): Promise<void> {
       const file = find(id);
-      await sdk.blobs.delete(file ? blobOf(file) : id);
+      await sdk.blobs.delete(id);
       doc.update((data) => removeFile(data, id));
       await doc.flush();
       if (file?.link) await sdk.files.forget(file.link.ref).catch(() => undefined);

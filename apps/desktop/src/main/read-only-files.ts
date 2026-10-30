@@ -58,14 +58,14 @@ export class ReadOnlyFiles {
   async remember(selected: string, allowed: () => boolean = () => true): Promise<ReadOnlyFile> {
     const absolute = path.resolve(selected), target = await realpath(absolute);
     const entry = {path:absolute,target,name:path.basename(absolute)};
-    const bytes = await this.bytes(entry);
+    const size = await this.size(entry);
     return this.update(async entries => {
       if (!allowed()) throw new HostError('PERMISSION_DENIED','The file picker is no longer active.');
       if (Object.keys(entries).length >= 200) throw new HostError('QUOTA_EXCEEDED','Too many remembered files. Forget an unused file first.');
       const id = randomBytes(16).toString('hex'); entries[id] = entry;
       await mkdir(path.dirname(this.file), {recursive:true});
       await writeFileAtomic(path.join(path.dirname(this.file), 'picker.json'), JSON.stringify({directory:path.dirname(absolute)}));
-      return {id,name:entry.name,size:bytes.byteLength};
+      return {id,name:entry.name,size};
     },true);
   }
   async read(id: string): Promise<Buffer> {
@@ -84,6 +84,14 @@ export class ReadOnlyFiles {
       activeReads--;const count=(reads.get(this.file)??1)-1;
       if(count)reads.set(this.file,count);else reads.delete(this.file);
     }
+  }
+  /** The size of a file that can be linked, checked without reading it: a file, still the one picked, within the limit. */
+  private async size(entry: Entry): Promise<number> {
+    if (await realpath(entry.path) !== entry.target) throw new HostError('PERMISSION_DENIED','This file now points somewhere else. Choose it again.');
+    const found = await stat(entry.target);
+    if (!found.isFile()) throw new HostError('INVALID_PARAMS','Choose a file, not a folder.');
+    if (found.size > MAX_READ_ONLY_BYTES) throw new HostError('QUOTA_EXCEEDED','Choose a file smaller than 50 MB.');
+    return found.size;
   }
   private async bytes(entry: Entry): Promise<Buffer> {
     if (await realpath(entry.path) !== entry.target) throw new HostError('PERMISSION_DENIED','This file now points somewhere else. Choose it again.');
@@ -113,7 +121,8 @@ export class ReadOnlyFiles {
     const entry=(await this.entries())[id];
     if(!entry)throw new HostError('BAD_REQUEST','This file is no longer linked. Choose it again.');
     if(!await this.located(entry))throw new HostError('BAD_REQUEST',"Can't find this file. It may have moved.");
-    return entry.path;
+    // The place just checked, links resolved, so nothing swapped in since can be shown instead.
+    return entry.target;
   }
   /** The file's details while it is still the file that was picked, else null (gone, moved or now pointing elsewhere). */
   private async located(entry: Entry) {

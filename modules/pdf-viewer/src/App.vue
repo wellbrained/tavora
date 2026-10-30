@@ -21,7 +21,7 @@ import { ACCEPT_ATTRIBUTE, formatBytes, PICK_EXTENSIONS, sortPicked, versionOf, 
 import { setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
 import { createFilesStore, FileProblem, type FilesStore } from "./store";
-import { closeTab, emptyTabs, keepExisting, openTab, parseTabState, reorderTabs, type TabState } from "./tabs";
+import { closeTab, emptyTabs, followRenamed, keepExisting, openTab, parseTabState, reorderTabs, type TabState } from "./tabs";
 
 const TOAST_MS = 8000;
 
@@ -97,10 +97,11 @@ onBeforeUnmount(() => {
   void store.value?.dispose();
 });
 
-// Another panel removed a file: its tab goes too.
+// Another panel reloaded a file's original: its tab follows the new copy. Another panel removed a file: its tab goes too.
 watch(files, () => {
   if (!store.value) return;
-  const next = keepExisting(tabState.value, (id) => byId.value.has(id));
+  const renamed = new Map(files.value.flatMap((file) => (file.previous ? [[file.previous, file.id] as const] : [])));
+  const next = keepExisting(followRenamed(tabState.value, renamed), (id) => byId.value.has(id));
   if (next !== tabState.value) tabState.value = next;
 });
 
@@ -222,8 +223,9 @@ async function reloadActive() {
   if (!file || !store.value) return;
   reloading.value = true;
   try {
-    await store.value.reload(file.id);
-    statuses.value.set(file.id, "same");
+    const id = await store.value.reload(file.id);
+    statuses.value.set(id, "same");
+    tabState.value = followRenamed(tabState.value, new Map([[file.id, id]]));
   } catch (reason) {
     notice(t("original.reloadFailed", { name: file.name, error: errorMessage(reason) }));
     void checkOriginal(file.id);
@@ -384,14 +386,14 @@ async function remove() {
     <main class="relative isolate min-h-0 flex-1">
       <PdfPane
         v-if="active?.kind === 'pdf'"
-        :key="`${active.id}:${active.blob ?? ''}`"
+        :key="active.id"
         :url="store.url(active.id)"
         :view="active.view"
         @view="store.setView(active.id, $event)"
         @open-link="openLink"
         @cancel="cancelOpening(active.id)"
       />
-      <ImagePane v-else-if="active" :key="`${active.id}:${active.blob ?? ''}`" :url="store.url(active.id)" :name="active.name" :view="active.view" @view="store.setView(active.id, $event)" />
+      <ImagePane v-else-if="active" :key="active.id" :url="store.url(active.id)" :name="active.name" :view="active.view" @view="store.setView(active.id, $event)" />
       <div v-else class="flex h-full items-center justify-center p-4">
         <EmptyState :title="t('empty.title')" :description="t('empty.description')" class="w-full max-w-sm" data-testid="empty">
           <template #icon><Upload :stroke-width="1.5" /></template>

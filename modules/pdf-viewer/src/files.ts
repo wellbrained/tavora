@@ -40,10 +40,10 @@ export interface FileLink {
 export type LinkStatus = "same" | "changed" | "skipped" | "gone" | "unlinked";
 
 export interface FileEntry {
-  /** What the file and its tab are called; the id of its first stored copy. */
+  /** The id of the stored file; also what a tab is called. */
   id: string;
-  /** The stored copy, when a reload replaced the first one. */
-  blob?: string;
+  /** The id the file had before its original was reloaded, so open tabs can follow it to the new copy. */
+  previous?: string;
   link?: FileLink;
   name: string;
   /** The type the host found by looking at the file. */
@@ -88,9 +88,6 @@ export function parseLink(raw: unknown): FileLink | undefined {
   return { ref: raw.ref, size: raw.size, modifiedAt: raw.modifiedAt, ...(typeof raw.skipped === "string" ? { skipped: raw.skipped } : {}) };
 }
 
-/** The stored copy a file shows. */
-export const blobOf = (file: FileEntry): string => file.blob ?? file.id;
-
 /** One version of an original, as a short text to compare. */
 export const versionOf = (found: { size: number; modifiedAt: number }): string => `${found.size}:${found.modifiedAt}`;
 
@@ -113,7 +110,7 @@ export function parseFiles(raw: unknown): FilesData {
     const link = parseLink(item.link);
     files.push({
       id: item.id,
-      ...(typeof item.blob === "string" && item.blob && item.blob !== item.id ? { blob: item.blob } : {}),
+      ...(typeof item.previous === "string" && item.previous && item.previous !== item.id ? { previous: item.previous } : {}),
       ...(link ? { link } : {}),
       name: typeof item.name === "string" && item.name.trim() ? cleanName(item.name) : item.id.slice(0, 8),
       type: item.type,
@@ -149,15 +146,15 @@ export function setFileView(data: FilesData, id: string, view: Partial<FileView>
   file.view = parseView({ ...file.view, ...view }, file.kind);
 }
 
-/** A reload put a new copy in place: the file shows it, and the link remembers the version it came from. */
-export function replaceCopy(data: FilesData, id: string, blob: string, type: string, link: FileLink): void {
-  const file = data.files.find((other) => other.id === id);
-  if (!file) return;
-  if (blob === file.id) delete file.blob;
-  else file.blob = blob;
-  file.type = type;
-  file.kind = kindOf(type);
-  file.link = { ref: link.ref, size: link.size, modifiedAt: link.modifiedAt };
+/**
+ * A reload stored a new copy: the file takes its id, in the same place in the list with its name and view, and
+ * remembers the id it had. A new id (not a second field for the copy) keeps the list readable by older versions.
+ */
+export function replaceCopy(data: FilesData, id: string, copy: { id: string; type: string }, link: FileLink): void {
+  const at = data.files.findIndex((other) => other.id === id);
+  const file = data.files[at];
+  if (!file || data.files.some((other) => other.id === copy.id)) return;
+  data.files[at] = { ...file, id: copy.id, previous: id, type: copy.type, kind: kindOf(copy.type), link: { ref: link.ref, size: link.size, modifiedAt: link.modifiedAt } };
 }
 
 /** Not now: this version of the original asks no more. */

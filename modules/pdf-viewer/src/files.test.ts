@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACCEPT_ATTRIBUTE, addFile, cleanName, detectType, formatBytes, NAME_LIMIT, parseFiles, removeFile, renameFile, setFileView, sortPicked, type FileEntry, type FilesData } from "./files";
+import { ACCEPT_ATTRIBUTE, addFile, cleanName, detectType, formatBytes, NAME_LIMIT, linkStatus, parseFiles, removeFile, replaceCopy, renameFile, setFileView, sortPicked, type FileEntry, type FilesData } from "./files";
 
 const entry = (id: string, patch: Partial<FileEntry> = {}): FileEntry => ({
   id,
@@ -126,5 +126,33 @@ describe("parseFiles", () => {
 describe("formatBytes", () => {
   it("writes short sizes", () => {
     expect([formatBytes(500), formatBytes(2048), formatBytes(1.5 * 1024 * 1024), formatBytes(50 * 1024 * 1024)]).toEqual(["500 B", "2 KB", "1.5 MB", "50 MB"]);
+  });
+});
+
+describe("the link to an original", () => {
+  const ref = "b".repeat(32);
+  it("reads a link and the id a file had, and drops broken ones", () => {
+    const parsed = parseFiles({ files: [
+      { id: "new", previous: "old", type: "application/pdf", name: "A.pdf", link: { ref, size: 3, modifiedAt: 9, skipped: "4:10" } },
+      { id: "two", type: "application/pdf", name: "B.pdf", link: { ref: "not-a-ref", size: 3, modifiedAt: 9 } },
+    ] });
+    expect(parsed.files[0]).toMatchObject({ previous: "old", link: { ref, size: 3, modifiedAt: 9, skipped: "4:10" } });
+    expect(parsed.files[1]!.link).toBeUndefined();
+  });
+
+  it("compares the original's version with the copy's", () => {
+    const link = { ref, size: 3, modifiedAt: 9, skipped: "5:20" };
+    expect(linkStatus(link, { found: true, size: 3, modifiedAt: 9 })).toBe("same");
+    expect(linkStatus(link, { found: true, size: 5, modifiedAt: 20 })).toBe("skipped");
+    expect(linkStatus(link, { found: true, size: 5, modifiedAt: 21 })).toBe("changed");
+    expect(linkStatus(link, { found: false, reason: "gone" })).toBe("gone");
+  });
+
+  it("puts a reloaded copy in the file's place under its new id", () => {
+    const data = parseFiles({ files: [{ id: "a", type: "application/pdf", name: "A.pdf" }, { id: "b", type: "application/pdf", name: "B.pdf", view: { page: 4 }, link: { ref, size: 1, modifiedAt: 1, skipped: "2:2" } }] });
+    replaceCopy(data, "b", { id: "b2", type: "application/pdf" }, { ref, size: 2, modifiedAt: 2 });
+    expect(data.files.map((file) => file.id)).toEqual(["a", "b2"]);
+    expect(data.files[1]).toMatchObject({ previous: "b", name: "B.pdf", view: { page: 4 }, link: { ref, size: 2, modifiedAt: 2 } });
+    expect(data.files[1]!.link?.skipped).toBeUndefined();
   });
 });

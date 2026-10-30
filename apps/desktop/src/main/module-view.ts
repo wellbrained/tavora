@@ -688,7 +688,8 @@ export class ModuleView {
           showInFolder: async id => {
             this.refuseOverGame('files.showInFolder');
             await this.takeGesture('files.showInFolder');
-            shell.showItemInFolder(await new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).locate(id));
+            const place = await new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).locate(id);
+            if (this.bridge === bridge) shell.showItemInFolder(place);
           },
         },
         showMenu: async (menu) => {

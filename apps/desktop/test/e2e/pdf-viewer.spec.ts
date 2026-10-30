@@ -1,6 +1,6 @@
 // The official PDF Viewer module: a PDF is added, drawn with its text, searched, and comes back as a tab after a restart.
 import { createHash } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
@@ -313,7 +313,7 @@ test("pdf viewer: files picked in Tavora's dialog stay linked to their original"
     await press(app, '[data-testid="file-list"] li:first-child [data-testid="file-menu"]');
     await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("file-show-in-folder")}`)).toBe(true);
     await press(app, '[data-testid="file-show-in-folder"]');
-    await expect.poll(() => app.evaluate(() => (globalThis as { shownInFolder?: string[] }).shownInFolder ?? [])).toEqual([rules]);
+    await expect.poll(() => app.evaluate(() => (globalThis as { shownInFolder?: string[] }).shownInFolder ?? [])).toEqual([await realpath(rules)]);
     await page.keyboard.press("Escape");
 
     // The original is gone: the bar offers to remove the file, and Keep my copy keeps it without the link.

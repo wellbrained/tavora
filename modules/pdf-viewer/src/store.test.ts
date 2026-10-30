@@ -90,7 +90,7 @@ describe("files linked to their original", () => {
     expect(await store.check(entry.id)).toBe("same");
   });
 
-  it("reloads a changed original in place, keeping the file's id, name and page", async () => {
+  it("reloads a changed original in place, keeping the file's name, place and page under the new copy's id", async () => {
     const { sdk, original, picked } = linkedHost();
     const store = await open(sdk);
     const entry = await store.addLinked(picked);
@@ -98,13 +98,12 @@ describe("files linked to their original", () => {
     original.bytes = new TextEncoder().encode("%PDF-1.7 second version");
     original.modifiedAt = 2000;
     expect(await store.check(entry.id)).toBe("changed");
-    await store.reload(entry.id);
-    const file = store.find(entry.id)!;
-    expect(file).toMatchObject({ id: entry.id, name: "Rules.pdf", view: { page: 7 }, link: { size: 23, modifiedAt: 2000 } });
-    expect(file.blob).toBeDefined();
-    expect((await sdk.blobs.list()).map((blob) => blob.id)).toEqual([file.blob]);
-    expect(store.url(entry.id)).toContain(file.blob);
-    expect(await store.check(entry.id)).toBe("same");
+    const id = await store.reload(entry.id);
+    expect(id).not.toBe(entry.id);
+    expect(store.files.value).toHaveLength(1);
+    expect(store.find(id)).toMatchObject({ previous: entry.id, name: "Rules.pdf", view: { page: 7 }, link: { size: 23, modifiedAt: 2000 } });
+    expect((await sdk.blobs.list()).map((blob) => blob.id)).toEqual([id]);
+    expect(await store.check(id)).toBe("same");
   });
 
   it("asks no more about a version the user skipped, but does about the next one", async () => {
