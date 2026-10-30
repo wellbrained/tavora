@@ -127,6 +127,32 @@ In a Vue module, `useItemSession` from `@tavora/official-ui` returns `items`, `c
 
 `ifRevision: 0` means "only if it doesn't exist yet". Other panels get `documents.onChange` after each save; the panel that saved does not.
 
+### Played games: the run store
+
+A game with daily puzzles keeps one **run** per played game. `openRuns` from `@tavora/sdk/store` keeps them in `storage.app` (shared by every workspace) with a compare-and-set on each run, so a move in one panel is never overwritten by another panel showing the same run. You say what is specific to your game: how to recognise a run, which runs still wait for a [leaderboard](./leaderboards.md#send-results), and how to group them (for example by difficulty).
+
+```ts
+import { openRuns } from "@tavora/sdk/store";
+
+const runs = openRuns<Run>(tavora, {
+  validate: (value): value is Run => isRun(value),
+  awaitsUpload: (run) => run.rankedOutcome !== null && !results.has(run.id),
+  groups: ["easy", "hard"],
+  groupOf: (run) => run.difficulty,
+});
+await runs.load();
+
+const run = await runs.start(newRun); // a daily run another panel started first is returned instead
+await runs.change(run, (saved) => void saved.guesses.push(guess)); // applied on the newest copy
+await runs.finish(run, "won");
+await runs.fold(); // old finished runs become a summary; runs that still await upload stay
+const { current, best } = runs.statistics("daily", "easy", localDate());
+```
+
+- A ranked run with a `deadline` ends first when its time is up, and takes no other change: a move after the deadline never counts.
+- `fold()` keeps the newest 100 finished unlimited runs per group (`keep`), never folds a run that `awaitsUpload` or any run after it, and leaves the work to another panel that folded at the same moment.
+- `localDate`, `previousDate`, `msUntilMidnight` and `onItsDay` are exported for the daily puzzle's calendar.
+
 ## Pictures
 
 ```ts

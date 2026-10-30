@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.14
+
+- New projects start on `@tavora/sdk` 0.2.20, which adds the result queue and the run store.
+
 ## 0.1.13
 
 - New projects start on `@tavora/sdk` 0.2.19, which adds the anchor form for menus and tooltips.

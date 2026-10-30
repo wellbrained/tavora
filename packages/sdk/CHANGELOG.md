@@ -1,3 +1,11 @@
+## 0.2.20
+
+The result queue and the run store: `openResults` and `openRuns` in `@tavora/sdk/store`. Nothing changes for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `openResults(sdk, { boards?, key?, pollMs? })` keeps finished games for a leaderboard. `record(board, result)` stores the result in `storage.app` at once (compare-and-set, so two panels never lose one) and sends in the background, in batches of up to 50 per board through `leaderboards.submit`. Results the board refused leave the queue like taken ones; results wait while the user is signed out or has not agreed (`status` `"waiting"`, checked again every `pollMs`), while Tavora's service is away (`"offline"`, retried after 1, 2, 4 … at most 30 minutes) and when the leaderboard connector is not allowed (`"denied"`). A panel resuming sends too. `onStanding(fn)` gets `leaderboards.mine()` after results were taken (not on a Tavora older than 0.21.97). `pending`, `has(id)`, `flush()`, `onStatus(fn)` and `dispose()` complete it. A Tavora without an `online` field in the status counts as online.
+- `rowsOf(answer)`, `isOffline(status)` and `retryDelay(failures)` are exported for the leaderboard tab: `top` answers with a bare list on Tavora 0.21.92 and `{ rows }` later.
+- `openRuns(sdk, { validate, awaitsUpload, keys?, groups?, groupOf?, keep?, now? })` keeps the played games of a daily-puzzle module (`start`, `change`, `finish`, `expire`, `makeCasual`, `fold`, `statistics`, `load`, `onChange`). Every change is a compare-and-set on the run's own key and is applied again on the newest copy; a ranked run whose time is up ends first, so a move after the deadline never counts. `fold()` folds old finished unlimited runs into a summary but keeps runs that `awaitsUpload`, and yields to another panel that folded first. Also exported: `localDate`, `previousDate`, `msUntilMidnight`, `onItsDay`, `runStatistics`, `finishRun`, `expireRun`, `makeRunCasual`, `defaultRunKeys`.
+
 ## 0.2.19
 
 The anchor form: pass the element a menu or tooltip is for. Nothing changes on the wire or for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).
