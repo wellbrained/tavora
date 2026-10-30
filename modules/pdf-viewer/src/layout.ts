@@ -25,6 +25,15 @@ export function fitZoom(mode: "width" | "page", page: PageSize, area: PageSize):
   return clampZoom(mode === "width" ? width / page.width : Math.min(width / page.width, height / page.height));
 }
 
+/**
+ * The fit for a whole document: the zoom at which every page fits, so it stays the same while the reader scrolls
+ * through pages of different sizes. Width follows the widest page; page makes the largest one fit whole.
+ */
+export function fitZoomAll(mode: "width" | "page", pages: readonly PageSize[], area: PageSize): number {
+  if (pages.length === 0) return 1;
+  return Math.min(...pages.map((page) => fitZoom(mode, page, area)));
+}
+
 export interface PageLayout {
   /** Top of each page in the column, in pixels. */
   tops: number[];

@@ -4,6 +4,7 @@
 import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { passwordAnswerer, type AskPassword } from "./password";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -12,15 +13,15 @@ export type { PDFDocumentProxy };
 
 const folder = (name: string) => new URL(`./pdfjs/${name}/`, window.location.href).href;
 
-/** Why a PDF could not be opened, as far as the reader needs to know. */
+/** Why a PDF could not be opened, as far as the reader needs to know; `cancelled`: they gave up at the password. */
 export class PdfProblem extends Error {
-  constructor(readonly kind: "gone" | "password" | "broken") {
+  constructor(readonly kind: "gone" | "broken" | "cancelled") {
     super(kind);
   }
 }
 
-/** Reads a stored file and opens it. */
-export async function openPdf(url: string): Promise<PDFDocumentProxy> {
+/** Reads a stored file and opens it; a PDF with a password asks for it through `askPassword`, as often as needed. */
+export async function openPdf(url: string, askPassword: AskPassword): Promise<PDFDocumentProxy> {
   let bytes: Uint8Array;
   try {
     const response = await fetch(url);
@@ -29,18 +30,24 @@ export async function openPdf(url: string): Promise<PDFDocumentProxy> {
   } catch (error) {
     throw error instanceof PdfProblem ? error : new PdfProblem("gone");
   }
+  const task = pdfjs.getDocument({
+    data: bytes,
+    useWasm: false,
+    enableXfa: false,
+    cMapUrl: folder("cmaps"),
+    cMapPacked: true,
+    standardFontDataUrl: folder("standard_fonts"),
+    wasmUrl: folder("wasm"),
+  });
+  let cancelled = false;
+  task.onPassword = passwordAnswerer(askPassword, (reason) => reason === pdfjs.PasswordResponses.INCORRECT_PASSWORD, () => {
+    cancelled = true;
+    void task.destroy();
+  });
   try {
-    return await pdfjs.getDocument({
-      data: bytes,
-      useWasm: false,
-      enableXfa: false,
-      cMapUrl: folder("cmaps"),
-      cMapPacked: true,
-      standardFontDataUrl: folder("standard_fonts"),
-      wasmUrl: folder("wasm"),
-    }).promise;
-  } catch (error) {
-    throw new PdfProblem((error as { name?: string })?.name === "PasswordException" ? "password" : "broken");
+    return await task.promise;
+  } catch {
+    throw new PdfProblem(cancelled ? "cancelled" : "broken");
   }
 }
 
@@ -57,7 +64,8 @@ interface RawOutline {
   items: RawOutline[];
 }
 
-async function pageOf(pdf: PDFDocumentProxy, dest: RawOutline["dest"]): Promise<number | null> {
+/** The page (1-based) a destination points to, from the contents list or a link; null when it leads nowhere. */
+export async function destinationPage(pdf: PDFDocumentProxy, dest: string | unknown[] | null): Promise<number | null> {
   try {
     const resolved = typeof dest === "string" ? await pdf.getDestination(dest) : dest;
     const target = resolved?.[0];
@@ -73,7 +81,7 @@ async function pageOf(pdf: PDFDocumentProxy, dest: RawOutline["dest"]): Promise<
 export async function loadOutline(pdf: PDFDocumentProxy): Promise<OutlineNode[]> {
   const raw = (await pdf.getOutline().catch(() => null)) as RawOutline[] | null;
   const build = async (items: RawOutline[]): Promise<OutlineNode[]> =>
-    Promise.all(items.map(async (item) => ({ title: item.title, page: await pageOf(pdf, item.dest), items: await build(item.items ?? []) })));
+    Promise.all(items.map(async (item) => ({ title: item.title, page: await destinationPage(pdf, item.dest), items: await build(item.items ?? []) })));
   return raw ? build(raw) : [];
 }
 

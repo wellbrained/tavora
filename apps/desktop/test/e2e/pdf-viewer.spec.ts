@@ -1,4 +1,5 @@
 // The official PDF Viewer module: a PDF is added, drawn with its text, searched, and comes back as a tab after a restart.
+import { createHash } from "node:crypto";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { inModule, launch, openModule, openWorkspace, panels, PDF_VIEWER } from "./harness";
 
@@ -126,5 +127,128 @@ test("pdf viewer: a picture opens in the zoom pane and a file that is not a PDF 
 
   await pick(app, "Notes.txt", "text/plain", Buffer.from("hello").toString("base64"));
   await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("notice-toast")}`)).toBe(true);
+  await app.close();
+});
+
+/** Builds a PDF from its objects (strings, or bytes for an encrypted stream); the xref is left for the reader to rebuild. */
+function buildPdf(objects: (string | Buffer)[], trailer: string): string {
+  const parts: Buffer[] = [Buffer.from("%PDF-1.4\n", "latin1")];
+  objects.forEach((object, index) => parts.push(Buffer.from(`${index + 1} 0 obj\n`, "latin1"), typeof object === "string" ? Buffer.from(object, "latin1") : object, Buffer.from("\nendobj\n", "latin1")));
+  parts.push(Buffer.from(`trailer\n<< /Root 1 0 R /Size ${objects.length + 1} ${trailer}>>\n%%EOF\n`, "latin1"));
+  return Buffer.concat(parts).toString("base64");
+}
+
+/** Two pages; the first has a link to the second and a link to a web address. */
+function linkedPdf(): string {
+  const first = "BT /F1 18 Tf 20 320 Td (To page two) Tj 0 -100 Td (To the web) Tj ET";
+  const second = "BT /F1 18 Tf 20 320 Td (Page two) Tj ET";
+  return buildPdf(
+    [
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Contents 4 0 R /Resources << /Font << /F1 9 0 R >> >> /Annots [7 0 R 8 0 R] >>",
+      `<< /Length ${first.length} >>\nstream\n${first}\nendstream`,
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Contents 6 0 R /Resources << /Font << /F1 9 0 R >> >> >>",
+      `<< /Length ${second.length} >>\nstream\n${second}\nendstream`,
+      "<< /Type /Annot /Subtype /Link /Rect [15 310 160 345] /Border [0 0 0] /Dest [5 0 R /XYZ null null null] >>",
+      "<< /Type /Annot /Subtype /Link /Rect [15 210 160 245] /Border [0 0 0] /A << /S /URI /URI (https://example.com/guide) >> >>",
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ],
+    "",
+  );
+}
+
+function rc4(key: Buffer, data: Buffer): Buffer {
+  const box = Array.from({ length: 256 }, (_, index) => index);
+  for (let i = 0, j = 0; i < 256; i++) {
+    j = (j + box[i]! + key[i % key.length]!) & 255;
+    [box[i], box[j]] = [box[j]!, box[i]!];
+  }
+  const out = Buffer.alloc(data.length);
+  for (let k = 0, i = 0, j = 0; k < data.length; k++) {
+    i = (i + 1) & 255;
+    j = (j + box[i]!) & 255;
+    [box[i], box[j]] = [box[j]!, box[i]!];
+    out[k] = data[k]! ^ box[(box[i]! + box[j]!) & 255]!;
+  }
+  return out;
+}
+
+/** A one-page PDF locked with `password` (the standard 40-bit RC4 lock, revision 2). */
+function lockedPdf(password: string): string {
+  const PAD = Buffer.from("28BF4E5E4E758A4164004E56FFFA01082E2E00B6D0683E802F0CA9FE6453697A", "hex");
+  const pad = (text: string) => Buffer.concat([Buffer.from(text, "latin1"), PAD]).subarray(0, 32);
+  const md5 = (...parts: Buffer[]) => createHash("md5").update(Buffer.concat(parts)).digest();
+  const id = Buffer.from("0123456789abcdef0123456789abcdef", "hex");
+  const owner = rc4(md5(pad("owner")).subarray(0, 5), pad(password));
+  const permissions = Buffer.alloc(4);
+  permissions.writeInt32LE(-4);
+  const key = md5(pad(password), owner, permissions, id).subarray(0, 5);
+  const user = rc4(key, PAD);
+  // The page text is object 4, so it is locked with the key for object 4, generation 0.
+  const text = rc4(md5(key, Buffer.from([4, 0, 0, 0, 0])).subarray(0, 10), Buffer.from("BT /F1 24 Tf 20 100 Td (Secret dragon) Tj ET", "latin1"));
+  return buildPdf(
+    [
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+      Buffer.concat([Buffer.from(`<< /Length ${text.length} >>\nstream\n`, "latin1"), text, Buffer.from("\nendstream", "latin1")]),
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+      `<< /Filter /Standard /V 1 /R 2 /O <${owner.toString("hex")}> /U <${user.toString("hex")}> /P -4 >>`,
+    ],
+    `/Encrypt 6 0 R /ID [<${id.toString("hex")}> <${id.toString("hex")}>] `,
+  );
+}
+
+const typePassword = (app: ElectronApplication, text: string) =>
+  inModule(app, PDF_VIEWER, `(() => { const input = ${q("pdf-password-input")}; input.value = ${JSON.stringify(text)}; input.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+
+test("pdf viewer: a link to another page jumps there, and a web link goes to Tavora to open", async () => {
+  const { app, page } = await launch();
+  await openModule(page, PDF_VIEWER);
+  await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("empty")}`).catch(() => false), { timeout: 15_000 }).toBe(true);
+  await pick(app, "Links.pdf", "application/pdf", linkedPdf());
+  await expect.poll(() => inModule<number>(app, PDF_VIEWER, `document.querySelectorAll('[data-page="1"] [data-testid="pdf-link"]').length`), { timeout: 20_000 }).toBe(2);
+
+  const link = (web: boolean) => `[...document.querySelectorAll('[data-page="1"] [data-testid="pdf-link"]')].find((button) => button.title.includes("example.com") === ${web})`;
+  await inModule(app, PDF_VIEWER, `${link(false)}.click()`);
+  await expect.poll(() => inModule<string>(app, PDF_VIEWER, `${q("pdf-page-input")}.value`)).toBe("2");
+
+  // The page did not move away from the module, and a real click on the web link asks where to open it.
+  await inModule(app, PDF_VIEWER, `${q("pdf-prev")}.click()`);
+  await expect.poll(() => inModule<string>(app, PDF_VIEWER, `${q("pdf-page-input")}.value`)).toBe("1");
+  const box = await inModule<{ x: number; y: number }>(app, PDF_VIEWER, `(() => { const button = ${link(true)}; button.scrollIntoView({ block: "center" }); const r = button.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+  await app.evaluate(({ webContents }, { moduleId, x, y }) => {
+    const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`))!;
+    for (const type of ["mouseDown", "mouseUp"] as const) target.sendInputEvent({ type, x, y, button: "left", clickCount: 1 });
+  }, { moduleId: PDF_VIEWER, ...box });
+  await expect(page.getByTestId("link-choice-url")).toHaveText("https://example.com/guide");
+  await page.getByTestId("link-choice-cancel").click();
+  expect(await inModule<string>(app, PDF_VIEWER, "location.href")).toMatch(/^tavora-module:/);
+  await app.close();
+});
+
+test("pdf viewer: a locked PDF asks for its password, again after a wrong one, and Cancel closes it", async () => {
+  const { app, page } = await launch();
+  await openModule(page, PDF_VIEWER);
+  await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("empty")}`).catch(() => false), { timeout: 15_000 }).toBe(true);
+
+  await pick(app, "Locked.pdf", "application/pdf", lockedPdf("dragon"));
+  await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("pdf-password")}`), { timeout: 20_000 }).toBe(true);
+  await typePassword(app, "nope");
+  await inModule(app, PDF_VIEWER, `${q("pdf-password-open")}.click()`);
+  await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("pdf-password-wrong")}`), { timeout: 15_000 }).toBe(true);
+  expect(await inModule<string>(app, PDF_VIEWER, `${q("pdf-password-input")}.value`)).toBe("");
+  await typePassword(app, "dragon");
+  await inModule(app, PDF_VIEWER, `${q("pdf-password-open")}.click()`);
+  await expect
+    .poll(() => inModule<string>(app, PDF_VIEWER, `document.querySelector('.textLayer')?.textContent ?? ""`), { timeout: 20_000 })
+    .toContain("Secret dragon");
+
+  await pick(app, "Locked again.pdf", "application/pdf", lockedPdf("dragon"));
+  await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("pdf-password")}`), { timeout: 20_000 }).toBe(true);
+  await inModule(app, PDF_VIEWER, `${q("pdf-password-cancel")}.click()`);
+  await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("file-list")}`)).toBe(true);
+  await expect.poll(() => inModule<string>(app, PDF_VIEWER, `[...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent.trim()).join()`)).not.toContain("Locked again.pdf");
   await app.close();
 });
