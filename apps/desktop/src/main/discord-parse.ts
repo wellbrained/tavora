@@ -1,7 +1,7 @@
 // What the Discord connector itself reads from Discord: the signed-in user
 // and the scopes of a sign-in, and the pictures it fetches for modules from
 // Discord's image server. Everything else Discord says is passed on to the
-// module as it came; the Discord module reads it (modules/discord).
+// module as it came; the Discord module reads it (tavora-modules: discord).
 
 const SNOWFLAKE = /^\d{1,20}$/;
 export const MAX_NAME = 64;
