@@ -410,6 +410,38 @@ describe("other panels", () => {
     await session.dispose();
   });
 
+  it("remove while restoreDeleted runs still deletes the item and opens the next one", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    seed(a.host, "a", "A", ["one"]);
+    seed(a.host, "b", "B");
+    const session = await openItems(a.sdk, options({ onAdd: "none" }));
+    await session.pick("plan-a");
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(session.deleted).toBe(true));
+    const restoring = session.restoreDeleted();
+    const removing = session.remove("plan-a");
+    await restoring;
+    await removing;
+    expect(storedPlan(a.host, "plan-a")).toBeUndefined();
+    expect(session.currentId).toBe("plan-b");
+    expect(names(session)).toEqual(["B"]);
+    await session.dispose();
+  });
+
+  it("pick of a missing item rejects with ItemNotFoundError, even when parse refuses null", async () => {
+    const { sdk, host } = createMemoryHost();
+    seed(host, "a", "A");
+    const strict = (raw: JsonValue | null): Plan => {
+      if (!raw) throw new Error("not a plan");
+      return raw as unknown as Plan;
+    };
+    const session = await openItems(sdk, options({ parse: strict, onAdd: "none" }));
+    await expect(session.pick("plan-gone")).rejects.toBeInstanceOf(ItemNotFoundError);
+    await expect(session.rename("plan-gone", "X")).rejects.toBeInstanceOf(ItemNotFoundError);
+    await session.dispose();
+  });
+
   it("restoreDeleted does not cancel a pick that is still opening", async () => {
     const a = createMemoryHost();
     const b = createMemoryHost({ share: a.host });

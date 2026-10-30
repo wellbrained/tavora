@@ -161,6 +161,18 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
     ...(options.merge ? { merge: options.merge } : {}),
     ...(options.debounceMs === undefined ? {} : { debounceMs: options.debounceMs }),
   });
+  /**
+   * Opens an item's document. A missing one reads as parse(null), and a parse that refuses null throws: that is a
+   * missing item too, so it rejects with ItemNotFoundError as for a parse that gives a placeholder.
+   */
+  const openStored = async (id: string): Promise<DocumentHandle<T>> => {
+    try {
+      return await openDocument(sdk, id, documentOptions());
+    } catch (error) {
+      const stored = await sdk.documents.get(id).then((found) => found ?? null, () => undefined);
+      throw stored === null ? new ItemNotFoundError(id) : error;
+    }
+  };
   const contentOf = (id: string, data: T): PanelContent => (options.content ? options.content(id, data) : { id, title: title(data) });
 
   let items: readonly ItemSummary[] = [];
@@ -171,6 +183,8 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
   let deleted = false;
   /** The open item's last copy before a delete elsewhere, for `restoreDeleted`. */
   let lastCopy: T | null = null;
+  /** A restoreDeleted that is running: a remove of the same item waits for it, else it would skip a delete the restore then undoes. */
+  let restoring: Promise<void> | null = null;
   /** How many saves of the open item gave up: a switch that sees it grow while saving stays on the item. */
   let saveFailures = 0;
   /** Bumped by every switch (and dispose): a switch that finds it changed while waiting has lost. */
@@ -349,7 +363,7 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
     }
     let next: DocumentHandle<T> | null = null;
     if (id !== null) {
-      next = await openDocument(sdk, id, documentOptions());
+      next = await openStored(id);
       if (mine !== generation) {
         await next.dispose();
         return false;
@@ -399,6 +413,7 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
 
   async function removeItem(id: string): Promise<() => Promise<void>> {
     if (closed) throw new Error("the item session is closed");
+    if (restoring && id === currentId) await restoring.catch(() => undefined);
     const before = items;
     const wasCurrent = id === currentId && handle !== null;
     let mine = generation;
@@ -476,7 +491,7 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
       handle.update(change);
       await handle.flush();
     } else {
-      const other = await openDocument(sdk, id, documentOptions());
+      const other = await openStored(id);
       try {
         if (other.revision === 0) throw new ItemNotFoundError(id);
         other.update(change);
@@ -490,6 +505,16 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
 
   async function restoreDeleted(copy?: T): Promise<void> {
     if (closed) throw new Error("the item session is closed");
+    const run = restoreNow(copy);
+    restoring = run;
+    try {
+      await run;
+    } finally {
+      if (restoring === run) restoring = null;
+    }
+  }
+
+  async function restoreNow(copy?: T): Promise<void> {
     const id = currentId;
     const restored = copy ?? lastCopy;
     if (!deleted || !id || restored === null) return;
