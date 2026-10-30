@@ -10,7 +10,8 @@ import { TavoraError, type GameOverlayResult, type MenuOptions, type TavoraSDK }
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { plural, setLanguage, t } from "./i18n";
 import ItemCard from "./ItemCard.vue";
-import { count, find, insert, lap, LIST_ID, MAX, newItem, parseList, remove, resetClock, resetCounter, startPause, type Item, type ItemKind, type ItemList } from "./items";
+import { count, find, insert, lap, MAX, newItem, parseList, remove, resetClock, resetCounter, startPause, type Item, type ItemKind, type ItemList } from "./items";
+import { de, en } from "./locales";
 import { PANEL, UNDO_MS } from "./panel";
 import { createItemStore, type ItemStore } from "./store";
 
@@ -222,11 +223,15 @@ const cleanup: (() => void)[] = [];
 
 onMounted(async () => {
   try {
-    const connected = await connectModule(setLanguage);
-    const items = createItemStore(connected);
-    await items.load();
+    const connection = await connectModule({ texts: { en, de } });
+    if (connection.status !== "ready" || !connection.sdk) throw connection.error;
+    const connected = connection.sdk;
+    // The components read the module's own translator; it follows the language the handle reports.
+    setLanguage(connection.language);
+    cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
+    const items = await createItemStore(connected);
     cleanup.push(
-      connected.documents.onChange((change) => change.id === LIST_ID && void items.reload()),
+      () => void items.dispose(),
       connected.hotkeys.onPress(({ action, target }) => act(action, target)),
       connected.lifecycle.onSuspend(() => (suspended.value = true)),
       connected.lifecycle.onResume(() => {

@@ -6,10 +6,10 @@
 // The keypad keeps a calculator size: its keys never shrink below a button nor grow past a big one. The history sits
 // beside it once the panel is wide enough for both, else below; a panel too short for both scrolls.
 // Save as… keeps the result under a name; the Values tab taps it into a sum, where it counts with its number now.
-// The history and the values live in the workspace's module storage, so every panel of the workspace shares them; a panel
-// reads them again when it shows or gets focus, since storage has no change events.
+// The history and the values are one document of the workspace, so every panel of the workspace shares them and sees
+// another panel's change at once.
 import { BookmarkPlus, Check, Copy, Delete, Ellipsis, History, Pencil, Settings2, Trash2 } from "@lucide/vue";
-import { ConfirmDialog, connectModule, errorMessage, SegmentedControl, serial } from "@tavora/official-ui";
+import { ConfirmDialog, connectModule, errorMessage, SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import {
   DropdownMenu,
@@ -26,63 +26,17 @@ import {
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
-import type { JsonValue, TavoraSDK } from "@tavora/sdk";
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, type Ref } from "vue";
-import { copyText, EMPTY, evaluate, format, insert, press, pretty, reference, rounded, segments, type Entry } from "./calc";
-import { HISTORY_KEY, parseHistory, remember, type Calculation } from "./history";
-import { language, setLanguage, t } from "./i18n";
-import type { en } from "./locales";
+import type { TavoraSDK } from "@tavora/sdk";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { copyText, decimalComma, EMPTY, evaluate, format, insert, press, pretty, reference, rounded, segments, type Entry } from "./calc";
+import { remember, type Calculation } from "./history";
+import { BASIC, keyAction, pasteKeys, PLUS, type Key } from "./keys";
+import { createListsStore, type ListsStore } from "./lists";
+import { locale, setLanguage, t } from "./i18n";
+import { de, en } from "./locales";
 import { DECIMALS, DEFAULT_SETTINGS, HISTORY_LENGTHS, parseSettings, SETTINGS_KEY, type Decimals, type Mode, type Settings } from "./settings";
 import ValueDialog from "./ValueDialog.vue";
-import { deleteValue, lookup, parseValues, renameValue, saveValue, VALUES_KEY, type Value } from "./values";
-
-type Key = { key: string; label: string; name?: keyof typeof en; kind: "digit" | "op" | "clear" | "equals" };
-
-const digits = (keys: string[]) => keys.map((key) => ({ key, label: key, kind: "digit" as const }));
-
-/** The classic pocket calculator. */
-const BASIC: Key[] = [
-  { key: "clear", label: "C", name: "calc.clear", kind: "clear" },
-  { key: "(", label: "(", name: "calc.open", kind: "op" },
-  { key: ")", label: ")", name: "calc.close", kind: "op" },
-  { key: "/", label: "÷", name: "calc.divide", kind: "op" },
-  ...digits(["7", "8", "9"]),
-  { key: "*", label: "×", name: "calc.times", kind: "op" },
-  ...digits(["4", "5", "6"]),
-  { key: "-", label: "−", name: "calc.minus", kind: "op" },
-  ...digits(["1", "2", "3"]),
-  { key: "+", label: "+", name: "calc.plus", kind: "op" },
-  { key: "%", label: "%", name: "calc.percent", kind: "op" },
-  { key: "0", label: "0", kind: "digit" },
-  { key: ".", label: ".", name: "calc.point", kind: "digit" },
-  { key: "=", label: "=", name: "calc.equals", kind: "equals" },
-];
-
-/** Laid out like the Windows calculator, with √, x², ± and ans, and a row for big numbers and rounding up. */
-const PLUS: Key[] = [
-  { key: "k", label: "k", name: "calc.thousand", kind: "op" },
-  { key: "m", label: "m", name: "calc.million", kind: "op" },
-  { key: "b", label: "b", name: "calc.billion", kind: "op" },
-  { key: "ceil", label: "⌈x⌉", name: "calc.ceil", kind: "op" },
-  { key: "clear", label: "C", name: "calc.clear", kind: "clear" },
-  { key: "(", label: "(", name: "calc.open", kind: "op" },
-  { key: ")", label: ")", name: "calc.close", kind: "op" },
-  { key: "/", label: "÷", name: "calc.divide", kind: "op" },
-  { key: "sqrt", label: "√", name: "calc.sqrt", kind: "op" },
-  { key: "square", label: "x²", name: "calc.square", kind: "op" },
-  { key: "%", label: "%", name: "calc.percent", kind: "op" },
-  { key: "*", label: "×", name: "calc.times", kind: "op" },
-  ...digits(["7", "8", "9"]),
-  { key: "-", label: "−", name: "calc.minus", kind: "op" },
-  ...digits(["4", "5", "6"]),
-  { key: "+", label: "+", name: "calc.plus", kind: "op" },
-  ...digits(["1", "2", "3"]),
-  { key: "negate", label: "±", name: "calc.negate", kind: "op" },
-  { key: "ans", label: "ans", name: "calc.ans", kind: "op" },
-  { key: "0", label: "0", kind: "digit" },
-  { key: ".", label: ".", name: "calc.point", kind: "digit" },
-  { key: "=", label: "=", name: "calc.equals", kind: "equals" },
-];
+import { deleteValue, lookup, renameValue, saveValue, type Value } from "./values";
 
 const VARIANT = { digit: "secondary", op: "outline", clear: "outline", equals: "default" } as const;
 /** The keypad's rows by number of keys; written out so Tailwind finds the classes. */
@@ -99,8 +53,9 @@ const clearing = ref(false);
 const entry = ref<Entry>(EMPTY);
 /** Why the last Equals did not work, until the next key. */
 const problem = ref<string | null>(null);
-const history = ref<Calculation[]>([]);
-const values = ref<Value[]>([]);
+const lists = shallowRef<ListsStore | null>(null);
+const history = computed<Calculation[]>(() => lists.value?.history.value ?? []);
+const values = computed<Value[]>(() => lists.value?.values.value ?? []);
 const lookupValue = computed(() => lookup(values.value));
 const tab = ref<"history" | "values">("history");
 /** The lists' open tab: only Values while the history is hidden. */
@@ -116,7 +71,6 @@ const deleting = ref<string | null>(null);
 const copied = ref(false);
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 const settings = ref<Settings>(DEFAULT_SETTINGS);
-const queue = serial();
 
 const modes = computed(() => [
   { value: "basic" as Mode, label: t("mode.basic"), testid: "mode-basic" },
@@ -158,7 +112,8 @@ function choose(change: Partial<Settings>): void {
     });
 }
 
-const comma = computed(() => language.value.toLowerCase().startsWith("de"));
+const comma = computed(() => decimalComma(locale()));
+const shownError = computed(() => saveError.value ?? lists.value?.error.value ?? null);
 const show = (text: string) => pretty(text, comma.value);
 /** A result as it shows, with the decimal places and short form picked; the number itself keeps every digit. */
 const showResult = (text: string) => show(rounded(text, settings.value.decimals, settings.value.short));
@@ -220,31 +175,8 @@ function use(calculation: Calculation): void {
 
 // ── History and values ───────────────────────────────────────────────
 
-/** Reads the newest list from the workspace's storage, changes it and writes it back, one save at a time. */
-function update<T extends Calculation | Value>(
-  key: string,
-  list: Ref<T[]>,
-  parse: (raw: JsonValue | null) => T[],
-  failure: "saveError" | "valuesError",
-  change: (items: T[]) => T[],
-): void {
-  list.value = change(list.value);
-  void queue(async () => {
-    const connected = sdk.value;
-    if (!connected) return;
-    try {
-      const next = change(parse(await connected.storage.get(key)));
-      await connected.storage.set(key, next.map((item) => ({ ...item })));
-      list.value = next;
-      saveError.value = null;
-    } catch (reason) {
-      saveError.value = t(failure, { error: errorMessage(reason) });
-    }
-  });
-}
-
-const save = (change: (items: Calculation[]) => Calculation[]) => update(HISTORY_KEY, history, parseHistory, "saveError", change);
-const saveValues = (change: (items: Value[]) => Value[]) => update(VALUES_KEY, values, parseValues, "valuesError", change);
+const save = (change: (items: Calculation[]) => Calculation[]) => lists.value?.changeHistory(change);
+const saveValues = (change: (items: Value[]) => Value[]) => lists.value?.changeValues(change);
 
 /** Saves the current result under a name, or renames a value, from the value dialog. */
 function submitValue(name: string): void {
@@ -276,57 +208,21 @@ function confirmClear(): void {
   save(() => []);
 }
 
-function reload(): void {
-  void queue(async () => {
-    const stored = await sdk.value?.storage.get(HISTORY_KEY).catch(() => undefined);
-    if (stored !== undefined) history.value = parseHistory(stored);
-    const storedValues = await sdk.value?.storage.get(VALUES_KEY).catch(() => undefined);
-    if (storedValues !== undefined) values.value = parseValues(storedValues);
-  });
-}
-
 // ── Keyboard and paste ───────────────────────────────────────────────
-
-const KEYBOARD: Record<string, string> = {
-  Enter: "=",
-  "=": "=",
-  Backspace: "back",
-  Escape: "clear",
-  Delete: "clear",
-  ",": ".",
-  x: "*",
-  X: "*",
-  ":": "/",
-  // The Windows calculator's own shortcuts.
-  "@": "sqrt",
-  q: "square",
-  Q: "square",
-  F9: "negate",
-  k: "k",
-  K: "k",
-  m: "m",
-  M: "m",
-  b: "b",
-  B: "b",
-};
 
 /** Whether a key or paste is meant for a text field or a dialog rather than the calculator. */
 const elsewhere = (target: EventTarget | null) => target instanceof HTMLElement && !!target.closest("input, textarea, [role='dialog']");
 
 function onKeydown(event: KeyboardEvent): void {
   if (elsewhere(event.target)) return;
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c" && !window.getSelection()?.toString()) {
-    event.preventDefault();
-    return void copy();
-  }
-  if (event.ctrlKey || event.metaKey || event.altKey) return;
-  // A focused button or option keeps its own Enter, so the keyboard can still press it; a dialog keeps its keys.
-  const focused = event.target instanceof HTMLElement && event.target.closest("button, [role='radio'], [role='tab']");
-  if (focused && (event.key === "Enter" || event.key === "Escape" || event.key === "Backspace" || event.key === "Delete")) return;
-  const name = KEYBOARD[event.key] ?? (/^[\d.+\-*/%()]$/.test(event.key) ? event.key : null);
-  if (!name) return;
+  const action = keyAction(event, {
+    selection: !!window.getSelection()?.toString(),
+    focusedControl: event.target instanceof HTMLElement && !!event.target.closest("button, [role='radio'], [role='tab']"),
+  });
+  if (!action) return;
   event.preventDefault();
-  key(name);
+  if (action.type === "copy") void copy();
+  else key(action.name);
 }
 
 function onPaste(event: ClipboardEvent): void {
@@ -335,9 +231,7 @@ function onPaste(event: ClipboardEvent): void {
   if (!text) return;
   event.preventDefault();
   problem.value = null;
-  for (const char of text.replace(/×/g, "*").replace(/÷/g, "/").replace(/−/g, "-").replace(/,/g, ".").toLowerCase()) {
-    if (/^[\d.+\-*/%()kmb]$/.test(char)) entry.value = press(entry.value, char);
-  }
+  for (const name of pasteKeys(text)) entry.value = press(entry.value, name);
 }
 
 const cleanup: (() => void)[] = [];
@@ -345,18 +239,21 @@ const cleanup: (() => void)[] = [];
 onMounted(async () => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("paste", onPaste);
-  window.addEventListener("focus", reload);
   cleanup.push(
     () => window.removeEventListener("keydown", onKeydown),
     () => window.removeEventListener("paste", onPaste),
-    () => window.removeEventListener("focus", reload),
   );
   try {
-    const connected = await connectModule(setLanguage);
-    history.value = parseHistory(await connected.storage.get(HISTORY_KEY));
-    values.value = parseValues(await connected.storage.get(VALUES_KEY));
+    const connection = await connectModule({ texts: { en, de } });
+    if (connection.status !== "ready" || !connection.sdk) throw connection.error;
+    const connected = connection.sdk;
+    // The components read the module's own translator; it follows the language the handle reports.
+    setLanguage(connection.language);
+    cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
     settings.value = parseSettings(await connected.storage.app.get(SETTINGS_KEY));
-    cleanup.push(connected.lifecycle.onResume(reload));
+    const stored = await createListsStore(connected);
+    cleanup.push(() => void stored.dispose());
+    lists.value = stored;
     sdk.value = connected;
   } catch (reason) {
     error.value = errorMessage(reason);
@@ -426,7 +323,7 @@ onBeforeUnmount(() => {
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-    <p v-if="saveError" class="text-destructive flex-none px-3 pt-1 text-xs">{{ saveError }}</p>
+    <p v-if="shownError" class="text-destructive flex-none px-3 pt-1 text-xs">{{ shownError }}</p>
     <div
       class="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto p-3 @min-[36rem]:flex-row @min-[36rem]:items-start @min-[36rem]:justify-center"
       data-testid="calculator-body"

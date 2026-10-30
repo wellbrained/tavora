@@ -328,3 +328,8 @@ export function reference(entry: Entry, name: string): Entry {
   const text = entry.fresh ? "" : entry.text;
   return { text: `${text}${OPERAND_END.test(text) ? "*" : ""}[${name}]`, fresh: false };
 }
+
+/** Whether numbers are written with a decimal comma in this locale (de-DE) rather than a point (en-GB). */
+export function decimalComma(locale: string): boolean {
+  return new Intl.NumberFormat(locale).formatToParts(1.5).find((part) => part.type === "decimal")?.value === ",";
+}
