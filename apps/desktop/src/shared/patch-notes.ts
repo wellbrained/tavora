@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.22.5",
+    date: "2026-10-30",
+    title: "Calculator history in every panel",
+    notes: [
+      "A second Calculator panel shows new results and saved values at once, without waiting for you to click into it.",
+    ],
+    prs: [
+      { number: 495, title: "Clock & Counter, Calculator and System Monitor on the document store and module bootstrap" },
+    ],
+    tags: ["calculator", "clock-counter", "system-monitor"],
+  },
+  {
     version: "0.22.4",
     date: "2026-10-30",
     title: "Notes you delete in another panel",
