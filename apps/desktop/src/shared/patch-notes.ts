@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.4",
+    date: "2026-10-30",
+    title: "Plain module versions",
+    notes: [
+      "Modules now publish only plain versions like 1.2.0, no more alpha or beta.",
+      "On a test version, the Publish screen lets you pick a release version instead.",
+    ],
+    prs: [
+      { number: 522, title: "Publish only plain module versions" },
+    ],
+    tags: ["catalog", "modules", "publishing", "service", "website"],
+  },
+  {
     version: "0.23.3",
     date: "2026-10-30",
     title: "Links and passwords in the PDF Viewer",
