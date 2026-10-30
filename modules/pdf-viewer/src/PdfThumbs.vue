@@ -2,6 +2,7 @@
 // Small pictures of every page, for jumping through a long PDF. A picture is drawn only while it is near the
 // visible part of the list and let go again far from it, so a long PDF does not fill the memory. The page the
 // reader is on is marked and kept in view.
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { t } from "./i18n";
 import type { PageSize } from "./layout";
@@ -88,25 +89,27 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <nav ref="list" class="bg-card w-40 flex-none overflow-y-auto border-r p-2" :aria-label="t('pdf.pages')" data-testid="pdf-thumbs">
+  <!-- The size comes from the parent (a column beside the pages, or the whole width when the panel is narrow). -->
+  <nav ref="list" class="bg-card overflow-y-auto p-2" :aria-label="t('pdf.pages')" data-testid="pdf-thumbs">
     <ol class="flex flex-col items-center gap-3">
       <li v-for="(size, index) in sizes" :key="index" :data-thumb="index + 1">
-        <button
-          type="button"
-          class="group flex flex-col items-center gap-1 rounded-md p-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        <Button
+          variant="ghost"
+          class="h-auto flex-col gap-1 p-1 font-normal"
           :aria-label="t('pdf.goToPage', { page: index + 1 })"
           :aria-current="index + 1 === page ? 'page' : undefined"
           data-testid="pdf-thumb"
           @click="emit('go', index + 1)"
         >
+          <!-- bg-white: the paper of a document page, the same in every theme. -->
           <span
             data-thumb-host
-            class="relative block overflow-hidden bg-white shadow-sm ring-offset-2 ring-offset-card transition-shadow group-hover:ring-2 group-hover:ring-border"
-            :class="index + 1 === page ? 'ring-2 ring-primary group-hover:ring-primary' : ''"
+            class="relative block overflow-hidden bg-white ring-1 ring-border"
+            :class="index + 1 === page && 'ring-2 ring-primary'"
             :style="{ width: `${THUMB_WIDTH}px`, height: `${heightOf(size)}px` }"
           />
-          <span class="text-xs tabular-nums" :class="index + 1 === page ? 'text-foreground font-medium' : 'text-muted-foreground'">{{ index + 1 }}</span>
-        </button>
+          <span class="text-xs tabular-nums" :class="index + 1 === page ? 'text-foreground font-semibold' : 'text-muted-foreground'">{{ index + 1 }}</span>
+        </Button>
       </li>
     </ol>
   </nav>

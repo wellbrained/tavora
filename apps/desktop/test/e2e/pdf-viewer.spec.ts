@@ -102,7 +102,7 @@ test("pdf viewer: page pictures on the side jump to a page, and page keys move b
   await expect.poll(pageField).toBe("8");
   await expect.poll(() => inModule(app, PDF_VIEWER, `document.querySelector('[data-testid="pdf-thumb"][aria-current="page"]')?.textContent.trim()`)).toBe("8");
 
-  const press = (key: string) => inModule(app, PDF_VIEWER, `window.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)}, bubbles: true }))`);
+  const press = (key: string) => inModule(app, PDF_VIEWER, `(() => { const pane = ${q("pdf-scroller")}; pane.focus(); pane.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)}, bubbles: true })); })()`);
   await press("End");
   await expect.poll(pageField).toBe("12");
   await press("PageUp");

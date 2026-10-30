@@ -138,12 +138,13 @@ onBeforeUnmount(clear);
 
 <template>
   <div
-    class="relative mx-auto bg-white shadow-md"
+    class="ring-border relative isolate mx-auto bg-white ring-1"
     :style="{ width: `${width * zoom}px`, height: `${height * zoom}px` }"
     :data-page="number"
     data-testid="pdf-page"
   >
+    <!-- bg-white above: the paper of a document page, the same in every theme. -->
     <div ref="host" class="absolute inset-0 overflow-hidden" />
-    <p v-if="failed" class="absolute inset-0 grid place-items-center text-sm text-neutral-500">{{ number }}</p>
+    <p v-if="failed" class="bg-muted text-muted-foreground absolute inset-0 grid place-items-center text-sm tabular-nums">{{ number }}</p>
   </div>
 </template>

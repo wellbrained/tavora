@@ -19,10 +19,10 @@ export class FileProblem extends Error {
 
 export type FilesStore = Awaited<ReturnType<typeof createFilesStore>>;
 
-export async function createFilesStore(sdk: TavoraSDK, options: { debounceMs?: number } = {}) {
+export async function createFilesStore(sdk: TavoraSDK, options: { /** The document's name, in the reader's language. */ title: () => string; debounceMs?: number }) {
   const doc = await openDocument<FilesData>(sdk, FILES_ID, {
     parse: (raw) => (raw === null ? emptyFiles() : parseFiles(raw)),
-    title: () => "Files",
+    title: options.title,
     ...(options.debounceMs === undefined ? {} : { debounceMs: options.debounceMs }),
   });
   const files = ref<FileEntry[]>(doc.data.files);

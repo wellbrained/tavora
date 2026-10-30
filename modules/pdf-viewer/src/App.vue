@@ -6,6 +6,8 @@ import { FilePlus2, FolderOpen, Upload } from "@lucide/vue";
 import { connectModule, ConfirmDialog, errorMessage, NameDialog } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
+import { Notice } from "@tavora/official-ui/components/ui/notice";
+import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
 import { TabStrip, type StripTab } from "@tavora/official-ui/components/ui/tabs";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
@@ -33,6 +35,8 @@ const picker = ref<HTMLInputElement | null>(null);
 const renaming = ref<FileEntry | null>(null);
 const removing = ref<FileEntry | null>(null);
 const busy = ref(false);
+/** How far the start is, for the bar shown until the panel is ready. */
+const starting = ref(20);
 
 const cleanup: (() => void)[] = [];
 
@@ -57,11 +61,15 @@ onMounted(async () => {
     const connected = connection.sdk;
     setLanguage(connection.language);
     cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
-    const opened = await createFilesStore(connected);
+    starting.value = 60;
+    const opened = await createFilesStore(connected, { title: () => t("files.title") });
     const saved = parseTabState(await connected.panel.getState<unknown>());
     tabState.value = keepExisting(saved, (id) => opened.find(id) !== undefined);
     sdk.value = connected;
     store.value = opened;
+    // Hidden or closed: what the panel remembers is written now. The file list and the page and zoom of each file
+    // are saved by the document store on its own.
+    cleanup.push(connected.lifecycle.onSuspend(flushNow), connected.lifecycle.onDispose(flushNow));
   } catch (reason) {
     error.value = errorMessage(reason);
   }
@@ -79,11 +87,17 @@ watch(files, () => {
   if (next !== tabState.value) tabState.value = next;
 });
 
-watch(
-  tabState,
-  (state) => void sdk.value?.panel.setState({ tabs: [...state.tabs], active: state.active }).catch(() => undefined),
-  { deep: true },
-);
+/** Writes which files this panel has open and which one it shows. */
+function saveTabs(): Promise<void> {
+  const state = tabState.value;
+  return sdk.value ? sdk.value.panel.setState({ tabs: [...state.tabs], active: state.active }).catch(() => undefined) : Promise.resolve();
+}
+
+async function flushNow() {
+  await Promise.all([saveTabs(), store.value?.flush()]);
+}
+
+watch(tabState, () => void saveTabs(), { deep: true });
 
 // ── Opening files
 
@@ -203,9 +217,11 @@ async function remove() {
 </script>
 
 <template>
-  <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
-    {{ error ? t("connectError") : t("loading") }}
-  </p>
+  <Notice v-if="!store && error" variant="error" class="m-4" data-testid="status">{{ t("connectError") }}</Notice>
+  <div v-else-if="!store" class="flex flex-col gap-2 p-4" data-testid="status">
+    <Progress :model-value="starting" :aria-label="t('loading')" />
+    <p class="text-muted-foreground text-sm">{{ t("loading") }}</p>
+  </div>
   <div v-else class="relative flex h-full min-h-0 flex-col" data-testid="pdf-viewer-app" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
     <header class="bg-card flex items-center border-b px-1 py-1">
       <TabStrip class="min-w-0 flex-1" :tabs="tabs" :model-value="tabState.active ?? undefined" :aria-label="t('tabs.label')" @update:model-value="setActive" @close="closeOne" @reorder="reorder" @rename="rename">
@@ -221,13 +237,13 @@ async function remove() {
             <FolderOpen :stroke-width="1.5" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" class="w-80">
+        <PopoverContent align="end" class="w-80 max-w-[calc(100vw-1rem)]">
           <FileList :files="files" :active-id="tabState.active" :usage="usage" @open="show" @rename="askRename" @remove="askRemove" />
         </PopoverContent>
       </Popover>
     </header>
 
-    <main class="min-h-0 flex-1">
+    <main class="relative isolate min-h-0 flex-1">
       <PdfPane v-if="active?.kind === 'pdf'" :key="active.id" :url="store.url(active.id)" :view="active.view" @view="store.setView(active.id, $event)" />
       <ImagePane v-else-if="active" :key="active.id" :url="store.url(active.id)" :name="active.name" :view="active.view" @view="store.setView(active.id, $event)" />
       <div v-else class="flex h-full items-center justify-center p-4">
@@ -243,7 +259,7 @@ async function remove() {
       </div>
     </main>
 
-    <div v-if="dragging" class="bg-background/80 border-primary pointer-events-none absolute inset-1 z-20 flex items-center justify-center rounded-lg border-2 border-dashed" data-testid="drop-hint">
+    <div v-if="dragging" class="bg-background/80 border-primary pointer-events-none absolute inset-1 flex items-center justify-center rounded-lg border-2 border-dashed" data-testid="drop-hint">
       <p class="text-sm font-medium">{{ t("drop.hint") }}</p>
     </div>
 

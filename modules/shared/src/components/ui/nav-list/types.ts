@@ -4,6 +4,8 @@ export interface NavItem {
   id: string;
   label: string;
   icon?: Component;
+  /** How far the entry is indented, for a flat list that shows a hierarchy (0 or none: not at all). */
+  level?: number;
   /** A small number or word at the end, such as a count. */
   badge?: string | number;
   /** Draws the badge as a filled tag, for something that wants attention. */

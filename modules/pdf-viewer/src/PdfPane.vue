@@ -1,11 +1,16 @@
 <script setup lang="ts">
 // One open PDF: a toolbar, small pictures of the pages or the contents list on the side, and the pages in one long scroll.
 // It remembers the page, zoom and side per file (the parent saves what it reports) and searches the whole text.
-// Page Up and Page Down, the arrow keys left and right, Home and End jump by whole pages.
+// Page Up and Page Down, the arrow keys left and right, Home and End jump by whole pages, and Ctrl+F searches. The keys
+// act on this pane only (they are heard on its own element), so a second pane next to it is left alone.
+// In a narrow panel the side does not sit beside the pages but takes their place until a page is picked.
 import { ChevronDown, ChevronUp, Columns2, Expand, GalleryVerticalEnd, ListTree, Minus, Plus, Search, X } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
+import { Progress } from "@tavora/official-ui/components/ui/progress";
+import { Separator } from "@tavora/official-ui/components/ui/separator";
+import { Toggle, ToggleGroup } from "@tavora/official-ui/components/ui/toggle";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import OutlineList from "./OutlineList.vue";
 import PdfPage from "./PdfPage.vue";
@@ -30,13 +35,24 @@ const zoom = ref(clampZoom(props.view.zoom));
 const fit = ref<FitMode>(props.view.fit);
 const page = ref(1);
 const pageField = ref("1");
+const root = ref<HTMLElement | null>(null);
 const scroller = ref<HTMLElement | null>(null);
+const searchInput = ref<InstanceType<typeof Input> | null>(null);
+/** How far the opening is, in percent (the page sizes are read first). */
+const progress = ref(0);
+
+const panelWidth = ref(Infinity);
 const viewport = reactive({ top: 0, height: 0, width: 0 });
 const pageRefs = new Map<number, InstanceType<typeof PdfPage>>();
+
+/** Below this width (CSS pixels) the side no longer fits next to the pages. */
+const NARROW = 480;
 
 let loadToken = 0;
 let restoring = true;
 
+const narrow = computed(() => panelWidth.value < NARROW);
+const covered = computed(() => narrow.value && side.value !== null && (side.value === "pages" || outline.value.length > 0));
 const count = computed(() => sizes.value.length);
 const layout = computed(() => layoutPages(sizes.value, zoom.value));
 const columnWidth = computed(() => Math.max(0, ...sizes.value.map((size) => size.width)) * zoom.value + PAGE_GAP * 2);
@@ -47,6 +63,7 @@ const near = computed(() => new Set(pagesInBand(layout.value.tops, sizes.value, 
 async function load() {
   const mine = ++loadToken;
   status.value = "opening";
+  progress.value = 0;
   restoring = true;
   void closePdf(pdf.value);
   pdf.value = null;
@@ -62,6 +79,7 @@ async function load() {
         }),
       );
       found.push(...batch);
+      progress.value = Math.round((found.length / opened.numPages) * 100);
       if (mine !== loadToken) return void closePdf(opened);
     }
     sizes.value = found;
@@ -75,6 +93,8 @@ async function load() {
     if (fit.value) refit();
     await nextTick();
     goToPage(wanted, false);
+    // Keys need the focus inside this pane; when nothing has it yet, it starts on the pages.
+    if (document.activeElement === document.body) scroller.value?.focus({ preventScroll: true });
     // What the scroll reports while the page is being put in place is not the reader's doing.
     setTimeout(() => (restoring = false), 150);
   } catch (error) {
@@ -85,21 +105,27 @@ async function load() {
 
 onMounted(() => {
   void load();
-  window.addEventListener("keydown", onKey);
+  if (!root.value) return;
+  panelWidth.value = root.value.clientWidth || Infinity;
+  paneResizer = new ResizeObserver(() => (panelWidth.value = root.value?.clientWidth || Infinity));
+  paneResizer.observe(root.value);
 });
 
 onBeforeUnmount(() => {
   loadToken++;
-  window.removeEventListener("keydown", onKey);
   resizer?.disconnect();
+  paneResizer?.disconnect();
   void closePdf(pdf.value);
 });
 
 let resizer: ResizeObserver | null = null;
+let paneResizer: ResizeObserver | null = null;
 watch(scroller, (element) => {
   resizer?.disconnect();
   if (!element) return;
   resizer = new ResizeObserver(() => {
+    // The pages are not shown (the side has their place): nothing to measure.
+    if (element.clientWidth === 0) return;
     measure();
     if (fit.value) refit();
   });
@@ -290,7 +316,7 @@ const searchSummary = computed(() => {
 async function openSearch() {
   searching.value = true;
   await nextTick();
-  const input = document.querySelector<HTMLInputElement>("[data-testid='pdf-search-input']");
+  const input = searchInput.value?.$el as HTMLInputElement | undefined;
   input?.focus();
   input?.select();
 }
@@ -310,7 +336,7 @@ function onKey(event: KeyboardEvent) {
     void openSearch();
   } else if (event.key === "Escape" && searching.value) {
     closeSearch();
-  } else if (!event.ctrlKey && !event.metaKey && !event.altKey && !typingIn(event.target)) {
+  } else if (!event.defaultPrevented && !event.ctrlKey && !event.metaKey && !event.altKey && !typingIn(event.target)) {
     const target = pageKeys[event.key]?.();
     if (target === undefined || Number.isNaN(target)) return;
     event.preventDefault();
@@ -337,10 +363,37 @@ function typingIn(target: EventTarget | null): boolean {
   return target.isContentEditable || target.closest("input, textarea, select, [role=dialog], [role=menu]") !== null;
 }
 
-function toggleSide(mode: Exclude<SideMode, null>) {
-  side.value = side.value === mode ? null : mode;
+/** The side buttons are one choice or none: the button pressed now is the one that was not on. */
+function chooseSide(pressed: Exclude<SideMode, null>[]) {
+  side.value = pressed.find((mode) => mode !== side.value) ?? null;
   emit("view", { side: side.value });
 }
+
+function chooseFit(pressed: ("width" | "page")[]) {
+  const next = pressed.find((mode) => mode !== fit.value);
+  if (next) fitTo(next);
+  else void setZoom(zoom.value, null);
+}
+
+/** A page picked on the side. Where the side has the pages' place, it steps aside first. */
+async function goFromSide(target: number) {
+  if (narrow.value) {
+    side.value = null;
+    emit("view", { side: null });
+    await nextTick();
+    measure();
+  }
+  goToPage(target);
+}
+
+const sideOptions = computed(() => [
+  { value: "pages" as const, label: t("pdf.pages"), icon: GalleryVerticalEnd, testid: "pdf-thumbs-toggle" },
+  ...(outline.value.length ? [{ value: "contents" as const, label: t("pdf.outline"), icon: ListTree, testid: "pdf-outline-toggle" }] : []),
+]);
+const fitOptions = computed(() => [
+  { value: "width" as const, label: t("pdf.fitWidth"), icon: Columns2, testid: "pdf-fit-width" },
+  { value: "page" as const, label: t("pdf.fitPage"), icon: Expand, testid: "pdf-fit-page" },
+]);
 
 const percent = computed(() => Math.round(zoom.value * 100));
 const setPageRef = (number: number) => (element: unknown) => {
@@ -350,81 +403,71 @@ const setPageRef = (number: number) => (element: unknown) => {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col" data-testid="pdf-pane">
+  <div ref="root" class="flex h-full min-h-0 flex-col outline-none" tabindex="-1" data-testid="pdf-pane" @keydown="onKey">
     <Notice v-if="status === 'gone' || status === 'password' || status === 'broken'" variant="error" class="m-3" data-testid="pdf-error">
       {{ status === "gone" ? t("pdf.fileGone") : status === "password" ? t("pdf.password") : t("pdf.failed") }}
       <template v-if="status === 'broken'" #action>
         <Button size="sm" variant="secondary" @click="load">{{ t("pdf.retry") }}</Button>
       </template>
     </Notice>
-    <p v-else-if="status === 'opening'" class="text-muted-foreground p-4 text-sm" data-testid="pdf-opening">{{ t("pdf.opening") }}</p>
+    <div v-else-if="status === 'opening'" class="flex flex-col gap-2 p-4" data-testid="pdf-opening">
+      <Progress :model-value="progress" :aria-label="t('pdf.progress')" />
+      <p class="text-muted-foreground text-sm">{{ t("pdf.opening") }}</p>
+    </div>
 
     <template v-else>
-      <div class="bg-card flex flex-wrap items-center gap-1 border-b px-2 py-1" role="toolbar" :aria-label="t('pdf.toolbar')">
-        <Button variant="ghost" size="icon-sm" :aria-pressed="side === 'pages'" :title="t('pdf.pages')" :aria-label="t('pdf.pages')" data-testid="pdf-thumbs-toggle" @click="toggleSide('pages')">
-          <GalleryVerticalEnd :stroke-width="1.5" />
-        </Button>
-        <Button v-if="outline.length" variant="ghost" size="icon-sm" :aria-pressed="side === 'contents'" :title="t('pdf.outline')" :aria-label="t('pdf.outline')" data-testid="pdf-outline-toggle" @click="toggleSide('contents')">
-          <ListTree :stroke-width="1.5" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" :disabled="page <= 1" :title="t('pdf.previous')" :aria-label="t('pdf.previous')" data-testid="pdf-prev" @click="goToPage(page - 1)">
+      <div class="bg-card flex shrink-0 flex-wrap items-center gap-1 border-b px-2 py-1" role="toolbar" :aria-label="t('pdf.toolbar')">
+        <ToggleGroup :model-value="side ? [side] : []" :options="sideOptions" :label="t('pdf.pages') + ', ' + t('pdf.outline')" @update:model-value="chooseSide" />
+        <Button variant="ghost" size="icon" :disabled="page <= 1" :title="t('pdf.previous')" :aria-label="t('pdf.previous')" data-testid="pdf-prev" @click="goToPage(page - 1)">
           <ChevronUp :stroke-width="1.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" :disabled="page >= count" :title="t('pdf.next')" :aria-label="t('pdf.next')" data-testid="pdf-next" @click="goToPage(page + 1)">
+        <Button variant="ghost" size="icon" :disabled="page >= count" :title="t('pdf.next')" :aria-label="t('pdf.next')" data-testid="pdf-next" @click="goToPage(page + 1)">
           <ChevronDown :stroke-width="1.5" />
         </Button>
-        <form class="flex items-center gap-1.5" @submit.prevent="submitPage">
-          <Input v-model="pageField" inputmode="numeric" class="h-7 w-12 px-1 text-center text-sm" :aria-label="t('pdf.page')" data-testid="pdf-page-input" @blur="submitPage" />
-          <span class="text-muted-foreground text-sm whitespace-nowrap">{{ t("pdf.of", { count }) }}</span>
+        <form class="flex items-center gap-2" @submit.prevent="submitPage">
+          <Input v-model="pageField" inputmode="numeric" class="w-14 px-1 text-center" :aria-label="t('pdf.page')" data-testid="pdf-page-input" @blur="submitPage" />
+          <span class="text-muted-foreground text-sm whitespace-nowrap tabular-nums">{{ t("pdf.of", { count }) }}</span>
         </form>
-        <span class="bg-border mx-1 h-4 w-px" aria-hidden="true" />
-        <Button variant="ghost" size="icon-sm" :title="t('pdf.zoomOut')" :aria-label="t('pdf.zoomOut')" data-testid="pdf-zoom-out" @click="setZoom(stepZoom(zoom, -1), null)">
+        <Separator orientation="vertical" class="data-[orientation=vertical]:h-4 mx-1" />
+        <Button variant="ghost" size="icon" :title="t('pdf.zoomOut')" :aria-label="t('pdf.zoomOut')" data-testid="pdf-zoom-out" @click="setZoom(stepZoom(zoom, -1), null)">
           <Minus :stroke-width="1.5" />
         </Button>
-        <Button variant="ghost" size="sm" class="text-muted-foreground h-7 w-12 px-0 text-sm tabular-nums" :title="t('pdf.zoomReset')" :aria-label="t('pdf.zoomLevel', { percent }) + ', ' + t('pdf.zoomReset')" data-testid="pdf-zoom" @click="setZoom(1, null)">{{ percent }}%</Button>
-        <Button variant="ghost" size="icon-sm" :title="t('pdf.zoomIn')" :aria-label="t('pdf.zoomIn')" data-testid="pdf-zoom-in" @click="setZoom(stepZoom(zoom, 1), null)">
+        <Button variant="ghost" class="text-muted-foreground w-14 px-0 tabular-nums" :title="t('pdf.zoomReset')" :aria-label="t('pdf.zoomLevel', { percent }) + ', ' + t('pdf.zoomReset')" data-testid="pdf-zoom" @click="setZoom(1, null)">{{ percent }}%</Button>
+        <Button variant="ghost" size="icon" :title="t('pdf.zoomIn')" :aria-label="t('pdf.zoomIn')" data-testid="pdf-zoom-in" @click="setZoom(stepZoom(zoom, 1), null)">
           <Plus :stroke-width="1.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" :aria-pressed="fit === 'width'" :title="t('pdf.fitWidth')" :aria-label="t('pdf.fitWidth')" data-testid="pdf-fit-width" @click="fitTo('width')">
-          <Columns2 :stroke-width="1.5" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" :aria-pressed="fit === 'page'" :title="t('pdf.fitPage')" :aria-label="t('pdf.fitPage')" data-testid="pdf-fit-page" @click="fitTo('page')">
-          <Expand :stroke-width="1.5" />
-        </Button>
+        <ToggleGroup :model-value="fit ? [fit] : []" :options="fitOptions" :label="t('pdf.fitWidth') + ', ' + t('pdf.fitPage')" @update:model-value="chooseFit" />
         <span class="flex-1" />
-        <Button variant="ghost" size="icon-sm" :aria-pressed="searching" :title="t('pdf.search')" :aria-label="t('pdf.search')" data-testid="pdf-search-toggle" @click="searching ? closeSearch() : openSearch()">
-          <Search :stroke-width="1.5" />
-        </Button>
+        <Toggle :model-value="searching" :label="t('pdf.search')" data-testid="pdf-search-toggle" @update:model-value="searching ? closeSearch() : openSearch()">
+          <Search class="size-4" :stroke-width="1.5" />
+        </Toggle>
       </div>
 
-      <div v-if="searching" class="bg-card flex flex-wrap items-center gap-1 border-b px-2 py-1" data-testid="pdf-search">
+      <div v-if="searching" class="bg-card flex shrink-0 items-center gap-1 border-b px-2 py-1" data-testid="pdf-search">
         <Input
+          ref="searchInput"
           v-model="query"
           type="search"
-          class="h-7 min-w-32 flex-1 text-sm"
+          class="min-w-0 flex-1"
           :placeholder="t('pdf.searchPlaceholder')"
           :aria-label="t('pdf.searchField')"
           data-testid="pdf-search-input"
           @keydown.enter.prevent="step($event.shiftKey ? -1 : 1)"
         />
         <span class="text-muted-foreground min-w-16 text-sm whitespace-nowrap" role="status" data-testid="pdf-search-summary">{{ searchSummary }}</span>
-        <Button variant="ghost" size="icon-sm" :disabled="!matches.length" :title="t('pdf.searchPrevious')" :aria-label="t('pdf.searchPrevious')" data-testid="pdf-search-prev" @click="step(-1)">
+        <Button variant="ghost" size="icon" :disabled="!matches.length" :title="t('pdf.searchPrevious')" :aria-label="t('pdf.searchPrevious')" data-testid="pdf-search-prev" @click="step(-1)">
           <ChevronUp :stroke-width="1.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" :disabled="!matches.length" :title="t('pdf.searchNext')" :aria-label="t('pdf.searchNext')" data-testid="pdf-search-next" @click="step(1)">
+        <Button variant="ghost" size="icon" :disabled="!matches.length" :title="t('pdf.searchNext')" :aria-label="t('pdf.searchNext')" data-testid="pdf-search-next" @click="step(1)">
           <ChevronDown :stroke-width="1.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" :title="t('pdf.searchClose')" :aria-label="t('pdf.searchClose')" data-testid="pdf-search-close" @click="closeSearch">
+        <Button variant="ghost" size="icon" :title="t('pdf.searchClose')" :aria-label="t('pdf.searchClose')" data-testid="pdf-search-close" @click="closeSearch">
           <X :stroke-width="1.5" />
         </Button>
       </div>
 
-      <div class="flex min-h-0 flex-1">
-        <PdfThumbs v-if="side === 'pages' && pdf" :pdf="pdf" :sizes="sizes" :page="page" @go="goToPage" />
-        <nav v-else-if="side === 'contents' && outline.length"class="bg-card w-56 flex-none overflow-y-auto border-r p-1" :aria-label="t('pdf.outline')" data-testid="pdf-outline">
-          <OutlineList :nodes="outline" @go="goToPage" />
-        </nav>
-        <div ref="scroller" class="bg-muted/40 relative min-w-0 flex-1 overflow-auto" tabindex="0" data-testid="pdf-scroller" @scroll.passive="onScroll" @wheel="onWheel">
+      <div class="relative flex min-h-0 flex-1">
+        <div ref="scroller" class="bg-muted/40 relative min-w-0 flex-1 overflow-auto" tabindex="0" :inert="covered" data-testid="pdf-scroller" @scroll.passive="onScroll" @wheel="onWheel">
           <div class="relative" :style="{ height: `${layout.height}px`, minWidth: `${columnWidth}px` }">
             <div v-for="(size, index) in sizes" :key="index" class="absolute right-0 left-0" :style="{ top: `${layout.tops[index]}px` }">
               <PdfPage
@@ -440,6 +483,11 @@ const setPageRef = (number: number) => (element: unknown) => {
               />
             </div>
           </div>
+        </div>
+        <!-- Beside the pages when there is room; otherwise it takes their place until a page is picked. -->
+        <PdfThumbs v-if="side === 'pages' && pdf" :class="narrow ? 'absolute inset-0' : 'order-first w-40 flex-none border-r'" :pdf="pdf" :sizes="sizes" :page="page" @go="goFromSide" />
+        <div v-else-if="side === 'contents' && outline.length" class="bg-card overflow-y-auto p-1" :class="narrow ? 'absolute inset-0' : 'order-first w-56 flex-none border-r'" data-testid="pdf-outline">
+          <OutlineList :nodes="outline" @go="goFromSide" />
         </div>
       </div>
     </template>
