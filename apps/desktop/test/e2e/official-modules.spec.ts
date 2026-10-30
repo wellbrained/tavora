@@ -484,7 +484,7 @@ test("ui playground: shows every section, filters them and disables the controls
   // Each tab shows its own sections; Basics is open first.
   await expect.poll(sections).toEqual(["colours", "type"]);
   await inModule(app, PLAYGROUND, `${q("tab-display")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
-  await expect.poll(sections).toEqual(["status", "progress", "notices", "empty", "expandable", "collapsible", "tabs", "lists", "navlist", "settings"]);
+  await expect.poll(sections).toEqual(["status", "progress", "notices", "empty", "expandable", "collapsible", "tabs", "table", "lists", "navlist", "settings"]);
 
   await inModule(
     app,
