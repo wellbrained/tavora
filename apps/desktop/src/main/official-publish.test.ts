@@ -33,7 +33,7 @@ beforeEach(async () => {
 });
 
 const run: Run = async (command, args) => {
-  world.calls.push([command, ...args].join(" "));
+  world.calls.push([command.replace(/.cmd$/, ""), ...args].join(" "));
   const [first, second] = args;
   if (command === "git") {
     if (first === "fetch") return "";

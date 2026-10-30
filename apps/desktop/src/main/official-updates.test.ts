@@ -276,6 +276,16 @@ describe("the load-time check", () => {
     expect((await running(official)).manifest.version).toBe("1.1.0");
   });
 
+  it("uses the shipped copy when the record names a version below its high-water mark", async () => {
+    const official = officialOf();
+    await install(official, zipOf("tavora.notes", "1.1.0"));
+    const file = path.join(userData, OFFICIAL_UPDATES_FILE);
+    const saved = JSON.parse(await readFile(file, "utf8"));
+    saved.modules["tavora.notes"].highWater = "1.2.0";
+    await writeFile(file, JSON.stringify(saved));
+    expect((await running(official)).manifest.version).toBe("1.0.0");
+  });
+
   it("does not read the folder again while nothing in it changed", async () => {
     const official = officialOf();
     await install(official, zipOf("tavora.notes", "1.1.0"));
@@ -342,6 +352,26 @@ describe("cleanup at start", () => {
     await shipModule("tavora.notes", "2.0.0");
     await load(official);
     expect(await readFile(path.join(userData, "grants.json"), "utf8")).toBe("{}");
+  });
+
+  it("leaves a copy alone while it is being installed, before its record is saved", async () => {
+    const official = officialOf();
+    await official.install("tavora.notes", async () => {
+      await mkdir(copy(), { recursive: true });
+      await official.cleanup(new Map([["tavora.notes", "1.0.0"]]));
+      expect(await exists(copy())).toBe(true);
+    });
+    await official.cleanup(new Map([["tavora.notes", "1.0.0"]]));
+    expect(await exists(copy())).toBe(false);
+  });
+
+  it("keeps every record when two saves run at once", async () => {
+    const official = officialOf();
+    await Promise.all([
+      official.save({ id: "tavora.notes", version: "1.1.0", sha256: "a".repeat(64), signer: PINNED }),
+      official.save({ id: "tavora.files", version: "2.1.0", sha256: "b".repeat(64), signer: PINNED }),
+    ]);
+    expect(Object.keys(await readOfficialRecords(userData)).sort()).toEqual(["tavora.files", "tavora.notes"]);
   });
 });
 

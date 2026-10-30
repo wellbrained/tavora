@@ -121,6 +121,10 @@ export class OfficialUpdates {
   private records: OfficialRecords = {};
   /** Folders checked before, by what they held: a folder that did not change is not read and hashed again. */
   private readonly checked = new Map<string, { stamp: string; verified: Verified | null }>();
+  /** Ids being installed right now: cleanup leaves their folder alone until the record is saved. */
+  private readonly installing = new Set<string>();
+  /** Saves run one after another, so two at once cannot drop a record and its high-water mark. */
+  private saving: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: OfficialUpdatesOptions) {}
 
@@ -153,8 +157,24 @@ export class OfficialUpdates {
     return isOfficialSigner(safety.firstKeyChain(signer), safety.revoked(signer, sha256), pins);
   }
 
+  /** Runs an install of `id`; cleanup skips its folder meanwhile. */
+  async install<T>(id: string, run: () => Promise<T>): Promise<T> {
+    this.installing.add(id);
+    try {
+      return await run();
+    } finally {
+      this.installing.delete(id);
+    }
+  }
+
   /** Records a copy that was just put in place; the high-water mark only goes up. */
-  async save(entry: Omit<OfficialRecord, "highWater">): Promise<void> {
+  save(entry: Omit<OfficialRecord, "highWater">): Promise<void> {
+    const next = this.saving.then(() => this.write(entry));
+    this.saving = next.catch(() => undefined);
+    return next;
+  }
+
+  private async write(entry: Omit<OfficialRecord, "highWater">): Promise<void> {
     const records = await readOfficialRecords(this.options.userData);
     const before = records[entry.id];
     const highWater = before && compareModuleVersions(before.highWater, entry.version) > 0 ? before.highWater : entry.version;
@@ -170,7 +190,7 @@ export class OfficialUpdates {
   async trusted(id: string, dir: string): Promise<boolean> {
     if (!this.on) return false;
     const record = this.records[id];
-    if (!record || record.id !== id || this.options.safety.blocked(record.sha256) || !this.signerTrusted(record.signer, record.sha256)) return false;
+    if (!record || record.id !== id || compareModuleVersions(record.version, record.highWater) < 0 || this.options.safety.blocked(record.sha256) || !this.signerTrusted(record.signer, record.sha256)) return false;
     const verified = await this.verify(dir);
     return verified !== null && verified.id === id && verified.version === record.version && verified.signer === record.signer;
   }
@@ -201,6 +221,7 @@ export class OfficialUpdates {
     if (!this.on) return [];
     const removed: string[] = [];
     for (const entry of await readdir(this.dir, { withFileTypes: true }).catch(() => [])) {
+      if (this.installing.has(entry.name)) continue;
       const record = this.records[entry.name];
       const version = shipped.get(entry.name);
       const gone = version === undefined && !unsure.has(entry.name);

@@ -37,10 +37,10 @@ export type Run = (command: string, args: readonly string[], options: RunOptions
 
 const execute = promisify(execFile);
 
-/** The real runner. On Windows pnpm and gh are `.cmd` files, which need a shell; the arguments are fixed words or checked ids. */
+/** The real runner. On Windows pnpm is a `.cmd` file, which needs a shell; its arguments are fixed words or a checked name. Everything else runs without one. */
 export const runCommand: Run = async (command, args, { cwd, timeoutMs = 600_000 }) => {
   try {
-    const { stdout } = await execute(command, [...args], { cwd, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, shell: process.platform === "win32", windowsHide: true });
+    const { stdout } = await execute(command, [...args], { cwd, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, shell: process.platform === "win32" && command.endsWith(".cmd"), windowsHide: true });
     return stdout;
   } catch (error) {
     const failure = error as { stderr?: string; message: string };

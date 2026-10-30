@@ -951,8 +951,12 @@ export class Host {
     return loadInstalledModules({ userData: options.userData, userModules: userModulesDir(options), sources: Host.moduleSources(options, developmentFolders), tavoraVersion: app.getVersion(), safety, official });
   }
 
-  /** Looks for modules again; panels of modules that are gone are closed. */
+  /**
+   * Looks for modules again; panels of modules that are gone are closed, and panels of a module now loaded
+   * from another folder start again from it (a blocked built-in update falls back to the shipped copy at once).
+   */
   private async reloadModules(): Promise<void> {
+    const roots = new Map([...this.modules].map(([id, module]) => [id, module.root]));
     this.installed.replace(await Host.loadModules(this.options, this.library.developmentFolders, this.safetyLists, this.official));
     const { modules } = this.installed;
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
@@ -960,6 +964,7 @@ export class Host {
     this.noteModuleVersions();
     this.workspaces.settlePanelTypes(panelTypesOf(modules));
     this.syncPanelTypes();
+    for (const [id, module] of modules) if (roots.has(id) && roots.get(id) !== module.root) this.reloadModuleViews(id);
     await this.watchDevelopmentFolders();
     void this.refreshPublisherNames();
   }

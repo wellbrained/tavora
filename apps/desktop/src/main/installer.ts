@@ -238,7 +238,12 @@ function checkOfficial({ official, manifest, files, sha256, signer, modules, exp
 }
 
 /** Writes a checked zip into place and records its owner. */
-async function writeChecked({ files, manifest, owner, signer, sha256, updated, official: downloaded }: CheckedZip, { userData, userModules, catalog, official }: InstallOptions): Promise<Installed> {
+async function writeChecked(checked: CheckedZip, options: InstallOptions): Promise<Installed> {
+  const { official } = options;
+  return checked.official && official ? official.install(checked.manifest.id, () => writeFiles(checked, options)) : writeFiles(checked, options);
+}
+
+async function writeFiles({ files, manifest, owner, signer, sha256, updated, official: downloaded }: CheckedZip, { userData, userModules, catalog, official }: InstallOptions): Promise<Installed> {
   const folder = manifest.id;
   const target = downloaded && official ? path.join(official.dir, folder) : path.join(userModules, folder);
   if (downloaded && !official) throw new InstallError("error.installRefused", { reason: "it is not one of Tavora's own modules" });
