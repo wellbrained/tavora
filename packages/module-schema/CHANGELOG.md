@@ -2,7 +2,7 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
-## Unreleased
+## 0.1.7
 
 - `API_REASONS` (`ApiReason`, `isApiReason`, `apiReason`): every `reason` code Tavora's service sends with a refusal.
 
