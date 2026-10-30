@@ -28,6 +28,22 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.9",
+    date: "2026-10-30",
+    title: "Your modules, in their own menu",
+    notes: [
+      "Settings has a Development group for module developers: Your modules, Project folders, Publishing, and Examples and help.",
+      "Your modules lists each module once, even with a Local and a Release copy, and says in words where it stands in the catalog.",
+      "Publish shows up only when there is something to publish. Show only what waits with To publish.",
+      "Open a module to see its folders and choose how users can reach you: in Tavora, by email, on GitHub, on your Discord server, as your Discord user, on your website, or nobody.",
+      "Publishing sets what your other modules use, and says what users will see for each choice.",
+    ],
+    prs: [
+      { number: 527, title: "Settings: Development pages, and how users reach you" },
+    ],
+    tags: ["accounts", "development", "messages", "privacy", "publishing", "service", "settings", "ui-kit", "website"],
+  },
+  {
     version: "0.23.8",
     date: "2026-10-30",
     title: "Built-in modules update on their own",
