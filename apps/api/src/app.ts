@@ -13,10 +13,10 @@ import { conversationRoutes, createConversationNotifier, publicContact } from ".
 import { leaderboardRoutes } from "./leaderboards.ts";
 import { createNotifier } from "./moderation-mail.ts";
 import { vaultRoutes } from "./vault.ts";
-import { catalogFilter, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
+import { catalogFilter, isOfficialId, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
 import { isBot, parseVisit, referrerDomain, SITE_CLICKS, SITE_ORIGIN, UNKNOWN_COUNTRY } from "./site-visits.ts";
 import { isAppVersion, type StatsStore } from "./stats.ts";
-import { catalogTrust } from "./catalog-trust.ts";
+import { catalogTrust, OFFICIAL_PINS, type OfficialPins } from "./catalog-trust.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
@@ -59,6 +59,8 @@ export interface AppOptions {
   scanner?: Scanner;
   /** The catalogue public key uploads check the signed lists against; CATALOGUE_PUBLIC_KEY by default. */
   catalogueKey?: string;
+  /** The pinned publisher key and account for Tavora's own modules (`tavora.*`); OFFICIAL_PINS by default, empty means none are accepted. */
+  officialPins?: OfficialPins;
   /** Reports per client. */
   reportRateLimiter?: RateLimiter;
   /** Who is told by email when the catalog is full (needs accounts' mailer). */
@@ -83,7 +85,7 @@ const SUBMIT_REASONS = { 400: "bad-request", 409: "has-icon", 413: "too-big", 42
 /** Steam import refusals also carry their reason as `code`, which Tavoras from before the sign-in gate read. */
 const steamFail = (context: Context, status: ContentfulStatusCode, reason: string, error: string) => context.json({ error, reason, code: reason }, status);
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats, countryOf, siteRateLimiter }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, officialPins = OFFICIAL_PINS, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats, countryOf, siteRateLimiter }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
@@ -237,6 +239,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     ...(publishLimits ? { limits: publishLimits } : {}),
     ...(scanner ? { scanner } : {}),
     ...(catalogueKey ? { catalogueKey } : {}),
+    officialPins,
     ...(accounts?.now ? { now: accounts.now } : {}),
     ...(accounts ? { mail: { mailer: accounts.mailer, ...(accounts.mailDailyLimit === undefined ? {} : { mailDailyLimit: accounts.mailDailyLimit }) } } : {}),
     ...(accounts && maintainerEmail?.trim()
@@ -261,18 +264,26 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     if (!catalog) return fail(context, 503, "unavailable", "The module catalog is not available right now.");
     await next();
   });
+  // Tavora's own modules take no ratings, reviews, reports or messages.
+  catalogApp.all("/modules/:id/:what", async (context, next) => {
+    if (isOfficialId(context.req.param("id")) && ["review", "reviews", "contact"].includes(context.req.param("what"))) return fail(context, 404, "not-found", "Not found.");
+    await next();
+  });
   catalogApp.get("/", (context) => {
     const filter = catalogFilter(context.req.query("game"), context.req.query("personal"), context.req.query("workspace"));
     if (!filter) return fail(context, 400, "bad-request", "Ask for ?game=<game id>, ?personal=1 or neither.");
     context.header("Cache-Control", "public, max-age=300");
     const summaries = ratings?.summaries();
-    return context.json({ modules: catalog!.index(filter).map((entry) => listed(entry, summaries ?? new Map())) });
+    // Tavora's own modules are for the app's own update check only: asked for with ?include=official, never in the public index.
+    const official = context.req.query("include") === "official";
+    return context.json({ modules: catalog!.index(filter, { official }).map((entry) => listed(entry, summaries ?? new Map())) });
   });
   catalogApp.get("/modules/:id", (context) => {
     const found = catalog!.module(context.req.param("id"));
     if (!found) return fail(context, 404, "not-found", "Not found.");
     context.header("Cache-Control", "public, max-age=300");
-    const contact = accounts?.conversations ? publicContact(accounts.conversations, accounts.store, found.module.id, found.module.owner) : undefined;
+    // Tavora's own modules have no developer to write to.
+    const contact = accounts?.conversations && !isOfficialId(found.module.id) ? publicContact(accounts.conversations, accounts.store, found.module.id, found.module.owner) : undefined;
     return context.json({ module: { ...listed(found.module), ...(contact ? { contact } : {}) }, versions: found.versions, readme: found.readme });
   });
   // Sent once by the app after a user installed a module from Browse: only the module id.
@@ -388,10 +399,10 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   else app.all("/v1/account/copy", (context) => context.json({ error: "The cloud copy is not available right now.", reason: "unavailable" }, 503)).all("/v1/account/copy/*", (context) => context.json({ error: "The cloud copy is not available right now.", reason: "unavailable" }, 503));
   if (accounts) app.route("/v1/account/vault", vaultRoutes({ accounts: accounts.store, clientKey: (request) => (clientKey ? clientKey(request) : "local"), ...(accounts.now ? { now: accounts.now } : {}) }));
   if (accounts) app.route("/v1/account/pairing", pairingRoutes({ accounts: accounts.store, clientKey: (request) => (clientKey ? clientKey(request) : "local"), ...(accounts.now ? { now: accounts.now } : {}) }));
-  if (accounts) app.route("/v1/account", accountRoutes({ ...(catalog ? { trust: catalogTrust(catalog, catalogueKey), catalog } : {}), ...accounts }, limiter, (request) => (clientKey ? clientKey(request) : "local")));
+  if (accounts) app.route("/v1/account", accountRoutes({ ...(catalog ? { trust: catalogTrust(catalog, catalogueKey), catalog } : {}), officialPins, ...accounts }, limiter, (request) => (clientKey ? clientKey(request) : "local")));
   else app.all("/v1/account/*", (context) => context.json({ error: "Accounts are not available right now.", reason: "unavailable" }, 503));
   // Publisher keys belong to accounts, so they come and go with them.
-  if (accounts) app.route("/v1/publishers", publisherRoutes({ store: accounts.store, ...(accounts.verifyRateLimiter ? { linkRateLimiter: accounts.verifyRateLimiter } : {}), ...(accounts.now ? { now: accounts.now } : {}) }, limiter, (request) => (clientKey ? clientKey(request) : "local")));
+  if (accounts) app.route("/v1/publishers", publisherRoutes({ store: accounts.store, officialPins, ...(accounts.verifyRateLimiter ? { linkRateLimiter: accounts.verifyRateLimiter } : {}), ...(accounts.now ? { now: accounts.now } : {}) }, limiter, (request) => (clientKey ? clientKey(request) : "local")));
   else app.all("/v1/publishers/*", (context) => context.json({ error: "Publishers are not available right now.", reason: "unavailable" }, 503));
 
   // Sent once by the app when a new Tavora version finished downloading: only the version.
