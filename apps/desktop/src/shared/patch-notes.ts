@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.22.4",
+    date: "2026-10-30",
+    title: "Notes you delete in another panel",
+    notes: [
+      "A note stays open when you delete it in another Notes panel, with \"Deleted elsewhere\" and a Restore button, instead of jumping to the scratchpad.",
+    ],
+    prs: [
+      { number: 490, title: "Todos and Notes on the document store, item session and bootstrap" },
+    ],
+    tags: ["notes", "todos"],
+  },
+  {
     version: "0.22.3",
     date: "2026-10-30",
     title: "Module updates install from Settings again",
