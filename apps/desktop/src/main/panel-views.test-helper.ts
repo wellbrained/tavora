@@ -66,7 +66,7 @@ export interface PanelViewsRig {
   /** Lends a panel to the in-game layer; `revoked <id>` is noted in `calls` if the panel closes meanwhile. */
   lend(instanceId: string): PanelLease;
   /** Opens a panel with a new in-memory view. */
-  add(instanceId: string, kind?: "module" | "browser"): MemoryPanelView;
+  add(instanceId: string, kind?: "module" | "browser", moduleId?: string): MemoryPanelView;
 }
 
 export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelViewsRig {
@@ -82,6 +82,7 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
     windowHidden: () => world.hidden,
     asking: (id) => world.asking.has(id),
     releasing: (id, forget) => void calls.push(`releasing ${id} ${forget}`),
+    moduleGone: (moduleId) => void calls.push(`moduleGone ${moduleId}`),
     shownHere: (id) => !world.away.has(id),
     returned: (id) => void calls.push(`returned ${id}`),
     dialogClosed: () => void calls.push("dialogClosed"),
@@ -104,9 +105,9 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
       if (!lease) throw new Error(`${instanceId} cannot be lent`);
       return lease;
     },
-    add(instanceId, kind = "module") {
+    add(instanceId, kind = "module", moduleId = "m") {
       const adapter = new MemoryPanelView(kind);
-      views.open({ instanceId, moduleId: "m" }, () => ({ adapter, start: () => void mounted.add(adapter.view) }));
+      views.open({ instanceId, moduleId }, () => ({ adapter, start: () => void mounted.add(adapter.view) }));
       return adapter;
     },
   };

@@ -473,6 +473,20 @@ describe("cleanup", () => {
     expect(rig.calls).toContain(`releasing ${A} true`);
   });
 
+  it("tells the host once the last view of a module goes, closed or released", () => {
+    const rig = panelViewsRig();
+    rig.add(A, "module", "one");
+    rig.add(B, "module", "one");
+    rig.add(C, "module", "two");
+    rig.views.close(A);
+    expect(rig.calls.filter((call) => call.startsWith("moduleGone"))).toEqual([]);
+    rig.views.release(B);
+    rig.views.close(id(4)); // never had a view
+    expect(rig.calls.filter((call) => call.startsWith("moduleGone"))).toEqual(["moduleGone one"]);
+    rig.views.closeAll();
+    expect(rig.calls.filter((call) => call.startsWith("moduleGone"))).toEqual(["moduleGone one", "moduleGone two"]);
+  });
+
   it("releasing only takes the view away: place, waiting and keeping stay for its workspace", () => {
     const { rig, a } = everything();
     rig.views.release(A);

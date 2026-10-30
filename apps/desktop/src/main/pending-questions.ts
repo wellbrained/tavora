@@ -5,8 +5,8 @@ import type { LeaderboardQuestion } from "./leaderboards";
 import type { PanelContent } from "./panel-content";
 import type { InstalledModule } from "./registry";
 
-/** Who a question belongs to: it ends when its panel closes, its workspace is left, or (app) only when it is answered. */
-export type QuestionScope = { panel: string } | { workspace: string } | { app: true };
+/** Who a question belongs to: it ends when its panel closes, its workspace is left, or the module's last panel goes. */
+export type QuestionScope = { panel: string } | { workspace: string } | { module: string };
 
 /** Every kind of question: what it carries, and what the user (or a cancel) answers. */
 interface QuestionKinds {
@@ -70,7 +70,7 @@ interface Entry {
 function sameScope(a: QuestionScope, b: QuestionScope): boolean {
   if ("panel" in a) return "panel" in b && a.panel === b.panel;
   if ("workspace" in a) return "workspace" in b && a.workspace === b.workspace;
-  return "app" in b;
+  return "module" in b && a.module === b.module;
 }
 
 /**
