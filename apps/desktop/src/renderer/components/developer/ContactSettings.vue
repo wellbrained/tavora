@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Settings > Development > Messages from users: per published module, whether users can write to the developer in
-// Tavora, and an optional public https link to show instead when it is off. Contact is on by default.
+// Tavora, and an optional public https link to show instead when it is off. Contact is on by default, so a module
+// with it on is one short line: its name and the switch; only one turned off says so.
 import { computed, onMounted, reactive, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
@@ -36,11 +37,11 @@ async function save(id: string, enabled: boolean, text: string) {
 <template>
   <SettingGroup v-if="contacts" :title="t('contactSettings.title')" :description="t('contactSettings.description')">
     <p v-if="!contacts.length" class="text-muted-foreground py-4 text-sm" data-testid="contact-settings-none">{{ t("contactSettings.none") }}</p>
-    <div v-for="contact in contacts" :key="contact.id" class="-mx-5 flex flex-col gap-3 border-b px-5 py-4 last:border-b-0" :data-testid="`contact-setting-${contact.id}`">
+    <div v-for="contact in contacts" :key="contact.id" class="-mx-5 flex flex-col gap-3 border-b px-5 py-3 last:border-b-0" :data-testid="`contact-setting-${contact.id}`">
       <div class="flex items-center gap-4">
         <div class="min-w-0 flex-1">
           <p class="truncate font-medium">{{ contact.name }}</p>
-          <p class="text-muted-foreground text-sm">{{ contact.enabled ? t("contactSettings.on") : t("contactSettings.off") }}</p>
+          <p v-if="!contact.enabled" class="text-muted-foreground text-sm">{{ t("contactSettings.off") }}</p>
         </div>
         <Switch :model-value="contact.enabled" :disabled="busy" :aria-label="t('contactSettings.switch', { name: contact.name })" :data-testid="`contact-switch-${contact.id}`" @update:model-value="(value: boolean) => save(contact.id, value, link(contact.id))" />
       </div>

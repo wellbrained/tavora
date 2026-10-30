@@ -134,7 +134,7 @@ function removeToken(token: AccountPublishToken) {
 </script>
 
 <template>
-  <SettingGroup :title="t('account.developer.title')" :description="t('account.developer.hint')">
+  <SettingGroup :title="t('account.developer.title')" :description="view?.developer ? undefined : t('account.developer.hint')">
     <div class="-mx-5 px-5 py-4 transition-colors duration-500" :class="highlight === 'module-developer' && 'bg-primary/10'" data-setting="module-developer" data-testid="account-developer">
       <form class="flex flex-col gap-1" @submit.prevent="saveDeveloperName">
         <label class="text-sm font-medium" for="account-developer-name">{{ t("account.developer.name") }}</label>

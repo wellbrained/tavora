@@ -1924,7 +1924,6 @@ export const de: Record<keyof typeof en, string> = {
   "contactSettings.title": "Nachrichten von Nutzern",
   "contactSettings.description": "Nutzer können dir zu deinen Modulen schreiben, ohne dass du siehst, wer sie sind.",
   "contactSettings.none": "Du hast noch keine veröffentlichten Module.",
-  "contactSettings.on": "Nutzer können dir schreiben",
   "contactSettings.off": "Nachrichten sind aus",
   "contactSettings.switch": "Nachrichten für {name} annehmen",
   "contactSettings.link": "Stattdessen öffentlicher Link (https://…)",
