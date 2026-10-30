@@ -14,7 +14,7 @@
     { "tag": "cloud-copy", "paths": ["apps/desktop/src/main/cloud-copy*", "apps/desktop/src/main/copy-*", "apps/desktop/src/main/backup*", "apps/desktop/src/main/pairing*", "apps/desktop/src/renderer/components/CloudCopyDialog.vue", "apps/desktop/src/renderer/components/PairingDialog.vue", "apps/api/src/cloud*", "apps/api/src/vault*"] },
     { "tag": "settings", "paths": ["apps/desktop/src/renderer/components/settings/**", "apps/desktop/src/main/settings*"] },
     { "tag": "hotkeys", "paths": ["apps/desktop/src/main/hotkeys*", "apps/desktop/src/renderer/shortcuts*", "apps/desktop/src/renderer/components/HotkeyDialog.vue"] },
-    { "tag": "discord", "paths": ["apps/desktop/src/main/discord*", "modules/discord/**"] },
+    { "tag": "discord", "paths": ["apps/desktop/src/main/discord*"] },
     { "tag": "media", "paths": ["apps/desktop/src/main/media*", "packages/media-helper/**"] },
     { "tag": "ai-usage", "paths": ["apps/desktop/src/main/ai-usage*"] },
     { "tag": "system-monitor", "paths": ["modules/system-monitor/**", "apps/desktop/src/main/connection*", "apps/desktop/src/main/system*", "apps/desktop/src/main/traffic*"] },

@@ -1,7 +1,7 @@
 // What the AI Usage connector reads from a profile's saved login and from the providers about
 // who is signed in: the plan as a name from a fixed list, the access token for one request, and
 // the email. Pure functions: nothing here touches the disk or the network. The usage windows are
-// read by the AI Usage module itself (modules/ai-usage), from the answers the connector hands over.
+// read by the AI Usage module itself (tavora-modules: ai-usage), from the answers the connector hands over.
 
 type Json = Record<string, unknown>;
 
