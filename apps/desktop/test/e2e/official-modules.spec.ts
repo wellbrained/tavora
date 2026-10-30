@@ -590,6 +590,82 @@ test("ui playground: a select can pick an empty choice, a switch field toggles f
   await app.close();
 });
 
+test("ui playground: tabs close with the X and a middle click, reorder by drag, rename in place and scroll with the wheel", async () => {
+  const { app, page } = await launch();
+  await openModule(page, PLAYGROUND);
+  await ready(app, PLAYGROUND, "section-colours");
+  await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
+  await page.waitForTimeout(500);
+  await inModule(app, PLAYGROUND, `${q("tab-display")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("tab-strip")}`)).toBe(true);
+
+  const strip = `document.querySelector('[data-testid="tab-strip"]')`;
+  const labels = () => inModule<string[]>(app, PLAYGROUND, `[...${strip}.querySelectorAll('[data-testid="strip-tab"]')].map((el) => el.textContent.trim())`);
+  const tabNamed = (name: string) => `[...${strip}.querySelectorAll('[data-testid="strip-tab"]')].find((el) => el.textContent.trim() === ${JSON.stringify(name)})`;
+  const state = () => inModule<string>(app, PLAYGROUND, `${q("strip-state")}.textContent.trim()`);
+  await expect.poll(labels).toEqual(["Iron", "Copper", "Steel", "Plastic"]);
+
+  // The X closes a tab; closing the open one opens the tab after it.
+  await inModule(app, PLAYGROUND, `${tabNamed("Iron")}.querySelector('[data-testid="strip-tab-close"]').click()`);
+  await expect.poll(labels).toEqual(["Copper", "Steel", "Plastic"]);
+  await expect.poll(state).toContain("open: Copper");
+
+  // A middle click closes a tab too.
+  await inModule(app, PLAYGROUND, `${tabNamed("Steel")}.dispatchEvent(new MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true }))`);
+  await expect.poll(labels).toEqual(["Copper", "Plastic"]);
+
+  // Dragging a tab past the last one moves it to the end.
+  await inModule(app, PLAYGROUND, `(() => {
+    const from = ${tabNamed("Copper")};
+    const to = ${tabNamed("Plastic")}.getBoundingClientRect();
+    const box = from.getBoundingClientRect();
+    const at = (x) => ({ bubbles: true, cancelable: true, button: 0, clientX: x, clientY: box.top + box.height / 2, pointerId: 1 });
+    from.dispatchEvent(new PointerEvent("pointerdown", at(box.left + 10)));
+    document.dispatchEvent(new PointerEvent("pointermove", at(box.left + 30)));
+    document.dispatchEvent(new PointerEvent("pointermove", at(to.right - 5)));
+  })()`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `${tabNamed("Plastic")}.dataset.drop`)).toBe("after");
+  await inModule(app, PLAYGROUND, `document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 1 }))`);
+  await expect.poll(labels).toEqual(["Plastic", "Copper"]);
+
+  // Alt + arrow is the keyboard way.
+  await inModule(app, PLAYGROUND, `${tabNamed("Plastic")}.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true, cancelable: true }))`);
+  await expect.poll(labels).toEqual(["Copper", "Plastic"]);
+
+  // Double-click renames in place; an empty name is not accepted, Escape gives it up.
+  const rename = (action: string) => inModule(app, PLAYGROUND, `(() => { const input = ${strip}.querySelector('[data-testid="tab-rename-input"]'); ${action} })()`);
+  const typeName = (name: string) => rename(`input.value = ${JSON.stringify(name)}; input.dispatchEvent(new Event("input", { bubbles: true }));`);
+  const key = (name: string) => rename(`input.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(name)}, bubbles: true, cancelable: true }));`);
+  await inModule(app, PLAYGROUND, `${tabNamed("Plastic")}.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${strip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
+  expect(await inModule(app, PLAYGROUND, `document.activeElement === ${strip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
+  await typeName("   ");
+  await key("Enter");
+  expect(await inModule(app, PLAYGROUND, `${strip}.querySelector('[data-testid="tab-rename-input"]').getAttribute("aria-invalid")`)).toBe("true");
+  await typeName("Rubber");
+  await key("Enter");
+  await expect.poll(labels).toEqual(["Copper", "Rubber"]);
+  await inModule(app, PLAYGROUND, `${tabNamed("Rubber")}.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", bubbles: true, cancelable: true }))`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${strip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
+  await typeName("Glass");
+  await key("Escape");
+  await expect.poll(labels).toEqual(["Copper", "Rubber"]);
+
+  // Delete on a focused tab closes it; the last tab stays.
+  await inModule(app, PLAYGROUND, `${tabNamed("Rubber")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true }))`);
+  await expect.poll(labels).toEqual(["Copper"]);
+  await inModule(app, PLAYGROUND, `${q("strip-add")}.click()`);
+  await expect.poll(labels).toEqual(["Copper", "New plan 1"]);
+  await expect.poll(state).toContain("open: New plan 1");
+
+  // Too many tabs for the width: the wheel scrolls the row sideways.
+  const crowd = `document.querySelector('[data-testid="tab-strip-crowd"] [data-testid="tab-strip-scroller"]')`;
+  expect(await inModule(app, PLAYGROUND, `${crowd}.scrollWidth > ${crowd}.clientWidth`)).toBe(true);
+  await inModule(app, PLAYGROUND, `${crowd}.dispatchEvent(new WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true }))`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `${crowd}.scrollLeft`)).toBeGreaterThan(0);
+  await app.close();
+});
+
 test("to-dos: an open menu stays open when a save comes back", async () => {
   const { app, page } = await launch();
   await openModule(page, TODOS);

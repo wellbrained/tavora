@@ -14,7 +14,7 @@ import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { Sparkline } from "@tavora/official-ui/components/ui/sparkline";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger, TabStrip, type StripTab } from "@tavora/official-ui/components/ui/tabs";
 import { ref } from "vue";
 import DemoSection from "../DemoSection.vue";
 import ModuleSettingsDemo from "./ModuleSettingsDemo.vue";
@@ -29,6 +29,26 @@ const startActions: ActionEntry[] = [
   { id: "export", label: "Browse shared builds", description: "Find one other players made.", icon: Download },
   { id: "later", label: "Not yet available", description: "Comes with a later update.", icon: StickyNote, disabled: true },
 ];
+const stripTabs = ref<StripTab[]>(["Iron", "Copper", "Steel", "Plastic"].map((label) => ({ id: label.toLowerCase(), label, closable: true, renamable: true })));
+const stripActive = ref("iron");
+const crowdTabs = ref<StripTab[]>(Array.from({ length: 12 }, (_, i) => ({ id: `plan-${i + 1}`, label: `Production plan ${i + 1}`, closable: true })));
+const crowdActive = ref("plan-1");
+let stripCount = 0;
+function closeStripTab(id: string) {
+  if (stripTabs.value.length > 1) stripTabs.value = stripTabs.value.filter((tab) => tab.id !== id);
+}
+function reorderStrip(order: string[]) {
+  stripTabs.value = order.map((id) => stripTabs.value.find((tab) => tab.id === id)!);
+}
+function renameStripTab(id: string, label: string) {
+  stripTabs.value = stripTabs.value.map((tab) => (tab.id === id ? { ...tab, label } : tab));
+}
+function addStripTab() {
+  stripCount += 1;
+  const tab = { id: `new-${stripCount}`, label: `New plan ${stripCount}`, closable: true, renamable: true };
+  stripTabs.value = [...stripTabs.value, tab];
+  stripActive.value = tab.id;
+}
 const progress = ref(45);
 const spark = Array.from({ length: 60 }, (_, i) => Math.round(50 + 30 * Math.sin(i / 5) + 12 * Math.sin(i * 1.7)));
 const switchOn = ref(true);
@@ -163,6 +183,18 @@ function bump(by: number) {
           <TabsContent value="skills" class="text-muted-foreground text-sm">Skill gems and supports.</TabsContent>
           <TabsContent value="gear" class="text-muted-foreground text-sm">What to wear, slot by slot.</TabsContent>
         </Tabs>
+        <Specimen label="Tabs you can close, drag and rename (TabStrip)" column>
+          <TabStrip v-model="stripActive" :tabs="stripTabs" aria-label="Plans" data-testid="tab-strip" @close="closeStripTab" @reorder="reorderStrip" @rename="renameStripTab">
+            <template #add>
+              <Button variant="ghost" size="icon-sm" aria-label="New tab" data-testid="strip-add" :disabled="off" @click="addStripTab"><Plus :stroke-width="1.5" /></Button>
+            </template>
+          </TabStrip>
+          <p class="text-muted-foreground text-xs">Drag to reorder (or Alt + ← / →), middle-click or Delete to close, double-click or F2 to rename. The last one can't be closed.</p>
+          <p class="text-muted-foreground text-xs" data-testid="strip-state">{{ stripTabs.map((tab) => tab.label).join(", ") }} · open: {{ stripTabs.find((tab) => tab.id === stripActive)?.label ?? "none" }}</p>
+        </Specimen>
+        <Specimen label="Too many for the width: the wheel scrolls, the edges fade" column>
+          <TabStrip v-model="crowdActive" :tabs="crowdTabs" class="w-72" aria-label="Many tabs" data-testid="tab-strip-crowd" @close="(id) => (crowdTabs = crowdTabs.filter((tab) => tab.id !== id))" />
+        </Specimen>
       </DemoSection>
 
 <DemoSection v-if="visible.has('lists')" id="lists" :title="title('lists')" description="Rows highlight on hover with the accent surface, never a glow.">

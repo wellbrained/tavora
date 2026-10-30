@@ -29,7 +29,7 @@ export const SECTIONS = [
   { id: "empty", group: "display", title: "Empty state", keywords: "empty state nothing placeholder no items action list start" },
   { id: "expandable", group: "display", title: "Show more", keywords: "expand collapse more less long text read clamp" },
   { id: "collapsible", group: "display", title: "Collapsible sections", keywords: "collapsible disclosure accordion details summary open close fold section notes" },
-  { id: "tabs", group: "display", title: "Tabs", keywords: "tabs views" },
+  { id: "tabs", group: "display", title: "Tabs", keywords: "tabs views strip close closable reorder drag rename middle-click scroll overflow add" },
   { id: "navlist", group: "display", title: "Side navigation", keywords: "nav list categories settings sidebar sections menu" },
   { id: "lists", group: "display", title: "Lists and rows", keywords: "list row hover selected settings divider card" },
   { id: "settings", group: "display", title: "Module settings", keywords: "settings dialog overlay preview page reset saved control column row" },
