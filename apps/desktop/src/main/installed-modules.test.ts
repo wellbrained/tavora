@@ -5,7 +5,8 @@ import path from "node:path";
 import { catalogPublicKey, signCatalogList, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { installZip } from "./installer";
-import { loadInstalledModules } from "./installed-modules";
+import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
+import type { InstalledModule } from "./registry";
 import { BROWSER_MODULE_ID } from "./registry";
 import { SafetyLists } from "./safety-lists";
 
@@ -67,5 +68,26 @@ describe("loadInstalledModules", () => {
     expect([...loaded.blocked.keys()]).toEqual(["wellbrained.tracker"]);
     expect([...loaded.catalog]).toEqual(["wellbrained.tracker"]);
     expect(loaded.problems.map((problem) => problem.kind)).toEqual(["blocked"]);
+  });
+});
+
+describe("Installed", () => {
+  const module = (id: string) => ({ owner: "official", root: "/nowhere", provenance: "official", manifest: { id, name: id } }) as unknown as InstalledModule;
+  const found = (...ids: string[]): InstalledModules => ({ modules: new Map(ids.map((id) => [id, module(id)])), blocked: new Map(), catalog: new Set(), info: new Map(), problems: [] });
+
+  it("gives a module with its texts in the language now, and nothing for one that is not installed", () => {
+    const installed = new Installed(found("tavora.notes"), (manifest) => ({ ...manifest, name: `de:${manifest.name}` }));
+    expect(installed.shown("tavora.notes")?.manifest.name).toBe("de:tavora.notes");
+    expect(installed.get("tavora.notes")?.manifest.name).toBe("tavora.notes");
+    expect(installed.shown("tavora.todos")).toBeUndefined();
+  });
+
+  it("answers from what a reload found, for everyone who holds it", () => {
+    const installed = new Installed(found("tavora.notes"), (manifest) => manifest);
+    const holder: { shown(moduleId: string): unknown } = installed;
+    installed.replace(found("tavora.todos"));
+    expect(holder.shown("tavora.notes")).toBeUndefined();
+    expect(holder.shown("tavora.todos")).toBeDefined();
+    expect([...installed.modules.keys()]).toEqual(["tavora.todos"]);
   });
 });

@@ -43,7 +43,7 @@ async function setup() {
   const windows: FakeWindow[] = [];
   const previews = new OverlayPreviews({
     overlays,
-    module: (id) => modules.get(id),
+    installed: { shown: (id) => modules.get(id) },
     openWindow: (request) => {
       const window = new FakeWindow(request);
       windows.push(window);

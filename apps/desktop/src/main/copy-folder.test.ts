@@ -198,8 +198,6 @@ describe("following a copy's line", () => {
 
 describe("the cloud copy in a folder, as Tavora runs it", () => {
   const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
-  // Signed out: the service is never asked.
-  const offService = new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: (() => Promise.reject(new Error("no service"))) as typeof fetch, token: () => null });
 
   function tavora(at: Awaited<ReturnType<typeof pc>>) {
     const views: CloudCopyView[] = [];
@@ -207,13 +205,14 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
     const sync = new CopySync({
       userData: at.userData,
       enabled: true,
-      moduleFiles: () => at.moduleFiles,
-      service: offService,
-      accountKey: new AccountKey({ file: path.join(at.userData, "account-key.json"), encryptor, baseUrl: "http://tavora.test/v1/account", fetch: (() => Promise.reject(new Error("no service"))) as typeof fetch, token: () => null }),
-      flush: async () => undefined,
+      files: { root: () => at.moduleFiles },
+      account: { token: () => null },
+      serviceUrl: "http://tavora.test/v1/account",
+      fetch: (() => Promise.reject(new Error("no service"))) as typeof fetch,
+      encryptor,
       restart: () => void events.restarts++,
-      onChange: (view) => views.push(view),
     });
+    sync.attach({ flush: async () => undefined, onChange: (view) => views.push(view) });
     return { sync, views, events };
   }
 

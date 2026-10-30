@@ -48,3 +48,46 @@ export async function loadInstalledModules(options: InstalledModulesOptions): Pr
   const info = await describeModules(options.userModules, modules);
   return { modules, blocked, catalog, info, problems };
 }
+
+
+/**
+ * The modules installed now, as one object that services hold: a reload replaces what is inside, so they never keep
+ * an out-of-date map. `shown` gives a module with its texts in Tavora's language now.
+ */
+export class Installed {
+  constructor(
+    private current: InstalledModules,
+    private readonly translate: (manifest: InstalledModule["manifest"]) => InstalledModule["manifest"],
+  ) {}
+
+  /** Puts what a new look at the modules found in place of the old (every reload). */
+  replace(next: InstalledModules): void {
+    this.current = next;
+  }
+
+  get modules(): Map<string, InstalledModule> {
+    return this.current.modules;
+  }
+  get blocked(): Map<string, InstalledModule> {
+    return this.current.blocked;
+  }
+  get catalog(): Set<string> {
+    return this.current.catalog;
+  }
+  get info(): Map<string, ModuleInfo> {
+    return this.current.info;
+  }
+  get problems(): ModuleProblem[] {
+    return this.current.problems;
+  }
+
+  get(moduleId: string): InstalledModule | undefined {
+    return this.current.modules.get(moduleId);
+  }
+
+  /** The module with its name, description, panel and action names in Tavora's language now; undefined when it is not installed. */
+  shown(moduleId: string): InstalledModule | undefined {
+    const module = this.current.modules.get(moduleId);
+    return module && { ...module, manifest: this.translate(module.manifest) };
+  }
+}

@@ -8,6 +8,8 @@ import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
 import type { DiscordLoginResult } from "./discord-login";
 import { UserError } from "./messages";
+import { serviceUrl } from "./service-url";
+import type { SignIn } from "./sign-in";
 
 // The user's Tavora account (decided 2026-10-16): signed into with an email
 // code, a Discord login (the browser, see discord-login.ts) or both. The main process talks to the service; the
@@ -100,8 +102,8 @@ export interface AccountClientOptions {
   deviceName?: string;
   language: () => Language;
   canKeepSignIn: () => boolean;
-  load: () => Promise<SavedAccount | null>;
-  save: (account: SavedAccount | null) => Promise<void>;
+  /** The saved sign-in; the cloud copy and pairing hold the same one. */
+  signIn: SignIn;
   onChange: (view: AccountView) => void;
   /** The profile on this PC, and how the account's profile is put in its place. */
   profile: {
@@ -227,7 +229,12 @@ function device(value: unknown): AccountDevice | null {
 }
 
 export class AccountClient {
-  private saved: SavedAccount | null = null;
+  private get saved(): SavedAccount | null {
+    return this.options.signIn.current;
+  }
+  private set saved(account: SavedAccount | null) {
+    this.options.signIn.current = account;
+  }
   private devices: AccountDevice[] | null = null;
   private pending: AccountPending | null = null;
   /** The right code for an address with no account yet, kept until the user says yes or no. */
@@ -255,7 +262,7 @@ export class AccountClient {
 
   async init(): Promise<void> {
     if (!this.options.enabled) return;
-    this.saved = await this.options.load();
+    await this.options.signIn.load();
     this.changed();
     // Once at each start: the profile comes down or goes up, whichever is newer. Quietly; offline is fine.
     if (this.saved) void this.syncProfile(false).catch(() => undefined);
@@ -767,7 +774,7 @@ export class AccountClient {
   }
 
   private async keep(): Promise<void> {
-    if (this.options.canKeepSignIn()) await this.options.save(this.saved);
+    if (this.options.canKeepSignIn()) await this.options.signIn.persist(this.saved);
   }
 
   private async forget(): Promise<void> {
@@ -785,7 +792,7 @@ export class AccountClient {
     this.newPublishToken = null;
     this.prefixes = null;
     this.prefixCheck = null;
-    await this.options.save(null);
+    await this.options.signIn.persist(null);
     this.changed();
   }
 

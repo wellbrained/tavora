@@ -4,6 +4,7 @@ import { isGameId } from "@tavora/module-schema";
 import { writeFileAtomic } from "./fsutil";
 import { normalizeName } from "./launcher-games";
 import { hostedIconFileName, type IconResult } from "./steam-icons";
+import { serviceUrl } from "./service-url";
 
 /**
  * Game icons from the Tavora service's hosted set, for games whose icon is

@@ -2,6 +2,7 @@ import type { InstanceStatus } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS } from "./layout";
 import type { PanelLaunch } from "./panel-content";
+import type { HotkeyListener } from "./streaming";
 
 export interface PanelRect {
   x: number;
@@ -42,6 +43,8 @@ export function clampRect(raw: unknown, size: { width: number; height: number })
  */
 export interface PanelViewAdapter {
   readonly kind: "module" | "browser";
+  /** The panel as a hotkey hears it, for a module panel; a Browser panel has none. */
+  readonly hotkeys?: HotkeyListener;
   /** The native view, for `mount` and `unmount`; Panel views never looks inside. */
   readonly view: object;
   readonly webContentsId: number;

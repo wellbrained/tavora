@@ -12,15 +12,12 @@ import {
   app,
   BrowserWindow,
   clipboard,
-  desktopCapturer,
   dialog,
-  globalShortcut,
   ipcMain,
   Notification,
   nativeImage,
   nativeTheme,
   protocol,
-  safeStorage,
   screen,
   session,
   shell,
@@ -33,7 +30,7 @@ import {
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, CloudCopyView, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -46,8 +43,9 @@ import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./module-data";
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
 import { checkZipData, readOwnerRecords } from "./installer";
-import { loadInstalledModules, type InstalledModules } from "./installed-modules";
+import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
 import { PendingQuestions } from "./pending-questions";
+import { createOverlayServices } from "./overlay-wiring";
 import { readModulePage } from "./module-page";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
@@ -108,7 +106,7 @@ import { CatalogClient, catalogView, type CatalogScope } from "./catalog-client"
 import { parseReadme, readmeAllowsLink } from "./catalog-readme";
 import { CHECK_INTERVAL_MS } from "./catalog-updates";
 import { isReleaseCopies, releaseStatuses } from "./release-pending";
-import { DEFAULT_API_URL, OnlineSearch } from "./online";
+import { OnlineSearch } from "./online";
 import { countAppUpdate } from "./usage-counts";
 import { PublisherNames } from "./publisher-names";
 import { UpdateManager, type UpdaterLike } from "./updates";
@@ -119,17 +117,14 @@ import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
 import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
 import { AppInfoError, readClientIcons } from "./steam-appinfo";
-import { windowsForegroundProbe } from "./foreground";
 import { GameOverlayWindow, type OverlayPanel } from "./game-overlay-window";
-import { GameVeilWindow } from "./game-veil-window";
 import { GameOverlays, layerBinding, toggleBinding, type OverlayWindowRequest, type PanelInfo, type PanelLoan } from "./game-overlay-service";
 import { scopeForKind } from "./game-overlays";
 import { OverlayLayout, type SourcePanel } from "./overlay-layout";
 import { OverlayCanvas } from "./overlay-canvas";
-import { LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, PICTURES_FOLDER, sourceForHandle } from "./layout-pictures";
+import { PICTURES_FOLDER } from "./layout-pictures";
 import { parseLayoutMessage } from "../shared/layout-view";
 import { OverlayPreviews } from "./overlay-previews";
-import { OverlayPreviewWindow } from "./overlay-preview-window";
 import { GameWatcher } from "./game-watch";
 import { moveToWorkspaces } from "./workspace-move";
 import { Streaming } from "./streaming";
@@ -161,11 +156,16 @@ import { readClaudeEmail } from "./ai-usage-claude";
 import { readCodexUsage } from "./ai-usage-codex";
 import { DiscordConnector, DISCORD_CLIENT_ID } from "./discord";
 import { RpcClient } from "./discord-rpc";
-import { AccountKey } from "./account-key";
+
 import { DeveloperKeys } from "./developer-keys";
 import { ModulePublisher } from "./module-publish";
-import { FolderPairing, Pairing, ServicePairing } from "./pairing";
-import { ServiceStorage } from "./cloud-copy";
+import { Pairing } from "./pairing";
+import { osEncryptor } from "./os-encryptor";
+import { SignIn } from "./sign-in";
+import { accountServiceUrl, serviceUrl } from "./service-url";
+import { LibraryWorkspaces } from "./workspace-lookup";
+import type { Shell } from "./shell";
+
 import { CopySync } from "./cloud-copy-sync";
 import { Inbox } from "./inbox";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
@@ -343,6 +343,27 @@ function loadSmallBitmap(file: string): Uint8Array | null {
 const STEAM_ICON_URL = `${HOST_SCHEME}://app/steam-icons/`;
 const PROFILE_URL = `${HOST_SCHEME}://app/profile/`;
 
+/**
+ * What Host.create makes before the Host, each from the things before it: the Host is handed them, and nothing in
+ * here asks the Host for anything. The order they are made in (host.ts, Host.create) is the order their data needs.
+ */
+interface Prepared {
+  /** The system's key store, built once. */
+  encryptor: Encryptor;
+  /** The account's saved sign-in, read at start. */
+  signIn: SignIn;
+  /** The cloud copy; it has run its first step (a newer copy taken) before the library was read. */
+  copySync: CopySync;
+  installed: Installed;
+  safetyLists: SafetyLists;
+  grants: GrantStore;
+  connection: ConnectionWatcher;
+  systemInfo: SystemMonitorThread;
+  openTimes: OpenTimes;
+  /** Tavora's emblem for the cover's fire, read once. */
+  emblem: string | null;
+}
+
 export class Host {
   private readonly data: DataRegistry;
   /** Every open panel's native view, place, visibility and clean-up (panel-views.ts). */
@@ -391,9 +412,9 @@ export class Host {
   /** The AI Usage connector: the AI accounts, read for modules granted it. */
   private readonly aiUsage: AiUsageConnector;
   /** The System info connector: this PC's hardware and usage, read in a worker thread only while a shown panel of a granted module watches. */
-  private systemInfo!: SystemMonitorThread;
+  private readonly systemInfo: SystemMonitorThread;
   /** The connection watcher (connection.ts): pings the router and one internet address while System Monitor is in a workspace, and keeps the log of drops. */
-  private connection!: ConnectionWatcher;
+  private readonly connection: ConnectionWatcher;
   /** The Media connector: what plays on this PC, read by Tavora's media helper only while a panel of a granted module watches. */
   private readonly media = new MediaConnector(
     mediaDeps(helperPath(app.isPackaged, process.resourcesPath, path.resolve(__dirname, "../../../..")), (message, error) =>
@@ -403,15 +424,15 @@ export class Host {
   /** The user's Tavora account; the sign-in never leaves the main process. */
   private readonly account: AccountClient;
   /** The user's messages with developers and Tavora (inbox.ts). */
-  private inbox!: Inbox;
+  private readonly inbox: Inbox;
   private inboxSignedIn = false;
   /** The cloud copy: made before the data is read, since a newer copy is taken before anything reads it. */
-  private copySync!: CopySync;
+  private readonly copySync: CopySync;
   /** The publisher keys the account's vault keeps (developer-keys.ts). */
-  private developerKeys!: DeveloperKeys;
+  private readonly developerKeys: DeveloperKeys;
   /** The review screen and Publish for dev modules from project folders (module-publish.ts). */
-  private publisher!: ModulePublisher;
-  private pairing!: Pairing;
+  private readonly publisher: ModulePublisher;
+  private readonly pairing: Pairing;
   /** The developer names users see for publisher keys (publisher-names.ts). */
   private readonly publisherNames: PublisherNames;
   private screen: Screen = "welcome";
@@ -419,22 +440,40 @@ export class Host {
   /** Every (owner, module) with saved settings or documents, for Settings > Modules. */
   private moduleData: { owner: string; moduleId: string }[] = [];
   /** What the user granted each module (grants.ts); loaded before any module panel opens. */
-  private grants!: GrantStore;
+  private readonly grants: GrantStore;
   /** The catalog's signed safety lists (revoked keys, blocked zips, successions). */
-  private safetyLists!: SafetyLists;
-  /** Stream overlays and hotkeys for module actions (streaming.ts); made before any module panel opens. */
+  private readonly safetyLists: SafetyLists;
+  /** Stream overlays and hotkeys for module actions (streaming.ts); made by Host.create once the Host is there, before any module panel opens. */
   private streaming!: Streaming;
-  /** Module overlay pages shown over the game in front (game-overlay-service.ts); made right after streaming. */
+  /** Module overlay pages shown over the game in front (game-overlay-service.ts). */
   private gameOverlays!: GameOverlays;
   /** The preview windows of overlays (overlay-previews.ts). */
   private previews!: OverlayPreviews;
   /** The Overlay page and what it shows (overlay-layout.ts). */
-  private layout!: OverlayLayout;
-  /** The views over the Overlay page's canvas, while the page is shown (overlay-canvas.ts). */
-  private canvas: OverlayCanvas | null = null;
+  private layout!: OverlayLayout<OverlayCanvas>;
+  /** The views over the Overlay page's canvas, while the page is shown: the layout holds the window (overlay-layout.ts). */
+  private get canvas(): OverlayCanvas | null {
+    return this.layout?.canvas ?? null;
+  }
+  /** The modules installed now; a reload replaces what is inside (installed-modules.ts). */
+  private readonly installed: Installed;
+  private get modules(): Map<string, InstalledModule> {
+    return this.installed.modules;
+  }
+  private get moduleInfo(): Map<string, ModuleInfo> {
+    return this.installed.info;
+  }
+  private get moduleProblems(): ModuleProblem[] {
+    return this.installed.problems;
+  }
   /** Modules in the user's folder whose zip Tavora blocked: not loaded, data kept. */
-  private blockedModules = new Map<string, InstalledModule>();
-  /** The games of the library running on this PC (by their workspaces' ids), in the order they started, while "When a game starts" is not off (game-watch.ts). */
+  private get blockedModules(): Map<string, InstalledModule> {
+    return this.installed.blocked;
+  }
+  /** The modules installed from the catalog, by id, as the installer recorded them. */
+  private get catalogModules(): Set<string> {
+    return this.installed.catalog;
+  }
   private running: string[] = [];
   /** When each workspace was last opened as of startup: the rail keeps this order until the next start. */
   private openedAtStart: Record<string, string> = {};
@@ -454,11 +493,11 @@ export class Host {
   /** True while the window is minimized or hidden. */
   private windowHidden = false;
   /** Covers the workspace while it opens, until every panel has drawn (panel-cover.ts). */
-  private cover!: PanelCover;
+  private readonly cover: PanelCover;
   /** How long each workspace took to open here, so the cover knows whether to show the fire from the start. */
-  private openTimes!: OpenTimes;
+  private readonly openTimes: OpenTimes;
   /** Tavora's emblem for the cover's fire, read once. */
-  private emblem: string | null = null;
+  private readonly emblem: string | null;
   /** Counts workspace openings, so the end of one that was left does not end the next. */
   private openings = 0;
   private readonly onlineSearch: OnlineSearch;
@@ -468,8 +507,6 @@ export class Host {
   private readonly workspaces: Workspaces;
   /** Installs, updates and removes modules, and grants or takes back what they ask for (module-lifecycle.ts). */
   private readonly lifecycle: ModuleLifecycle;
-  /** The modules installed from the catalog, by id, as the installer recorded them. */
-  private catalogModules = new Set<string>();
   private catalogTimer: ReturnType<typeof setInterval> | undefined;
   /** Looks for new versions; only in an installed (packaged) app. */
   private updates: UpdateManager | null = null;
@@ -481,9 +518,8 @@ export class Host {
 
   private constructor(
     private readonly options: HostOptions,
-    private modules: Map<string, InstalledModule>,
-    private moduleInfo: Map<string, ModuleInfo>,
-    private moduleProblems: ModuleProblem[],
+    /** What Host.create made before the Host: they need nothing of it (see `Prepared`). */
+    prepared: Prepared,
     private readonly library: Library,
     workspaces: WorkspaceState,
     private readonly profile: Profile,
@@ -493,6 +529,14 @@ export class Host {
     /** Reads and writes library.json and the other data files (saved-data.ts). */
     private readonly savedData: SavedData,
   ) {
+    this.installed = prepared.installed;
+    this.copySync = prepared.copySync;
+    this.safetyLists = prepared.safetyLists;
+    this.grants = prepared.grants;
+    this.connection = prepared.connection;
+    this.systemInfo = prepared.systemInfo;
+    this.openTimes = prepared.openTimes;
+    this.emblem = prepared.emblem;
     this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation, library.toasts);
     this.files = new ModuleFilesFolder({
       userData: options.userData,
@@ -542,14 +586,14 @@ export class Host {
       introduce: (owner) => this.publisherNames.refresh([owner]),
       log: (line) => console.warn(`[tavora] ${line}`),
     });
-    this.discord = Host.discordConnector(options, (view) => {
+    this.discord = Host.discordConnector(options, prepared.encryptor, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
     });
     this.aiUsage = Host.aiUsageService(options, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:ai-usage", view);
       for (const panel of this.moduleViews()) panel.notifyAiUsageAccounts();
     });
-    this.account = Host.accountClient(options, () => this.language, { get: () => this.profileData(), apply: (remote) => this.applyProfile(remote) }, (view) => {
+    this.account = Host.accountClient(options, prepared.signIn, prepared.encryptor, () => this.language, { get: () => this.profileData(), apply: (remote) => this.applyProfile(remote) }, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
       if (this.inbox && this.inboxSignedIn !== (view.account !== null)) {
         this.inboxSignedIn = view.account !== null;
@@ -558,7 +602,7 @@ export class Host {
       this.developerKeys?.accountChanged(view.account !== null);
     });
     this.inbox = new Inbox({
-      baseUrl: (options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, ""),
+      baseUrl: serviceUrl(options.apiUrl),
       fetch: (input, init) => fetch(input, init),
       token: () => (this.library.onlineSearch ? this.account.token() : null),
       language: () => this.language,
@@ -577,7 +621,7 @@ export class Host {
     });
     this.publisherNames = new PublisherNames({
       file: path.join(options.userData, "publisher-names.json"),
-      baseUrl: options.apiUrl ?? DEFAULT_API_URL,
+      baseUrl: serviceUrl(options.apiUrl),
       fetch: (input, init) => fetch(input, init),
       online: () => this.library.onlineSearch,
       onChange: () => this.pushState(),
@@ -629,12 +673,53 @@ export class Host {
         return{root:module.root,name:this.shown(module.manifest).name,bounds};
       }});
     this.watchShortcuts(this.window.webContents);
+    this.cover = new PanelCover({ parent: this.window.contentView, emblem: () => this.emblem });
+    this.developerKeys = new DeveloperKeys({
+      accountKey: this.copySync.accountKey,
+      account: {
+        signedIn: () => this.account.view().account !== null,
+        link: (key) => this.account.linkPublisherKey(key),
+        publish: (key, zip) => this.account.publishModule(key, zip),
+      },
+      onChange: (view) => {
+        if (!this.window.isDestroyed()) this.window.webContents.send("host:developer-keys", view);
+      },
+    });
+    this.publisher = this.modulePublisher();
+    this.pairing = new Pairing({
+      copySync: this.copySync,
+      account: this.account,
+      serviceUrl: accountServiceUrl(options),
+      deviceName: os.hostname(),
+      keyKept: () => this.developerKeys.refresh(),
+      onChange: (view) => {
+        if (!this.window.isDestroyed()) this.window.webContents.send("host:pairing", view);
+      },
+      focus: () => this.bringToFront(),
+      log: (line) => console.log(`[tavora] ${line}`),
+    });
+    // The cloud copy started before there was a window: from here it flushes the saved data and tells the page.
+    this.copySync.attach({
+      flush: () => this.flush(),
+      onChange: (view) => {
+        if (!this.window.isDestroyed()) this.window.webContents.send("host:cloud-copy", view);
+        this.developerKeys.keyMaybeChanged();
+      },
+    });
   }
 
   static async create(options: HostOptions): Promise<Host> {
     const { userData } = options;
-    let created: Host | undefined;
-    const copySync = await Host.cloudCopy(options, () => created);
+    const encryptor = osEncryptor(options.discord !== undefined);
+    // The cloud copy comes first, as a newer copy is taken before anything reads the files. It needs only the saved
+    // sign-in and the module files folder as saved; once the library is read, the folder is the library's.
+    const signIn = Host.signIn(options, encryptor);
+    await signIn.load();
+    const savedFolder = (await loadLibrary(userData)).moduleFilesFolder ?? null;
+    const defaultFolder = options.picturesFolder ?? defaultFilesRoot(userData);
+    let loaded: Library | undefined;
+    const copySync = Host.cloudCopy(options, encryptor, signIn, { root: () => (loaded ? (loaded.moduleFilesFolder ?? null) : savedFolder) ?? defaultFolder });
+    await copySync.beforeLoad();
     const savedData = new SavedData(userData);
     // Before anything reads the files (a cloud copy taken just now included): what was saved under the old names of the
     // Game → Workspace rename gets the new ones. When that fails, Tavora does not start on files it can't read.
@@ -642,15 +727,16 @@ export class Host {
     // A file saved by a newer Tavora is copied aside before this one can overwrite it.
     await savedData.keepNewerFiles();
     const library = await savedData.loadLibrary();
+    loaded = library;
     const safetyLists = new SafetyLists({
       file: path.join(userData, "catalog-lists.json"),
-      baseUrl: options.apiUrl ?? DEFAULT_API_URL,
+      baseUrl: serviceUrl(options.apiUrl),
       publicKey: CATALOGUE_PUBLIC_KEY,
       online: () => library.onlineSearch,
     });
     await safetyLists.load();
-    const installed = await Host.loadModules(options, library.developmentFolders, safetyLists);
-    const { modules, info: moduleInfo, problems: moduleProblems } = installed;
+    const installed = new Installed(await Host.loadModules(options, library.developmentFolders, safetyLists), (manifest) => translateManifest(manifest, Host.languageOf(library, options)));
+    const { modules, problems: moduleProblems } = installed;
     const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
     // Before any module session or store is opened (S5: data is keyed by owner and id).
     await migrateModuleData(userData, (line) => console.warn(`[tavora] ${line}`), library.moduleFilesFolder ?? defaultFilesRoot(userData)).catch((error: unknown) =>
@@ -682,35 +768,12 @@ export class Host {
       options.devServer,
     );
 
-    const host = new Host(options, modules, moduleInfo, moduleProblems, library, workspaces, profile, windowState, themes, themeProblems, savedData);
-    created = host;
-    host.safetyLists = safetyLists;
-    host.blockedModules = installed.blocked;
-    host.catalogModules = installed.catalog;
-    host.openedAtStart = openedTimes(library);
-    host.copySync = copySync;
-    host.developerKeys = new DeveloperKeys({
-      accountKey: copySync.accountKey,
-      account: {
-        signedIn: () => host.account.view().account !== null,
-        link: (key) => host.account.linkPublisherKey(key),
-        publish: (key, zip) => host.account.publishModule(key, zip),
-      },
-      onChange: (view) => {
-        if (!host.window.isDestroyed()) host.window.webContents.send("host:developer-keys", view);
-      },
-    });
-    host.publisher = host.modulePublisher();
-    host.pairing = Host.pairing(options, host);
-    // Before any module opens, so none sees the pictures half moved.
-    await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
-    host.moduleData = await listModuleData(userData, host.files.root());
-    host.grants = await GrantStore.load(userData);
+    const grants = await GrantStore.load(userData);
     const connectionFile = new ConnectionFile(path.join(userData, "connection.json"));
-    host.connection = new ConnectionWatcher({ probe: connectionProbe(), store: connectionFile, initial: await connectionFile.load(), log: (message, error) => console.warn(`[tavora] ${message}`, error) });
-    host.systemInfo = new SystemMonitorThread({
+    const connection = new ConnectionWatcher({ probe: connectionProbe(), store: connectionFile, initial: await connectionFile.load(), log: (message, error) => console.warn(`[tavora] ${message}`, error) });
+    const systemInfo = new SystemMonitorThread({
       start: () => new Worker(path.join(__dirname, "system-info-worker.cjs")),
-      connection: host.connection,
+      connection,
       trafficStore: new TrafficFile(path.join(userData, "traffic.json")),
       // Electron's CPU figure is already a share of the whole PC; its memory is in kilobytes.
       tavora: () => {
@@ -719,21 +782,23 @@ export class Host {
       },
       log: (message, error) => console.warn(`[tavora] ${message}`, error),
     });
+    const openTimes = new OpenTimes(path.join(userData, "open-times.json"));
+    await openTimes.load();
+    const emblem = await Host.readEmblem(options);
+
+    const host = new Host(options, { encryptor, signIn, copySync, installed, safetyLists, grants, connection, systemInfo, openTimes, emblem }, library, workspaces, profile, windowState, themes, themeProblems, savedData);
+    host.openedAtStart = openedTimes(library);
+    // Before any module opens, so none sees the pictures half moved.
+    await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
+    host.moduleData = await listModuleData(userData, host.files.root());
     host.syncConnection();
-    host.streaming = await Host.streamingService(host);
-    host.gameOverlays = await Host.gameOverlayService(host);
-    host.previews = Host.previewService(host);
-    host.layout = Host.layoutService(host);
+    await host.startOverlays();
     await host.moveAiUsagePanelData();
     await host.moveDiscordPanelData();
     // Native menus, dialogs and scrollbars follow the theme's mode.
     host.syncNativeTheme();
     await host.account.init();
     await host.publisherNames.load();
-    host.openTimes = new OpenTimes(path.join(userData, "open-times.json"));
-    await host.openTimes.load();
-    host.emblem = await Host.readEmblem(options);
-    host.cover = new PanelCover({ parent: host.window.contentView, emblem: () => host.emblem });
     void host.refreshPublisherNames();
     void host.refreshSafetyLists();
     setInterval(() => void host.refreshSafetyLists(), SAFETY_REFRESH_MS).unref();
@@ -847,7 +912,7 @@ export class Host {
         autoDownload: this.library.autoUpdate,
         onChange: () => this.pushState(),
         onDownloaded: (version) => {
-          if (this.library.onlineSearch) void countAppUpdate({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL }, version);
+          if (this.library.onlineSearch) void countAppUpdate({ baseUrl: serviceUrl(this.options.apiUrl) }, version);
         },
         log: (line) => this.logUpdate(line),
       });
@@ -869,12 +934,8 @@ export class Host {
 
   /** Looks for modules again; panels of modules that are gone are closed. */
   private async reloadModules(): Promise<void> {
-    const { modules, blocked, catalog, info, problems } = await Host.loadModules(this.options, this.library.developmentFolders, this.safetyLists);
-    this.blockedModules = blocked;
-    this.catalogModules = catalog;
-    this.moduleInfo = info;
-    this.moduleProblems = problems;
-    this.modules = modules;
+    this.installed.replace(await Host.loadModules(this.options, this.library.developmentFolders, this.safetyLists));
+    const { modules } = this.installed;
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
     this.noteModuleVersions();
@@ -1748,7 +1809,7 @@ export class Host {
     ipcMain.handle("host:steam-library", async (event, profile: unknown): Promise<SteamLibraryResult> => {
       if (!fromHost(event) || typeof profile !== "string") return { status: "error", error: translate(this.language, "error.notUnderstood") };
       if (!this.library.onlineSearch) return { status: "error", error: translate(this.language, "error.onlineOff") };
-      const result = await fetchSteamLibrary({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL, language: this.language }, profile);
+      const result = await fetchSteamLibrary({ baseUrl: serviceUrl(this.options.apiUrl), language: this.language }, profile);
       if (result.status !== "ok") return result;
       // Kept for sharing icons without adding the games: only games the service listed can be offered.
       this.steamLookup = result.games;
@@ -2537,7 +2598,6 @@ export class Host {
 
   private closeOverlayPage(): void {
     this.layout.close();
-    this.canvas = null;
   }
 
   /** Add overlay on a game workspace in the rail: the game gets a setup of its own. */
@@ -2698,7 +2758,7 @@ export class Host {
   private loadHostedList(): Promise<HostedList | null> {
     if (!this.library.onlineSearch || this.options.steamIcons === "off") return Promise.resolve(null);
     if (this.hostedList) return Promise.resolve(this.hostedList);
-    this.hostedListLoading ??= fetchHostedList({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL }).then((list) => {
+    this.hostedListLoading ??= fetchHostedList({ baseUrl: serviceUrl(this.options.apiUrl) }).then((list) => {
       this.hostedList = list;
       this.hostedListLoading = null;
       if (list) this.pushState();
@@ -2791,7 +2851,7 @@ export class Host {
       tried += 1;
       const ico = await offer.read().catch(() => null);
       if (!ico) continue;
-      const outcome = await submitIcon({ baseUrl: this.options.apiUrl ?? DEFAULT_API_URL, token: token! }, { id: offer.id, name: offer.name, source: offer.source, ico });
+      const outcome = await submitIcon({ baseUrl: serviceUrl(this.options.apiUrl), token: token! }, { id: offer.id, name: offer.name, source: offer.source, ico });
       if (outcome === "signed-out") {
         signedOut = true;
         break;
@@ -3177,35 +3237,18 @@ export class Host {
     });
   }
 
-  /** The operating system's key store, for the sign-ins Tavora keeps (Discord, the Tavora account). */
-  private static encryptor(options: HostOptions): Encryptor {
-    const test = options.discord;
-    // Test machines have no keyring; Linux's plain-text fallback stands in there (and only there).
-    if (test && process.platform === "linux") safeStorage.setUsePlainTextEncryption(true);
-    return {
-      // Linux without a keyring falls back to a fixed key, which protects nothing; Tavora then saves no sign-in.
-      isAvailable: () =>
-        safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || test !== undefined || safeStorage.getSelectedStorageBackend() !== "basic_text"),
-      encrypt: (text) => safeStorage.encryptString(text),
-      decrypt: (data) => safeStorage.decryptString(data),
-    };
-  }
-
   // ── Account ──────────────────────────────────────────────────────────
 
-  private static accountClient(options: HostOptions, language: () => Language, profile: AccountClientOptions["profile"], onChange: (view: AccountView) => void): AccountClient {
-    const file = path.join(options.userData, "account.json");
-    const encryptor = Host.encryptor(options);
+  private static accountClient(options: HostOptions, signIn: SignIn, encryptor: Encryptor, language: () => Language, profile: AccountClientOptions["profile"], onChange: (view: AccountView) => void): AccountClient {
     return new AccountClient({
       enabled: options.accounts === true,
-      baseUrl: options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL,
+      baseUrl: serviceUrl(options.accountUrl ?? options.apiUrl),
       fetch: (input, init) => fetch(input, init),
       os: deviceOs(process.platform),
       deviceName: os.hostname(),
       language,
       canKeepSignIn: () => encryptor.isAvailable(),
-      load: () => loadAccount(file, encryptor),
-      save: (account) => saveAccount(file, encryptor, account),
+      signIn,
       profile,
       onChange,
       discordLogin: () =>
@@ -3218,89 +3261,36 @@ export class Host {
     });
   }
 
-  /**
-   * The cloud copy, run before the data is read: a copy waiting from the last run, or a newer one from
-   * another PC, is taken first. Until the host exists it uses the sign-in and module files folder as saved.
-   */
-  private static async cloudCopy(options: HostOptions, host: () => Host | undefined): Promise<CopySync> {
-    const encryptor = Host.encryptor(options);
-    const startToken = options.accounts === true ? ((await loadAccount(path.join(options.userData, "account.json"), encryptor))?.token ?? null) : null;
-    const savedFolder = (await loadLibrary(options.userData)).moduleFilesFolder;
-    const service = {
-      baseUrl: `${(options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/account`,
-      fetch: ((input, init) => fetch(input, init)) as typeof fetch,
-      token: () => {
-        const current = host();
-        return current ? current.account.token() : startToken;
-      },
-    };
-    const sync = new CopySync({
-      userData: options.userData,
-      enabled: options.accounts === true,
-      devData: options.devData === true,
-      moduleFiles: () => host()?.files.root() ?? savedFolder ?? options.picturesFolder ?? defaultFilesRoot(options.userData),
-      service: new ServiceStorage(service),
-      accountKey: new AccountKey({
-        file: path.join(options.userData, "account-key.json"),
-        legacyFile: path.join(options.userData, "cloud-copy-key.json"),
-        cacheFile: path.join(options.userData, "account-vault.bin"),
-        encryptor,
-        ...service,
-      }),
-      flush: () => host()?.flush() ?? Promise.resolve(),
-      restart: () => options.restart(),
-      onChange: (view: CloudCopyView) => {
-        const current = host();
-        if (current && !current.window.isDestroyed()) current.window.webContents.send("host:cloud-copy", view);
-        current?.developerKeys?.keyMaybeChanged();
-      },
-      log: (line) => console.log(`[tavora] ${line}`),
-    });
-    await sync.beforeLoad();
-    return sync;
+  /** The saved sign-in, read at start for whoever needs the token before the account client exists. */
+  private static signIn(options: HostOptions, encryptor: Encryptor): SignIn {
+    const file = path.join(options.userData, "account.json");
+    return new SignIn({ enabled: options.accounts === true, load: () => loadAccount(file, encryptor), save: (account) => saveAccount(file, encryptor, account) });
   }
 
   /**
-   * Approving a new PC from an old one: through the service while signed in, or the cloud copy's folder.
-   * The key that comes is checked like a typed one, then the copy and the publisher keys go on with it.
+   * The cloud copy, run before the data is read: a copy waiting from the last run, or a newer one from another PC, is
+   * taken first. It holds the account's sign-in and the module files folder, which are the saved ones until the
+   * library is read (`moduleFilesFolder`) and the live ones after.
    */
-  private static pairing(options: HostOptions, host: Host): Pairing {
-    const service = new ServicePairing({
-      baseUrl: `${(options.accountUrl ?? options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/account`,
-      fetch: (input, init) => fetch(input, init),
-      token: () => host.account.token(),
-    });
-    // One per folder, so it remembers what it asked and answered.
-    let folder: FolderPairing | null = null;
-    return new Pairing({
-      accountKey: host.copySync.accountKey,
-      service: () => (host.account.token() ? service : null),
-      folder: () => {
-        const place = host.copySync.place;
-        if (!place) return null;
-        if (folder?.folder !== place) folder = new FolderPairing(place, os.hostname());
-        return folder;
-      },
-      received: async (key, via) => {
-        if (via === "service") await host.copySync.accountKey.take(key);
-        else await host.copySync.accountKey.takeHere(key);
-        await host.copySync.keyArrived();
-        await host.developerKeys.refresh();
-      },
-      onChange: (view) => {
-        if (!host.window.isDestroyed()) host.window.webContents.send("host:pairing", view);
-      },
-      focus: () => host.bringToFront(),
+  private static cloudCopy(options: HostOptions, encryptor: Encryptor, signIn: SignIn, files: { root(): string }): CopySync {
+    return new CopySync({
+      userData: options.userData,
+      enabled: options.accounts === true,
+      devData: options.devData === true,
+      files,
+      account: signIn,
+      serviceUrl: accountServiceUrl(options),
+      encryptor,
+      restart: () => options.restart(),
       log: (line) => console.log(`[tavora] ${line}`),
     });
   }
 
   // ── Discord ──────────────────────────────────────────────────────────
 
-  private static discordConnector(options: HostOptions, onChange: (view: ReturnType<DiscordConnector["view"]>) => void): DiscordConnector {
+  private static discordConnector(options: HostOptions, encryptor: Encryptor, onChange: (view: ReturnType<DiscordConnector["view"]>) => void): DiscordConnector {
     const file = path.join(options.userData, "discord.json");
     const test = options.discord;
-    const encryptor = Host.encryptor(options);
     return new DiscordConnector({
       clientId: DISCORD_CLIENT_ID,
       connect: (events) => RpcClient.connect(DISCORD_CLIENT_ID, events, test ? [test.ipcPath] : undefined),
@@ -4184,7 +4174,11 @@ export class Host {
 
   /** The language of Tavora's texts now. */
   get language(): Language {
-    return resolveLanguage(this.library.language, this.options.systemLocale ?? app.getLocale());
+    return Host.languageOf(this.library, this.options);
+  }
+
+  private static languageOf(library: Pick<Library, "language">, options: Pick<HostOptions, "systemLocale">): Language {
+    return resolveLanguage(library.language, options.systemLocale ?? app.getLocale());
   }
 
   /** A module's manifest with its name, description, panel and action names in Tavora's language now. */
@@ -4480,82 +4474,6 @@ export class Host {
     else this.gameWatcher.stop();
   }
 
-  /** Overlay previews (overlay-previews.ts): small normal windows, whatever the Game overlays and Stream overlays switches say. */
-  private static previewService(host: Host): OverlayPreviews {
-    return new OverlayPreviews({
-      overlays: host.streaming.overlayStore,
-      module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
-      openWindow: (request) =>
-        new OverlayPreviewWindow(request, {
-          hidden: !!host.options.hidden,
-          labels: { dark: translate(host.language, "preview.dark"), light: translate(host.language, "preview.light"), checker: translate(host.language, "preview.checker") },
-        }),
-    });
-  }
-
-  /** The Overlay layout (overlay-layout.ts): the window where the user arranges the overlays and panels in game. */
-  private static layoutService(host: Host): OverlayLayout {
-    const options = host.options;
-    const pictures = new LayoutPictures(path.join(options.userData, PICTURES_FOLDER));
-    const layout: OverlayLayout = new OverlayLayout({
-      source: host.gameOverlays.layout,
-      pictures,
-      gameName: (gameId) => host.library.workspaces[gameId]?.name ?? null,
-      screen: () => screen.getPrimaryDisplay().workArea,
-      enabled: () => host.library.gameOverlays,
-      language: () => host.language,
-      games: () => Object.values(host.library.workspaces).filter((entry) => entry.kind === "game" && !entry.trashedAt).map((entry) => ({ id: entry.id, name: entry.name })),
-      sources: () => host.overlaySources(),
-      keepRunning: (panels) => host.runForOverlayPage(panels),
-      leave: () => host.leaveOverlayPage(),
-      openWindow: () => {
-        const page = options.devServer ? new URL("layout.html", options.devServer) : new URL("layout.html", `${HOST_SCHEME}://app/`);
-        const canvas = new OverlayCanvas({ window: host.window, preload: options.hostPreload, devTools: options.devTools, address: () => `${page.href.split("#")[0]}#layer` });
-        host.canvas = canvas;
-        return canvas;
-      },
-      // Only on the user's click, only the game's own window, with the OS's window capture (as OBS's Window Capture does).
-      capture: async (handle, size) => {
-        if (options.hidden) return null;
-        // The first look asks for no picture at all (a 0 x 0 thumbnail), only for the list: no such window open, nothing to take.
-        const listed = await desktopCapturer.getSources({ types: ["window"], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false });
-        const wanted = sourceForHandle(listed, handle);
-        if (!wanted) return null;
-        // Electron can't capture one window alone: it takes a picture of every open window at this size and hands them all
-        // over. Tavora keeps the game's by its id and lets the rest go at once, unread.
-        // The size is in DIPs; the window's pixels are more on a scaled screen (never wider than a picture may be).
-        const k = Math.max(1, Math.min(screen.getPrimaryDisplay().scaleFactor, MAX_PICTURE_WIDTH / Math.max(1, size.width)));
-        const thumbnailSize = { width: Math.round(size.width * k), height: Math.round(size.height * k) };
-        const sources = await desktopCapturer.getSources({ types: ["window"], thumbnailSize, fetchWindowIcons: false });
-        const found = sources.find((source) => source.id === wanted.id);
-        return found && !found.thumbnail.isEmpty() ? found.thumbnail.toPNG() : null;
-      },
-      choose: async () => {
-        const file = await host.pickPath(
-          "layout-picture",
-          {
-            title: translate(host.language, "overlays.layout.chooseTitle"),
-            properties: ["openFile"],
-            filters: [{ name: translate(host.language, "dialog.images"), extensions: ["png", "jpg", "jpeg", "webp"] }],
-          },
-          host.window,
-        );
-        if (!file) return "cancelled";
-        try {
-          if ((await stat(file)).size > MAX_PICTURE_BYTES) return "bad";
-          let image = nativeImage.createFromBuffer(await readFile(file));
-          if (image.isEmpty()) return "bad";
-          if (image.getSize().width > MAX_PICTURE_WIDTH) image = image.resize({ width: MAX_PICTURE_WIDTH });
-          host.rememberPicked("layout-picture", file);
-          return image.toPNG();
-        } catch {
-          return "bad";
-        }
-      },
-    });
-    return layout;
-  }
-
   /** Closes every window Tavora drew over a game and every preview, at once (quitting, a signal, the process exiting). */
   closeOverlayWindows(): void {
     this.gameOverlays?.closeNow();
@@ -4563,89 +4481,69 @@ export class Host {
     this.layout?.close();
   }
 
-  /** Game overlays over the game in front, lent what they need of the host. */
-  private static async gameOverlayService(host: Host): Promise<GameOverlays> {
-    const options = host.options;
-    const overlays = await GameOverlays.create({
-      userData: options.userData,
-      overlays: host.streaming.overlayStore,
-      supported: process.platform === "win32",
-      enabled: () => host.library.gameOverlays,
-      stay: () => host.library.overlaysStay,
-      sidebar: () => host.library.overlaySidebar,
-      module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
-      workspaceName: (workspaceId) => host.library.workspaces[workspaceId]?.name ?? null,
-      gamesOf: (program) => host.gameWatcher.gamesOf(program),
-      scopeOf: (workspaceId) => ((entry) => (entry ? scopeForKind(entry.kind) : "game"))(host.library.workspaces[workspaceId]),
-      // The games of the game workspaces, by their ids (a game workspace's id is its game's).
-      gameIds: () => Object.values(host.library.workspaces).filter((entry) => entry.kind === "game" && !entry.trashedAt).map((entry) => entry.id),
-      openVeil: () => new GameVeilWindow({ hidden: !!options.hidden }),
-      panels: {
-        info: (instanceId, workspaceId) => host.panelInfo(instanceId, workspaceId),
-        lend: (instanceId, workspaceId, revoked) => host.lendPanel(instanceId, workspaceId, revoked),
+  /** Stream overlays, game overlays, overlay previews and the Overlay page, wired from the objects that own what they read (overlay-wiring.ts). */
+  private async startOverlays(): Promise<void> {
+    const { options } = this;
+    const services = await createOverlayServices({
+      options: { userData: options.userData, hidden: !!options.hidden, devServer: options.devServer, devTools: options.devTools, hostPreload: options.hostPreload, modulePreload: options.modulePreload },
+      window: this.window,
+      library: this.library,
+      workspaces: new LibraryWorkspaces(this.library),
+      installed: this.installed,
+      grants: this.grants,
+      panels: this.panels,
+      watcher: this.gameWatcher,
+      ports: {
+        shell: {
+          openSetting: (setting) => {
+            this.bringToFront();
+            this.window.webContents.send("host:shortcut", `setting:${setting}`);
+          },
+          notify: (message) => {
+            this.notice = message;
+            if (!options.hidden && Notification.isSupported()) new Notification({ title: "Tavora", body: message, silent: true }).show();
+            this.pushStateSoon();
+          },
+          focus: () => {
+            this.bringToFront();
+            this.window.webContents.focus();
+          },
+        },
+        language: () => this.language,
+        changed: () => this.pushStateSoon(),
+        overlaysChanged: () => {
+          this.syncGameWatcher();
+          this.pushStateSoon();
+        },
+        saveLibrary: () => this.saveLibrary(),
+        workspaceId: () => this.workspaceId,
+        askConnector: (moduleId, connector) => this.askConnector(moduleId, connector),
+        panelsInGame: {
+          info: (instanceId, workspaceId) => this.panelInfo(instanceId, workspaceId),
+          lend: (instanceId, workspaceId, revoked) => this.lendPanel(instanceId, workspaceId, revoked),
+        },
+        page: {
+          sources: () => this.overlaySources(),
+          keepRunning: (panels) => this.runForOverlayPage(panels),
+          leave: () => this.leaveOverlayPage(),
+          choosePicture: () =>
+            this.pickPath(
+              "layout-picture",
+              {
+                title: translate(this.language, "overlays.layout.chooseTitle"),
+                properties: ["openFile"],
+                filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg", "webp"] }],
+              },
+              this.window,
+            ),
+          rememberPicture: (file) => this.rememberPicked("layout-picture", file),
+        },
       },
-      probe: () => windowsForegroundProbe(),
-      // Windows reports pixels; windows are placed in DIPs.
-      toDip: (rect) => screen.screenToDipRect(null, rect),
-      screen: () => screen.getPrimaryDisplay().bounds,
-      // Any of Tavora's windows with the keyboard; the service tells its own overlay windows apart.
-      tavoraInFront: () => BrowserWindow.getFocusedWindow() !== null,
-      openWindow: (request, panel) => host.overlayWindow(request, panel),
-      shortcuts: globalShortcut,
-      openLayout: (setupId) => host.layout.open(setupId),
-      openSetting: (setting) => {
-        host.bringToFront();
-        host.window.webContents.send("host:shortcut", `setting:${setting}`);
-      },
-      notify: (message) => {
-        host.notice = message;
-        if (!options.hidden && Notification.isSupported()) new Notification({ title: "Tavora", body: message, silent: true }).show();
-        host.pushStateSoon();
-      },
-      removeKeys: (test) => host.streaming.removeKeys(test),
-      moveKey: (test, to) => host.streaming.moveKey(test, to),
-      keyOf: (binding) => host.streaming.keyOf(binding),
-      language: () => host.language,
-      changed: () => {
-        host.syncGameWatcher();
-        host.pushStateSoon();
-      },
-      // Take picture in the Overlay layout depends on which games run and whose window was seen.
-      windowsChanged: () => host.layout?.refresh(),
     });
-    host.streaming.useOverlayKeys(overlays);
-    return overlays;
-  }
-
-  /** Stream overlays and hotkeys, lent what they need of the host. */
-  private static streamingService(host: Host): Promise<Streaming> {
-    return Streaming.create({
-      userData: host.options.userData,
-      settings: () => host.library,
-      saveSettings: (next) => {
-        if (next.streamOverlays !== undefined) host.library.streamOverlays = next.streamOverlays;
-        if (next.overlayPort !== undefined) host.library.overlayPort = next.overlayPort;
-        host.saveLibrary();
-      },
-      module: (moduleId) => ((module) => module && { ...module, manifest: host.shown(module.manifest) })(host.modules.get(moduleId)),
-      overlayGranted: (moduleId) => host.connectorsOf(moduleId).has("stream-overlay"),
-      askConnector: (moduleId, connector) => host.askConnector(moduleId, connector),
-      workspaceId: () => host.workspaceId,
-      workspaceName: (workspaceId) => host.library.workspaces[workspaceId]?.name ?? null,
-      panels: () => host.moduleViews(),
-      shortcuts: globalShortcut,
-      writeClipboard: (text) => clipboard.writeText(text),
-      openSetting: (setting) => {
-        host.bringToFront();
-        host.window.webContents.send("host:shortcut", `setting:${setting}`);
-      },
-      focus: () => {
-        host.bringToFront();
-        host.window.webContents.focus();
-      },
-      language: () => host.language,
-      changed: () => host.pushStateSoon(),
-    });
+    this.streaming = services.streaming;
+    this.gameOverlays = services.gameOverlays;
+    this.previews = services.previews;
+    this.layout = services.layout;
   }
 }
 

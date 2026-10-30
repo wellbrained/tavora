@@ -25,20 +25,14 @@ function tavora(cloud: Service, at: Pc, { signedIn = true, devData = false } = {
     userData: at.userData,
     enabled: true,
     devData,
-    moduleFiles: () => at.moduleFiles,
-    service: new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => (signedIn ? cloud.token : null) }),
-    accountKey: new AccountKey({
-      file: path.join(at.userData, "account-key.json"),
-      legacyFile: path.join(at.userData, "cloud-copy-key.json"),
-      encryptor,
-      baseUrl: "http://tavora.test/v1/account",
-      fetch: cloud.fetch,
-      token: () => (signedIn ? cloud.token : null),
-    }),
-    flush: async () => undefined,
+    files: { root: () => at.moduleFiles },
+    account: { token: () => (signedIn ? cloud.token : null) },
+    serviceUrl: "http://tavora.test/v1/account",
+    fetch: cloud.fetch,
+    encryptor,
     restart: () => void events.restarts++,
-    onChange: (view) => views.push(view),
   });
+  sync.attach({ flush: async () => undefined, onChange: (view) => views.push(view) });
   return { sync, views, events };
 }
 
@@ -350,15 +344,12 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(atB.sync.view().askKey).toBe(true);
 
     const pairing = (sync: CopySync, name: string) => {
-      const folder = new FolderPairing(onedrive, name);
       return new Pairing({
-        accountKey: sync.accountKey,
-        service: () => null,
-        folder: () => (sync.place ? folder : null),
-        received: async (key) => {
-          await sync.accountKey.takeHere(key);
-          await sync.keyArrived();
-        },
+        copySync: sync,
+        account: { token: () => null },
+        serviceUrl: "http://tavora.test/v1/account",
+        deviceName: name,
+        folderTransport: (_folder, deviceName) => new FolderPairing(onedrive, deviceName),
         onChange: () => undefined,
         focus: () => undefined,
       });

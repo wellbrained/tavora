@@ -8,6 +8,7 @@ import type { AccountView } from "../shared/host-api";
 import { AccountClient, deviceOs, loadAccount, saveAccount, type ProfileData, type SavedAccount } from "./account";
 import type { Encryptor } from "./discord-store";
 import { UserError } from "./messages";
+import { SignIn } from "./sign-in";
 
 // Stands in for safeStorage: reversible, and never the plain text.
 const encryptor = (available = true): Encryptor => ({
@@ -66,8 +67,7 @@ function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null;
     ...(options.deviceName ? { deviceName: options.deviceName } : {}),
     language: () => "de",
     canKeepSignIn: () => options.canKeep ?? true,
-    load: async () => options.saved ?? null,
-    save: async (value) => void kept.push(value),
+    signIn: new SignIn({ enabled: options.enabled ?? true, load: async () => options.saved ?? null, save: async (value) => void kept.push(value) }),
     onChange: (view) => views.push(view),
     ...(options.discordLogin ? { discordLogin: options.discordLogin } : {}),
     profile: {

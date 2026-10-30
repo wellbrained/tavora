@@ -15,17 +15,15 @@ const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.f
 async function onPc(fetch: typeof globalThis.fetch, token: string | null, transport?: PairingTransport) {
   const { userData } = await pc({ "library.json": "{}" });
   const accountKey = new AccountKey({ file: path.join(userData, "account-key.json"), encryptor, baseUrl: "http://tavora.test/v1/account", fetch, token: () => token });
-  const service = token ? new ServicePairing({ baseUrl: "http://tavora.test/v1/account", fetch, token: () => token }) : null;
   const views: PairingView[] = [];
   let focused = 0;
   const pairing = new Pairing({
-    accountKey,
-    service: () => service,
-    folder: () => transport ?? null,
-    received: async (key, via) => {
-      if (via === "service") await accountKey.take(key);
-      else await accountKey.takeHere(key);
-    },
+    copySync: { accountKey, place: transport ? "a folder" : null, keyArrived: async () => undefined },
+    account: { token: () => token },
+    serviceUrl: "http://tavora.test/v1/account",
+    fetch,
+    deviceName: "Desk",
+    ...(transport ? { folderTransport: () => transport } : {}),
     onChange: (view) => views.push(view),
     focus: () => focused++,
   });

@@ -10,6 +10,10 @@ import { HostError } from "./errors";
 import { isOverlayAction } from "./game-overlay-service";
 import { HotkeyRegistrar, HotkeyStore, sameBinding, type HotkeyRecord, type ShortcutRegistry } from "./hotkeys";
 import { OverlayServer, OverlayStore, overlayUrl, type OverlayLink, type OverlaySubject } from "./overlays";
+import type { GrantSubject } from "./grants";
+import type { GrantStore } from "./grants";
+import type { Shell } from "./shell";
+import type { WorkspaceNames } from "./workspace-lookup";
 
 /** A module as streaming needs it: who owns it, its manifest and the real path of its package. */
 export interface StreamingModule {
@@ -26,26 +30,27 @@ export interface HotkeyListener {
   hotkeyPressed(binding: HotkeyBinding): void;
 }
 
+/** A module whose grant can be looked up: the manifest carries the version and permissions grants are kept by. */
+export type GrantedModule = StreamingModule & { manifest: GrantSubject["manifest"] };
+
 export interface StreamingOptions {
   userData: string;
   settings(): { streamOverlays: boolean; overlayPort: number };
   saveSettings(next: { streamOverlays?: boolean; overlayPort?: number }): void;
-  module(moduleId: string): StreamingModule | undefined;
-  /** Whether the user granted the module the stream-overlay connector, as it is installed now. */
-  overlayGranted(moduleId: string): boolean;
+  /** The modules installed now: `shown` for their names in Tavora's language, `get` for what the user granted them. */
+  installed: { shown(moduleId: string): StreamingModule | undefined; get(moduleId: string): GrantedModule | undefined };
+  /** What the user granted each module (the stream-overlay connector is checked here). */
+  grants: Pick<GrantStore, "allowed">;
   /** Asks the user in Tavora's consent dialog for a connector the module asks for on request; whether they allowed it. */
   askConnector(moduleId: string, connector: "stream-overlay"): Promise<boolean>;
   /** The workspace shown now, or null. */
   workspaceId(): string | null;
-  workspaceName(workspaceId: string): string | null;
-  /** The module panels of the workspace shown now. */
-  panels(): HotkeyListener[];
+  workspaces: Pick<WorkspaceNames, "name">;
+  /** Every open panel's view; the module panels among them hear the hotkeys. */
+  panels: { adapters(): readonly { hotkeys?: HotkeyListener }[] };
   shortcuts: ShortcutRegistry;
   writeClipboard(text: string): void;
-  /** Opens Settings at one of its settings (settings-index.ts). */
-  openSetting(setting: string): void;
-  /** Brings Tavora's window to the front and gives it the keyboard, for the hotkey dialog. */
-  focus(): void;
+  shell: Pick<Shell, "openSetting" | "focus">;
   language(): Language;
   changed(): void;
 }
@@ -80,6 +85,17 @@ export class Streaming {
     return this.overlays;
   }
 
+  /** Whether the user granted the module the stream-overlay connector, as it is installed now. */
+  private overlayGranted(moduleId: string): boolean {
+    const module = this.options.installed.get(moduleId);
+    return module !== undefined && this.options.grants.allowed(module).connectors.includes("stream-overlay");
+  }
+
+  /** The module panels of the workspace shown now. */
+  private panelListeners(): HotkeyListener[] {
+    return this.options.panels.adapters().flatMap((view) => (view.hotkeys ? [view.hotkeys] : []));
+  }
+
   private pending: PendingHotkey | null = null;
   private nextRequest = 1;
   private overlayKeys: OverlayKeys | null = null;
@@ -101,8 +117,8 @@ export class Streaming {
 
   /** The overlay page of a link's module, while it may serve one: installed under the link's owner, with the connector granted. */
   private pageOf(link: OverlayLink): { root: string; entry: string } | null {
-    const module = this.options.module(link.moduleId);
-    if (!module || module.owner !== link.owner || !module.manifest.overlay || !this.options.overlayGranted(link.moduleId)) return null;
+    const module = this.options.installed.shown(link.moduleId);
+    if (!module || module.owner !== link.owner || !module.manifest.overlay || !this.overlayGranted(link.moduleId)) return null;
     return { root: module.root, entry: module.manifest.overlay };
   }
 
@@ -121,7 +137,7 @@ export class Streaming {
   overlayFor(module: StreamingModule, workspaceId: string) {
     const subject = (key: string): OverlaySubject => ({ owner: module.owner, moduleId: module.manifest.id, workspaceId, key });
     const granted = async (): Promise<boolean> => {
-      if (this.options.overlayGranted(module.manifest.id)) return true;
+      if (this.overlayGranted(module.manifest.id)) return true;
       if (!(module.manifest.permissions.onRequest ?? []).includes("stream-overlay")) {
         throw new HostError("PERMISSION_DENIED", 'overlay.copyLink needs the "overlay" permission', { capability: "overlay" });
       }
@@ -132,7 +148,7 @@ export class Streaming {
         // Without the connector nothing reads a link, so state is kept only for a key that a game overlay shows or that
         // has a link already (a link made before the grant was taken back). Otherwise a module could fill the disk.
         const own = subject(key);
-        if (this.options.overlayGranted(module.manifest.id) || this.overlays.peek(own) || this.overlayKeys?.has(own)) this.overlays.publish(own, state);
+        if (this.overlayGranted(module.manifest.id) || this.overlays.peek(own) || this.overlayKeys?.has(own)) this.overlays.publish(own, state);
       },
       remove: (key: string) => this.overlays.remove(subject(key)),
       copyLink: async (key: string): Promise<OverlayLinkResult> => {
@@ -140,7 +156,7 @@ export class Streaming {
         const link = this.overlays.link(subject(key));
         const port = this.server.port;
         if (!this.options.settings().streamOverlays || port === null) {
-          this.options.openSetting("stream-overlays");
+          this.options.shell.openSetting("stream-overlays");
           return "off";
         }
         this.options.writeClipboard(overlayUrl(port, link.token));
@@ -149,7 +165,7 @@ export class Streaming {
       resetLink: (key: string) => this.overlays.reset(subject(key)),
       /** Whether copyLink would open Tavora's own window now: the consent dialog, or the setting that is off. */
       copyNeedsWindow: (): boolean =>
-        !this.options.overlayGranted(module.manifest.id) || !this.options.settings().streamOverlays || this.server.port === null,
+        !this.overlayGranted(module.manifest.id) || !this.options.settings().streamOverlays || this.server.port === null,
     };
   }
 
@@ -175,7 +191,7 @@ export class Streaming {
     this.registrar.pause();
     return new Promise<HotkeySetResult>((resolve) => {
       this.pending = { id: this.nextRequest++, binding, label, error: null, resolve, ...(overlay ? { overlay } : {}) };
-      this.options.focus();
+      this.options.shell.focus();
       this.changed();
     });
   }
@@ -254,7 +270,7 @@ export class Streaming {
   /** The workspace changed or its panel went away while the dialog was open: it closes. */
   private dropStalePending(): void {
     const pending = this.pending;
-    if (pending && !pending.overlay && (this.options.workspaceId() !== pending.binding.workspaceId || !this.options.panels().some((panel) => panel.moduleId === pending.binding.moduleId))) this.close("cancelled");
+    if (pending && !pending.overlay && (this.options.workspaceId() !== pending.binding.workspaceId || !this.panelListeners().some((panel) => panel.moduleId === pending.binding.moduleId))) this.close("cancelled");
   }
 
   // ── Keys registered with the system ──────────────────────────────────
@@ -266,8 +282,8 @@ export class Streaming {
   sync(): void {
     this.dropStalePending();
     const workspaceId = this.options.workspaceId();
-    const open = new Set(this.options.panels().map((panel) => panel.moduleId));
-    const wanted = workspaceId === null ? [] : this.hotkeys.all().filter((record) => record.workspaceId === workspaceId && !isOverlayAction(record.action) && open.has(record.moduleId) && this.options.module(record.moduleId)?.owner === record.owner);
+    const open = new Set(this.panelListeners().map((panel) => panel.moduleId));
+    const wanted = workspaceId === null ? [] : this.hotkeys.all().filter((record) => record.workspaceId === workspaceId && !isOverlayAction(record.action) && open.has(record.moduleId) && this.options.installed.shown(record.moduleId)?.owner === record.owner);
     // The keys of game overlays follow what shows instead (a game's setup, All games, Everywhere), so they take no key
     // from other programs while nothing does. An item's key works where the item shows.
     if (this.overlayKeys?.showing()) wanted.push(...this.hotkeys.all().filter((record) => isOverlayAction(record.action) && this.overlayKeys!.wants(record)));
@@ -278,7 +294,7 @@ export class Streaming {
   private pressed(record: HotkeyRecord): void {
     if (isOverlayAction(record.action)) return this.overlayKeys?.pressed(record);
     if (this.options.workspaceId() !== record.workspaceId) return;
-    const panel = this.options.panels().filter((item) => item.moduleId === record.moduleId).sort((a, b) => b.usedAt - a.usedAt)[0];
+    const panel = this.panelListeners().filter((item) => item.moduleId === record.moduleId).sort((a, b) => b.usedAt - a.usedAt)[0];
     panel?.hotkeyPressed({ action: record.action, target: record.target });
   }
 
@@ -322,7 +338,7 @@ export class Streaming {
 
   private actionName(record: Pick<HotkeyRecord, "moduleId" | "action">): string {
     if (isOverlayAction(record.action)) return translate(this.options.language(), record.action === "$layer" ? "overlays.layerAction" : "overlays.toggleAction");
-    return this.options.module(record.moduleId)?.manifest.actions?.find((action) => action.id === record.action)?.name ?? record.action;
+    return this.options.installed.shown(record.moduleId)?.manifest.actions?.find((action) => action.id === record.action)?.name ?? record.action;
   }
 
   view(): StreamingView {
@@ -336,17 +352,17 @@ export class Streaming {
         .map((link) => ({
           owner: link.owner,
           moduleId: link.moduleId,
-          moduleName: this.options.module(link.moduleId)?.manifest.name ?? link.moduleId,
+          moduleName: this.options.installed.shown(link.moduleId)?.manifest.name ?? link.moduleId,
           workspaceId: link.workspaceId,
-          workspaceName: this.options.workspaceName(link.workspaceId) ?? link.workspaceId,
+          workspaceName: this.options.workspaces.name(link.workspaceId) ?? link.workspaceId,
           key: link.key,
         })),
       hotkeys: this.hotkeys.all().filter((record) => !isOverlayAction(record.action)).map((record) => ({
           owner: record.owner,
           workspaceId: record.workspaceId,
-          workspaceName: this.options.workspaceName(record.workspaceId) ?? record.workspaceId,
+          workspaceName: this.options.workspaces.name(record.workspaceId) ?? record.workspaceId,
           moduleId: record.moduleId,
-          moduleName: this.options.module(record.moduleId)?.manifest.name ?? record.moduleId,
+          moduleName: this.options.installed.shown(record.moduleId)?.manifest.name ?? record.moduleId,
           action: record.action,
           actionName: this.actionName(record),
           target: record.target,
@@ -363,7 +379,7 @@ export class Streaming {
     const current = this.hotkeys.find(pending.binding)?.accelerator ?? null;
     return {
       id: pending.id,
-      moduleName: pending.overlay?.module ?? this.options.module(pending.binding.moduleId)?.manifest.name ?? pending.binding.moduleId,
+      moduleName: pending.overlay?.module ?? this.options.installed.shown(pending.binding.moduleId)?.manifest.name ?? pending.binding.moduleId,
       actionName: pending.overlay?.action ?? this.actionName(pending.binding),
       label: pending.label,
       current,

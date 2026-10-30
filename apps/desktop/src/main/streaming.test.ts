@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { HotkeyBinding } from "@tavora/sdk/protocol";
 import type { ShortcutRegistry } from "./hotkeys";
-import { Streaming, type HotkeyListener, type StreamingModule } from "./streaming";
+import { Streaming, type GrantedModule, type HotkeyListener } from "./streaming";
 
 let dir: string;
 
@@ -18,11 +18,12 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true, maxRetries: 5 });
 });
 
-const MODULE: StreamingModule = {
+const MODULE: GrantedModule = {
   owner: "official",
   root: "/nowhere",
   manifest: {
     id: "tavora.clock-counter",
+    version: "1.0.0",
     name: "Clock & Counter",
     overlay: "dist/overlay.html",
     actions: [{ id: "start-pause", name: "Start/Pause" }, { id: "reset", name: "Reset" }],
@@ -47,20 +48,19 @@ async function setup({ held = [] as string[] } = {}) {
     userData: dir,
     settings: () => world.settings,
     saveSettings: (next) => Object.assign(world.settings, next),
-    module: (id) => (id === MODULE.manifest.id ? MODULE : undefined),
-    overlayGranted: () => world.granted,
+    installed: { shown: (id) => (id === MODULE.manifest.id ? MODULE : undefined), get: (id) => (id === MODULE.manifest.id ? MODULE : undefined) },
+    grants: { allowed: () => ({ network: [], connectors: world.granted ? ["stream-overlay"] : [] }) },
     askConnector: async () => {
       world.asked++;
       world.granted = world.answer;
       return world.answer;
     },
     workspaceId: () => world.workspaceId,
-    workspaceName: (id) => (id === "poe2" ? "Path of Exile 2" : null),
-    panels: () => world.panels,
+    workspaces: { name: (id) => (id === "poe2" ? "Path of Exile 2" : null) },
+    panels: { adapters: () => world.panels.map((hotkeys) => ({ hotkeys })) },
     shortcuts,
     writeClipboard: (text) => (world.clipboard = text),
-    openSetting: (setting) => world.opened.push(setting),
-    focus: () => {},
+    shell: { openSetting: (setting) => void world.opened.push(setting), focus: () => {} },
     language: () => "en",
     changed: () => {},
   });
