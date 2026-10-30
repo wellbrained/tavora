@@ -1,5 +1,5 @@
 import type { InstanceStatus } from "../shared/host-api";
-import { PanelViews, type PanelRect, type PanelViewAdapter, type PanelViewsDeps } from "./panel-views";
+import { PanelViews, type PanelLease, type PanelRect, type PanelViewAdapter, type PanelViewsDeps } from "./panel-views";
 
 let nextContents = 1;
 
@@ -55,19 +55,22 @@ export interface PanelViewsRig {
     size: { width: number; height: number };
     hidden: boolean;
     gone: boolean;
-    floating: Set<string>;
+    /** Panels that belong to a workspace that is not shown. */
+    away: Set<string>;
     asking: Set<string>;
   };
   mounted: Set<object>;
   calls: string[];
   frozen: Record<string, string>[];
   ended: { show: boolean; tag: string }[];
+  /** Lends a panel to the in-game layer; `revoked <id>` is noted in `calls` if the panel closes meanwhile. */
+  lend(instanceId: string): PanelLease;
   /** Opens a panel with a new in-memory view. */
   add(instanceId: string, kind?: "module" | "browser"): MemoryPanelView;
 }
 
 export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelViewsRig {
-  const world = { size: { width: 1000, height: 800 }, hidden: false, gone: false, floating: new Set<string>(), asking: new Set<string>() };
+  const world = { size: { width: 1000, height: 800 }, hidden: false, gone: false, away: new Set<string>(), asking: new Set<string>() };
   const mounted = new Set<object>();
   const calls: string[] = [];
   const frozen: Record<string, string>[] = [];
@@ -77,10 +80,10 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
     unmount: (adapter) => void mounted.delete(adapter.view),
     windowSize: () => world.size,
     windowHidden: () => world.hidden,
-    floating: (id) => world.floating.has(id),
     asking: (id) => world.asking.has(id),
     releasing: (id, forget) => void calls.push(`releasing ${id} ${forget}`),
-    stopLent: (id) => void calls.push(`stopLent ${id}`),
+    shownHere: (id) => !world.away.has(id),
+    returned: (id) => void calls.push(`returned ${id}`),
     dialogClosed: () => void calls.push("dialogClosed"),
     openingEnded: ({ show, tag }) => void ended.push({ show, tag }),
     overlayOpening: () => void calls.push("overlayOpening"),
@@ -96,6 +99,11 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
     calls,
     frozen,
     ended,
+    lend(instanceId) {
+      const lease = views.lend(instanceId, () => void calls.push(`revoked ${instanceId}`));
+      if (!lease) throw new Error(`${instanceId} cannot be lent`);
+      return lease;
+    },
     add(instanceId, kind = "module") {
       const adapter = new MemoryPanelView(kind);
       views.open({ instanceId, moduleId: "m" }, () => ({ adapter, start: () => void mounted.add(adapter.view) }));
