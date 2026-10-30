@@ -92,6 +92,39 @@ Unsaved edits are saved when the panel is hidden and on `dispose()`. A document 
 
 If you need more control (several documents in one save, or your own conflict handling), use `documents.put` with `ifRevision` as above.
 
+### Items: a list and the one that is open
+
+Builds, plans, boards, notes: many documents of one kind, and a panel that shows one of them. `openItems` from `@tavora/sdk/store` is the list, the choice and the open document in one, on top of `openDocument`. It lists the documents whose id starts with your prefix, restores the item a panel showed before a restart, keeps `panel.setContent` and `panel.onNavigate` in step, and follows what other panels create, rename and delete.
+
+```ts
+import { openItems } from "@tavora/sdk/store";
+
+const plans = await openItems<Plan>(tavora, {
+  prefix: "plan-",                                   // letters, digits, "-" and "_" only; a new id adds 36 characters
+  parse: (raw) => (raw as Plan | null) ?? { name: "New plan", items: [] },
+  title: (plan) => plan.name,
+  rename: (draft, name) => void (draft.name = name), // needed for rename() and create(data, title)
+});
+
+plans.onChange((event) => render(plans));             // { type: "list" } or { type: "current", ... }
+plans.items;                                          // [{ id, title, updatedAt, revision }], newest save first
+plans.current?.update((draft) => void draft.items.push("Milk")); // the document store's handle, or null
+await plans.pick(id);                                 // saves the open item, opens another (or none with null)
+await plans.create();                                 // new item from newItem() or parse(null), saved and open
+await plans.rename(id, "Weekend");
+const undo = await plans.remove(id);                  // falls back to the next item; undo() creates it again
+```
+
+- **Starting up.** A panel that was open before (and one opened by `panels.open`) shows its item; if it is gone, or the panel was just added, `onAdd` decides: `"last"` (default, the item picked last, else the first), `"first"` or `"none"`. `restore(launch, state)` lets you choose the item yourself from `panel.getLaunch` and `panel.getState`. `whenEmpty: () => ({ data, title? })` creates a starter item (a first board, a first note) once the list is empty; it has a fixed id, so two panels starting together make one.
+- **Picking.** `pick` resolves `true` once the item is the open one and `false` when a newer `pick` came first, so a slow click never overrides a fast one. An item that does not exist rejects with `ItemNotFoundError` and the open item stays. If the open item cannot be saved, `pick` rejects with `ItemSaveError` and it stays open; with the default `merge` its edits were rolled back and reported through `onError`, with `merge: "mine"` they stay on screen for the next try. `panel.onNavigate` uses the same `pick` (after a running `job`), so a switch that cannot happen is answered as failed; pass `followNavigate: false` to handle it yourself.
+- **Other panels.** The list follows `documents.onChange`, and the open item follows it through the document store.
+- **Deleted elsewhere.** A panel never switches by itself, so by default (`onDeleted: "keep"`) the session stays on the item: `deleted` is true and `onChange` says so. The session remembers its last copy. `restoreDeleted()` puts that copy back (unsaved edits included) and opens it again; it rejects with `CONFLICT` if another panel has made the same id again. `flush()` and `pick` leave a deleted item deleted. A direct `current.update()` is still the document store's: it creates the document again, from the edits on an empty copy. `onDeleted: "fallback"` opens the next item instead.
+- **Remove.** Deletes the copy you listed: if another panel saved it since, `remove` rejects with `CONFLICT`. Unsaved edits of the open item are saved first, so `undo()` brings back its last data; if another panel made the same id again meanwhile, `undo()` rejects with `CONFLICT`. The next item opens, unless you picked another one meanwhile.
+- **Busy.** `plans.job(fn)` runs one async job at a time, and `plans.busy` is true meanwhile. Changes other panels make (list, a delete of the open item, remote edits) wait and are shown once when the jobs are done. `panels.open` and the fallback wait too, so a panel in the middle of an import is not reloaded or switched under it.
+- **Last item.** The item picked last is kept as `items.last.<prefix>` in the module's storage; a module that kept its own `lastBuild` can move it there when it migrates.
+
+In a Vue module, `useItemSession` from `@tavora/official-ui` returns `items`, `currentId`, `current` (the open item's data), `status`, `busy`, `deleted` and the same methods (plus `adoptRemote`, `refresh` and `restoreDeleted`) as refs and functions. Showing the open item in more than one panel is what [panels](./panels.md#let-each-panel-show-its-own-build) are for; the item session does the `getLaunch`, `setContent` and `onNavigate` part of that for you.
+
 `ifRevision: 0` means "only if it doesn't exist yet". Other panels get `documents.onChange` after each save; the panel that saved does not.
 
 ## Pictures

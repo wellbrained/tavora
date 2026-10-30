@@ -70,6 +70,7 @@ async function show(id: string | null) {
 }
 ```
 
+- Most modules do not write this by hand: the [item session](./saving-data.md#items-a-list-and-the-one-that-is-open) lists the items, restores, calls `panel.setContent` and follows `panel.onNavigate` for you.
 - Call `panel.setContent` every time the selection changes. Tavora keeps it with the panel and shows the title when the user hovers the tab, so two Gear tabs can be told apart.
 - Put a build selector in the panel's toolbar. Shorten long titles there and show the full name on hover.
 - When a panel's build is deleted, keep the panel open: say so where the build was and keep the selector. Never switch to another build by yourself.

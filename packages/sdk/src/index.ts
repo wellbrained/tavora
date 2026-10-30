@@ -162,7 +162,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.17";
+export const SDK_VERSION = "0.2.18";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as

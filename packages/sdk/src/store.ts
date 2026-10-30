@@ -406,3 +406,5 @@ export async function openDocument<T>(sdk: TavoraSDK, id: string, options: OpenD
     },
   };
 }
+
+export * from "./items.js";

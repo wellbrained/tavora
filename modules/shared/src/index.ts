@@ -11,6 +11,7 @@ export { default as NameDialog } from "./components/NameDialog.vue";
 export { checkName, type NameProblem } from "./components/name-check";
 export { SegmentedControl } from "./components/ui/segmented-control";
 export { useDocument, type UseDocument } from "./use-document";
+export { useItemSession, type UseItemSession } from "./use-item-session";
 export { errorMessage, readDocument, serial, updateDocument, type UpdateOptions, type Versioned } from "./documents";
 
 export{Tooltip,TooltipRows,type TooltipRow}from"./components/tooltip";
