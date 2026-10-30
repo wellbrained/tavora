@@ -529,11 +529,10 @@ describe("switching safely", () => {
     };
     await expect(session.pick("plan-b")).rejects.toBeInstanceOf(ItemSaveError);
     expect(session.currentId).toBe("plan-a");
-    expect(await host.navigate({ id: "plan-b", title: "x" })).toEqual({ handled: true, ok: false });
-    expect(session.currentId).toBe("plan-a");
+    // The failed save rolled the edit back and reported it: nothing is left to protect, so a switch now goes through.
+    expect(await host.navigate({ id: "plan-b", title: "x" })).toEqual({ handled: true, ok: true });
+    expect(session.currentId).toBe("plan-b");
     sdk.documents.put = put;
-    session.current!.update(add("again"));
-    expect(await session.pick("plan-b")).toBe(true);
   });
 
   it("lets a pick made during remove(current) win over remove's fallback", async () => {
@@ -730,5 +729,70 @@ describe("adoptRemote", () => {
     const { sdk } = createMemoryHost();
     const session = await openItems(sdk, options());
     await expect(session.adoptRemote()).resolves.toBeUndefined();
+  });
+});
+
+describe("re-check fixes", () => {
+  it("saves an edit typed while the next item opened, or stays on the item when that save fails", async () => {
+    const { sdk, host } = createMemoryHost();
+    seed(host, "a", "A");
+    seed(host, "b", "B");
+    const session = await openItems(sdk, options({ debounceMs: 60_000 }));
+    await session.pick("plan-a");
+    const errors: string[] = [];
+    session.onError((_error, kind) => errors.push(kind));
+    const release = gateGet(sdk, "plan-b");
+    const picked = session.pick("plan-b");
+    await wait(0);
+    session.current!.update(add("typed late"));
+    host.answer("documents.put", () => {
+      throw new Error("disk full");
+    });
+    release();
+    await expect(picked).rejects.toBeInstanceOf(ItemSaveError);
+    expect(session.currentId).toBe("plan-a");
+    expect(errors).toContain("save");
+
+    host.unanswer("documents.put");
+    session.current!.update(add("again"));
+    await expect(session.pick("plan-b")).resolves.toBe(true);
+    expect(storedPlan(host, "plan-a")?.items).toEqual(["again"]);
+  });
+
+  it("lets a pick through once the disk is back, even with nothing left to save", async () => {
+    const { sdk, host } = createMemoryHost();
+    seed(host, "a", "A");
+    seed(host, "b", "B");
+    const session = await openItems(sdk, options({ debounceMs: 60_000 }));
+    await session.pick("plan-a");
+    host.answer("documents.put", () => {
+      throw new Error("disk full");
+    });
+    session.current!.update(add("lost"));
+    await session.flush();
+    expect(session.status).toBe("error");
+    host.unanswer("documents.put");
+    await session.flush();
+    await expect(session.pick("plan-b")).resolves.toBe(true);
+    expect(session.currentId).toBe("plan-b");
+  });
+
+  it("does not let a fallback after a delete elsewhere override a pick in flight", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    seed(a.host, "a", "A");
+    seed(a.host, "b", "B");
+    seed(a.host, "c", "C");
+    const session = await openItems(a.sdk, options({ onDeleted: "fallback" }));
+    await session.pick("plan-a");
+    const release = gateGet(a.sdk, "plan-b");
+    const picked = session.pick("plan-b");
+    await wait(0);
+    await b.sdk.documents.delete("plan-a");
+    await wait(10);
+    release();
+    await expect(picked).resolves.toBe(true);
+    await wait(20);
+    expect(session.currentId).toBe("plan-b");
   });
 });

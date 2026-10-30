@@ -220,11 +220,13 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
   /** What came in during a job. `id` is the open item they are about: a pick makes them stale. */
   const held = { list: false, current: false, deleted: false, id: null as string | null };
   const busy = () => running > 0;
+  /** Picks in flight: a fallback after a delete elsewhere must not override the item the user is switching to. */
+  let picking = 0;
 
   async function fallbackFrom(removedId: string, before: readonly ItemSummary[]): Promise<void> {
     const index = before.findIndex((item) => item.id === removedId);
     await refresh();
-    if (closed || currentId !== removedId) return;
+    if (closed || currentId !== removedId || picking > 0) return;
     const next = items[Math.min(Math.max(index, 0), items.length - 1)]?.id ?? null;
     try {
       await pick(next);
@@ -299,6 +301,15 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
 
   async function pick(id: string | null, restoring = false): Promise<boolean> {
     if (closed) throw new Error("the item session is closed");
+    picking++;
+    try {
+      return await pickNow(id, restoring);
+    } finally {
+      picking--;
+    }
+  }
+
+  async function pickNow(id: string | null, restoring: boolean): Promise<boolean> {
     if (id !== null) {
       // Checked before `generation` moves, so a wrong id cannot cancel a pick that is still waiting.
       if (!id.startsWith(prefix)) throw new ItemNotFoundError(id);
@@ -310,7 +321,7 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
       const failures = saveFailures;
       await handle.flush();
       if (mine !== generation) return false;
-      if (saveFailures !== failures || handle.status === "error") throw new ItemSaveError(currentId ?? "");
+      if (saveFailures !== failures) throw new ItemSaveError(currentId ?? "");
     }
     let next: DocumentHandle<T> | null = null;
     if (id !== null) {
@@ -323,6 +334,20 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
         await next.dispose();
         throw new ItemNotFoundError(id);
       }
+    }
+    // Edits typed while the next item opened still went to the open one: save them before the swap, or stay.
+    while (handle && !deleted && handle.status !== "idle") {
+      const failures = saveFailures;
+      await handle.flush();
+      if (mine !== generation) {
+        await next?.dispose();
+        return false;
+      }
+      if (saveFailures !== failures) {
+        await next?.dispose();
+        throw new ItemSaveError(currentId ?? "");
+      }
+      if (handle.status === "error") break; // nothing left to save: the failure was reported already
     }
     const previous = handle;
     for (const off of detach) off();
