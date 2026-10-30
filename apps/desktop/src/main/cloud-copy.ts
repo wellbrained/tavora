@@ -1,3 +1,4 @@
+import { apiReason } from "@tavora/module-schema";
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -330,9 +331,10 @@ export class ServiceStorage implements CopyStorage {
     Buffer.from(sealed).copy(body, 8 + ids.length * PART_ID_BYTES);
     const response = await this.request("PUT", "", body);
     const answer = (await response.json().catch(() => null)) as { reason?: unknown; version?: unknown; size?: unknown } | null;
+    const reason = apiReason(answer);
     if (response.ok && typeof answer?.version === "number" && typeof answer.size === "number") return { status: "saved", version: answer.version, size: answer.size };
-    if (response.status === 409 && answer?.reason === "copy-changed" && typeof answer.version === "number") return { status: "conflict", version: answer.version };
-    if (response.status === 409 && answer?.reason === "missing-parts") return { status: "missing-parts" };
+    if (response.status === 409 && answer && reason === "copy-changed" && typeof answer.version === "number") return { status: "conflict", version: answer.version };
+    if (response.status === 409 && reason === "missing-parts") return { status: "missing-parts" };
     if (response.status === 413) return { status: "too-big", ...(typeof answer?.size === "number" ? { size: answer.size } : {}) };
     return this.fail(response);
   }

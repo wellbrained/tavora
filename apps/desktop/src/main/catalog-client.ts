@@ -5,7 +5,7 @@
 // matches the listing. After that the zip goes through the same installer as Install from zip, which
 // checks the publisher signature itself.
 import { createHash } from "node:crypto";
-import { isConnector, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, translationsFor, type Connector } from "@tavora/module-schema";
+import { apiReason, isConnector, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, translationsFor, type ApiReason, type Connector } from "@tavora/module-schema";
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView, CatalogOwnReview, CatalogRating } from "../shared/host-api";
 import { isWebUrl } from "./browser-url";
@@ -191,7 +191,7 @@ function parseOwnReview(raw: unknown): CatalogOwnReview | null {
 }
 
 /** What the service said went wrong with a rating or reply, as a message for the user. */
-const REVIEW_REASONS: Record<string, MessageKey> = {
+const REVIEW_REASONS: Partial<Record<ApiReason, MessageKey>> = {
   "own-module": "error.reviewOwn",
   "review-words": "error.reviewWords",
   "review-link": "error.reviewLink",
@@ -566,7 +566,8 @@ export class CatalogClient {
     if (response.status === 204) return {};
     const json = (await response.json().catch(() => null)) as Record<string, unknown> | null;
     if (response.ok) return json && typeof json === "object" && !Array.isArray(json) ? json : {};
-    const key = typeof json?.reason === "string" ? REVIEW_REASONS[json.reason] : undefined;
+    const reason = apiReason(json);
+    const key = reason ? REVIEW_REASONS[reason] : undefined;
     // The limits say how many hours are left.
     if (key) throw new CatalogError(key, Number.isInteger(json?.hours) && (json!.hours as number) > 0 ? { hours: json!.hours as number } : undefined);
     if (response.status === 404) throw new CatalogError("error.catalogNotListed");

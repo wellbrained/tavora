@@ -2,6 +2,10 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## Unreleased
+
+- `API_REASONS` (`ApiReason`, `isApiReason`, `apiReason`): every `reason` code Tavora's service sends with a refusal.
+
 ## 0.1.6
 
 - `viewport.wide`: the smallest size while a panel is wider than tall (`ModuleMinimum`), for a module with a second layout for that shape; the panel type's `viewport` takes it too. With it, `minWidth` must be no larger than `minHeight` and `wide.minWidth` larger than `wide.minHeight`. A manifest with it needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_WIDE_LAYOUT` (0.21.93), except Tavora's own modules.

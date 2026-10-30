@@ -3,6 +3,7 @@
 // signed in); this signs the code with the key and sends the signature and the key's public half to
 // Tavora's service. The secret key never leaves this PC.
 import { createPublicKey, sign, type KeyObject } from "node:crypto";
+import { apiReason, type ApiReason } from "@tavora/module-schema";
 import { fingerprint } from "./signature.ts";
 
 export const DEFAULT_API_URL = "https://api.mytavora.app";
@@ -28,7 +29,7 @@ export function linkRequest(key: KeyObject, code: string): { code: string; publi
   return { code, publicKey: publicHalf(key), signature: sign(null, Buffer.from(`${LINK_STATEMENT}\n${code}`, "utf8"), key).toString("base64") };
 }
 
-const MESSAGES: Record<string, string> = {
+const MESSAGES: Partial<Record<ApiReason, string>> = {
   "wrong-code": "That code is wrong or has expired. Get a new one in Tavora: Settings > Development > Publisher keys and CI > Get a link code.",
   "bad-signature": "The service could not check the key's signature.",
   "key-taken": "This key is already linked to another Tavora account.",
@@ -36,6 +37,10 @@ const MESSAGES: Record<string, string> = {
   "too-many": "Too many tries. Wait a few minutes and try again.",
   unavailable: "Linking keys is not available right now.",
 };
+
+function linkMessage(reason: ApiReason | undefined): string | undefined {
+  return reason === undefined ? undefined : MESSAGES[reason];
+}
 
 /** Links the key with the code. Resolves with the key's fingerprint and the developer name users will see. */
 export async function linkKey(options: { key: KeyObject; code: string; apiUrl?: string; fetch?: typeof fetch }): Promise<{ fingerprint: string; name: string | null }> {
@@ -55,7 +60,7 @@ export async function linkKey(options: { key: KeyObject; code: string; apiUrl?: 
     throw new LinkError(`Tavora's service could not be reached (${url}). Check your internet connection.`);
   }
   const answer = (await response.json().catch(() => ({}))) as { reason?: unknown; name?: unknown; fingerprint?: unknown };
-  if (!response.ok) throw new LinkError((typeof answer.reason === "string" && MESSAGES[answer.reason]) || `The service refused the link (${response.status}).`);
+  if (!response.ok) throw new LinkError(linkMessage(apiReason(answer)) ?? `The service refused the link (${response.status}).`);
   const own = fingerprint(options.key);
   if (answer.fingerprint !== own) throw new LinkError("The service answered for a different key.");
   return { fingerprint: own, name: typeof answer.name === "string" ? answer.name : null };

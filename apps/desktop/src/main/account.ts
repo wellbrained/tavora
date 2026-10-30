@@ -1,5 +1,6 @@
 import type { KeyObject } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
+import { apiReason, type ApiReason } from "@tavora/module-schema";
 import { linkRequest, publishSignature, publishZip, type Published } from "@tavora/pack";
 import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken, AccountView, DeviceOs, KeyRequestView, PrefixState } from "../shared/host-api";
 import type { Language, MessageKey } from "../shared/i18n";
@@ -116,7 +117,7 @@ export interface AccountClientOptions {
 }
 
 /** What the service said went wrong, as a message for the user. */
-const REASONS: Record<string, MessageKey> = {
+const REASONS: Partial<Record<ApiReason, MessageKey>> = {
   "discord-refused": "account.error.discordRefused",
   "discord-unreachable": "account.error.discordUnreachable",
   "discord-taken": "account.error.discordTaken",
@@ -848,28 +849,29 @@ export class AccountClient {
       await this.forget();
       throw new UserError("account.error.signedOut");
     }
+    const reason = apiReason(json);
     // The catalog's uploads for today are used up; it says nothing about when, so: tomorrow.
-    if (json.reason === "daily-limit" && root === "/v1/catalog") throw new UserError("publish.error.dailyLimit");
+    if (reason === "daily-limit" && root === "/v1/catalog") throw new UserError("publish.error.dailyLimit");
     if (response.status === 429) {
       const seconds = Number(response.headers.get("retry-after"));
       throw new UserError("account.error.tooMany", { minutes: Math.max(1, Math.ceil((Number.isFinite(seconds) ? seconds : 60) / 60)) });
     }
-    if (json.reason === "name-too-soon") {
+    if (reason === "name-too-soon") {
       const at = typeof json.nextChangeAt === "string" ? new Date(json.nextChangeAt) : null;
       if (at && Number.isFinite(at.getTime())) throw new UserError("account.error.nameTooSoon", { date: new Intl.DateTimeFormat(this.options.language(), { dateStyle: "long" }).format(at) });
     }
-    if (json.reason === "daily-limit") {
+    if (reason === "daily-limit") {
       // The service's emails for today are used up: say when sending works again, in the user's own time.
       const at = typeof json.retryAt === "string" ? new Date(json.retryAt) : null;
       if (at && Number.isFinite(at.getTime())) throw new UserError("account.error.dailyLimit", { time: new Intl.DateTimeFormat(this.options.language(), { weekday: "long", hour: "2-digit", minute: "2-digit" }).format(at) });
       throw new UserError("account.error.dailyLimitSoon");
     }
-    const key = typeof json.reason === "string" ? REASONS[json.reason] : undefined;
+    const key = reason ? REASONS[reason] : undefined;
     if (key) throw new UserError(key);
     // A zip the catalog refused comes with the catalog's own sentence about it.
-    if ((json.reason === "invalid" || json.reason === "conflict") && typeof json.error === "string" && json.error.trim()) {
+    if ((reason === "invalid" || reason === "conflict") && typeof json.error === "string" && json.error.trim()) {
       const message = json.error.replace(/\s+/g, " ").trim().slice(0, 300);
-      const manifest = root === "/v1/catalog" && json.reason === "invalid" ? refusedManifest(message) : null;
+      const manifest = root === "/v1/catalog" && reason === "invalid" ? refusedManifest(message) : null;
       // Tavora checked this very manifest before uploading, so a refusal here means an older catalog.
       if (manifest) throw new UserError("publish.error.serverOlder", { detail: manifest });
       throw new UserError("publish.error.refused", { message });

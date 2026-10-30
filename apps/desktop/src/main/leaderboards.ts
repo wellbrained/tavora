@@ -1,4 +1,4 @@
-import { isLeaderboardId, isLeaderboardPeriod, LEADERBOARD_PERIODS, type LeaderboardBoard } from "@tavora/module-schema";
+import { apiReason, isLeaderboardId, isLeaderboardPeriod, LEADERBOARD_PERIODS, type ApiReason, type LeaderboardBoard } from "@tavora/module-schema";
 import { LIMITS, type LeaderboardMine, type LeaderboardPeriod, type LeaderboardRow, type LeaderboardStanding, type LeaderboardStatus, type LeaderboardSubmitResult, type LeaderboardTop } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
 
@@ -95,9 +95,12 @@ function resultFields(value: unknown): Record<string, unknown> {
   return fields;
 }
 
+/** The reasons the service gives a result it did not take. */
+const REJECTED_REASONS: readonly ApiReason[] = ["invalid", "time", "archive", "day-taken", "full"];
+
 /** Turns the service's refusal into the module's error. */
 function refused(answer: Answer | null): never {
-  const reason = answer?.body.reason;
+  const reason = apiReason(answer?.body);
   if (!answer) throw new HostError("PERMISSION_DENIED", "leaderboards need Tavora's accounts, which are off in this Tavora");
   if (answer.status === 401) throw new HostError("PERMISSION_DENIED", "the user is signed out of Tavora");
   if (answer.status === 403 && reason === "not-shown") throw new HostError("PERMISSION_DENIED", "the user hasn't agreed to show their results yet (leaderboards.show)");
@@ -157,7 +160,7 @@ export class ModuleLeaderboards {
     return {
       accepted: strings(answer.body.accepted),
       rejected: rejected.flatMap((item) =>
-        typeof item.id === "string" && ["invalid", "time", "archive", "day-taken", "full"].includes(item.reason as string)
+        typeof item.id === "string" && REJECTED_REASONS.includes(item.reason as ApiReason)
           ? [{ id: item.id, reason: item.reason as LeaderboardSubmitResult["rejected"][number]["reason"] }]
           : [],
       ),

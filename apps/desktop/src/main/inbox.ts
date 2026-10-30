@@ -3,6 +3,7 @@
 // sign-in; the host UI only sees the view built here. Nothing the service says is trusted: every conversation and
 // message is checked field by field and shown as plain text. The notes about the header icon are decided here, once per
 // cause, and remembered on this PC.
+import { apiReason, type ApiReason } from "@tavora/module-schema";
 import { readFile } from "node:fs/promises";
 import {
   appearedKey,
@@ -39,7 +40,7 @@ const ID = /^[A-Za-z0-9_-]{16}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 /** What the service's `reason` becomes for the user. */
-const REASONS: Record<string, MessageKey> = {
+const REASONS: Partial<Record<ApiReason, MessageKey>> = {
   "message-link": "inbox.error.link",
   "message-words": "inbox.error.words",
   "daily-limit": "inbox.error.dailyLimit",
@@ -462,7 +463,8 @@ export class Inbox {
     if (response.status === 204) return {};
     const json = (await response.json().catch(() => null)) as Record<string, unknown> | null;
     if (response.ok) return json && typeof json === "object" && !Array.isArray(json) ? json : {};
-    const key = typeof json?.reason === "string" ? REASONS[json.reason] : undefined;
+    const reason = apiReason(json);
+    const key = reason ? REASONS[reason] : undefined;
     if (key) throw new UserError(key, Number.isInteger(json?.hours) && (json!.hours as number) > 0 ? { hours: json!.hours as number } : undefined);
     if (response.status === 404) throw new UserError("inbox.error.gone");
     if (response.status === 401) throw new UserError("account.error.signedOut");
