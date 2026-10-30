@@ -37,133 +37,23 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Pictures have a 1:1 button next to the zoom buttons (or press 1).",
       "Delete a note or a board in another panel and it stays open with a Restore button.",
       "A second Calculator panel shows new results and saved values at once.",
+      "A stream overlay question goes away when you close the last panel of the module that asked.",
       "Links from modules no longer open addresses on your PC or local network, and packing a module stops if it holds a link to files elsewhere.",
       "Update in Settings > Modules installs updates again, and catalog modules work right after Tavora starts.",
     ],
     prs: [
       { number: 514, title: "Tavora 0.23: PDF Viewer and safer modules" },
-    ],
-    tags: ["calculator", "clock-counter", "modules", "notes", "pdf-viewer", "privacy", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.22.10",
-    date: "2026-10-30",
-    title: "Back to 100% zoom",
-    notes: [
-      "In the PDF Viewer, click the zoom number to go back to 100%.",
-      "Pictures have a 1:1 button next to the zoom buttons (or press 1).",
-    ],
-    prs: [
       { number: 510, title: "Zoom back to 100%: PDF Viewer zoom number resets, ZoomPane gets 1:1" },
-    ],
-    tags: ["pdf-viewer", "ui-kit"],
-  },
-  {
-    version: "0.22.9",
-    date: "2026-10-30",
-    title: "PDF Viewer",
-    notes: [
-      "New official module: read PDFs and look at pictures next to your game.",
-      "Open files one by one or drop them on the panel. Each game keeps its own files, and every file remembers the page and zoom you left it at.",
-      "Search a PDF with Ctrl+F, jump through its contents list, and fit it to the width or the whole page.",
-    ],
-    prs: [
       { number: 509, title: "PDF Viewer: new official module, PDFs in the module file store" },
-    ],
-    tags: ["modules", "notes", "pdf-viewer", "privacy", "sdk", "website", "whiteboard"],
-  },
-  {
-    version: "0.22.8",
-    date: "2026-10-30",
-    title: "Connector questions",
-    notes: [
-      "A stream overlay question goes away when you close the last panel of the module that asked.",
-    ],
-    prs: [
       { number: 506, title: "Desktop: a connector question ends with the module's last panel" },
-    ],
-    tags: ["privacy", "website", "workspace"],
-  },
-  {
-    version: "0.22.7",
-    date: "2026-10-30",
-    title: "Safer module packages",
-    notes: [
-      "Packing a module now stops with a clear message if a folder or file in it is a link, instead of pulling in files from elsewhere.",
-    ],
-    prs: [
       { number: 501, title: "Packer refuses links inside a module folder" },
-    ],
-    tags: ["publishing"],
-  },
-  {
-    version: "0.22.6",
-    date: "2026-10-30",
-    title: "Whiteboard keeps a deleted board open",
-    notes: [
-      "If you delete a board in another panel, it stays on screen with a Restore button.",
-      "A new Whiteboard panel opens the board you used last.",
-    ],
-    prs: [
       { number: 498, title: "Whiteboard: board library and board session on the item session and document store" },
-    ],
-    tags: ["whiteboard"],
-  },
-  {
-    version: "0.22.5",
-    date: "2026-10-30",
-    title: "Calculator history in every panel",
-    notes: [
-      "A second Calculator panel shows new results and saved values at once, without waiting for you to click into it.",
-    ],
-    prs: [
       { number: 495, title: "Clock & Counter, Calculator and System Monitor on the document store and module bootstrap" },
-    ],
-    tags: ["calculator", "clock-counter", "system-monitor"],
-  },
-  {
-    version: "0.22.4",
-    date: "2026-10-30",
-    title: "Notes you delete in another panel",
-    notes: [
-      "A note stays open when you delete it in another Notes panel, with \"Deleted elsewhere\" and a Restore button, instead of jumping to the scratchpad.",
-    ],
-    prs: [
       { number: 490, title: "Todos and Notes on the document store, item session and bootstrap" },
-    ],
-    tags: ["notes", "todos"],
-  },
-  {
-    version: "0.22.3",
-    date: "2026-10-30",
-    title: "Module updates install from Settings again",
-    notes: [
-      "Update to … in Settings > Modules installs the update. Before, it did nothing when the update asked for no new access.",
-    ],
-  },
-  {
-    version: "0.22.2",
-    date: "2026-10-29",
-    title: "Safer links",
-    notes: [
-      "Links from modules and catalog pages no longer open addresses on your PC or local network.",
-      "One click lets a module do one thing that needs a click, as promised.",
-    ],
-    prs: [
       { number: 477, title: "Desktop: links skip local addresses, and one press allows one call" },
-    ],
-    tags: ["modules", "privacy", "website"],
-  },
-  {
-    version: "0.22.1",
-    date: "2026-10-29",
-    title: "Catalog modules right after starting",
-    notes: [
-      "Modules from the catalog are known as catalog modules as soon as Tavora starts, not only after a module reload: Report, the module page and leaderboards work for them right away.",
-    ],
-    prs: [
       { number: 474, title: "Desktop: find installed modules in one step at startup and on reload" },
     ],
+    tags: ["calculator", "clock-counter", "modules", "notes", "pdf-viewer", "privacy", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard", "workspace"],
   },
   {
     version: "0.22.0",
