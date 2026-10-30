@@ -4,7 +4,7 @@ import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, WebContentsView, type Session } from "electron";
-import type { Capability, GameOverlayResult, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
+import type { CallName, Capability, GameOverlayResult, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
 import { gestureCounts, type Opacity } from "./game-overlays";
@@ -489,7 +489,8 @@ export class ModuleView {
     throw new HostError("PERMISSION_DENIED", `${what} is not available while the panel is shown over the game; bring it back first`);
   }
 
-  private async takeGesture(what: string): Promise<void> {
+  /** `what` is the call as METHOD_INFO names it (gesture-table.test.ts holds the two together); `detail` only goes into the error. */
+  private async takeGesture(what: CallName, detail?: string): Promise<void> {
     if (!unused(this.press)) {
       await new Promise<void>((resolve) => {
         const done = () => {
@@ -502,7 +503,7 @@ export class ModuleView {
       });
     }
     const press = this.press;
-    if (!unused(press)) throw new HostError("PERMISSION_DENIED", `${what} must be called right after a click or key press`);
+    if (!unused(press)) throw new HostError("PERMISSION_DENIED", `${detail ?? what} must be called right after a click or key press`);
     press.used = true;
   }
 
@@ -653,7 +654,7 @@ export class ModuleView {
         tooltip:{
           show:async request=>{
             if(!this.tooltipAnchorAllowed(request.at))return false;
-            if(request.pinned)await this.takeGesture("ui.tooltip.show pinned");
+            if(request.pinned)await this.takeGesture("ui.tooltip.show", "a pinned ui.tooltip.show");
             else {
               if(!this.tooltipPointerMatches(request.at))await new Promise(resolve=>setTimeout(resolve,40));
               if(!this.tooltipPointerMatches(request.at)&&!unused(this.press))return false;
@@ -857,7 +858,7 @@ export class ModuleView {
         // Joining or leaving, and muting or deafening the user (which can switch their microphone back on),
         // only follow a click or key press (D8). A person's volume streams while a slider is dragged, and only
         // changes what the user hears, so it needs none.
-        if (command === "SELECT_VOICE_CHANNEL" || command === "SET_VOICE_SETTINGS") await this.takeGesture(command);
+        if (command === "SELECT_VOICE_CHANNEL" || command === "SET_VOICE_SETTINGS") await this.takeGesture("discord.command", command);
         await use();
         return connector.command(command, args);
       },

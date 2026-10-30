@@ -1288,7 +1288,8 @@ const flag = (key: string, when: string): GestureRule => ({ when, check: (params
 /**
  * Each call declared once: the Tavora that first has it, its capability and whether it needs a click. `Record<CallName,
  * ...>` makes a new method without an entry fail typecheck. The memory host, `sdk.supports`, the fallbacks and the
- * generated protocol reference all read this table; the host's own checks are in apps/desktop (bridge.ts, module-view.ts).
+ * generated protocol reference all read this table; the host's own checks are in apps/desktop (bridge.ts, module-view.ts), and
+ * apps/desktop/src/main/gesture-table.test.ts fails when the host's click checks and `gesture` differ.
  */
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),
