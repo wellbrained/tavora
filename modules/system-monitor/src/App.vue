@@ -13,6 +13,7 @@ import AppsDialog from "./AppsDialog.vue";
 import DrivesDialog from "./DrivesDialog.vue";
 import { memory, num } from "./format";
 import { language, setLanguage, t } from "./i18n";
+import { de, en } from "./locales";
 import { buildMenu, parsePick } from "./menu";
 import { createMonitor, type Monitor } from "./monitor";
 import { watchedDrives } from "./settings";
@@ -25,10 +26,16 @@ const connectError = ref<string | null>(null);
 const picking = ref(false);
 const connecting = ref(false);
 const showingApps = ref(false);
+const stopFollowing: (() => void)[] = [];
 
 onMounted(async () => {
   try {
-    const connected = await connectModule(setLanguage);
+    const connection = await connectModule({ texts: { en, de } });
+    if (connection.status !== "ready" || !connection.sdk) throw connection.error;
+    const connected = connection.sdk;
+    // The components read the module's own translator; it follows the language the handle reports.
+    setLanguage(connection.language);
+    stopFollowing.push(connection.onLanguage(setLanguage), connection.dispose);
     const started = createMonitor(connected);
     sdk.value = connected;
     monitor.value = started;
@@ -39,7 +46,10 @@ onMounted(async () => {
   }
 });
 
-onBeforeUnmount(() => monitor.value?.stop());
+onBeforeUnmount(() => {
+  stopFollowing.forEach((fn) => fn());
+  monitor.value?.stop();
+});
 
 const status = computed(() => monitor.value?.status.value ?? "loading");
 const snapshot = computed(() => monitor.value?.snapshot.value ?? null);

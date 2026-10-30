@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyText, EMPTY, evaluate, format, insert, press, pretty, reference, rounded, segments, type Entry, type Lookup } from "./calc";
+import { copyText, decimalComma, EMPTY, evaluate, format, insert, press, pretty, reference, rounded, segments, type Entry, type Lookup } from "./calc";
 
 const value = (text: string) => {
   const outcome = evaluate(text);
@@ -236,5 +236,11 @@ describe("rounded", () => {
   it("leaves anything that isn't one number alone", () => {
     expect(rounded("", 2, true)).toBe("");
     expect(rounded("2+3", 2, true)).toBe("2+3");
+  });
+});
+describe("decimalComma", () => {
+  it("knows which locales write a decimal comma", () => {
+    expect(decimalComma("de-DE")).toBe(true);
+    expect(decimalComma("en-GB")).toBe(false);
   });
 });

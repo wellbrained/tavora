@@ -1,27 +1,24 @@
-// Keeps this panel's copy of the list and saves each change. Changes show at once; saving re-applies them to the
-// newest stored list, so two panels changing it at the same time both keep their changes. After a save, the panel
-// that made the change tells each touched item's overlay what it shows now.
-import { errorMessage, readDocument, serial, updateDocument, type Versioned } from "@tavora/official-ui";
+// Keeps this panel's copy of the list on top of the SDK's document store: changes show at once and are saved a moment
+// later, re-applied on the newest stored list, so two panels changing it at the same time both keep their changes.
+// After a save, the panel that made the change tells each touched item's overlay what it shows now.
+import { errorMessage } from "@tavora/official-ui";
 import type { TavoraSDK } from "@tavora/sdk";
+import { openDocument } from "@tavora/sdk/store";
 import { ref, shallowRef } from "vue";
 import { t } from "./i18n";
 import { find, LIST_ID, LIST_TITLE, overlayState, parseList, type ItemList } from "./items";
 
-export type ItemStore = ReturnType<typeof createItemStore>;
+export type ItemStore = Awaited<ReturnType<typeof createItemStore>>;
 
-export function createItemStore(sdk: TavoraSDK) {
-  const list = shallowRef<ItemList>(parseList(null));
+export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: number } = {}) {
+  const doc = await openDocument(sdk, LIST_ID, { parse: parseList, title: () => LIST_TITLE, debounceMs: options.debounceMs ?? 0 });
+  /** What the panel shows: the stored list plus changes still being saved. */
+  const list = shallowRef<ItemList>(doc.data);
   const error = ref<string | null>(null);
-  let stored: Versioned<ItemList> = { data: list.value, revision: 0 };
-  let saving = 0;
-  const queue = serial();
   /** Whether the user allowed stream overlays; asked for on the first Copy OBS link, so it can turn true later. */
   const overlays = ref(sdk.host.capabilities.includes("overlay"));
-
-  async function load(): Promise<void> {
-    stored = await readDocument(sdk, LIST_ID, parseList);
-    list.value = stored.data;
-  }
+  /** Items changed here whose overlays have not been told yet. */
+  const touched = new Set<string>();
 
   /** Tells the overlays of these items (OBS or over the game) what they show now; an item that is gone shows nothing. */
   function publish(ids: string[], data: ItemList): void {
@@ -32,35 +29,31 @@ export function createItemStore(sdk: TavoraSDK) {
     }
   }
 
-  /** Applies a change to the items `touched` names, shows it and saves it. */
-  function apply(touched: string[], change: (data: ItemList) => void): Promise<void> {
-    const next = structuredClone(list.value);
-    change(next);
-    list.value = next;
-    saving++;
-    return queue(async () => {
-      try {
-        stored = await updateDocument(sdk, LIST_ID, { parse: parseList, change, title: () => LIST_TITLE, known: stored });
-        error.value = null;
-        publish(touched, stored.data);
-      } catch (reason) {
-        error.value = t("store.saveError", { error: errorMessage(reason) });
-        stored = await readDocument(sdk, LIST_ID, parseList).catch(() => stored);
-      } finally {
-        saving--;
-        if (saving === 0) list.value = stored.data;
-      }
-    });
-  }
+  doc.onChange((event) => (list.value = event.data));
+  doc.onStatus((status) => {
+    if (status === "dirty" || status === "saving") error.value = null;
+    else if (status === "idle") {
+      publish([...touched], doc.data);
+      touched.clear();
+    } else touched.clear();
+  });
+  doc.onError((reason, kind) => {
+    if (kind === "save") error.value = t("store.saveError", { error: errorMessage(reason) });
+  });
 
-  /** Another panel saved: show its list unless this panel is still saving, which reads it anyway. */
-  async function reload(): Promise<void> {
-    if (saving > 0) return;
-    const fresh = await readDocument(sdk, LIST_ID, parseList);
-    if (saving > 0) return;
-    stored = fresh;
-    list.value = fresh.data;
-  }
-
-  return { list, error, load, apply, reload, publish, overlays };
+  return {
+    list,
+    error,
+    overlays,
+    publish,
+    status: () => doc.status,
+    /** Changes the list at once and saves it soon; the overlays of the `touched` items hear of it after the save. `change` runs again on a newer stored list, so it must not make ids. */
+    apply(items: string[], change: (data: ItemList) => void): void {
+      for (const id of items) touched.add(id);
+      doc.update(change);
+    },
+    flush: () => doc.flush(),
+    /** Saves what is left, then stops listening. */
+    dispose: () => doc.dispose(),
+  };
 }
