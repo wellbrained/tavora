@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.18
+
+- New projects start on `@tavora/sdk` 0.3.1, which adds `restoreDeleted(copy?)` to the item session and drops the kit's `serial` and the callback form of `connectModule`.
+
 ## 0.1.17
 
 - New projects start on `@tavora/sdk` 0.3.0.

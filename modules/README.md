@@ -25,7 +25,7 @@ community module could do everything they do.
   applied again to the newest copy (the document store, `openDocument` in
   `@tavora/sdk/store`), so both panels keep their work. Changes are
   written so that running them twice gives the same result.
-- The theme comes from `ui.getTheme`: `connectModule()` sets each token as a
+- The theme comes from `ui.getTheme`: `connectModule({ texts })` sets each token as a
   CSS variable, which `shared/src/theme.css` maps into Tailwind.
 
 ## Working on them

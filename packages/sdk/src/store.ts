@@ -19,7 +19,10 @@ const DEFAULT_DEBOUNCE_MS = 500;
 export type DocumentChangeFn<T> = (draft: T) => T | void;
 
 export interface OpenDocumentOptions<T> {
-  /** Turns stored data, or null for a missing document, into a valid value. */
+  /**
+   * Turns stored data into a valid value. Called with `null` for a document that does not exist (not made yet, or
+   * deleted by another panel), it must return a valid, empty placeholder and not throw; the store reports a throw as an error that says so.
+   */
   parse(raw: JsonValue | null): T;
   title(data: T): string;
   /**
@@ -111,9 +114,18 @@ export async function openDocument<T>(sdk: TavoraSDK, id: string, options: OpenD
     return result === undefined ? copy : (result as T);
   };
 
+  /** What a missing document shows. A `parse` that throws for null is a mistake in the module: say so, not the raw error. */
+  const placeholder = (): T => {
+    try {
+      return parse(null);
+    } catch (error) {
+      throw new Error(`parse(null) must return a valid empty value for a missing document (${id}): ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    }
+  };
+
   async function readNewest(): Promise<Stored<T> & { exists: boolean }> {
     const doc = await sdk.documents.get(id);
-    return doc ? { data: parse(doc.data), revision: doc.revision, exists: true } : { data: parse(null), revision: 0, exists: false };
+    return doc ? { data: parse(doc.data), revision: doc.revision, exists: true } : { data: placeholder(), revision: 0, exists: false };
   }
 
   const first = await readNewest();

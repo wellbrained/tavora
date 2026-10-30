@@ -96,4 +96,17 @@ describe("useItemSession", () => {
     await plans.refresh();
     await plans.adoptRemote();
   });
+
+  it("restores an edited copy", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    a.host.documents.put({ id: "plan-a", title: "A", data: { name: "A", items: ["one"] } });
+    const plans = useItemSession(a.sdk, options);
+    await plans.ready;
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(plans.deleted.value).toBe(true));
+    await plans.restoreDeleted({ name: "A", items: ["one", "later"] });
+    expect(plans.deleted.value).toBe(false);
+    expect(plans.current.value?.items).toEqual(["one", "later"]);
+  });
 });

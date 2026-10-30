@@ -82,7 +82,7 @@ A module built on the shared kit (`@tavora/official-ui`) calls `connectModule` i
 ```ts
 import { connectModule } from "@tavora/official-ui";
 
-const { sdk, t, status } = await connectModule({ texts: { en, de } });
+const { sdk, t, status } = await connectModule({ texts: { en, de } }); // pass {} for no texts
 t.t("add"); // follows the language by itself
 ```
 

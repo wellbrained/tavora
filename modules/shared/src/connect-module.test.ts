@@ -78,29 +78,6 @@ describe("connectModule({ texts })", () => {
   });
 });
 
-describe("connectModule(onLanguage) (deprecated)", () => {
-  it("gives the language now and on change, and returns the sdk", async () => {
-    const { sdk, host } = createMemoryHost();
-    host.setLanguage("de");
-    vi.mocked(connect).mockResolvedValueOnce(sdk);
-    const heard: string[] = [];
-    const connected = await connectModule((language: string) => heard.push(language));
-    expect(connected).toBe(sdk);
-    host.setLanguage("en");
-    expect(heard).toEqual(["de", "en"]);
-    expect(root.style.props.get("--host-accent")).toBeTruthy();
-  });
-
-  it("works without a callback and rejects when there is no host", async () => {
-    const { sdk } = createMemoryHost();
-    vi.mocked(connect).mockResolvedValueOnce(sdk);
-    expect(await connectModule()).toBeTruthy();
-    const error = new Error("no host");
-    vi.mocked(connect).mockRejectedValueOnce(error);
-    await expect(connectModule((language: string) => void language)).rejects.toBe(error);
-  });
-});
-
 describe("connectModule when Tavora is not there", () => {
   it("returns a failed handle instead of throwing", async () => {
     const error = new Error("no host");

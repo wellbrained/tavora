@@ -123,6 +123,10 @@ export interface ItemSession<T> {
   /**
    * Reads the open item again after something other than its handle wrote it (this panel's own `documents.put`, which
    * Tavora does not report back): its title and content show the new copy, unsaved edits stay on top. Does nothing for none.
+   * It does not interrupt a `pick` that is still opening. Unsaved edits of an item that was deleted elsewhere and
+   * made again by this panel's own `documents.put` are applied on top of the newer copy (and `deleted` ends), so bring
+   * a deleted item back with `restoreDeleted`, never with `documents.put(deletedCopy)` and `reload()`: that copy
+   * already holds the edits and they would be applied twice.
    */
   reload(): Promise<void>;
   /** Saves the open item. Never rejects; does nothing for an item deleted elsewhere (see `restoreDeleted`). */
@@ -130,11 +134,13 @@ export interface ItemSession<T> {
   /** The open item's `adoptRemote`: drops unsaved edits and shows the other panel's copy. Does nothing for none or a deleted item. */
   adoptRemote(): Promise<void>;
   /**
-   * After the open item was deleted elsewhere: puts back the last copy the session had (unsaved edits included) with
-   * `ifRevision: 0` and opens it again. Rejects with CONFLICT when another panel has made the id again. Does nothing
-   * when the open item is not deleted.
+   * After the open item was deleted elsewhere: puts `copy` back with `ifRevision: 0` and opens it again. Without
+   * `copy` it is `deletedCopy`, the last copy the session had (unsaved edits included); give your own copy when the
+   * user went on editing after the notice, or those edits are lost. Rejects with CONFLICT when another panel has made
+   * the id again. Does nothing when the open item is not deleted. When a `pick` (or `remove`) started meanwhile, the
+   * item is put back in storage but that switch wins: it is opened again only if the switch fails.
    */
-  restoreDeleted(): Promise<void>;
+  restoreDeleted(copy?: T): Promise<void>;
   onChange(fn: (event: ItemSessionEvent) => void): () => void;
   onStatus(fn: (status: DocumentStatus) => void): () => void;
   onError(fn: (error: unknown, kind: ItemErrorKind) => void): () => void;
@@ -236,6 +242,7 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
   const busy = () => running > 0;
   /** Picks in flight: a fallback after a delete elsewhere must not override the item the user is switching to. */
   let picking = 0;
+  const picks = new Set<Promise<boolean>>();
 
   async function fallbackFrom(removedId: string, before: readonly ItemSummary[]): Promise<void> {
     const index = before.findIndex((item) => item.id === removedId);
@@ -316,9 +323,12 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
   async function pick(id: string | null, restoring = false): Promise<boolean> {
     if (closed) throw new Error("the item session is closed");
     picking++;
+    const run = pickNow(id, restoring);
+    picks.add(run);
     try {
-      return await pickNow(id, restoring);
+      return await run;
     } finally {
+      picks.delete(run);
       picking--;
     }
   }
@@ -478,13 +488,17 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
     await refresh();
   }
 
-  async function restoreDeleted(): Promise<void> {
+  async function restoreDeleted(copy?: T): Promise<void> {
     if (closed) throw new Error("the item session is closed");
     const id = currentId;
-    const copy = lastCopy;
-    if (!deleted || !id || copy === null) return;
-    await sdk.documents.put({ id, title: title(copy), data: copy as JsonValue, ifRevision: 0 });
+    const restored = copy ?? lastCopy;
+    if (!deleted || !id || restored === null) return;
+    await sdk.documents.put({ id, title: title(restored), data: restored as JsonValue, ifRevision: 0 });
     await refresh();
+    // A switch that started meanwhile wins: opening this item again would cancel it. If it fails, the item is still
+    // the open one and still shown as deleted although it is back, so it is opened once the picks are done.
+    while (picks.size > 0) await Promise.allSettled([...picks]);
+    if (closed || !deleted || currentId !== id) return;
     await pick(id, true);
   }
 

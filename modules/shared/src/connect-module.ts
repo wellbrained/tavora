@@ -36,14 +36,9 @@ export interface ModuleHandle<K extends string = string> {
  * the kit's language and `<html lang>`, and the title tooltips. A failed connection does not throw: check `status`.
  * Pass `{}` when you have no texts.
  */
-export async function connectModule<K extends string = string>(options: ConnectModuleOptions<K>): Promise<ModuleHandle<K>>;
-/** @deprecated Pass an options object (`connectModule({ texts })`) and read `handle.language` / `handle.onLanguage` instead. Called with no argument or a function, it still returns the SDK; removed in a later SDK. */
-export async function connectModule(onLanguage?: (language: string) => void): Promise<TavoraSDK>;
-export async function connectModule(arg?: ConnectModuleOptions<string> | ((language: string) => void)): Promise<ModuleHandle | TavoraSDK> {
-  const legacy = typeof arg !== "object";
-  const options: ConnectModuleOptions<string> = legacy ? {} : arg;
+export async function connectModule<K extends string = string>(options: ConnectModuleOptions<K>): Promise<ModuleHandle<K>> {
   const boot = await bootstrapModule(options.sdk ? { sdk: options.sdk } : {});
-  const translator = createTranslator<string>(options.texts?.en ?? {}, options.texts?.de ?? {});
+  const translator = createTranslator<K>(options.texts?.en ?? ({} as Record<K, string>), options.texts?.de ?? ({} as Record<K, string>));
 
   if (boot.status === "ready") {
     if (boot.theme) applyKitTheme(boot.theme);
@@ -51,16 +46,6 @@ export async function connectModule(arg?: ConnectModuleOptions<string> | ((langu
     translator.setLanguage(boot.language);
     boot.onTheme(applyKitTheme);
     boot.onLanguage((language) => translator.setLanguage(language));
-  } else if (legacy) {
-    throw boot.error;
-  }
-
-  if (legacy) {
-    if (arg) {
-      arg(boot.language);
-      boot.onLanguage(arg);
-    }
-    return boot.sdk as TavoraSDK;
   }
 
   return {
