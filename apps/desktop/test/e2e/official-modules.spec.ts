@@ -532,6 +532,26 @@ test("ui playground: the name dialog selects its text, counts and locks while bu
   await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-input")}.disabled && ${q("name-cancel")}.disabled && ${q("name-submit")}.getAttribute("aria-busy") === "true"`)).toBe(true);
   await expect.poll(() => inModule(app, PLAYGROUND, `!${q("name-dialog")}`)).toBe(true);
 
+  // A name filled in from a picked save: Save waits for the pick, the name follows it, but a typed name stays.
+  const nameValue = () => inModule(app, PLAYGROUND, `${q("name-input")}.value`);
+  await press("New from a save…");
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("name-dialog")}`)).toBe(true);
+  expect(await inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(true);
+  await click(app, PLAYGROUND, `[data-testid="pick-save"]`);
+  await expect.poll(nameValue).toBe("Waystone Camp");
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(false);
+  await click(app, PLAYGROUND, `[data-testid="name-cancel"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!${q("name-dialog")}`)).toBe(true);
+  await press("New from a save…");
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("name-dialog")}`)).toBe(true);
+  await type("Mine");
+  expect(await inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(true);
+  await click(app, PLAYGROUND, `[data-testid="pick-save"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(false);
+  expect(await nameValue()).toBe("Mine");
+  await click(app, PLAYGROUND, `[data-testid="name-cancel"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!${q("name-dialog")}`)).toBe(true);
+
   // The plain confirm is not red; a busy one can't be cancelled.
   await press("Share (plain confirm)…");
   await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("confirm-submit")}`)).toBe(true);
@@ -657,6 +677,17 @@ test("ui playground: tabs close with the X and a middle click, reorder by drag, 
   await inModule(app, PLAYGROUND, `${q("strip-add")}.click()`);
   await expect.poll(labels).toEqual(["Copper", "New plan 1"]);
   await expect.poll(state).toContain("open: New plan 1");
+
+  // An icon before the name: only the tab that has one shows it, and it stays while the tab is renamed.
+  const iconStrip = `document.querySelector('[data-testid="tab-strip-icon"]')`;
+  const iconTab = (name: string) => `[...${iconStrip}.querySelectorAll('[data-testid="strip-tab"]')].find((el) => el.textContent.trim() === ${JSON.stringify(name)})`;
+  expect(await inModule(app, PLAYGROUND, `!!${iconTab("Iron")}.querySelector('[data-testid="plan-tab-feeds"]')`)).toBe(true);
+  expect(await inModule(app, PLAYGROUND, `!${iconTab("Copper")}.querySelector('[data-testid="plan-tab-feeds"]')`)).toBe(true);
+  await inModule(app, PLAYGROUND, `${iconTab("Iron")}.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${iconStrip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
+  expect(await inModule(app, PLAYGROUND, `${iconStrip}.querySelector('[data-testid="tab-rename-input"]').value`)).toBe("Iron");
+  expect(await inModule(app, PLAYGROUND, `!!${iconStrip}.querySelector('[data-testid="plan-tab-feeds"]')`)).toBe(true);
+  await inModule(app, PLAYGROUND, `${iconStrip}.querySelector('[data-testid="tab-rename-input"]').dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))`);
 
   // Too many tabs for the width: the wheel scrolls the row sideways.
   const crowd = `document.querySelector('[data-testid="tab-strip-crowd"] [data-testid="tab-strip-scroller"]')`;

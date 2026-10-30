@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { AlertTriangle, Blocks, FolderOpen, Download, CheckCircle2, Info, LayoutGrid, Loader2, MoreHorizontal, Plus, StickyNote, Store, XCircle } from "@lucide/vue";
-import { SegmentedControl } from "@tavora/official-ui";
+import { AlertTriangle, Blocks, FolderOpen, Download, CheckCircle2, Info, LayoutGrid, Link2, Loader2, MoreHorizontal, Plus, StickyNote, Store, XCircle } from "@lucide/vue";
+import { SegmentedControl, Tooltip } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
@@ -49,6 +49,15 @@ function addStripTab() {
   stripTabs.value = [...stripTabs.value, tab];
   stripActive.value = tab.id;
 }
+const iconTabs = ref<StripTab[]>([{ id: "iron", label: "Iron", closable: true, renamable: true }, { id: "copper", label: "Copper", renamable: true }]);
+const iconActive = ref("iron");
+const feeds = (id: string) => (id === "iron" ? ["Copper"] : []);
+const linkTip = ref<{ open: boolean; anchor: { left: number; top: number; right: number; bottom: number } }>({ open: false, anchor: { left: 0, top: 0, right: 0, bottom: 0 } });
+function showLinkTip(e: Event) {
+  const { left, top, right, bottom } = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  linkTip.value = { open: true, anchor: { left, top, right, bottom } };
+}
+const hideLinkTip = () => (linkTip.value.open = false);
 const progress = ref(45);
 const spark = Array.from({ length: 60 }, (_, i) => Math.round(50 + 30 * Math.sin(i / 5) + 12 * Math.sin(i * 1.7)));
 const switchOn = ref(true);
@@ -191,6 +200,26 @@ function bump(by: number) {
           </TabStrip>
           <p class="text-muted-foreground text-xs">Drag to reorder (or Alt + ← / →), middle-click or Delete to close, double-click or F2 to rename. The last one can't be closed.</p>
           <p class="text-muted-foreground text-xs" data-testid="strip-state">{{ stripTabs.map((tab) => tab.label).join(", ") }} · open: {{ stripTabs.find((tab) => tab.id === stripActive)?.label ?? "none" }}</p>
+        </Specimen>
+        <Specimen label="A tab with an icon before its name (TabStrip, icon slot)" column>
+          <TabStrip v-model="iconActive" :tabs="iconTabs" aria-label="Linked plans" data-testid="tab-strip-icon" @rename="(id, label) => (iconTabs = iconTabs.map((tab) => (tab.id === id ? { ...tab, label } : tab)))">
+            <template #icon="{ tab }">
+              <Link2
+                v-if="feeds(tab.id).length"
+                class="text-primary size-3.5 flex-none"
+                :stroke-width="1.5"
+                tabindex="0"
+                :aria-label="`Feeds ${feeds(tab.id).join(', ')}`"
+                data-testid="plan-tab-feeds"
+                @pointerenter="showLinkTip"
+                @pointerleave="hideLinkTip"
+                @focus="showLinkTip"
+                @blur="hideLinkTip"
+              />
+            </template>
+          </TabStrip>
+          <Tooltip :open="linkTip.open" :anchor="linkTip.anchor" compact title="Feeds Copper" @dismiss="hideLinkTip" />
+          <p class="text-muted-foreground text-xs">The icon stays while you rename the tab.</p>
         </Specimen>
         <Specimen label="Too many for the width: the wheel scrolls, the edges fade" column>
           <TabStrip v-model="crowdActive" :tabs="crowdTabs" class="w-72" aria-label="Many tabs" data-testid="tab-strip-crowd" @close="(id) => (crowdTabs = crowdTabs.filter((tab) => tab.id !== id))" />
