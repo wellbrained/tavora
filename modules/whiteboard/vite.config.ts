@@ -3,9 +3,10 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
+import { moduleConfig } from "@tavora/pack/vite";
 import react from "@vitejs/plugin-react";
 import vue from "@vitejs/plugin-vue";
-import { defaultClientConditions, defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin } from "vite";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -43,26 +44,15 @@ function trimExcalidraw(): Plugin {
   };
 }
 
-// Modules ship as self-contained bundles: relative asset paths, no remote code.
-export default defineConfig({
-  root: "src",
-  base: "./",
-  plugins: [vue(), react({ include: /\.tsx$/ }), tailwindcss(), trimExcalidraw()],
-  resolve: {
-    // The SDK from its source, like the other official modules, so a stale packages/sdk/dist never breaks the build.
-    conditions: ["source", ...defaultClientConditions],
-    dedupe: ["vue"],
+// Loaded from disk, never over a network, so a big bundle is fine.
+export default defineConfig(
+  moduleConfig({
+    root: here,
+    plugins: [vue(), react({ include: /.tsx$/ }), tailwindcss(), trimExcalidraw()],
     alias: { "@excalidraw/mermaid-to-excalidraw": path.join(here, "stubs", "mermaid.ts") },
-  },
-  // React must match the JSX the plugin writes: `pnpm dev` runs this build with NODE_ENV=development (its Vite
-  // server sets it), and production React has no jsxDEV, so a fixed "production" left a blank panel there.
-  define: { "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV === "development" ? "development" : "production") },
-  build: {
-    outDir: "../dist",
-    emptyOutDir: true,
-    target: "chrome130",
-    modulePreload: { polyfill: false },
-    // Loaded from disk, never over a network, so a big bundle is fine.
+    // React must match the JSX the plugin writes: `pnpm dev` runs this build with NODE_ENV=development (its Vite
+    // server sets it), and production React has no jsxDEV, so a fixed "production" left a blank panel there.
+    define: { "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV === "development" ? "development" : "production") },
     chunkSizeWarningLimit: 4000,
-  },
-});
+  }),
+);

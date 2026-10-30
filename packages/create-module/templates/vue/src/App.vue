@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// This page runs inside a Tavora panel; in a normal browser connect() fails. Build it and add this
+// This page runs inside a Tavora panel; in a normal browser the connection fails. Build it and add this
 // folder in Tavora (Settings > Development > Add a development folder) to see it.
-import { connect, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
-import { computed, onMounted, ref, shallowRef } from "vue";
+import type { TavoraSDK } from "@tavora/sdk";
+import { bootstrapModule, languageOf, type ModuleBootstrap } from "@tavora/sdk/bootstrap";
+import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 
 /** Your texts in English and German; Tavora says which language the user uses. */
 const TEXTS = {
@@ -20,22 +21,18 @@ const count = ref(0);
 const failed = ref<string | null>(null);
 const status = computed(() => (failed.value ? failed.value : tavora.value ? `${text("here", { workspace: workspace.value })} ${text("clicked", { count: count.value })}` : text("connecting")));
 
-/** Tavora's theme as CSS variables (--background, --foreground, --primary, ...), so the module looks like Tavora. */
-function applyTheme(theme: TavoraTheme) {
-  const root = document.documentElement;
-  for (const [name, value] of Object.entries(theme.tokens)) root.style.setProperty(`--${name}`, value);
-  root.style.setProperty("--radius", `${theme.radius}px`);
-  root.style.colorScheme = theme.mode;
-}
+let boot: ModuleBootstrap | undefined;
+onUnmounted(() => boot?.dispose());
 
 onMounted(async () => {
   try {
-    const sdk = await connect();
-    applyTheme(await sdk.ui.getTheme());
-    sdk.ui.onThemeChange(applyTheme);
-    const setLanguage = (code: string) => (language.value = code.startsWith("de") ? "de" : "en");
-    setLanguage(await sdk.ui.getLanguage());
-    sdk.ui.onLanguageChange(setLanguage);
+    // Connects, applies Tavora's theme as CSS variables (--background, --foreground, --primary, ...) and keeps
+    // following it, so the module looks like Tavora.
+    boot = await bootstrapModule();
+    const sdk = boot.sdk;
+    if (!sdk) throw boot.error;
+    language.value = languageOf(boot.language);
+    boot.onLanguage((code) => (language.value = languageOf(code)));
     workspace.value = (await sdk.workspace.getCurrent()).displayName;
     // storage keeps small settings for this module in the current workspace.
     count.value = (await sdk.storage.get<number>("count")) ?? 0;

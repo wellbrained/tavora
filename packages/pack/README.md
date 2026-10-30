@@ -17,6 +17,20 @@ TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pack publish <id>-<version>.zip --key p
 
 Keep the key file secret: whoever has it can sign updates in your name. A token works for a year; remove it in Tavora when you don't need it any more.
 
+## Build settings
+
+`@tavora/pack/vite` has the Vite settings a module shares, so `vite.config.ts` stays short:
+
+```ts
+import { moduleConfig } from "@tavora/pack/vite";
+import vue from "@vitejs/plugin-vue";
+import { defineConfig } from "vite";
+
+export default defineConfig(moduleConfig({ pages: ["index", "overlay"], plugins: [vue()], notices: { VUE: "vue", MODULE: "./LICENSE" } }));
+```
+
+`pages` are the HTML files in `src/` (default `["index"]`); `notices` copy licence files into `dist/` as `<NAME>-LICENSE.txt`, from a package name or a `./file` in your project. Also `publicDir`, `dedupe`, `alias`, `define` and `chunkSizeWarningLimit`. A project's `tsconfig.json` can extend `@tavora/pack/tsconfig.module.json`.
+
 ## Pack
 
 `tavora-pack <module folder> --key <key file> [--out <file.zip>]` checks `tavora.module.json`, takes the manifest, the folder its `entry` page is in (usually `dist/`), the icon and the changelog, and writes a zip with a signature of every file. Build the module first.

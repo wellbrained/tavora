@@ -1,4 +1,5 @@
-import { connect, TavoraError, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
+import { TavoraError, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
+import { bootstrapModule } from "@tavora/sdk/bootstrap";
 
 // Every example module shows the same things with the same data-testid
 // values, so one set of end-to-end tests covers all of them.
@@ -10,7 +11,8 @@ interface Note {
 }
 type View = "list" | "grid";
 
-function applyTheme(theme: TavoraTheme) {
+/** The bootstrap applies Tavora's theme; this page also shows the mode and maps four colours to its own names. */
+function showTheme(theme: TavoraTheme) {
   el("theme").textContent = theme.mode;
   const style = document.documentElement.style;
   style.setProperty("--bg", theme.colors.background);
@@ -120,20 +122,18 @@ function setUpLifecycle(tavora: TavoraSDK) {
 }
 
 try {
-  const tavora = await connect();
-  const [workspace, viewport, theme] = await Promise.all([
-    tavora.workspace.getCurrent(),
-    tavora.workspace.getViewport(),
-    tavora.ui.getTheme(),
-  ]);
+  const boot = await bootstrapModule();
+  const tavora = boot.sdk;
+  if (!tavora) throw boot.error;
+  const [workspace, viewport] = await Promise.all([tavora.workspace.getCurrent(), tavora.workspace.getViewport()]);
   el("workspace").textContent = workspace.displayName;
   el("workspace").dataset.workspaceId = workspace.id;
   el("viewport").textContent = `${viewport.width} × ${viewport.height}`;
-  applyTheme(theme);
+  showTheme(boot.theme!);
   tavora.workspace.onResize(({ width, height }) => {
     el("viewport").textContent = `${width} × ${height}`;
   });
-  tavora.ui.onThemeChange(applyTheme);
+  boot.onTheme(showTheme);
   setUpLifecycle(tavora);
   await Promise.all([setUpCounter(tavora), setUpNote(tavora), setUpView(tavora), setUpMaximize(tavora)]);
   el("status").textContent = "Connected";

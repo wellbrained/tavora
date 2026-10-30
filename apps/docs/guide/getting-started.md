@@ -12,7 +12,7 @@ A Tavora module is a web page that runs in a sandboxed panel inside Tavora Deskt
 npm create @tavora/module
 ```
 
-It asks where the project goes (the empty folder you are in, or a new folder in it), the module's name, its id (`publisher.module-name`) and a template: vanilla TypeScript, Vue or React. The project builds with Vite and depends on `@tavora/sdk` and `@tavora/pack`; its manifest already sets [`minTavora`](../reference/manifest.md) to the Tavora that SDK needs. pnpm works too: `pnpm create @tavora/module`.
+It asks where the project goes (the empty folder you are in, or a new folder in it), the module's name, its id (`publisher.module-name`) and a template: vanilla TypeScript, Vue or React. The project builds with Vite and depends on `@tavora/sdk` and `@tavora/pack`; its page starts with `bootstrapModule` (see [Talk to the host](#talk-to-the-host)), its `vite.config.ts` is one `moduleConfig()` call (see [Build the module](#build-the-module)); its manifest already sets [`minTavora`](../reference/manifest.md) to the Tavora that SDK needs. pnpm works too: `pnpm create @tavora/module`.
 
 ```sh
 cd my-module
@@ -26,10 +26,24 @@ To add the SDK to a project of your own instead: `npm install @tavora/sdk`, and 
 
 ## Talk to the host
 
-```ts
-import { connect, TavoraError } from "@tavora/sdk";
+Start the page with `bootstrapModule`: it connects, applies Tavora's theme as CSS variables and keeps following it, and tracks the language. It works in any framework, and a failed connection gives `status: "failed"` instead of throwing.
 
-const tavora = await connect();
+```ts
+import { bootstrapModule, languageOf } from "@tavora/sdk/bootstrap";
+
+const boot = await bootstrapModule();
+const tavora = boot.sdk;
+if (!tavora) return showError(boot.error); // outside Tavora, or another protocol version
+let language = languageOf(boot.language); // "en" or "de"
+boot.onLanguage((code) => (language = languageOf(code)));
+// when the page goes away: boot.dispose()
+```
+
+What the starter does with `tavora`, and the rest of the SDK:
+
+```ts
+import { TavoraError } from "@tavora/sdk";
+
 const workspace = await tavora.workspace.getCurrent(); // { id: "poe2", displayName: "Path of Exile 2", kind: "game" }
 
 // Small settings, private to this module in this workspace.
@@ -51,12 +65,11 @@ tavora.documents.onChange(({ id }) => console.log(`${id} changed in another pane
 await tavora.panel.setState({ tab: "gear" });
 
 tavora.workspace.onResize(({ width, height }) => {});
-tavora.ui.onThemeChange((theme) => {});
 tavora.lifecycle.onSuspend(() => {}); // hidden: pause timers and animations
 tavora.lifecycle.onResume(() => {});
 ```
 
-`connect()` can be called any number of times and always returns the same connection. It rejects with a `TavoraError` when the page runs outside Tavora (`HOST_UNAVAILABLE`) or the host speaks another protocol version (`INCOMPATIBLE`).
+`bootstrapModule` calls `connect()` for you. `connect()` can be called any number of times and always returns the same connection. It rejects with a `TavoraError` when the page runs outside Tavora (`HOST_UNAVAILABLE`) or the host speaks another protocol version (`INCOMPATIBLE`).
 
 Every failed call rejects with a `TavoraError`. Check `error.code`, not the message. The codes and limits are in the [bridge protocol](../reference/protocol.md#errors), and every method is in the [SDK reference](/api/).
 
@@ -97,7 +110,7 @@ Every item on Tavora's rail is a workspace: a game workspace, linked to a game, 
 ## Build the module
 
 - Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, name its host in `permissions.network` and call [`network.fetch`](../reference/protocol.md#network) once the user has granted it.
-- Use relative asset paths (Vite: `base: "./"`). The page is served from `tavora-module://<module-id>/`.
+- Use relative asset paths (Vite: `base: "./"`). `moduleConfig()` from `@tavora/pack/vite` sets this and the rest of what a module's build needs (a self-contained `dist/` for Tavora's browser, one input per page); the starter's `vite.config.ts` is just `export default defineConfig(moduleConfig({ plugins: [vue()] }))`. Add `pages: ["index", "overlay"]` for more pages and `notices: { VUE: "vue", MODULE: "./LICENSE" }` to copy licence files into `dist/`. Its `tsconfig.json` extends `@tavora/pack/tsconfig.module.json`. The page is served from `tavora-module://<module-id>/`.
 - Don't use Ctrl+K (Cmd+K on macOS) as a shortcut. Tavora takes it for its own search before your page sees the key.
 - Point the manifest's `entry` at the built HTML file.
 - Add `"$schema"` to the manifest so your editor checks it. The schema is published at `https://docs.mytavora.app/schema/tavora.module.schema.json`.

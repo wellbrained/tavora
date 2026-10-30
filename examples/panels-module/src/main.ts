@@ -1,4 +1,5 @@
-import { connect, type DocumentSummary, type PanelLaunch, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
+import type { DocumentSummary, PanelLaunch, TavoraSDK, TavoraTheme } from "@tavora/sdk";
+import { bootstrapModule } from "@tavora/sdk/bootstrap";
 import manifest from "../tavora.module.json";
 
 // A showcase of named panel types: each page asks Tavora which type it runs
@@ -20,7 +21,8 @@ const OPTIONS: [keyof PanelType, string, (type: PanelType) => string][] = [
   ["continues", "Panels from before the module had types become this one", (type) => (type.continues ? "yes" : "no")],
 ];
 
-function applyTheme(theme: TavoraTheme) {
+/** The bootstrap applies Tavora's theme; this page maps four colours to its own names. */
+function mapColors(theme: TavoraTheme) {
   const style = document.documentElement.style;
   style.setProperty("--bg", theme.colors.background);
   style.setProperty("--text", theme.colors.text);
@@ -165,10 +167,12 @@ async function contentSelector(tavora: TavoraSDK) {
 }
 
 async function main() {
-  const tavora = await connect();
+  const boot = await bootstrapModule();
+  const tavora = boot.sdk;
+  if (!tavora) throw boot.error;
   render(tavora.panel.type);
-  applyTheme(await tavora.ui.getTheme());
-  tavora.ui.onThemeChange(applyTheme);
+  mapColors(boot.theme!);
+  boot.onTheme(mapColors);
 
   // A setting every panel type reads and writes: content is shared, not per panel.
   let shared = (await tavora.storage.get<number>("shared")) ?? 0;

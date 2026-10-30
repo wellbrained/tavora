@@ -1,6 +1,6 @@
-import { connect, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
+import { bootstrapModule, languageOf } from "@tavora/sdk/bootstrap";
 
-// This page runs inside a Tavora panel; in a normal browser connect() fails. Build it and add this
+// This page runs inside a Tavora panel; in a normal browser the connection fails. Build it and add this
 // folder in Tavora (Settings > Development > Add a development folder) to see it.
 
 const status = document.querySelector<HTMLParagraphElement>("#status")!;
@@ -13,30 +13,27 @@ const TEXTS = {
 };
 let language: keyof typeof TEXTS = "en";
 const text = (key: keyof (typeof TEXTS)["en"], params: Record<string, string | number>) =>
-  TEXTS[language][key].replace(/\{(\w+)\}/g, (match, name: string) => String(params[name] ?? match));
+  TEXTS[language][key].replace(/{(w+)}/g, (match, name: string) => String(params[name] ?? match));
 
-/** Tavora's theme as CSS variables (--background, --foreground, --primary, ...), so the module looks like Tavora. */
-function applyTheme(theme: TavoraTheme) {
-  const root = document.documentElement;
-  for (const [name, value] of Object.entries(theme.tokens)) root.style.setProperty(`--${name}`, value);
-  root.style.setProperty("--radius", `${theme.radius}px`);
-  root.style.colorScheme = theme.mode;
-}
+async function start() {
+  // Connects, applies Tavora's theme as CSS variables (--background, --foreground, --primary, ...) and keeps
+  // following it, so the module looks like Tavora.
+  const tavora = await bootstrapModule();
+  if (!tavora.sdk) {
+    status.textContent = `Not connected to Tavora: ${tavora.error instanceof Error ? tavora.error.message : String(tavora.error)}`;
+    return;
+  }
+  const sdk = tavora.sdk;
+  language = languageOf(tavora.language);
 
-async function start(tavora: TavoraSDK) {
-  applyTheme(await tavora.ui.getTheme());
-  tavora.ui.onThemeChange(applyTheme);
-  const setLanguage = (code: string) => (language = code.startsWith("de") ? "de" : "en");
-  setLanguage(await tavora.ui.getLanguage());
-
-  const workspace = await tavora.workspace.getCurrent();
+  const workspace = await sdk.workspace.getCurrent();
   // storage keeps small settings for this module in the current workspace.
-  let count = (await tavora.storage.get<number>("count")) ?? 0;
+  let count = (await sdk.storage.get<number>("count")) ?? 0;
   const render = () => {
     status.textContent = `${text("here", { workspace: workspace.displayName })} ${text("clicked", { count })}`;
   };
-  tavora.ui.onLanguageChange((code) => {
-    setLanguage(code);
+  tavora.onLanguage((code) => {
+    language = languageOf(code);
     render();
   });
   render();
@@ -45,10 +42,8 @@ async function start(tavora: TavoraSDK) {
   counter.addEventListener("click", async () => {
     count += 1;
     render();
-    await tavora.storage.set("count", count);
+    await sdk.storage.set("count", count);
   });
 }
 
-connect().then(start, (error: unknown) => {
-  status.textContent = `Not connected to Tavora: ${error instanceof Error ? error.message : String(error)}`;
-});
+void start();

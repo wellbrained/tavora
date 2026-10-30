@@ -2,6 +2,11 @@
 
 What changed in `@tavora/pack`, newest first.
 
+## 0.3.1
+
+- New `@tavora/pack/vite`: `moduleConfig({ pages, plugins, notices, publicDir, … })` returns the Vite settings every module shares (relative paths, Chrome 130, one input per page, the SDK from its source in Tavora's repository) for `defineConfig`. `notices` copies licence files into `dist/`, found from your project. No Vite dependency is added: it is the project's own Vite.
+- New `@tavora/pack/tsconfig.module.json`, a TypeScript base for module projects to `extends`.
+
 ## 0.3.0
 
 - Publishing can answer **Waiting for review**: the version is uploaded but not listed until a person at Tavora has looked at it (your first module, new pictures, or a failed automatic check). `tavora-pack publish` prints it with the reasons and exits 0. `publishZip` resolves with `status: "published" | "waiting"` and `reasons`.
