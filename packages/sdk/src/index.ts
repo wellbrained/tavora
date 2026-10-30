@@ -1,7 +1,8 @@
 // @tavora/sdk: thin typed client for modules running inside Tavora Desktop.
 // The host enforces every check; this package only marshals typed calls.
-import type { TooltipAnchor, TooltipRequest } from "./tooltip-types.js";
+import { menuParams, tooltipParams, type MenuOptions, type TooltipMoveOptions, type TooltipShowOptions } from "./anchor.js";
 export type { TooltipAnchor, TooltipRequest, TooltipContent } from "./tooltip-types.js";
+export type { AnchorTarget, MenuOptions, TooltipMoveOptions, TooltipShowOptions } from "./anchor.js";
 // Protocol reference: apps/docs/reference/protocol.md.
 
 import {
@@ -162,7 +163,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.2.18";
+export const SDK_VERSION = "0.2.19";
 
 /**
  * The oldest Tavora that has everything this SDK version offers. Put it in your manifest as
@@ -317,12 +318,16 @@ export interface TavoraSDK {
      * Shows a menu that Tavora draws above every panel, so it is never cut off at the panel's edge. Call it from
      * the click, right-click or key press that asked for it: the host refuses it otherwise (PERMISSION_DENIED).
      * Resolves with the chosen item's id, or null when the user closed the menu without choosing.
+     * Pass the element the menu is for as `anchor` (a button, or the row that was right-clicked): its box is read
+     * when you call, and Tavora opens the menu next to it, never at the pointer. `at` (a bare box) stays for the
+     * rare case without an element; with neither, INVALID_PARAMS.
      */
-    showMenu(request: MenuRequest): Promise<string | null>;
+    showMenu(request: MenuOptions): Promise<string | null>;
     /** One shared tooltip above the workspace (Tavora 0.19.3+). A pin needs a real click/key press. */
     tooltip: {
-      show(request: TooltipRequest): Promise<boolean>;
-      move(anchor: TooltipAnchor): Promise<void>;
+      /** `anchor` (the element or its box) or `at` (a point); with an anchor the tooltip opens next to it, never on top of it. */
+      show(request: TooltipShowOptions): Promise<boolean>;
+      move(anchor: TooltipMoveOptions): Promise<void>;
       /** Ends hover only; a pin remains until close, Escape, or a lifecycle change. */
       hide(id: string): Promise<void>;
       close(id: string): Promise<void>;
@@ -846,10 +851,10 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       getLanguage: () => call("ui.getLanguage"),
       onLanguageChange: (fn) => on("ui.language", fn),
       // The user may take their time choosing.
-      showMenu: (request) => call("ui.showMenu", request, MENU_TIMEOUT_MS),
+      showMenu: async (request) => call("ui.showMenu", menuParams(request), MENU_TIMEOUT_MS),
       tooltip: {
-        show: request => call("ui.tooltip.show",request),
-        move: async anchor => { await call("ui.tooltip.move",anchor); },
+        show: async request => call("ui.tooltip.show",tooltipParams(request)),
+        move: async anchor => { await call("ui.tooltip.move",tooltipParams(anchor)); },
         hide: async id => { await call("ui.tooltip.hide",{id}); },
         close: async id => { await call("ui.tooltip.close",{id}); },
         onClose: fn => on("ui.tooltipClosed",fn),

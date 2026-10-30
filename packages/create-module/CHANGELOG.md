@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.13
+
+- New projects start on `@tavora/sdk` 0.2.19, which adds the anchor form for menus and tooltips.
+
 ## 0.1.12
 
 - New projects start on `@tavora/sdk` 0.2.18, which adds the item session.

@@ -1,7 +1,7 @@
 // What a To-Dos panel shares with its groups and rows: this panel's own view
 // (which to-do is being edited, what is folded, what just finished) and the
 // undo offer. None of it is stored in the shared list.
-import type { MenuRequest } from "@tavora/sdk";
+import type { MenuOptions } from "@tavora/sdk";
 import type { InjectionKey, Ref } from "vue";
 
 /** What happens to a to-do once it is finished: it stays, struck through, or it vanishes after a moment. */
@@ -29,7 +29,7 @@ export interface PanelContext {
   /** Shows a toast that can put a change back. */
   offerUndo: (message: string, undo: () => void) => void;
   /** A menu Tavora draws above every panel (ui.showMenu): the chosen item's id, or null. */
-  showMenu: (request: MenuRequest) => Promise<string | null>;
+  showMenu: (request: MenuOptions) => Promise<string | null>;
 }
 
 export const PANEL: InjectionKey<PanelContext> = Symbol("todos-panel");

@@ -1,3 +1,11 @@
+## 0.2.19
+
+The anchor form: pass the element a menu or tooltip is for. Nothing changes on the wire or for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `ui.showMenu({ anchor, items, side?, align? })`: `anchor` is the element (its box is read when you call) or a box `{ x, y, width?, height? }`. The SDK sends that box as `at`; Tavora adds the gap and opens the menu next to it, never at the pointer. `at` still works for the rare case without an element; with neither, the call rejects with `INVALID_PARAMS`. The new `MenuOptions` type describes the argument (`MenuRequest` stays the wire shape).
+- `ui.tooltip.show` and `ui.tooltip.move` take `anchor` instead of `at`: with an element, the tooltip opens next to it, at the middle of its right edge. `TooltipShowOptions` and `TooltipMoveOptions` are the new argument types.
+- The memory host (`@tavora/sdk/testing`) does the same, so `host.calls["ui.showMenu"]` holds the box that was sent.
+
 ## 0.2.18
 
 The item session: `openItems` in `@tavora/sdk/store`. Nothing changes for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).

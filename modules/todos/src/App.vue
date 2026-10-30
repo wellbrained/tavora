@@ -8,7 +8,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
-import type { MenuRequest, TavoraSDK } from "@tavora/sdk";
+import type { MenuOptions, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import AddInput from "./AddInput.vue";
 import GroupSection, { type DropTarget } from "./GroupSection.vue";
@@ -155,7 +155,7 @@ function toggleAllGroups() {
 }
 
 /** Before the panel is connected there is nothing to show a menu with. */
-const showMenu = (request: MenuRequest) => sdk.value?.ui.showMenu(request) ?? Promise.resolve(null);
+const showMenu = (request: MenuOptions) => sdk.value?.ui.showMenu(request) ?? Promise.resolve(null);
 provide(PANEL, { finished, editing, draft, folded, toggleFolded: (id) => toggle(folded, id), linger, lingering, offerUndo, showMenu });
 
 const cleanup: (() => void)[] = [];

@@ -51,10 +51,9 @@ const tavora = computed(() => {
 async function openMenu(event: MouseEvent): Promise<void> {
   const started = monitor.value;
   if (!started || !sdk.value) return;
-  const button = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const picked = await sdk.value.ui.showMenu({
     items: buildMenu(t, started.info.value, started.app.value, started.panel.value, started.connectionMissing.value ? null : started.connectionSettings.value),
-    at: { x: button.left, y: button.top, width: button.width, height: button.height },
+    anchor: event.currentTarget as HTMLElement,
     align: "end",
   });
   const pick = picked ? parsePick(picked) : null;

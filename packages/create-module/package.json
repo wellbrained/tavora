@@ -1,6 +1,6 @@
 {
   "name": "@tavora/create-module",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Makes a new Tavora module project: npm create @tavora/module.",
   "type": "module",
   "keywords": [
