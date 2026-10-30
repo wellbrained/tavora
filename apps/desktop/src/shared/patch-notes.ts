@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.22.9",
+    date: "2026-10-30",
+    title: "PDF Viewer",
+    notes: [
+      "New official module: read PDFs and look at pictures next to your game.",
+      "Open files one by one or drop them on the panel. Each game keeps its own files, and every file remembers the page and zoom you left it at.",
+      "Search a PDF with Ctrl+F, jump through its contents list, and fit it to the width or the whole page.",
+    ],
+    prs: [
+      { number: 509, title: "PDF Viewer: new official module, PDFs in the module file store" },
+    ],
+    tags: ["modules", "notes", "pdf-viewer", "privacy", "sdk", "website", "whiteboard"],
+  },
+  {
     version: "0.22.8",
     date: "2026-10-30",
     title: "Connector questions",
