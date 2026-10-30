@@ -4,6 +4,7 @@
 // sent, and the account's sign-in (Tavora's Publish button) or a publish token (CI): the key alone
 // publishes nothing (decided 2026-10-20). The secret key never leaves this PC.
 import { createHash, sign, type KeyObject } from "node:crypto";
+import { apiReason, type ApiReason } from "@tavora/module-schema";
 import { DEFAULT_API_URL } from "./link.ts";
 import { verifyFiles } from "./signature.ts";
 import { asSigner, type Signer } from "./signer.ts";
@@ -35,7 +36,8 @@ export function publishSignature(key: KeyObject, zip: Buffer): string {
   return sign(null, Buffer.from(`${PUBLISH_STATEMENT}\n${sha256}`, "utf8"), key).toString("base64");
 }
 
-const MESSAGES: Record<string, string> = {
+/** The API's reasons, and "token-not-working", which tavora-pack words for a refused publish token. */
+const MESSAGES: Partial<Record<ApiReason | "token-not-working", string>> = {
   "sign-in-needed": "Publishing needs your Tavora account. Publish from Tavora (Settings > Development), or from CI with a publish token in TAVORA_PUBLISH_TOKEN (Settings > Development > Publisher keys and CI).",
   "token-not-working": "This publish token doesn't work any more: it was removed or ran out. Make a new one in Tavora (Settings > Development > Publisher keys and CI).",
   "wrong-account": "This publisher key is linked to another Tavora account than the one publishing.",
@@ -104,8 +106,8 @@ export async function publishZip(options: {
   const answer = (await response.json().catch(() => ({}))) as { reason?: unknown; error?: unknown; id?: unknown; version?: unknown; sha256?: unknown; status?: unknown; reasons?: unknown };
   if (!response.ok) {
     // A token was sent, so it is the token that doesn't work.
-    const reason = answer.reason === "sign-in-needed" ? "token-not-working" : answer.reason;
-    const known = typeof reason === "string" ? MESSAGES[reason] : undefined;
+    const sent = apiReason(answer);
+    const known = sent === undefined ? undefined : MESSAGES[sent === "sign-in-needed" ? "token-not-working" : sent];
     // "invalid" and "conflict" carry the service's own sentence about this zip.
     throw new PublishError(known ?? (typeof answer.error === "string" ? answer.error : `The service refused the upload (${response.status}).`));
   }
@@ -130,7 +132,7 @@ export async function withdrawVersion(options: { token: string | undefined; sha2
   }
   const answer = (await response.json().catch(() => ({}))) as { reason?: unknown; id?: unknown; version?: unknown };
   if (response.ok && typeof answer.id === "string" && typeof answer.version === "string") return { id: answer.id, version: answer.version };
-  if (answer.reason === "not-waiting") throw new PublishError("None of your versions with this hash is waiting for review.");
-  if (answer.reason === "sign-in-needed") throw new PublishError(MESSAGES["token-not-working"]!);
+  if (apiReason(answer) === "not-waiting") throw new PublishError("None of your versions with this hash is waiting for review.");
+  if (apiReason(answer) === "sign-in-needed") throw new PublishError(MESSAGES["token-not-working"]!);
   throw new PublishError(`The service refused the request (${response.status}).`);
 }

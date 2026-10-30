@@ -852,3 +852,4 @@ export function validateManifest(input: unknown): ManifestResult {
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, manifest: withBoardNames(input) as unknown as ModuleManifest };
 }
+export * from "./api-reasons.ts";
