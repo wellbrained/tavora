@@ -217,9 +217,9 @@ describe("banning a developer", () => {
     unlist.mockRestore();
 
     // Something is left to do, so a second ban isn't refused as "banned already"; it keeps the modules of the first.
-    expect(await (await adminCall("/api/moderation/ban", { accountId: developer.id, reason: "spam" })).json()).toMatchObject({ ok: true, unlisted: ["wellbrained.timer"] });
+    expect(await (await adminCall("/api/moderation/ban", { accountId: developer.id, reason: "unsafe" })).json()).toMatchObject({ ok: true, unlisted: ["wellbrained.timer"] });
     expect(catalog.isListed("wellbrained.timer")).toBe(false);
-    expect(store.bans()[0]?.modules).toEqual(["wellbrained.timer"]);
+    expect(store.bans()[0]).toMatchObject({ reason: "spam", modules: ["wellbrained.timer"] });
     expect((await adminCall("/api/moderation/ban", { accountId: developer.id, reason: "spam" })).status).toBe(409);
 
     expect(await (await adminCall("/api/moderation/unban", { accountId: developer.id })).json()).toMatchObject({ ok: true, relisted: ["wellbrained.timer"] });

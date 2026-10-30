@@ -512,10 +512,10 @@ export class AccountStore {
     const name = this.developer(accountId)?.name ?? null;
     this.db.exec("begin");
     try {
-      // Banning again (to finish a ban that stopped halfway) keeps the modules the first one named: they are unlisted already.
+      // Banning again (to finish a ban that stopped halfway) keeps the first ban: its reason, its time and the modules it named.
       const all = [...new Set([...(this.bannedModules(accountId) ?? []), ...modules])];
       this.db
-        .prepare("insert into bans (account_id, reason, note, banned_at, modules, email, name) values (?, ?, ?, ?, ?, ?, ?) on conflict (account_id) do update set reason = excluded.reason, note = excluded.note, banned_at = excluded.banned_at, modules = excluded.modules")
+        .prepare("insert into bans (account_id, reason, note, banned_at, modules, email, name) values (?, ?, ?, ?, ?, ?, ?) on conflict (account_id) do update set modules = excluded.modules")
         .run(accountId, reason, note, now, JSON.stringify(all), email, name);
       this.db.prepare("insert into banned_keys (fingerprint, account_id) select fingerprint, account_id from publisher_keys where account_id = ? on conflict (fingerprint) do nothing").run(accountId);
       this.db.exec("commit");
