@@ -1,8 +1,17 @@
-## 0.2.17
+## 0.2.18
 
 The item session: `openItems` in `@tavora/sdk/store`. Nothing changes for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).
 
 - `openItems(sdk, { prefix, parse, title, rename?, newItem?, content?, onAdd?, onDeleted?, followNavigate?, restore?, whenEmpty?, merge?, debounceMs? })` keeps the items of one kind (documents whose id starts with `prefix`) and the one a panel has open, on top of `openDocument`. `items` follows `documents.onChange` and the panel's own saves; `current` is the open item's document handle. `pick(id)` saves the open item and opens another; a slow pick that finishes after a newer one resolves `false`, an unknown id rejects with `ItemNotFoundError`. `create`, `rename` and `remove` keep the list in step; `remove` deletes only the copy that was listed (else `CONFLICT`), opens the next item when it was the open one and returns an `undo`. A panel that was open before (or opened by `panels.open`) shows its item again; a new one follows `onAdd` (`last`, `first`, `none`). `panel.setContent` and `panel.onNavigate` are kept in step. When another panel deletes the open item, the session stays on it (`onDeleted: "keep"`, default; `deleted` turns true and `restoreDeleted()` puts its last copy back) or opens the next one (`"fallback"`); `flush()` and `pick` never create a deleted item again. A `pick` that cannot save the open item rejects with `ItemSaveError` and keeps it open. `job(fn)` runs one async job at a time and shows what other panels changed meanwhile once afterwards; `panels.open` and the fallback wait for it (`busy`). `restore(launch, state)` lets a module choose the item to show from `panel.getState`, and `whenEmpty()` creates a starter item once for an empty list.
+
+## 0.2.17
+
+The module bootstrap: `@tavora/sdk/bootstrap`. Nothing changes for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `bootstrapModule()` connects, applies the host theme now and whenever it changes, and tracks the language. It returns `{ sdk, theme, language, status, error?, onLanguage(fn), onTheme(fn), dispose() }`; `dispose()` removes every listener it added. A failed connection does not throw: `status` is `"failed"` and `error` says why, so the page can show "Could not connect".
+- `applyHostTheme(theme, root?)` writes the theme to the page: every token as `--<token>`, the summary colours as `--host-background`, `--host-surface`, `--host-text`, `--host-text-muted` and `--host-accent`, `--radius`, `color-scheme`, the `dark` class and `data-mode` (`"dark"` or `"light"`).
+- `isGerman(language)` and `languageOf(language)`: anything but German (`de`, `de-AT`, `de_DE`, …) is English, as in the host.
+
 
 ## 0.2.16
 

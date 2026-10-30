@@ -2,9 +2,13 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.12
+
+- New projects start on `@tavora/sdk` 0.2.18, which adds the item session.
+
 ## 0.1.11
 
-- New projects start on `@tavora/sdk` 0.2.17, which adds leaderboards, `compareAndSet`, panel dialogs, a test host, the document store and the item session.
+- New projects start on `@tavora/sdk` 0.2.17, which adds leaderboards, `compareAndSet`, panel dialogs, a test host, the document store and the module bootstrap.
 
 ## 0.1.10
 
