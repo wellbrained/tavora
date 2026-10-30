@@ -13,12 +13,15 @@ export const MAX_ZOOM = 5;
 export type FileKind = "pdf" | "image";
 /** How a file is fitted: to the width of the panel, to the whole page or picture, or by a zoom of its own (null). */
 export type FitMode = "width" | "page" | null;
+/** What the side of a PDF shows: small pictures of its pages, its contents, or nothing. */
+export type SideMode = "pages" | "contents" | null;
 
 /** Where the reader was, remembered per file. `page` counts from 1 and means nothing for a picture. */
 export interface FileView {
   page: number;
   zoom: number;
   fit: FitMode;
+  side: SideMode;
 }
 
 export interface FileEntry {
@@ -56,7 +59,8 @@ export function parseView(raw: unknown, kind: FileKind): FileView {
   const page = typeof value.page === "number" && Number.isFinite(value.page) ? Math.max(1, Math.floor(value.page)) : 1;
   const zoom = typeof value.zoom === "number" ? clampZoom(value.zoom) : 1;
   const fit: FitMode = value.fit === "width" || value.fit === "page" || value.fit === null ? value.fit : kind === "pdf" ? "width" : "page";
-  return { page, zoom, fit };
+  const side: SideMode = value.side === "pages" || value.side === "contents" ? value.side : null;
+  return { page, zoom, fit, side };
 }
 
 export function parseFiles(raw: unknown): FilesData {

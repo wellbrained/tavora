@@ -1,14 +1,16 @@
 <script setup lang="ts">
-// One open PDF: a toolbar, a contents list on the side when the PDF has one, and the pages in one long scroll.
-// It remembers the page and zoom per file (the parent saves what it reports) and searches the whole text.
-import { ChevronDown, ChevronUp, Columns2, Expand, ListTree, Minus, Plus, Search, X } from "@lucide/vue";
+// One open PDF: a toolbar, small pictures of the pages or the contents list on the side, and the pages in one long scroll.
+// It remembers the page, zoom and side per file (the parent saves what it reports) and searches the whole text.
+// Page Up and Page Down, the arrow keys left and right, Home and End jump by whole pages.
+import { ChevronDown, ChevronUp, Columns2, Expand, GalleryVerticalEnd, ListTree, Minus, Plus, Search, X } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import OutlineList from "./OutlineList.vue";
 import PdfPage from "./PdfPage.vue";
-import { clampZoom, type FileView, type FitMode } from "./files";
+import PdfThumbs from "./PdfThumbs.vue";
+import { clampZoom, type FileView, type FitMode, type SideMode } from "./files";
 import { t } from "./i18n";
 import { fitZoom, layoutPages, pageAtOffset, pagesInBand, PAGE_GAP, parsePageInput, stepZoom, type PageSize } from "./layout";
 import { closePdf, loadOutline, openPdf, PdfProblem, type OutlineNode, type PDFDocumentProxy } from "./pdf";
@@ -23,7 +25,7 @@ const status = ref<Status>("opening");
 const pdf = shallowRef<PDFDocumentProxy | null>(null);
 const sizes = ref<PageSize[]>([]);
 const outline = ref<OutlineNode[]>([]);
-const outlineOpen = ref(false);
+const side = ref<SideMode>(props.view.side);
 const zoom = ref(clampZoom(props.view.zoom));
 const fit = ref<FitMode>(props.view.fit);
 const page = ref(1);
@@ -308,7 +310,36 @@ function onKey(event: KeyboardEvent) {
     void openSearch();
   } else if (event.key === "Escape" && searching.value) {
     closeSearch();
+  } else if (!event.ctrlKey && !event.metaKey && !event.altKey && !typingIn(event.target)) {
+    const target = pageKeys[event.key]?.();
+    if (target === undefined || Number.isNaN(target)) return;
+    event.preventDefault();
+    goToPage(target);
   }
+}
+
+/** Keys that jump by whole pages, to the page they lead to. */
+const pageKeys: Record<string, () => number> = {
+  PageDown: () => page.value + 1,
+  PageUp: () => page.value - 1,
+  ArrowRight: () => (sideways() ? NaN : page.value + 1),
+  ArrowLeft: () => (sideways() ? NaN : page.value - 1),
+  Home: () => 1,
+  End: () => count.value,
+};
+
+/** Zoomed in wider than the panel: the arrow keys left and right move sideways, as they normally do. */
+const sideways = () => !!scroller.value && scroller.value.scrollWidth > scroller.value.clientWidth + 1;
+
+/** Keys pressed while typing in a field, a dialog or a menu are not for the pages. */
+function typingIn(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || target.closest("input, textarea, select, [role=dialog], [role=menu]") !== null;
+}
+
+function toggleSide(mode: Exclude<SideMode, null>) {
+  side.value = side.value === mode ? null : mode;
+  emit("view", { side: side.value });
 }
 
 const percent = computed(() => Math.round(zoom.value * 100));
@@ -330,7 +361,10 @@ const setPageRef = (number: number) => (element: unknown) => {
 
     <template v-else>
       <div class="bg-card flex flex-wrap items-center gap-1 border-b px-2 py-1" role="toolbar" :aria-label="t('pdf.toolbar')">
-        <Button v-if="outline.length" variant="ghost" size="icon-sm" :aria-pressed="outlineOpen" :title="t('pdf.outline')" :aria-label="t('pdf.outline')" data-testid="pdf-outline-toggle" @click="outlineOpen = !outlineOpen">
+        <Button variant="ghost" size="icon-sm" :aria-pressed="side === 'pages'" :title="t('pdf.pages')" :aria-label="t('pdf.pages')" data-testid="pdf-thumbs-toggle" @click="toggleSide('pages')">
+          <GalleryVerticalEnd :stroke-width="1.5" />
+        </Button>
+        <Button v-if="outline.length" variant="ghost" size="icon-sm" :aria-pressed="side === 'contents'" :title="t('pdf.outline')" :aria-label="t('pdf.outline')" data-testid="pdf-outline-toggle" @click="toggleSide('contents')">
           <ListTree :stroke-width="1.5" />
         </Button>
         <Button variant="ghost" size="icon-sm" :disabled="page <= 1" :title="t('pdf.previous')" :aria-label="t('pdf.previous')" data-testid="pdf-prev" @click="goToPage(page - 1)">
@@ -386,7 +420,8 @@ const setPageRef = (number: number) => (element: unknown) => {
       </div>
 
       <div class="flex min-h-0 flex-1">
-        <nav v-if="outlineOpen && outline.length" class="bg-card w-56 flex-none overflow-y-auto border-r p-1" :aria-label="t('pdf.outline')" data-testid="pdf-outline">
+        <PdfThumbs v-if="side === 'pages' && pdf" :pdf="pdf" :sizes="sizes" :page="page" @go="goToPage" />
+        <nav v-else-if="side === 'contents' && outline.length"class="bg-card w-56 flex-none overflow-y-auto border-r p-1" :aria-label="t('pdf.outline')" data-testid="pdf-outline">
           <OutlineList :nodes="outline" @go="goToPage" />
         </nav>
         <div ref="scroller" class="bg-muted/40 relative min-w-0 flex-1 overflow-auto" tabindex="0" data-testid="pdf-scroller" @scroll.passive="onScroll" @wheel="onWheel">
