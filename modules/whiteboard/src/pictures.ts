@@ -4,14 +4,14 @@
 
 import type { BinaryFileData } from "@excalidraw/excalidraw/types";
 import type { BlobInfo, TavoraSDK } from "@tavora/sdk";
-import { BLOB_TYPES } from "@tavora/sdk";
+import { PICTURE_TYPES } from "@tavora/sdk";
 import type { StoredFile } from "./boards";
 
 type Files = Record<string, BinaryFileData>;
 
 /** What the file store accepts. Other kinds (SVG, BMP, …) can be drawn on the board but not kept. */
 export function isStorable(mimeType: string): boolean {
-  return (BLOB_TYPES as readonly string[]).includes(mimeType);
+  return (PICTURE_TYPES as readonly string[]).includes(mimeType);
 }
 
 /** The picture behind a data address, or null when the address is not a base64 one. */

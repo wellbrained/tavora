@@ -125,12 +125,12 @@ A module never sees another module's data, or its own data for another workspace
 
 ### Files (blobs)
 
-A module can keep pictures that are too big for a document: up to 50 MB each and 500 MB together per module and workspace. They live in a folder Tavora manages (`module-blobs` in its data folder by default; the user can move it in Settings > Modules), shared by all of the module's panels, and are removed with the workspace.
+A module can keep pictures and PDF files that are too big for a document: up to 50 MB each and 500 MB together per module and workspace. They live in a folder Tavora manages (`module-blobs` in its data folder by default; the user can move it in Settings > Modules), shared by all of the module's panels, and are removed with the workspace.
 
 - **Storing:** `sdk.blobs.put(file)` sends the file to the module's own address, `POST /_blobs/`, as the request body, so it is streamed to disk and never held in memory whole. The answer is a `BlobInfo`: `id` (32 lowercase hex characters chosen by the host), `bytes`, `type` and `createdAt`. A module never names a file.
 - **Showing:** `sdk.blobs.url(id)` is the address to use as an image source (`GET /_blobs/<id>`). It only works from the module's own page.
-- **What is accepted:** PNG, JPEG, GIF and WebP, judged by the first bytes of the file itself, never by its name or type. Anything else (SVG, BMP, documents, scripts) is refused with `INVALID_PARAMS`. Over the limits it is `QUOTA_EXCEEDED`, and nothing is left behind.
-- **Serving:** each file is sent with its real type, `X-Content-Type-Options: nosniff` and a policy that lets it load nothing, so a picture can only be shown.
+- **What is accepted:** PNG, JPEG, GIF and WebP pictures and PDF files, judged by the first bytes of the file itself (`%PDF-` for a PDF), never by its name or type. Anything else (SVG, BMP, other documents, scripts) is refused with `INVALID_PARAMS`. Over the limits it is `QUOTA_EXCEEDED`, and nothing is left behind.
+- **Serving:** each file is sent with its real type, `X-Content-Type-Options: nosniff` and a policy that lets it load nothing, so a picture can only be shown. A PDF also carries `Content-Disposition: attachment`: Tavora never shows it as a page, the module reads the bytes and draws them itself. The SDK exports `PICTURE_TYPES` (the four pictures) and `BLOB_TYPES` (those and `application/pdf`). A Tavora from before PDF support refuses a PDF with `INVALID_PARAMS`.
 
 ### Clipboard
 
@@ -527,7 +527,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | Document title | 200 characters |
 | Panel content (`panel.setContent`) | `id` 200 characters, `title` 200 characters |
 | `panels.open` | one per click or key press; the panel asked to switch has 5 s |
-| Stored files (`blobs`) | 50 MB each, 500 MB per module and workspace; PNG, JPEG, GIF and WebP only |
+| Stored files (`blobs`) | 50 MB each, 500 MB per module and workspace; PNG, JPEG, GIF, WebP and PDF only |
 | `clipboard.writeImage` | one PNG per click or key press, at most 20 MB, 16384 pixels on a side and 100 million pixels |
 | `pictures.save` | the same as `clipboard.writeImage`; names up to 80 characters |
 | `files.saveJson`, `files.openJson` | one file per click or key press, JSON up to 8 MiB; names up to 80 characters |

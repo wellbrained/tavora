@@ -432,6 +432,9 @@ describe("scripted answers", () => {
     expect(sdk.blobs.url(info.id)).toContain(info.id);
     expect(await sdk.blobs.usage()).toMatchObject({ bytes: 3, count: 1 });
     expect(await failure(sdk.blobs.put(new Blob(["abc"], { type: "text/plain" })))).toMatchObject({ code: "INVALID_PARAMS" });
+    const pdf = await sdk.blobs.put(new Blob(["%PDF-1.7"], { type: "application/pdf" }));
+    expect(pdf.type).toBe("application/pdf");
+    await sdk.blobs.delete(pdf.id);
     await sdk.blobs.delete(info.id);
     expect(await sdk.blobs.list()).toEqual([]);
   });

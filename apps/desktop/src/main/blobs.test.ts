@@ -8,6 +8,7 @@ import { BlobStore, sniffType } from "./blobs";
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 1, 2, 3, 4]);
 const JPEG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1]);
 const GIF = Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
+const PDF = new TextEncoder().encode("%PDF-1.7\n1 0 obj <<>> endobj\n%%EOF");
 const WEBP = Uint8Array.from([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20]);
 
 /** A stream of the given pieces, like a request body. */
@@ -29,6 +30,12 @@ describe("sniffType", () => {
     expect(sniffType(JPEG)).toBe("image/jpeg");
     expect(sniffType(GIF)).toBe("image/gif");
     expect(sniffType(WEBP)).toBe("image/webp");
+  });
+
+  it("knows a PDF by its %PDF- header at the very start", () => {
+    expect(sniffType(PDF)).toBe("application/pdf");
+    expect(sniffType(new TextEncoder().encode(" %PDF-1.7"))).toBeNull();
+    expect(sniffType(new TextEncoder().encode("%PDF"))).toBeNull();
   });
 
   it("refuses everything else, including text, SVG and BMP", () => {
@@ -53,6 +60,14 @@ describe("BlobStore.put", () => {
     expect((await store.put(pieces(JPEG))).type).toBe("image/jpeg");
     expect((await store.put(pieces(GIF))).type).toBe("image/gif");
     expect((await store.put(pieces(WEBP))).type).toBe("image/webp");
+  });
+
+  it("stores a PDF with the pdf extension", async () => {
+    const info = await store.put(pieces(PDF));
+    expect(info.type).toBe("application/pdf");
+    expect(await readdir(dir)).toEqual([`${info.id}.pdf`]);
+    expect(await store.open(info.id)).toMatchObject({ type: "application/pdf", bytes: PDF.length });
+    expect(await store.list()).toEqual([info]);
   });
 
   it("refuses anything that is not a picture, and leaves nothing behind", async () => {
@@ -123,6 +138,21 @@ describe("serveBlobs", () => {
     expect(served.headers.get("x-content-type-options")).toBe("nosniff");
     expect(served.headers.get("content-security-policy")).toContain("sandbox");
     expect(new Uint8Array(await served.arrayBuffer())).toEqual(PNG);
+  });
+
+  it("serves a PDF as a download, never as a page", async () => {
+    const stored = await serveBlobs(store, post(PDF), url(""));
+    expect(stored.status).toBe(201);
+    const info = (await stored.json()) as { id: string; type: string };
+    expect(info.type).toBe("application/pdf");
+    const served = await serveBlobs(store, new Request(url(info.id).href), url(info.id));
+    expect(served.headers.get("content-type")).toBe("application/pdf");
+    expect(served.headers.get("content-disposition")).toBe("attachment");
+    expect(served.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(new Uint8Array(await served.arrayBuffer())).toEqual(PDF);
+    const picture = await serveBlobs(store, post(PNG), url(""));
+    const pictureId = ((await picture.json()) as { id: string }).id;
+    expect((await serveBlobs(store, new Request(url(pictureId).href), url(pictureId))).headers.get("content-disposition")).toBeNull();
   });
 
   it("answers a refused file with the error and a fitting status", async () => {

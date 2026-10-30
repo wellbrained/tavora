@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { expectModuleText, inModule, launch, NOTES, openWorkspace, openModule, panels, PLAYGROUND, RAIL_WIDTH, setContentSize, TODOS, typeInModule, VUE, waitForShown } from "./harness";
+import { expectModuleText, inModule, launch, NOTES, openWorkspace, openModule, panels, PDF_VIEWER, PLAYGROUND, RAIL_WIDTH, setContentSize, TODOS, typeInModule, VUE, waitForShown } from "./harness";
 
 // The official Notes, To-Dos and UI Playground modules, driven through their own pages.
 
@@ -94,7 +94,7 @@ test("official modules sit under Official without a tag of their own, the exampl
   const { app, page } = await launch();
   await page.getByTestId("add-module").click();
   const official = page.getByRole("region", { name: "Official", exact: true });
-  for (const id of [NOTES, TODOS, PLAYGROUND]) {
+  for (const id of [NOTES, TODOS, PLAYGROUND, PDF_VIEWER]) {
     await expect(official.getByTestId(`module-${id}`)).toBeVisible();
     await expect(page.getByTestId(`provenance-${id}`)).toHaveCount(0);
   }
