@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.1",
+    date: "2026-10-30",
+    title: "Page pictures in the PDF Viewer",
+    notes: [
+      "Show small pictures of every page on the side and click one to jump there.",
+      "Page Up and Page Down, Home and End, and the left and right arrows move by whole pages.",
+      "On a narrow panel the pages or the contents take the place of the document until you pick a page.",
+      "Your files list has a ⋯ menu on every row, and opening a file shows its progress.",
+    ],
+    prs: [
+      { number: 513, title: "PDF Viewer: page pictures on the side, page keys" },
+    ],
+    tags: ["pdf-viewer", "ui-kit"],
+  },
+  {
     version: "0.23.0",
     date: "2026-10-30",
     title: "PDF Viewer and safer modules",
