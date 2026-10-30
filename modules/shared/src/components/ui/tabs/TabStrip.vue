@@ -7,6 +7,8 @@
 // - Reorder: drag a tab (a line shows where it lands; Esc puts it back), or press Alt + ← / → on a focused tab.
 //   `reorder` carries the whole new order of ids, once per move.
 // - Rename: double-click or F2 on a `renamable` tab. Enter or leaving the field keeps the name, Esc drops it.
+// - Icon: the scoped `icon` slot (`{ tab }`) puts an icon before a tab's label. It stays while the tab is renamed
+//   and is not part of the rename field's text. Give it its own look (e.g. `text-primary size-3.5`) and a tooltip.
 // - A row that is too wide scrolls with the wheel and fades at the edges. The `add` slot sits after the row, always visible.
 import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useResizeObserver } from "@vueuse/core";
@@ -241,7 +243,8 @@ onBeforeUnmount(endDrag);
     >
       <TabsList class="h-full w-max border-b-0" :aria-label="ariaLabel">
         <template v-for="tab in tabs" :key="tab.id">
-          <div v-if="renaming?.id === tab.id" class="flex h-full items-center px-1">
+          <div v-if="renaming?.id === tab.id" class="flex h-full items-center gap-1 px-1">
+            <span v-if="$slots.icon" class="flex flex-none items-center" data-testid="strip-tab-icon"><slot name="icon" :tab="tab" /></span>
             <Input
               v-model="renaming.text"
               class="h-6 w-36 px-1.5 text-sm md:text-sm"
@@ -271,6 +274,7 @@ onBeforeUnmount(endDrag);
             @dblclick="startRename(tab.id)"
             @keydown="onKeyDown($event, tab.id)"
           >
+            <span v-if="$slots.icon" class="flex flex-none items-center" data-testid="strip-tab-icon"><slot name="icon" :tab="tab" /></span>
             <span class="truncate" :title="tab.label">{{ tab.label }}</span>
             <!-- Not a button: the tab is one already. Delete or a middle click close it from the keyboard or mouse. -->
             <span

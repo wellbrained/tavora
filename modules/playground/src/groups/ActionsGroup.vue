@@ -58,6 +58,10 @@ const name = ref("Waystone");
 const confirming = ref(false);
 const renaming = ref(false);
 const renamingBusy = ref(false);
+/** "New from a save": picking a (pretend) save fills the name and turns Save on; typing first keeps the typed name. */
+const fromSave = ref(false);
+const pickedSave = ref("");
+const pickSave = () => (pickedSave.value = "Waystone Camp");
 const sharing = ref(false);
 const savingConfirm = ref(false);
 const working = ref(false);
@@ -287,6 +291,7 @@ function slow(done: () => void) {
         <Specimen label="Dialogs">
           <Button variant="secondary" :disabled="off" @click="renaming = true">Rename…</Button>
           <Button variant="secondary" :disabled="off" @click="renamingBusy = true">Rename with a slow save…</Button>
+          <Button variant="secondary" :disabled="off" @click="pickedSave = ''; fromSave = true">New from a save…</Button>
           <Button variant="secondary" :disabled="off" @click="sharing = true">Share (plain confirm)…</Button>
           <Button variant="secondary" :disabled="off" @click="savingConfirm = true">Slow confirm…</Button>
           <Button variant="secondary" class="text-destructive" :disabled="off" @click="confirming = true">Delete group…</Button>
@@ -311,6 +316,18 @@ function slow(done: () => void) {
           @submit="slow(() => (renamingBusy = false))"
         >
           <p class="text-muted-foreground text-xs">Extra fields go here.</p>
+        </NameDialog>
+        <NameDialog
+          v-model:open="fromSave"
+          title="New build"
+          label="Name"
+          :value="pickedSave"
+          :ready="!!pickedSave"
+          placeholder="Pick a save first"
+          confirm="Create"
+          @submit="fromSave = false"
+        >
+          <Button type="button" variant="secondary" data-testid="pick-save" @click="pickSave">Pick a save…</Button>
         </NameDialog>
         <ConfirmDialog
           v-model:open="sharing"
