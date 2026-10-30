@@ -18,6 +18,9 @@ export class CatalogError extends Error {}
 
 /** Tavora's own modules stay bundled with the app; the catalog holds community modules only. */
 const OFFICIAL_PREFIX = "tavora.";
+
+/** Whether a module id is one of Tavora's own (`tavora.*`); nothing is stored for it, the id says it. */
+export const isOfficialId = (id: string) => id.startsWith(OFFICIAL_PREFIX);
 const SHA256 = /^[0-9a-f]{64}$/;
 /** Widest and tallest screenshot the catalog takes, in pixels. */
 export const MAX_SCREENSHOT_PIXELS = 4096;
@@ -126,6 +129,8 @@ export interface ReviewInfo {
   language: string;
   /** The publish token's name when it came from CI. */
   token: string | null;
+  /** One of Tavora's own modules: its reasons are kept for the admin page, but it lists at once. */
+  official?: boolean;
 }
 
 export type VersionStatus = "listed" | "waiting";
@@ -156,7 +161,7 @@ export function copyHashes(files: readonly ZipFile[]): [string, number][] {
 }
 
 /** Checks a module zip the way the app's installer does, and refuses what the catalog does not take. */
-export function checkCatalogZip(bytes: Buffer): CheckedZip {
+export function checkCatalogZip(bytes: Buffer, options: { official?: boolean } = {}): CheckedZip {
   if (bytes.length > ZIP_LIMITS.maxArchiveBytes) throw new CatalogError("The zip is too big.");
   let files;
   try {
@@ -179,7 +184,8 @@ export function checkCatalogZip(bytes: Buffer): CheckedZip {
   const { manifest } = result;
   const { entries, icons, screenshots: shots } = manifestFiles(manifest);
   for (const name of [...entries, ...icons, ...shots]) if (!file(name)) throw new CatalogError(`It names ${name}, which is missing.`);
-  if (manifest.id.startsWith(OFFICIAL_PREFIX)) throw new CatalogError("Its id is reserved for Tavora's own modules, which stay bundled with the app.");
+  // Tavora's own ids pass only for the publish route, which then holds them to the pinned key and account.
+  if (isOfficialId(manifest.id) && !options.official) throw new CatalogError("Its id is reserved for Tavora's own modules, which stay bundled with the app.");
 
   const verified = verifyFiles(files);
   if (!verified.ok) throw new CatalogError(`It was refused: ${verified.reason}.`);
@@ -471,7 +477,7 @@ export class CatalogStore {
     const screenshots = checked.screenshots.map(({ sha256: hash, type, size }) => ({ sha256: hash, type, size }));
     const icon = checked.icon ? { sha256: checked.icon.sha256, type: checked.icon.type, size: checked.icon.size } : null;
     const at = now.toISOString();
-    const waits = review !== undefined && review.reasons.length > 0;
+    const waits = review !== undefined && review.reasons.length > 0 && review.official !== true;
     this.db.exec("begin");
     try {
       if (!module) this.db.prepare("insert into modules (id, owner, created_at) values (?, ?, ?)").run(manifest.id, owner, at);
@@ -719,7 +725,7 @@ export class CatalogStore {
       )
       .all() as unknown as { module_id: string; account_id: string | null; manifest: string; signer: string }[];
     return rows
-      .filter((row) => row.module_id !== self.moduleId && (self.accountId === null || row.account_id !== self.accountId) && !self.fingerprints.includes(row.signer))
+      .filter((row) => !isOfficialId(row.module_id) && row.module_id !== self.moduleId && (self.accountId === null || row.account_id !== self.accountId) && !self.fingerprints.includes(row.signer))
       .map((row) => {
         const manifest = JSON.parse(row.manifest) as ModuleManifest;
         return { id: row.module_id, names: [manifest.name, ...Object.values(manifest.translations ?? {}).flatMap((translation) => translation.name ?? [])] };
@@ -741,7 +747,7 @@ export class CatalogStore {
       .all() as unknown as { module_id: string; version: string; sha256: string; account_id: string | null; file_hashes: string | null; zip_removed: string | null; signer: string }[];
     let best: { id: string; version: string; share: number } | null = null;
     for (const row of rows) {
-      if (row.module_id === self.moduleId || (self.accountId !== null && row.account_id === self.accountId) || self.fingerprints.includes(row.signer)) continue;
+      if (isOfficialId(row.module_id) || row.module_id === self.moduleId || (self.accountId !== null && row.account_id === self.accountId) || self.fingerprints.includes(row.signer)) continue;
       let theirs: [string, number][] | null = row.file_hashes === null ? null : (JSON.parse(row.file_hashes) as [string, number][]);
       if (theirs === null && row.zip_removed === null) {
         const bytes = this.zipBytes(row.sha256);
@@ -953,6 +959,12 @@ export class CatalogStore {
     ).map((row) => ({ ...row, listed: row.listed === 1 }));
   }
 
+  /** What the checks said about a version, listed or not (the admin page shows it); null when nothing was kept. */
+  versionReview(sha256: string): ReviewInfo | null {
+    const row = this.db.prepare("select review from versions where sha256 = ?").get(sha256) as { review: string | null } | undefined;
+    return row?.review ? (JSON.parse(row.review) as ReviewInfo) : null;
+  }
+
   /** Every module, listed or not, with its versions, installs and stored bytes, for the admin panel. */
   adminModules(): AdminModule[] {
     const rows = this.db.prepare("select id, owner, listed, created_at from modules order by id").all() as unknown as { id: string; owner: string; listed: number; created_at: string }[];
@@ -986,9 +998,12 @@ export class CatalogStore {
     });
   }
 
-  /** The listed modules at their newest version: all, those for one game (and any game), or those for a personal workspace. */
-  index(filter: CatalogFilter = {}): CatalogEntry[] {
-    const entries = (this.db.prepare(`${LATEST} order by m.id`).all() as unknown as VersionSql[]).map(entryOf);
+  /**
+   * The listed modules at their newest version: all, those for one game (and any game), or those for a personal workspace.
+   * Tavora's own modules (`tavora.*`) are left out unless `official` is set.
+   */
+  index(filter: CatalogFilter = {}, { official = false }: { official?: boolean } = {}): CatalogEntry[] {
+    const entries = (this.db.prepare(`${LATEST} order by m.id`).all() as unknown as VersionSql[]).map(entryOf).filter((entry) => official || !isOfficialId(entry.id));
     if ("game" in filter) return entries.filter((entry) => entry.games.length === 0 || entry.games.includes(filter.game));
     if ("personal" in filter) return entries.filter((entry) => entry.personalWorkspaces);
     return entries;

@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { AccountStore } from "./account-store.ts";
-import type { CatalogStore } from "./catalog.ts";
+import { isOfficialId, type CatalogStore } from "./catalog.ts";
 import { mailLanguage, type Mail, type MailLanguage } from "./mail.ts";
 import type { Notifier } from "./moderation-mail.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
@@ -761,7 +761,7 @@ export function conversationRoutes({ conversations, catalog, accounts, clientKey
     const input = await body(context);
     if (!input) return bad(context, "Send JSON.");
     if (typeof input.moduleId !== "string" || !MODULE_ID.test(input.moduleId)) return bad(context, "Send { moduleId, type, text, versions }.");
-    const listed = catalog.module(input.moduleId);
+    const listed = isOfficialId(input.moduleId) ? null : catalog.module(input.moduleId);
     if (!listed) return notFound(context);
     if (ownsModule(accounts, account.id, input.moduleId, listed.module.owner)) return context.json({ error: "You can't write to yourself.", reason: "own-module" }, 403);
     const settings = publicContact(conversations, accounts, input.moduleId, listed.module.owner);
