@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.22.6",
+    date: "2026-10-30",
+    title: "Whiteboard keeps a deleted board open",
+    notes: [
+      "If you delete a board in another panel, it stays on screen with a Restore button.",
+      "A new Whiteboard panel opens the board you used last.",
+    ],
+    prs: [
+      { number: 498, title: "Whiteboard: board library and board session on the item session and document store" },
+    ],
+    tags: ["whiteboard"],
+  },
+  {
     version: "0.22.5",
     date: "2026-10-30",
     title: "Calculator history in every panel",
