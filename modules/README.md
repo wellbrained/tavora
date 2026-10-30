@@ -22,8 +22,8 @@ community module could do everything they do.
   saves when another note is opened or the panel is hidden or closed.
 - Several panels of one module share the same documents. A panel that saves
   after another panel did gets `CONFLICT` from the host; the change is then
-  applied again to the newest copy (`updateDocument` in
-  `shared/src/documents.ts`), so both panels keep their work. Changes are
+  applied again to the newest copy (the document store, `openDocument` in
+  `@tavora/sdk/store`), so both panels keep their work. Changes are
   written so that running them twice gives the same result.
 - The theme comes from `ui.getTheme`: `connectModule()` sets each token as a
   CSS variable, which `shared/src/theme.css` maps into Tailwind.

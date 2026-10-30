@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.17
+
+- New projects start on `@tavora/sdk` 0.3.0.
+
 ## 0.1.16
 
 - New projects start on `@tavora/sdk` 0.2.21, which adds `sdk.supports` and the table of calls.

@@ -80,6 +80,12 @@ export interface DocumentHandle<T> {
    * When this panel's own save already went over that copy, it is saved back as a new revision.
    */
   adoptRemote(): Promise<void>;
+  /**
+   * Reads the stored copy again, for a change made outside this handle (Tavora tells a panel about other panels'
+   * writes, not about its own `documents.put`). Unsaved edits stay on top, as after a remote change; nothing happens
+   * when the stored revision is the one this handle has. A failed read goes to `onError` as `"reload"`.
+   */
+  reload(): Promise<void>;
   onChange(fn: (event: DocumentChangeEvent<T>) => void): () => void;
   onStatus(fn: (status: DocumentStatus) => void): () => void;
   onError(fn: (error: unknown, kind: DocumentErrorKind) => void): () => void;
@@ -363,6 +369,10 @@ export async function openDocument<T>(sdk: TavoraSDK, id: string, options: OpenD
       schedule();
     },
     flush,
+    reload() {
+      if (closed) throw new Error("the document is closed");
+      return reloadJob({ id, revision: stored.revision, deleted: false });
+    },
     adoptRemote() {
       if (closed) throw new Error("the document is closed");
       clearTimeout(timer);

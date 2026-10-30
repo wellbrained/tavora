@@ -1,3 +1,12 @@
+## 0.3.0
+
+The helper entries are complete: `testing`, `store` (document store, item session, result queue, run store), `bootstrap` and the generated protocol table. Nothing changes on the wire, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- Item session: `reload()` reads the open item again after something other than its handle wrote it (the panel's own `documents.put` is not reported back to it), keeping unsaved edits on top; `deletedCopy` is the last copy of an item deleted by another panel (unsaved edits included, null otherwise), so a panel can keep showing it. `parse(null)` must return a valid placeholder: the docs say so now.
+- Document store: `reload()` on the handle is the same for one document.
+- The kit's `useItemSession` returns `deletedCopy` and `reload`.
+- The kit no longer exports `updateDocument`, `readDocument`, `applyTheme`, `Versioned` and `UpdateOptions`; use `openDocument` / `useDocument`, and `connectModule({ texts })`. `serial` and the callback form of `connectModule` are still there, deprecated, for modules that have not moved.
+
 ## 0.2.21
 
 The protocol table: every call declared once. Nothing changes on the wire or for a running module, so `MIN_TAVORA` stays (Tavora 0.19.32).

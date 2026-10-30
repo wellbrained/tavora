@@ -45,6 +45,16 @@ describe("useItemSession", () => {
     await vi.waitFor(() => expect((host.documents.get("plan-a")?.data as unknown as Plan).items).toEqual(["one", "two"]));
   });
 
+  it("reload shows a copy written through this panel's own sdk", async () => {
+    const { sdk, host } = createMemoryHost();
+    host.documents.put({ id: "plan-a", title: "A", data: { name: "A", items: [] } });
+    const plans = useItemSession(sdk, options);
+    await plans.ready;
+    await sdk.documents.put({ id: "plan-a", title: "B", data: { name: "B", items: [] }, ifRevision: 1 });
+    await plans.reload();
+    expect(plans.current.value?.name).toBe("B");
+  });
+
   it("queues calls made before it has loaded, and reports a session that cannot open", async () => {
     const { sdk } = createMemoryHost();
     const plans = useItemSession(sdk, options);
@@ -78,8 +88,10 @@ describe("useItemSession", () => {
     await b.sdk.documents.delete("plan-a");
     await vi.waitFor(() => expect(plans.deleted.value).toBe(true));
     expect(plans.currentId.value).toBe("plan-a");
+    expect(plans.deletedCopy.value).toEqual({ name: "A", items: [] });
     await plans.restoreDeleted();
     expect(plans.deleted.value).toBe(false);
+    expect(plans.deletedCopy.value).toBeNull();
     expect(a.host.documents.get("plan-a")).not.toBeNull();
     await plans.refresh();
     await plans.adoptRemote();

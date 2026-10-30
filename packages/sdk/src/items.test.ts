@@ -344,6 +344,52 @@ describe("other panels", () => {
     await session.restoreDeleted(); // nothing to restore: no-op
   });
 
+  it("reload shows a header written outside the handle", async () => {
+    const { sdk, host } = createMemoryHost();
+    seed(host, "a", "A", ["one"]);
+    const session = await openItems(sdk, options());
+    const events: ItemSessionEvent[] = [];
+    session.onChange((event) => events.push(event));
+    await sdk.documents.put({ id: "plan-a", title: "Outside", data: { name: "Outside", items: ["one", "two"] } as unknown as JsonValue, ifRevision: 1 });
+    expect(session.current?.data.name).toBe("A");
+    await session.reload();
+    expect(session.current?.data).toEqual({ name: "Outside", items: ["one", "two"] });
+    expect(events).toContainEqual({ type: "current", id: "plan-a", source: "remote", deleted: false });
+    expect(names(session)).toEqual(["Outside"]);
+    expect(host.content).toEqual({ id: "plan-a", title: "Outside" });
+    await session.dispose();
+  });
+
+  it("reload does nothing with no item open", async () => {
+    const { sdk } = createMemoryHost();
+    const session = await openItems(sdk, options({ onAdd: "none" }));
+    await session.reload();
+    expect(session.currentId).toBeNull();
+    await session.dispose();
+  });
+
+  it("deletedCopy keeps the last copy of an item deleted elsewhere, edits included, until it is back or left", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    seed(a.host, "a", "A", ["one"]);
+    seed(a.host, "b", "B");
+    const session = await openItems(a.sdk, options({ debounceMs: 60_000 }));
+    await session.pick("plan-a");
+    expect(session.deletedCopy).toBeNull();
+    session.current!.update(add("two"));
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(session.deleted).toBe(true));
+    expect(session.deletedCopy).toEqual({ name: "A", items: ["one", "two"] });
+    await session.restoreDeleted();
+    expect(session.deletedCopy).toBeNull();
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(session.deleted).toBe(true));
+    expect(session.deletedCopy).not.toBeNull();
+    await session.pick("plan-b");
+    expect(session.deletedCopy).toBeNull();
+    await session.dispose();
+  });
+
   it("restoreDeleted rejects with CONFLICT when another panel made the item again", async () => {
     const a = createMemoryHost();
     const b = createMemoryHost({ share: a.host });
