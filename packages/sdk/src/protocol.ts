@@ -1243,3 +1243,185 @@ export const JSON_OPEN_PATH = "/_files/json/open/";
 
 /** POST a bounded JSON document after a gesture; saves a new .json in Downloads/Tavora. */
 export const JSON_EXPORT_PATH = "/_exports/json/";
+
+/**
+ * Calls the real client makes over plain HTTP from the module's own page, not over the message port. They answer
+ * to the same rules as `Methods`, so they have an entry in `METHOD_INFO` too.
+ */
+export interface HttpCalls {
+  "blobs.put": { params: { file: Blob }; result: BlobInfo };
+  "clipboard.writeImage": { params: { png: Blob }; result: null };
+  "files.read": { params: { id: string }; result: Uint8Array };
+  "files.exportJson": { params: { value: JsonValue; name?: string }; result: { fileName: string } };
+  "files.saveJson": { params: { value: JsonValue; name?: string }; result: { fileName: string } | null };
+  "files.openJson": { params: undefined; result: { fileName: string; value: JsonValue } | null };
+  "pictures.save": { params: { png: Blob; name?: string }; result: { fileName: string } | null };
+}
+
+/** Every call a module can make: the protocol's methods and the file, picture and blob calls. */
+export type CallName = MethodName | keyof HttpCalls;
+
+/** A call that needs a click or key press only for some params. */
+export interface GestureRule {
+  /** In words, for the reference: "opening", "pinned"... */
+  when: string;
+  check(params: unknown): boolean;
+}
+
+/** What the host knows about one call, besides its params and result. */
+export interface MethodInfo {
+  /** The first Tavora that answers it. Older ones throw UNKNOWN_METHOD (a page call: not found). `0.1.0` is "always". */
+  since: string;
+  /** The grant it needs, or null. Reserved methods are in `RESERVED_METHODS`, not here. */
+  capability: Capability | null;
+  /** Needs a click or key press in the panel just before: always (true), never (false) or for some params. */
+  gesture: boolean | GestureRule;
+  /** Set when the call is newer than `MIN_TAVORA`, so it does not raise it. */
+  later?: true;
+}
+
+const call = (since: string, capability: Capability | null = null, gesture: boolean | GestureRule = false): MethodInfo => ({ since, capability, gesture });
+/** A call newer than `MIN_TAVORA`: a module that uses it sets its own `minTavora`, or checks `sdk.supports`. */
+const later = (since: string, capability: Capability | null = null, gesture: boolean | GestureRule = false): MethodInfo => ({ since, capability, gesture, later: true });
+const flag = (key: string, when: string): GestureRule => ({ when, check: (params) => (params as Record<string, unknown> | undefined)?.[key] === true });
+
+/**
+ * Each call declared once: the Tavora that first has it, its capability and whether it needs a click. `Record<CallName,
+ * ...>` makes a new method without an entry fail typecheck. The memory host, `sdk.supports`, the fallbacks and the
+ * generated protocol reference all read this table; the host's own checks are in apps/desktop (bridge.ts, module-view.ts).
+ */
+export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
+  "bridge.handshake": call("0.1.0"),
+  "workspace.getCurrent": later("0.21.43"),
+  "game.getCurrent": call("0.1.0"),
+  "storage.get": call("0.1.0"),
+  "storage.set": call("0.1.0"),
+  "storage.delete": call("0.1.0"),
+  "storage.keys": call("0.1.0"),
+  "storage.compareAndSet": later("0.21.92"),
+  "storage.app.get": call("0.16.10"),
+  "storage.app.set": call("0.16.10"),
+  "storage.app.delete": call("0.16.10"),
+  "storage.app.keys": call("0.16.10"),
+  "storage.app.compareAndSet": later("0.21.92"),
+  "documents.list": call("0.1.0"),
+  "documents.get": call("0.1.0"),
+  "documents.put": call("0.1.0"),
+  "documents.delete": call("0.1.0"),
+  "panel.getState": call("0.1.0"),
+  "panel.setState": call("0.1.0"),
+  "panel.getLaunch": call("0.17.17"),
+  "panel.setContent": call("0.17.17"),
+  "panel.navigated": call("0.17.18"),
+  "panel.isMaximized": later("0.20.20"),
+  "panel.setMaximized": later("0.20.20", null, flag("maximized", "making it fill the workspace")),
+  "panel.setDialog": later("0.21.95", null, flag("open", "opening")),
+  "panel.setLive": later("0.21.11"),
+  "panels.open": call("0.17.18", null, true),
+  "workspace.getViewport": call("0.1.0"),
+  "ui.getTheme": call("0.1.0"),
+  "ui.getLanguage": call("0.5.9"),
+  "ui.showMenu": call("0.17.9", null, true),
+  "ui.tooltip.show": call("0.18.18", null, flag("pinned", "pinned")),
+  "ui.tooltip.move": call("0.18.18"),
+  "ui.tooltip.hide": call("0.18.18"),
+  "ui.tooltip.close": call("0.18.18"),
+  "links.open": call("0.11.0", null, true),
+  "blobs.list": call("0.12.0"),
+  "blobs.usage": call("0.12.0"),
+  "blobs.delete": call("0.12.0"),
+  "network.fetch": call("0.16.8", "network"),
+  "network.readPage": call("0.19.3", "network"),
+  "aiUsage.accounts": call("0.16.10", "aiUsage"),
+  "aiUsage.read": call("0.16.10", "aiUsage"),
+  "leaderboards.status": later("0.21.92", "leaderboards"),
+  "leaderboards.show": later("0.21.92", "leaderboards", true),
+  "leaderboards.hide": later("0.21.92", "leaderboards", true),
+  "leaderboards.submit": later("0.21.92", "leaderboards"),
+  "leaderboards.top": later("0.21.92", "leaderboards"),
+  "leaderboards.mine": later("0.21.97", "leaderboards"),
+  "systemInfo.info": later("0.21.1", "systemInfo"),
+  "systemInfo.watch": later("0.21.1", "systemInfo"),
+  "systemInfo.connectionLog": later("0.21.22", "systemInfo"),
+  "systemInfo.clearConnectionLog": later("0.21.22", "systemInfo", true),
+  "systemInfo.connectionSettings": later("0.21.22", "systemInfo"),
+  "systemInfo.setConnectionSettings": later("0.21.22", "systemInfo", true),
+  "systemInfo.apps": later("0.21.21", "systemInfo"),
+  "systemInfo.traffic": later("0.21.31", "systemInfo"),
+  "media.watch": later("0.21.18", "media"),
+  "media.control": later("0.21.18", "media", true),
+  "discord.state": call("0.16.11", "discord"),
+  "discord.connect": call("0.16.11", "discord", true),
+  "discord.allowControl": call("0.16.11", "discord", true),
+  "discord.command": call("0.16.11", "discord", {
+    when: "SELECT_VOICE_CHANNEL or SET_VOICE_SETTINGS",
+    check: (params) => {
+      const command = (params as { command?: string } | undefined)?.command;
+      return command === "SELECT_VOICE_CHANNEL" || command === "SET_VOICE_SETTINGS";
+    },
+  }),
+  "discord.subscribe": call("0.16.11", "discord"),
+  "discord.unsubscribe": call("0.16.11", "discord"),
+  "discord.image": call("0.16.11", "discord"),
+  "overlay.publish": call("0.19.26"),
+  "overlay.remove": call("0.19.26"),
+  "overlay.copyLink": call("0.19.26", "overlay", true),
+  "overlay.resetLink": call("0.19.26", "overlay"),
+  "overlay.showOverGame": later("0.20.51", null, true),
+  "overlay.hideOverGame": later("0.21.3"),
+  "overlay.overGame": later("0.21.3"),
+  "overlay.preview": later("0.21.3", null, true),
+  "hotkeys.list": call("0.19.26"),
+  "hotkeys.set": call("0.19.26", null, true),
+  "hotkeys.remove": call("0.19.26"),
+  "blobs.put": call("0.12.0"),
+  "clipboard.writeImage": call("0.14.1", null, true),
+  "files.pickReadOnly": later("0.21.13", null, true),
+  "files.forget": later("0.21.13"),
+  "files.read": later("0.21.13"),
+  "files.exportJson": call("0.19.17", null, true),
+  "files.saveJson": later("0.21.13", null, true),
+  "files.openJson": later("0.21.13", null, true),
+  "pictures.save": call("0.17.19", null, true),
+};
+
+function versionParts(version: string): number[] {
+  return version.split(".").map((part) => Number.parseInt(part, 10) || 0);
+}
+
+/** Whether `version` is `wanted` or newer (dotted numbers). */
+export function versionAtLeast(version: string, wanted: string): boolean {
+  const a = versionParts(version);
+  const b = versionParts(wanted);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const diff = (a[i] ?? 0) - (b[i] ?? 0);
+    if (diff !== 0) return diff > 0;
+  }
+  return true;
+}
+
+/** Whether a call needs a click or key press, for these params. */
+export function needsGesture(method: CallName, params?: unknown): boolean {
+  const { gesture } = METHOD_INFO[method];
+  return typeof gesture === "boolean" ? gesture : gesture.check(params);
+}
+
+/** Things besides calls that a Tavora needs for the SDK to work, and the first Tavora that has them. */
+export const HOST_FEATURES: Readonly<Record<string, string>> = {
+  "permissions.onRequest": "0.19.32",
+};
+
+/** The oldest Tavora that has everything the SDK offers without a check: the newest of the calls not marked `later` and of `HOST_FEATURES`. */
+export const MIN_TAVORA: string = [...Object.values(METHOD_INFO).filter((info) => !info.later).map((info) => info.since), ...Object.values(HOST_FEATURES)].reduce((a, b) => (versionAtLeast(a, b) ? a : b));
+
+/** SDK calls whose protocol call has another name. */
+const SDK_CALLS = { "panel.openDialog": "panel.setDialog", "panel.closeDialog": "panel.setDialog" } as const;
+
+/** A protocol call, or one of the SDK calls named differently on the wire (`panel.openDialog`). */
+export type SupportedCall = CallName | keyof typeof SDK_CALLS;
+
+/** Whether a Tavora of this version answers the call. */
+export function supportsCall(version: string, call: SupportedCall): boolean {
+  const method = call in SDK_CALLS ? SDK_CALLS[call as keyof typeof SDK_CALLS] : (call as CallName);
+  return versionAtLeast(version, METHOD_INFO[method].since);
+}

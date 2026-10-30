@@ -8,9 +8,14 @@ import {
   BLOB_TYPES,
   DOCUMENT_ID,
   LIMITS,
+  METHOD_INFO,
+  needsGesture,
+  supportsCall,
   PROTOCOL_VERSION,
   THEME_TOKENS,
+  versionAtLeast,
   type BlobInfo,
+  type CallName,
   type Capability,
   type DocumentChange,
   type DocumentSummary,
@@ -18,6 +23,7 @@ import {
   type EventName,
   type Events,
   type HandshakeResult,
+  type HttpCalls,
   type HotkeyBinding,
   type JsonValue,
   type LeaderboardResult,
@@ -36,20 +42,8 @@ import {
 
 export { TavoraError } from "./index.js";
 
-/** Calls that the real client makes over plain HTTP rather than the message port; here they go through the same path. */
-interface FileCalls {
-  "blobs.put": { params: { file: Blob }; result: BlobInfo };
-  "clipboard.writeImage": { params: { png: Blob }; result: null };
-  "files.read": { params: { id: string }; result: Uint8Array };
-  "files.exportJson": { params: { value: JsonValue; name?: string }; result: { fileName: string } };
-  "files.saveJson": { params: { value: JsonValue; name?: string }; result: { fileName: string } | null };
-  "files.openJson": { params: undefined; result: { fileName: string; value: JsonValue } | null };
-  "pictures.save": { params: { png: Blob; name?: string }; result: { fileName: string } | null };
-}
-
-type Table = Methods & FileCalls;
-/** Every call a module can make: the protocol's methods and the file, picture and blob calls. */
-export type CallName = keyof Table;
+type Table = Methods & HttpCalls;
+export type { CallName };
 type Params<M extends CallName> = Table[M]["params"];
 type Result<M extends CallName> = Table[M]["result"];
 
@@ -173,83 +167,6 @@ export interface MemoryHost {
 /** Newest Tavora the SDK knows, and the default version of a memory host. */
 export const LATEST_TAVORA = "0.21.97";
 
-/** The Tavora that first answered each method newer than MIN_TAVORA. Older ones throw UNKNOWN_METHOD. */
-const SINCE: Partial<Record<CallName, string>> = {
-  "workspace.getCurrent": "0.21.43",
-  "storage.compareAndSet": "0.21.92",
-  "storage.app.compareAndSet": "0.21.92",
-  "leaderboards.status": "0.21.92",
-  "leaderboards.show": "0.21.92",
-  "leaderboards.hide": "0.21.92",
-  "leaderboards.submit": "0.21.92",
-  "leaderboards.top": "0.21.92",
-  "leaderboards.mine": "0.21.97",
-  "panel.setDialog": "0.21.95",
-  "panel.setLive": "0.21.11",
-  "panel.isMaximized": "0.20.20",
-  "panel.setMaximized": "0.20.20",
-  "overlay.showOverGame": "0.20.51",
-  "overlay.hideOverGame": "0.21.3",
-  "overlay.overGame": "0.21.3",
-  "overlay.preview": "0.21.3",
-  "systemInfo.info": "0.21.1",
-  "systemInfo.connectionLog": "0.21.22",
-  "systemInfo.clearConnectionLog": "0.21.22",
-  "systemInfo.connectionSettings": "0.21.22",
-  "systemInfo.setConnectionSettings": "0.21.22",
-  "systemInfo.apps": "0.21.21",
-  "systemInfo.traffic": "0.21.31",
-  "media.watch": "0.21.18",
-};
-
-/** Calls that need a capability. */
-function capabilityOf(method: CallName): Capability | null {
-  if (method === "clipboard.writeImage") return "clipboard";
-  if (method === "files.pickReadOnly" || method === "files.read" || method === "files.forget") return "files";
-  if (method === "overlay.publish" || method === "overlay.remove" || method === "overlay.copyLink" || method === "overlay.resetLink") return "overlay";
-  const group = method.split(".")[0];
-  return group === "network" || group === "aiUsage" || group === "discord" || group === "systemInfo" || group === "media" || group === "leaderboards" ? group : null;
-}
-
-/** Calls that the host only accepts right after a click or key press. */
-function needsGesture(method: CallName, params: unknown): boolean {
-  switch (method) {
-    case "ui.showMenu":
-    case "panels.open":
-    case "links.open":
-    case "leaderboards.show":
-    case "leaderboards.hide":
-    case "overlay.copyLink":
-    case "overlay.showOverGame":
-    case "overlay.preview":
-    case "hotkeys.set":
-    case "files.pickReadOnly":
-    case "files.saveJson":
-    case "files.openJson":
-    case "files.exportJson":
-    case "pictures.save":
-    case "clipboard.writeImage":
-    case "media.control":
-    case "discord.connect":
-    case "discord.allowControl":
-    case "systemInfo.clearConnectionLog":
-    case "systemInfo.setConnectionSettings":
-      return true;
-    case "panel.setMaximized":
-      return (params as { maximized?: boolean } | undefined)?.maximized === true;
-    case "panel.setDialog":
-      return (params as { open?: boolean } | undefined)?.open === true;
-    case "ui.tooltip.show":
-      return (params as { pinned?: boolean } | undefined)?.pinned === true;
-    case "discord.command": {
-      const command = (params as { command?: string } | undefined)?.command;
-      return command === "SELECT_VOICE_CHANNEL" || command === "SET_VOICE_SETTINGS";
-    }
-    default:
-      return false;
-  }
-}
-
 /** Calls that answer with nothing when nobody scripted them. */
 const SILENT = new Set<CallName>([
   "files.forget", "links.open", "ui.tooltip.show", "ui.tooltip.move", "ui.tooltip.hide", "ui.tooltip.close", "ui.showMenu",
@@ -302,20 +219,6 @@ function sameJson(a: JsonValue | null, b: JsonValue | null): boolean {
   }
   const keys = Object.keys(a);
   return keys.length === Object.keys(b).length && keys.every((key) => key in b && sameJson(a[key]!, b[key]!));
-}
-
-function versionParts(version: string): number[] {
-  return version.split(".").map((part) => Number.parseInt(part, 10) || 0);
-}
-
-function atLeast(version: string, wanted: string): boolean {
-  const a = versionParts(version);
-  const b = versionParts(wanted);
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const diff = (a[i] ?? 0) - (b[i] ?? 0);
-    if (diff !== 0) return diff > 0;
-  }
-  return true;
 }
 
 function validateKey(key: unknown, limits: Limits): asserts key is string {
@@ -727,7 +630,7 @@ function handshakeOf(panel: Panel): HandshakeResult {
     host: { name: "tavora-desktop", version: shared.version },
     module: { ...shared.handshakeModule },
     capabilities: [...shared.capabilities],
-    ...(atLeast(shared.version, "0.17.12") ? { panel: { type: panel.type } } : {}),
+    ...(versionAtLeast(shared.version, "0.17.12") ? { panel: { type: panel.type } } : {}),
   };
 }
 
@@ -758,9 +661,8 @@ async function invoke<M extends CallName>(panel: Panel, method: M, params?: Para
   panel.log.push({ method, params });
   const { shared } = panel;
 
-  const since = SINCE[method];
-  if (since && !atLeast(shared.version, since)) fail("UNKNOWN_METHOD", `unknown method ${method}`);
-  const capability = capabilityOf(method);
+  const { capability } = METHOD_INFO[method];
+  if (!supportsCall(shared.version, method)) fail("UNKNOWN_METHOD", `unknown method ${method}`);
   if (capability && !shared.capabilities.has(capability)) {
     fail("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
   }
@@ -873,6 +775,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
 
   const sdk: TavoraSDK = {
     host: handshake,
+    supports: (name) => supportsCall(shared.version, name),
     game: { getCurrent: () => call("game.getCurrent") },
     storage: { ...store("storage"), app: store("storage.app") },
     documents: {

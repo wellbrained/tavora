@@ -1,6 +1,6 @@
 # Bridge protocol v1
 
-**Status:** Version 1 is what `@tavora/sdk` 0.2.4 speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
+**Status:** Version 1 is what `@tavora/sdk` speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
 
 Module authors normally use `@tavora/sdk` and never see these messages. This page is for people writing another SDK, reviewing the host, or debugging.
 
@@ -325,6 +325,106 @@ A panel can open the module's other panel types on what it shows, such as the ge
 When the handler throws, or does not resolve within 5 seconds, the panel keeps its content and edits, the call answers `"failed"`, and Tavora tells the user and offers to open the content in a new panel instead. Never switch content without saving first.
 
 The Panel Types Example in Tavora's examples folder does all of this.
+
+## Method index
+
+Every call with the first Tavora that answers it, its capability and whether it needs a click. The table is generated from the code, so it cannot go out of date.
+
+<!-- protocol-index:start -->
+<!-- generated from METHOD_INFO by apps/docs/scripts/protocol-index.ts; do not edit -->
+
+A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.supports(call)` tells beforehand. **Click** says the call must come right after a click or key press in the panel, always or for the params named. `MIN_TAVORA` is 0.19.32: the newest of the calls not marked later (the ones before it work on every Tavora the SDK supports).
+
+| Call | Since | Capability | Click |
+| --- | --- | --- | --- |
+| `bridge.handshake` | always |  |  |
+| `workspace.getCurrent` | 0.21.43 |  |  |
+| `game.getCurrent` | always |  |  |
+| `storage.get` | always |  |  |
+| `storage.set` | always |  |  |
+| `storage.delete` | always |  |  |
+| `storage.keys` | always |  |  |
+| `storage.compareAndSet` | 0.21.92 |  |  |
+| `storage.app.get` | 0.16.10 |  |  |
+| `storage.app.set` | 0.16.10 |  |  |
+| `storage.app.delete` | 0.16.10 |  |  |
+| `storage.app.keys` | 0.16.10 |  |  |
+| `storage.app.compareAndSet` | 0.21.92 |  |  |
+| `documents.list` | always |  |  |
+| `documents.get` | always |  |  |
+| `documents.put` | always |  |  |
+| `documents.delete` | always |  |  |
+| `panel.getState` | always |  |  |
+| `panel.setState` | always |  |  |
+| `panel.getLaunch` | 0.17.17 |  |  |
+| `panel.setContent` | 0.17.17 |  |  |
+| `panel.navigated` | 0.17.18 |  |  |
+| `panel.isMaximized` | 0.20.20 |  |  |
+| `panel.setMaximized` | 0.20.20 |  | making it fill the workspace |
+| `panel.setDialog` | 0.21.95 |  | opening |
+| `panel.setLive` | 0.21.11 |  |  |
+| `panels.open` | 0.17.18 |  | always |
+| `workspace.getViewport` | always |  |  |
+| `ui.getTheme` | always |  |  |
+| `ui.getLanguage` | 0.5.9 |  |  |
+| `ui.showMenu` | 0.17.9 |  | always |
+| `ui.tooltip.show` | 0.18.18 |  | pinned |
+| `ui.tooltip.move` | 0.18.18 |  |  |
+| `ui.tooltip.hide` | 0.18.18 |  |  |
+| `ui.tooltip.close` | 0.18.18 |  |  |
+| `links.open` | 0.11.0 |  | always |
+| `blobs.list` | 0.12.0 |  |  |
+| `blobs.usage` | 0.12.0 |  |  |
+| `blobs.delete` | 0.12.0 |  |  |
+| `network.fetch` | 0.16.8 | `network` |  |
+| `network.readPage` | 0.19.3 | `network` |  |
+| `aiUsage.accounts` | 0.16.10 | `aiUsage` |  |
+| `aiUsage.read` | 0.16.10 | `aiUsage` |  |
+| `leaderboards.status` | 0.21.92 | `leaderboards` |  |
+| `leaderboards.show` | 0.21.92 | `leaderboards` | always |
+| `leaderboards.hide` | 0.21.92 | `leaderboards` | always |
+| `leaderboards.submit` | 0.21.92 | `leaderboards` |  |
+| `leaderboards.top` | 0.21.92 | `leaderboards` |  |
+| `leaderboards.mine` | 0.21.97 | `leaderboards` |  |
+| `systemInfo.info` | 0.21.1 | `systemInfo` |  |
+| `systemInfo.watch` | 0.21.1 | `systemInfo` |  |
+| `systemInfo.connectionLog` | 0.21.22 | `systemInfo` |  |
+| `systemInfo.clearConnectionLog` | 0.21.22 | `systemInfo` | always |
+| `systemInfo.connectionSettings` | 0.21.22 | `systemInfo` |  |
+| `systemInfo.setConnectionSettings` | 0.21.22 | `systemInfo` | always |
+| `systemInfo.apps` | 0.21.21 | `systemInfo` |  |
+| `systemInfo.traffic` | 0.21.31 | `systemInfo` |  |
+| `media.watch` | 0.21.18 | `media` |  |
+| `media.control` | 0.21.18 | `media` | always |
+| `discord.state` | 0.16.11 | `discord` |  |
+| `discord.connect` | 0.16.11 | `discord` | always |
+| `discord.allowControl` | 0.16.11 | `discord` | always |
+| `discord.command` | 0.16.11 | `discord` | SELECT_VOICE_CHANNEL or SET_VOICE_SETTINGS |
+| `discord.subscribe` | 0.16.11 | `discord` |  |
+| `discord.unsubscribe` | 0.16.11 | `discord` |  |
+| `discord.image` | 0.16.11 | `discord` |  |
+| `overlay.publish` | 0.19.26 |  |  |
+| `overlay.remove` | 0.19.26 |  |  |
+| `overlay.copyLink` | 0.19.26 | `overlay` | always |
+| `overlay.resetLink` | 0.19.26 | `overlay` |  |
+| `overlay.showOverGame` | 0.20.51 |  | always |
+| `overlay.hideOverGame` | 0.21.3 |  |  |
+| `overlay.overGame` | 0.21.3 |  |  |
+| `overlay.preview` | 0.21.3 |  | always |
+| `hotkeys.list` | 0.19.26 |  |  |
+| `hotkeys.set` | 0.19.26 |  | always |
+| `hotkeys.remove` | 0.19.26 |  |  |
+| `blobs.put` | 0.12.0 |  |  |
+| `clipboard.writeImage` | 0.14.1 |  | always |
+| `files.pickReadOnly` | 0.21.13 |  | always |
+| `files.forget` | 0.21.13 |  |  |
+| `files.read` | 0.21.13 |  |  |
+| `files.exportJson` | 0.19.17 |  | always |
+| `files.saveJson` | 0.21.13 |  | always |
+| `files.openJson` | 0.21.13 |  | always |
+| `pictures.save` | 0.17.19 |  | always |
+
+<!-- protocol-index:end -->
 
 ## Events
 

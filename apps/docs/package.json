@@ -8,6 +8,8 @@
     "build": "pnpm generate && vitepress build",
     "preview": "vitepress preview",
     "deploy:server": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Deploy-Docs.ps1",
+    "protocol": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/protocol-index.ts",
+    "protocol:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/protocol-index.ts --check",
     "generate": "typedoc && node scripts/copy-schema.mjs"
   },
   "devDependencies": {
