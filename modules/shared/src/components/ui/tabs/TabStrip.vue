@@ -244,7 +244,7 @@ onBeforeUnmount(endDrag);
       <TabsList class="h-full w-max border-b-0" :aria-label="ariaLabel">
         <template v-for="tab in tabs" :key="tab.id">
           <div v-if="renaming?.id === tab.id" class="flex h-full items-center gap-1 px-1">
-            <span v-if="$slots.icon" class="flex flex-none items-center" data-testid="strip-tab-icon"><slot name="icon" :tab="tab" /></span>
+            <span v-if="$slots.icon" class="flex flex-none items-center empty:hidden" data-testid="strip-tab-icon"><slot name="icon" :tab="tab" /></span>
             <Input
               v-model="renaming.text"
               class="h-6 w-36 px-1.5 text-sm md:text-sm"
@@ -274,7 +274,7 @@ onBeforeUnmount(endDrag);
             @dblclick="startRename(tab.id)"
             @keydown="onKeyDown($event, tab.id)"
           >
-            <span v-if="$slots.icon" class="flex flex-none items-center" data-testid="strip-tab-icon"><slot name="icon" :tab="tab" /></span>
+            <span v-if="$slots.icon" class="flex flex-none items-center empty:hidden" data-testid="strip-tab-icon"><slot name="icon" :tab="tab" /></span>
             <span class="truncate" :title="tab.label">{{ tab.label }}</span>
             <!-- Not a button: the tab is one already. Delete or a middle click close it from the keyboard or mouse. -->
             <span
