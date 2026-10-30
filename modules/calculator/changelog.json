@@ -1,5 +1,10 @@
 [
   {
+    "version": "0.1.7",
+    "date": "2026-10-30",
+    "notes": ["The first update that comes straight from the catalog, without a new Tavora version."]
+  },
+  {
     "version": "0.1.6",
     "date": "2026-10-27",
     "notes": [
