@@ -863,11 +863,11 @@ export function validateManifest(input: unknown): ManifestResult {
 }
 /**
  * Who may publish updates for Tavora's own modules (ids starting with `tavora.`) through the catalogue: one pinned
- * publisher key (its 32-hex fingerprint) and the one account it is linked to. Both empty means the catalogue
- * accepts none, which is how they ship until Tavora turns the feature on.
+ * publisher key (its 32-hex fingerprint) and the one account it is linked to. Either empty means the catalogue
+ * accepts none and the app loads no downloaded copy.
  */
-export const TAVORA_PUBLISHER_KEY = "";
-export const TAVORA_ACCOUNT_ID = "";
+export const TAVORA_PUBLISHER_KEY = "64e602936197d758ddd40c90c6aa1568";
+export const TAVORA_ACCOUNT_ID = "ouJVNmLvP3xZm6u5LQ23jg";
 
 /** The pinned key and account as a pair; either empty: nobody may publish Tavora's own modules. */
 export interface OfficialPins {

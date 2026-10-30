@@ -2,7 +2,7 @@ import { createHash, generateKeyPairSync, type KeyObject } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { firstKeyOf, type SuccessionStatement } from "@tavora/module-schema";
+import { firstKeyOf, OFFICIAL_PINS, type SuccessionStatement } from "@tavora/module-schema";
 import { fingerprint, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { beforeEach, describe, expect, it } from "vitest";
 import { backupData } from "./backup";
@@ -487,7 +487,7 @@ describe("backup and cloud copy", () => {
 
 describe("the pins", () => {
   it("come from the build when packaged, and from the environment only in a development run", () => {
-    expect(resolveOfficialPins(true, { TAVORA_OFFICIAL_PINS: "a:b" })).toEqual({ key: "", account: "" });
+    expect(resolveOfficialPins(true, { TAVORA_OFFICIAL_PINS: "a:b" })).toEqual(OFFICIAL_PINS);
     expect(resolveOfficialPins(false, { TAVORA_OFFICIAL_PINS: "a:b" })).toEqual({ key: "a", account: "b" });
     expect(resolveOfficialPins(false, {})).toEqual({ key: "", account: "" });
   });
