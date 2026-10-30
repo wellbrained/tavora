@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.3",
+    date: "2026-10-30",
+    title: "Links and passwords in the PDF Viewer",
+    notes: [
+      "Links in a PDF work: a link to another page jumps there, a web link opens in the Browser.",
+      "A PDF with a password asks for it. Typed it wrong? Just try again, or cancel.",
+      "Fit width and Fit page stay the same while you scroll through pages of different sizes.",
+    ],
+    prs: [
+      { number: 519, title: "PDF Viewer: working links, a password prompt, and a fit for mixed page sizes" },
+    ],
+    tags: ["pdf-viewer"],
+  },
+  {
     version: "0.23.2",
     date: "2026-10-30",
     title: "Clearer recovery key warning",
