@@ -421,12 +421,44 @@ describe("other panels", () => {
     await vi.waitFor(() => expect(session.deleted).toBe(true));
     const release = gateGet(a.sdk, "plan-b");
     const picking = session.pick("plan-b");
-    await session.restoreDeleted();
+    const restoring = session.restoreDeleted();
+    await vi.waitFor(() => expect(storedPlan(a.host, "plan-a")?.items).toEqual(["one"]));
     release();
     expect(await picking).toBe(true);
+    await restoring;
     expect(session.currentId).toBe("plan-b");
     expect(session.deleted).toBe(false);
-    expect(storedPlan(a.host, "plan-a")?.items).toEqual(["one"]);
+    await session.dispose();
+  });
+
+  it("restoreDeleted opens the item again when the pick it gave way to fails", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    seed(a.host, "a", "A", ["one"]);
+    seed(a.host, "b", "B");
+    const session = await openItems(a.sdk, options({ onAdd: "none" }));
+    await session.pick("plan-a");
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(session.deleted).toBe(true));
+    const get = a.sdk.documents.get.bind(a.sdk.documents);
+    let fail!: () => void;
+    const gate = new Promise<void>((resolve) => (fail = resolve));
+    a.sdk.documents.get = (async (wanted: string) => {
+      if (wanted === "plan-b") {
+        await gate;
+        throw new Error("offline");
+      }
+      return get(wanted);
+    }) as typeof a.sdk.documents.get;
+    const picking = session.pick("plan-b");
+    const restoring = session.restoreDeleted();
+    await vi.waitFor(() => expect(storedPlan(a.host, "plan-a")?.items).toEqual(["one"]));
+    fail();
+    await expect(picking).rejects.toThrow();
+    await restoring;
+    expect(session.currentId).toBe("plan-a");
+    expect(session.deleted).toBe(false);
+    expect(session.current?.data.items).toEqual(["one"]);
     await session.dispose();
   });
 
