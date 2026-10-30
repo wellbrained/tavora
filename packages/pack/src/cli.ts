@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// For publishing from CI. Developers publish from Tavora itself (Settings > Development), which packs,
+// For publishing from CI. Developers publish from Tavora itself (Settings > Your modules), which packs,
 // signs and uploads with one button; this command signs with a key file exported from Tavora.
 // tavora-pack <module folder> --key <key file> [--out <file.zip>]
 //   Packs a built module into a zip signed with your publisher key.
@@ -34,7 +34,7 @@ const USAGE = [
 ].join("\n");
 
 /** What the command says without --key: publishing lives in Tavora now. */
-const NO_KEY = "Publish from Tavora: Settings > Development. For CI, export your key there and pass --key <file>.";
+const NO_KEY = "Publish from Tavora: Settings > Your modules. For CI, export your key there and pass --key <file>.";
 
 /** The key in the file --key names. */
 async function keyFrom(file: string, fail: (message: string) => Error) {

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 // This page runs inside a Tavora panel; in a normal browser the connection fails. Build it and add this
-// folder in Tavora (Settings > Development > Add a development folder) to see it.
+// folder in Tavora (Settings > Project folders > Add folder) to see it.
 
 /** Your texts in English and German; Tavora says which language the user uses. */
 const TEXTS = {

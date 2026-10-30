@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BUILT_IN_TEXTS, developerNameOf, fillPlaceholders, groupConversations, inboxCause, inboxIcon, linkHost, messageProblem, noteParagraphs, noteText, type ConversationItem } from "./conversations";
+import { BUILT_IN_TEXTS, cleanContactValue, contactToLegacy, developerNameOf, readContact, fillPlaceholders, groupConversations, inboxCause, inboxIcon, linkHost, messageProblem, noteParagraphs, noteText, type ConversationItem } from "./conversations";
 import { en } from "./locales/en";
 
 const item = (fields: Partial<ConversationItem> = {}): ConversationItem => ({
@@ -116,5 +116,36 @@ describe("the texts", () => {
   it("has English and German for the texts the app shows for messages", () => {
     expect(en["inbox.empty"]).toBe("No messages yet");
     expect(en["contact.anonymous"]).toBe("The developer won't see your name or email.");
+  });
+});
+
+describe("contact kinds", () => {
+  it("clean the value for its kind, and refuse one that doesn't fit", () => {
+    expect(cleanContactValue("email", " dev@example.com ")).toBe("dev@example.com");
+    expect(cleanContactValue("email", "dev@example")).toBeUndefined();
+    expect(cleanContactValue("github", "github.com/wellbrained/timer/issues")).toBe("https://github.com/wellbrained/timer/issues");
+    expect(cleanContactValue("github", "https://gitlab.com/x")).toBeUndefined();
+    expect(cleanContactValue("discord-server", "https://discord.com/invite/abc")).toBe("https://discord.com/invite/abc");
+    expect(cleanContactValue("discord-server", "https://discord.com/users/123")).toBeUndefined();
+    expect(cleanContactValue("discord-user", "@WellBrained")).toBe("wellbrained");
+    expect(cleanContactValue("discord-user", "a..b")).toBeUndefined();
+    expect(cleanContactValue("website", "http://example.com")).toBeUndefined();
+    expect(cleanContactValue("tavora", null)).toBeNull();
+    expect(cleanContactValue("none", "x")).toBeUndefined();
+  });
+
+  it("read an older service's on or off and link as a kind", () => {
+    expect(readContact({ enabled: true, link: null })).toEqual({ kind: "tavora", value: null });
+    expect(readContact({ enabled: false, link: null })).toEqual({ kind: "none", value: null });
+    expect(readContact({ enabled: false, link: "https://discord.gg/abc" })).toEqual({ kind: "discord-server", value: "https://discord.gg/abc" });
+    expect(readContact({ enabled: false, link: "https://example.com/help" })).toEqual({ kind: "website", value: "https://example.com/help" });
+    expect(readContact({ kind: "discord-user", value: "wellbrained", enabled: false, link: null })).toEqual({ kind: "discord-user", value: "wellbrained" });
+    expect(readContact(undefined)).toEqual({ kind: "tavora", value: null });
+  });
+
+  it("tell an older app on or off, with the link only for a link", () => {
+    expect(contactToLegacy({ kind: "email", value: "dev@example.com" })).toEqual({ enabled: false, link: null });
+    expect(contactToLegacy({ kind: "github", value: "https://github.com/x" })).toEqual({ enabled: false, link: "https://github.com/x" });
+    expect(contactToLegacy({ kind: "tavora", value: null })).toEqual({ enabled: true, link: null });
   });
 });

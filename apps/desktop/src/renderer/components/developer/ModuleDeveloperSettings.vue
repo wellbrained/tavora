@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Settings > Development > Module developer, once signed in: the public developer name and the id
-// prefixes the account holds. Saving the name the first time also claims its prefix and makes the
+// Settings > Publishing, once signed in: the public developer name and the id prefixes the account holds, and how
+// users reach the developer about modules without a choice of their own. Saving the name the first time also claims its prefix and makes the
 // publisher key (host.ts), so publishing from Tavora needs nothing more here; the keys (Export, Lost
 // it?, Unlink), key files, link codes and publish tokens are folded away under Publisher keys and CI.
 import { computed, ref, watch } from "vue";
@@ -8,11 +8,12 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { AccountPublishToken, HostAction } from "../../../shared/host-api";
 import { suggestPrefix } from "../../../shared/id-prefix";
-import { account, act, confirmAction, developerKeys, showToast, submitAction } from "../../host";
+import type { Contact } from "../../../shared/conversations";
+import { account, act, confirmAction, developerKeys, inbox, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import SettingGroup from "../settings/SettingGroup.vue";
 import SettingRow from "../settings/SettingRow.vue";
-import ContactSettings from "./ContactSettings.vue";
+import ContactChoice from "./ContactChoice.vue";
 import PrefixClaim from "./PrefixClaim.vue";
 
 defineProps<{ highlight: string | null }>();
@@ -43,6 +44,13 @@ const nameHint = computed(() => {
 async function saveDeveloperName() {
   const name = developerName.value.trim();
   if (await run({ type: "account-developer-name", name })) showToast(t("account.developer.saved", { name }));
+}
+
+async function saveContactDefault(contact: Contact): Promise<string | null> {
+  const result = await act({ type: "inbox-contact-default", ...contact }, { quiet: true });
+  if (!result.ok) return result.error;
+  showToast(t("contactChoice.saved"));
+  return null;
 }
 
 // One list of publisher keys: the ones linked to the account (oldest first), then the ones Tavora keeps
@@ -160,7 +168,19 @@ function removeToken(token: AccountPublishToken) {
     </div>
   </SettingGroup>
 
-  <ContactSettings />
+  <SettingGroup v-if="view?.developer && inbox.contactDefault" :title="t('contactChoice.title')">
+    <div
+      :class="['-mx-5 px-5 py-4 transition-colors duration-500', highlight === 'contact-default' && 'bg-primary/10']"
+      data-setting="contact-default"
+    >
+      <ContactChoice :contact="inbox.contactDefault" :name="t('contactChoice.yourModules')" :save="saveContactDefault" testid="contact-default">
+        <template #label>
+          <span class="font-medium">{{ t("settings.contact-default.label") }}</span>
+          <span class="text-muted-foreground text-sm">{{ t("settings.contact-default.description") }}</span>
+        </template>
+      </ContactChoice>
+    </div>
+  </SettingGroup>
 
   <SettingGroup>
     <SettingRow :label="t('settings.publish-ci.label')" :description="t('settings.publish-ci.description')" setting="publish-ci" :highlighted="highlight === 'publish-ci'">

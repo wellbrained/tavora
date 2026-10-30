@@ -150,7 +150,7 @@ async function main(): Promise<number> {
       `${manager} install`,
       `${run} dev        # builds, then rebuilds on every change: leave it running`,
       "",
-      "Then in Tavora: Settings > Development > Add a development folder…",
+      "Then in Tavora: Settings > Project folders > Add folder…",
       `and pick ${project}`,
       ...(folder === "." ? [] : [`(or ${here}, to load every module project you keep in it)`]),
     ];

@@ -36,7 +36,7 @@ Pick the kinds that fit your game; most use one or two.
 
 ## Before it goes live
 
-- **Your copy from a folder** (Settings > Development), or any copy not installed from the catalog, gets test boards on Tavora's service right away, under `local.` and its id without the publisher part (`wellbrained.word-guess` becomes `local.word-guess`). Only you see your own line there, so you can try the whole flow. An account keeps up to 10 of them.
+- **Your copy from a folder** (Settings > Project folders), or any copy not installed from the catalog, gets test boards on Tavora's service right away, under `local.` and its id without the publisher part (`wellbrained.word-guess` becomes `local.word-guess`). Only you see your own line there, so you can try the whole flow. An account keeps up to 10 of them.
 - **Your catalog module** gets its boards once Tavora allows it. The boards it runs are the ones your newest listed version declares.
 
 ## Ask the user first

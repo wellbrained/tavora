@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // This page runs inside a Tavora panel; in a normal browser the connection fails. Build it and add this
-// folder in Tavora (Settings > Development > Add a development folder) to see it.
+// folder in Tavora (Settings > Project folders > Add folder) to see it.
 import type { TavoraSDK } from "@tavora/sdk";
 import { bootstrapModule, languageOf, type ModuleBootstrap } from "@tavora/sdk/bootstrap";
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";

@@ -148,18 +148,25 @@ describe("deleting an account", () => {
 });
 
 describe("suspending an account", () => {
-  it("takes no new conversations for its modules while suspended, keeps the link, and takes them again after", async () => {
+  it("takes no new conversations for its modules while suspended, keeps a link, and takes them again after", async () => {
     const { developer, user, start, reason, contact, adminCall, call, devToken } = setup();
-    await call("PUT", "/v1/catalog/modules/wellbrained.timer/contact", devToken(), { enabled: true, link: "https://github.com/wellbrained/timer/issues" });
+    const url = "/v1/catalog/modules/wellbrained.timer/contact";
+    const issues = "https://github.com/wellbrained/timer/issues";
     const mara = user("mara@example.com");
     expect((await adminCall("/api/accounts/suspend", { id: developer.id, reason: "spam" })).status).toBe(200);
     const refused = await start(mara.token);
     expect(refused.status).toBe(403);
     expect(await reason(refused)).toBe("contact-off");
-    expect(await contact()).toEqual({ enabled: false, link: "https://github.com/wellbrained/timer/issues" });
-
+    expect(await contact()).toEqual({ kind: "none", value: null, enabled: false, link: null });
     expect((await adminCall("/api/accounts/unsuspend", { id: developer.id })).status).toBe(200);
-    expect(await contact()).toEqual({ enabled: true, link: "https://github.com/wellbrained/timer/issues" });
+
+    // A link the developer chose stays while suspended.
+    await call("PUT", url, devToken(), { kind: "github", value: issues });
+    expect((await adminCall("/api/accounts/suspend", { id: developer.id, reason: "spam" })).status).toBe(200);
+    expect(await contact()).toEqual({ kind: "github", value: issues, enabled: false, link: issues });
+    expect((await adminCall("/api/accounts/unsuspend", { id: developer.id })).status).toBe(200);
+    await call("PUT", url, devToken(), { kind: "tavora", value: null });
+    expect(await contact()).toEqual({ kind: "tavora", value: null, enabled: true, link: null });
     expect((await start(mara.token)).status).toBe(201);
   });
 });
@@ -180,7 +187,7 @@ describe("banning a developer", () => {
 
     // Should a module of theirs be listed again by hand, they still don't act as its publisher and show no link.
     catalog.setListed("wellbrained.timer", true);
-    expect(await contact()).toEqual({ enabled: false, link: null });
+    expect(await contact()).toEqual({ kind: "none", value: null, enabled: false, link: null });
     expect(await reason(await call("PUT", "/v1/catalog/modules/wellbrained.timer/contact", token, { enabled: true, link: null }))).toBe("banned");
     expect(await reason(await call("PUT", `/v1/catalog/reviews/${review.id}/reply`, token, { text: "Thanks!" }))).toBe("banned");
     expect(await reason(await start(user("lea@example.com").token))).toBe("contact-off");
@@ -189,7 +196,7 @@ describe("banning a developer", () => {
     const unbanned = await adminCall("/api/moderation/unban", { accountId: developer.id });
     expect(await unbanned.json()).toMatchObject({ ok: true, relisted: ["wellbrained.timer"] });
     expect(store.isBanned(developer.id)).toBe(false);
-    expect(await contact()).toEqual({ enabled: true, link: "https://github.com/wellbrained/timer/issues" });
+    expect(await contact()).toEqual({ kind: "tavora", value: null, enabled: true, link: null });
     const after = (await (await call("GET", `/v1/conversations/${opened}`, mara.token)).json()) as { conversation: { state: string } };
     expect(after.conversation.state).toBe("closed");
   });

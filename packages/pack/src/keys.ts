@@ -2,7 +2,7 @@ import { createPrivateKey, generateKeyPairSync, type KeyObject } from "node:cryp
 import { readFile, writeFile } from "node:fs/promises";
 
 // Publisher keys in files, for publishing from CI. The pack command never makes a key; Tavora does, and
-// exports it for CI (Settings > Development > Publisher keys and CI).
+// exports it for CI (Settings > Publishing > Publisher keys and CI).
 
 /** A publisher's private key from a file, which must exist. */
 export async function loadExistingKey(file: string): Promise<{ key: KeyObject }> {

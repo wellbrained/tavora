@@ -1,5 +1,5 @@
 // Links a publisher key to a Tavora account, so users see the account's developer name instead
-// of the key's fingerprint. The developer gets a one-time code in Tavora (Settings > Development,
+// of the key's fingerprint. The developer gets a one-time code in Tavora (Settings > Publishing,
 // signed in); this signs the code with the key and sends the signature and the key's public half to
 // Tavora's service. The secret key never leaves this PC.
 import { createPublicKey, sign, type KeyObject } from "node:crypto";
@@ -30,7 +30,7 @@ export function linkRequest(key: KeyObject, code: string): { code: string; publi
 }
 
 const MESSAGES: Partial<Record<ApiReason, string>> = {
-  "wrong-code": "That code is wrong or has expired. Get a new one in Tavora: Settings > Development > Publisher keys and CI > Get a link code.",
+  "wrong-code": "That code is wrong or has expired. Get a new one in Tavora: Settings > Publishing > Publisher keys and CI > Get a link code.",
   "bad-signature": "The service could not check the key's signature.",
   "key-taken": "This key is already linked to another Tavora account.",
   "too-many-keys": "Your account has as many keys as it can link. Unlink one in Tavora first.",
@@ -45,7 +45,7 @@ function linkMessage(reason: ApiReason | undefined): string | undefined {
 /** Links the key with the code. Resolves with the key's fingerprint and the developer name users will see. */
 export async function linkKey(options: { key: KeyObject; code: string; apiUrl?: string; fetch?: typeof fetch }): Promise<{ fingerprint: string; name: string | null }> {
   const code = cleanLinkCode(options.code);
-  if (!code) throw new LinkError("That is not a link code. It looks like ABCD-EFGH, from Tavora: Settings > Development > Publisher keys and CI > Get a link code.");
+  if (!code) throw new LinkError("That is not a link code. It looks like ABCD-EFGH, from Tavora: Settings > Publishing > Publisher keys and CI > Get a link code.");
   const url = `${(options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, "")}/v1/publishers/link`;
   let response: Response;
   try {

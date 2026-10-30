@@ -38,6 +38,7 @@ function service() {
     if (url === "/v1/conversations/settings") return json({ emailCopies: true, hasEmail: true });
     if (url === "/v1/texts") return json({ texts: state.texts });
     if (url === "/v1/catalog/modules/wellbrained.timer") return json({ module: { id: "wellbrained.timer", name: "Timer", version: "1.2.0", contact: { enabled: true, link: null } } });
+    if (url === "/v1/catalog/modules/wellbrained.discord") return json({ module: { id: "wellbrained.discord", name: "Chat", version: "1.0.0", contact: { kind: "discord-user", value: "wellbrained", enabled: false, link: null } } });
     if (url === "/v1/catalog/modules/wellbrained.quiet") return json({ module: { id: "wellbrained.quiet", name: "Quiet", version: "1.0.0", contact: { enabled: false, link: "https://github.com/x/y/issues" } } });
     if (url === "/v1/conversations" && method === "POST") {
       state.conversations = [row()];
@@ -53,6 +54,7 @@ async function make(overrides: Partial<InboxOptions> = {}, fake = service()) {
   const dir = await mkdtemp(path.join(tmpdir(), "tavora-inbox-"));
   const views: ReturnType<Inbox["view"]>[] = [];
   const opened: string[] = [];
+  const copied: string[] = [];
   const inbox = new Inbox({
     baseUrl: "https://api.test",
     fetch: fake.impl,
@@ -65,12 +67,13 @@ async function make(overrides: Partial<InboxOptions> = {}, fake = service()) {
     ownModules: async () => [],
     onChange: (view) => views.push(view),
     openLink: (url) => opened.push(url),
+    copy: (text) => copied.push(text),
     pollMs: 3_600_000,
     ...overrides,
   });
   await inbox.init();
   await inbox.refresh();
-  return { inbox, fake, views, opened, file: path.join(dir, "inbox.json") };
+  return { inbox, fake, views, opened, copied, file: path.join(dir, "inbox.json") };
 }
 
 describe("parsing what the service sends", () => {
@@ -182,10 +185,19 @@ describe("writing", () => {
 
   it("offers the public link when contact is off, and refuses to send", async () => {
     const { inbox, opened } = await make();
-    expect(await inbox.contactDraft("wellbrained.quiet")).toEqual({ status: "off", moduleName: "Quiet", link: "https://github.com/x/y/issues", host: "github.com" });
+    // An older service sends only on or off and a link.
+    expect(await inbox.contactDraft("wellbrained.quiet")).toEqual({ status: "off", moduleName: "Quiet", kind: "github", value: "https://github.com/x/y/issues", host: "github.com" });
     await expect(inbox.sendRequest("wellbrained.quiet", "bug", "Hi")).rejects.toMatchObject({ key: "inbox.error.contactOff" });
-    await inbox.openContactLink("wellbrained.quiet");
+    expect(await inbox.openContactLink("wellbrained.quiet")).toBe("opened");
     expect(opened).toEqual(["https://github.com/x/y/issues"]);
+  });
+
+  it("copies a Discord name the developer chose instead of opening anything", async () => {
+    const { inbox, opened, copied } = await make();
+    expect(await inbox.contactDraft("wellbrained.discord")).toEqual({ status: "off", moduleName: "Chat", kind: "discord-user", value: "wellbrained", host: null });
+    expect(await inbox.openContactLink("wellbrained.discord")).toBe("copied");
+    expect(copied).toEqual(["wellbrained"]);
+    expect(opened).toEqual([]);
   });
 
   it("needs a sign-in for the draft", async () => {

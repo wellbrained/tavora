@@ -638,7 +638,7 @@ export function seedDev({ stateDir, gamesFile, now = Date.now() }: SeedOptions):
   const t4 = conversations.startTavora({ userAccountId: id("hannah"), text: "Your account was signed in from a new PC. Was this you?", about: { type: "account", id: id("hannah") }, moduleId: null, moduleName: null }, ago(25));
   conversations.addMessage(t4.id, "user", id("hannah"), "Yes, that was me, I got a new laptop.", ago(24));
   conversations.closeConversation(t4.id, "tavora", ago(24));
-  conversations.setContact("clickworks.click-counter", true, "https://clickworks.example/support");
+  conversations.setContact("clickworks.click-counter", { kind: "website", value: "https://clickworks.example/support" });
   conversations.setText("inbox.appeared.tavora", "Tavora wrote to you.", "Tavora hat dir geschrieben.");
   conversations.setText("inbox.gone", `${builtInTexts()["inbox.gone"].en} Thanks for your patience.`, `${builtInTexts()["inbox.gone"].de} Danke für deine Geduld.`);
 

@@ -636,6 +636,7 @@ export class Host {
         if (!this.window.isDestroyed()) this.window.webContents.send("host:inbox", view);
       },
       openLink: (url) => this.openLinkFromModule(url),
+      copy: (text) => clipboard.writeText(text),
     });
     this.publisherNames = new PublisherNames({
       file: path.join(options.userData, "publisher-names.json"),
@@ -2370,7 +2371,8 @@ export class Host {
       "inbox-report": (action) => this.inboxAction(() => this.inbox.report(action.id, action.report)),
       "inbox-delete": (action) => this.inboxAction(() => this.inbox.delete(action.id)),
       "inbox-email-copies": (action) => this.inboxAction(() => this.inbox.setEmailCopies(action.on)),
-      "inbox-contact": (action) => this.inboxAction(() => this.inbox.setContact(action.moduleId, action.enabled, action.link)),
+      "inbox-contact": (action) => this.inboxAction(() => this.inbox.setContact(action.moduleId, { kind: action.kind, value: action.value })),
+      "inbox-contact-default": (action) => this.inboxAction(() => this.inbox.setContactDefault({ kind: action.kind, value: action.value })),
       "open-contact-link": (action) => this.inboxAction(() => this.inbox.openContactLink(action.moduleId)),
       "inbox-note-seen": () => this.inbox.noteSeen(),
       "inbox-developer-note-seen": () => this.inbox.developerNoteSeen(),

@@ -116,7 +116,7 @@ test("small text, off switches and disabled buttons keep their contrast in every
       await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(mode === "dark");
 
       await settled(page);
-      record(theme.name, mode, "Section label", await painted(page, '[data-testid="settings"] section > header > h3'));
+      record(theme.name, mode, "Section label", await painted(page, '[data-testid="settings"] section > header h3'));
       record(theme.name, mode, "Menu group label", await painted(page, '[data-testid="settings"] nav h3, [data-testid="settings"] h3'));
       const grayscale = page.getByTestId("grayscale-text");
       if ((await grayscale.getAttribute("data-state")) === "checked") await grayscale.click();
