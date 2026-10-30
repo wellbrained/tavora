@@ -60,7 +60,27 @@ joinButton.onclick = async () => {
 
 ## Send results
 
-Give every finished game a UUID once, keep it with the game, and send games in batches of up to 50. Sending a game again is safe: the board counts it once.
+Give every finished game a UUID once. Sending a game again is safe: the board counts it once. The easiest way is the result queue from `@tavora/sdk/store`: it keeps each result in `storage.app` the moment you record it, sends in batches of up to 50, and keeps and retries results while the user is signed out, hasn't agreed yet, or Tavora's service is away. Two panels of your module share one queue and never lose a result.
+
+```ts
+import { openResults } from "@tavora/sdk/store";
+
+const results = await openResults(tavora);
+results.onStanding(({ boards }) => render(boards)); // after results were taken (Tavora 0.21.97 and newer)
+results.onStatus((state) => render(state)); // idle, sending, offline, waiting, denied, unsupported, failed
+
+// When a game ends (give `day` yourself on a daily board):
+await results.record("daily", { id: game.id, outcome: won ? "won" : "lost", at: Date.now(), day: game.date });
+```
+
+- `record` resolves once the result is stored; sending happens in the background. It tries again on its own: after a network error with a growing wait (1 minute, doubling, at most 30), when the panel resumes, and while the user still has to sign in or agree, every minute. `flush()` tries right now, for example after `show()`.
+- A result the board refuses never counts, so it leaves the queue. Results are only dropped for that, never for a network error or a signed-out user.
+- `pending` and `has(id)` say what still waits, for example to keep a game around until its result is sent. Pass `{ boards: ["daily"] }` to limit the queue to some boards.
+- Call `dispose()` when the page goes away. Stored results stay for the next panel.
+
+### Sending yourself
+
+If you want full control, `submit` takes the results directly:
 
 ```ts
 const game = { id: crypto.randomUUID(), outcome: won ? "won" : "lost", at: Date.now(), day: todayLocal() };
@@ -82,6 +102,8 @@ async function upload() {
 - `at` is when the game ended, `day` the user's local day; the SDK fills `day` in from `at` when you leave it out. A game counts only when it ended within its `day`, so replaying an old puzzle from an archive never counts; it comes back as `archive`. On a daily board, give the puzzle's day yourself.
 - A daily board takes one game per day. A second one comes back as `day-taken`.
 - Each game is taken or refused on its own, so one bad game never holds up the others. Try again after `NETWORK_ERROR` with a growing wait, not in a loop.
+
+The queue, and the run store that keeps the played games it belongs to, are described in [Saving data](./saving-data.md#played-games-the-run-store).
 
 ## Show a board
 
