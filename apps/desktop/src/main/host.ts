@@ -7,7 +7,7 @@ import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
-import { allowsPersonalWorkspaces, continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, panelTypes, translateManifest, type Connector, type ModuleManifest, type ResolvedPanelType } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, OFFICIAL_PINS, officialOn, panelTypes, translateManifest, type Connector, type ModuleManifest, type ResolvedPanelType } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -1962,7 +1962,8 @@ export class Host {
    */
   private async publishOfficialModule(moduleId: string): Promise<string | void> {
     const module = this.modules.get(moduleId);
-    if (app.isPackaged || !this.official.on || module?.provenance !== "official" || module.shippedVersion === undefined) throw new UserError("officialPublish.error.notBuiltIn");
+    const trust = this.officialPublishTrust();
+    if (!trust || module?.provenance !== "official" || module.shippedVersion === undefined) throw new UserError("officialPublish.error.notBuiltIn");
     const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.tavoraKey"), properties: ["openFile"] });
     const keyFile = picked.filePaths[0];
     if (picked.canceled || !keyFile) return;
@@ -1977,7 +1978,7 @@ export class Host {
           throw error;
         }
       },
-      trusted: (fingerprint, sha256) => this.official.signerTrusted(fingerprint, sha256),
+      trusted: (fingerprint, sha256) => trust.signerTrusted(fingerprint, sha256),
       upload: (key, zip) => this.account.uploadModule(key, zip),
     });
     this.officialPublishing = moduleId;
@@ -1989,6 +1990,16 @@ export class Host {
       this.officialPublishing = null;
       this.pushState();
     }
+  }
+
+  /**
+   * Who may sign Tavora's own modules, for publishing from a dev build: the built-in pins. A dev build never loads
+   * downloaded copies (resolveOfficialPins), but it publishes under the same key and account as the catalogue checks.
+   * Null in a packaged build or while the pins are empty.
+   */
+  private officialPublishTrust(): OfficialUpdates | null {
+    if (app.isPackaged || !officialOn(OFFICIAL_PINS)) return null;
+    return new OfficialUpdates({ userData: this.options.userData, pins: { ...OFFICIAL_PINS }, safety: this.safetyLists });
   }
 
   /** The project folder a dev module was loaded from, for Publish and Save as zip. */
@@ -4132,7 +4143,7 @@ export class Host {
         ),
       })),
       moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder && !problem.official).map(({ folder, path: full, message, kind, values }) => ({ folder, path: full, message, ...(kind ? { kind } : {}), ...(values ? { values } : {}) })),
-      officialPublish: { available: !app.isPackaged && this.official.on, busy: this.officialPublishing },
+      officialPublish: { available: !app.isPackaged && officialOn(OFFICIAL_PINS), busy: this.officialPublishing },
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
         const projects = new Map<string, HostViewState["developmentFolders"][number]["projects"][number]>();
