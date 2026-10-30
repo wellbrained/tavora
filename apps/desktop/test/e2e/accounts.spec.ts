@@ -216,10 +216,11 @@ test("a developer chooses a public name and links a key file with tavora-pack li
     await page.getByTestId("account-create").click();
     await expect(page.getByTestId("account-sign-out")).toBeVisible();
 
-    // The developer settings are under Development; linking a key file is part of publishing from CI.
+    // The developer settings are under Development > Publishing; linking a key file is part of publishing from CI.
     await page.getByTestId("settings-nav-development").click();
     // Not a developer yet: the tools show after Let's go.
     await page.getByTestId("development-start").click();
+    await page.getByTestId("settings-nav-dev-publishing").click();
     const developer = page.getByTestId("account-developer");
     await expect(developer).toBeVisible();
     await page.getByTestId("developer-ci-toggle").click();
@@ -285,6 +286,7 @@ test("Tavora keeps a developer's publisher key, and tavora-pack without a key fi
     await signIn(page, "keeper@example.com", true);
     await page.getByTestId("settings-nav-development").click();
     await page.getByTestId("development-start").click();
+    await page.getByTestId("settings-nav-dev-publishing").click();
     await page.getByTestId("developer-ci-toggle").click();
     await expect(page.getByTestId("developer-keys-none")).toBeVisible();
     await expect(page.getByTestId("developer-key-create")).toBeDisabled();
@@ -302,7 +304,7 @@ test("Tavora keeps a developer's publisher key, and tavora-pack without a key fi
     await page.getByTestId("recovery-key-show").click();
     await expect(recovery).toHaveText(recoveryKey!);
     await page.getByTestId("recovery-key-saved").click();
-    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("settings-nav-dev-publishing").click();
     await page.getByTestId("developer-ci-toggle").click();
     const kept = page.getByTestId("developer-keys-list").locator("li");
     await expect(kept).toHaveCount(1);
@@ -313,7 +315,7 @@ test("Tavora keeps a developer's publisher key, and tavora-pack without a key fi
     for (const args of [[project], ["publish", path.join(project, "out.zip")]]) {
       const run = await tavoraPack(args);
       expect(run.status).toBe(2);
-      expect(run.out).toContain("Publish from Tavora: Settings > Development");
+      expect(run.out).toContain("Publish from Tavora: Settings > Your modules");
     }
   } finally {
     await app.close();

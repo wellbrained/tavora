@@ -1,4 +1,4 @@
-import { Blocks, Cloud, FolderCode, Globe, Info, Keyboard, LayoutGrid, Palette, PictureInPicture2, Plug, Radio, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
+import { Blocks, BookOpen, Cloud, FolderCode, Globe, Info, Keyboard, KeyRound, LayoutGrid, Package, Palette, PictureInPicture2, Plug, Radio, SlidersHorizontal, Trash2, UserRound } from "@lucide/vue";
 import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 
@@ -25,7 +25,17 @@ export const GROUPS = [
       { id: "streaming", icon: Radio },
       { id: "overlays", icon: PictureInPicture2 },
       { id: "browser", icon: Globe },
-      { id: "development", icon: FolderCode },
+    ],
+  },
+  // For module developers. "development" is Your modules, where the badge counts what waits for Publish; players see
+  // only it, as Make modules, until they start (DEVELOPER_SECTIONS are hidden until then).
+  {
+    id: "development",
+    sections: [
+      { id: "development", icon: Package },
+      { id: "dev-folders", icon: FolderCode },
+      { id: "dev-publishing", icon: KeyRound },
+      { id: "dev-help", icon: BookOpen },
     ],
   },
   {
@@ -46,7 +56,12 @@ export const PATCH_NOTES_SECTION = "patch-notes";
 
 export type SettingsSection = (typeof GROUPS)[number]["sections"][number]["id"] | typeof PATCH_NOTES_SECTION;
 
-export const sectionLabel = (section: SettingsSection): string => t(`settings.section.${section}` as MessageKey);
+/** The developer pages after Your modules, shown once the user makes modules. */
+export const DEVELOPER_SECTIONS = ["dev-folders", "dev-publishing", "dev-help"] as const satisfies readonly SettingsSection[];
+
+/** Your modules is Make modules for someone who doesn't make modules yet (`makesModules`). */
+export const sectionLabel = (section: SettingsSection, makesModules = true): string =>
+  t((section === "development" && !makesModules ? "settings.section.development-start" : `settings.section.${section}`) as MessageKey);
 export const groupLabel = (group: (typeof GROUPS)[number]["id"]): string => t(`settings.group.${group}` as MessageKey);
 
 /**
@@ -100,11 +115,13 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["browser-adblock-off", "browser"],
   ["browser-clear-workspace", "browser"],
   ["browser-clear-shared", "browser"],
-  ["development-folders", "development"],
-  ["development-examples", "development"],
-  ["module-developer", "development"],
-  ["publish-ci", "development"],
-  ["developer-docs", "development"],
+  ["module-contact", "development"],
+  ["development-folders", "dev-folders"],
+  ["module-developer", "dev-publishing"],
+  ["contact-default", "dev-publishing"],
+  ["publish-ci", "dev-publishing"],
+  ["development-examples", "dev-help"],
+  ["developer-docs", "dev-help"],
   ["shortcuts", "shortcuts"],
   ["workspaces", "workspaces"],
   ["trash", "trash"],

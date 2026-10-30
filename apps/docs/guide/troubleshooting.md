@@ -2,7 +2,7 @@
 
 ## The module doesn't show up
 
-Open **Settings > Development**. Each development folder lists its projects, and a project that didn't load says why and what to do. (Modules in your modules folder that didn't load are listed in **Settings > Modules**.)
+Open **Settings > Project folders**. Each development folder lists its projects, and a project that didn't load says why and what to do. (Modules in your modules folder that didn't load are listed in **Settings > Modules**.)
 
 - **"No module here"**: add the project folder (the one with `tavora.module.json`), or the folder that has your projects directly inside it, not a project's `src` or `dist`.
 - **A manifest error**, such as an unknown field or a wrong `id`: Tavora refuses manifests with mistakes rather than guessing. Add `"$schema": "https://docs.mytavora.app/schema/tavora.module.schema.json"` and your editor shows the problem. The fields are in the [manifest reference](../reference/manifest.md).
@@ -23,7 +23,7 @@ When the page crashes or stops responding, the panel says so and offers **Reload
 
 - Keep `npm run dev` running: it rebuilds on every change, and Tavora reloads the module's open panels when the build changes. A change to `tavora.module.json` makes Tavora read the module again.
 - Tavora watches the project folder and its build folder. If your build writes somewhere else, point the manifest's `entry` there.
-- Still old? Remove the development folder in Settings > Development and add it again.
+- Still old? Remove the development folder in Settings > Project folders and add it again.
 
 ## A call fails
 
@@ -40,7 +40,7 @@ Check `error.code`, not the message. The codes are in the [protocol reference](.
 
 ## `tavora-pack` can't sign
 
-- **"Publish from Tavora: Settings > Development"**: `tavora-pack` needs a key file. To publish by hand, press **Publish** in Tavora. From CI, pass an [exported key](./publishing.md#publish-from-ci) with `--key <file>`.
+- **"Publish from Tavora: Settings > Your modules"**: `tavora-pack` needs a key file. To publish by hand, press **Publish** in Tavora. From CI, pass an [exported key](./publishing.md#publish-from-ci) with `--key <file>`.
 - **"Unknown option '--publisher'"**: `tavora-pack` 0.3.0 signs only with `--key <file>`.
 - **"There is no publisher key at …"**: the `--key` file isn't there. Check the path, or export the key again in Tavora.
 
@@ -55,7 +55,7 @@ Check `error.code`, not the message. The codes are in the [protocol reference](.
 
 - **"comes from a different publisher, so it can't replace it"**: the zip is signed with another key than the installed version. Sign it with your original key; see [Your publisher key](./publisher-key.md).
 - **"An update needs a higher version"**: the zip has the same or a lower `version` than the installed one. Raise `version` in `tavora.module.json`, build, and press Save as zip again.
-- **"is loaded from your development folder"**: Tavora is loading the same module from its project folder. Remove that development folder in Settings > Development, then install the zip.
+- **"is loaded from your development folder"**: Tavora is loading the same module from its project folder. Remove that development folder in Settings > Project folders, then install the zip.
 - **"is already loaded from …"**: the same id is loaded from another folder. Remove it there first.
 - **"comes with Tavora"**: your module uses the id of one that ships with Tavora. Give it its own id.
 - **"needs Tavora … or newer"**: the user has to update Tavora first.

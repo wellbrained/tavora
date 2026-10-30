@@ -17,7 +17,7 @@ import type {
   SavedLayout,
   SteamImportGame,
 } from "./host-api";
-import { CONVERSATION_REPORT_REASONS, MODULE_REPORT_REASONS, OUTCOMES, REQUEST_TYPES } from "./conversations";
+import { CONTACT_KINDS, CONVERSATION_REPORT_REASONS, MODULE_REPORT_REASONS, OUTCOMES, REQUEST_TYPES } from "./conversations";
 import { isLanguageSetting, type LanguageSetting } from "./i18n";
 import { GRID_LIMITS, layoutTemplate, type LayoutTemplateId } from "./layout-templates";
 
@@ -403,9 +403,11 @@ export function hostActionTable(c: HostChecks) {
     "inbox-delete": { id: conversationId },
     /** The email copy switch (Settings > Account > Messages). */
     "inbox-email-copies": { on: bool },
-    /** A module's contact on or off, with an optional public https link. */
-    "inbox-contact": { moduleId: c.moduleId, enabled: bool, link: nullable(text(200)) },
-    /** Opens a developer's public contact link (the address is read from the service again). It leaves Tavora. */
+    /** How users reach the developer about a module: in Tavora, an address the developer chose (the service checks it), or not at all. */
+    "inbox-contact": { moduleId: c.moduleId, kind: oneOf(...CONTACT_KINDS), value: nullable(text(200)) },
+    /** The same for the developer's modules without a setting of their own. */
+    "inbox-contact-default": { kind: oneOf(...CONTACT_KINDS), value: nullable(text(200)) },
+    /** Opens a developer's public contact link, or copies their email address or Discord name (read from the service again). A link leaves Tavora. */
     "open-contact-link": { moduleId: c.moduleId },
     /** The user read the note about the inbox icon, or the developer note. */
     "inbox-note-seen": {},

@@ -8,6 +8,7 @@ import { readFile } from "node:fs/promises";
 import {
   appearedKey,
   CLOSE_REASONS,
+  CONTACT_LINK_KINDS,
   developerNameOf,
   EMPTY_INBOX,
   IDLE_DAYS,
@@ -16,7 +17,9 @@ import {
   linkHost,
   NOTE_KEYS,
   noteText,
+  readContact,
   REQUEST_TYPES,
+  type Contact,
   type ContactDraft,
   type ConversationDetailResult,
   type ConversationItem,
@@ -90,6 +93,8 @@ export interface InboxOptions {
   onChange: (view: InboxView) => void;
   /** Opens a developer's public link where the user picks (it leaves Tavora). */
   openLink: (url: string) => void;
+  /** Puts a text on the clipboard. */
+  copy: (text: string) => void;
   pollMs?: number;
 }
 
@@ -157,6 +162,7 @@ export class Inbox {
   private developer = false;
   private emailCopies: InboxView["emailCopies"] = null;
   private contacts: ModuleContact[] | null = null;
+  private contactDefault: Contact | null = null;
   private texts: NoteTexts | null = null;
   private textsAt = 0;
   private remembered: Remembered = fresh();
@@ -198,6 +204,7 @@ export class Inbox {
       this.developer = false;
       this.emailCopies = null;
       this.contacts = null;
+      this.contactDefault = null;
       this.remembered.iconShown = false;
       this.remembered.pending = null;
       this.changed();
@@ -226,6 +233,7 @@ export class Inbox {
       emailCopies: this.emailCopies,
       developerNote: (this.o.isDeveloper() || this.developer) && !this.remembered.developerNoteSeen,
       contacts: this.contacts,
+      contactDefault: this.contactDefault,
     };
   }
 
@@ -262,7 +270,10 @@ export class Inbox {
       const inbox = (typeof list.inbox === "object" && list.inbox !== null ? list.inbox : {}) as Record<string, unknown>;
       this.developer = inbox.developer === true;
       const settings = await this.request("GET", "/v1/conversations/settings").catch(() => null);
-      if (settings) this.emailCopies = { on: settings.emailCopies === true, hasEmail: settings.hasEmail === true };
+      if (settings) {
+        this.emailCopies = { on: settings.emailCopies === true, hasEmail: settings.hasEmail === true };
+        this.contactDefault = readContact(settings.contact ?? { enabled: true });
+      }
       if (Date.now() - this.textsAt > TEXTS_MS) await this.readTexts();
     } catch {
       this.changed();
@@ -349,11 +360,8 @@ export class Inbox {
       const body = await this.request("GET", `/v1/catalog/modules/${encodeURIComponent(moduleId)}`, undefined, false);
       const module = (typeof body.module === "object" && body.module !== null ? body.module : {}) as Record<string, unknown>;
       const name = text(module.name, 200) ?? moduleId;
-      const contact = (typeof module.contact === "object" && module.contact !== null ? module.contact : { enabled: true, link: null }) as Record<string, unknown>;
-      if (contact.enabled === false) {
-        const link = typeof contact.link === "string" && linkHost(contact.link) ? contact.link : null;
-        return { status: "off", moduleName: name, link, host: linkHost(link) };
-      }
+      const contact = readContact(module.contact ?? { enabled: true });
+      if (contact.kind !== "tavora") return { status: "off", moduleName: name, kind: contact.kind, value: contact.value, host: CONTACT_LINK_KINDS.includes(contact.kind) ? linkHost(contact.value) : null };
       const version = this.o.installedVersion(moduleId) ?? (typeof module.version === "string" && SEMVER.test(module.version) ? module.version : null);
       if (!version) return { status: "error", error: this.say("error.generic") };
       return { status: "ok", moduleName: name, versions: { tavora: this.o.tavoraVersion, module: version } };
@@ -362,11 +370,16 @@ export class Inbox {
     }
   }
 
-  /** Opens the developer's public link after a click; the address is read from the service again. */
-  async openContactLink(moduleId: string): Promise<void> {
+  /** Opens the developer's public link after a click, or copies their email address or Discord name; it is read from the service again. */
+  async openContactLink(moduleId: string): Promise<"opened" | "copied"> {
     const draft = await this.contactDraft(moduleId);
-    if (draft.status !== "off" || !draft.link) throw new UserError("inbox.error.contactOff");
-    this.o.openLink(draft.link);
+    if (draft.status !== "off" || !draft.value) throw new UserError("inbox.error.contactOff");
+    if (draft.host) {
+      this.o.openLink(draft.value);
+      return "opened";
+    }
+    this.o.copy(draft.value);
+    return "copied";
   }
 
   // ── Writing ────────────────────────────────────────────────────────────
@@ -422,8 +435,7 @@ export class Inbox {
       for (const module of own) {
         const answer = await this.request("GET", `/v1/catalog/modules/${encodeURIComponent(module.id)}/contact`).catch(() => null);
         if (!answer) continue;
-        const link = typeof answer.link === "string" && linkHost(answer.link) ? answer.link : null;
-        contacts.push({ id: module.id, name: module.name, enabled: answer.enabled !== false, link });
+        contacts.push({ id: module.id, name: module.name, ...readContact(answer), own: answer.own !== false });
       }
       this.contacts = contacts;
       this.changed();
@@ -432,10 +444,18 @@ export class Inbox {
     }
   }
 
-  async setContact(moduleId: string, enabled: boolean, link: string | null): Promise<void> {
-    const answer = await this.request("PUT", `/v1/catalog/modules/${encodeURIComponent(moduleId)}/contact`, { enabled, link: link?.trim() || null });
-    const saved = typeof answer.link === "string" ? answer.link : null;
-    this.contacts = (this.contacts ?? []).map((contact) => (contact.id === moduleId ? { ...contact, enabled: answer.enabled !== false, link: saved } : contact));
+  async setContact(moduleId: string, contact: Contact): Promise<void> {
+    const answer = await this.request("PUT", `/v1/catalog/modules/${encodeURIComponent(moduleId)}/contact`, contact);
+    this.contacts = (this.contacts ?? []).map((entry) => (entry.id === moduleId ? { ...entry, ...readContact(answer), own: true } : entry));
+    this.changed();
+    void this.refresh();
+  }
+
+  /** How users reach the developer about the modules without a setting of their own. */
+  async setContactDefault(contact: Contact): Promise<void> {
+    const answer = await this.request("PUT", "/v1/conversations/settings", { contact });
+    this.contactDefault = readContact(answer.contact);
+    this.contacts = (this.contacts ?? []).map((entry) => (entry.own ? entry : { ...entry, ...this.contactDefault! }));
     this.changed();
     void this.refresh();
   }

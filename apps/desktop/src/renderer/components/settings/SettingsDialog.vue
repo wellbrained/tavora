@@ -10,13 +10,16 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
-import { act, hiddenSettingIds, hiddenSettings, refreshReleaseStatuses, releasePendingCount, settingsOpen, settingsTarget, state } from "../../host";
+import { act, hiddenSettingIds, hiddenSettings, makesModules, menuHiddenSettings, refreshReleaseStatuses, releasePendingCount, settingsOpen, settingsTarget, state } from "../../host";
 import { formatDate, t } from "../../i18n";
 import AboutSection from "./AboutSection.vue";
 import AccountSection from "./AccountSection.vue";
 import AppearanceSection from "./AppearanceSection.vue";
 import BrowserSection from "./BrowserSection.vue";
 import DevelopmentSection from "./DevelopmentSection.vue";
+import DevFoldersSection from "./DevFoldersSection.vue";
+import DevHelpSection from "./DevHelpSection.vue";
+import DevPublishingSection from "./DevPublishingSection.vue";
 import WorkspacesSection from "./WorkspacesSection.vue";
 import GeneralSection from "./GeneralSection.vue";
 import IntegrationsSection from "./IntegrationsSection.vue";
@@ -27,7 +30,7 @@ import ShortcutsSection from "./ShortcutsSection.vue";
 import OverlaysSection from "./OverlaysSection.vue";
 import StreamingSection from "./StreamingSection.vue";
 import TrashSection from "./TrashSection.vue";
-import { GROUPS, groupLabel, sectionLabel, settingEntries, type SettingsSection } from "./settings-index";
+import { DEVELOPER_SECTIONS, GROUPS, groupLabel, sectionLabel, settingEntries, type SettingsSection } from "./settings-index";
 import { SETTINGS_PAGE_TITLE } from "./settings-page";
 
 /** The icon shown in the page header: the section's own, a magnifier for search results. */
@@ -41,7 +44,7 @@ const headerIcon = computed(() => {
 const section = ref<SettingsSection>("general");
 const query = ref("");
 /** What the page header says; a group with the same title leaves its own out. */
-const pageTitle = computed(() => (query.value.trim() ? t("settings.results.title") : sectionLabel(section.value)));
+const pageTitle = computed(() => (query.value.trim() ? t("settings.results.title") : sectionLabel(section.value, makesModules.value)));
 provide(SETTINGS_PAGE_TITLE, pageTitle);
 /** The setting a search result led to, tinted for a moment. */
 const highlight = ref<string | null>(null);
@@ -63,6 +66,8 @@ watch(settingsTarget, (target) => {
 });
 
 async function show(target: SettingsSection, setting?: string) {
+  // A search led someone who doesn't make modules yet to a developer page: that is a start, so the menu shows the pages.
+  if (!makesModules.value && (DEVELOPER_SECTIONS as readonly string[]).includes(target)) void act({ type: "set-makes-modules", on: true }, { quiet: true });
   section.value = target;
   query.value = "";
   clearTimeout(highlightTimer);
@@ -83,10 +88,10 @@ const navGroups = computed<NavGroup[]>(() =>
   GROUPS.map((group) => ({
     heading: groupLabel(group.id),
     items: group.sections
-      .filter((entry) => !hiddenSettings.value.has(entry.id))
+      .filter((entry) => !menuHiddenSettings.value.has(entry.id))
       .map((item) => ({
         id: item.id,
-        label: sectionLabel(item.id),
+        label: sectionLabel(item.id, makesModules.value),
         icon: item.icon,
         badge: item.id === "trash" && library.value.trash.length ? library.value.trash.length : item.id === "development" && releasePendingCount.value ? releasePendingCount.value : undefined,
         badgeTestid: item.id === "development" ? "settings-nav-development-count" : undefined,
@@ -231,7 +236,10 @@ function onSearchKey(event: KeyboardEvent) {
             <StreamingSection v-else-if="section === 'streaming'" :highlight="highlight" />
             <OverlaysSection v-else-if="section === 'overlays'" :highlight="highlight" />
             <BrowserSection v-else-if="section === 'browser'" :highlight="highlight" />
-            <DevelopmentSection v-else-if="section === 'development'" :highlight="highlight" />
+            <DevelopmentSection v-else-if="section === 'development'" :highlight="highlight" @show="show" />
+            <DevFoldersSection v-else-if="section === 'dev-folders'" :highlight="highlight" />
+            <DevPublishingSection v-else-if="section === 'dev-publishing'" :highlight="highlight" />
+            <DevHelpSection v-else-if="section === 'dev-help'" :highlight="highlight" />
             <WorkspacesSection v-else-if="section === 'workspaces'" :highlight="highlight" />
             <TrashSection v-else-if="section === 'trash'" :highlight="highlight" />
             <PatchNotesSection v-else-if="section === 'patch-notes'" />

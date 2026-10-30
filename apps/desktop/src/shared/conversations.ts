@@ -62,12 +62,84 @@ export interface ConversationDetail {
 
 export type ConversationDetailResult = ({ status: "ok" } & ConversationDetail) | { status: "error"; error: string };
 
-/** A module's contact settings: on by default, with an optional https link instead. */
-export interface ModuleContact {
+/**
+ * How users can reach a module's developer: in Tavora (the default, anonymous), or one public address the developer
+ * chose (an email address, a GitHub link, a Discord invite, a Discord user name, a website), or not at all.
+ */
+export const CONTACT_KINDS = ["tavora", "email", "github", "discord-server", "discord-user", "website", "none"] as const;
+export type ContactKind = (typeof CONTACT_KINDS)[number];
+/** The kinds that are an https link users open. */
+export const CONTACT_LINK_KINDS: readonly ContactKind[] = ["github", "discord-server", "website"];
+/** The kinds with a value the developer types in. */
+export const contactNeedsValue = (kind: ContactKind): boolean => kind !== "tavora" && kind !== "none";
+
+export interface Contact {
+  kind: ContactKind;
+  /** The address for email, github, discord-server, discord-user and website; null for tavora and none. */
+  value: string | null;
+}
+
+/** A module's contact settings, for its developer: what users get, and whether it is the module's own or the account's default. */
+export interface ModuleContact extends Contact {
   id: string;
   name: string;
-  enabled: boolean;
-  link: string | null;
+  /** Set for this module; otherwise it follows the default (Settings > Development > Publishing). */
+  own: boolean;
+}
+
+/**
+ * The value cleaned for its kind, or undefined when it doesn't fit: an email address, an https link on github.com, a
+ * Discord invite (discord.gg/… or discord.com/invite/…), a Discord user name (2 to 32 of a-z, 0-9, _ and ., no ..), any
+ * https link for a website. A link typed without https:// gets it. The service checks it again, slurs too.
+ */
+export function cleanContactValue(kind: ContactKind, value: unknown): string | null | undefined {
+  if (!contactNeedsValue(kind)) return value === null || value === undefined || value === "" ? null : undefined;
+  if (typeof value !== "string") return undefined;
+  let text = value.trim();
+  if (!text || text.length > 200 || /[\s\u0000-\u001f\u007f-\u009f]/.test(text)) return undefined;
+  if (kind === "email") return /^[^@]+@[^@]+\.[^@.]+$/.test(text) ? text : undefined;
+  if (kind === "discord-user") {
+    text = text.replace(/^@/, "").toLowerCase();
+    return /^[a-z0-9_.]{2,32}$/.test(text) && !text.includes("..") ? text : undefined;
+  }
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(text)) text = `https://${text}`;
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== "https:" || url.username || url.password || !url.hostname.includes(".")) return undefined;
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  if (kind === "github" && host !== "github.com") return undefined;
+  if (kind === "discord-server" && !(host === "discord.gg" || ((host === "discord.com" || host === "discordapp.com") && url.pathname.startsWith("/invite/")))) return undefined;
+  return text;
+}
+
+/** What an older service or app sends (contact on or off, with an optional link) as a kind. */
+export function contactFromLegacy(enabled: boolean, link: string | null): Contact {
+  if (enabled) return { kind: "tavora", value: null };
+  if (!link) return { kind: "none", value: null };
+  for (const kind of ["github", "discord-server"] as const) if (cleanContactValue(kind, link) === link) return { kind, value: link };
+  return { kind: "website", value: link };
+}
+
+/** A contact as the service sends it; one from a service before contact kinds is read from its on or off and link. */
+export function readContact(raw: unknown): Contact {
+  const body = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+  const kind = (CONTACT_KINDS as readonly unknown[]).includes(body.kind) ? (body.kind as ContactKind) : null;
+  if (kind) {
+    const value = cleanContactValue(kind, body.value);
+    if (value !== undefined) return { kind, value };
+    return { kind: "none", value: null };
+  }
+  const link = typeof body.link === "string" && linkHost(body.link) ? body.link : null;
+  return contactFromLegacy(body.enabled !== false, link);
+}
+
+/** A contact as an older app reads it: on when it is in Tavora, and the link when there is one to open. */
+export function contactToLegacy(contact: Contact): { enabled: boolean; link: string | null } {
+  return { enabled: contact.kind === "tavora", link: CONTACT_LINK_KINDS.includes(contact.kind) ? contact.value : null };
 }
 
 /** A piece of a note: plain, or emphasised (*like this* in the editable text). Never markup. */
@@ -107,16 +179,18 @@ export interface InboxView {
   emailCopies: { on: boolean; hasEmail: boolean } | null;
   /** The one-time note for developers is waiting. */
   developerNote: boolean;
-  /** The account's published modules and whether they take messages; null until read. */
+  /** The account's published modules and how users reach the developer about each; null until read. */
   contacts: ModuleContact[] | null;
+  /** How users reach the developer about a module that has no setting of its own; null until read. */
+  contactDefault: Contact | null;
 }
 
-export const EMPTY_INBOX: InboxView = { active: false, items: null, developer: false, icon: false, unread: 0, cause: null, why: null, note: null, emailCopies: null, developerNote: false, contacts: null };
+export const EMPTY_INBOX: InboxView = { active: false, items: null, developer: false, icon: false, unread: 0, cause: null, why: null, note: null, emailCopies: null, developerNote: false, contacts: null, contactDefault: null };
 
 /** What the dialogs need before a request is written: the contact state and the versions that go with it. */
 export type ContactDraft =
   | { status: "ok"; moduleName: string; versions: { tavora: string; module: string } }
-  | { status: "off"; moduleName: string; link: string | null; host: string | null }
+  | { status: "off"; moduleName: string; kind: Exclude<ContactKind, "tavora">; value: string | null; host: string | null }
   | { status: "signed-out" | "own" | "error"; error?: string };
 
 // ── Texts ──────────────────────────────────────────────────────────────

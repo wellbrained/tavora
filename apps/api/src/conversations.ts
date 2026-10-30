@@ -10,7 +10,7 @@ import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { banned, requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import { checkReviewText } from "./review-filter.ts";
 import { MIN_ACCOUNT_AGE_MS, ownsModule } from "./reviews.ts";
-import { BUILT_IN_TEXTS } from "../../desktop/src/shared/conversations.ts";
+import { BUILT_IN_TEXTS, CONTACT_KINDS, cleanContactValue, contactFromLegacy, contactToLegacy, type Contact, type ContactKind } from "../../desktop/src/shared/conversations.ts";
 
 /**
  * Conversations (decided 2026-10-27, "Conversations" in the design doc). Two kinds exist and nothing else, so
@@ -185,9 +185,13 @@ export class ConversationStore {
       create table if not exists mail_copies (day text primary key, count integer not null);
       create index if not exists limits_account on limits (account_id, kind, at);
       create table if not exists module_contact (module_id text primary key, enabled integer not null, link text);
+      create table if not exists account_contact (account_id text primary key, kind text not null, value text);
       create table if not exists account_settings (account_id text primary key, email_copies integer not null);
       create table if not exists texts (key text primary key, en text not null, de text not null);
     `);
+    // Contact kinds (2026-10-30): a row from before has only enabled and link, read as a kind (contactFromLegacy).
+    const columns = (this.db.prepare("pragma table_info(module_contact)").all() as { name: string }[]).map((column) => column.name);
+    if (!columns.includes("kind")) this.db.exec("alter table module_contact add column kind text; alter table module_contact add column value text;");
   }
 
   close(): void {
@@ -420,18 +424,40 @@ export class ConversationStore {
     for (const row of this.db.prepare("select id from conversations").all() as unknown as { id: string }[]) this.purgeIfDone(row.id);
     this.db.prepare("delete from limits where account_id = ?").run(accountId);
     this.db.prepare("delete from account_settings where account_id = ?").run(accountId);
+    this.db.prepare("delete from account_contact where account_id = ?").run(accountId);
   }
 
   // ── Settings and texts ─────────────────────────────────────────────────
 
-  /** A module's contact settings: on by default, with an optional https link instead. */
-  contact(moduleId: string): { enabled: boolean; link: string | null } {
-    const row = this.db.prepare("select enabled, link from module_contact where module_id = ?").get(moduleId) as { enabled: number; link: string | null } | undefined;
-    return row ? { enabled: row.enabled === 1, link: row.link } : { enabled: true, link: null };
+  /**
+   * How users reach a module's developer: what the developer set for the module, else the default of the developer's
+   * account (`developerId`), else in Tavora. `own` says the module has its own.
+   */
+  contact(moduleId: string, developerId: string | null = null): Contact & { own: boolean } {
+    const row = this.db.prepare("select enabled, link, kind, value from module_contact where module_id = ?").get(moduleId) as
+      | { enabled: number; link: string | null; kind: string | null; value: string | null }
+      | undefined;
+    if (row) return { ...(isContactKind(row.kind) ? { kind: row.kind, value: row.value } : contactFromLegacy(row.enabled === 1, row.link)), own: true };
+    return { ...this.contactDefault(developerId), own: false };
   }
 
-  setContact(moduleId: string, enabled: boolean, link: string | null): void {
-    this.db.prepare("insert into module_contact (module_id, enabled, link) values (?, ?, ?) on conflict (module_id) do update set enabled = excluded.enabled, link = excluded.link").run(moduleId, enabled ? 1 : 0, link);
+  setContact(moduleId: string, contact: Contact): void {
+    const legacy = contactToLegacy(contact);
+    this.db
+      .prepare(
+        "insert into module_contact (module_id, enabled, link, kind, value) values (?, ?, ?, ?, ?) on conflict (module_id) do update set enabled = excluded.enabled, link = excluded.link, kind = excluded.kind, value = excluded.value",
+      )
+      .run(moduleId, legacy.enabled ? 1 : 0, legacy.link, contact.kind, contact.value);
+  }
+
+  /** The contact an account's modules have until one gets its own: in Tavora unless the developer chose another. */
+  contactDefault(accountId: string | null): Contact {
+    const row = accountId ? (this.db.prepare("select kind, value from account_contact where account_id = ?").get(accountId) as { kind: string; value: string | null } | undefined) : undefined;
+    return row && isContactKind(row.kind) ? { kind: row.kind, value: row.value } : { kind: "tavora", value: null };
+  }
+
+  setContactDefault(accountId: string, contact: Contact): void {
+    this.db.prepare("insert into account_contact (account_id, kind, value) values (?, ?, ?) on conflict (account_id) do update set kind = excluded.kind, value = excluded.value").run(accountId, contact.kind, contact.value);
   }
 
   /** Whether the account wants an email copy of new messages; `fallback` is the default when it never chose. */
@@ -504,6 +530,25 @@ export function cleanMessage(value: unknown, max = MAX_MESSAGE_LENGTH): string |
   return [...text].length <= max ? text : undefined;
 }
 
+const isContactKind = (kind: unknown): kind is ContactKind => (CONTACT_KINDS as readonly unknown[]).includes(kind);
+
+/**
+ * A contact as the developer sends it, checked: `{ kind, value }`, or `{ enabled, link }` from an older app. Undefined
+ * when it doesn't fit. The value is shown on the module page, so the slur filter applies to it.
+ */
+export function cleanContact(input: Record<string, unknown> | null): Contact | undefined {
+  if (!input) return undefined;
+  const keys = Object.keys(input);
+  if (keys.every((key) => key === "enabled" || key === "link") && typeof input.enabled === "boolean") {
+    const link = cleanContactLink(input.link);
+    return link === undefined ? undefined : contactFromLegacy(input.enabled, link);
+  }
+  if (keys.some((key) => key !== "kind" && key !== "value") || !isContactKind(input.kind)) return undefined;
+  const value = cleanContactValue(input.kind, input.value);
+  if (value === undefined || (value && checkReviewText(value.replace(/[./:?#=&_@-]+/g, " ")) === "words")) return undefined;
+  return { kind: input.kind, value };
+}
+
 /** A developer's one public link: an https address of at most 200 characters, no spaces, no sign-in part. */
 export function cleanContactLink(value: unknown): string | null | undefined {
   if (value === null || value === undefined || value === "") return null;
@@ -535,12 +580,12 @@ export function developerOf(accounts: AccountStore, moduleId: string, owner: str
  * A module's contact settings as users see them. A suspended developer takes no new conversations, a banned one
  * none and shows no link either; both come back on their own with unsuspend or unban (account-lifecycle.ts).
  */
-export function publicContact(conversations: ConversationStore, accounts: AccountStore, moduleId: string, owner: string): { enabled: boolean; link: string | null } {
-  const settings = conversations.contact(moduleId);
+export function publicContact(conversations: ConversationStore, accounts: AccountStore, moduleId: string, owner: string): Contact & { enabled: boolean; link: string | null } {
   const developer = developerOf(accounts, moduleId, owner);
-  if (developer && accounts.isBanned(developer)) return { enabled: false, link: null };
-  if (developer && accounts.isSuspended(developer)) return { enabled: false, link: settings.link };
-  return settings;
+  const { kind, value } = conversations.contact(moduleId, developer);
+  const shown: Contact = developer && accounts.isBanned(developer) ? { kind: "none", value: null } : developer && accounts.isSuspended(developer) && kind === "tavora" ? { kind: "none", value: null } : { kind, value };
+  // enabled and link are what apps before contact kinds read.
+  return { ...shown, ...contactToLegacy(shown) };
 }
 
 /** The published modules an account is the developer of. */
@@ -733,16 +778,22 @@ export function conversationRoutes({ conversations, catalog, accounts, clientKey
 
   // Settings first: "/settings" must not be read as a conversation id.
   user.use("*", writes, signedIn);
-  user.get("/settings", (context) => {
-    const account = context.get("account");
-    return context.json({ emailCopies: wantsCopies(account.id), hasEmail: Boolean(account.email) });
-  });
+  // The email copies, and the contact a developer's modules have until one gets its own.
+  const settingsOf = (account: { id: string; email?: string | null }) => ({ emailCopies: wantsCopies(account.id), hasEmail: Boolean(account.email), contact: conversations.contactDefault(account.id) });
+  user.get("/settings", (context) => context.json(settingsOf(context.get("account"))));
   user.put("/settings", small, async (context) => {
     const input = await body(context);
-    if (!input || Object.keys(input).join() !== "emailCopies" || typeof input.emailCopies !== "boolean") return bad(context, "Send { emailCopies: true or false }.");
     const account = context.get("account");
+    if (input && Object.keys(input).join() === "contact") {
+      if (accounts.isBanned(account.id)) return banned(context);
+      const settings = cleanContact(typeof input.contact === "object" && input.contact !== null ? (input.contact as Record<string, unknown>) : null);
+      if (!settings || !("kind" in (input.contact as object))) return bad(context, "Send { contact: { kind, value } }.", "bad-link");
+      conversations.setContactDefault(account.id, settings);
+      return context.json(settingsOf(account));
+    }
+    if (!input || Object.keys(input).join() !== "emailCopies" || typeof input.emailCopies !== "boolean") return bad(context, "Send { emailCopies: true or false } or { contact: { kind, value } }.");
     conversations.setEmailCopies(account.id, input.emailCopies);
-    return context.json({ emailCopies: input.emailCopies, hasEmail: Boolean(account.email) });
+    return context.json(settingsOf(account));
   });
 
   user.get("/", (context) => {
@@ -751,7 +802,7 @@ export function conversationRoutes({ conversations, catalog, accounts, clientKey
       const role = roleOf(conversation, account.id);
       return role ? [item(conversation, role)] : [];
     });
-    const developer = ownsPublished(account.id).some((entry) => conversations.contact(entry.id).enabled);
+    const developer = ownsPublished(account.id).some((entry) => conversations.contact(entry.id, account.id).kind === "tavora");
     return context.json({ conversations: list, inbox: { open: list.filter((entry) => entry.state === "open").length, unread: list.filter((entry) => entry.unread).length, developer } });
   });
 
@@ -910,22 +961,24 @@ export function conversationRoutes({ conversations, catalog, accounts, clientKey
     if (!ownsModule(accounts, context.get("account").id, id, listed.module.owner)) return { error: context.json({ error: "Only the module's developer can change this.", reason: "not-publisher" }, 403) };
     return { id };
   };
+  // What the developer set, with enabled and link for apps before contact kinds.
+  const developerView = (moduleId: string, accountId: string) => {
+    const settings = conversations.contact(moduleId, accountId);
+    return { ...settings, ...contactToLegacy(settings) };
+  };
   contact.get("/modules/:id/contact", (context) => {
     const checked = developerOnly(context);
-    return checked.error ?? context.json(conversations.contact(checked.id!));
+    return checked.error ?? context.json(developerView(checked.id!, context.get("account").id));
   });
   contact.put("/modules/:id/contact", bodyLimit({ maxSize: 1000, onError: (context) => context.json({ error: "Too big.", reason: "bad-request" }, 413) }), async (context) => {
     const checked = developerOnly(context);
     if (checked.error) return checked.error;
     // A banned developer no longer acts as the publisher (decided 2026-10-29).
     if (accounts.isBanned(context.get("account").id)) return banned(context);
-    const input = await body(context);
-    const link = cleanContactLink(input?.link);
-    if (!input || Object.keys(input).some((key) => !["enabled", "link"].includes(key)) || typeof input.enabled !== "boolean" || link === undefined) {
-      return bad(context, "Send { enabled: true or false, link: an https address of at most 200 characters or null }.", "bad-link");
-    }
-    conversations.setContact(checked.id!, input.enabled, link);
-    return context.json(conversations.contact(checked.id!));
+    const settings = cleanContact(await body(context));
+    if (!settings) return bad(context, "Send { kind, value }: the value fits the kind (an email address, a GitHub or Discord invite link, a Discord user name, an https link) or is null.", "bad-link");
+    conversations.setContact(checked.id!, settings);
+    return context.json(developerView(checked.id!, context.get("account").id));
   });
 
   // The explanation notes and mails the admin edited; the app falls back to its built-in texts for the rest.

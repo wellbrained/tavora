@@ -273,17 +273,17 @@ A developer can link a publisher key to their account, so users see a developer 
 
 ### Publisher keys Tavora keeps
 
-Tavora keeps a developer's publisher keys (Settings > Development), so the recovery key is the only thing they have to keep safe.
+Tavora keeps a developer's publisher keys (Settings > Publishing), so the recovery key is the only thing they have to keep safe.
 
 - **They are sealed with your recovery key.** The keys sit in your account's vault, sealed on your PC with a key derived from the recovery key, so the service only ever sees sealed bytes. Each PC keeps the vault as it last read it, sealed the same way, so signing works offline.
-- **Only Tavora's own buttons sign.** Tavora signs when you press Publish on the review screen, or Save as zip in Settings > Development or a module's menu, and at no other time. It opens no pipe, socket or port for signing, so no other program, web page or module can ask it to sign.
+- **Only Tavora's own buttons sign.** Tavora signs when you press Publish on the review screen, or Save as zip in Settings > Your modules or a module's menu, and at no other time. It opens no pipe, socket or port for signing, so no other program, web page or module can ask it to sign.
 - **What you see is what gets signed.** Tavora packs the zip itself from your module's project folder and shows the review screen from that zip: its name, version, patch notes and what it asks for. Pressing Publish there signs and uploads that zip and nothing else; the press is your yes.
-- **A key leaves Tavora only when you export it**, to a file you pick, to publish from CI (Settings > Development > Publisher keys and CI). Packing works with that file alone; publishing also needs a publish token.
+- **A key leaves Tavora only when you export it**, to a file you pick, to publish from CI (Settings > Publishing > Publisher keys and CI). Packing works with that file alone; publishing also needs a publish token.
 
 ### Publishing to the catalog
 
 - **The key alone publishes nothing.** Every upload carries the key's signature over the zip's SHA-256 and a sign-in of the account the key is linked to: Tavora's own, when you press Publish, or a publish token, from CI. An upload with only a key, or with the sign-in of another account, is refused.
-- **Publish tokens are narrow.** A token is shown once and the service keeps only its hash. It works for a year, is removed in Settings > Development > Publisher keys and CI, and publishes only under id prefixes the account already holds, so it can't claim a new one. It can't sign in, read the account or change anything else.
+- **Publish tokens are narrow.** A token is shown once and the service keeps only its hash. It works for a year, is removed in Settings > Publishing > Publisher keys and CI, and publishes only under id prefixes the account already holds, so it can't claim a new one. It can't sign in, read the account or change anything else.
 - **Every upload is told.** The account's email address gets a mail for each published version, naming the module, the key and whether it came from Tavora or which token.
 
 ## Leaderboards
@@ -356,7 +356,7 @@ Tavora keeps three lists for modules from other people: publisher keys that were
 - **Discord's local connection is trusted.** Whatever listens where the Discord app listens gets the Discord token. A program that can do that is already running as the user.
 - **Users who stay offline, or turn online features off, do not get new safety lists.** A revoked key or a blocked zip still works for them until they go online, and an unsigned module that is already installed is not stopped by a block.
 - **Unsigned local modules are known only by their id.** Another local module put in the same folder under the same id gets its grants.
-- **A development folder is a module's whole bundle.** A module loaded from a development folder (Settings > Development) can read every file in its project folder, such as its sources or a `.env` file, because G6 is measured from that folder. It is an unsigned local module, known only by its id. Add only your own projects.
+- **A development folder is a module's whole bundle.** A module loaded from a development folder (Settings > Project folders) can read every file in its project folder, such as its sources or a `.env` file, because G6 is measured from that folder. It is an unsigned local module, known only by its id. Add only your own projects.
 - **WebAssembly is allowed only for Tavora's own modules** that ask for it, because the Whiteboard needs it. Community modules do not get it.
 
 ## Shared item tooltips

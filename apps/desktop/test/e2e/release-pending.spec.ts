@@ -71,7 +71,7 @@ test("nothing is said while the catalog can't be reached", async () => {
   try {
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-development").click();
-    await expect(page.getByTestId("module-wellbrained.fresh")).toBeVisible();
+    await expect(page.getByTestId("dev-module-wellbrained.fresh")).toBeVisible();
     await expect(page.locator('[data-testid^="module-pending-"]')).toHaveCount(0);
     await expect(page.getByTestId("settings-nav-development-count")).toHaveCount(0);
   } finally {

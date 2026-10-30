@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Contact the developer: a request (bug report, feature request or question) to the developer of a catalog module. It
 // needs a sign-in; the developer never sees who wrote. The Tavora and module version are filled in and shown before
-// sending. If the developer switched messages off, their public link is offered instead, with a warning.
+// sending. If the developer chose another way (contactChoice), that is offered instead: a link opens with a warning
+// that it leaves Tavora and isn't anonymous, an email address or Discord name can be copied; Nobody says so.
 import { computed, onMounted, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Label } from "@tavora/official-ui/components/ui/label";
@@ -9,7 +10,8 @@ import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { MAX_MESSAGE_LENGTH, messageProblem, REQUEST_TYPES, type ContactDraft, type RequestType } from "../../../shared/conversations";
-import { act, api, openInbox, openSettings } from "../../host";
+import { act, api, openInbox, openSettings, showToast } from "../../host";
+import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 import ModalDialog from "../ModalDialog.vue";
 
@@ -47,6 +49,7 @@ async function send() {
 async function openLink() {
   const result = await act({ type: "open-contact-link", moduleId: props.moduleId }, { quiet: true });
   if (!result.ok) error.value = result.error;
+  else if (result.id === "copied") showToast(t("contact.copied"));
   else emit("close");
 }
 
@@ -69,11 +72,20 @@ function signIn() {
     </div>
 
     <div v-else-if="draft.status === 'off'" class="grid gap-3" data-testid="contact-off">
-      <template v-if="draft.link && draft.host">
+      <template v-if="draft.value && draft.host">
+        <p class="text-sm">{{ t(`contact.off.${draft.kind}` as MessageKey, { name }) }}</p>
         <Notice variant="warning">{{ t("contact.offWarning") }}</Notice>
         <Button variant="secondary" class="justify-self-start" data-testid="contact-link" @click="openLink">{{ t("contact.offLink", { host: draft.host }) }}</Button>
       </template>
-      <p v-else class="text-sm">{{ t("contact.offNone") }}</p>
+      <template v-else-if="draft.value">
+        <p class="text-sm">{{ t(`contact.off.${draft.kind}` as MessageKey, { name }) }}</p>
+        <div class="flex items-center gap-2">
+          <code class="bg-muted min-w-0 truncate rounded px-2 py-1 font-mono text-sm select-all" data-testid="contact-value">{{ draft.value }}</code>
+          <Button variant="secondary" size="sm" data-testid="contact-copy" @click="openLink">{{ t("contact.copy") }}</Button>
+        </div>
+        <p class="text-muted-foreground text-sm">{{ t("contact.offNotAnonymous") }}</p>
+      </template>
+      <p v-else class="text-sm">{{ t("contact.offNone", { name }) }}</p>
       <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
       <div class="flex justify-end"><Button variant="secondary" @click="emit('close')">{{ t("common.close") }}</Button></div>
     </div>

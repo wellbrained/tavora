@@ -37,6 +37,7 @@ const radio = ref("normal");
 const segment = ref<"day" | "week" | "month">("week");
 const select = ref("poe2");
 const optional = ref("ranger");
+const reach = ref("tavora");
 const notify = ref(true);
 const quiet = ref(false);
 const picked = ref<string>();
@@ -186,6 +187,18 @@ const name = ref("Waystone");
             <SelectContent>
               <SelectItem value="recent">Recently changed</SelectItem>
               <SelectItem value="name">Name</SelectItem>
+            </SelectContent>
+          </Select>
+        </Specimen>
+        <Specimen label="Select with a line under each choice (SelectItem description)">
+          <Select v-model="reach" :disabled="off">
+            <SelectTrigger class="w-56" aria-label="How users can reach you" data-testid="select-described">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent class="max-w-80">
+              <SelectItem value="tavora" description="Users write to you here. You won't see who they are.">In Tavora</SelectItem>
+              <SelectItem value="email" description="Users get your email address.">Email</SelectItem>
+              <SelectItem value="none" description="No contact button at all.">Nobody</SelectItem>
             </SelectContent>
           </Select>
         </Specimen>

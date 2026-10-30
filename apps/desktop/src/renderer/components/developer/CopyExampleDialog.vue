@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // Make a copy of an example that ships with Tavora: the developer names their module and says where its
 // project goes, in one of their project folders or a folder they pick next. Main copies the sources into
-// a new folder named after the module, gives it its own id, and loads it from there (main/example-copy.ts).
+// a new folder named after the module, gives it its own id, and loads it from there (main/example-copy.ts). Settings
+// then shows Project folders, where the new project waits for its first build.
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
-import { act, dialog, showToast, state } from "../../host";
+import { act, dialog, openSettings, settingsOpen, showToast, state } from "../../host";
 import { t } from "../../i18n";
 import ModalDialog from "../ModalDialog.vue";
 
@@ -45,6 +46,7 @@ async function submit() {
   if (!result.ok) error.value = result.error;
   else if (result.id) {
     dialog.value = null;
+    if (settingsOpen.value) openSettings({ section: "dev-folders" });
     showToast(t("examples.copied", { folder: result.id.split(/[\\/]/).at(-1) ?? result.id }));
   }
 }

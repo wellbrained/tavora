@@ -5,7 +5,7 @@ import { toast } from "@tavora/official-ui/components/ui/toast";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
-import { SETTING_SECTIONS, type SettingsSection } from "./components/settings/settings-index";
+import { DEVELOPER_SECTIONS, SETTING_SECTIONS, type SettingsSection } from "./components/settings/settings-index";
 import { numberedWorkspaces } from "./shortcuts";
 import { setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
@@ -175,6 +175,15 @@ export const copyQuestion = computed<"closing" | "conflict" | "newer" | null>(()
 export const hiddenSettings = computed<ReadonlySet<SettingsSection>>(
   () => new Set<SettingsSection>([...(account.value?.enabled ? [] : (["account"] as const)), ...(state.value?.gameOverlays.supported ? [] : (["overlays"] as const))]),
 );
+
+/** The user makes modules: they pressed Let's go, or have project folders or a developer account. */
+export const makesModules = computed(() => Boolean(state.value?.library.makesModules || state.value?.developmentFolders.length || account.value?.developer));
+
+/**
+ * The sections in the Settings menu: the shown ones, without the developer pages for someone who doesn't make modules
+ * yet. Search still finds those; opening one counts as starting (SettingsDialog).
+ */
+export const menuHiddenSettings = computed<ReadonlySet<SettingsSection>>(() => new Set([...hiddenSettings.value, ...(makesModules.value ? [] : DEVELOPER_SECTIONS)]));
 
 /** Single settings not shown on this run: Discord and AI usage until an installed module asks for them. */
 export const hiddenSettingIds = computed<ReadonlySet<string>>(

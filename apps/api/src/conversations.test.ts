@@ -463,19 +463,60 @@ describe("contact settings", () => {
     expect((await call("GET", url)).status).toBe(401);
     expect((await call("GET", url, mara.token)).status).toBe(403);
     expect((await call("PUT", url, mara.token, { enabled: false, link: null })).status).toBe(403);
-    expect(await (await call("GET", url, devToken)).json()).toEqual({ enabled: true, link: null });
+    expect(await (await call("GET", url, devToken)).json()).toEqual({ kind: "tavora", value: null, own: false, enabled: true, link: null });
     expect((await call("GET", "/v1/catalog/modules/wellbrained.timer")).status).toBe(200);
     const page = (await (await call("GET", "/v1/catalog/modules/wellbrained.timer")).json()) as { module: { contact: unknown } };
-    expect(page.module.contact).toEqual({ enabled: true, link: null });
+    expect(page.module.contact).toEqual({ kind: "tavora", value: null, enabled: true, link: null });
 
     for (const link of ["http://example.com", "https://", "javascript:alert(1)", "https://user:pw@example.com", "https://exa mple.com", `https://example.com/${"a".repeat(200)}`, "example.com", 5]) {
       expect((await call("PUT", url, devToken, { enabled: false, link })).status, String(link)).toBe(400);
     }
     expect((await call("PUT", url, devToken, { enabled: "no", link: null })).status).toBe(400);
-    expect(await (await call("PUT", url, devToken, { enabled: false, link: "https://github.com/wellbrained/timer/issues" })).json()).toEqual({ enabled: false, link: "https://github.com/wellbrained/timer/issues" });
+    const issues = "https://github.com/wellbrained/timer/issues";
+    expect(await (await call("PUT", url, devToken, { enabled: false, link: issues })).json()).toEqual({ kind: "github", value: issues, own: true, enabled: false, link: issues });
     const after = (await (await call("GET", "/v1/catalog/modules/wellbrained.timer")).json()) as { module: { contact: unknown } };
-    expect(after.module.contact).toEqual({ enabled: false, link: "https://github.com/wellbrained/timer/issues" });
+    expect(after.module.contact).toEqual({ kind: "github", value: issues, enabled: false, link: issues });
     expect((await call("GET", "/v1/catalog/modules/wellbrained.other/contact", devToken)).status).toBe(404);
+  });
+
+  it("take a kind with a value that fits it, and tell older apps on or off with a link", async () => {
+    const { call, devToken } = setup();
+    const url = "/v1/catalog/modules/wellbrained.timer/contact";
+    const page = async () => ((await (await call("GET", "/v1/catalog/modules/wellbrained.timer")).json()) as { module: { contact: unknown } }).module.contact;
+    for (const [kind, value] of [
+      ["email", "no-at-sign"],
+      ["github", "https://gitlab.com/x"],
+      ["discord-server", "https://discord.com/users/1"],
+      ["discord-user", "a"],
+      ["discord-user", "two..dots"],
+      ["website", "http://example.com"],
+      ["tavora", "https://example.com"],
+      ["none", "x"],
+      ["fax", null],
+    ] as const) {
+      expect((await call("PUT", url, devToken, { kind, value })).status, `${kind} ${value}`).toBe(400);
+    }
+    expect(await (await call("PUT", url, devToken, { kind: "discord-user", value: "@WellBrained" })).json()).toMatchObject({ kind: "discord-user", value: "wellbrained", enabled: false, link: null });
+    expect(await page()).toEqual({ kind: "discord-user", value: "wellbrained", enabled: false, link: null });
+    expect(await (await call("PUT", url, devToken, { kind: "discord-server", value: "discord.gg/abc" })).json()).toMatchObject({ kind: "discord-server", value: "https://discord.gg/abc", link: "https://discord.gg/abc" });
+    expect(await (await call("PUT", url, devToken, { kind: "email", value: "dev@example.com" })).json()).toMatchObject({ kind: "email", value: "dev@example.com", link: null });
+    expect(await (await call("PUT", url, devToken, { kind: "none", value: null })).json()).toMatchObject({ kind: "none", value: null, enabled: false });
+    // An older app's on or off is read as a kind.
+    expect(await (await call("PUT", url, devToken, { enabled: true, link: null })).json()).toMatchObject({ kind: "tavora", enabled: true });
+    expect(await (await call("PUT", url, devToken, { enabled: false, link: "https://example.com/help" })).json()).toMatchObject({ kind: "website", value: "https://example.com/help" });
+  });
+
+  it("follow the developer's default until a module gets its own", async () => {
+    const { call, devToken } = setup();
+    const url = "/v1/catalog/modules/wellbrained.timer/contact";
+    expect(await (await call("GET", "/v1/conversations/settings", devToken)).json()).toMatchObject({ contact: { kind: "tavora", value: null } });
+    expect((await call("PUT", "/v1/conversations/settings", devToken, { contact: { kind: "email", value: "nope" } })).status).toBe(400);
+    expect(await (await call("PUT", "/v1/conversations/settings", devToken, { contact: { kind: "none", value: null } })).json()).toMatchObject({ contact: { kind: "none", value: null } });
+    expect(await (await call("GET", url, devToken)).json()).toMatchObject({ kind: "none", own: false });
+    expect(((await (await call("GET", "/v1/catalog/modules/wellbrained.timer")).json()) as { module: { contact: unknown } }).module.contact).toEqual({ kind: "none", value: null, enabled: false, link: null });
+    expect(((await (await call("GET", "/v1/conversations", devToken)).json()) as { inbox: { developer: boolean } }).inbox.developer).toBe(false);
+    await call("PUT", url, devToken, { kind: "tavora", value: null });
+    expect(await (await call("GET", url, devToken)).json()).toMatchObject({ kind: "tavora", own: true });
   });
 
   it("checks the link on its own", () => {
@@ -489,10 +530,10 @@ describe("the email copy setting", () => {
   it("is off for developers and on for others by default, and can be changed", async () => {
     const { user, call, devToken } = setup();
     const mara = user("mara@example.com");
-    expect(await (await call("GET", "/v1/conversations/settings", mara.token)).json()).toEqual({ emailCopies: true, hasEmail: true });
-    expect(await (await call("GET", "/v1/conversations/settings", devToken)).json()).toEqual({ emailCopies: false, hasEmail: true });
-    expect(await (await call("PUT", "/v1/conversations/settings", devToken, { emailCopies: true })).json()).toEqual({ emailCopies: true, hasEmail: true });
-    expect(await (await call("GET", "/v1/conversations/settings", devToken)).json()).toEqual({ emailCopies: true, hasEmail: true });
+    expect(await (await call("GET", "/v1/conversations/settings", mara.token)).json()).toMatchObject({ emailCopies: true, hasEmail: true });
+    expect(await (await call("GET", "/v1/conversations/settings", devToken)).json()).toMatchObject({ emailCopies: false, hasEmail: true });
+    expect(await (await call("PUT", "/v1/conversations/settings", devToken, { emailCopies: true })).json()).toMatchObject({ emailCopies: true, hasEmail: true });
+    expect(await (await call("GET", "/v1/conversations/settings", devToken)).json()).toMatchObject({ emailCopies: true, hasEmail: true });
     expect((await call("PUT", "/v1/conversations/settings", mara.token, { emailCopies: "yes" })).status).toBe(400);
     expect((await call("GET", "/v1/conversations/settings")).status).toBe(401);
   });

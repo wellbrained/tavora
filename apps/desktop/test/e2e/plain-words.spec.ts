@@ -33,10 +33,15 @@ test("Development shows its tools only after Let's go, kept in the library file"
     await first.page.getByTestId("rail-settings").click();
     await first.page.getByTestId("settings-nav-development").click();
     await expect(first.page.getByTestId("development-intro")).toBeVisible();
-    await expect(first.page.getByTestId("add-development-folder")).toHaveCount(0);
-    await expect(first.page.getByTestId("development-examples")).toHaveCount(0);
+    await expect(first.page.getByTestId("settings-heading")).toHaveText("Make modules");
+    await expect(first.page.getByTestId("settings-nav-dev-folders")).toHaveCount(0);
+    await expect(first.page.getByTestId("settings-nav-dev-help")).toHaveCount(0);
     await first.page.getByTestId("development-start").click();
+    await expect(first.page.getByTestId("settings-heading")).toHaveText("Your modules");
+    await expect(first.page.getByTestId("dev-modules-none")).toBeVisible();
+    await first.page.getByTestId("settings-nav-dev-folders").click();
     await expect(first.page.getByTestId("add-development-folder")).toBeVisible();
+    await first.page.getByTestId("settings-nav-dev-help").click();
     await expect(first.page.getByTestId("development-examples")).toBeVisible();
     await expect(first.page.getByTestId("development-examples")).not.toContainText("test ids");
     await expect.poll(() => makesModulesIn(userData)).toBe(true);
@@ -51,8 +56,9 @@ test("Development shows its tools only after Let's go, kept in the library file"
   try {
     await again.page.getByTestId("rail-settings").click();
     await again.page.getByTestId("settings-nav-development").click();
-    await expect(again.page.getByTestId("add-development-folder")).toBeVisible();
     await expect(again.page.getByTestId("development-intro")).toHaveCount(0);
+    await again.page.getByTestId("settings-nav-dev-folders").click();
+    await expect(again.page.getByTestId("add-development-folder")).toBeVisible();
   } finally {
     await again.app.close();
   }
@@ -66,8 +72,9 @@ test("a Let's go kept in the window's local storage moves into the library once"
     await page.evaluate(() => localStorage.setItem("tavora.makesModules", "1"));
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-development").click();
-    await expect(page.getByTestId("add-development-folder")).toBeVisible();
     await expect(page.getByTestId("development-intro")).toHaveCount(0);
+    await page.getByTestId("settings-nav-dev-folders").click();
+    await expect(page.getByTestId("add-development-folder")).toBeVisible();
     await expect.poll(() => makesModulesIn(userData)).toBe(true);
     await expect.poll(() => page.evaluate(() => localStorage.getItem("tavora.makesModules"))).toBeNull();
   } finally {
