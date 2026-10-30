@@ -4,9 +4,13 @@
 // Page Up and Page Down, the arrow keys left and right, Home and End jump by whole pages, and Ctrl+F searches. The keys
 // act on this pane only (they are heard on its own element), so a second pane next to it is left alone.
 // In a narrow panel the side does not sit beside the pages but takes their place until a page is picked.
-import { ChevronDown, ChevronUp, Columns2, Expand, GalleryVerticalEnd, ListTree, Minus, Plus, Search, X } from "@lucide/vue";
+// Links on a page jump to their page here; web addresses go up to the parent (`openLink`), which hands them to Tavora.
+// A PDF with a password asks for it in the pane; cancelling closes the file (`cancel`). The password is never kept.
+// Fit width and fit page use the whole document (the widest or largest page), so the zoom stays put while scrolling.
+import { ChevronDown, ChevronUp, Columns2, Expand, GalleryVerticalEnd, ListTree, LockKeyhole, Minus, Plus, Search, X } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { Label } from "@tavora/official-ui/components/ui/label";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
@@ -17,12 +21,13 @@ import PdfPage from "./PdfPage.vue";
 import PdfThumbs from "./PdfThumbs.vue";
 import { clampZoom, type FileView, type FitMode, type SideMode } from "./files";
 import { t } from "./i18n";
-import { fitZoom, layoutPages, pageAtOffset, pagesInBand, PAGE_GAP, parsePageInput, stepZoom, type PageSize } from "./layout";
-import { closePdf, loadOutline, openPdf, PdfProblem, type OutlineNode, type PDFDocumentProxy } from "./pdf";
+import { fitZoomAll, layoutPages, pageAtOffset, pagesInBand, PAGE_GAP, parsePageInput, stepZoom, type PageSize } from "./layout";
+import { namedPage, type LinkTarget } from "./links";
+import { closePdf, destinationPage, loadOutline, openPdf, PdfProblem, type OutlineNode, type PDFDocumentProxy } from "./pdf";
 import { buildPageText, findMatches, firstMatchFrom, stepMatch, type Match, type PageText, type Range } from "./search";
 
 const props = defineProps<{ url: string; view: FileView }>();
-const emit = defineEmits<{ view: [view: Partial<FileView>] }>();
+const emit = defineEmits<{ view: [view: Partial<FileView>]; openLink: [url: string]; cancel: [] }>();
 
 type Status = "opening" | "ready" | "gone" | "password" | "broken";
 
@@ -68,7 +73,7 @@ async function load() {
   void closePdf(pdf.value);
   pdf.value = null;
   try {
-    const opened = await openPdf(props.url);
+    const opened = await openPdf(props.url, askPassword);
     if (mine !== loadToken) return void closePdf(opened);
     const found: PageSize[] = [];
     for (let start = 1; start <= opened.numPages; start += 40) {
@@ -98,9 +103,42 @@ async function load() {
     // What the scroll reports while the page is being put in place is not the reader's doing.
     setTimeout(() => (restoring = false), 150);
   } catch (error) {
-    if (mine !== loadToken) return;
-    status.value = error instanceof PdfProblem ? error.kind : "broken";
+    const kind = error instanceof PdfProblem ? error.kind : "broken";
+    if (mine !== loadToken || kind === "cancelled") return;
+    status.value = kind;
   }
+}
+
+// ── Password
+
+const passwordField = ref("");
+const passwordWrong = ref(false);
+const passwordInput = ref<InstanceType<typeof Input> | null>(null);
+let passwordReply: ((password: string | null) => void) | null = null;
+
+/** pdf.js needs the password: the pane asks for it and waits for Open or Cancel. */
+async function askPassword(wrong: boolean): Promise<string | null> {
+  status.value = "password";
+  passwordWrong.value = wrong;
+  passwordField.value = "";
+  const answer = new Promise<string | null>((resolve) => (passwordReply = resolve));
+  await nextTick();
+  (passwordInput.value?.$el as HTMLInputElement | undefined)?.focus();
+  return answer;
+}
+
+/** Open (with the password) or Cancel (null). The field is emptied right away, so the password is not kept. */
+function answerPassword(password: string | null) {
+  const reply = passwordReply;
+  passwordReply = null;
+  passwordField.value = "";
+  if (password === null) {
+    reply?.(null);
+    emit("cancel");
+    return;
+  }
+  status.value = "opening";
+  reply?.(password);
 }
 
 onMounted(() => {
@@ -113,6 +151,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   loadToken++;
+  passwordReply?.(null);
   resizer?.disconnect();
   paneResizer?.disconnect();
   void closePdf(pdf.value);
@@ -190,21 +229,30 @@ async function setZoom(next: number, mode: FitMode) {
   emit("view", { zoom: value, fit: mode });
 }
 
-/** Works out the fit again (the panel changed size, or the page did). */
+/** Works out the fit again (the panel changed size). */
 function refit() {
   const mode = fit.value;
-  const size = sizes.value[page.value - 1];
   const element = scroller.value;
-  if (!mode || !size || !element) return;
-  const next = fitZoom(mode, size, { width: element.clientWidth, height: element.clientHeight });
+  if (!mode || !element || !count.value) return;
+  const next = fitZoomAll(mode, sizes.value, { width: element.clientWidth, height: element.clientHeight });
   if (Math.abs(next - zoom.value) > 0.001) void setZoom(next, mode);
 }
 
 function fitTo(mode: "width" | "page") {
-  const size = sizes.value[page.value - 1];
   const element = scroller.value;
-  if (!size || !element) return;
-  void setZoom(fitZoom(mode, size, { width: element.clientWidth, height: element.clientHeight }), mode);
+  if (!element || !count.value) return;
+  void setZoom(fitZoomAll(mode, sizes.value, { width: element.clientWidth, height: element.clientHeight }), mode);
+}
+
+// ── Links
+
+/** A link on a page was clicked. A web address goes up right away, while the click still counts for Tavora. */
+async function followLink(target: LinkTarget) {
+  if (target.kind === "web") return emit("openLink", target.url);
+  if (target.kind === "named") return goToPage(namedPage(target.action, page.value, count.value));
+  const document = pdf.value;
+  const number = document ? await destinationPage(document, target.dest) : null;
+  if (number !== null && document === pdf.value) goToPage(number);
 }
 
 function onWheel(event: WheelEvent) {
@@ -404,12 +452,38 @@ const setPageRef = (number: number) => (element: unknown) => {
 
 <template>
   <div ref="root" class="flex h-full min-h-0 flex-col outline-none" tabindex="-1" data-testid="pdf-pane" @keydown="onKey">
-    <Notice v-if="status === 'gone' || status === 'password' || status === 'broken'" variant="error" class="m-3" data-testid="pdf-error">
-      {{ status === "gone" ? t("pdf.fileGone") : status === "password" ? t("pdf.password") : t("pdf.failed") }}
+    <Notice v-if="status === 'gone' || status === 'broken'" variant="error" class="m-3" data-testid="pdf-error">
+      {{ status === "gone" ? t("pdf.fileGone") : t("pdf.failed") }}
       <template v-if="status === 'broken'" #action>
         <Button size="sm" variant="secondary" @click="load">{{ t("pdf.retry") }}</Button>
       </template>
     </Notice>
+    <div v-else-if="status === 'password'" class="flex h-full items-center justify-center p-4">
+      <form class="flex w-full max-w-xs flex-col gap-3" data-testid="pdf-password" @submit.prevent="answerPassword(passwordField)" @keydown.esc.prevent="answerPassword(null)">
+        <div class="flex items-center gap-2">
+          <LockKeyhole class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+          <p class="text-sm font-medium">{{ t("pdf.password") }}</p>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <Label for="pdf-password-input">{{ t("pdf.passwordField") }}</Label>
+          <Input
+            id="pdf-password-input"
+            ref="passwordInput"
+            v-model="passwordField"
+            type="password"
+            autocomplete="off"
+            :aria-invalid="passwordWrong || undefined"
+            :aria-describedby="passwordWrong ? 'pdf-password-wrong' : undefined"
+            data-testid="pdf-password-input"
+          />
+          <p v-if="passwordWrong" id="pdf-password-wrong" class="text-destructive text-xs" role="alert" data-testid="pdf-password-wrong">{{ t("pdf.passwordWrong") }}</p>
+        </div>
+        <div class="flex justify-end gap-2">
+          <Button type="button" variant="secondary" data-testid="pdf-password-cancel" @click="answerPassword(null)">{{ t("cancel") }}</Button>
+          <Button type="submit" :disabled="!passwordField" data-testid="pdf-password-open">{{ t("pdf.passwordOpen") }}</Button>
+        </div>
+      </form>
+    </div>
     <div v-else-if="status === 'opening'" class="flex flex-col gap-2 p-4" data-testid="pdf-opening">
       <Progress :model-value="progress" :aria-label="t('pdf.progress')" />
       <p class="text-muted-foreground text-sm">{{ t("pdf.opening") }}</p>
@@ -480,6 +554,7 @@ const setPageRef = (number: number) => (element: unknown) => {
                 :near="near.has(index + 1)"
                 :ranges="rangesByPage.get(index + 1) ?? noRanges"
                 :current="currentMatch && currentMatch.page === index + 1 ? currentMatch : null"
+                @link="followLink"
               />
             </div>
           </div>

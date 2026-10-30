@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitZoom, layoutPages, pageAtOffset, PAGE_GAP, pagesInBand, parsePageInput, stepZoom } from "./layout";
+import { fitZoom, fitZoomAll, layoutPages, pageAtOffset, PAGE_GAP, pagesInBand, parsePageInput, stepZoom } from "./layout";
 
 const sizes = [
   { width: 600, height: 800 },
@@ -49,6 +49,21 @@ describe("zoom", () => {
     expect(fitZoom("width", sizes[0]!, area)).toBe(1);
     expect(fitZoom("page", sizes[0]!, area)).toBe(0.5);
     expect(fitZoom("page", { width: 0, height: 0 }, area)).toBe(1);
+  });
+
+  it("fits a document of mixed page sizes so every page fits, whichever page the reader is on", () => {
+    const mixed = [
+      { width: 600, height: 800 },
+      { width: 1200, height: 400 },
+      { width: 300, height: 1600 },
+    ];
+    const area = { width: 624, height: 424 };
+    // Width: the widest page fills the area, the others are narrower.
+    expect(fitZoomAll("width", mixed, area)).toBe(0.5);
+    // Page: the zoom at which the tallest and the widest both fit whole.
+    expect(fitZoomAll("page", mixed, area)).toBe(0.25);
+    expect(fitZoomAll("width", sizes, area)).toBe(fitZoom("width", sizes[0]!, area));
+    expect(fitZoomAll("page", [], area)).toBe(1);
   });
 });
 

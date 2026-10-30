@@ -1,8 +1,11 @@
 <script setup lang="ts">
 // One page of a PDF. It draws itself (picture and selectable text) only while it is near the visible part, and
 // gives the memory back when it is far away. The size it takes up is always known, so the column never jumps.
+// Links on the page sit on top as buttons; what a click on one does is the pane's call (`link`).
 import { onBeforeUnmount, ref, watch } from "vue";
 import type { PDFDocumentProxy } from "./pdf";
+import { t } from "./i18n";
+import { linkBox, linkTarget, type LinkTarget, type RawLink } from "./links";
 import { pdfjs } from "./pdf";
 import { buildPageText, segmentsFor, type PageText, type Range } from "./search";
 
@@ -22,6 +25,7 @@ const props = defineProps<{
   ranges: Range[];
   current: Range | null;
 }>();
+const emit = defineEmits<{ link: [target: LinkTarget] }>();
 
 const host = ref<HTMLDivElement | null>(null);
 const failed = ref(false);
@@ -68,7 +72,7 @@ async function draw() {
     next.style.cssText = "position:absolute;inset:0;width:100%;height:100%";
     const task = page.render({ canvas: next, viewport, ...(ratio !== 1 ? { transform: [ratio, 0, 0, ratio, 0, 0] } : {}) });
     renderTask = task;
-    const content = await page.getTextContent();
+    const [content, annotations] = await Promise.all([page.getTextContent(), page.getAnnotations({ intent: "display" }).catch(() => [])]);
     await task.promise;
     if (mine !== token || !host.value) return;
 
@@ -76,7 +80,7 @@ async function draw() {
     nextLayer.className = "textLayer";
     nextLayer.style.setProperty("--total-scale-factor", String(props.zoom));
     // The old picture stays until the new one is ready, so zooming does not flash.
-    host.value.replaceChildren(next, nextLayer);
+    host.value.replaceChildren(next, nextLayer, linkLayer(annotations as RawLink[], page.view));
     canvas = next;
     layer = nextLayer;
     const textual = content.items.filter((item): item is Extract<typeof item, { str: string }> => "str" in item);
@@ -92,6 +96,27 @@ async function draw() {
     if ((error as { name?: string })?.name === "RenderingCancelledException" || mine !== token) return;
     failed.value = true;
   }
+}
+
+/** The links of the page as buttons over the text, placed in percent so they do not move when the zoom changes. */
+function linkLayer(annotations: RawLink[], view: number[]): HTMLDivElement {
+  const links = document.createElement("div");
+  links.className = "linkLayer";
+  for (const annotation of annotations) {
+    const target = linkTarget(annotation);
+    const box = target && annotation.rect ? linkBox(annotation.rect, view) : null;
+    if (!target || !box) continue;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.style.cssText = `left:${box.left}%;top:${box.top}%;width:${box.width}%;height:${box.height}%`;
+    button.dataset.testid = "pdf-link";
+    const label = target.kind === "web" ? t("pdf.linkWeb", { url: target.url }) : t("pdf.linkPage");
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.addEventListener("click", () => emit("link", target));
+    links.append(button);
+  }
+  return links;
 }
 
 /** Marks the matches in the text layer; text without a match is put back as it was. */

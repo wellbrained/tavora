@@ -41,3 +41,23 @@
   background: color-mix(in srgb, var(--primary) 60%, transparent);
   outline: 2px solid var(--primary);
 }
+
+/* Links on a page: a button over each one, above the text, that shows itself only on hover and keyboard focus. */
+.linkLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.linkLayer button {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.linkLayer button:hover {
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+}
+.linkLayer button:focus-visible {
+  outline: 2px solid var(--ring);
+}

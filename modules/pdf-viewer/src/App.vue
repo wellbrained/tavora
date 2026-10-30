@@ -159,6 +159,19 @@ function onDrop(event: DragEvent) {
   void addFiles([...(event.dataTransfer?.files ?? [])]);
 }
 
+// ── Links and passwords
+
+/** A web link in a PDF: Tavora opens it in the Browser panel (only from a click, only public addresses). */
+function openLink(url: string) {
+  void sdk.value?.links.open(url).catch(() => notice(t("pdf.linkFailed")));
+}
+
+/** The reader gave up at a PDF's password: its tab closes and the file list opens. */
+function cancelOpening(id: string) {
+  tabState.value = closeTab(tabState.value, id);
+  listOpen.value = true;
+}
+
 // ── Tabs and the list
 
 function show(id: string) {
@@ -244,7 +257,15 @@ async function remove() {
     </header>
 
     <main class="relative isolate min-h-0 flex-1">
-      <PdfPane v-if="active?.kind === 'pdf'" :key="active.id" :url="store.url(active.id)" :view="active.view" @view="store.setView(active.id, $event)" />
+      <PdfPane
+        v-if="active?.kind === 'pdf'"
+        :key="active.id"
+        :url="store.url(active.id)"
+        :view="active.view"
+        @view="store.setView(active.id, $event)"
+        @open-link="openLink"
+        @cancel="cancelOpening(active.id)"
+      />
       <ImagePane v-else-if="active" :key="active.id" :url="store.url(active.id)" :name="active.name" :view="active.view" @view="store.setView(active.id, $event)" />
       <div v-else class="flex h-full items-center justify-center p-4">
         <EmptyState :title="t('empty.title')" :description="t('empty.description')" class="w-full max-w-sm" data-testid="empty">
