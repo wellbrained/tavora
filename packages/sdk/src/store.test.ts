@@ -586,6 +586,44 @@ describe('merge: "mine" failures and remote copies', () => {
   });
 });
 
+describe("reload", () => {
+  it("reads a copy this panel's own sdk wrote outside the handle", async () => {
+    const { sdk, host } = createMemoryHost();
+    host.documents.put({ id: "plan", title: "Plan", data: { items: ["one"] } });
+    const doc = await openDocument(sdk, "plan", options());
+    await sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["one", "outside"] }, ifRevision: 1 }); // no change event for the writer itself
+    expect(doc.data.items).toEqual(["one"]);
+    const events: DocumentChangeEvent<Plan>[] = [];
+    doc.onChange((event) => events.push(event));
+    await doc.reload();
+    expect(doc.data.items).toEqual(["one", "outside"]);
+    expect(doc.revision).toBe(2);
+    expect(events.at(-1)).toMatchObject({ source: "remote", deleted: false });
+  });
+
+  it("keeps unsaved edits on top of the newer copy", async () => {
+    const { sdk, host } = createMemoryHost();
+    host.documents.put({ id: "plan", title: "Plan", data: { items: ["one"] } });
+    const doc = await openDocument(sdk, "plan", options({ debounceMs: 60_000 }));
+    doc.update(add("mine"));
+    await sdk.documents.put({ id: "plan", title: "Plan", data: { items: ["one", "outside"] }, ifRevision: 1 });
+    await doc.reload();
+    expect(doc.data.items).toEqual(["one", "outside", "mine"]);
+    await doc.flush();
+    expect(stored(host)).toEqual(["one", "outside", "mine"]);
+  });
+
+  it("does nothing when the stored copy is the one it has", async () => {
+    const { sdk, host } = createMemoryHost();
+    host.documents.put({ id: "plan", title: "Plan", data: { items: ["one"] } });
+    const doc = await openDocument(sdk, "plan", options());
+    const events: DocumentChangeEvent<Plan>[] = [];
+    doc.onChange((event) => events.push(event));
+    await doc.reload();
+    expect(events).toEqual([]);
+  });
+});
+
 function gateGet(sdk: { documents: unknown }) {
   const target = sdk.documents as { get: (id: string) => Promise<unknown> };
   const real = target.get;

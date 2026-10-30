@@ -16,6 +16,10 @@ export interface ItemSummary {
   revision: number;
 }
 
+/**
+ * Note on `parse`: it receives null for a missing item and must return a valid placeholder then (an empty plan, a blank
+ * build), not throw. The session shows that placeholder as `current.data` while an item is deleted elsewhere.
+ */
 export interface OpenItemsOptions<T> extends Pick<OpenDocumentOptions<T>, "parse" | "title" | "merge" | "debounceMs"> {
   /** Every item's document id starts with this, e.g. `"build-"` (a document id is letters, digits, `-` and `_`, at most 64: a new id adds 36). Other documents of the module are left alone. */
   prefix: string;
@@ -75,6 +79,11 @@ export interface ItemSession<T> {
   readonly currentId: string | null;
   /** The open item; null for none. Its `data`, `update` and `flush` are the document store's. */
   readonly current: DocumentHandle<T> | null;
+  /**
+   * The last copy of the open item before another panel deleted it, unsaved edits included; null while it exists or
+   * when nothing is open. `current.data` is `parse(null)` then, so a panel that keeps showing the item reads this.
+   */
+  readonly deletedCopy: T | null;
   /** The open item's status; "idle" for none. */
   readonly status: DocumentStatus;
   /** A `job` is running (or waiting). `panels.open` and the automatic fallback wait until it is done. */
@@ -111,6 +120,11 @@ export interface ItemSession<T> {
   job<R>(fn: () => Promise<R>): Promise<R>;
   /** Reads the list again. */
   refresh(): Promise<void>;
+  /**
+   * Reads the open item again after something other than its handle wrote it (this panel's own `documents.put`, which
+   * Tavora does not report back): its title and content show the new copy, unsaved edits stay on top. Does nothing for none.
+   */
+  reload(): Promise<void>;
   /** Saves the open item. Never rejects; does nothing for an item deleted elsewhere (see `restoreDeleted`). */
   flush(): Promise<void>;
   /** The open item's `adoptRemote`: drops unsaved edits and shows the other panel's copy. Does nothing for none or a deleted item. */
@@ -513,6 +527,9 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
     get deleted() {
       return deleted;
     },
+    get deletedCopy() {
+      return deleted ? lastCopy : null;
+    },
     pick: (id) => pick(id),
     create: (data, name) => createItem(data, name),
     rename: renameItem,
@@ -526,6 +543,11 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
       if (handle && !deleted) await handle.adoptRemote();
     },
     restoreDeleted,
+    reload: async () => {
+      if (!handle) return;
+      await handle.reload();
+      await refresh();
+    },
     onChange(fn) {
       changeListeners.add(fn);
       return () => void changeListeners.delete(fn);

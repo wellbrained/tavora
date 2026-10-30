@@ -16,6 +16,8 @@ export interface UseItemSession<T> {
   busy: Readonly<Ref<boolean>>;
   /** The open item was deleted by another panel (`onDeleted: "keep"`); `restoreDeleted()` brings it back. */
   deleted: Readonly<Ref<boolean>>;
+  /** The last copy of the open item while `deleted` (edits included); null otherwise. `current` is the placeholder then. */
+  deletedCopy: Readonly<ShallowRef<T | null>>;
   /** The last error (a failed save, list or pick, or the session not opening), until the next edit. */
   error: Readonly<Ref<unknown>>;
   /** True once the list is read and the first item is open (or there is none). */
@@ -34,6 +36,8 @@ export interface UseItemSession<T> {
   adoptRemote(): Promise<void>;
   /** Puts a deleted open item back with its last copy and opens it again. */
   restoreDeleted(): Promise<void>;
+  /** Reads the open item again after something other than its handle wrote it (this panel's own `documents.put`). */
+  reload(): Promise<void>;
   /** Never rejects; does nothing before the session is open. */
   flush(): Promise<void>;
 }
@@ -49,6 +53,7 @@ export function useItemSession<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>):
   const status = ref<DocumentStatus>("idle");
   const busy = ref(false);
   const deleted = ref(false);
+  const deletedCopy = shallowRef<T | null>(null);
   const error = shallowRef<unknown>(undefined);
   const loaded = ref(false);
   let session: ItemSession<T> | undefined;
@@ -68,6 +73,7 @@ export function useItemSession<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>):
         status.value = opened.status;
         busy.value = opened.busy;
         deleted.value = opened.deleted;
+        deletedCopy.value = opened.deletedCopy;
       };
       sync();
       loaded.value = true;
@@ -104,6 +110,7 @@ export function useItemSession<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>):
     status,
     busy,
     deleted,
+    deletedCopy,
     error,
     loaded,
     ready,
@@ -114,6 +121,7 @@ export function useItemSession<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>):
     remove: (id) => use((opened) => opened.remove(id)),
     job: (fn) => use((opened) => opened.job(fn)),
     refresh: () => use((opened) => opened.refresh()),
+    reload: () => use((opened) => opened.reload()),
     adoptRemote: () => use((opened) => opened.adoptRemote()),
     restoreDeleted: () => use((opened) => opened.restoreDeleted()),
     flush: () => (session ? session.flush() : ready.then((opened) => opened.flush(), () => undefined)),
