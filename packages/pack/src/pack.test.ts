@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
-import { mkdir, mkdtemp, readFile, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
@@ -57,7 +57,30 @@ describe("packModule", () => {
     const linked = await moduleFolder();
     await writeFile(path.join(linked, "tavora.module.json"), JSON.stringify({ ...manifest, icon: "icon.png" }));
     await symlink("/etc/hostname", path.join(linked, "icon.png"));
-    await expect(packModule(linked, key())).rejects.toThrow(/not a plain file/);
+    await expect(packModule(linked, key())).rejects.toThrow(/goes through a link/);
+  });
+
+  it("refuses a folder link that leads out of the module", async () => {
+    const outside = await mkdtemp(path.join(tmpdir(), "tavora-outside-"));
+    await writeFile(path.join(outside, "index.html"), "<p>not yours</p>");
+    await writeFile(path.join(outside, "icon.png"), "png");
+
+    // The entry's own folder is a link.
+    const linkedDist = await moduleFolder();
+    await rm(path.join(linkedDist, "dist"), { recursive: true });
+    await symlink(outside, path.join(linkedDist, "dist"), "junction");
+    await expect(packModule(linkedDist, key())).rejects.toThrow(/link/);
+
+    // A folder on the way to the icon is a link.
+    const linkedIcon = await moduleFolder();
+    await writeFile(path.join(linkedIcon, "tavora.module.json"), JSON.stringify({ ...manifest, icon: "art/icon.png" }));
+    await symlink(outside, path.join(linkedIcon, "art"), "junction");
+    await expect(packModule(linkedIcon, key())).rejects.toThrow(/link/);
+
+    // A link inside the entry's folder is refused too, not skipped silently.
+    const linkedInside = await moduleFolder();
+    await symlink(outside, path.join(linkedInside, "dist", "extra"), "junction");
+    await expect(packModule(linkedInside, key())).rejects.toThrow(/link/);
   });
 });
 

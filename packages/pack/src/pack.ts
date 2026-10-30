@@ -48,6 +48,7 @@ export async function collectFiles(dir: string): Promise<{ manifest: ModuleManif
   let total = 0;
   for (const name of [...names].sort()) {
     if (!isSafeEntryName(name)) throw new PackError(`${name} cannot go into a module zip (its name is not allowed)`);
+    await refuseLinks(dir, name);
     const info = await lstat(path.join(dir, name)).catch(() => null);
     if (!info?.isFile()) throw new PackError(`${name} is missing or not a plain file`);
     total += info.size;
@@ -58,17 +59,29 @@ export async function collectFiles(dir: string): Promise<{ manifest: ModuleManif
   return { manifest, files };
 }
 
+/** Refuses a file or folder whose path, from the module folder down, passes through a link: it could lead out of the module. */
+async function refuseLinks(root: string, relative: string): Promise<void> {
+  let current = root;
+  for (const part of relative.split("/").filter(Boolean)) {
+    current = path.join(current, part);
+    const info = await lstat(current).catch(() => null);
+    if (info?.isSymbolicLink()) throw new PackError(`${relative} goes through a link (${part}); a module zip holds only what is really in the folder`);
+  }
+}
+
 async function walk(root: string, folder: string): Promise<string[]> {
   const found: string[] = [];
   const visit = async (relative: string) => {
     for (const entry of await readdir(path.join(root, relative), { withFileTypes: true })) {
       const name = relative ? `${relative}/${entry.name}` : entry.name;
       if (!folder && (entry.name.startsWith(".") || entry.name === "node_modules")) continue;
-      // Links are never followed: the zip holds what is really in the folder.
+      // Links are never followed, and never skipped silently: the zip would lack files the author expects.
+      if (entry.isSymbolicLink()) throw new PackError(`${name} is a link; a module zip holds only what is really in the folder`);
       if (entry.isDirectory()) await visit(name);
       else if (entry.isFile()) found.push(name);
     }
   };
+  await refuseLinks(root, folder);
   await visit(folder).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "ENOENT") throw error;
   });
