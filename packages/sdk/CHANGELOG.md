@@ -1,3 +1,10 @@
+## 0.3.2
+
+Two rare item-session cases. Nothing changes on the wire, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `session.remove(id)` of the open item while its `restoreDeleted()` still runs waits for the restore, then deletes the item and opens the next one, where the restore could put it back after the remove.
+- `pick(id)` and `rename(id, …)` of a missing item reject with `ItemNotFoundError` also when `parse` throws for `null`, where they gave the parse(null) error.
+
 ## 0.3.1
 
 The last gaps of the item session, and the kit's last deprecated helpers go. Nothing changes on the wire, so `MIN_TAVORA` stays (Tavora 0.19.32).
