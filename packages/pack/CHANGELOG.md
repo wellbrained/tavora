@@ -2,6 +2,10 @@
 
 What changed in `@tavora/pack`, newest first.
 
+## 0.3.2
+
+- `packModule` (and `tavora-pack`) refuses a pre-release version such as `1.0.0-beta.1`: module versions are plain `major.minor.patch`. The catalog refuses them too.
+
 ## 0.3.1
 
 - New `@tavora/pack/vite`: `moduleConfig({ pages, plugins, notices, publicDir, … })` returns the Vite settings every module shares (relative paths, Chrome 130, one input per page, the SDK from its source in Tavora's repository) for `defineConfig`. `notices` copies licence files into `dist/`, found from your project. No Vite dependency is added: it is the project's own Vite.

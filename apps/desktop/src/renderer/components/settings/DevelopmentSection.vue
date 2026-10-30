@@ -5,9 +5,11 @@
 // changes. Each folder lists its modules, with Publish and Save as zip, or
 // says what to do next for a project that loaded nothing; the developer closes
 // folders and drags them into their own order. Below are the
-// examples that ship with Tavora, to open or copy as a new project, then what
-// a module developer has with the account, and the way to the docs and to
-// GitHub. Once we know publishing isn't set up, a card offers the developer onboarding.
+// examples that ship with Tavora, to open or copy as a new project (folded away
+// once the developer has modules of their own), then what a module developer has
+// with the account, and the way to the docs and to GitHub. Once we know publishing
+// isn't set up, a card offers the developer onboarding; on a new PC of a developer,
+// getting the recovery key here comes first instead.
 import { BookOpen, Bug, CircleAlert, Copy, FileArchive, FolderCode, FolderOpen, GripVertical, MessageCircleQuestion, Rocket, Trash2, Upload } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -51,6 +53,8 @@ try {
 const accounts = computed(() => account.value?.enabled === true);
 /** The account's recovery key is on screen (made with a key here) or needed on this PC. */
 const recoveryKey = computed(() => Boolean(developerKeys.value?.recoveryKey) || developerKeys.value?.status === "ask");
+/** A developer on a new PC needs only the recovery key here, so the card asking "Want to make modules?" stays away. */
+const startCard = computed(() => accounts.value && developerState.value === "missing" && !(account.value?.developer && recoveryKey.value));
 
 const modules = computed(() => state.value!.modules);
 const folders = computed(() => state.value!.developmentFolders);
@@ -66,6 +70,8 @@ const makesModules = computed(
 const builtIn = computed(() => modules.value.filter((module) => module.provenance === "official" && module.updatable).sort((a, b) => a.name.localeCompare(b.name)));
 const examples = computed(() => modules.value.filter((module) => module.origin.kind === "example").sort((a, b) => a.name.localeCompare(b.name)));
 const moduleById = (id: string) => modules.value.find((module) => module.id === id);
+/** With modules of their own loaded when the page opens, the examples are folded away; a search for them opens them. */
+const examplesOpen = ref(props.highlight === "development-examples" || !folders.value.some((entry) => entry.projects.some((project) => project.moduleId)));
 
 type Module = (typeof modules.value)[number];
 /** A development folder holding a module with a publishable id (not local.…) is a release copy, as ModuleRow tags it. */
@@ -187,7 +193,9 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
   </SettingGroup>
 
   <template v-else>
-  <SettingGroup v-if="accounts && developerState === 'missing'">
+  <RecoveryKeySettings v-if="accounts && account?.account && recoveryKey" />
+
+  <SettingGroup v-if="startCard">
     <div class="flex flex-wrap items-center gap-x-6 gap-y-3 py-4" data-testid="developer-start-card">
       <Rocket class="text-primary size-6 flex-none" :stroke-width="1.5" aria-hidden="true" />
       <div class="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
@@ -275,7 +283,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
           <p v-else-if="!entry.projects.length" class="text-muted-foreground pl-7 text-sm" data-testid="development-folder-status">{{ t("settings.devFolders.empty") }}</p>
           <ul v-else class="flex flex-col pl-7">
             <template v-for="project in entry.projects" :key="project.project">
-              <ModuleRow v-if="project.moduleId && moduleById(project.moduleId)" :module="moduleById(project.moduleId)!" hide-origin>
+              <ModuleRow v-if="project.moduleId && moduleById(project.moduleId)" :module="moduleById(project.moduleId)!" hide-origin compact>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -324,11 +332,18 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
     </ul>
   </SettingGroup>
 
-  <SettingGroup v-if="examples.length" :title="t('settings.development-examples.label')" :description="t('settings.development-examples.description')">
-    <div
-      :class="cn('-mx-5 px-5 transition-colors duration-500', highlight === 'development-examples' && 'bg-primary/10')"
-      data-setting="development-examples"
+  <SettingGroup v-if="examples.length">
+    <SettingRow
+      :label="t('settings.development-examples.label')"
+      :description="t('settings.development-examples.description')"
+      setting="development-examples"
+      :highlighted="highlight === 'development-examples'"
     >
+      <Button variant="ghost" :aria-expanded="examplesOpen" data-testid="development-examples-toggle" @click="examplesOpen = !examplesOpen">
+        {{ examplesOpen ? t("developer.ciHide") : t("developer.ciShow") }}
+      </Button>
+    </SettingRow>
+    <div v-if="examplesOpen">
       <ul class="flex flex-col" :aria-label="t('settings.development-examples.label')" data-testid="development-examples">
         <ModuleRow v-for="module in examples" :key="module.id" :module="module" hide-origin>
           <Button variant="ghost" :data-testid="`open-example-${module.id}`" @click="act({ type: 'open-example-folder', moduleId: module.id })">
@@ -358,7 +373,6 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
   </SettingGroup>
 
   <template v-if="accounts && account?.account">
-    <RecoveryKeySettings v-if="recoveryKey" />
     <ModuleDeveloperSettings :highlight="highlight" />
   </template>
   </template>

@@ -163,6 +163,9 @@ describe("publishing to the catalog", () => {
     const invalid = await send(key, unsigned);
     expect(invalid.status).toBe(400);
     expect(await reason(invalid)).toBe("invalid");
+    const beta = await send(key, moduleZip(key, "wellbrained.timer", "1.0.0-beta.1"));
+    expect(beta.status).toBe(400);
+    expect(await beta.json()).toMatchObject({ reason: "invalid", error: expect.stringMatching(/pre-release/) });
     expect((await publish(moduleZip(key), publishSignature(key, moduleZip(key)), "application/json")).status).toBe(415);
   });
 

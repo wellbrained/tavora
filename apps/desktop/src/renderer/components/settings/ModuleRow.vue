@@ -2,7 +2,7 @@
 // One module in a Settings list: icon, name, version, who made it, what it
 // does and where it was found. Tavora's own modules are the usual case and carry no tag; the others say where they
 // came from (Catalog, From file, Local…), and a list that already says it, like a project folder's, hides it. The
-// buttons for it go in the slot.
+// buttons for it go in the slot. A compact row, for a developer's own modules, is one line: they know what theirs do.
 import { FileArchive, FolderCode, Hourglass, Package, Store, Upload } from "@lucide/vue";
 import { computed } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
@@ -12,7 +12,7 @@ import { t } from "../../i18n";
 import { MODULE_TAG_TEXT, moduleTag } from "../../../shared/module-tag";
 import ModuleIcon from "../ModuleIcon.vue";
 
-const props = defineProps<{ module: NonNullable<typeof state.value>["modules"][number]; hideOrigin?: boolean }>();
+const props = defineProps<{ module: NonNullable<typeof state.value>["modules"][number]; hideOrigin?: boolean; compact?: boolean }>();
 // Where this copy came from (shared/module-tag.ts). Local and Release sit side by side in Settings > Development,
 // so each has its own color and icon: blue for work in progress, green for the copy that gets published. Official
 // keeps the gold; Catalog and From file, what users install, stay quiet.
@@ -35,9 +35,9 @@ const tagClass = {
 </script>
 
 <template>
-  <li class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b py-4 last:border-b-0" :data-testid="`module-${module.id}`">
-    <span class="module-tile size-10" aria-hidden="true">
-      <ModuleIcon :module-id="module.id" size="size-[34px]" />
+  <li :class="cn('flex flex-wrap items-center gap-x-4 gap-y-2 border-b last:border-b-0', compact ? 'py-2' : 'py-4')" :data-testid="`module-${module.id}`">
+    <span :class="cn('module-tile', compact ? 'size-8' : 'size-10')" aria-hidden="true">
+      <ModuleIcon :module-id="module.id" :size="compact ? 'size-[26px]' : 'size-[34px]'" />
     </span>
     <div class="flex min-w-0 flex-1 basis-48 flex-col gap-0.5">
       <span class="flex min-w-0 items-center gap-2">
@@ -80,7 +80,7 @@ const tagClass = {
           >{{ t("settings.modules.publisher", { short: module.publisher.slice(0, 8) }) }}</Badge
         >
       </span>
-      <span v-if="module.description" class="text-muted-foreground line-clamp-2 text-sm">{{ module.description }}</span>
+      <span v-if="module.description && !compact" class="text-muted-foreground line-clamp-2 text-sm">{{ module.description }}</span>
       <span v-if="module.origin.kind !== 'official' && !hideOrigin" class="text-muted-foreground/80 text-xs" :data-testid="`module-origin-${module.id}`">{{ t(`modules.origin.${module.origin.kind}`, { folder: module.origin.folder }) }}</span>
     </div>
     <slot />

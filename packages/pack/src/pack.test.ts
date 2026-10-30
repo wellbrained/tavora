@@ -84,6 +84,13 @@ describe("packModule", () => {
   });
 });
 
+describe("packModule versions", () => {
+  it("refuses a pre-release version, so only plain major.minor.patch reaches users", async () => {
+    const dir = await moduleFolder({ "tavora.module.json": JSON.stringify({ ...manifest, version: "0.1.0-alpha.44" }) });
+    await expect(packModule(dir, key())).rejects.toThrow("version 0.1.0-alpha.44 is a pre-release; module versions are plain major.minor.patch, e.g. 0.1.0");
+  });
+});
+
 describe("packModule with a changelog", () => {
   const withChangelog = { ...manifest, changelog: "changelog.json" };
 

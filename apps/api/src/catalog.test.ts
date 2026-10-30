@@ -229,6 +229,7 @@ describe("adding to the catalog", () => {
     const catalog = store();
     expect(() => catalog.add(moduleZip({ key: null }))).toThrow(/not signed/);
     expect(() => catalog.add(moduleZip({ id: "tavora.timer" }))).toThrow(/reserved/);
+    expect(() => catalog.add(moduleZip({ version: "1.1.0-beta.1" }))).toThrow(/pre-release/);
     expect(() => catalog.add(writeZip([{ name: "tavora.module.json", data: Buffer.from("{") }]))).toThrow(/not valid JSON/);
     expect(() => catalog.add(Buffer.from("not a zip"))).toThrow(CatalogError);
     const signed = moduleZip();

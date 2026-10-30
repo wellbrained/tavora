@@ -1,7 +1,7 @@
 import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ChangelogEntry, type ModuleManifest } from "@tavora/module-schema";
+import { isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ChangelogEntry, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, packModule, PackError, type Published } from "@tavora/pack";
 import type { AccountView, PrefixState, PublishProblem, PublishView, ReadmeBlock } from "../shared/host-api";
 import { suggestPrefix } from "../shared/id-prefix";
@@ -173,6 +173,8 @@ export class ModulePublisher {
     view.sourceNewer = built.sourceNewer;
     view.catalog = listed === undefined ? { kind: "unknown" } : listed === null ? { kind: "first" } : { kind: "update", version: listed.version };
     if (listed && compareModuleVersions(version, listed.version) <= 0) view.problems.push({ kind: "version", listed: listed.version, next: nextVersions(listed.version) });
+    // Only plain major.minor.patch versions go out (decided 2026-10-30): a pre-release is offered the versions after it.
+    else if (!isReleaseVersion(version)) view.problems.push({ kind: "version", listed: null, next: nextVersions(version) });
     const prefix = id.split(".")[0]!;
     if (prefixState && prefixState !== "held" && prefixState !== "free") view.problems.push({ kind: "prefix", prefix, state: prefixState });
     if (prefixState === "free") view.newPrefix = { prefix, max: this.options.account.prefixes()?.max ?? 3 };
@@ -180,6 +182,9 @@ export class ModulePublisher {
       view.problems.push({ kind: "not-built" });
       return { view: { ...view, status: "ready" }, zip: null, key: null };
     }
+
+    // The packer refuses a pre-release; the version fix above says it better.
+    if (!isReleaseVersion(version)) return { view: { ...view, status: "ready" }, zip: null, key: null };
 
     const signer = this.options.key(listed?.owner);
     if (!signer) throw new UserError("publish.error.setup");
@@ -335,6 +340,7 @@ const jsonText = (value: unknown, indent = "  ", newline = true) => JSON.stringi
  * never names a version or a file that isn't there.
  */
 export async function writeVersion(project: string, version: string, notes: string[], date: string): Promise<void> {
+  if (!isReleaseVersion(version)) throw new UserError("publish.error.version");
   const manifestFile = path.join(project, MANIFEST_FILE);
   const manifest = await readJson(manifestFile);
   if (!manifest) throw new UserError("publish.error.badFile", { file: MANIFEST_FILE });
