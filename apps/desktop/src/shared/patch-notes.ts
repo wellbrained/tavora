@@ -28,6 +28,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.2",
+    date: "2026-10-30",
+    title: "Clearer recovery key warning",
+    notes: [
+      "When you make your publisher key, Tavora now says what happens if you lose your recovery key: you could never update your modules again.",
+    ],
+    prs: [
+      { number: 520, title: "Say what losing the recovery key costs a developer" },
+    ],
+  },
+  {
     version: "0.23.1",
     date: "2026-10-30",
     title: "Page pictures in the PDF Viewer",
