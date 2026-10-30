@@ -77,7 +77,8 @@ watch(
   { immediate: true },
 );
 /** Built-in modules that can update from the catalogue; a dev build with that switched on can publish them. */
-const builtIn = computed(() => state.value!.modules.filter((module) => module.provenance === "official" && module.updatable).sort((a, b) => a.name.localeCompare(b.name)));
+// Every built-in module: a dev build never marks them updatable, since it loads no downloaded copies.
+const builtIn = computed(() => state.value!.modules.filter((module) => module.provenance === "official").sort((a, b) => a.name.localeCompare(b.name)));
 
 async function publishOfficial(moduleId: string) {
   const result = await act({ type: "publish-official-module", moduleId });
