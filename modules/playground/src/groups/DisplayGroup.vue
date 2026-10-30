@@ -67,7 +67,7 @@ const selectedRow = ref("b");
 const navSelected = ref("all");
 const NAV_GROUPS: NavGroup[] = [
   { heading: "Installed", items: [{ id: "all", label: "All", icon: Blocks, badge: 12 }, { id: "workspace", label: "In this workspace", icon: LayoutGrid, badge: 3 }] },
-  { heading: "More", items: [{ id: "catalog", label: "Catalog", icon: Store }] },
+  { heading: "More", items: [{ id: "catalog", label: "Catalog", icon: Store }, { id: "featured", label: "Featured", level: 1 }, { id: "recent", label: "Recent", level: 2 }] },
 ];
 function bump(by: number) {
   progress.value = Math.min(100, Math.max(0, progress.value + by));

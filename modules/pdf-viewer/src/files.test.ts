@@ -7,7 +7,7 @@ const entry = (id: string, patch: Partial<FileEntry> = {}): FileEntry => ({
   type: "application/pdf",
   kind: "pdf",
   addedAt: "2026-10-30T10:00:00.000Z",
-  view: { page: 1, zoom: 1, fit: "width" },
+  view: { page: 1, zoom: 1, fit: "width", side: null },
   ...patch,
 });
 
@@ -82,12 +82,22 @@ describe("remembering page and zoom", () => {
   it("keeps what is not given and limits what is", () => {
     const data: FilesData = { files: [entry("a")] };
     setFileView(data, "a", { page: 12 });
-    expect(data.files[0]!.view).toEqual({ page: 12, zoom: 1, fit: "width" });
+    expect(data.files[0]!.view).toEqual({ page: 12, zoom: 1, fit: "width", side: null });
     setFileView(data, "a", { zoom: 9, fit: null });
-    expect(data.files[0]!.view).toEqual({ page: 12, zoom: 5, fit: null });
+    expect(data.files[0]!.view).toEqual({ page: 12, zoom: 5, fit: null, side: null });
     setFileView(data, "a", { page: -3, zoom: 0.01 });
     expect(data.files[0]!.view).toMatchObject({ page: 1, zoom: 0.25 });
     setFileView(data, "missing", { page: 2 });
+  });
+
+  it("remembers what the side shows and drops what it does not know", () => {
+    const data: FilesData = { files: [entry("a")] };
+    setFileView(data, "a", { side: "pages" });
+    expect(data.files[0]!.view.side).toBe("pages");
+    setFileView(data, "a", { side: "contents" });
+    expect(data.files[0]!.view.side).toBe("contents");
+    setFileView(data, "a", { side: "nonsense" as never });
+    expect(data.files[0]!.view.side).toBeNull();
   });
 });
 

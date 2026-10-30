@@ -34,10 +34,10 @@
 }
 .textLayer mark {
   color: transparent;
-  background: color-mix(in srgb, var(--warning, #f5c518) 55%, transparent);
-  border-radius: 2px;
+  background: color-mix(in srgb, var(--warning) 55%, transparent);
+  border-radius: var(--radius-sm);
 }
 .textLayer mark[data-current] {
-  background: color-mix(in srgb, var(--primary, #3b82f6) 60%, transparent);
-  outline: 2px solid var(--primary, #3b82f6);
+  background: color-mix(in srgb, var(--primary) 60%, transparent);
+  outline: 2px solid var(--primary);
 }

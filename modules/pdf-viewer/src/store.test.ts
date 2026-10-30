@@ -2,7 +2,7 @@ import { createMemoryHost } from "@tavora/sdk/testing";
 import { describe, expect, it } from "vitest";
 import { createFilesStore } from "./store";
 
-const open = (sdk: ReturnType<typeof createMemoryHost>["sdk"]) => createFilesStore(sdk, { debounceMs: 0 });
+const open = (sdk: ReturnType<typeof createMemoryHost>["sdk"]) => createFilesStore(sdk, { title: () => "Files", debounceMs: 0 });
 const pdf = (name = "Guide.pdf") => new File(["%PDF-1.7"], name, { type: "application/pdf" });
 const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
 

@@ -50,6 +50,7 @@ function onKey(event: KeyboardEvent) {
         :aria-current="item.id === modelValue ? 'page' : undefined"
         :title="item.title"
         :data-testid="item.testid"
+        :style="item.level ? { paddingLeft: `calc(0.75rem + ${item.level} * 1rem)` } : undefined"
         :class="
           cn(
             'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring group flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
