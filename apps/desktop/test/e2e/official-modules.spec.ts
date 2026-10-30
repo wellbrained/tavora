@@ -197,7 +197,12 @@ test("notes: two panels show the same notes and follow each other's changes", as
   // Deleting needs no confirmation; an Undo notice shows instead.
   await expect.poll(() => inModule(app, NOTES, `!!${q("undo-toast")}`, 0)).toBe(true);
   await expect.poll(() => noteTitles(app, 1)).toEqual(["Scratchpad"]);
-  await expect.poll(() => editorText(app, 1)).toBe("Shared between panels");
+  // The second panel still shows the note it had open, says it was deleted elsewhere and can bring it back.
+  await expect.poll(() => inModule(app, NOTES, `!!${q("deleted-banner")}`, 1)).toBe(true);
+  await expect.poll(() => editorText(app, 1)).toBe("Made in the second panel");
+  await click(app, NOTES, `[data-testid="restore-note"]`, 1);
+  await expect.poll(() => inModule(app, NOTES, `!!${q("deleted-banner")}`, 1)).toBe(false);
+  await expect.poll(() => noteTitles(app, 0)).toEqual(["Scratchpad", "Made in the second panel"]);
   await app.close();
 });
 
