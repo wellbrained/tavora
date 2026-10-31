@@ -3,7 +3,7 @@ name: Checks
 # Typecheck, unit tests and build run for every pull request to main, for every
 # push to main and for release tags, and next to them a Windows job installs and
 # starts the packaged app (packaged-start, below). The e2e suite runs in shards
-# (e2e, below) for release tags, for pull requests that change what it tests
+# on Windows (e2e, below) for release tags, for pull requests that change what it tests
 # (e2e-scope) and when started by hand from the Actions tab (Run workflow, pick
 # the branch). A new push to the same pull request cancels the run before it.
 on:
@@ -81,8 +81,9 @@ jobs:
           echo "e2e: $run"
           echo "run=$run" >> "$GITHUB_OUTPUT"
 
-  # The suite takes about 14 minutes on a fast PC but well over an hour on one runner, so it is split over 8 runners
-  # that run side by side. Each builds for itself (about 20 s) rather than waiting on the check job.
+  # Windows, like the users and `pnpm release`: on Ubuntu the suite needed well over an hour and 17 tests failed only
+  # there. Split over 8 runners side by side, each shard takes about 5 minutes with its own install (from the pnpm
+  # cache) and build, rather than waiting on the check job.
   e2e:
     needs: e2e-scope
     if: needs.e2e-scope.outputs.run == 'true'
