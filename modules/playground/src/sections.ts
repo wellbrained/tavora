@@ -18,7 +18,7 @@ export const SECTIONS = [
   { id: "popovers", group: "actions", title: "Popovers", keywords: "popover floating panel form anchor close" },
   { id: "toasts", group: "actions", title: "Toasts", keywords: "toast snackbar undo message notification status" },
   { id: "dialogs", group: "actions", title: "Dialogs", keywords: "dialog modal confirm delete rename name prompt busy" },
-  { id: "fields", group: "inputs", title: "Text fields", keywords: "input textarea search label hint error invalid code one-time" },
+  { id: "fields", group: "inputs", title: "Text fields", keywords: "input textarea search clear escape magnifier label hint error invalid code one-time" },
   { id: "choices", group: "inputs", title: "Choices", keywords: "checkbox switch field label description radio segmented select empty choice none clear picker dropdown combobox autocomplete search slider number field stepper quantity plus minus" },
   { id: "ratings", group: "inputs", title: "Star rating", keywords: "stars rating review score" },
   { id: "colors", group: "inputs", title: "Colour picker", keywords: "color colour swatch custom palette" },
