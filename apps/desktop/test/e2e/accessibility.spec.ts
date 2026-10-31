@@ -116,6 +116,7 @@ test("small text, off switches and disabled buttons keep their contrast in every
     for (const mode of MODES) {
       await page.getByTestId("rail-settings").click();
       await page.getByTestId("settings-nav-appearance").click();
+      await page.getByTestId("theme-select").click();
       await page.getByTestId(`theme-${theme.id}`).click();
       await page.getByTestId(`mode-${mode}`).click();
       await expect(page.getByTestId(`mode-${mode}`)).toHaveAttribute("aria-checked", "true");
