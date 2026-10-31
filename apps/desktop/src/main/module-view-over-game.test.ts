@@ -70,7 +70,7 @@ vi.mock("electron", () => {
   };
 });
 
-const { ModuleView, allowedHere } = await import("./module-view");
+const { ModuleView, allowedHere, ADD_DIALOG_MS } = await import("./module-view");
 const { CLIPBOARD_PATH } = await import("@tavora/sdk/protocol");
 
 function make(extra: Record<string, unknown> = {}) {
@@ -339,5 +339,76 @@ describe("a panel shown again", () => {
     view.setVisible(true);
     view.framed(frameRequest());
     expect(state.background).toBe("#00000000");
+  });
+});
+
+describe("a dialog right after Add", () => {
+  type Opened = { open: boolean; byClick: boolean | undefined };
+  const SIZE = { width: 560, height: 640 };
+  function made_(launch: { reason: string }, extra: Record<string, unknown> = {}) {
+    const opened: Opened[] = [];
+    const view = make({ setDialog: (open: boolean, _size: unknown, how?: { byClick: boolean }) => void opened.push({ open, byClick: how?.byClick }), ...extra });
+    const inner = view as unknown as { startPage(launch: unknown): void; requestDialog(open: boolean, size: typeof SIZE): Promise<void> };
+    inner.startPage(launch);
+    return { view, opened, ask: (open = true) => inner.requestDialog(open, SIZE) };
+  }
+
+  it("opens once without a press for a panel just added, and not as if clicked", async () => {
+    const { opened, ask } = made_({ reason: "add" });
+    await ask();
+    expect(opened).toEqual([{ open: true, byClick: false }]);
+    await expect(ask()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(opened).toHaveLength(1);
+  });
+
+  it("is gone once the page has run for 10 seconds", async () => {
+    const now = vi.spyOn(Date, "now");
+    try {
+      now.mockReturnValue(1_000_000);
+      const { opened, ask } = made_({ reason: "add" });
+      now.mockReturnValue(1_000_000 + ADD_DIALOG_MS + 1);
+      await expect(ask()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+      expect(opened).toEqual([]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("is not there after a restore or panels.open", async () => {
+    for (const launch of [{ reason: "restore", content: null }, { reason: "open", content: null }]) {
+      const { opened, ask } = made_(launch);
+      await expect(ask()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+      expect(opened).toEqual([]);
+    }
+  });
+
+  it("is not there for a panel that came with another one from the same click", async () => {
+    const { opened, ask } = made_({ reason: "add" }, { mayWelcome: () => false });
+    await expect(ask()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(opened).toEqual([]);
+  });
+
+  it("is not there over the game", async () => {
+    const { view, opened, ask } = made_({ reason: "add" });
+    view.enterGame(() => false);
+    await expect(ask()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(opened).toEqual([]);
+  });
+
+  it("is gone after the page reloads", async () => {
+    const { view, opened, ask } = made_({ reason: "add" });
+    // A new document asks for its launch again: the host answers restore.
+    (view as unknown as { startPage(launch: unknown): void }).startPage({ reason: "restore", content: null });
+    await expect(ask()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(opened).toEqual([]);
+  });
+
+  it("opens from a real press as clicked, which uses up the pass", async () => {
+    const { view, opened, ask } = made_({ reason: "add" });
+    view.noteGesture();
+    await ask();
+    await ask(false);
+    await expect(ask()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(opened).toEqual([{ open: true, byClick: true }, { open: false, byClick: undefined }]);
   });
 });

@@ -1175,7 +1175,7 @@ export interface TavoraHostApi {
   onModuleMenu(listener: (menu: ModuleMenu | null) => void): void;
   /** The user chose an item of the module menu, or closed it (null). */
   answerModuleMenu(requestId: number, id: string | null): void;
-  /** A panel asked to be shown big in a dialog over the app (panel.setDialog), or null: its dialog closed. */
+  /** A panel asked to be shown big in a dialog over the workspace (panel.setDialog), or null: its dialog closed. */
   onPanelDialog(listener: (dialog: PanelDialog | null) => void): void;
   /** Where the dialog's frame leaves room for the panel's page, in window pixels; the host moves the page there. */
   placePanelDialog(bounds: { x: number; y: number; width: number; height: number }): void;
@@ -1183,13 +1183,18 @@ export interface TavoraHostApi {
   closePanelDialog(): void;
 }
 
-/** A panel shown big in a dialog over the app: its module's name and icon for the frame, and the size it asked for. */
+/** A panel shown big in a dialog over the workspace: its module's name and icon for the frame, and the size it asked for. */
 export interface PanelDialog {
   instanceId: string;
   title: string;
   icon: string | null;
   width: number;
   height: number;
+  /**
+   * A click beside the frame closes it: true for a dialog opened by a click, false for one a panel just added opened on
+   * its own (a welcome), which closes only with its close button, Esc or the module.
+   */
+  closesOnClickBeside: boolean;
 }
 
 /**

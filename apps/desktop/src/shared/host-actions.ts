@@ -436,7 +436,8 @@ export function hostActionTable(c: HostChecks) {
      * Opens a new panel; `panelType` picks one of the module's panel types (its continuing type when left out).
      * With `reuse`, a panel of that type already open comes to the front instead.
      */
-    "open-module": { moduleId: c.moduleId, panelType: optional(c.panelType), reuse: optional(bool) },
+    // `moreFollow`: more panels follow from the same click (Add all); only the last, the one in front, gets a welcome.
+    "open-module": { moduleId: c.moduleId, panelType: optional(c.panelType), reuse: optional(bool), moreFollow: optional(bool) },
     /** Gives a panel whose type an update removed another type of the same module. */
     "choose-panel-type": { instanceId: c.uuid, panelType: c.panelType },
     "close-panel": { instanceId: c.uuid },

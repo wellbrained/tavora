@@ -134,6 +134,10 @@ Tavora lays it out only inside this panel's group: the Overview panel, clicked, 
 
 `panelLayout` needs a `minTavora` newer than `0.23.28`; `panels.openMany` needs the same click as `panels.open`, and one press covers the whole call.
 
+## Show a welcome on first add
+
+A panel the user just added may open its dialog once on its own, within 10 seconds of its page starting, to greet them. When to show it, what goes in it and how it looks: [A welcome for your module](./module-welcome.md).
+
 ## Checklist
 
 - Every type has an `id` you will keep forever.

@@ -443,6 +443,7 @@ describe("cleanup", () => {
       rig.views.setLaunch(instanceId, { reason: "add" });
       rig.views.setOpenedFrom(instanceId, { instanceId: C, background: true });
       rig.views.keepRunning(instanceId);
+      rig.views.withholdWelcome(instanceId);
     }
     rig.views.place([place(A), place(B, 400)]);
     rig.views.bindContents(a, 900);
@@ -460,6 +461,7 @@ describe("cleanup", () => {
     expect(rig.views.isPlaced(A)).toBe(false);
     expect(rig.views.isAwaiting(A)).toBe(false);
     expect(rig.views.takeLaunch(A)).toBeUndefined();
+    expect(rig.views.takeWelcome(A)).toBe(true);
     expect(rig.views.openedFrom(A)).toBeUndefined();
     expect(rig.views.isKept(A)).toBe(false);
     expect(rig.views.dialog).toBeNull();
@@ -469,6 +471,7 @@ describe("cleanup", () => {
     expect(rig.views.isPlaced(B)).toBe(true);
     expect(rig.views.isAwaiting(B)).toBe(true);
     expect(rig.views.takeLaunch(B)).toEqual({ reason: "add" });
+    expect(rig.views.takeWelcome(B)).toBe(false);
     expect(rig.views.openedFrom(B)).toEqual({ instanceId: C, background: true });
     expect(rig.views.isKept(B)).toBe(true);
   });
@@ -598,5 +601,18 @@ describe("snapshot", () => {
     await rig.views.freeze(true);
     expect(rig.views.snapshot().overlay).toBe(true);
     expect(rig.views.snapshot().opening).toBe(false);
+  });
+});
+
+describe("a welcome", () => {
+  it("is for each panel just added, unless it came with another one from the same click, and is asked once", () => {
+    const rig = panelViewsRig();
+    rig.add(A);
+    rig.add(B);
+    rig.views.withholdWelcome(B);
+    expect(rig.views.takeWelcome(A)).toBe(true);
+    expect(rig.views.takeWelcome(B)).toBe(false);
+    // Asked again (a reload), the host answers by the launch reason, which is no longer add.
+    expect(rig.views.takeWelcome(B)).toBe(true);
   });
 });

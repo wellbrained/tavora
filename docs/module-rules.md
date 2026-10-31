@@ -60,6 +60,7 @@ classes where you use a control; never copy it.
 | Small chart | `Sparkline` | |
 | Rating | `StarRating` | |
 | Module settings page | `ModuleSettings` and its parts | own settings layout |
+| Welcome on first add (optional) | kit parts as in [module-welcome.md](../apps/docs/guide/module-welcome.md) (Palworld is the reference) | a tour, popups over the panel, own frame |
 
 Known gaps (ask before building, then add to the kit): number field with steps, tree, drop zone, scroll area, input
 with a leading icon. Remove an entry here once the kit has it.

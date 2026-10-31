@@ -2540,7 +2540,7 @@ export class Host {
 
       // Panels and workspace
       "open-module": (action) =>
-        this.openModule(action.moduleId, { ...(action.panelType ? { panelType: action.panelType } : {}), ...(action.reuse ? { reuse: true } : {}) }),
+        this.openModule(action.moduleId, { ...(action.panelType ? { panelType: action.panelType } : {}), ...(action.reuse ? { reuse: true } : {}), ...(action.moreFollow ? { moreFollow: true } : {}) }),
       "choose-panel-type": (action) => this.choosePanelType(action.instanceId, action.panelType),
       "close-panel": (action) => this.closePanel(action.instanceId),
       "remove-module-from-workspace": (action) => this.removeModuleFromWorkspace(action.moduleId),
@@ -3201,7 +3201,7 @@ export class Host {
    */
   private openModule(
     moduleId: string,
-    options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string; launch?: PanelLaunch; reuse?: boolean; instanceId?: string; placement?: PanelPlacement } = {},
+    options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string; launch?: PanelLaunch; reuse?: boolean; instanceId?: string; placement?: PanelPlacement; moreFollow?: boolean } = {},
   ): string | void {
     const { openedFrom } = options;
     const workspace = this.workspace;
@@ -3221,6 +3221,7 @@ export class Host {
     if (openedFrom) this.panels.setOpenedFrom(record.instanceId, openedFrom);
     if (options.placement) this.panels.setPlacement(record.instanceId, options.placement);
     this.panels.setLaunch(record.instanceId, options.launch ?? { reason: "add" });
+    if (options.moreFollow) this.panels.withholdWelcome(record.instanceId);
     this.createView(record, workspace, performance.now());
     return record.instanceId;
   }
@@ -3550,8 +3551,10 @@ export class Host {
   private applySnapshot(snapshotId: string): void {
     const { opened, closed } = this.workspaces.applySnapshot(this.currentWorkspaceId(), snapshotId);
     for (const record of closed) this.closeView(record.instanceId);
-    for (const record of opened) {
+    for (const [index, record] of opened.entries()) {
       this.panels.setLaunch(record.instanceId, { reason: "add" });
+      // A layout is one click: one welcome at most.
+      if (index < opened.length - 1) this.panels.withholdWelcome(record.instanceId);
       this.createView(record, this.workspace!);
     }
   }
@@ -3649,12 +3652,13 @@ export class Host {
       },
       tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at),close:(id,hoverOnly)=>this.tooltips.close(record.instanceId,id,hoverOnly)},
       launch: () => this.launchOf(record),
+      mayWelcome: () => this.panels.takeWelcome(record.instanceId),
       setContent: (content) => this.setPanelContent(record, content),
       openPanel: (type, content) => this.openRelatedPanel(record, type, content),
       openPanels: async (types) => this.openPanels(record, types),
       setLive: (state) => this.gameOverlays.setLive(record.instanceId, module.owner, state),
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
-      setDialog: (open, size) => (open ? this.openPanelDialog(record.instanceId, module, size) : this.panels.closeDialog(record.instanceId)),
+      setDialog: (open, size, how) => (open ? this.openPanelDialog(record.instanceId, module, size, how?.byClick ?? true) : this.closePanelDialog(record.instanceId)),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
@@ -3748,7 +3752,7 @@ export class Host {
    * several of the module's own panel types, each once, in the workspace shown now. A type open there already (the asking
    * panel's own, too) comes to the front where it is; the others open new, docked around the panel that asked as the
    * manifest's panelLayout says (the host UI fits it into that panel's group), else each where panels.open puts a panel.
-   * The panel that asked keeps the focus.
+   * The panel that asked keeps the focus; if it was in its dialog, the dialog closes first.
    */
   private openPanels(from: InstanceRecord, types: string[]): Record<string, PanelOpenManyResult> {
     const workspace = this.workspace;
@@ -3758,6 +3762,8 @@ export class Host {
     const known = new Set(panelTypes(manifest).map((type) => type.id));
     const unknown = types.find((type) => !known.has(type));
     if (unknown !== undefined) throw new HostError("INVALID_PARAMS", `this module has no panel type "${unknown}"`);
+    // Called from its dialog (a welcome's last step), the panel goes back in its slot first, so the layout is laid out around it.
+    this.closePanelDialog(from.instanceId);
     const result: Record<string, PanelOpenManyResult> = {};
     const shown: string[] = [];
     // The new panels' ids come first, so the layout can name them before they open.
@@ -4176,16 +4182,23 @@ export class Host {
   }
 
   /**
-   * Shows a panel big in a dialog centred on the app: the host UI draws the frame (the module's name and a close button)
-   * over the dimmed app and says where the page goes; the panel's own view moves there, so it keeps everything it had.
-   * Only a panel in sight in the workspace, one at a time; a new one closes the last.
+   * Shows a panel big in a dialog centred over the workspace: the host UI draws the frame (the module's name and a close
+   * button) over the dimmed app and says where the page goes; the panel's own view moves there, so it keeps everything it
+   * had. Only a panel in sight in the workspace, one at a time; a new one closes the last. A dialog opened by a click
+   * closes on a click beside it; one a panel just added opened on its own (a welcome) does not.
    */
-  private openPanelDialog(instanceId: string, module: InstalledModule, size: PanelDialogSize): void {
+  private openPanelDialog(instanceId: string, module: InstalledModule, size: PanelDialogSize, byClick = true): void {
     if (this.panels.isLent(instanceId)) return this.openPanelDialogFromGame(instanceId, module, size);
-    if (this.window.isDestroyed() || !this.panels.openDialog(instanceId, size)) return;
+    if (this.window.isDestroyed()) return;
+    // A panel just added can ask before the host UI has given it its slot: it opens once it is there, if that is soon.
+    if (!this.panels.isPlaced(instanceId) && this.workspaceId && this.records(this.workspaceId).some((record) => record.instanceId === instanceId)) {
+      void this.questions.ask("dialog", { panel: instanceId }, { module, size, until: Date.now() + PENDING_DIALOG_MS, byClick });
+      return;
+    }
+    if (!this.panels.openDialog(instanceId, size)) return;
     this.closeModuleMenu();
     this.tooltips.close(instanceId);
-    const shown: PanelDialog = { instanceId, title: this.shown(module.manifest).name, icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null, ...size };
+    const shown: PanelDialog = { instanceId, title: this.shown(module.manifest).name, icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null, ...size, closesOnClickBeside: byClick };
     this.window.webContents.send("host:panel-dialog", shown);
   }
 
@@ -4197,12 +4210,18 @@ export class Host {
     const workspaceId = this.gameOverlays.panelWorkspace(instanceId);
     if (!workspaceId || this.window.isDestroyed() || !isLive(this.library, workspaceId)) return;
     // It opens once the panel is back in its slot, if that happens soon.
-    void this.questions.ask("dialog", { panel: instanceId }, { module, size, until: Date.now() + PENDING_DIALOG_MS });
+    void this.questions.ask("dialog", { panel: instanceId }, { module, size, until: Date.now() + PENDING_DIALOG_MS, byClick: true });
     // From Home or the Overlay page too: no workspace counts as shown there.
     if (this.workspaceId !== workspaceId) this.openWorkspace(workspaceId);
     this.gameOverlays.endLayer();
     this.bringToFront();
     this.openPendingDialog();
+  }
+
+  /** panel.closeDialog: puts the panel back, and drops a dialog it asked for that is still waiting for its slot. */
+  private closePanelDialog(instanceId: string): void {
+    this.questions.cancel({ panel: instanceId }, "dialog");
+    this.panels.closeDialog(instanceId);
   }
 
   /** Opens the dialog a panel asked for from the layer once the panel is back in its slot; a panel that took too long misses it. */
@@ -4216,7 +4235,7 @@ export class Host {
     }
     if (this.panels.isLent(instanceId) || !this.panels.isPlaced(instanceId)) return;
     this.questions.answer(pending.id, true);
-    this.openPanelDialog(instanceId, pending.payload.module, pending.payload.size);
+    this.openPanelDialog(instanceId, pending.payload.module, pending.payload.size, pending.payload.byClick);
   }
 
   /** Closes the module menu shown now (only if it belongs to `instanceId`, when given), as if nothing was chosen. */

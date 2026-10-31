@@ -20,8 +20,11 @@ interface QuestionKinds {
   connector: { payload: { moduleId: string; connector: Connector }; answer: boolean };
   /** A module's question about its leaderboards, shown in the panel that asked; yes or no. */
   leaderboard: { payload: { moduleId: string; question: LeaderboardQuestion }; answer: boolean };
-  /** A dialog a panel in the in-game layer asked for, waiting for the panel to be back in its slot; true once it opened. */
-  dialog: { payload: { module: InstalledModule; size: PanelDialogSize; until: number }; answer: boolean };
+  /**
+   * A dialog a panel asked for before it was in its slot (in the in-game layer, or just added and not placed yet),
+   * waiting for it to be there; true once it opened. `byClick`: a click opened it, so a click beside it closes it.
+   */
+  dialog: { payload: { module: InstalledModule; size: PanelDialogSize; until: number; byClick: boolean }; answer: boolean };
   /** A module's menu in the host UI; the chosen item's id, or null. */
   menu: { payload: { choices: ReadonlySet<string> }; answer: string | null };
 }

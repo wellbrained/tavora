@@ -3,7 +3,7 @@ import { PendingQuestions } from "./pending-questions";
 
 const content = { id: "c1", title: "Build" } as never;
 const navigation = { workspaceId: "w1", moduleId: "m", panelType: "t", panelName: "Viewer", content };
-const dialog = { module: {} as never, size: {} as never, until: 0 };
+const dialog = { module: {} as never, size: {} as never, until: 0, byClick: true };
 const consent = { kind: "consent", name: "Ann" } as const;
 const connector = { moduleId: "m", connector: "stream-overlay" } as const;
 

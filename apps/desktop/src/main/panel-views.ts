@@ -162,6 +162,8 @@ export class PanelViews {
   private bounds = new Map<string, PanelRect>();
   private readonly waiting = new Set<string>();
   private readonly launches = new Map<string, PanelLaunch>();
+  /** Panels added by the same click as a later one (Add all, a layout): no welcome of their own. */
+  private readonly noWelcome = new Set<string>();
   private readonly opened = new Map<string, OpenedFrom>();
   private readonly placements = new Map<string, PanelPlacement>();
   private readonly keep = new Set<string>();
@@ -267,6 +269,16 @@ export class PanelViews {
     return launch;
   }
 
+  /** One click, one welcome: this panel came with another one from the same click, so it may not open its dialog on its own. */
+  withholdWelcome(instanceId: string): void {
+    this.noWelcome.add(instanceId);
+  }
+
+  /** Whether a panel just added may open its dialog once without a click (asked once, when its page starts). */
+  takeWelcome(instanceId: string): boolean {
+    return !this.noWelcome.delete(instanceId);
+  }
+
   /** The panel runs for the in-game overlays, from any workspace, and stays when its workspace is left. */
   keepRunning(instanceId: string): void {
     this.keep.add(instanceId);
@@ -320,6 +332,7 @@ export class PanelViews {
       this.placements.delete(instanceId);
       this.waiting.delete(instanceId);
       this.launches.delete(instanceId);
+      this.noWelcome.delete(instanceId);
     }
     const entry = this.entries.get(instanceId);
     const adapter = entry?.adapter;
@@ -546,7 +559,7 @@ export class PanelViews {
 
   // ── Panel dialog ────────────────────────────────────────────────────
 
-  /** The panel shown big in a dialog over the app, how big it asked to be, and where the host UI put it. */
+  /** The panel shown big in a dialog over the workspace, how big it asked to be, and where the host UI put it. */
   get dialog(): { instanceId: string; width: number; height: number; bounds: PanelRect | null } | null {
     return this.dialogState;
   }
