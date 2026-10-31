@@ -6,10 +6,14 @@
 // only when it first shows, so content that grows (a box dragged past the edge) keeps the view.
 // With fit "width" the content fills the width and is read top to bottom like a page: a
 // plain wheel scrolls it, and it is fitted again when the pane's width changes.
-// A parent can read `view`, put a saved one back with setView() and show an area with showArea().
+// A parent can read `view`, put a saved one back with setView() and show an area with showArea(); `center` and
+// setCenter() do the same with the content point in the middle, which stays right when the pane's size changes.
+// With wheel "zoom" a plain wheel zooms, as on a map. The `overlay` slot lies over the content without being scaled
+// (pins that keep their size); its `view` and `pane` slot props place things on it. Inside the content or the
+// overlay, a pan never starts on a button or a field, unless it is marked `data-zoom-pane-drag`.
 import type { HTMLAttributes } from "vue"
 import { Maximize, Minus, Plus } from "@lucide/vue"
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { uiText } from "../text"
@@ -26,6 +30,8 @@ const props = withDefaults(defineProps<{
   fit?: ZoomFit
   /** Fit again whenever the content changes size. Off: only the first show fits; call fit() when the content is new. */
   autoFit?: boolean
+  /** What a plain wheel does: scroll the page (Ctrl + wheel zooms), or zoom, as on a map. */
+  wheel?: "scroll" | "zoom"
   /** What the pane shows, for screen readers. */
   label?: string
   class?: HTMLAttributes["class"]
@@ -35,7 +41,12 @@ const props = withDefaults(defineProps<{
   align: "center",
   fit: "whole",
   autoFit: true,
+  wheel: "scroll",
 })
+const emit = defineEmits<{
+  /** The view or the pane's size changed. */
+  viewChange: [view: ZoomView, pane: Size]
+}>()
 
 /** One press of a button or key. */
 const STEP = 1.25
@@ -82,6 +93,16 @@ function moveOrigin(dx: number, dy: number) {
 /** The view a parent asked for before the pane was measured, worked out once it is; it replaces the first fit. */
 let pendingView: (() => ZoomView) | undefined
 const measured = () => paneSize.value.width > 0 && paneSize.value.height > 0 && contentSize.value.width > 0 && contentSize.value.height > 0
+/** The content point in the middle of the pane, and the zoom. */
+const center = computed(() => ({ x: (paneSize.value.width / 2 - view.value.x) / view.value.zoom, y: (paneSize.value.height / 2 - view.value.y) / view.value.zoom, zoom: view.value.zoom }))
+/** Puts `point` (content pixels) in the middle of the pane at `zoom` (default: the zoom now). Before the first show it is used instead of the first fit. */
+function setCenter(point: { x: number, y: number }, zoom?: number) {
+  const copy = { ...point }
+  whenMeasured(() => {
+    const next = clampZoom(zoom ?? view.value.zoom, limits.value)
+    return { zoom: next, x: paneSize.value.width / 2 - copy.x * next, y: paneSize.value.height / 2 - copy.y * next }
+  })
+}
 function applyView(next: ZoomView) {
   view.value = clampPan({ ...next, zoom: clampZoom(next.zoom, limits.value) }, paneSize.value, contentSize.value)
 }
@@ -129,7 +150,7 @@ const distance = (a: { x: number, y: number }, b: { x: number, y: number }) => M
 
 function onPointerDown(event: PointerEvent) {
   if (event.pointerType === "mouse" && event.button !== 0) return
-  if (event.target instanceof Element && event.target.closest(INTERACTIVE) && event.pointerType === "mouse") return
+  if (event.target instanceof Element && event.target.closest(INTERACTIVE) && !event.target.closest("[data-zoom-pane-drag]") && event.pointerType === "mouse") return
   pointers.set(event.pointerId, local(event))
   if (pointers.size === 1) {
     drag = { start: local(event), from: view.value, id: event.pointerId }
@@ -187,7 +208,7 @@ function onClickCapture(event: MouseEvent) {
 
 let hintTimer: ReturnType<typeof setTimeout> | undefined
 function onWheel(event: WheelEvent) {
-  if (!event.ctrlKey && props.fit === "width") {
+  if (!event.ctrlKey && props.fit === "width" && props.wheel !== "zoom") {
     // Read like a page: the wheel scrolls, Shift + wheel goes sideways.
     event.preventDefault()
     const lines = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1
@@ -195,7 +216,7 @@ function onWheel(event: WheelEvent) {
     panBy(-(sideways ? event.deltaY : event.deltaX) * lines, sideways ? 0 : -event.deltaY * lines)
     return
   }
-  if (!event.ctrlKey) {
+  if (!event.ctrlKey && props.wheel !== "zoom") {
     // A plain wheel scrolls the page; say how to zoom instead.
     hint.value = true
     clearTimeout(hintTimer)
@@ -227,6 +248,8 @@ function onKeyDown(event: KeyboardEvent) {
   action()
 }
 
+watch([view, paneSize], () => emit("viewChange", view.value, paneSize.value))
+
 let observer: ResizeObserver | undefined
 onMounted(() => {
   // The wheel listener must not be passive, so Ctrl + wheel can stop the page from zooming.
@@ -256,7 +279,7 @@ onBeforeUnmount(() => {
   clearTimeout(hintTimer)
 })
 
-defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, zoom: computed(() => view.value.zoom), view: computed(() => view.value) })
+defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, setCenter, center, zoom: computed(() => view.value.zoom), view: computed(() => view.value) })
 </script>
 
 <template>
@@ -281,7 +304,10 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
     <div ref="content" data-slot="zoom-pane-content" class="absolute top-0 left-0 w-max origin-top-left" :style="{ transform }">
       <slot />
     </div>
-    <div class="absolute right-2 bottom-2 flex gap-1 cursor-default">
+    <div v-if="$slots.overlay" data-slot="zoom-pane-overlay" class="pointer-events-none absolute inset-0 overflow-hidden">
+      <slot name="overlay" :view="view" :pane="paneSize" />
+    </div>
+    <div class="bg-background absolute right-2 bottom-2 flex cursor-default gap-1 rounded-md">
       <Button variant="outline" size="icon-sm" :aria-label="uiText.zoomIn" :title="uiText.zoomIn" @click="zoomIn">
         <Plus />
       </Button>
