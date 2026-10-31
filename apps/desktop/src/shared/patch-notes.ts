@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.22",
+    date: "2026-10-31",
+    title: "Your own profile banner",
+    notes: [
+      "Pick the banner behind your picture: six patterns, four scenes like a night camp or an adventure map, or your picture. Press Change on the banner.",
+      "Banners take the colours of your theme and change with it.",
+      "Your name sits beside your picture, and the profile menu matches Settings.",
+    ],
+    prs: [
+      { number: 564, title: "Profile: banners in the theme's colours, the name beside the picture, a breadcrumb title" },
+    ],
+    tags: ["accounts", "games"],
+  },
+  {
     version: "0.23.21",
     date: "2026-10-31",
     title: "Calmer fields",
