@@ -23,11 +23,16 @@ function contrast(a: number[], b: number[]): number {
  */
 const PAINTED = `
   (selector, pseudo) => {
+    // Any CSS colour (rgb, oklch, color-mix …), read back as sRGB through one canvas pixel.
+    const pen = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
     const parse = (value) => {
-      const match = value.match(/rgba?\\(([^)]+)\\)/);
-      if (!match) return null;
-      const parts = match[1].split(/[\\s,\\/]+/).filter(Boolean).map(Number);
-      return { rgb: parts.slice(0, 3), alpha: parts.length > 3 ? parts[3] : 1 };
+      if (!value || value === "transparent") return null;
+      pen.clearRect(0, 0, 1, 1);
+      pen.fillStyle = "rgba(0, 0, 0, 0)";
+      pen.fillStyle = value;
+      pen.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = pen.getImageData(0, 0, 1, 1).data;
+      return { rgb: [r, g, b], alpha: a / 255 };
     };
     const over = (top, alpha, under) => top.map((channel, i) => Math.round(channel * alpha + under[i] * (1 - alpha)));
     const element = document.querySelector(selector);
@@ -35,6 +40,10 @@ const PAINTED = `
     // Background: walk up until something opaque, compositing translucent layers on the way down.
     const layers = [];
     for (let node = element.parentElement; node; node = node.parentElement) {
+      // A gradient wash (the Settings menu's plates) counts with its first, strongest colour; it lies over the fill.
+      const wash = getComputedStyle(node).backgroundImage.match(/gradient\\([^,]*,\\s*((?:rgba?|color|oklch|oklab|lab|lch|hsla?)\\((?:[^()]|\\([^()]*\\))*\\))/);
+      const washed = wash && parse(wash[1]);
+      if (washed && washed.alpha > 0) layers.push({ ...washed, opacity: Number(getComputedStyle(node).opacity) });
       const background = parse(getComputedStyle(node).backgroundColor);
       if (background && background.alpha > 0) layers.push({ ...background, opacity: Number(getComputedStyle(node).opacity) });
       if (background && background.alpha >= 1) break;
@@ -165,15 +174,20 @@ test("small text, off switches and disabled buttons keep their contrast in every
       await expect
         .poll(() => inModule<string>(app, NOTES, `getComputedStyle(document.documentElement).getPropertyValue("--tavora-background").trim()`).catch(() => null))
         .toBe(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--background").trim()));
-      // The panel is made again after a workspace switch, so the editor and its placeholder take a moment.
+      // The panel is made again after a workspace switch, so the editor and its placeholder take a moment, and its
+      // colours may still be on their way to the theme: measure once two readings in a row agree.
       let placeholder: Painted = null;
+      let previous = "";
       await expect
         .poll(async () => {
           placeholder =
             (await paintedInNotes(app, ".note-content p.is-editor-empty:first-child", "::before").catch(() => null)) ??
             (await paintedInNotes(app, "input[placeholder]", "::placeholder").catch(() => null));
-          return placeholder !== null;
-        })
+          const reading = JSON.stringify(placeholder);
+          const steady = placeholder !== null && reading === previous;
+          previous = reading;
+          return steady;
+        }, { intervals: [250] })
         .toBe(true);
       record(theme.name, mode, "Notes placeholder", placeholder);
     }

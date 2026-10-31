@@ -3,7 +3,7 @@
 // at its foot; the chosen page on the right, under a title that stays put while it scrolls. A page that opens from a
 // row (SUB_PAGES) has a way back in its title; the developer pages are tabs under one entry. Each page is its own
 // component; settings-index.ts lists them and every setting the search can find.
-import { ChevronRight, Info, RotateCw, ScrollText, Search, Settings as SettingsIcon, X } from "@lucide/vue";
+import { Info, RotateCw, Search, X } from "@lucide/vue";
 import { computed, nextTick, provide, ref, watch } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -33,7 +33,6 @@ import TrashSection from "./TrashSection.vue";
 import WorkspacesSection from "./WorkspacesSection.vue";
 import { hasNewSettings, markSeen } from "./new-settings";
 import {
-  ABOUT_SECTION,
   DEVELOPER_SECTIONS,
   DEVELOPER_TABS,
   GROUPS,
@@ -50,21 +49,14 @@ import { SETTINGS_PAGE_TITLE } from "./settings-page";
 
 const section = ref<SettingsSection>("general");
 const query = ref("");
+/** Settings opens with the search focused, so typing searches; it shows its focus ring only once the user uses it. */
+const searchUsed = ref(false);
 /** The menu entry lit for the page. */
 const entry = computed(() => menuEntry(section.value));
 /** The page a sub-page opened from, for the way back in its title. */
 const parent = computed<SettingsSection | null>(() => (section.value in SUB_PAGES ? SUB_PAGES[section.value as keyof typeof SUB_PAGES] : null));
 /** The developer tabs show once the user makes modules; before, the page is Make modules with Let's go. */
 const devTabs = computed(() => entry.value === "development" && makesModules.value);
-
-/** The icon shown in the page header: the menu entry's own, a magnifier for search results. */
-const headerIcon = computed(() => {
-  if (query.value.trim()) return Search;
-  if (section.value === "patch-notes") return ScrollText;
-  if (entry.value === ABOUT_SECTION) return Info;
-  for (const group of GROUPS) for (const item of group.sections) if (item.id === entry.value) return item.icon;
-  return SettingsIcon;
-});
 
 /** What the page header says; a group with the same title leaves its own out. */
 const pageTitle = computed(() => (query.value.trim() ? t("settings.results.title") : parent.value ? sectionLabel(section.value) : menuLabel(section.value, makesModules.value)));
@@ -82,6 +74,7 @@ watch(settingsOpen, (open) => {
     return;
   }
   query.value = "";
+  searchUsed.value = false;
   void show(settingsTarget.value.section, settingsTarget.value.setting);
   void refreshReleaseStatuses();
 });
@@ -114,6 +107,8 @@ const library = computed(() => state.value!.library);
 const navGroups = computed<NavGroup[]>(() =>
   GROUPS.map((group) => ({
     heading: groupLabel(group.id),
+    icon: group.icon,
+    class: `settings-plate-${group.id}`,
     items: group.sections.map((item) => {
       const fresh = item.id !== entry.value && hasNewSettings(item.id);
       return {
@@ -194,29 +189,39 @@ function onSearchKey(event: KeyboardEvent) {
       :show-close-button="false"
       :aria-describedby="undefined"
     >
-      <div class="settings-scroll settings-menu bg-background flex w-56 flex-none flex-col gap-4 overflow-y-auto border-r p-4 lg:w-64">
-        <DialogTitle class="px-2 pt-1 text-xl font-semibold">{{ t("settings.title") }}</DialogTitle>
-        <div class="relative">
+      <div class="settings-scroll settings-menu bg-background flex w-56 flex-none flex-col gap-3 overflow-y-auto border-r px-4 pb-4 lg:w-64">
+        <div class="relative flex h-16 flex-none items-center">
           <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
           <Input
             v-model="query"
             type="text"
-            class="h-10 pr-3 pl-9"
+            :class="cn('h-10 pr-3 pl-9', !searchUsed && 'focus-visible:border-input focus-visible:ring-0')"
             :placeholder="t('settings.search')"
             :aria-label="t('settings.search')"
             autocomplete="off"
             maxlength="80"
             data-testid="settings-search"
             @keydown="onSearchKey"
+            @pointerdown="searchUsed = true"
+            @input="searchUsed = true"
+            @blur="searchUsed = true"
           />
         </div>
-        <NavList :model-value="query ? null : entry" :label="t('settings.sections')" :groups="navGroups" @select="(id: string) => show(id as SettingsSection)" />
+        <NavList
+          :model-value="query ? null : entry"
+          :label="t('settings.sections')"
+          :groups="navGroups"
+          class="settings-plates gap-2.5"
+          group-class="rounded-xl border p-1"
+          heading-class="pt-1"
+          @select="(id: string) => show(id as SettingsSection)"
+        />
         <!-- About & updates, with the version: rarely needed, so it sits at the foot. -->
         <button
           type="button"
           :class="
             cn(
-              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mt-auto flex h-9 flex-none items-center gap-3 rounded-lg border-t px-3 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
+              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mt-auto flex h-9 flex-none items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
               !query && entry === 'about' && 'bg-primary/10 text-foreground',
             )
           "
@@ -233,22 +238,20 @@ function onSearchKey(event: KeyboardEvent) {
 
       <div class="flex min-w-0 flex-1 flex-col">
         <header
-          :class="cn('flex h-[72px] flex-none items-center justify-between gap-4 border-b px-6 transition-colors duration-500 lg:px-10', highlight === section && 'bg-primary/10')"
+          :class="cn('flex h-16 flex-none items-center justify-between gap-4 border-b px-6 transition-colors duration-500 lg:px-10', highlight === section && 'bg-primary/10')"
           :data-setting="section"
         >
-          <div class="flex min-w-0 items-center gap-3">
-            <span class="bg-primary/15 text-primary flex size-9 flex-none items-center justify-center rounded-lg" aria-hidden="true">
-              <component :is="headerIcon" class="size-5" :stroke-width="1.75" />
-            </span>
-            <h2 class="flex min-w-0 items-center gap-2 text-xl font-semibold">
-              <template v-if="parent && !query.trim()">
-                <button type="button" class="text-muted-foreground hover:text-foreground flex-none rounded-md font-medium" data-testid="settings-back" @click="show(parent)">
-                  {{ menuLabel(parent) }}
-                </button>
-                <ChevronRight class="text-muted-foreground size-4 flex-none" :stroke-width="1.75" aria-hidden="true" />
-              </template>
-              <span class="truncate" data-testid="settings-heading">{{ pageTitle }}</span>
-            </h2>
+          <!-- Where you are: Settings / the page, with the page a sub-page opened from in between. -->
+          <div class="flex min-w-0 items-center gap-2.5 text-base">
+            <DialogTitle class="text-muted-foreground flex-none text-base font-medium">{{ t("settings.title") }}</DialogTitle>
+            <span class="text-muted-foreground/60 flex-none" aria-hidden="true">/</span>
+            <template v-if="parent && !query.trim()">
+              <button type="button" class="text-muted-foreground hover:text-foreground flex-none rounded-md font-medium" data-testid="settings-back" @click="show(parent)">
+                {{ menuLabel(parent) }}
+              </button>
+              <span class="text-muted-foreground/60 flex-none" aria-hidden="true">/</span>
+            </template>
+            <h2 class="truncate font-semibold" data-testid="settings-heading">{{ pageTitle }}</h2>
           </div>
           <DialogClose as-child>
             <Button variant="ghost" size="icon" class="flex-none" data-testid="settings-close" :aria-label="t('settings.close')" :title="t('common.close')">
@@ -321,6 +324,26 @@ function onSearchKey(event: KeyboardEvent) {
 </template>
 
 <style scoped>
+/* The menu's groups as plates, each washed in a colour of its own: the theme's accent for Tavora, turned around the
+   colour wheel for the others, so every theme keeps three that go together. */
+.settings-plates :deep([data-slot="nav-group"]) {
+  --tone: var(--primary);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 13%, transparent), color-mix(in srgb, var(--tone) 3%, transparent) 70%);
+  border-color: color-mix(in srgb, var(--tone) 18%, transparent);
+}
+.settings-plates :deep(.settings-plate-modules) {
+  --tone: oklch(from var(--primary) l c calc(h + 110));
+}
+.settings-plates :deep(.settings-plate-development) {
+  --tone: oklch(from var(--primary) l c calc(h + 220));
+}
+.settings-plates :deep([data-slot="nav-group"] > h3) {
+  color: color-mix(in srgb, var(--tone) 80%, var(--foreground));
+}
+.settings-plates :deep([data-slot="nav-group"] [aria-current="page"]) {
+  background: color-mix(in srgb, var(--tone) 22%, transparent);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
+}
 .settings-scroll {
   scrollbar-width: auto;
   scrollbar-color: auto;

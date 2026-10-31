@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // A vertical list of sections for a side navigation, such as the categories in Settings. Up and
-// down arrows, Home and End move between entries; Tab enters and leaves the list in one stop.
+// down arrows, Home and End move between entries; Tab enters and leaves the list in one stop. Each group sits in a box
+// of its own: plain by default, `groupClass` (and a group's own `class`) can turn it into a plate.
 import { computed, ref, type HTMLAttributes } from "vue";
 import { cn } from "../../../lib/utils";
 import type { NavGroup } from "./types";
 
-const props = defineProps<{ groups: NavGroup[]; label: string; modelValue?: string | null; class?: HTMLAttributes["class"]; headingClass?: HTMLAttributes["class"]; iconClass?: HTMLAttributes["class"] }>();
+const props = defineProps<{ groups: NavGroup[]; label: string; modelValue?: string | null; class?: HTMLAttributes["class"]; headingClass?: HTMLAttributes["class"]; iconClass?: HTMLAttributes["class"]; groupClass?: HTMLAttributes["class"] }>();
 const emit = defineEmits<{
   "update:modelValue": [id: string];
   /** Every press, also on the entry that is already selected. */
@@ -39,8 +40,11 @@ function onKey(event: KeyboardEvent) {
 
 <template>
   <nav ref="list" data-slot="nav-list" :aria-label="label" :class="cn('flex flex-col gap-0.5', props.class)" @keydown="onKey">
-    <template v-for="(group, index) in groups" :key="group.heading ?? index">
-      <h3 v-if="group.heading" :class="cn('text-muted-foreground px-3 pb-1 text-xs font-semibold tracking-wider uppercase', index > 0 && 'pt-4', props.headingClass)">{{ group.heading }}</h3>
+    <div v-for="(group, index) in groups" :key="group.heading ?? index" data-slot="nav-group" :class="cn('flex flex-col gap-0.5', props.groupClass, group.class)">
+      <h3 v-if="group.heading" :class="cn('text-muted-foreground flex items-center gap-1.5 px-3 pb-1 text-xs font-semibold tracking-wider uppercase', index > 0 && 'pt-4', props.headingClass)">
+        <component :is="group.icon" v-if="group.icon" class="size-3.5 flex-none" :stroke-width="2" aria-hidden="true" />
+        {{ group.heading }}
+      </h3>
       <button
         v-for="item in group.items"
         :key="item.id"
@@ -70,6 +74,6 @@ function onKey(event: KeyboardEvent) {
         />
         <span v-if="item.badge !== undefined" :data-testid="item.badgeTestid" :class="cn('text-xs tabular-nums', item.badgeAccent ? 'bg-primary text-primary-foreground rounded-sm px-1.5' : item.id === modelValue ? 'text-primary' : 'text-muted-foreground')">{{ item.badge }}</span>
       </button>
-    </template>
+    </div>
   </nav>
 </template>

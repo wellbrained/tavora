@@ -23,5 +23,9 @@ export interface NavItem {
 export interface NavGroup {
   /** A small heading above the group. */
   heading?: string;
+  /** A small icon before the heading. */
+  icon?: Component;
   items: NavItem[];
+  /** Classes for this group's box, on top of the list's `groupClass` (e.g. a colour of its own). */
+  class?: string;
 }
