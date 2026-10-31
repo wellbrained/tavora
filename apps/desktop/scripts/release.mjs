@@ -150,7 +150,9 @@ console.log(`https://github.com/${REPO}/actions/runs/${runId} (about 25 minutes$
 try {
   run("gh", ["run", "watch", runId, "--repo", REPO, "--exit-status", "--interval", "30"]);
 } catch {
-  fail(`The Release build failed; see the run above. Nothing was published or tagged.`);
+  // Also reached by Ctrl+C (it stops gh run watch too): stop the run as well; a finished run stays as it is.
+  cancelRun(runId);
+  fail(`The Release build failed or was stopped; see the run above. Nothing was published or tagged.`);
 }
 finished = true;
 
@@ -239,7 +241,7 @@ try {
     `${version} is published, but tagging failed (${error.message}). Finish by hand:\n` +
       `  git tag -a v${version} ${built} -m "Tavora ${version}"   (skip if the tag exists)\n` +
       `  git push origin v${version}\n` +
-      `  gh release create v${version} --repo ${REPO} --verify-tag --title "Tavora ${version} (preview build)" ${allFiles.map((name) => `"${path.join(releaseDir, name)}"`).join(" ")}`,
+      `  gh release create v${version} --repo ${REPO} --verify-tag --title "Tavora ${version} (preview build)" --notes "Windows preview build of Tavora." ${allFiles.map((name) => `"${path.join(releaseDir, name)}"`).join(" ")}`,
   );
 }
 
