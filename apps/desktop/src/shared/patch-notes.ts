@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.28",
+    date: "2026-10-31",
+    title: "Even darker gaps",
+    notes: [
+      "The gaps between your panels now match the dark background above them.",
+      "Tab icons keep their own colours, and the close button stays easy to see.",
+    ],
+    prs: [
+      { number: 572, title: "Gaps match the canvas; tab icons keep their colours" },
+    ],
+    tags: ["workspace"],
+  },
+  {
     version: "0.23.27",
     date: "2026-10-31",
     title: "Pick how your panels look",
