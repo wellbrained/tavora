@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.29",
+    date: "2026-10-31",
+    title: "Several panels from one click",
+    notes: [
+      "A module can now open several of its panels with one button, such as the ones you ticked on its welcome page.",
+      "They open right next to the panel you clicked, laid out the way the module suggests. Your other panels stay where they are.",
+      "A panel that's already open just comes to the front.",
+    ],
+    prs: [
+      { number: 575, title: "One click opens several of a module's panels, laid out next to it" },
+    ],
+    tags: ["modules", "privacy", "publishing", "sdk", "website", "workspace"],
+  },
+  {
     version: "0.23.28",
     date: "2026-10-31",
     title: "Even darker gaps",
