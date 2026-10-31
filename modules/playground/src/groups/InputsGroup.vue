@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { Search, X } from "@lucide/vue";
 import { SegmentedControl } from "@tavora/official-ui";
-import { Button } from "@tavora/official-ui/components/ui/button";
 import { CodeInput, codeDigits } from "@tavora/official-ui/components/ui/code-input";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
 import { Combobox, ComboboxAnchor, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@tavora/official-ui/components/ui/combobox";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { SearchInput } from "@tavora/official-ui/components/ui/search-input";
 import { NumberField } from "@tavora/official-ui/components/ui/number-field";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { Picker } from "@tavora/official-ui/components/ui/picker";
@@ -94,22 +93,8 @@ const name = ref("Waystone");
           <p id="pg-error-area-text" class="text-destructive text-xs">Write at least a sentence.</p>
         </div>
         <div class="flex flex-col gap-1.5">
-          <Label for="pg-search">Search</Label>
-          <div class="relative">
-            <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" />
-            <Input id="pg-search" v-model="search" type="search" class="pr-9 pl-9" placeholder="Search notes" :disabled="off" />
-            <Button
-              v-if="search"
-              size="icon-xs"
-              variant="ghost"
-              class="absolute top-1/2 right-2 -translate-y-1/2"
-              aria-label="Clear search"
-              title="Clear search"
-              @click="search = ''"
-            >
-              <X :stroke-width="1.5" />
-            </Button>
-          </div>
+          <Label for="pg-search">Search (× or Escape clears)</Label>
+          <SearchInput id="pg-search" v-model="search" placeholder="Search notes" clear-label="Clear search" :disabled="off" />
         </div>
         <div class="flex flex-col gap-1.5">
           <Label for="pg-mono">Monospace</Label>
