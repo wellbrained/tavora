@@ -97,10 +97,19 @@ export function findDispatchedRun(runs, title, sha) {
   return { run };
 }
 
-/** The "RELEASE-SHA256 <hash>  <file>" lines the Release build printed, as a Map of file name to hash. */
+/**
+ * The "RELEASE-SHA256 <hash>  <file>" lines the Release build's package job printed, as a Map of file name to hash.
+ * Lines from other jobs (the e2e shards) don't count; a file printed with two different hashes maps to null.
+ */
 export function readCiHashes(log) {
   const hashes = new Map();
-  for (const match of String(log).matchAll(/RELEASE-SHA256 ([0-9a-f]{64}) {2}([A-Za-z0-9._-]+)\s*$/gm)) hashes.set(match[2], match[1]);
+  for (const line of String(log).split(/\r?\n/)) {
+    if (!line.startsWith("package\t")) continue;
+    const match = /RELEASE-SHA256 ([0-9a-f]{64}) {2}([A-Za-z0-9._-]+)\s*$/.exec(line);
+    if (!match) continue;
+    const [, hash, name] = match;
+    hashes.set(name, hashes.has(name) && hashes.get(name) !== hash ? null : hash);
+  }
   return hashes;
 }
 
@@ -116,6 +125,7 @@ export function checkDownload(version, downloaded, ciHashes, latestYml) {
     const file = downloaded.get(name);
     if (!file) problems.push(`${name} is missing from the download.`);
     else if (!ciHashes.has(name)) problems.push(`The Release build printed no SHA-256 for ${name}.`);
+    else if (ciHashes.get(name) === null) problems.push(`The Release build printed two different SHA-256 for ${name}.`);
     else if (ciHashes.get(name) !== file.sha256) problems.push(`${name} is not the file the Release build made (its SHA-256 differs).`);
   }
   const lines = String(latestYml).split(/\r?\n/);
