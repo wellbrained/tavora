@@ -28,6 +28,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.12",
+    date: "2026-10-31",
+    title: "Profile over your workspace",
+    notes: [
+      "The profile dialog now opens above your workspace panels.",
+    ],
+    prs: [
+      { number: 545, title: "Profile dialog opens above workspace panels" },
+    ],
+  },
+  {
     version: "0.23.11",
     date: "2026-10-31",
     title: "A tidier Settings",
