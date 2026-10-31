@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.23",
+    date: "2026-10-31",
+    title: "No loose text at the top of pages",
+    notes: [
+      "Account and Browser no longer start with a loose paragraph: the text now sits under the first heading, and once you are signed in, Account starts right with your sign-in methods.",
+    ],
+    prs: [
+      { number: 565, title: "Account and Browser: no loose intro paragraph at the top" },
+    ],
+    tags: ["settings"],
+  },
+  {
     version: "0.23.22",
     date: "2026-10-31",
     title: "Your own profile banner",
