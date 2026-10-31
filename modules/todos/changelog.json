@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.1",
+    "date": "2026-10-31",
+    "notes": [
+      "Text fields and dropdowns look calmer in Dark mode."
+    ]
+  },
+  {
     "version": "0.2.0",
     "date": "2026-10-29",
     "notes": [

@@ -3,7 +3,7 @@
   "id": "tavora.pdf-viewer",
   "name": "PDF Viewer",
   "description": "Read PDFs and look at pictures next to your game. Files are kept per game, and each one remembers where you were.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "apiVersion": "1",
   "entry": "dist/index.html",
   "changelog": "changelog.json",
