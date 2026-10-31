@@ -1,0 +1,72 @@
+{
+  "id": "tavora.garnet",
+  "name": "Garnet",
+  "description": "Wine-dark shadows with a true garnet red.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "variations": [
+    {
+      "id": "dark",
+      "name": "Dark",
+      "mode": "dark",
+      "radius": 10,
+      "colors": {
+        "background": "#191213",
+        "foreground": "#f2e6e6",
+        "card": "#231819",
+        "card-foreground": "#f2e6e6",
+        "popover": "#231819",
+        "popover-foreground": "#f2e6e6",
+        "primary": "#ea5459",
+        "primary-hover": "#f06b6f",
+        "primary-foreground": "#191213",
+        "secondary": "#2e2021",
+        "secondary-foreground": "#f2e6e6",
+        "muted": "#2e2021",
+        "muted-foreground": "#a6918f",
+        "accent": "#2e2021",
+        "accent-foreground": "#f2e6e6",
+        "destructive": "#ff8a65",
+        "border": "#3b2a2b",
+        "input": "#7c6566",
+        "ring": "#ea5459",
+        "rail": "#110c0d",
+        "success": "#8cc49a",
+        "warning": "#e6c56a",
+        "info": "#8fb0e8"
+      }
+    }
+    ,
+    {
+      "id": "light",
+      "name": "Light",
+      "mode": "light",
+      "radius": 10,
+      "colors": {
+        "background": "#f8f0ef",
+        "foreground": "#2a1a1b",
+        "card": "#fffaf9",
+        "card-foreground": "#2a1a1b",
+        "popover": "#fffaf9",
+        "popover-foreground": "#2a1a1b",
+        "primary": "#b42330",
+        "primary-hover": "#961c27",
+        "primary-foreground": "#ffffff",
+        "secondary": "#f0e2e1",
+        "secondary-foreground": "#2a1a1b",
+        "muted": "#f0e2e1",
+        "muted-foreground": "#6f5856",
+        "accent": "#f0e2e1",
+        "accent-foreground": "#2a1a1b",
+        "destructive": "#a8360a",
+        "border": "#e3d0ce",
+        "input": "#8f7472",
+        "ring": "#b42330",
+        "rail": "#efe2e0",
+        "success": "#2d7136",
+        "warning": "#7f6100",
+        "info": "#25619c"
+      }
+    }
+  ]
+}

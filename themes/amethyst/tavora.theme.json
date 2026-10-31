@@ -1,0 +1,72 @@
+{
+  "id": "tavora.amethyst",
+  "name": "Amethyst",
+  "description": "Cool violet greys with a lilac glow.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "variations": [
+    {
+      "id": "dark",
+      "name": "Dark",
+      "mode": "dark",
+      "radius": 10,
+      "colors": {
+        "background": "#16131d",
+        "foreground": "#ece8f4",
+        "card": "#1f1a29",
+        "card-foreground": "#ece8f4",
+        "popover": "#1f1a29",
+        "popover-foreground": "#ece8f4",
+        "primary": "#b18cff",
+        "primary-hover": "#c2a5ff",
+        "primary-foreground": "#16131d",
+        "secondary": "#2a2436",
+        "secondary-foreground": "#ece8f4",
+        "muted": "#2a2436",
+        "muted-foreground": "#9d95ad",
+        "accent": "#2a2436",
+        "accent-foreground": "#ece8f4",
+        "destructive": "#ef6b5e",
+        "border": "#352e44",
+        "input": "#716882",
+        "ring": "#b18cff",
+        "rail": "#0f0d14",
+        "success": "#8cc49a",
+        "warning": "#e6c56a",
+        "info": "#7fb4f0"
+      }
+    }
+    ,
+    {
+      "id": "light",
+      "name": "Light",
+      "mode": "light",
+      "radius": 10,
+      "colors": {
+        "background": "#f4f1f9",
+        "foreground": "#1f1a2b",
+        "card": "#fcfaff",
+        "card-foreground": "#1f1a2b",
+        "popover": "#fcfaff",
+        "popover-foreground": "#1f1a2b",
+        "primary": "#6d3fc0",
+        "primary-hover": "#5a32a3",
+        "primary-foreground": "#ffffff",
+        "secondary": "#e8e2f3",
+        "secondary-foreground": "#1f1a2b",
+        "muted": "#e8e2f3",
+        "muted-foreground": "#625a72",
+        "accent": "#e8e2f3",
+        "accent-foreground": "#1f1a2b",
+        "destructive": "#b0322a",
+        "border": "#d8d0e6",
+        "input": "#857c96",
+        "ring": "#6d3fc0",
+        "rail": "#e9e4f2",
+        "success": "#2d7136",
+        "warning": "#7f6100",
+        "info": "#25619c"
+      }
+    }
+  ]
+}
