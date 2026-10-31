@@ -28,19 +28,12 @@ describe("checkRelease", () => {
     expect(checkRelease("1.0.0", { ...ready, noteVersions: ["1.0.0"], tags: ["v0.9.0"] })).toEqual([]);
   });
 
-  it("never publishes a patch version", () => {
-    const problems = checkRelease("0.4.1", { ...ready, noteVersions: ["0.4.1"] });
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain("patch version");
-  });
-
-  it("publishes a patch version only when asked for a one-off", () => {
+  it("publishes a patch version like any other (decided 2026-10-30)", () => {
     const state = { ...ready, tags: ["v0.4.0"], noteVersions: ["0.4.1", "0.4.0"] };
-    expect(checkRelease("0.4.1", state, { allowPatch: true })).toEqual([]);
-    expect(checkRelease("0.4.1", state)[0]).toContain("--allow-patch");
+    expect(checkRelease("0.4.1", state)).toEqual([]);
     // The other guards still apply: not newer, wrong notes.
-    expect(checkRelease("0.4.0", { ...state, noteVersions: ["0.4.0"] }, { allowPatch: true }).join(" ")).toContain("already released");
-    expect(checkRelease("0.4.1", { ...state, noteVersions: ["0.4.0"] }, { allowPatch: true }).join(" ")).toContain("newest patch-notes entry");
+    expect(checkRelease("0.4.0", { ...state, noteVersions: ["0.4.0"] }).join(" ")).toContain("already released");
+    expect(checkRelease("0.4.1", { ...state, noteVersions: ["0.4.0"] }).join(" ")).toContain("newest patch-notes entry");
   });
 
   it("wants main, clean and level with origin/main", () => {
