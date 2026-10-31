@@ -154,6 +154,14 @@ export type PanelLaunch =
  */
 export type PanelOpenResult = "shown" | "switched" | "opened" | "failed";
 
+/**
+ * What `panels.openMany` did with one panel type.
+ * - `opened`: Tavora opened a new panel of that type, placed by the manifest's `panelLayout` when it has one.
+ * - `shown`: a panel of that type was open in the workspace already (the one that asked, too); it came to the front where it is.
+ * - `failed`: no panel could open, such as when the workspace is full.
+ */
+export type PanelOpenManyResult = "opened" | "shown" | "failed";
+
 /** Tavora asks this panel to show other content (the `panel.navigate` event); answer with `panel.navigated`. */
 export interface PanelNavigateRequest {
   requestId: number;
@@ -817,6 +825,13 @@ export interface Methods {
    * click or key press in the panel, once per click. Tavora 0.17.18 and newer.
    */
   "panels.open": { params: { type: string; content?: PanelContent }; result: PanelOpenResult };
+  /**
+   * Opens several of this module's own panel types at once, each at most once and without content, in the current
+   * workspace: inside the asking panel's group, as the manifest's `panelLayout` lays them out. A type already open comes
+   * to the front where it is. Only right after a click or key press in the panel; one press covers the whole call.
+   * Answers per type. Tavora 0.23.29 and newer.
+   */
+  "panels.openMany": { params: { types: string[] }; result: Record<string, PanelOpenManyResult> };
   "workspace.getViewport": { params: undefined; result: TavoraViewport };
   "ui.getTheme": { params: undefined; result: TavoraTheme };
   /** The language of Tavora's own texts, as a code such as "en" or "de". */
@@ -1337,6 +1352,7 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "panel.setDialog": later("0.21.95", null, flag("open", "opening")),
   "panel.setLive": later("0.21.11"),
   "panels.open": call("0.17.18", null, true),
+  "panels.openMany": later("0.23.29", null, true),
   "workspace.getViewport": call("0.1.0"),
   "ui.getTheme": call("0.1.0"),
   "ui.getLanguage": call("0.5.9"),

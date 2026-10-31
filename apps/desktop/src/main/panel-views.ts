@@ -1,4 +1,4 @@
-import type { InstanceStatus } from "../shared/host-api";
+import type { InstanceStatus, PanelPlacement } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS } from "./layout";
 import type { PanelLaunch } from "./panel-content";
@@ -163,6 +163,7 @@ export class PanelViews {
   private readonly waiting = new Set<string>();
   private readonly launches = new Map<string, PanelLaunch>();
   private readonly opened = new Map<string, OpenedFrom>();
+  private readonly placements = new Map<string, PanelPlacement>();
   private readonly keep = new Set<string>();
   /** Panels lent to the in-game layer, with what to tell it when the panel closes for good. */
   private readonly lent = new Map<string, () => void>();
@@ -246,6 +247,15 @@ export class PanelViews {
     return this.opened.get(instanceId);
   }
 
+  /** Where the host UI docks a panel panels.openMany opened, with the others of that call. */
+  setPlacement(instanceId: string, placement: PanelPlacement): void {
+    this.placements.set(instanceId, placement);
+  }
+
+  placement(instanceId: string): PanelPlacement | undefined {
+    return this.placements.get(instanceId);
+  }
+
   /** Why the panel's page loads, kept until it first asks. */
   setLaunch(instanceId: string, launch: PanelLaunch): void {
     this.launches.set(instanceId, launch);
@@ -307,6 +317,7 @@ export class PanelViews {
     if (forget) {
       this.keep.delete(instanceId);
       this.opened.delete(instanceId);
+      this.placements.delete(instanceId);
       this.waiting.delete(instanceId);
       this.launches.delete(instanceId);
     }

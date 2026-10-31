@@ -467,12 +467,22 @@ export const railToggles = ref(0);
 export const addressFocus = shallowRef<{ instanceId: string } | null>(null);
 /** Asks the workspace to bring a panel to the front of its group (panels.open); a new object each time. */
 export const panelToShow = shallowRef<{ instanceId: string } | null>(null);
+/**
+ * After panels.openMany: brings the panels that were open already to the front of their groups, then gives the focus
+ * back to the panel that asked (`anchor`); a new object each time.
+ */
+export const panelsToFront = shallowRef<{ anchor: string; instanceIds: string[] } | null>(null);
 /** Asks the workspace to make a panel's group fill it, or to put it back (panel.setMaximized); a new object each time. */
 export const panelToMaximize = shallowRef<{ instanceId: string; maximized: boolean } | null>(null);
 
 function runShortcut(shortcut: HostShortcut): void {
   if (shortcut.startsWith("address:")) addressFocus.value = { instanceId: shortcut.slice("address:".length) };
   else if (shortcut.startsWith("panel:")) panelToShow.value = { instanceId: shortcut.slice("panel:".length) };
+  else if (shortcut.startsWith("panels:")) {
+    // panels:<anchor>:<id>,<id>
+    const [anchor = "", ids = ""] = shortcut.slice("panels:".length).split(":");
+    panelsToFront.value = { anchor, instanceIds: ids ? ids.split(",") : [] };
+  }
   else if (shortcut.startsWith("maximize:")) panelToMaximize.value = { instanceId: shortcut.slice("maximize:".length), maximized: true };
   else if (shortcut.startsWith("restore:")) panelToMaximize.value = { instanceId: shortcut.slice("restore:".length), maximized: false };
   else if (shortcut.startsWith("setting:")) {

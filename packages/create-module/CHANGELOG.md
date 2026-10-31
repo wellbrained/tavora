@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.22
+
+- New projects start on `@tavora/sdk` 0.3.4: one click can open several of the module's panels (`panels.openMany`).
+
 ## 0.1.21
 
 - New projects start on `@tavora/sdk` 0.3.3: linked files can be picked several at once, checked and shown in their folder.

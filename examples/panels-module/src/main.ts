@@ -163,7 +163,26 @@ async function contentSelector(tavora: TavoraSDK) {
         });
         return button;
       }),
+    openAllButton(tavora, types),
   );
+}
+
+/** Opens every panel type at once (panels.openMany): new ones go next to this panel, open ones come to the front. */
+function openAllButton(tavora: TavoraSDK, types: PanelType[]): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.testid = "open-all";
+  button.textContent = "Open all panels";
+  // Tavora 0.23.29 and newer; an older one refuses it (UNKNOWN_METHOD), and the result below says so.
+  button.addEventListener("click", async () => {
+    try {
+      const result = await tavora.panels.openMany(types.map((type) => type.id));
+      el("open-result").textContent = types.map((type) => `${type.id} ${result[type.id]}`).join(", ");
+    } catch (error) {
+      el("open-result").textContent = `refused: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  });
+  return button;
 }
 
 async function main() {

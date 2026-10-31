@@ -305,6 +305,26 @@ describe("panel", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(await main.sdk.panels.open("side", { content: { id: "b9", title: "B9" } })).toBe("failed");
   });
+
+  it("panels.openMany opens each type once, shows the ones open already, and refuses a bad list", async () => {
+    const main = createMemoryHost({ panelType: "main", panelTypes: ["main", "map", "bosses"], gestures: "enforce" });
+    expect(main.sdk.supports("panels.openMany")).toBe(true);
+    expect(await failure(main.sdk.panels.openMany(["map"]))).toMatchObject({ code: "PERMISSION_DENIED" });
+    // One press covers the whole call.
+    main.host.gesture();
+    expect(await main.sdk.panels.openMany(["main", "map", "bosses"])).toEqual({ main: "shown", map: "opened", bosses: "opened" });
+    expect(main.host.opened).toEqual([
+      { type: "map", content: null },
+      { type: "bosses", content: null },
+    ]);
+    main.host.gesture();
+    expect(await main.sdk.panels.openMany(["map"])).toEqual({ map: "shown" });
+    for (const types of [[], ["map", "map"], ["other"]]) {
+      main.host.gesture();
+      expect(await failure(main.sdk.panels.openMany(types))).toMatchObject({ code: "INVALID_PARAMS" });
+    }
+    expect(createMemoryHost({ version: "0.23.28" }).sdk.supports("panels.openMany")).toBe(false);
+  });
 });
 
 describe("workspace and ui", () => {

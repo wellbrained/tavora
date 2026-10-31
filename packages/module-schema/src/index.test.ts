@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -16,6 +16,46 @@ const valid = {
 };
 
 describe("validateManifest", () => {
+  it("takes a panelLayout only of the module's own panel types, each once, from a minTavora that knows it", () => {
+    const panels = [
+      { id: "map", name: "Map" },
+      { id: "bosses", name: "Bosses" },
+    ];
+    const base = { ...valid, minTavora: "0.23.29", panels };
+    const two = { row: [{ panel: "map" }, { panel: "bosses" }] };
+    expect(validateManifest({ ...base, panelLayout: two }).ok).toBe(true);
+    expect(validateManifest({ ...base, minTavora: LAST_TAVORA_WITHOUT_PANEL_LAYOUT, panelLayout: two })).toEqual({
+      ok: false,
+      errors: [`panelLayout needs a minTavora newer than ${LAST_TAVORA_WITHOUT_PANEL_LAYOUT}, because older Tavoras refuse it`],
+    });
+    expect(validateManifest({ ...base, minTavora: undefined, panelLayout: two }).ok).toBe(false);
+    // Tavora's own modules ship with the app.
+    expect(validateManifest({ ...base, id: "tavora.notes", minTavora: undefined, panelLayout: two }).ok).toBe(true);
+    expect(validateManifest({ ...base, panelLayout: { row: [{ panel: "map" }, { panel: "loot" }] } })).toEqual({
+      ok: false,
+      errors: ["panelLayout.row[1].panel must be the id of one of the module's panels"],
+    });
+    expect(validateManifest({ ...base, panelLayout: { row: [{ panel: "map" }, { column: [{ panel: "bosses" }, { panel: "map" }] }] } })).toEqual({
+      ok: false,
+      errors: ["panelLayout places map twice"],
+    });
+    expect(validateManifest({ ...valid, minTavora: "0.23.29", panelLayout: two })).toEqual({ ok: false, errors: ["panelLayout needs panels: it places the module's panel types"] });
+  });
+
+  it("says where a panelLayout goes too deep or runs the same way twice", () => {
+    const panels = ["a", "b", "c", "d", "e"].map((id) => ({ id, name: id.toUpperCase() }));
+    const base = { ...valid, minTavora: "0.23.29", panels };
+    const deep = { row: [{ panel: "a" }, { column: [{ panel: "b" }, { row: [{ panel: "c" }, { column: [{ panel: "d" }, { panel: "e" }] }] }] }] };
+    expect(validateManifest({ ...base, panelLayout: deep })).toEqual({
+      ok: false,
+      errors: ["panelLayout may hold at most 3 rows and columns inside each other"],
+    });
+    expect(validateManifest({ ...base, panelLayout: { column: [{ panel: "a" }, { column: [{ panel: "b" }, { panel: "c" }] }] } })).toEqual({
+      ok: false,
+      errors: ["panelLayout.column[1] is a column inside a column; put its parts in the outer one"],
+    });
+  });
+
   it("takes workspaces (the old name of personalWorkspaces) only as a boolean, and true only for a module for any game", () => {
     const anyGame = { ...valid, games: [] };
     expect(validateManifest({ ...anyGame, workspaces: false }).ok).toBe(true);
@@ -129,10 +169,37 @@ const leaderboards = {
 };
 const board = (fields: Record<string, unknown>) => ({ ...leaderboards, leaderboards: { boards: [{ id: "a", name: "A", kind: "score", ...fields }] } });
 
+const palworld = {
+  ...valid,
+  minTavora: "0.23.29",
+  panels: [
+    { id: "map", name: "Map" },
+    { id: "bosses", name: "Bosses" },
+    { id: "paldeck", name: "Paldeck" },
+    { id: "breeding", name: "Breeding" },
+  ],
+  panelLayout: { row: [{ size: 50, column: [{ panel: "map", size: 60 }, { panel: "bosses", size: 40 }] }, { size: 50, panel: "paldeck" }] },
+};
+const layout = (panelLayout: unknown) => ({ ...palworld, panelLayout });
+
 // Every case is checked by the validator and by the JSON Schema, and both
 // must agree, so editors flag exactly what Tavora refuses to load.
 const cases: [string, unknown, boolean][] = [
   ["minimal", valid, true],
+  ["a panel layout", palworld, true],
+  ["a panel layout as a column, sizes left out", layout({ column: [{ panel: "map" }, { panel: "bosses" }] }), true],
+  ["a panel layout three deep", layout({ row: [{ panel: "map" }, { column: [{ panel: "bosses" }, { row: [{ panel: "paldeck" }, { panel: "breeding" }] }] }] }), true],
+  ["a panel layout four deep", layout({ row: [{ panel: "map" }, { column: [{ panel: "bosses" }, { row: [{ panel: "paldeck" }, { column: [{ panel: "breeding" }, { panel: "map" }] }] }] }] }), false],
+  ["a panel layout of one panel", layout({ panel: "map" }), false],
+  ["a panel layout with a size at the top", layout({ size: 2, row: [{ panel: "map" }, { panel: "bosses" }] }), false],
+  ["a panel layout row with one part", layout({ row: [{ panel: "map" }] }), false],
+  ["a panel layout with a row in a row", layout({ row: [{ panel: "map" }, { row: [{ panel: "bosses" }, { panel: "paldeck" }] }] }), false],
+  ["a panel layout slot with a row and a panel", layout({ row: [{ panel: "map", column: [{ panel: "bosses" }, { panel: "paldeck" }] }, { panel: "breeding" }] }), false],
+  ["a panel layout with a tab list", layout({ row: [{ panel: ["map", "bosses"] }, { panel: "paldeck" }] }), false],
+  ["a panel layout size of 0", layout({ row: [{ panel: "map", size: 0 }, { panel: "bosses" }] }), false],
+  ["a panel layout size as text", layout({ row: [{ panel: "map", size: "50%" }, { panel: "bosses" }] }), false],
+  ["a panel layout with an unknown field", layout({ row: [{ panel: "map", tabs: true }, { panel: "bosses" }] }), false],
+  ["a panel layout without panels", { ...valid, minTavora: "0.23.29", panelLayout: { row: [{ panel: "map" }, { panel: "bosses" }] } }, false],
   ["translations", { ...valid, minTavora: "0.21.0", panels: [{ id: "planner", name: "Planner" }], translations: { de: { name: "Begleiter", description: "Plant Builds.", panels: { planner: "Planer" } }, "pt-br": {} } }, true],
   ["translations with an upper-case code", { ...valid, minTavora: "0.21.0", translations: { DE: { name: "Begleiter" } } }, false],
   ["translations empty", { ...valid, minTavora: "0.21.0", translations: {} }, false],

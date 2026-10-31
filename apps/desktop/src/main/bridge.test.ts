@@ -47,6 +47,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     launch: { reason: "add" },
     setContent: () => {},
     openPanel: () => Promise.resolve("opened"),
+    openPanels: (types) => Promise.resolve(Object.fromEntries(types.map((type) => [type, "opened" as const]))),
     navigated: () => {},
     isMaximized: () => false,
     setMaximized: () => Promise.resolve(),
@@ -246,6 +247,17 @@ describe("panel content", () => {
       ["planner", { id: "b1", title: "Ice Shot" }],
       ["gear", null],
     ]);
+  });
+
+  it("passes panels.openMany on with distinct, checked types, and refuses anything else", async () => {
+    const asked: string[][] = [];
+    const p = await connected({ ...makeContext(), openPanels: (types) => (asked.push(types), Promise.resolve({ map: "opened", bosses: "shown" })) });
+    expect(await call(p, "panels.openMany", { types: ["map", "bosses"] })).toMatchObject({ ok: true, result: { map: "opened", bosses: "shown" } });
+    const tooMany = Array.from({ length: 17 }, (_, i) => `t${i}`);
+    for (const params of [{}, { types: "map" }, { types: [] }, { types: ["map", "map"] }, { types: ["Map"] }, { types: ["map", 3] }, { types: tooMany }]) {
+      expect(await call(p, "panels.openMany", params)).toMatchObject({ error: { code: "INVALID_PARAMS" } });
+    }
+    expect(asked).toEqual([["map", "bosses"]]);
   });
 
   it("says whether the panel fills the workspace and passes on a checked request to change it", async () => {

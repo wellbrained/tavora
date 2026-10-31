@@ -106,6 +106,34 @@ The handler has 5 seconds. When it throws or runs out of time, the panel stays a
 
 `panels.open` only works right after a click or key press in the panel, once per click, and only opens your own module's panel types in the current workspace. Called on its own, it fails with `PERMISSION_DENIED`.
 
+## Open several panels at once
+
+A welcome page can let the user tick the panels they want (Passive tree, Gear) and open them all with one button. Call `panels.openMany` from that click:
+
+```ts
+openButton.addEventListener("click", async () => {
+  const types = [...ticked]; // such as ["tree", "gear"]
+  if (!tavora.supports("panels.openMany")) return; // Tavora older than 0.23.29: offer one Open button per panel instead
+  const result = await tavora.panels.openMany(types);
+  // { tree: "opened", gear: "shown" }: "opened", "shown" or "failed" for each type
+});
+```
+
+Each type is opened at most once and without content, so the new panels start with `panel.getLaunch()` answering `{ reason: "open", content: null }`. A type that is open in the workspace already (this panel's own type, too) comes to the front where it is: `"shown"`. `"failed"` means it couldn't open, such as when the workspace is full. This panel keeps the focus.
+
+Where the new panels go comes from the manifest's [`panelLayout`](../reference/manifest.md#panel-layout), a starter layout of your panel types:
+
+```json
+"panelLayout": { "row": [
+  { "size": 40, "panel": "overview" },
+  { "size": 60, "column": [ { "panel": "tree", "size": 60 }, { "panel": "gear", "size": 40 } ] }
+]}
+```
+
+Tavora lays it out only inside this panel's group: the Overview panel, clicked, keeps its group (with any other tabs) as its slot, and Tree and Gear split off beside it in these sizes, measured against that group. A type you didn't ask for, or one that is open elsewhere already, leaves the layout and its neighbour takes the room. A slot too small for its panel's minimum size opens as a tab in this panel's group instead. Nothing outside the group moves. Without a `panelLayout`, or when this panel's type isn't in it, each new panel opens where `panels.open` would put it. There is no Undo, so open only what the user asked for.
+
+`panelLayout` needs a `minTavora` newer than `0.23.28`; `panels.openMany` needs the same click as `panels.open`, and one press covers the whole call.
+
 ## Checklist
 
 - Every type has an `id` you will keep forever.
@@ -113,4 +141,4 @@ The handler has 5 seconds. When it throws or runs out of time, the panel stays a
 - Each panel keeps its own selection in `panel` state and reports it with `panel.setContent`.
 - Every page handles all three `getLaunch` reasons.
 - Pages that switch content have an `onNavigate` handler that saves first.
-- `panels.open` is only called from a click or key press.
+- `panels.open` and `panels.openMany` are only called from a click or key press.

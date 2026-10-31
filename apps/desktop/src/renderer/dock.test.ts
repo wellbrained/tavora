@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { DockviewApi, Position } from "dockview-vue";
-import { dropReorders, fromDockview, GUIDE, groupConstraints, heightSpans, leastAlong, maximizedPanel, MISSING_MODULE_SIZE, PANEL_COMPONENT, panelInfo, placePanel, resolveDropPosition, resolveOuterEdge, TAB_HEIGHT, toDockview, widthSpans, type GroupShape, type Sizes } from "./dock";
-import type { HostViewState, PanelView, SavedLayout } from "../shared/host-api";
+import { dropReorders, fromDockview, GUIDE, groupConstraints, heightSpans, layoutAround, leastAlong, maximizedPanel, MISSING_MODULE_SIZE, PANEL_COMPONENT, panelInfo, placePanel, resolveDropPosition, resolveOuterEdge, TAB_HEIGHT, toDockview, widthSpans, type GroupShape, type Sizes } from "./dock";
+import type { HostViewState, LayoutGroup, LayoutSplit, PanelView, SavedLayout } from "../shared/host-api";
+import type { Slots } from "../shared/panel-layout";
 
 describe("what docking knows about a panel", () => {
   const panel = (moduleId: string, panelType: string | null = null): PanelView => ({ instanceId: "p", moduleId, panelType, name: "Discord", status: "unavailable", waiting: false, content: null });
@@ -247,5 +248,139 @@ describe("templateRects", () => {
       { x: 0.6, y: 0, width: 0.4, height: 0.5 },
       { x: 0.6, y: 0.5, width: 0.4, height: 0.5 },
     ]);
+  });
+});
+
+describe("laying out panels opened together (panels.openMany)", () => {
+  // Another module's panel "other" on the left (400 px), the clicking panel "anchor" with a second tab on the right (600 px).
+  const layout: SavedLayout = {
+    width: 1000,
+    height: 600,
+    direction: "row",
+    root: {
+      kind: "split",
+      size: 600,
+      children: [
+        { kind: "group", size: 400, panels: ["other"], active: "other" },
+        { kind: "group", size: 600, panels: ["anchor", "tab"], active: "anchor", focused: true },
+      ],
+    },
+  };
+  const roomy = () => ({ title: "x", minWidth: 0, minHeight: 0 });
+  const slots = (top: "row" | "column"): Slots => ({
+    split: top,
+    parts: [
+      { size: 1, slots: { panel: "anchor" } },
+      { size: 2, slots: { split: top === "row" ? "column" : "row", parts: [{ size: 1, slots: { panel: "map" } }, { size: 1, slots: { panel: "bosses" } }] } },
+    ],
+  });
+
+  it("splits the clicking panel's group in the layout's sizes and leaves the rest as it was", () => {
+    const result = layoutAround(layout, "anchor", slots("column"), roomy);
+    expect(result?.placed).toEqual(["map", "bosses"]);
+    expect(result?.layout.root.children[0]).toEqual(layout.root.children[0]);
+    expect(result?.layout.root.children[1]).toEqual({
+      kind: "split",
+      size: 600,
+      children: [
+        { kind: "group", size: 200, panels: ["anchor", "tab"], active: "anchor", focused: true },
+        {
+          kind: "split",
+          size: 400,
+          children: [
+            { kind: "group", size: 300, panels: ["map"], active: "map" },
+            { kind: "group", size: 300, panels: ["bosses"], active: "bosses" },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("puts the parts of a layout running the same way as the group's row into that row, sharing the group's size", () => {
+    const result = layoutAround(layout, "anchor", slots("row"), roomy);
+    const children = result?.layout.root.children ?? [];
+    expect(children.map((child) => child.size)).toEqual([400, 200, 400]);
+    expect(children[0]).toEqual(layout.root.children[0]);
+    expect(children[1]).toMatchObject({ kind: "group", panels: ["anchor", "tab"] });
+    // The column inside measures its parts against the group's height.
+    expect(children[2]).toMatchObject({ kind: "split", children: [{ size: 300, panels: ["map"] }, { size: 300, panels: ["bosses"] }] });
+  });
+
+  it("opens a panel whose slot would be too small as a tab behind the clicking one", () => {
+    // Map and Bosses need 350 px of width; their row gives each 200 of the group's 600.
+    const info = (id: string) => (id === "map" || id === "bosses" ? { title: id, minWidth: 350, minHeight: 0 } : roomy());
+    const result = layoutAround(layout, "anchor", slots("column"), info);
+    expect(result?.placed).toEqual(["bosses", "map"]);
+    // Map, laid out first, leaves first; Bosses then has the whole lower part and fits.
+    expect(result?.layout.root.children[1]).toEqual({
+      kind: "split",
+      size: 600,
+      children: [
+        { kind: "group", size: 200, panels: ["anchor", "tab", "map"], active: "anchor", focused: true },
+        { kind: "group", size: 400, panels: ["bosses"], active: "bosses" },
+      ],
+    });
+  });
+
+  it("keeps the clicking panel's slot big enough for the panels that become tabs there, so nothing outside moves", () => {
+    // Map needs 350 px of width and gets 300: it would become a tab beside the anchor, whose slot is 300 too. So Bosses
+    // leaves as well and everything stays in the group, which then needs no more room than it has.
+    const info = (id: string) => (id === "map" ? { title: id, minWidth: 350, minHeight: 0 } : roomy());
+    const result = layoutAround(layout, "anchor", { split: "row", parts: [{ size: 1, slots: { panel: "anchor" } }, { size: 1, slots: { split: "column", parts: [{ size: 1, slots: { panel: "map" } }, { size: 1, slots: { panel: "bosses" } }] } }] }, info);
+    expect(result?.layout.root.children).toHaveLength(2);
+    expect(result?.layout.root.children[0]).toEqual(layout.root.children[0]);
+    expect(result?.layout.root.children[1]).toMatchObject({ kind: "group", size: 600, panels: ["anchor", "tab", "map", "bosses"], active: "anchor" });
+  });
+
+  it("checks the heights with the tab bar counted in", () => {
+    // The lower part is 400 px tall; Map needs 380 px for its content and the tab bar on top.
+    const info = (id: string) => (id === "map" ? { title: id, minWidth: 0, minHeight: 400 - TAB_HEIGHT + 1 } : roomy());
+    const result = layoutAround(layout, "anchor", { split: "column", parts: [{ size: 1, slots: { panel: "anchor" } }, { size: 2, slots: { panel: "map" } }] }, info);
+    expect(result?.layout.root.children[1]).toMatchObject({ kind: "group", panels: ["anchor", "tab", "map"] });
+  });
+
+  it("does nothing when the clicking panel is not docked", () => {
+    expect(layoutAround(layout, "gone", slots("row"), roomy)).toBeNull();
+  });
+
+  it("no longer fills the workspace with the split group", () => {
+    const maximized = structuredClone(layout);
+    (maximized.root.children[1] as LayoutGroup).maximized = true;
+    const result = layoutAround(maximized, "anchor", slots("column"), roomy);
+    expect(maximizedPanel(result?.layout ?? null)).toBeNull();
+  });
+
+  it("finds the group inside nested splits and measures it there", () => {
+    const nested: SavedLayout = {
+      width: 1000,
+      height: 600,
+      direction: "row",
+      root: {
+        kind: "split",
+        size: 600,
+        children: [
+          { kind: "group", size: 500, panels: ["other"], active: "other" },
+          {
+            kind: "split",
+            size: 500,
+            children: [
+              { kind: "group", size: 200, panels: ["top"], active: "top" },
+              { kind: "group", size: 400, panels: ["anchor"], active: "anchor" },
+            ],
+          },
+        ],
+      },
+    };
+    const result = layoutAround(nested, "anchor", { split: "row", parts: [{ size: 1, slots: { panel: "anchor" } }, { size: 4, slots: { panel: "map" } }] }, roomy);
+    // The anchor's group is 500 wide: a row there splits it 100 / 400, as a new split in the column's place.
+    expect((result?.layout.root.children[1] as LayoutSplit).children[1]).toEqual({
+      kind: "split",
+      size: 400,
+      children: [
+        { kind: "group", size: 100, panels: ["anchor"], active: "anchor" },
+        { kind: "group", size: 400, panels: ["map"], active: "map" },
+      ],
+    });
+    expect((result?.layout.root.children[1] as LayoutSplit).children[0]).toEqual({ kind: "group", size: 200, panels: ["top"], active: "top" });
   });
 });

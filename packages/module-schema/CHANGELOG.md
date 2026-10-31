@@ -2,6 +2,10 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.1.9
+
+- `panelLayout`: a module's starter layout for `panels.openMany` (`PanelLayoutNode`, `PanelLayoutSplit`), a `row` or `column` of parts, each `{ panel, size? }` or a split running the other way, 2 to `MAX_PANEL_TYPES` parts per split and at most `MAX_PANEL_LAYOUT_DEPTH` (3) splits inside each other. Each panel type at most once and only types in `panels`; `size` is a share above 0, up to `MAX_PANEL_LAYOUT_SIZE`. A manifest with it needs `panels` and a `minTavora` newer than `LAST_TAVORA_WITHOUT_PANEL_LAYOUT` (0.23.28), except Tavora's own modules. The JSON Schema checks the shape.
+
 ## 0.1.8
 
 - `isReleaseVersion`: whether a module version is plain `major.minor.patch`, the only kind that can be packed and published. `validateManifest` still accepts a pre-release such as `2.0.0-beta.1`, so modules installed at one keep loading.

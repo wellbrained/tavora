@@ -10,7 +10,8 @@ import {
   type DockviewWillDropEvent,
   type SerializedDockview,
 } from "dockview-vue";
-import type { HostViewState, LayoutNode, PanelView, SavedLayout } from "../shared/host-api";
+import type { HostViewState, LayoutGroup, LayoutNode, LayoutSplit, PanelView, SavedLayout } from "../shared/host-api";
+import { fitSlots, slotPanels, type Slots } from "../shared/panel-layout";
 
 /** Height of a group's tab bar; module content starts below it. */
 export const TAB_HEIGHT = 36;
@@ -327,6 +328,78 @@ export function placeTab(api: DockviewApi, id: string, info: Info, from: string,
     inactive: background,
   });
   return true;
+}
+
+/** Whether every one of panels `ids` has room in a group of `width` by `height` (the tab bar counted in). */
+export function roomFor(ids: readonly string[], width: number, height: number, info: Info): boolean {
+  return ids.every((id) => {
+    const panel = info(id);
+    return !panel || widthSpans(panel, height - TAB_HEIGHT).some((span) => width >= span.min && width <= span.max);
+  });
+}
+
+/**
+ * Lays out panels opened together (panels.openMany) inside the group of `anchor`, as `slots` (the module's panelLayout,
+ * by instance id) says: the anchor's group, with its other tabs, keeps the anchor's slot, and the new panels split off
+ * around it, in the layout's sizes measured against that group. Nothing outside the group moves. A new panel whose slot
+ * would be too small for it (fitSlots) becomes a tab of the anchor's group instead. Answers the new layout and the panels
+ * it placed, or null when the anchor is not docked.
+ */
+export function layoutAround(layout: SavedLayout, anchor: string, slots: Slots, info: Info): { layout: SavedLayout; placed: string[] } | null {
+  const next = structuredClone(layout);
+  type Found = { parent: LayoutSplit; index: number; direction: "row" | "column"; width: number; height: number };
+  const find = (split: LayoutSplit, direction: "row" | "column", width: number, height: number): Found | null => {
+    const shown = split.children.filter((child) => !child.hidden);
+    const total = shown.reduce((sum, child) => sum + child.size, 0);
+    const row = direction === "row";
+    for (const [index, child] of split.children.entries()) {
+      if (child.hidden) continue;
+      const share = total > 0 ? child.size / total : 1 / shown.length;
+      const [w, h] = row ? [width * share, height] : [width, height * share];
+      if (child.kind === "group" && child.panels.includes(anchor)) return { parent: split, index, direction, width: w, height: h };
+      if (child.kind === "split") {
+        const found = find(child, row ? "column" : "row", w, h);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  const found = find(next.root, next.direction, next.width, next.height);
+  if (!found) return null;
+  const group = found.parent.children[found.index] as LayoutGroup;
+  // The anchor's slot holds its group's tabs and the panels that become tabs there.
+  const fitted = fitSlots(slots, anchor, found.width, found.height, (id, width, height, tabs) => roomFor(id === anchor ? [...group.panels, ...tabs] : [id], width, height, info));
+  // The panels that don't fit open as tabs behind the anchor, which stays the one shown.
+  group.panels.push(...fitted.tabs.filter((id) => !group.panels.includes(id)));
+  const placed = [...slotPanels(fitted.slots).filter((id) => id !== anchor), ...fitted.tabs];
+  if ("panel" in fitted.slots) return { layout: next, placed };
+  // Splitting a group that fills the workspace would hide the new panels behind it.
+  delete group.maximized;
+  const build = (part: Slots, size: number, width: number, height: number): LayoutNode => {
+    if ("panel" in part) return part.panel === anchor ? { ...group, size } : { kind: "group", size, panels: [part.panel], active: part.panel };
+    const row = part.split === "row";
+    const total = part.parts.reduce((sum, item) => sum + item.size, 0);
+    const children = part.parts.map((item) => {
+      const share = item.size / total;
+      return row ? build(item.slots, width * share, width * share, height) : build(item.slots, height * share, width, height * share);
+    });
+    return { kind: "split", size, children };
+  };
+  const top = fitted.slots;
+  if (top.split === found.direction) {
+    // The layout runs the same way as the group's row (or column): its parts join it in the group's place, sharing its size.
+    const total = top.parts.reduce((sum, item) => sum + item.size, 0);
+    const row = top.split === "row";
+    const parts = top.parts.map((item) => {
+      const share = item.size / total;
+      const node = build(item.slots, 0, row ? found.width * share : found.width, row ? found.height : found.height * share);
+      return { ...node, size: group.size * share };
+    });
+    found.parent.children.splice(found.index, 1, ...parts);
+  } else {
+    found.parent.children[found.index] = build(top, group.size, found.width, found.height);
+  }
+  return { layout: next, placed };
 }
 
 /** Whether the row or column beside `group` has room for one more group holding panels `ids`. */

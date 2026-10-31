@@ -15,9 +15,10 @@ import {
   type VueComponent,
 } from "dockview-vue";
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
-import type { PanelBounds } from "../../shared/host-api";
+import type { PanelBounds, SavedLayout } from "../../shared/host-api";
+import { keepSlots } from "../../shared/panel-layout";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { act, api as host, dialog, dragging, nextPanelSlot, panelToMaximize, panelToShow, state } from "../host";
+import { act, api as host, dialog, dragging, nextPanelSlot, panelsToFront, panelToMaximize, panelToShow, state } from "../host";
 import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import {
@@ -27,6 +28,7 @@ import {
   groupConstraints,
   guardDrop,
   guideFits,
+  layoutAround,
   maximizedPanel,
   panelInfo,
   placePanel,
@@ -193,20 +195,24 @@ function quietly(change: () => void) {
 function restore(api: DockviewApi) {
   appliedEpoch = view.value.layoutEpoch;
   quietly(() => {
-    const layout = view.value.layout;
     try {
-      if (layout) api.fromJSON(toDockview(layout, info));
-      else api.clear();
+      load(api, view.value.layout);
     } catch (error) {
       console.error("[tavora] could not restore the layout", error);
       api.clear();
     }
-    const maximized = maximizedPanel(layout);
-    const group = maximized ? api.getPanel(maximized)?.group : undefined;
-    if (group && api.groups.length > 1) group.api.maximize();
   });
   reconcile(api);
   refreshColumns();
+}
+
+/** Puts a whole layout in the dock, its maximized group filling it again. */
+function load(api: DockviewApi, layout: SavedLayout | null) {
+  if (layout) api.fromJSON(toDockview(layout, info));
+  else api.clear();
+  const maximized = maximizedPanel(layout);
+  const group = maximized ? api.getPanel(maximized)?.group : undefined;
+  if (group && api.groups.length > 1) group.api.maximize();
 }
 
 /** The panel of the group that fills the workspace, or null. */
@@ -224,6 +230,7 @@ function reconcile(api: DockviewApi) {
       changed = true;
     }
   }
+  if (placeTogether(api, open)) changed = true;
   for (const id of open) {
     if (!api.getPanel(id)) {
       const from = view.value.panels.find((panel) => panel.instanceId === id)?.openedFrom;
@@ -241,6 +248,27 @@ function reconcile(api: DockviewApi) {
   updateConstraints(api);
   refreshColumns();
   if (changed) saveSoon();
+}
+
+/**
+ * Docks the panels one panels.openMany call opened (their `placement`): around the panel that asked, in the module's
+ * panelLayout (dock.ts layoutAround), and the rest where new panels go. The panel that asked keeps the focus. True
+ * when it docked any.
+ */
+function placeTogether(api: DockviewApi, open: Set<string>): boolean {
+  const fresh = view.value.panels.filter((panel) => panel.placement && open.has(panel.instanceId) && !api.getPanel(panel.instanceId));
+  const plans = new Map(fresh.map((panel) => [panel.placement!.id, panel.placement!]));
+  for (const plan of plans.values()) {
+    const mine = new Set(fresh.filter((panel) => panel.placement!.id === plan.id).map((panel) => panel.instanceId));
+    // Panels that could not open, or were closed since, leave the layout; their neighbours take the room.
+    const slots = plan.slots && api.getPanel(plan.anchor) ? keepSlots(plan.slots, (id) => id === plan.anchor || mine.has(id)) : null;
+    const saved = slots && !("panel" in slots) ? fromDockview(api.toJSON(), maximizedNow(api)) : null;
+    const result = saved && slots ? layoutAround(saved, plan.anchor, slots, info) : null;
+    if (result) quietly(() => load(api, result.layout));
+    for (const id of mine) if (!api.getPanel(id)) placePanel(api, id, info);
+    api.getPanel(plan.anchor)?.api.setActive();
+  }
+  return fresh.length > 0;
 }
 
 /**
@@ -279,6 +307,21 @@ watch(panelToShow, (request) => {
   const column = columns.value.find((item) => item.hidden && item.panels.includes(request.instanceId));
   if (column) setColumnHidden(column.side, false);
   dock.getPanel(request.instanceId)?.api.setActive();
+});
+// After panels.openMany: the panels that were open already come to the front where they are, and the panel that asked
+// keeps the focus. One in that panel's own group stays behind it, so the panel that asked stays the one shown.
+watch(panelsToFront, (request) => {
+  if (!request || !dock) return;
+  panelsToFront.value = null;
+  const anchor = dock.getPanel(request.anchor);
+  for (const id of request.instanceIds) {
+    const panel = dock.getPanel(id);
+    if (!panel || panel.group === anchor?.group) continue;
+    const column = columns.value.find((item) => item.hidden && item.panels.includes(id));
+    if (column) setColumnHidden(column.side, false);
+    panel.api.setActive();
+  }
+  anchor?.api.setActive();
 });
 // A panel asked to fill the workspace or to go back (panel.setMaximized), as Maximize and Restore in its menu do.
 watch(panelToMaximize, (request) => {

@@ -65,6 +65,7 @@ Methods without params must be sent with `params` left out.
 | `panel.setState` | `{ value }` | `null`; `value: null` removes the state |
 | `panel.getLaunch` | none | why this page is loading, the same on every call until it loads again: `{ reason: "add" }` for a panel the user just added, `{ reason: "restore", content }` for one that was open before, with what it last showed through `panel.setContent` (or `null`), or `{ reason: "open", content }` for one another panel opened with `panels.open` (Tavora 0.17.18 and newer). See [Content per panel](#content-per-panel) (Tavora 0.17.17 and newer) |
 | `panels.open` | `{ type, content? }` | `"shown"`, `"switched"`, `"opened"` or `"failed"`: opens one of this module's own panel types in the current workspace, on `content` (`{ id, title }`) when given. See [Opening another panel](#opening-another-panel). Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for a type the module does not have (Tavora 0.17.18 and newer) |
+| `panels.openMany` | `{ types }` | an object with `"opened"`, `"shown"` or `"failed"` for each type: opens several of this module's own panel types at once, each at most once and without content, inside the asking panel's group as the manifest's [`panelLayout`](./manifest.md#panel-layout) lays them out. See [Opening several panels](#opening-several-panels). Only right after a real click or key press in the panel; one press covers the call (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for an empty list, a type named twice or a type the module does not have (Tavora 0.23.29 and newer) |
 | `panel.navigated` | `{ requestId, handled, ok }` | `null`; the answer to a `panel.navigate` event. The SDK sends it for you from `panel.onNavigate` (Tavora 0.17.18 and newer) |
 | `panel.setContent` | `{ content }` | `null`; `content` is `{ id, title }` or `null`: what the panel shows now. `id` is your own, 1 to 200 characters; `title` is its full name, 1 to 200 characters, kept on one line. `INVALID_PARAMS` otherwise (Tavora 0.17.17 and newer) |
 | `panel.isMaximized` | none | `true` while the panel fills the workspace (Maximize in its menu, or `panel.setMaximized`) (Tavora 0.20.20 and newer) |
@@ -273,7 +274,7 @@ The same [`overlay`](./manifest.md#overlay) page can also be shown over the user
 - Tavora draws its own window above the game. It does not touch the game: nothing is injected into it or drawn by it. Games that run in exclusive full screen hide it; the user is told to switch the game to borderless. Windows only; elsewhere the call gives `"off"`.
 - The page has no bridge and runs under the same policy as a Stream overlay page, with no network. Clicks go through it to the game, so it can't take input.
 - Theme and language don't reach the page, and its size is the user's choice, so lay it out for any size and keep its background transparent.
-- A panel type that sets [`inGame: true`](./manifest.md#panel-types) in the manifest gets **Show in game** in its menu. The panel is then over the game only while the user holds the in-game layer open (their "Tavora over game" key), and goes back into its workspace slot when the layer closes. Your panel isn't told and calls nothing different: it keeps its bridge, and hears `workspace.resize` for the new size, `lifecycle.suspend` and `lifecycle.resume` as it moves. Clicks and key presses reach it only while the layer is open. In game the panel is scaled with the game window's height (laid out as in a 1080 px high window, as an overlay page is) with a style on the page, not the browser's zoom, which the module's other panels of the game would share. A page that sizes itself with `100vh` can overflow its panel in game; use `100%` height instead. While it is in the layer, calls that need Tavora's own window (`pictures.save`, `files.saveJson`, `files.openJson`, `files.pickReadOnly`, `files.showInFolder`, `overlay.copyLink` when it needs the consent dialog or a setting, `overlay.showOverGame`, `overlay.preview`, `hotkeys.set`, `ui.showMenu`, `panels.open`, `panel.setMaximized` and `links.open`) are refused with `PERMISSION_DENIED`; Tavora tells the user to close the layer first.
+- A panel type that sets [`inGame: true`](./manifest.md#panel-types) in the manifest gets **Show in game** in its menu. The panel is then over the game only while the user holds the in-game layer open (their "Tavora over game" key), and goes back into its workspace slot when the layer closes. Your panel isn't told and calls nothing different: it keeps its bridge, and hears `workspace.resize` for the new size, `lifecycle.suspend` and `lifecycle.resume` as it moves. Clicks and key presses reach it only while the layer is open. In game the panel is scaled with the game window's height (laid out as in a 1080 px high window, as an overlay page is) with a style on the page, not the browser's zoom, which the module's other panels of the game would share. A page that sizes itself with `100vh` can overflow its panel in game; use `100%` height instead. While it is in the layer, calls that need Tavora's own window (`pictures.save`, `files.saveJson`, `files.openJson`, `files.pickReadOnly`, `files.showInFolder`, `overlay.copyLink` when it needs the consent dialog or a setting, `overlay.showOverGame`, `overlay.preview`, `hotkeys.set`, `ui.showMenu`, `panels.open`, `panels.openMany`, `panel.setMaximized` and `links.open`) are refused with `PERMISSION_DENIED`; Tavora tells the user to close the layer first.
 
 ### Live views
 
@@ -326,6 +327,16 @@ When the handler throws, or does not resolve within 5 seconds, the panel keeps i
 
 The Panel Types Example in Tavora's examples folder does all of this.
 
+#### Opening several panels
+
+A welcome page, for one, can let the user tick the panels they want and open them with one button: `panels.openMany(types)`. Needs Tavora 0.23.29 or newer (check `sdk.supports("panels.openMany")`). Only right after a click or key press in the panel; one press covers the whole call, and only the module's own types (each once, no content) in the workspace shown now. For each type:
+
+1. A panel of that type that is open already in the workspace (the asking panel's own type, too) comes to the front where it is: `"shown"`. No second copy opens and no panel switches.
+2. Else a new panel of that type opens, with `panel.getLaunch()` saying `{ reason: "open", content: null }`: `"opened"`.
+3. When it can't open (the workspace is full), `"failed"`.
+
+The new panels go inside the asking panel's group, laid out by the manifest's [`panelLayout`](./manifest.md#panel-layout): the asking panel keeps its group (with any other tabs in it) as its slot, and the new ones split off around it in the layout's directions and sizes, measured against that group. Types that are not asked for or stay where they are leave the layout, and their neighbour takes the room. A slot that would be smaller than its panel's minimum size opens as a tab in the asking panel's group instead. Panels of other modules never move. Without a `panelLayout`, or when the asking panel's type isn't in it, each new panel opens where `panels.open` would put it. The asking panel keeps the focus. There is no Undo.
+
 ## Method index
 
 Every call with the first Tavora that answers it, its capability and whether it needs a click. The table is generated from the code, so it cannot go out of date.
@@ -364,6 +375,7 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `panel.setDialog` | 0.21.95 |  | opening |
 | `panel.setLive` | 0.21.11 |  |  |
 | `panels.open` | 0.17.18 |  | always |
+| `panels.openMany` | 0.23.29 |  | always |
 | `workspace.getViewport` | always |  |  |
 | `ui.getTheme` | always |  |  |
 | `ui.getLanguage` | 0.5.9 |  |  |
@@ -529,6 +541,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | Document title | 200 characters |
 | Panel content (`panel.setContent`) | `id` 200 characters, `title` 200 characters |
 | `panels.open` | one per click or key press; the panel asked to switch has 5 s |
+| `panels.openMany` | one call per click or key press, 1 to 16 types, each once |
 | Stored files (`blobs`) | 50 MB each, 500 MB per module and workspace; PNG, JPEG, GIF, WebP and PDF only |
 | `clipboard.writeImage` | one PNG per click or key press, at most 20 MB, 16384 pixels on a side and 100 million pixels |
 | `pictures.save` | the same as `clipboard.writeImage`; names up to 80 characters |
