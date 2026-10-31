@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.31",
+    date: "2026-11-01",
+    title: "Too many tabs",
+    notes: [
+      "When a panel has more tabs than fit, a list next to them shows the hidden ones, and the panels no longer cover it.",
+      "Prefer arrows? Pick them under Settings > Appearance > Too many tabs.",
+      "Tabs keep their size, and the open one always stays in view.",
+      "Ctrl+Tab and Ctrl+Shift+Tab switch to the next and the previous tab.",
+    ],
+    prs: [
+      { number: 578, title: "Too many tabs: list or arrows, and Ctrl+Tab" },
+    ],
+    tags: ["games", "hotkeys", "settings", "workspace"],
+  },
+  {
     version: "0.23.30",
     date: "2026-11-01",
     title: "Panel styles and a warm welcome",
