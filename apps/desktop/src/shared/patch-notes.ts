@@ -30,156 +30,38 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.23.25",
     date: "2026-10-31",
-    title: "Modules, tidied up like Settings",
+    title: "New themes and a tidier look",
     notes: [
-      "A shorter menu in Modules, with the search on top and Module settings at the foot.",
-      "Community modules sits right under your modules, set off by a line.",
+      "Six new themes in Settings > Appearance: Ashen Keep, Tidewater, Graphite, Dusk Rose, Garnet and Amethyst, each in Dark and Light.",
+      "Pick the theme from a dropdown with a preview and a short line for each. The one you use says \"In use\".",
+      "Pick how round corners are, on top of any theme. Reset to Tavora Default clears it.",
+      "Pick the banner behind your picture: six patterns, four scenes like a night camp or an adventure map, or your picture. Banners take your theme's colours.",
+      "Your name sits beside your picture, and the profile menu matches Settings.",
+      "Settings: each menu group sits on its own tinted plate, and search is on top.",
+      "The page title shows where you are, like Settings / Games / Workspaces. Click Games to go back.",
+      "Modules looks like Settings too: search on top, a shorter menu, and Community modules right under your modules.",
       "Official and Added by you are now sections in All modules.",
+      "In Dark mode, text fields and dropdowns have a much fainter fill, so they no longer stand out as bright grey blocks.",
+      "Account and Browser start right with their first heading. Once you are signed in, Account starts with your sign-in methods.",
+      "Linking a Palworld save opens the dialog in the Players folder of the world you played last.",
+      "Your devices show their own names, like your Mac's, without endings such as .fritz.box or .local.",
     ],
     prs: [
       { number: 567, title: "Modules: a Settings-style menu" },
-    ],
-    tags: ["catalog", "modules", "settings"],
-  },
-  {
-    version: "0.23.24",
-    date: "2026-10-31",
-    title: "Palworld saves are easier to find",
-    notes: [
-      "Linking a Palworld save opens the dialog in the Players folder of the world you played last.",
-    ],
-    prs: [
       { number: 566, title: "Linking a Palworld save opens the dialog in the Players folder of the world played last" },
-    ],
-  },
-  {
-    version: "0.23.23",
-    date: "2026-10-31",
-    title: "No loose text at the top of pages",
-    notes: [
-      "Account and Browser no longer start with a loose paragraph: the text now sits under the first heading, and once you are signed in, Account starts right with your sign-in methods.",
-    ],
-    prs: [
       { number: 565, title: "Account and Browser: no loose intro paragraph at the top" },
-    ],
-    tags: ["settings"],
-  },
-  {
-    version: "0.23.22",
-    date: "2026-10-31",
-    title: "Your own profile banner",
-    notes: [
-      "Pick the banner behind your picture: six patterns, four scenes like a night camp or an adventure map, or your picture. Press Change on the banner.",
-      "Banners take the colours of your theme and change with it.",
-      "Your name sits beside your picture, and the profile menu matches Settings.",
-    ],
-    prs: [
       { number: 564, title: "Profile: banners in the theme's colours, the name beside the picture, a breadcrumb title" },
-    ],
-    tags: ["accounts", "games"],
-  },
-  {
-    version: "0.23.21",
-    date: "2026-10-31",
-    title: "Calmer fields",
-    notes: [
-      "In Dark mode, text fields and dropdowns have a much fainter fill, so they no longer stand out as bright grey blocks. Their edge stays as clear as before.",
-    ],
-    prs: [
       { number: 562, title: "Kit: fainter fill for fields and dropdowns in Dark mode" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "themes", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.23.20",
-    date: "2026-10-31",
-    title: "A clearer Settings menu",
-    notes: [
-      "Each group in the Settings menu sits on its own tinted plate, so the groups are easy to tell apart.",
-      "The page title shows where you are, like Settings / Games / Workspaces. Click Games to go back.",
-      "Search sits at the top of the menu.",
-    ],
-    prs: [
-      { number: 558, title: "Settings: tinted plates for the menu groups, a breadcrumb title, search on top" },
-    ],
-    tags: ["settings", "ui-kit"],
-  },
-  {
-    version: "0.23.19",
-    date: "2026-10-31",
-    title: "Clearer theme choice",
-    notes: [
-      "The theme choice shows a bigger preview and the theme's line under its name.",
-      "In the theme list, the theme you use says \"In use\", and the list has a scrollbar.",
-    ],
-    prs: [
       { number: 560, title: "Bigger preview and a scrollbar in the theme choice" },
-    ],
-    tags: ["settings", "themes"],
-  },
-  {
-    version: "0.23.18",
-    date: "2026-10-31",
-    title: "A tidier theme choice",
-    notes: [
-      "Settings > Appearance picks the theme from a dropdown, with a small preview of each theme in the list.",
-    ],
-    prs: [
+      { number: 558, title: "Settings: tinted plates for the menu groups, a breadcrumb title, search on top" },
       { number: 557, title: "Pick the theme from a dropdown with previews" },
-    ],
-    tags: ["settings", "themes"],
-  },
-  {
-    version: "0.23.17",
-    date: "2026-10-31",
-    title: "Your own corners",
-    notes: [
-      "Pick how round corners are in Settings > Appearance, on top of any theme.",
-      "Theme keeps what your theme picked; Reset to Tavora Default clears it.",
-    ],
-    prs: [
       { number: 556, title: "Appearance: your own corner radius over any theme" },
-    ],
-    tags: ["games", "settings", "workspace"],
-  },
-  {
-    version: "0.23.16",
-    date: "2026-10-31",
-    title: "Easier theme picking",
-    notes: [
-      "Settings > Appearance lists the themes one per row, with a bigger preview next to each name.",
-      "Ashen Keep's ember colour is a bit lighter, so small labels on it are easier to read.",
-    ],
-    prs: [
       { number: 554, title: "List themes one per row in Settings > Appearance" },
-    ],
-    tags: ["settings", "themes"],
-  },
-  {
-    version: "0.23.15",
-    date: "2026-10-31",
-    title: "Three more themes",
-    notes: [
-      "Pick Ashen Keep, Tidewater or Graphite in Settings > Appearance, each in Dark and Light.",
-    ],
-    prs: [
       { number: 553, title: "Add the Ashen Keep, Tidewater and Graphite themes" },
-    ],
-    tags: ["themes"],
-  },
-  {
-    version: "0.23.14",
-    date: "2026-10-31",
-    title: "New themes and nicer device names",
-    notes: [
-      "Three new themes: pick Dusk Rose, Garnet or Amethyst in Settings > Appearance, each in Dark and Light.",
-      "Your devices show their own names, like your Mac's, without network endings such as .fritz.box or .local.",
-    ],
-    prs: [
       { number: 550, title: "Add the Dusk Rose, Garnet and Amethyst themes" },
       { number: 549, title: "Devices go by a friendly name" },
     ],
-    tags: ["accounts", "themes"],
+    tags: ["accounts", "calculator", "catalog", "clock-counter", "games", "modules", "notes", "pdf-viewer", "settings", "system-monitor", "themes", "todos", "ui-kit", "whiteboard", "workspace"],
   },
   {
     version: "0.23.12",
