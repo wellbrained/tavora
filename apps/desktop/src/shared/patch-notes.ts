@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.27",
+    date: "2026-10-31",
+    title: "Pick how your panels look",
+    notes: [
+      "New in Settings > Appearance: Panel style. Framed sets each module in a frame, Folders gives tabs a folder look, Classic keeps the header bar.",
+      "The panel you're working in is a shade lighter, and only its tab title stands out.",
+      "Panels keep their full border with Windows display scaling.",
+    ],
+    prs: [
+      { number: 571, title: "Panel style setting: Classic, Framed, Folders; panel borders stay visible at display scaling" },
+    ],
+    tags: ["games", "settings", "workspace"],
+  },
+  {
     version: "0.23.26",
     date: "2026-10-31",
     title: "Cleaner menus and panels",
