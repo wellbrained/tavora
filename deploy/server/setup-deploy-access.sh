@@ -124,6 +124,9 @@ grep -qE '^[[:space:]]*Include[[:space:]]+/etc/ssh/sshd_config\.d/\*\.conf' /etc
 # works where nothing else sets them.
 others="$(grep -lEis '^[[:space:]]*(Port|ListenAddress)[[:space:]]' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf | grep -vxF "$DROPIN" || true)"
 [[ -z "$others" ]] || die "sshd's ports are set in $others; add port $DEPLOY_PORT there by hand instead"
+# sshd -t/-T need sshd's runtime folder; with Ubuntu's ssh.socket it only exists while sshd runs (the service
+# makes it the same way, RuntimeDirectory=sshd).
+[[ -d /run/sshd ]] || install -d -m 755 -o root -g root /run/sshd
 userlist="$(IFS=,; echo "${USERS[*]}")"
 notlist="$(printf ',!%s' "${USERS[@]}")"
 probe22="host=pc,addr=$pc,laddr=127.0.0.1,lport=22"
