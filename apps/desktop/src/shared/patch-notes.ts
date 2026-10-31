@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.14",
+    date: "2026-10-31",
+    title: "Nicer device names",
+    notes: [
+      "Your Mac shows up by its own name in your devices, not its network name.",
+      "Network endings like .fritz.box or .local are gone from device names.",
+    ],
+    prs: [
+      { number: 549, title: "Devices go by a friendly name" },
+    ],
+    tags: ["accounts"],
+  },
+  {
     version: "0.23.13",
     date: "2026-10-31",
     title: "Three new themes",
