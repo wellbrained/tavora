@@ -94,8 +94,11 @@ export interface ModuleViewOptions {
   openPanels(types: string[]): Promise<Record<string, PanelOpenManyResult>>;
   /** panel.setMaximized from this panel (after its click was taken to maximize): asks the host UI to do it. */
   setMaximized(maximized: boolean): void;
-  /** panel.setDialog from this panel (after its click was taken to open): shows it big in a dialog over the app, or back in its slot. */
-  setDialog(open: boolean, size: PanelDialogSize): void;
+  /**
+   * panel.setDialog from this panel: shows it big in a dialog over the workspace, or back in its slot. Opening comes from
+   * a click or key press (`byClick`), or from the Add click that carried over to a panel just added (not by a click).
+   */
+  setDialog(open: boolean, size: PanelDialogSize, how?: { byClick: boolean }): void;
   /** panel.setLive from this panel (size already checked): what its live view over the game shows; null shows nothing. */
   setLive(state: JsonValue | null): void;
   /** Hosts the user granted this module for network.fetch, as installed now; asked on every call and redirect. */
@@ -304,6 +307,11 @@ export const GESTURE_MS = 2_000;
  * the bridge, so the report can land just after the call the click made.
  */
 const GESTURE_LATE_MS = 250;
+/**
+ * How long after its page starts a panel just added may open its dialog once without a click (the Add click carries
+ * over, for a welcome on first add).
+ */
+export const ADD_DIALOG_MS = 10_000;
 
 /** Corner radius of a panel card in the host UI (dock.css), in px. */
 const PANEL_RADIUS = 10;
@@ -529,8 +537,33 @@ export class ModuleView {
     this.options.onOpenLink(url);
   }
 
+  /** When the page shown now started loading. */
+  private pageStartedAt = Date.now();
+  /** Until when this page may open its dialog once without a click (a panel just added), or null. */
+  private addPass: { until: number } | null = null;
+
+  /**
+   * The page asked for its bridge: only a panel the user just added, in the workspace, gets the one dialog without a
+   * click, and only within ADD_DIALOG_MS of its page starting. A reload or any later page gets none.
+   */
+  private startPage(launch: PanelLaunch): void {
+    this.addPass = launch.reason === "add" && !this.overGame ? { until: this.pageStartedAt + ADD_DIALOG_MS } : null;
+  }
+
+  /** panel.setDialog: opening takes a click or key press, or the pass of a panel just added (used up either way). */
+  private async requestDialog(open: boolean, size: PanelDialogSize): Promise<void> {
+    if (!open) return this.options.setDialog(false, size);
+    const pass = this.addPass;
+    this.addPass = null;
+    if (pass && !unused(this.press) && !this.overGame && Date.now() <= pass.until) return this.options.setDialog(true, size, { byClick: false });
+    // Covering the app takes a click, as maximizing does. Over the game too: the host brings Tavora to the front for it.
+    await this.takeGesture("panel.setDialog");
+    this.options.setDialog(true, size, { byClick: true });
+  }
+
   /** Starts counting for a new page: it is hidden until it settles or the cap runs out. */
   private hideUntilSettled(): void {
+    this.pageStartedAt = Date.now();
     this.revealed = false;
     this.firstDrawn = false;
     // Over the game nothing else shows the view again (the host leaves such a panel alone), so it hides and shows itself.
@@ -584,6 +617,8 @@ export class ModuleView {
   /** Called when the module's main frame asks for a bridge port. */
   connect(): void {
     this.disconnect();
+    const launch = this.options.launch();
+    this.startPage(launch);
     const { port1, port2 } = new MessageChannelMain();
     const { module, workspace, instanceId, data, panelState, hostVersion } = this.options;
     const pageImports = new AbortController();
@@ -595,7 +630,7 @@ export class ModuleView {
         moduleVersion: module.manifest.version,
         instanceId,
         panelType: this.options.panelType?.id ?? null,
-        launch: this.options.launch(),
+        launch,
         setContent: this.options.setContent,
         openPanel: async (type, content) => {
           // One click opens or switches one panel, so a page cannot keep panels coming on its own.
@@ -621,11 +656,7 @@ export class ModuleView {
           }
           this.options.setMaximized(maximized);
         },
-        setDialog: async (open, size) => {
-          // Covering the app takes a click, as maximizing does. Over the game too: the host brings Tavora to the front for it.
-          if (open) await this.takeGesture("panel.setDialog");
-          this.options.setDialog(open, size);
-        },
+        setDialog: (open, size) => this.requestDialog(open, size),
         setLive: (state) => this.options.setLive(state),
         workspace,
         data,
@@ -1075,7 +1106,7 @@ export class ModuleView {
 
   /** Whether the panel's group fills the workspace, as the host UI last reported it. */
   private maximized = false;
-  /** Whether the panel is shown big in a dialog over the app (panel.setDialog). */
+  /** Whether the panel is shown big in a dialog over the workspace (panel.setDialog). */
   private inDialog = false;
 
   /** The host opened or closed the panel's dialog; the module hears a change. */
@@ -1257,6 +1288,7 @@ export class ModuleView {
 
   private disconnect(): void {
     this.options.tooltip?.close();this.pointer=null;
+    this.addPass = null;
     // A page that goes away answers nothing more.
     for (const finish of [...this.navigations.values()]) finish("failed");
     this.bridge?.close();

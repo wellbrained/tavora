@@ -510,7 +510,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
     </header>
 
     <div ref="root" class="relative min-h-0 flex-1" :data-drop-line="dropLine ?? undefined" @pointerdown.capture="onPointerDown">
-      <div ref="area" class="absolute inset-x-2 top-0 bottom-2 flex gap-2">
+      <div ref="area" class="absolute inset-x-2 top-0 bottom-2 flex gap-2" data-workspace-area>
         <Button
           v-if="leftColumn"
           variant="secondary"

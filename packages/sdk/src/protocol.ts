@@ -814,9 +814,10 @@ export interface Methods {
    */
   "panel.setMaximized": { params: { maximized: boolean }; result: null };
   /**
-   * Shows the panel big in a dialog centred on the app (open: true), with the module's name and a close button over
-   * the dimmed app, or puts it back in its slot (false). `width` and `height` (240 to 2000, default 560 x 640) are the
-   * page's size in it; Tavora makes it fit the window. Opening only right after a click or key press in the panel.
+   * Shows the panel big in a dialog centred over the workspace (open: true), with the module's name and a close button
+   * over the dimmed app, or puts it back in its slot (false). `width` and `height` (240 to 2000, default 560 x 640) are
+   * the page's size in it; Tavora makes it fit the workspace. Opening only right after a click or key press in the panel,
+   * or once within 10 seconds of the page starting for a panel whose launch reason is `add` (a welcome).
    * Tavora 0.21.95 and newer.
    */
   "panel.setDialog": { params: { open: boolean; width?: number; height?: number }; result: null };

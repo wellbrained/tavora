@@ -3654,7 +3654,7 @@ export class Host {
       openPanels: async (types) => this.openPanels(record, types),
       setLive: (state) => this.gameOverlays.setLive(record.instanceId, module.owner, state),
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
-      setDialog: (open, size) => (open ? this.openPanelDialog(record.instanceId, module, size) : this.panels.closeDialog(record.instanceId)),
+      setDialog: (open, size, how) => (open ? this.openPanelDialog(record.instanceId, module, size, how?.byClick ?? true) : this.closePanelDialog(record.instanceId)),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
@@ -4176,16 +4176,23 @@ export class Host {
   }
 
   /**
-   * Shows a panel big in a dialog centred on the app: the host UI draws the frame (the module's name and a close button)
-   * over the dimmed app and says where the page goes; the panel's own view moves there, so it keeps everything it had.
-   * Only a panel in sight in the workspace, one at a time; a new one closes the last.
+   * Shows a panel big in a dialog centred over the workspace: the host UI draws the frame (the module's name and a close
+   * button) over the dimmed app and says where the page goes; the panel's own view moves there, so it keeps everything it
+   * had. Only a panel in sight in the workspace, one at a time; a new one closes the last. A dialog opened by a click
+   * closes on a click beside it; one a panel just added opened on its own (a welcome) does not.
    */
-  private openPanelDialog(instanceId: string, module: InstalledModule, size: PanelDialogSize): void {
+  private openPanelDialog(instanceId: string, module: InstalledModule, size: PanelDialogSize, byClick = true): void {
     if (this.panels.isLent(instanceId)) return this.openPanelDialogFromGame(instanceId, module, size);
-    if (this.window.isDestroyed() || !this.panels.openDialog(instanceId, size)) return;
+    if (this.window.isDestroyed()) return;
+    // A panel just added can ask before the host UI has given it its slot: it opens once it is there, if that is soon.
+    if (!this.panels.isPlaced(instanceId) && this.workspaceId && this.records(this.workspaceId).some((record) => record.instanceId === instanceId)) {
+      void this.questions.ask("dialog", { panel: instanceId }, { module, size, until: Date.now() + PENDING_DIALOG_MS, byClick });
+      return;
+    }
+    if (!this.panels.openDialog(instanceId, size)) return;
     this.closeModuleMenu();
     this.tooltips.close(instanceId);
-    const shown: PanelDialog = { instanceId, title: this.shown(module.manifest).name, icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null, ...size };
+    const shown: PanelDialog = { instanceId, title: this.shown(module.manifest).name, icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null, ...size, closesOnClickBeside: byClick };
     this.window.webContents.send("host:panel-dialog", shown);
   }
 
@@ -4197,12 +4204,18 @@ export class Host {
     const workspaceId = this.gameOverlays.panelWorkspace(instanceId);
     if (!workspaceId || this.window.isDestroyed() || !isLive(this.library, workspaceId)) return;
     // It opens once the panel is back in its slot, if that happens soon.
-    void this.questions.ask("dialog", { panel: instanceId }, { module, size, until: Date.now() + PENDING_DIALOG_MS });
+    void this.questions.ask("dialog", { panel: instanceId }, { module, size, until: Date.now() + PENDING_DIALOG_MS, byClick: true });
     // From Home or the Overlay page too: no workspace counts as shown there.
     if (this.workspaceId !== workspaceId) this.openWorkspace(workspaceId);
     this.gameOverlays.endLayer();
     this.bringToFront();
     this.openPendingDialog();
+  }
+
+  /** panel.closeDialog: puts the panel back, and drops a dialog it asked for that is still waiting for its slot. */
+  private closePanelDialog(instanceId: string): void {
+    this.questions.cancel({ panel: instanceId }, "dialog");
+    this.panels.closeDialog(instanceId);
   }
 
   /** Opens the dialog a panel asked for from the layer once the panel is back in its slot; a panel that took too long misses it. */
@@ -4216,7 +4229,7 @@ export class Host {
     }
     if (this.panels.isLent(instanceId) || !this.panels.isPlaced(instanceId)) return;
     this.questions.answer(pending.id, true);
-    this.openPanelDialog(instanceId, pending.payload.module, pending.payload.size);
+    this.openPanelDialog(instanceId, pending.payload.module, pending.payload.size, pending.payload.byClick);
   }
 
   /** Closes the module menu shown now (only if it belongs to `instanceId`, when given), as if nothing was chosen. */

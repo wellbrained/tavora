@@ -624,7 +624,7 @@ export const nextPanelSlot = ref<string | null>(null);
 export const moduleMenu = shallowRef<ModuleMenu | null>(null);
 api.onModuleMenu((menu) => (moduleMenu.value = menu));
 
-/** The panel shown big in a dialog over the app (PanelDialog.vue), or null. */
+/** The panel shown big in a dialog over the workspace (PanelDialog.vue), or null. */
 export const panelDialog = shallowRef<PanelDialog | null>(null);
 api.onPanelDialog((dialog) => (panelDialog.value = dialog));
 

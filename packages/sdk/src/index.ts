@@ -284,12 +284,15 @@ export interface TavoraSDK {
     /** Fires when this panel starts or stops filling the workspace, whoever did it. Needs Tavora 0.20.20 or newer. */
     onMaximizedChange(fn: (maximized: boolean) => void): Unsubscribe;
     /**
-     * Shows this panel big in a dialog centred on the app, over everything else, with the module's name and a close
-     * button: for settings or details that don't fit a small panel. It is the same page, now `size` big (CSS pixels,
-     * 240 to 2000 a side, default 560 x 640; Tavora makes it fit the window), so it keeps all it had. Call it from the
-     * click or key press that asked for it: the host refuses it otherwise. The user closes it with the close button or a
-     * click beside it (Esc in the page is the module's to handle); onDialogChange says so. From a panel over the game, Tavora closes the
-     * in-game layer and comes to the front with the dialog open. Needs Tavora 0.21.95 or newer (older ones throw UNKNOWN_METHOD).
+     * Shows this panel big in a dialog centred over the workspace, above the other panels (the rail and header stay in
+     * sight, dimmed), with the module's name and a close button: for settings or details that don't fit a small panel. It
+     * is the same page, now `size` big (CSS pixels, 240 to 2000 a side, default 560 x 640; Tavora makes it fit the
+     * workspace), so it keeps all it had. Call it from the click or key press that asked for it: the host refuses it
+     * otherwise. One exception, for a welcome: a panel whose launch reason is `add` may call it once without a press,
+     * within 10 seconds of its page starting (not over the game). The user closes it with the close button or, when a
+     * press opened it, a click beside it (Esc in the page is the module's to handle); onDialogChange says so. From a panel
+     * over the game, Tavora closes the in-game layer and comes to the front with the dialog open. Needs Tavora 0.21.95 or
+     * newer (older ones throw UNKNOWN_METHOD); older ones than this change refuse the welcome without a press.
      */
     openDialog(size?: { width?: number; height?: number }): Promise<void>;
     /** Puts this panel back in its slot after openDialog. Needs Tavora 0.21.95 or newer. */

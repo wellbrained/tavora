@@ -546,7 +546,7 @@ export class PanelViews {
 
   // ── Panel dialog ────────────────────────────────────────────────────
 
-  /** The panel shown big in a dialog over the app, how big it asked to be, and where the host UI put it. */
+  /** The panel shown big in a dialog over the workspace, how big it asked to be, and where the host UI put it. */
   get dialog(): { instanceId: string; width: number; height: number; bounds: PanelRect | null } | null {
     return this.dialogState;
   }
