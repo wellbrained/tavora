@@ -27,13 +27,22 @@ function isRectLike(raw: unknown): raw is Record<keyof PanelRect, number> {
   return [item.x, item.y, item.width, item.height].every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0);
 }
 
-/** A place on the window from the host UI, clamped to the window; null when it is none (negative, not a number, or nothing left). */
+/**
+ * A place on the window from the host UI, clamped to the window; null when it is none (negative, not a number, or
+ * nothing left). With display scaling the place has fractions: its edges are rounded inwards, so the view never covers
+ * the panel's 1px border next to it.
+ */
 export function clampRect(raw: unknown, size: { width: number; height: number }): PanelRect | null {
   if (!isRectLike(raw)) return null;
   const item = raw;
-  const x = Math.min(Math.round(item.x as number), size.width);
-  const y = Math.min(Math.round(item.y as number), size.height);
-  const rect = { x, y, width: Math.min(Math.round(item.width as number), size.width - x), height: Math.min(Math.round(item.height as number), size.height - y) };
+  // A hair of slack, so 99.9999 from the layout still counts as 100.
+  const inwardStart = (n: number) => Math.ceil(n - 0.01);
+  const inwardEnd = (n: number) => Math.floor(n + 0.01);
+  const x = Math.min(inwardStart(item.x as number), size.width);
+  const y = Math.min(inwardStart(item.y as number), size.height);
+  const right = Math.min(inwardEnd((item.x as number) + (item.width as number)), size.width);
+  const bottom = Math.min(inwardEnd((item.y as number) + (item.height as number)), size.height);
+  const rect = { x, y, width: right - x, height: bottom - y };
   return rect.width > 0 && rect.height > 0 ? rect : null;
 }
 

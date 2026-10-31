@@ -907,9 +907,9 @@ test("calculator: keys keep a usable size and the history keeps room, whatever t
   // Wide but short: the history sits beside the keypad.
   await setContentSize(app, RAIL_WIDTH + 1000, 480);
   await expect.poll(fits(160)).toBe(true);
-  // Narrow and tall: the keys stop growing and the history gets the rest.
+  // Narrow and tall: the keys stop growing and the history gets the rest (about 400px; the panel's frame takes a few).
   await setContentSize(app, 640, 1000);
-  await expect.poll(fits(400, 56)).toBe(true);
+  await expect.poll(fits(390, 56)).toBe(true);
   // Without the history, the Basic keypad fits the smallest window whole (Plus has a row more and may scroll there).
   await click(app, CALCULATOR, `[data-testid="toggle-history"]`);
   await click(app, CALCULATOR, `[data-testid="mode-basic"]`);

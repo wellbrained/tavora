@@ -2333,6 +2333,9 @@ export class Host {
       "set-module-icons": saved((action) => {
         this.library.moduleIcons = action.enabled;
       }),
+      "set-panel-style": saved((action) => {
+        this.library.panelStyle = action.style;
+      }),
       // Every open panel moves its toasts at once: the position goes out with the theme.
       "set-toasts": saved((action) => {
         this.library.toasts = action.position;
@@ -4230,6 +4233,7 @@ export class Host {
         autoUpdateModules: library.autoUpdateModules,
         steamIcons: library.steamIcons,
         moduleIcons: library.moduleIcons,
+        panelStyle: library.panelStyle,
         toasts: library.toasts,
         steamProfile: library.steamProfile,
         onboarded: library.onboarded,

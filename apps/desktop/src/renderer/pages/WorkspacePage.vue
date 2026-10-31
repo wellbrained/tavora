@@ -447,7 +447,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
 </script>
 
 <template>
-  <main class="flex h-full min-w-0 flex-col" data-testid="workspace">
+  <main class="workspace-canvas flex h-full min-w-0 flex-col" data-testid="workspace">
     <!-- pl-6 leaves room for the rail's round expand button, which hangs over the rail's edge. -->
     <header class="app-drag flex h-14 flex-none items-center gap-3 pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+0.5rem)] pl-6">
       <WorkspaceIcon v-if="workspace" :workspace="workspace" :size="32" />

@@ -636,6 +636,8 @@ export interface HostViewState {
     steamIcons: boolean;
     /** Whether panel tabs show an icon before the module name. */
     moduleIcons: boolean;
+    /** How panels are drawn: one box with a header bar, or a frame with underlined or folder tabs. */
+    panelStyle: "classic" | "framed" | "folders";
     /** Where toasts show in every panel (the SDK's ToastPosition). */
     toasts: "bottom-center" | "bottom-right" | "top-center";
     /** The Steam profile the user asked Tavora to remember for the import, or null. */

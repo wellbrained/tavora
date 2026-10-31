@@ -12,8 +12,18 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe("bounds", () => {
-  it("clamps a place to the window and rounds it", () => {
-    expect(clampRect({ x: 10.4, y: 20.6, width: 5000, height: 5000 }, { width: 1000, height: 800 })).toEqual({ x: 10, y: 21, width: 990, height: 779 });
+  it("clamps a place to the window and rounds it inwards", () => {
+    expect(clampRect({ x: 10.4, y: 20.6, width: 5000, height: 5000 }, { width: 1000, height: 800 })).toEqual({ x: 11, y: 21, width: 989, height: 779 });
+  });
+
+  it("never reaches past the place's own edges, so a panel's border stays visible at display scaling", () => {
+    // 100.5 + 200.5 ends at 301: rounding each would give 101 + 201 = 302, one pixel over the border.
+    const rect = clampRect({ x: 100.5, y: 50.5, width: 200.5, height: 100.5 }, { width: 1000, height: 800 })!;
+    expect(rect.x).toBeGreaterThanOrEqual(100.5);
+    expect(rect.x + rect.width).toBeLessThanOrEqual(301);
+    expect(rect.y + rect.height).toBeLessThanOrEqual(151);
+    // Whole numbers stay as they are.
+    expect(clampRect({ x: 5, y: 6, width: 700, height: 500 }, { width: 1000, height: 800 })).toEqual({ x: 5, y: 6, width: 700, height: 500 });
   });
 
   it("gives no place for negative, missing, non-finite or empty ones", () => {

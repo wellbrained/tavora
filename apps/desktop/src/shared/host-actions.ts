@@ -230,6 +230,7 @@ export function hostActionTable(c: HostChecks) {
     "set-auto-update-modules": { enabled: bool },
     "set-steam-icons": { enabled: bool },
     "set-module-icons": { enabled: bool },
+    "set-panel-style": { style: oneOf("classic", "framed", "folders") },
     "set-toasts": { position: oneOf("bottom-center", "bottom-right", "top-center") },
 
     // Streaming

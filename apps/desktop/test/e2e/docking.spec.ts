@@ -154,9 +154,10 @@ test("panels are moved, split and maximized from their menu, and the layout is k
   expect(bottom.x).toBe(top.x);
   await expectModuleText(app, VANILLA, "lifecycle", "active");
   // The module sees the size of its half: 900 high, minus the 56px header, the
-  // 8px margin below the dock and the 8px gap, then its 36px tab bar and 1px card borders.
+  // 8px margin below the dock and the 8px gap, then its 36px tab bar, 1px card borders
+  // and the 6px frame below it (the default panel style, Framed).
   const height = Number(await inModule<number>(app, REACT, "innerHeight"));
-  expect(Math.abs(height - ((900 - 56 - 8 - 8) / 2 - 36 - 2))).toBeLessThanOrEqual(1);
+  expect(Math.abs(height - ((900 - 56 - 8 - 8) / 2 - 36 - 2 - 6))).toBeLessThanOrEqual(1);
 
   // Maximize hides the other group and pauses its module.
   await panelMenu(page, REACT, "panel-maximize");

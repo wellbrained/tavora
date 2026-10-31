@@ -54,15 +54,118 @@
   --dv-scrollbar-background-color: var(--input);
 }
 
-/* The selected tab of the focused group carries the one gold mark. */
-.dockview-theme-tavora .dv-groupview.dv-active-group > .dv-tabs-and-actions-container .dv-tab.dv-active-tab {
-  box-shadow: inset 0 -2px 0 var(--primary);
-}
-
 .dockview-theme-tavora .dv-tabs-and-actions-container {
   border-bottom: 1px solid color-mix(in srgb, var(--foreground) 22%, var(--border));
   background: color-mix(in srgb, var(--foreground) 5%, var(--card));
   box-sizing: border-box;
+}
+
+/* Panel styles (Settings > Appearance > Panel style), set on <html> as data-panel-style by host.ts:
+   - classic: one box with a header bar;
+   - framed: a frame around the module, tabs underlined, with a line between them;
+   - folders: a frame around the module, tabs like folder tabs.
+   All of them: a darker canvas between the panels; the panel you work in is a step lighter, and only its open tab's
+   title is bright, with a gold icon. Every other title is grey. */
+:root {
+  --panel-canvas: color-mix(in srgb, var(--background) 93%, black);
+  --panel-lift: color-mix(in srgb, var(--foreground) 6%, var(--card));
+  --panel-lift-border: color-mix(in srgb, var(--foreground) 22%, var(--border));
+  --panel-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+  --panel-folder-back: rgb(0 0 0 / 0.06);
+}
+:root.dark {
+  --panel-canvas: color-mix(in srgb, var(--background) 55%, black);
+  --panel-lift: color-mix(in srgb, var(--foreground) 9%, var(--card));
+  --panel-lift-border: color-mix(in srgb, var(--foreground) 14%, var(--border));
+  --panel-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 8px 24px rgb(0 0 0 / 0.6);
+  --panel-folder-back: rgb(0 0 0 / 0.18);
+}
+.workspace-canvas {
+  background: var(--panel-canvas);
+}
+.dockview-theme-tavora {
+  --dv-activegroup-visiblepanel-tab-color: var(--foreground);
+  --dv-inactivegroup-visiblepanel-tab-color: color-mix(in srgb, var(--foreground) 75%, transparent);
+}
+.dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+  font-weight: 600;
+}
+.dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab svg.lucide {
+  color: var(--primary);
+}
+/* A tab draws its divider and its underline as two shadows, so a style can set either. */
+.dockview-theme-tavora .dv-tab {
+  box-shadow: var(--tab-divider, 0 0 transparent), var(--tab-line, 0 0 transparent);
+}
+
+/* Classic: the gold line under the open tab of the panel you work in, and that panel a step lighter. */
+:root[data-panel-style="classic"] .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+  --tab-line: inset 0 -2px 0 var(--primary);
+}
+:root[data-panel-style="classic"] .dockview-theme-tavora .dv-groupview.dv-active-group {
+  border-color: var(--panel-lift-border);
+}
+:root[data-panel-style="classic"] .dockview-theme-tavora .dv-groupview.dv-active-group > .dv-tabs-and-actions-container {
+  background: var(--panel-lift);
+}
+
+/* Framed and Folders: the panel is a frame, and the module sits inside it like a screen. */
+:root:is([data-panel-style="framed"], [data-panel-style="folders"]) .dockview-theme-tavora {
+  --dv-activegroup-visiblepanel-tab-background-color: transparent;
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-inactivegroup-visiblepanel-tab-background-color: transparent;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+}
+:root:is([data-panel-style="framed"], [data-panel-style="folders"]) .dockview-theme-tavora .dv-groupview {
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: var(--panel-shadow);
+}
+:root:is([data-panel-style="framed"], [data-panel-style="folders"]) .dockview-theme-tavora .dv-groupview.dv-active-group {
+  background: var(--panel-lift);
+  border-color: var(--panel-lift-border);
+}
+:root:is([data-panel-style="framed"], [data-panel-style="folders"]) .dockview-theme-tavora .dv-tabs-and-actions-container {
+  background: transparent;
+  border-bottom: none;
+}
+:root:is([data-panel-style="framed"], [data-panel-style="folders"]) .dockview-theme-tavora .dv-content-container {
+  padding: 0 6px 6px;
+}
+:root:is([data-panel-style="framed"], [data-panel-style="folders"]) .panel-body {
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--background);
+}
+
+/* Framed: a line between tabs, the open tab underlined (gold in the panel you work in, grey in the others). */
+:root[data-panel-style="framed"] .dockview-theme-tavora .dv-tab + .dv-tab {
+  --tab-divider: inset 1px 0 0 color-mix(in srgb, var(--foreground) 12%, var(--border));
+}
+:root[data-panel-style="framed"] .dockview-theme-tavora .dv-tab.dv-active-tab {
+  --tab-line: inset 0 -2px 0 color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+:root[data-panel-style="framed"] .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+  --tab-line: inset 0 -2px 0 var(--primary);
+}
+
+/* Folders: the open tab has the module's background and runs into it; the others are darker tabs behind it. */
+:root[data-panel-style="folders"] .dockview-theme-tavora {
+  --dv-activegroup-visiblepanel-tab-background-color: var(--background);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--background);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--panel-folder-back);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--panel-folder-back);
+}
+:root[data-panel-style="folders"] .dockview-theme-tavora .dv-tabs-container {
+  padding-left: 6px;
+  align-items: flex-end;
+}
+:root[data-panel-style="folders"] .dockview-theme-tavora .dv-tab {
+  margin-top: 4px;
+  border-radius: 8px 8px 0 0;
+}
+:root[data-panel-style="folders"] .dockview-theme-tavora .dv-tab:not(.dv-active-tab) {
+  margin-right: 2px;
 }
 
 .dockview-theme-tavora .dv-tab {
@@ -146,10 +249,6 @@
    pokes out beside each card's corner; the cards carry their own border, so the line goes. */
 .dockview-theme-tavora .dv-split-view-container.dv-separator-border .dv-view::before {
   display: none;
-}
-
-.dockview-theme-tavora .dv-groupview.dv-active-group {
-  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
 }
 
 .dockview-theme-tavora .dv-view:not(.visible) {

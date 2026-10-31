@@ -74,7 +74,7 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
 </script>
 
 <template>
-  <div class="flex size-full flex-col">
+  <div class="panel-body flex size-full flex-col">
   <BrowserToolbar v-if="panel?.browser" :instance-id="id" :browser="panel.browser" />
   <div
     v-if="panel && updateWaiting"
