@@ -152,7 +152,7 @@ describe("the split release (CI builds, the PC checks and uploads)", () => {
 
   it("accepts only the files CI built, with a latest.yml that names this installer", () => {
     const version = "0.24.0";
-    const { all } = releaseFiles(version);
+    const all: string[] = releaseFiles(version).all;
     const downloaded = new Map(all.map((name, i) => [name, { sha256: String(i).repeat(64), sha512: "SHA512==" }]));
     const ci = new Map(all.map((name, i) => [name, String(i).repeat(64)]));
     const yml = "version: 0.24.0\nfiles:\n  - url: Tavora-Setup-0.24.0.exe\n    sha512: SHA512==\npath: Tavora-Setup-0.24.0.exe\nsha512: SHA512==\n";
