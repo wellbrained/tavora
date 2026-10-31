@@ -42,8 +42,11 @@ describe("fold-notes", () => {
     expect(result.text).toBe(`export const PATCH_NOTES = [\r\n${formatEntry(foldEntries(entries), "\r\n")}];\r\n`);
   });
 
-  it("says when there is nothing to fold", () => {
-    expect(foldText(text, entries, "0.4.1").problem).toMatch(/only 0.4.2 is newer than 0.4.1/);
+  it("says when there is nothing to fold, which is not a problem", () => {
+    const result = foldText(text, entries, "0.4.1");
+    expect(result.nothing).toMatch(/only 0.4.2 is newer than 0.4.1/);
+    expect(result.problem).toBeUndefined();
+    expect(foldText(text, entries, "0.4.2").nothing).toMatch(/no entry is newer than 0.4.2/);
   });
 
   it("writes entries exactly as patch-notes.ts has them", () => {
