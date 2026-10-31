@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.10",
+    date: "2026-10-31",
+    title: "Smoother built-in module updates",
+    notes: [
+      "An updated built-in module now starts once in its open panels, not twice.",
+    ],
+    prs: [
+      { number: 538, title: "Start an updated built-in module's panels once" },
+    ],
+    tags: ["modules"],
+  },
+  {
     version: "0.23.9",
     date: "2026-10-30",
     title: "Built-in modules update on their own",

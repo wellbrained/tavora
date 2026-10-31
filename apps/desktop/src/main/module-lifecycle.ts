@@ -6,7 +6,7 @@
 import path from "node:path";
 import { LOCAL_OWNER, OFFICIAL_OWNER, type Connector } from "@tavora/module-schema";
 import type { CatalogClient } from "./catalog-client";
-import { CatalogUpdater, type CatalogInstalled } from "./catalog-updates";
+import { CatalogUpdater, asksNothing, type CatalogInstalled } from "./catalog-updates";
 import type { GrantStore } from "./grants";
 import { checkZipData, forgetOwner, installZip, installZipData, type InstallOptions, type Installed } from "./installer";
 import { LibraryError } from "./library";
@@ -54,8 +54,11 @@ export interface ModuleLifecycleOptions {
   grantsChanged?(): void;
   /** Moves a module's folder to the recycle bin. */
   trash(dir: string): Promise<void>;
-  /** Looks for modules again, so `modules()` and `blocked()` say what is on disk now. */
-  reload(): Promise<void>;
+  /**
+   * Looks for modules again, so `modules()` and `blocked()` say what is on disk now. Answers with the modules whose
+   * open panels it already started again, because their folder moved (a built-in module's first update).
+   */
+  reload(): Promise<ReadonlySet<string>>;
   /** Learns the developer name of a publisher key, so an install can say it at once. */
   introduce(owner: string): Promise<void>;
   log?(line: string): void;
@@ -115,7 +118,8 @@ export class ModuleLifecycle {
   /**
    * The user said yes to an update that asks for more (exactly the version they were shown): it is
    * checked and installed by every installer rule again, what it asked for is granted, and its panels
-   * reload with the new version.
+   * reload with the new version. The install already started them; only a new grant starts them again,
+   * so they connect with it.
    */
   async applyUpdate(moduleId: string, version: string): Promise<string> {
     const module = this.options.modules().get(moduleId) ?? this.options.blocked().get(moduleId);
@@ -125,7 +129,7 @@ export class ModuleLifecycle {
     const updated = this.options.modules().get(moduleId);
     if (updated) {
       await this.options.grants().grant(updated, asks);
-      this.options.panels.reload(moduleId);
+      if (!asksNothing(asks)) this.options.panels.reload(moduleId);
     }
     return installed.manifest.id;
   }
@@ -189,8 +193,9 @@ export class ModuleLifecycle {
   private async finishInstall(installed: Installed): Promise<string> {
     // The developer name comes with the install, so it is said at once (it waits for the service at most a few seconds).
     if (installed.owner !== LOCAL_OWNER && installed.owner !== OFFICIAL_OWNER) await this.options.introduce(installed.owner).catch(() => undefined);
-    await this.options.reload();
-    if (installed.updated) this.options.panels.reload(installed.manifest.id);
+    const restarted = await this.options.reload();
+    // Started once: a second start right after could let both copies run and save (seen on CI, todo 423).
+    if (installed.updated && !restarted.has(installed.manifest.id)) this.options.panels.reload(installed.manifest.id);
     return installed.manifest.id;
   }
 
