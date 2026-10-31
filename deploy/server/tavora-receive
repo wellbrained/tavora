@@ -71,13 +71,14 @@ size="$(stat -c %s "$work/upload.tar")"
 names="$work/names"
 tar -tf "$work/upload.tar" > "$names" 2>/dev/null || die 'the upload is not a tar archive'
 listing="$work/listing"
-tar -tvf "$work/upload.tar" > "$listing" 2>/dev/null || die 'the upload is not a tar archive'
+# --numeric-owner: owner names come from the archive and could hold spaces, which would shift the size column.
+tar --numeric-owner -tvf "$work/upload.tar" > "$listing" 2>/dev/null || die 'the upload is not a tar archive'
 types="$(cut -c1 "$listing" | sort -u | tr -d '\n')"
 [[ "$types" =~ ^[-d]+$ ]] || die 'the upload holds something other than files and folders (a link?)'
 [[ "$(wc -l < "$names")" == "$(wc -l < "$listing")" ]] || die 'the upload has a name with a line break'
 (( $(wc -l < "$names") <= entries )) || die "the upload has more than $entries files and folders"
 # The unpacked size from the listing (third column), so a small archive can't fill the disk once unpacked.
-total="$(awk '{ s += $3 } END { printf "%.0f", s }' "$listing")"
+total="$(awk '$3 !~ /^[0-9]+$/ { bad = 1 } { s += $3 } END { if (bad) print "bad"; else printf "%.0f", s }' "$listing")"
 [[ "$total" =~ ^[0-9]+$ ]] && (( total <= unpacked_limit )) || die "the upload unpacks to more than $((unpacked_limit / 1024 / 1024)) MB"
 while IFS= read -r name; do
   [[ "$name" =~ ^(\./)?([A-Za-z0-9_@+~-][A-Za-z0-9._@+~-]*/)*([A-Za-z0-9_@+~-][A-Za-z0-9._@+~-]*)?$ ]] || die "unsafe name in the upload: $name"
@@ -148,6 +149,7 @@ case "$job" in
     grep -qxF "  - url: $installer" "$unpacked/latest.yml" || die "latest.yml's files list does not point at $installer"
     digest="$(openssl dgst -sha512 -binary "$unpacked/$installer" | base64 -w0)"
     grep -qxF "sha512: $digest" "$unpacked/latest.yml" || die "latest.yml's sha512 is not the installer's"
+    grep -qxF "    sha512: $digest" "$unpacked/latest.yml" || die "latest.yml's files list has another sha512 than the installer's"
     # Only forward: a version that is not newer than the live one is refused (a bad release is fixed by a newer one).
     previous="$(grep -m1 '^version: ' "$root/latest.yml" 2>/dev/null | cut -d' ' -f2 || true)"
     if [[ -n "$previous" ]]; then

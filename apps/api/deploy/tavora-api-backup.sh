@@ -29,5 +29,6 @@ find "$dir" -maxdepth 1 -type f -name 'tavora-api-*.tar.gz' -mtime +14 -delete
 # Written as the service's user, never as root: the folder is the service's, and a link in it must not make root write elsewhere.
 if [ -d "$state" ]; then
   stamp_now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  runuser -u tavora-api -- sh -c 'umask 022; printf "%s\n" "$1" > "$2"' sh "$stamp_now" "$state/last-backup.txt"
+  # Written next to it and renamed: an older root-owned copy can be replaced (the folder is the service's), not opened.
+  runuser -u tavora-api -- sh -c 'umask 022; printf "%s\n" "$1" > "$2.new" && mv -f "$2.new" "$2"' sh "$stamp_now" "$state/last-backup.txt"
 fi
