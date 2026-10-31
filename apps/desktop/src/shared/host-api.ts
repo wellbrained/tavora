@@ -7,6 +7,7 @@ import type { ModuleProblemKind, ModuleProblemValues } from "./module-problem";
 import type { ContactDraft, ConversationDetailResult, InboxView } from "./conversations";
 import type { HostAction } from "./host-actions";
 import type { LayoutMessage, LayoutStills, LayoutView } from "./layout-view";
+import type { Slots } from "./panel-layout";
 
 // The leaderboard words the profile card needs, as module-schema and the SDK's protocol have them. Written out here:
 // the host UI type-checks packages from their builds, which aren't there yet when CI type-checks.
@@ -143,8 +144,22 @@ export interface PanelView {
   live?: boolean;
   /** A Browser tab opened from another one: docked beside it, and left in the background when asked. */
   openedFrom?: { instanceId: string; background: boolean };
+  /** A panel opened with others from one click (panels.openMany): docked around the panel that asked, not where new panels go. */
+  placement?: PanelPlacement;
   /** The panel of a module that left Tavora for the catalog (Discord, AI Usage) and is not installed: it offers to install it. */
   moved?: boolean;
+}
+
+/**
+ * Where the panels one panels.openMany call opened go (main/host.ts openPanels): the same object on each of them. With
+ * `slots`, the module's panelLayout trimmed to the clicking panel (`anchor`) and the new panels, by instance id; the host
+ * UI fits it into the anchor's group. Without, each docks where a new panel goes, and the anchor keeps the focus.
+ */
+export interface PanelPlacement {
+  /** Tells the calls apart: the panels of one call are placed together. */
+  id: string;
+  anchor: string;
+  slots: Slots | null;
 }
 
 /** One of a module's named panel types, as Add module and the tabs show it. */
@@ -1181,4 +1196,4 @@ export interface PanelDialog {
  * `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). `maximize:<instance id>` and
  * `restore:<instance id>` make that panel's group fill the workspace or put it back (panel.setMaximized).
  */
-export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `workspace-${number}` | `address:${string}` | `panel:${string}` | `maximize:${string}` | `restore:${string}` | `setting:${string}`;
+export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `workspace-${number}` | `address:${string}` | `panel:${string}` | `panels:${string}` | `maximize:${string}` | `restore:${string}` | `setting:${string}`;

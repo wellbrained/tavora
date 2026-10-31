@@ -45,6 +45,18 @@ export interface ModulePanelType {
   inGame?: boolean;
 }
 
+/**
+ * One part of a module's `panelLayout`: a slot for one panel type, or a split whose parts sit side by side (`row`) or
+ * stacked (`column`). `size` is the part's share of its split, relative to its siblings (left out: 1). A split holds
+ * 2 to MAX_PANEL_TYPES parts and never a split running the same way; splits go at most MAX_PANEL_LAYOUT_DEPTH deep.
+ */
+export type PanelLayoutNode = PanelLayoutSlot | PanelLayoutSplit;
+export interface PanelLayoutSlot {
+  panel: string;
+  size?: number;
+}
+export type PanelLayoutSplit = { row: PanelLayoutNode[]; size?: number; column?: never } | { column: PanelLayoutNode[]; size?: number; row?: never };
+
 /** Something a module can do on a key press (manifest `actions`). The user binds the key in Tavora; the module only hears which action fired. */
 export interface ModuleAction {
   /** Stable identity, never shown. Saved hotkeys keep it. */
@@ -107,6 +119,12 @@ export interface ModuleManifest {
   viewport: ModuleViewport;
   /** Named panel types. Without them the module has one panel, made from `entry`, `icon` and `viewport`. */
   panels?: ModulePanelType[];
+  /**
+   * How the module's panel types sit next to each other when `panels.openMany` opens several from one click: a tree of
+   * rows and columns with relative sizes, one panel type per slot (see PanelLayoutNode). Tavora lays it out only inside
+   * the clicking panel's group. Needs `panels` and a `minTavora` newer than LAST_TAVORA_WITHOUT_PANEL_LAYOUT.
+   */
+  panelLayout?: PanelLayoutSplit;
   /**
    * For a module without panel types: the user may show its panel in their game, like a type's `inGame`. Needs a
    * `minTavora` newer than LAST_TAVORA_WITHOUT_IN_GAME_PANELS; a module with `panels` sets it per type instead.
@@ -200,7 +218,7 @@ const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "personalWorkspaces", "workspaces", "viewport", "panels", "inGame", "overlay", "overlaySize", "actions", "translations", "leaderboards", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "personalWorkspaces", "workspaces", "viewport", "panels", "panelLayout", "inGame", "overlay", "overlaySize", "actions", "translations", "leaderboards", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight", "wide"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
@@ -439,6 +457,11 @@ export const LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES = "0.21.42";
 export const LAST_TAVORA_WITHOUT_LEADERBOARDS = "0.21.91";
 /** The last Tavora that refuses `viewport.wide`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_WIDE_LAYOUT = "0.21.93";
+/** The last Tavora that refuses `panelLayout`; a manifest with it needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_PANEL_LAYOUT = "0.23.28";
+/** How many rows and columns a `panelLayout` may hold inside each other (the outer one counts), and the most a part's `size` may be. */
+export const MAX_PANEL_LAYOUT_DEPTH = 3;
+export const MAX_PANEL_LAYOUT_SIZE = 10_000;
 /**
  * The last Tavora whose boards had no `name`. A manifest for it (`minTavora` at most this, such as Sudoku 0.1.0) may
  * leave the names out and loads with each board's id as its name; a newer manifest needs them.
@@ -603,6 +626,42 @@ function checkPanels(panels: unknown, errors: string[], inGameAllowed = true, wi
     if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
   });
   if (continuing > 1) errors.push("only one panel type may set continues");
+}
+
+/** Checks `panelLayout` against the module's panel types (`types`: their ids, null without `panels`). */
+function checkPanelLayout(layout: unknown, types: ReadonlySet<string> | null, allowed: boolean, errors: string[]): void {
+  if (!allowed) errors.push(`panelLayout needs a minTavora newer than ${LAST_TAVORA_WITHOUT_PANEL_LAYOUT}, because older Tavoras refuse it`);
+  if (types === null) return void errors.push("panelLayout needs panels: it places the module's panel types");
+  const seen = new Set<string>();
+  const before = errors.length;
+  const node = (value: unknown, at: string, depth: number, outer: "row" | "column" | null): void => {
+    if (!isRecord(value)) return void errors.push(`${at} must be an object`);
+    if (value.size !== undefined) {
+      if (outer === null) errors.push(`${at}.size is only for the parts of a row or column`);
+      else if (typeof value.size !== "number" || !Number.isFinite(value.size) || value.size <= 0 || value.size > MAX_PANEL_LAYOUT_SIZE) {
+        errors.push(`${at}.size must be a number above 0 and at most ${MAX_PANEL_LAYOUT_SIZE}`);
+      }
+    }
+    const kinds = (["panel", "row", "column"] as const).filter((key) => value[key] !== undefined);
+    const unknown = Object.keys(value).filter((key) => key !== "size" && key !== "panel" && key !== "row" && key !== "column");
+    if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
+    if (kinds.length !== 1) return void errors.push(`${at} must have one of panel, row or column`);
+    const kind = kinds[0]!;
+    if (kind === "panel") {
+      if (outer === null) return void errors.push(`${at} must be a row or a column`);
+      const panel = value.panel;
+      if (typeof panel !== "string" || !types.has(panel)) return void errors.push(`${at}.panel must be the id of one of the module's panels`);
+      if (seen.has(panel)) return void errors.push(`panelLayout places ${panel} twice`);
+      seen.add(panel);
+      return;
+    }
+    if (kind === outer) errors.push(`${at} is a ${kind} inside a ${kind}; put its parts in the outer one`);
+    if (depth > MAX_PANEL_LAYOUT_DEPTH) return void errors.push(`panelLayout may hold at most ${MAX_PANEL_LAYOUT_DEPTH} rows and columns inside each other`);
+    const parts = value[kind];
+    if (!Array.isArray(parts) || parts.length < 2 || parts.length > MAX_PANEL_TYPES) return void errors.push(`${at}.${kind} must be an array of 2 to ${MAX_PANEL_TYPES} parts`);
+    parts.forEach((part: unknown, index) => node(part, `${at}.${kind}[${index}]`, depth + 1, kind));
+  };
+  node(layout, "panelLayout", 1, null);
 }
 
 function checkActions(actions: unknown, errors: string[]): void {
@@ -791,6 +850,11 @@ export function validateManifest(input: unknown): ManifestResult {
   if (input.panels !== undefined) {
     const minTavora = { minTavora: typeof input.minTavora === "string" ? input.minTavora : "" };
     checkPanels(input.panels, errors, officialId(input) || needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_IN_GAME_PANELS), wideAllowed);
+  }
+  if (input.panelLayout !== undefined) {
+    const types = Array.isArray(input.panels) ? new Set(input.panels.filter(isRecord).map((type) => type.id).filter(isPanelTypeId)) : null;
+    const allowed = officialId(input) || needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_PANEL_LAYOUT);
+    checkPanelLayout(input.panelLayout, types, allowed, errors);
   }
   if (input.inGame !== undefined) {
     if (typeof input.inGame !== "boolean") errors.push("inGame must be true or false");

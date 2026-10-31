@@ -22,7 +22,7 @@
       <p class="gone" data-testid="content-gone" hidden>This build was deleted. The panel stays open: pick another one above.</p>
       <p class="eyebrow">Why this page opened (<code>panel.getLaunch</code>): <span data-testid="launch">–</span></p>
       <h2>Open another panel on this build</h2>
-      <p><code>panels.open</code> brings forward a panel of that type already showing the build, else switches the one used last (it saves first, through <code>panel.onNavigate</code>), else opens a new one.</p>
+      <p><code>panels.open</code> brings forward a panel of that type already showing the build, else switches the one used last (it saves first, through <code>panel.onNavigate</code>), else opens a new one. <strong>Open all panels</strong> uses <code>panels.openMany</code>: one press opens every type that isn't open yet next to this panel and brings the others to the front.</p>
       <div class="toolbar" data-testid="open-buttons"></div>
       <p class="eyebrow">What Tavora did: <span data-testid="open-result">–</span></p>
       <p><label><input type="checkbox" data-testid="refuse-switch" /> Refuse to switch when another panel asks, as if saving failed (Tavora then offers a new panel)</label></p>

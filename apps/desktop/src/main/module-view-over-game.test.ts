@@ -61,7 +61,10 @@ vi.mock("electron", () => {
     BrowserWindow: { getAllWindows: () => [] },
     clipboard: {},
     ClipboardItem: class {},
-    MessageChannelMain: class {},
+    MessageChannelMain: class {
+      port1 = { on: () => undefined, postMessage: () => undefined, start: () => undefined, close: () => undefined };
+      port2 = {};
+    },
     session: { fromPartition: () => ses },
     WebContentsView,
   };
@@ -102,6 +105,39 @@ describe("one press", () => {
     expect((await copy()).status).not.toBe(403);
     await expect(take(view)).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
     expect((await copy()).status).toBe(403);
+  });
+});
+
+describe("panels.openMany", () => {
+  /** Enough for a page to connect: its launch and documents that can be watched. */
+  const bridged = { launch: () => ({ reason: "add" }), data: { blobs: {}, documents: { on: () => undefined, off: () => undefined } } };
+  /** The bridge's side of the page: what the page's calls reach once checked. */
+  const context = (view: InstanceType<typeof ModuleView>) => {
+    view.connect();
+    return (view as unknown as { bridge: { context: { openPanels(types: string[]): Promise<unknown> } } }).bridge.context;
+  };
+
+  it("opens the whole list on one press, and refuses a second call on the same press", async () => {
+    const asked: string[][] = [];
+    const view = make({ ...bridged, openPanels: async (types: string[]) => (asked.push(types), { map: "opened", bosses: "opened" }) });
+    const bridge = context(view);
+    await expect(bridge.openPanels(["map", "bosses"])).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    view.noteGesture();
+    await expect(bridge.openPanels(["map", "bosses"])).resolves.toEqual({ map: "opened", bosses: "opened" });
+    await expect(bridge.openPanels(["paldeck"])).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(asked).toEqual([["map", "bosses"]]);
+  });
+
+  it("is not for a panel over the game, and keeps the press for later", async () => {
+    const told = vi.fn();
+    const opened = vi.fn(async () => ({}));
+    const view = make({ ...bridged, openPanels: opened, onNeedsTavora: told });
+    const bridge = context(view);
+    view.enterGame(() => true);
+    view.noteGesture();
+    await expect(bridge.openPanels(["map"])).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(told).toHaveBeenCalledTimes(1);
+    expect(opened).not.toHaveBeenCalled();
   });
 });
 

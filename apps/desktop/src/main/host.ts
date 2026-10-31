@@ -30,7 +30,7 @@ import {
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, OfficialPublishStep, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, OfficialPublishStep, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -202,7 +202,8 @@ import {
   type WorkspaceState,
 } from "./workspace";
 import type { PanelContent, PanelLaunch } from "./panel-content";
-import type { PanelOpenResult } from "@tavora/sdk/protocol";
+import type { PanelOpenManyResult, PanelOpenResult } from "@tavora/sdk/protocol";
+import { openManySlots } from "../shared/panel-layout";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
 import { layoutKey, OpenTimes, PanelCover } from "./panel-cover";
 import { BrowserPanelView, ModulePanelView } from "./panel-view-adapters";
@@ -3200,7 +3201,7 @@ export class Host {
    */
   private openModule(
     moduleId: string,
-    options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string; launch?: PanelLaunch; reuse?: boolean } = {},
+    options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string; launch?: PanelLaunch; reuse?: boolean; instanceId?: string; placement?: PanelPlacement } = {},
   ): string | void {
     const { openedFrom } = options;
     const workspace = this.workspace;
@@ -3214,10 +3215,11 @@ export class Host {
       this.showPanel(open.record.instanceId);
       return open.record.instanceId;
     }
-    const record: InstanceRecord = { instanceId: randomUUID(), moduleId, ...(panelType ? { panelType } : {}) };
+    const record: InstanceRecord = { instanceId: options.instanceId ?? randomUUID(), moduleId, ...(panelType ? { panelType } : {}) };
     this.workspaces.openPanel(workspace.id, record);
     if (this.needsAnswer(moduleId)) this.panels.setAwaiting(record.instanceId);
     if (openedFrom) this.panels.setOpenedFrom(record.instanceId, openedFrom);
+    if (options.placement) this.panels.setPlacement(record.instanceId, options.placement);
     this.panels.setLaunch(record.instanceId, options.launch ?? { reason: "add" });
     this.createView(record, workspace, performance.now());
     return record.instanceId;
@@ -3623,7 +3625,13 @@ export class Host {
         this.pushStateSoon();
       },
       onDrawn: () => this.pushStateSoon(),
-      onFocus: () => this.window.webContents.send("host:shortcut", `panel:${record.instanceId}`),
+      onFocus: () => {
+        // A panel panels.openMany opened takes the keyboard while its page loads; the panel that asked keeps it.
+        const placement = this.panels.placement(record.instanceId);
+        const anchor = placement && !this.moduleView(record.instanceId)?.revealed ? this.moduleView(placement.anchor) : undefined;
+        if (anchor && !anchor.view.webContents.isDestroyed()) return anchor.view.webContents.focus();
+        this.window.webContents.send("host:shortcut", `panel:${record.instanceId}`);
+      },
       onOpenLink: (url) => this.openLinkFromModule(url, workspace.id),
       onNeedsTavora: () => {
         this.notice = translate(this.language, "overlays.bringBackFirst");
@@ -3642,6 +3650,7 @@ export class Host {
       launch: () => this.launchOf(record),
       setContent: (content) => this.setPanelContent(record, content),
       openPanel: (type, content) => this.openRelatedPanel(record, type, content),
+      openPanels: async (types) => this.openPanels(record, types),
       setLive: (state) => this.gameOverlays.setLive(record.instanceId, module.owner, state),
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
       setDialog: (open, size) => (open ? this.openPanelDialog(record.instanceId, module, size) : this.panels.closeDialog(record.instanceId)),
@@ -3731,6 +3740,61 @@ export class Host {
       // The page takes no navigation: a new panel shows the content instead.
     }
     return this.openPanelOn(from.moduleId, type, content) ? "opened" : "failed";
+  }
+
+  /**
+   * panels.openMany from a panel, after its click was taken (the decision log, 2026-10-31 "Several panels from one click"):
+   * several of the module's own panel types, each once, in the workspace shown now. A type open there already (the asking
+   * panel's own, too) comes to the front where it is; the others open new, docked around the panel that asked as the
+   * manifest's panelLayout says (the host UI fits it into that panel's group), else each where panels.open puts a panel.
+   * The panel that asked keeps the focus.
+   */
+  private openPanels(from: InstanceRecord, types: string[]): Record<string, PanelOpenManyResult> {
+    const workspace = this.workspace;
+    const module = this.modules.get(from.moduleId);
+    if (!workspace || !module || !this.records(workspace.id).includes(from)) throw new HostError("PERMISSION_DENIED", "panels.openMany works only in the workspace shown now");
+    const manifest = this.shown(module.manifest);
+    const known = new Set(panelTypes(manifest).map((type) => type.id));
+    const unknown = types.find((type) => !known.has(type));
+    if (unknown !== undefined) throw new HostError("INVALID_PARAMS", `this module has no panel type "${unknown}"`);
+    const result: Record<string, PanelOpenManyResult> = {};
+    const shown: string[] = [];
+    // The new panels' ids come first, so the layout can name them before they open.
+    const fresh = new Map<string, string>();
+    for (const type of types) {
+      const open = type === from.panelType ? from : this.panelsOfType(workspace.id, from.moduleId, type)[0]?.record;
+      if (!open) fresh.set(type, randomUUID());
+      else {
+        result[type] = "shown";
+        if (open !== from) shown.push(open.instanceId);
+      }
+    }
+    const placement: PanelPlacement = { id: randomUUID(), anchor: from.instanceId, slots: openManySlots(manifest.panelLayout, from.panelType, from.instanceId, fresh) };
+    let full = false;
+    for (const [type, instanceId] of fresh) {
+      if (full) {
+        result[type] = "failed";
+        continue;
+      }
+      try {
+        const opened = this.openModule(from.moduleId, { panelType: type, launch: { reason: "open", content: null }, instanceId, placement });
+        result[type] = opened === undefined ? "failed" : "opened";
+      } catch (error) {
+        if (!(error instanceof WorkspaceError)) throw error;
+        // The workspace is full; the user is told once, as for Add module.
+        this.notice = error.message;
+        full = true;
+        result[type] = "failed";
+      }
+    }
+    for (const instanceId of shown) {
+      const view = this.moduleView(instanceId);
+      if (view) view.usedAt = Date.now();
+    }
+    this.pushState();
+    // After the state, so the host UI has docked the new panels when it gives the focus back.
+    this.window.webContents.send("host:shortcut", `panels:${from.instanceId}:${shown.join(",")}`);
+    return Object.fromEntries(types.map((type) => [type, result[type]!]));
   }
 
   /** A workspace's panels of one of a module's panel types (undefined: a module without types); the one used last first, of panels nobody used the newest. */
@@ -4328,6 +4392,7 @@ export class Host {
         const name = type?.name ?? (module ? this.shown(module.manifest).name : (waitingModules(this.moduleProblems).get(record.moduleId) ?? movedModule(record.moduleId)?.name ?? record.moduleId));
         const panelType = record.panelType ?? null;
         const openedFrom = this.panels.openedFrom(record.instanceId);
+        const placement = this.panels.placement(record.instanceId);
         if (type === undefined) {
           // A module that left Tavora for the catalog and is not installed yet: its panel offers to install it.
           const moved = !module && movedModule(record.moduleId) !== undefined;
@@ -4356,6 +4421,7 @@ export class Host {
             ...(this.canShowInGame(record) ? { canInGame: true } : {}),
             ...(inGame ? { inGame } : {}),
             ...(live ? { live } : {}),
+            ...(placement ? { placement } : {}),
           };
         }
         const browser = view.state;

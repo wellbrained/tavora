@@ -15,6 +15,9 @@
     "viewport",
     "permissions"
   ],
+  "dependencies": {
+    "panelLayout": ["panels"]
+  },
   "allOf": [
     {
       "if": {
@@ -323,6 +326,26 @@
         }
       }
     },
+    "panelLayout": {
+      "description": "How the panel types sit next to each other when panels.openMany opens several from one click: a row or column of parts, each a slot { panel, size } or a split running the other way, at most 3 rows and columns inside each other. size is a part's share of its split, relative to its siblings (1 when left out). Each panel type at most once, and only types listed in panels; needs panels and a minTavora newer than 0.23.28 (except Tavora's own modules). The TypeScript validator checks the types and minTavora.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["row"],
+          "properties": { "row": { "type": "array", "minItems": 2, "maxItems": 16, "items": { "anyOf": [{ "$ref": "#/definitions/layoutSlot" }, { "$ref": "#/definitions/layoutColumn2" }] } } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["column"],
+          "properties": { "column": { "type": "array", "minItems": 2, "maxItems": 16, "items": { "anyOf": [{ "$ref": "#/definitions/layoutSlot" }, { "$ref": "#/definitions/layoutRow2" }] } } }
+        }
+      ],
+      "examples": [
+        { "row": [{ "size": 50, "column": [{ "panel": "map", "size": 60 }, { "panel": "bosses", "size": 40 }] }, { "size": 50, "panel": "paldeck" }] }
+      ]
+    },
     "overlay": {
       "type": "string",
       "allOf": [
@@ -604,6 +627,57 @@
     }
   },
   "definitions": {
+    "layoutSize": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 10000,
+      "description": "The part's share of its row or column, relative to its siblings."
+    },
+    "layoutSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["panel"],
+      "properties": {
+        "panel": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$", "description": "The id of one of the module's panel types." },
+        "size": { "$ref": "#/definitions/layoutSize" }
+      }
+    },
+    "layoutRow2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row"],
+      "properties": {
+        "row": { "type": "array", "minItems": 2, "maxItems": 16, "items": { "anyOf": [{ "$ref": "#/definitions/layoutSlot" }, { "$ref": "#/definitions/layoutColumn3" }] } },
+        "size": { "$ref": "#/definitions/layoutSize" }
+      }
+    },
+    "layoutColumn2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["column"],
+      "properties": {
+        "column": { "type": "array", "minItems": 2, "maxItems": 16, "items": { "anyOf": [{ "$ref": "#/definitions/layoutSlot" }, { "$ref": "#/definitions/layoutRow3" }] } },
+        "size": { "$ref": "#/definitions/layoutSize" }
+      }
+    },
+    "layoutRow3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row"],
+      "properties": {
+        "row": { "type": "array", "minItems": 2, "maxItems": 16, "items": { "$ref": "#/definitions/layoutSlot" } },
+        "size": { "$ref": "#/definitions/layoutSize" }
+      }
+    },
+    "layoutColumn3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["column"],
+      "properties": {
+        "column": { "type": "array", "minItems": 2, "maxItems": 16, "items": { "$ref": "#/definitions/layoutSlot" } },
+        "size": { "$ref": "#/definitions/layoutSize" }
+      }
+    },
     "leaderboardUnit": {
       "type": "string",
       "minLength": 1,

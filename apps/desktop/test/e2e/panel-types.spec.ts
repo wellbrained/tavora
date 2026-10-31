@@ -227,3 +227,30 @@ test("the modules menu adds the panel types not open yet and brings open ones to
   await expect(panels(page, PANELS)).toHaveCount(3);
   await app.close();
 });
+
+test("one press opens every panel type not open yet, and the panel pressed stays in front", async () => {
+  const { app, page } = await launch(await newUserData());
+  const result = () => inModule<string>(app, PANELS, `document.querySelector('[data-testid="open-result"]').textContent`, 0);
+  const front = (type: string) => page.locator(`.dv-tab.dv-active-tab [data-panel-type="${type}"]`);
+  await addPanel(page, "overview");
+  await expect.poll(() => inModule<boolean>(app, PANELS, `!!document.querySelector('[data-testid="open-all"]')`, 0)).toBe(true);
+
+  // Without a real click or key press nothing opens.
+  await inModule(app, PANELS, `document.querySelector('[data-testid="open-all"]').click()`, 0);
+  await expect.poll(result).toContain("refused");
+  await expect(panels(page, PANELS)).toHaveCount(1);
+
+  // The module has no panelLayout: the new panels open where a new panel goes, as tabs behind the one pressed.
+  await press(app, "open-all", 0);
+  await expect.poll(result).toBe("overview shown, planner opened, inventory opened");
+  await expect(panels(page, PANELS)).toHaveCount(3);
+  await expect(front("overview")).toHaveCount(1);
+  await expectModuleText(app, PANELS, "launch", "open: another panel opened it", 1);
+
+  // Pressed again, every type is open already: nothing new, no second copy.
+  await press(app, "open-all", 0);
+  await expect.poll(result).toBe("overview shown, planner shown, inventory shown");
+  await expect(panels(page, PANELS)).toHaveCount(3);
+  await expect(front("overview")).toHaveCount(1);
+  await app.close();
+});

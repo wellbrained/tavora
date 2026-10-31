@@ -33,6 +33,7 @@ import {
   type Methods,
   type PanelContent,
   type PanelLaunch,
+  type PanelOpenManyResult,
   type PanelOpenResult,
   type TavoraDocument,
   type TavoraTheme,
@@ -165,7 +166,9 @@ export interface MemoryHost {
 }
 
 /** Newest Tavora the SDK knows, and the default version of a memory host. */
-export const LATEST_TAVORA = "0.23.6";
+export const LATEST_TAVORA = "0.23.29";
+/** Most panel types one call may name: as many as a manifest may declare (MAX_PANEL_TYPES in @tavora/module-schema). */
+const MAX_PANEL_TYPES = 16;
 
 /** Calls that answer with nothing when nobody scripted them. */
 const SILENT = new Set<CallName>([
@@ -521,6 +524,24 @@ const handlers: Handlers = {
     shared.opened.push({ type, content: wanted });
     return "opened";
   },
+  "panels.openMany": (panel, { types }) => {
+    const { shared } = panel;
+    if (!Array.isArray(types) || types.length === 0 || types.length > MAX_PANEL_TYPES) fail("INVALID_PARAMS", `types must be 1 to ${MAX_PANEL_TYPES} panel types`);
+    if (new Set(types).size !== types.length) fail("INVALID_PARAMS", "types lists a panel type twice");
+    for (const type of types) {
+      if (typeof type !== "string" || !type || (shared.panelTypes && !shared.panelTypes.includes(type))) fail("INVALID_PARAMS", `${String(type)} is not one of this module's panel types`);
+    }
+    const result: Record<string, PanelOpenManyResult> = {};
+    for (const type of types) {
+      // A type open already (the asking panel's own, too) comes to the front; the rest open new, without content.
+      if ([...shared.panels].some((other) => other.type === type) || shared.opened.some((item) => item.type === type)) result[type] = "shown";
+      else {
+        shared.opened.push({ type, content: null });
+        result[type] = "opened";
+      }
+    }
+    return result;
+  },
 
   "ui.getTheme": ({ shared }) => structuredClone(shared.theme),
   "ui.getLanguage": ({ shared }) => shared.language,
@@ -809,6 +830,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     },
     panels: {
       open: (type, opts = {}) => call("panels.open", { type, ...(opts.content ? { content: opts.content } : {}) }),
+      openMany: (types) => call("panels.openMany", { types: [...types] }),
     },
     workspace: {
       getCurrent: () =>

@@ -1,3 +1,10 @@
+## 0.3.4
+
+Several panels from one click. The new call needs Tavora 0.23.29 (`later`), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `panels.openMany(types)` opens several of the module's own panel types at once, each at most once and without content, and answers per type: `"opened"`, `"shown"` (open already; it comes to the front where it is) or `"failed"`. New panels go inside the asking panel's group, as the manifest's `panelLayout` lays them out. One click or key press covers the whole call. Check `sdk.supports("panels.openMany")`.
+- The memory host (`@tavora/sdk/testing`) answers it and defaults to Tavora 0.23.29.
+
 ## 0.3.3
 
 Files a module linked can be checked and shown in their folder. The new calls need Tavora 0.23.6 (`later`), so `MIN_TAVORA` stays (Tavora 0.19.32).

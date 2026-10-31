@@ -52,6 +52,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `permissions.webAssembly` | no | `true` lets the page compile WebAssembly (the page's security policy gets `'wasm-unsafe-eval'`). Only Tavora's own modules may ask for it; a module from your modules folder that does is not loaded, and the Modules page says why. |
 
 | `panels` | no | Named [panel types](#panel-types) the module offers, 1 to 16. Without it the module has one panel, made from `entry`, `icon` and `viewport`. |
+| `panelLayout` | no | How the panel types sit next to each other when [`panels.openMany`](./protocol.md#opening-several-panels) opens several from one click, see [Panel layout](#panel-layout). Needs `panels` and a `minTavora` newer than `0.23.28`. |
 | `inGame` | no | For a module without `panels`: `true` when the user may show its panel in their game, as a panel type's `inGame` does (see below). Not together with `panels`. Needs a `minTavora` newer than `0.21.2` (except Tavora's own modules). |
 | `overlay` | no | The page for streaming software, see [Overlay](#overlay). The `"stream-overlay"` connector (for OBS links) needs this page, but the page needs no connector: without it the page serves game overlays only, and `minTavora` must be newer than `0.20.50`, because older Tavoras refuse it. Needs Tavora 0.19.26 or newer. The same page is the [live view](./protocol.md#live-views) of a panel the user shows in game. |
 | `overlaySize` | no | `{ "width": 440, "height": 100 }`: the size in pixels the `overlay` page starts at over the user's game; the user can still resize it. Without it the overlay starts at a fifth of the game window's width. Needs `overlay` and a `minTavora` newer than `0.21.27`, because older Tavoras refuse it. |
@@ -85,6 +86,24 @@ A module can offer several tools as separate panels, such as an Inventory, a Bui
 | `inGame` | no | `true` when the user may show this panel in their game: its menu offers **Show in game**, and the panel appears over the game only while the user holds Tavora's in-game layer open (see [Game overlays](./protocol.md#game-overlays)). Types without it get no such item. In game the panel is scaled with the game window's height, so give its page `height: 100%` rather than `100vh`, which can overflow there (see [Game overlays](./protocol.md#game-overlays)). Needs Tavora 0.21.3 or newer, so `minTavora` must be newer than `0.20.54` (except Tavora's own modules); Tavora refuses the manifest otherwise. |
 
 When an update removes a panel type, its open panels keep their place and say the type is gone; the user can remove them or pick another type of the same module. The module's saved content is not touched. Each panel can also show content of its own, such as a different build; see [Content per panel](./protocol.md#content-per-panel). The Panel Types Example in Tavora's examples folder shows every option, and [Several panels](../guide/panels.md) walks through a module built this way.
+
+## Panel layout
+
+`panelLayout` is the module's starter layout for [`panels.openMany`](./protocol.md#opening-several-panels): a row or column of parts, each a slot for one panel type or a split running the other way. `size` is a part's share of its split, relative to its siblings (left out: 1). Needs a `minTavora` newer than `0.23.28` (except Tavora's own modules); Tavora refuses the manifest otherwise.
+
+```json
+"panelLayout": { "row": [
+  { "size": 50, "column": [ { "panel": "map", "size": 60 }, { "panel": "bosses", "size": 40 } ] },
+  { "size": 50, "panel": "paldeck" }
+]}
+```
+
+- The top is `{ "row": [...] }` (side by side) or `{ "column": [...] }` (stacked), without a `size`. Each row or column holds 2 to 16 parts.
+- A part is `{ "panel": "<type id>" }` or a split; inside a row only columns, inside a column only rows. At most 3 rows and columns inside each other.
+- One panel type per slot, no tabs. Each type at most once, and only types listed in `panels`. Types you leave out open where `panels.open` would put them.
+- `size` is a number above 0, up to 10000.
+
+Tavora uses it only inside the group of the panel that called `panels.openMany`, and only when that panel's type is in the layout: it keeps that group as its slot, and lays out the new panels around it measured against the group. Types not opened (not asked for, or open elsewhere already) leave the layout and their neighbour takes the room. A slot smaller than its panel's minimum (`viewport`) opens as a tab in the asking panel's group instead. Panels of other modules never move.
 
 ## Overlay
 

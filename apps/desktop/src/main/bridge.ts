@@ -34,13 +34,14 @@ import {
   type PageResponse,
   type PanelContent,
   type PanelLaunch,
+  type PanelOpenManyResult,
   type PanelOpenResult,
   type TavoraGame,
   type TavoraTheme,
   type TavoraViewport,
   type TavoraWorkspace,
 } from "@tavora/sdk/protocol";
-import { isActionId, isPanelTypeId } from "@tavora/module-schema";
+import { isActionId, isPanelTypeId, MAX_PANEL_TYPES } from "@tavora/module-schema";
 import { HostError } from "./errors";
 import { serializeJson } from "./json";
 import { discordCommand, discordSubscription } from "./discord-commands";
@@ -97,6 +98,12 @@ export interface BridgeContext {
    * the module does not have.
    */
   openPanel(type: string, content: PanelContent | null): Promise<PanelOpenResult>;
+  /**
+   * panels.openMany with checked, distinct panel type ids: opens several of this module's own panels from one press, in the
+   * current workspace. Throws PERMISSION_DENIED unless the panel just got a click or key press, INVALID_PARAMS for a type
+   * the module does not have.
+   */
+  openPanels(types: string[]): Promise<Record<string, PanelOpenManyResult>>;
   /** The page's answer to a panel.navigate event. */
   navigated(requestId: number, handled: boolean, ok: boolean): void;
   /** Whether the panel fills the workspace now (Maximize). */
@@ -627,6 +634,17 @@ const handlers = new Map<string, Handler>([
         if (!content) throw new HostError("INVALID_PARAMS", "params.content must be { id, title }, as for panel.setContent");
       }
       return s.context.openPanel(type, content);
+    },
+  ],
+  [
+    "panels.openMany",
+    (s, params) => {
+      const types = required(object(params), "types");
+      if (!Array.isArray(types) || types.length === 0 || types.length > MAX_PANEL_TYPES || !types.every(isPanelTypeId)) {
+        throw new HostError("INVALID_PARAMS", `params.types must be 1 to ${MAX_PANEL_TYPES} panel type ids of this module`);
+      }
+      if (new Set(types).size !== types.length) throw new HostError("INVALID_PARAMS", "params.types names a panel type twice");
+      return s.context.openPanels(types as string[]);
     },
   ],
 

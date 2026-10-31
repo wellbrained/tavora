@@ -75,6 +75,7 @@ import {
   type PageResponse,
   type PanelContent,
   type PanelLaunch,
+  type PanelOpenManyResult,
   type PanelOpenResult,
   type PutDocumentParams,
   type TavoraDocument,
@@ -146,6 +147,7 @@ export type {
   PageResponse,
   PanelContent,
   PanelLaunch,
+  PanelOpenManyResult,
   PanelOpenResult,
   PutDocumentParams,
   TavoraDocument,
@@ -169,7 +171,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.3";
+export const SDK_VERSION = "0.3.4";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -310,6 +312,15 @@ export interface TavoraSDK {
      * refuses it otherwise (PERMISSION_DENIED). Needs Tavora 0.17.18 or newer.
      */
     open(type: string, options?: { content?: PanelContent }): Promise<PanelOpenResult>;
+    /**
+     * Opens several of this module's own panel types from one click, such as the ones a welcome page let the user tick.
+     * Each type at most once, without content. The new panels go inside this panel's group, laid out as the manifest's
+     * `panelLayout` says (else each where `open` would put it); a type already open in the workspace comes to the front
+     * where it is, and this panel keeps the focus. Answers per type: `opened`, `shown` or `failed`. Call it from the
+     * click or key press that asked for it: one press covers the whole call (PERMISSION_DENIED otherwise). Needs Tavora
+     * 0.23.29 or newer: check `sdk.supports("panels.openMany")`.
+     */
+    openMany(types: string[]): Promise<Record<string, PanelOpenManyResult>>;
   };
   workspace: {
     /**
@@ -853,6 +864,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       // Tavora may wait for another panel to save first.
       open: (type, options = {}) =>
         call("panels.open", { type, ...(options.content ? { content: options.content } : {}) }, LIMITS.navigateTimeoutMs + 5_000),
+      openMany: (types) => call("panels.openMany", { types: [...types] }),
     },
     workspace: {
       getCurrent: () =>

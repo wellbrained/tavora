@@ -16,7 +16,7 @@ import { moduleReadPage } from "./page-import";
 import type { CheckedMenu } from "./module-menu";
 import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
 import type { PanelContent, PanelLaunch } from "./panel-content";
-import { LIMITS, type PanelOpenResult } from "@tavora/sdk/protocol";
+import { LIMITS, type PanelOpenManyResult, type PanelOpenResult } from "@tavora/sdk/protocol";
 import type { DiscordConnector, DiscordListener } from "./discord";
 import { connectionAccess, type ConnectionWatcher } from "./connection";
 import type { SystemMonitor, SystemSubscription } from "./system-info";
@@ -90,6 +90,8 @@ export interface ModuleViewOptions {
   setContent(content: PanelContent | null): void;
   /** panels.open from this panel, after its click was taken: the host picks or opens the destination. */
   openPanel(type: string, content: PanelContent | null): Promise<PanelOpenResult>;
+  /** panels.openMany from this panel, after its click was taken: the host opens them around this panel. */
+  openPanels(types: string[]): Promise<Record<string, PanelOpenManyResult>>;
   /** panel.setMaximized from this panel (after its click was taken to maximize): asks the host UI to do it. */
   setMaximized(maximized: boolean): void;
   /** panel.setDialog from this panel (after its click was taken to open): shows it big in a dialog over the app, or back in its slot. */
@@ -600,6 +602,12 @@ export class ModuleView {
           this.refuseOverGame("panels.open");
           await this.takeGesture("panels.open");
           return this.options.openPanel(type, content);
+        },
+        openPanels: async (types) => {
+          // One press opens the whole call, but only the module's own types, each once, in this panel's area (the host checks).
+          this.refuseOverGame("panels.openMany");
+          await this.takeGesture("panels.openMany");
+          return this.options.openPanels(types);
         },
         navigated: (requestId, handled, ok) => {
           if (this.bridge === bridge) this.navigated(requestId, handled, ok);
