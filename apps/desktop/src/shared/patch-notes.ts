@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.30",
+    date: "2026-11-01",
+    title: "Welcome when you add a module",
+    notes: [
+      "A module you just added can greet you in a dialog right away.",
+      "Module dialogs now sit in the middle of your workspace. The rail and header stay in sight.",
+    ],
+    prs: [
+      { number: 573, title: "Welcome dialog on first add; panel dialogs centre over the workspace" },
+    ],
+    tags: ["modules", "privacy", "sdk", "website", "workspace"],
+  },
+  {
     version: "0.23.29",
     date: "2026-10-31",
     title: "Several panels from one click",
