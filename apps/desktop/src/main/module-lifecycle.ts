@@ -54,8 +54,11 @@ export interface ModuleLifecycleOptions {
   grantsChanged?(): void;
   /** Moves a module's folder to the recycle bin. */
   trash(dir: string): Promise<void>;
-  /** Looks for modules again, so `modules()` and `blocked()` say what is on disk now. */
-  reload(): Promise<void>;
+  /**
+   * Looks for modules again, so `modules()` and `blocked()` say what is on disk now. Answers with the modules whose
+   * open panels it already started again, because their folder moved (a built-in module's first update).
+   */
+  reload(): Promise<ReadonlySet<string>>;
   /** Learns the developer name of a publisher key, so an install can say it at once. */
   introduce(owner: string): Promise<void>;
   log?(line: string): void;
@@ -189,8 +192,9 @@ export class ModuleLifecycle {
   private async finishInstall(installed: Installed): Promise<string> {
     // The developer name comes with the install, so it is said at once (it waits for the service at most a few seconds).
     if (installed.owner !== LOCAL_OWNER && installed.owner !== OFFICIAL_OWNER) await this.options.introduce(installed.owner).catch(() => undefined);
-    await this.options.reload();
-    if (installed.updated) this.options.panels.reload(installed.manifest.id);
+    const restarted = await this.options.reload();
+    // Started once: a second start right after could let both copies run and save (seen on CI, todo 423).
+    if (installed.updated && !restarted.has(installed.manifest.id)) this.options.panels.reload(installed.manifest.id);
     return installed.manifest.id;
   }
 

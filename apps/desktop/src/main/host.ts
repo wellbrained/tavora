@@ -955,8 +955,9 @@ export class Host {
   /**
    * Looks for modules again; panels of modules that are gone are closed, and panels of a module now loaded
    * from another folder start again from it (a blocked built-in update falls back to the shipped copy at once).
+   * Answers with the modules whose panels started again.
    */
-  private async reloadModules(): Promise<void> {
+  private async reloadModules(): Promise<ReadonlySet<string>> {
     const roots = new Map([...this.modules].map(([id, module]) => [id, module.root]));
     this.installed.replace(await Host.loadModules(this.options, this.library.developmentFolders, this.safetyLists, this.official));
     const { modules } = this.installed;
@@ -965,9 +966,11 @@ export class Host {
     this.noteModuleVersions();
     this.workspaces.settlePanelTypes(panelTypesOf(modules));
     this.syncPanelTypes();
-    for (const [id, module] of modules) if (roots.has(id) && roots.get(id) !== module.root) this.reloadModuleViews(id);
+    const moved = new Set([...modules].filter(([id, module]) => roots.has(id) && roots.get(id) !== module.root).map(([id]) => id));
+    for (const id of moved) this.reloadModuleViews(id);
     await this.watchDevelopmentFolders();
     void this.refreshPublisherNames();
+    return moved;
   }
 
   /**
@@ -2348,7 +2351,7 @@ export class Host {
       "publish-official-module": (action) => this.publishOfficialModule(action.moduleId),
       "open-development-project": (action) => this.openDevelopmentProject(action.project),
       "open-developer-link": (action) => this.openDeveloperLink(action.link),
-      "reload-modules": () => this.reloadModules(),
+      "reload-modules": async () => void (await this.reloadModules()),
       "remove-module": (action) => this.lifecycle.remove(action.moduleId),
       "grant-module": (action) => this.lifecycle.grant(action.moduleId, action.network, action.connectors),
       "revoke-module": (action) => this.lifecycle.revoke(action.moduleId),

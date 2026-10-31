@@ -523,9 +523,14 @@ describe("the module lifecycle", () => {
       official,
       panels: { reload: (id) => steps.push(`reload ${id}`), close: (id) => steps.push(`close ${id}`) },
       trash: async () => undefined,
+      // Like the host: a module now loaded from another folder has its panels started again here.
       reload: async () => {
         steps.push("reload modules");
+        const roots = new Map([...current].map(([id, module]) => [id, module.root]));
         current = (await load(official)).modules;
+        const moved = new Set([...current].filter(([id, module]) => roots.has(id) && roots.get(id) !== module.root).map(([id]) => id));
+        for (const id of moved) steps.push(`reload ${id}`);
+        return moved;
       },
       introduce: async (owner) => void steps.push(`introduce ${owner}`),
     });
