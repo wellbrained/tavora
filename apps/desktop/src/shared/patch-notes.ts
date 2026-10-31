@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.26",
+    date: "2026-10-31",
+    title: "Cleaner menus and panels",
+    notes: [
+      "Hovering a menu entry in Settings or your profile now tints it in that group's colour.",
+      "No more stray lines next to the rounded corners of your panels.",
+      "Clicking into a panel now marks it as the one you're working in.",
+    ],
+    prs: [
+      { number: 569, title: "Plate hover in the group's colour, no stray lines at panel corners" },
+    ],
+    tags: ["accounts", "modules", "workspace"],
+  },
+  {
     version: "0.23.25",
     date: "2026-10-31",
     title: "New themes and a tidier look",
