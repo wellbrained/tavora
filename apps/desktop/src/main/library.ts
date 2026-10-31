@@ -5,6 +5,8 @@ import { TOAST_POSITIONS, type ToastPosition } from "@tavora/sdk/protocol";
 
 export const PANEL_STYLES = ["classic", "framed", "folders"] as const;
 export type PanelStyle = (typeof PANEL_STYLES)[number];
+export const TAB_OVERFLOWS = ["list", "arrows"] as const;
+export type TabOverflow = (typeof TAB_OVERFLOWS)[number];
 import { isWorkspaceId } from "./workspace-id";
 import type { GameStart, RootItem, RootSort, Startup } from "../shared/host-api";
 import { isProfileBanner, type ProfileBanner } from "../shared/profile-banner";
@@ -100,6 +102,8 @@ export interface Library {
   moduleIcons: boolean;
   /** How panels are drawn (Settings > Appearance > Panel style). */
   panelStyle: PanelStyle;
+  /** How a group shows the tabs that don't fit its tab row: a list, or arrows that step through the tabs. */
+  tabOverflow: TabOverflow;
   /** Where toasts show in every panel. */
   toasts: ToastPosition;
   /** Stream overlays: Tavora serves module overlays to streaming software on this PC (overlays.ts). Off until the user turns it on. */
@@ -231,6 +235,7 @@ export function emptyLibrary(): Library {
     steamIcons: true,
     moduleIcons: true,
     panelStyle: "framed",
+    tabOverflow: "list",
     toasts: "bottom-center",
     streamOverlays: false,
     overlayPort: DEFAULT_OVERLAY_PORT,
@@ -771,6 +776,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.steamIcons === "boolean") library.steamIcons = saved.steamIcons;
   if (typeof saved.moduleIcons === "boolean") library.moduleIcons = saved.moduleIcons;
   if (PANEL_STYLES.includes(saved.panelStyle as PanelStyle)) library.panelStyle = saved.panelStyle as PanelStyle;
+  if (TAB_OVERFLOWS.includes(saved.tabOverflow as TabOverflow)) library.tabOverflow = saved.tabOverflow as TabOverflow;
   if (TOAST_POSITIONS.includes(saved.toasts as ToastPosition)) library.toasts = saved.toasts as ToastPosition;
   if (typeof saved.streamOverlays === "boolean") library.streamOverlays = saved.streamOverlays;
   if (typeof saved.gameOverlays === "boolean") library.gameOverlays = saved.gameOverlays;

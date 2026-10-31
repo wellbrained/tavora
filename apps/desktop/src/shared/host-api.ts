@@ -653,6 +653,8 @@ export interface HostViewState {
     moduleIcons: boolean;
     /** How panels are drawn: one box with a header bar, or a frame with underlined or folder tabs. */
     panelStyle: "classic" | "framed" | "folders";
+    /** How a group shows the tabs that don't fit its tab row. */
+    tabOverflow: "list" | "arrows";
     /** Where toasts show in every panel (the SDK's ToastPosition). */
     toasts: "bottom-center" | "bottom-right" | "top-center";
     /** The Steam profile the user asked Tavora to remember for the import, or null. */
@@ -1201,4 +1203,4 @@ export interface PanelDialog {
  * `address:<instance id>` focuses that Browser panel's address bar (Ctrl+L in its page). `maximize:<instance id>` and
  * `restore:<instance id>` make that panel's group fill the workspace or put it back (panel.setMaximized).
  */
-export type HostShortcut = "search" | "shortcuts" | "settings" | "toggle-rail" | "home" | `workspace-${number}` | `address:${string}` | `panel:${string}` | `panels:${string}` | `maximize:${string}` | `restore:${string}` | `setting:${string}`;
+export type HostShortcut = "search" | "shortcuts" | "next-tab" | "previous-tab" | "settings" | "toggle-rail" | "home" | `workspace-${number}` | `address:${string}` | `panel:${string}` | `panels:${string}` | `maximize:${string}` | `restore:${string}` | `setting:${string}`;

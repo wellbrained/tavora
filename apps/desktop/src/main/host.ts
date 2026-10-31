@@ -2334,6 +2334,9 @@ export class Host {
       "set-module-icons": saved((action) => {
         this.library.moduleIcons = action.enabled;
       }),
+      "set-tab-overflow": saved((action) => {
+        this.library.tabOverflow = action.mode;
+      }),
       "set-panel-style": saved((action) => {
         this.library.panelStyle = action.style;
       }),
@@ -4318,6 +4321,7 @@ export class Host {
         steamIcons: library.steamIcons,
         moduleIcons: library.moduleIcons,
         panelStyle: library.panelStyle,
+        tabOverflow: library.tabOverflow,
         toasts: library.toasts,
         steamProfile: library.steamProfile,
         onboarded: library.onboarded,

@@ -21,6 +21,8 @@ export interface KeyInput {
  */
 export function shortcutForKey(input: KeyInput, mac: boolean): HostShortcut | null {
   if (input.type !== "keyDown") return null;
+  // Ctrl+Tab is Ctrl on a Mac too, as in browsers.
+  if (input.key === "Tab" && input.control && !input.meta && !input.alt) return input.shift ? "previous-tab" : "next-tab";
   const mod = mac ? input.meta && !input.control : input.control && !input.meta;
   if (!mod) return null;
   const key = input.key.toLowerCase();
