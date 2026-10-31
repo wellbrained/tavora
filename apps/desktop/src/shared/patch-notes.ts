@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.13",
+    date: "2026-10-31",
+    title: "Three new themes",
+    notes: [
+      "Pick Dusk Rose, Garnet or Amethyst in Settings > Appearance, each in Dark and Light.",
+    ],
+    prs: [
+      { number: 550, title: "Add the Dusk Rose, Garnet and Amethyst themes" },
+    ],
+    tags: ["themes"],
+  },
+  {
     version: "0.23.12",
     date: "2026-10-31",
     title: "A tidier Settings",
