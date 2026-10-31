@@ -187,6 +187,7 @@ import {
   THEME_MANIFEST,
   themeManifest,
   veiled,
+  withRadius,
   type InstalledTheme,
   type ThemeProblem,
 } from "./themes";
@@ -563,7 +564,7 @@ export class Host {
     this.systemInfo = prepared.systemInfo;
     this.openTimes = prepared.openTimes;
     this.emblem = prepared.emblem;
-    this.currentTheme = moduleTheme(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation, library.toasts);
+    this.currentTheme = moduleTheme(withRadius(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation, library.radius), library.toasts);
     this.files = new ModuleFilesFolder({
       userData: options.userData,
       defaultFolder: options.picturesFolder ?? defaultFilesRoot(options.userData),
@@ -1633,7 +1634,7 @@ export class Host {
 
   /** Shows the theme the library names, in the host window, native controls and every open module. */
   private applyTheme(): void {
-    const next = moduleTheme(this.currentChoice().variation, this.library.toasts);
+    const next = moduleTheme(withRadius(this.currentChoice().variation, this.library.radius), this.library.toasts);
     if (JSON.stringify(next) === JSON.stringify(this.currentTheme)) {
       this.syncNativeTheme();
       return;
@@ -2434,9 +2435,14 @@ export class Host {
         }
         this.applyTheme();
       }),
+      "set-radius": saved((action) => {
+        this.library.radius = action.radius;
+        this.applyTheme();
+      }),
       "reset-theme": saved(() => {
         this.library.theme = { ...DEFAULT_THEME };
         this.library.followSystem = true;
+        this.library.radius = null;
         this.applyTheme();
       }),
       "reload-themes": () => this.reloadThemes(),
@@ -4398,8 +4404,9 @@ export class Host {
     return {
       themeId: theme.id,
       variationId: variation.id,
-      isDefault: theme.id === DEFAULT_THEME.id && this.library.followSystem,
+      isDefault: theme.id === DEFAULT_THEME.id && this.library.followSystem && this.library.radius === null,
       followSystem: this.library.followSystem,
+      radius: this.library.radius,
       themes: themes.map(({ theme: item, provenance }) => ({
         id: item.id,
         name: item.name,

@@ -10,7 +10,7 @@ import { UserError } from "./messages";
 import { CATALOG, catalogGame } from "./catalog";
 import { DEFAULT_OVERLAY_PORT, MAX_OVERLAY_PORT, MIN_OVERLAY_PORT } from "./overlays";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
-import { DEFAULT_THEME, isVariationId } from "./themes";
+import { DEFAULT_THEME, isThemeRadius, isVariationId } from "./themes";
 
 export type { RootItem, RootSort, Startup };
 
@@ -130,6 +130,8 @@ export interface Library {
   theme: { id: string; variation: string };
   /** Show the variation that matches the system's light or dark setting, and change with it. */
   followSystem: boolean;
+  /** The user's own corner radius in px, over the theme's (THEME_LIMITS.radius); null uses the theme's. */
+  radius: number | null;
   /** False until the first-run welcome was finished or skipped. */
   onboarded: boolean;
   /** True once the user said they want to make modules (Settings > Development, Let's go): its tools show. */
@@ -238,6 +240,7 @@ export function emptyLibrary(): Library {
     profileRanks: { hidden: false, period: "all" },
     theme: { ...DEFAULT_THEME },
     followSystem: true,
+    radius: null,
     onboarded: false,
     makesModules: false,
     seenVersion: null,
@@ -790,6 +793,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   const theme = asRecord(saved.theme);
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };
   if (typeof saved.followSystem === "boolean") library.followSystem = saved.followSystem;
+  if (isThemeRadius(saved.radius)) library.radius = saved.radius;
   // A library saved before the welcome existed belongs to someone who is past it.
   library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;
   if (typeof saved.makesModules === "boolean") library.makesModules = saved.makesModules;

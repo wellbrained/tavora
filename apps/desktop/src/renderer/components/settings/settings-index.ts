@@ -87,6 +87,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["theme", "appearance"],
   ["appearance-mode", "appearance"],
   ["theme-variation", "appearance"],
+  ["corner-radius", "appearance"],
   ["module-icons", "appearance"],
   ["toasts", "appearance"],
   ["grayscale-text", "appearance"],

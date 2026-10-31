@@ -35,6 +35,7 @@ export const SECTIONS = [
   { id: "lists", group: "display", title: "Lists and rows", keywords: "list row hover selected settings divider card" },
   { id: "settings", group: "display", title: "Module settings", keywords: "settings dialog overlay preview page reset saved control column row" },
   { id: "zoom", group: "canvas", title: "Pan and zoom", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport" },
+  { id: "map", group: "canvas", title: "Tile map", keywords: "map tiles pins markers cluster group dots spawns highlight world game zoom" },
 ] as const;
 export type SectionId = (typeof SECTIONS)[number]["id"];
 

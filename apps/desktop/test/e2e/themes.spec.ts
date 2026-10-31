@@ -21,10 +21,11 @@ test("picking a theme recolours Tavora and its modules, and is kept after a rest
   await openModule(page, VANILLA);
 
   await openAppearance(page);
-  await expect(page.getByTestId("theme-tavora.default")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("theme-select")).toContainText("Tavora");
   await expect(page.getByTestId("reset-theme")).toBeDisabled();
+  await page.getByTestId("theme-select").click();
   await page.getByTestId("theme-tavora.nightfall").click();
-  await expect(page.getByTestId("theme-tavora.nightfall")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("theme-select")).toContainText("Nightfall");
   await expect.poll(() => rootToken(page, "background")).toBe("#12161c");
   // Nightfall comes in exactly Dark and Light, so the choice is the Light or dark row.
   await page.getByTestId("mode-light").click();
@@ -43,7 +44,40 @@ test("picking a theme recolours Tavora and its modules, and is kept after a rest
   await openAppearance(again.page);
   await again.page.getByTestId("reset-theme").click();
   await expect.poll(() => rootToken(again.page, "background")).toBe("#171412");
-  await expect(again.page.getByTestId("theme-tavora.default")).toHaveAttribute("aria-pressed", "true");
+  await expect(again.page.getByTestId("theme-select")).toContainText("Tavora");
+  await again.app.close();
+});
+
+test("the user's own corner radius sits on top of the theme, reaches modules, and Reset clears it", async () => {
+  const userData = await newUserData();
+  const { app, page } = await launch(userData);
+  await openWorkspace(page, "poe2");
+  await openModule(page, VANILLA);
+
+  await openAppearance(page);
+  await expect(page.getByTestId("radius-theme")).toHaveAttribute("aria-checked", "true");
+  await page.getByTestId("radius-12").click();
+  await expect.poll(() => rootToken(page, "radius")).toBe("12px");
+  await expect.poll(() => inModule<string>(app, VANILLA, `getComputedStyle(document.documentElement).getPropertyValue("--tavora-radius").trim()`)).toBe("12px");
+  await expect(page.getByTestId("reset-theme")).toBeEnabled();
+  // Another theme keeps the user's corners.
+  await page.getByTestId("theme-tavora.nightfall").click();
+  await expect.poll(() => rootToken(page, "background")).toBe("#12161c");
+  await expect.poll(() => rootToken(page, "radius")).toBe("12px");
+  await app.close();
+
+  const saved = JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { radius: unknown };
+  expect(saved.radius).toBe(12);
+
+  const again = await launch(userData);
+  await expect.poll(() => rootToken(again.page, "radius")).toBe("12px");
+  await openAppearance(again.page);
+  await again.page.getByTestId("radius-theme").click();
+  await expect.poll(() => rootToken(again.page, "radius")).toBe("8px");
+  await again.page.getByTestId("radius-4").click();
+  await again.page.getByTestId("reset-theme").click();
+  await expect(again.page.getByTestId("radius-theme")).toHaveAttribute("aria-checked", "true");
+  await expect.poll(() => rootToken(again.page, "radius")).toBe("8px");
   await again.app.close();
 });
 
@@ -96,11 +130,15 @@ test("the user's own themes load from the themes folder, and broken ones say why
   });
 
   await openAppearance(page);
+  await page.getByTestId("theme-select").click();
+  await expect(page.getByTestId("theme-tavora.default")).toBeVisible();
   await expect(page.getByTestId("theme-community.ash")).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await page.getByTestId("reload-themes").click();
-  await expect(page.getByTestId("theme-community.ash")).toContainText("Local");
   await expect(page.getByTestId("theme-problems")).toContainText("murky");
   await expect(page.getByTestId("theme-problems")).toContainText("muted-foreground on background");
+  await page.getByTestId("theme-select").click();
+  await expect(page.getByTestId("theme-community.ash")).toContainText("Local");
   await page.getByTestId("theme-community.ash").click();
   await expect.poll(() => rootToken(page, "background")).toBe(colors.background);
   await app.close();
@@ -111,10 +149,13 @@ test("New theme copies the Tavora theme into the themes folder as a theme to cha
   const { app, page } = await launch(userData);
   await openAppearance(page);
   await page.getByTestId("create-starter-theme").click();
+  await page.getByTestId("theme-select").click();
   await expect(page.getByTestId("theme-local.my-theme")).toContainText("My theme");
+  await page.keyboard.press("Escape");
   const manifest = JSON.parse(await readFile(path.join(userData, "themes", "my-theme", "tavora.theme.json"), "utf8")) as { id: string };
   expect(manifest.id).toBe("local.my-theme");
   await page.getByTestId("create-starter-theme").click();
+  await page.getByTestId("theme-select").click();
   await expect(page.getByTestId("theme-local.my-theme-2")).toContainText("My theme 2");
   await app.close();
 });

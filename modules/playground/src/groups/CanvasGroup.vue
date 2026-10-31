@@ -4,6 +4,7 @@ import { ZoomPane } from "@tavora/official-ui/components/ui/zoom-pane";
 import { ref } from "vue";
 import DemoSection from "../DemoSection.vue";
 import Specimen from "../Specimen.vue";
+import TileMapDemo from "./TileMapDemo.vue";
 import { type SectionId, sectionTitle as title } from "../sections";
 
 defineProps<{ visible: Set<SectionId>; off: boolean }>();
@@ -83,6 +84,11 @@ function addInFront() {
               </div>
             </div>
           </ZoomPane>
+        </Specimen>
+      </DemoSection>
+<DemoSection v-if="visible.has('map')" id="map" :title="title('map')" description="A map made of picture tiles with pins that keep their size: drag to move, scroll or pinch to zoom. Pins close together merge into a group with a count; dots (spawns) merge only among themselves. Give keyboards the same places as a list next to the map.">
+        <Specimen label="Tiles per zoom level, pins with the pin slot, done, selected, highlight, showPins and a saved camera" column>
+          <TileMapDemo :off="off" />
         </Specimen>
       </DemoSection>
 </template>

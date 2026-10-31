@@ -54,6 +54,8 @@ describe("a library saved by 0.1.0", () => {
     expect(library.onboarded).toBe(true);
     // Nobody had chosen light or dark before, so the theme follows the system.
     expect(library.followSystem).toBe(true);
+    // Corners follow the theme until the user picks their own.
+    expect(library.radius).toBeNull();
     // Fields added later start empty on workspaces saved before them.
     expect(library.workspaces.poe2).toMatchObject({ iconFile: null, iconCheckedAt: null });
   });

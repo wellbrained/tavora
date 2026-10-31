@@ -599,6 +599,8 @@ export interface AppearanceView {
   isDefault: boolean;
   /** The Dark or Light version follows the system's setting, and changes with it. */
   followSystem: boolean;
+  /** The user's own corner radius in px over the theme's, or null for the theme's. */
+  radius: number | null;
   themes: ThemeView[];
   /** Theme folders that could not be used, and why, for theme authors. */
   problems: { folder: string; message: string }[];
