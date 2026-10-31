@@ -52,6 +52,7 @@ export const de: Record<keyof typeof en, string> = {
   "settings.theme.search": "Farben und Ecken. Module passen sich an.",
   "settings.theme.keywords": "design, theme, farbe, farben, aussehen, stil, dunkel, palette, erscheinungsbild, colour, color, look, style, dark, skin, appearance",
   "settings.theme.description": "Farben und Ecken. Module passen sich an.",
+  "settings.theme.inUse": "Aktiv",
   "settings.appearance-mode.label": "Hell oder dunkel",
   "settings.appearance-mode.search": "Folge deinem System oder bleib hell oder dunkel.",
   "settings.appearance-mode.keywords": "system folgen, system, automatisch, dunkel, hell, dunkelmodus, hellmodus, nacht, tag, betriebssystem, windows, mac, follow system, automatic, auto, dark, light, dark mode, light mode, night, day, os",
