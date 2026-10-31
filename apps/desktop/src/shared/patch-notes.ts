@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.17",
+    date: "2026-10-31",
+    title: "Your own corners",
+    notes: [
+      "Pick how round corners are in Settings > Appearance, on top of any theme.",
+      "Theme keeps what your theme picked; Reset to Tavora Default clears it.",
+    ],
+    prs: [
+      { number: 556, title: "Appearance: your own corner radius over any theme" },
+    ],
+    tags: ["games", "settings", "workspace"],
+  },
+  {
     version: "0.23.16",
     date: "2026-10-31",
     title: "Easier theme picking",
