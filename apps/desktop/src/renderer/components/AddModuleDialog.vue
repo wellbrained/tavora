@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// The module library: every installed module, to open in the current workspace. The list on the left
-// picks what is shown: all modules, the ones already in this workspace, one kind of module, or Tavora's
-// catalog (CatalogBrowse.vue). Each module is a card with its Add; a module with panel types lists
+// The module library: every installed module, to open in the current workspace. The menu on the left
+// works like Settings' (plates in groups, the search on top, Module settings at its foot) and picks what
+// is shown: all modules (in sections by kind), the ones already in this workspace, updates, Tavora's
+// catalog (CatalogBrowse.vue), and for developers their own. Each module is a card with its Add; a module with panel types lists
 // them in a list that drops over the card below, each with its own Add (the decision log, named
 // panels round 1), next to an Add all that opens one of each; adding one of those panels keeps the
 // library open for the next. A module
@@ -9,7 +10,7 @@
 // module's page (CatalogModuleDialog.vue), from the catalog or, without it, from the module's own files.
 import { computed, ref } from "vue";
 import { useEventListener } from "@vueuse/core";
-import { account, act, addModule, dialog, openSettings, publishModule, saveModuleZip, state, type AddModuleRequest, type MenuItem } from "../host";
+import { account, addModule, dialog, makesModules, openSettings, publishModule, saveModuleZip, state, type AddModuleRequest, type MenuItem } from "../host";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
@@ -17,7 +18,7 @@ import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-li
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
 import { t } from "../i18n";
-import { Blocks, ChevronDown, CloudDownload, Code, Download, FileArchive, LayoutGrid, Search, Settings2, ShieldCheck, Store, Upload, X } from "@lucide/vue";
+import { Activity, Blocks, ChevronDown, CloudDownload, Code, FileArchive, Globe, LayoutGrid, NotebookPen, Search, Settings2, Upload, X } from "@lucide/vue";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
@@ -29,17 +30,11 @@ import { MODULE_TAG_TEXT, moduleTag, type TaggedModule } from "../../shared/modu
 
 type ModuleView = NonNullable<typeof state.value>["modules"][number];
 type Kind = "official" | "local" | "development";
-/** What the library shows: installed modules (all, the ones in this workspace, or one kind), or the catalog. */
-type View = "all" | "inWorkspace" | Kind | "catalog" | "updates";
+/** What the library shows: installed modules (all, the ones in this workspace, or the developer's own), updates, or the catalog. */
+type View = "all" | "inWorkspace" | "development" | "catalog" | "updates";
 
 const KINDS: Kind[] = ["official", "local", "development"];
-const VIEWS = [
-  { id: "all", icon: Blocks },
-  { id: "inWorkspace", icon: LayoutGrid },
-  { id: "official", icon: ShieldCheck },
-  { id: "local", icon: Download },
-  { id: "development", icon: Code },
-] as const;
+const VIEW_ICONS = { all: Blocks, inWorkspace: LayoutGrid, development: Code } as const;
 
 /** Who publishes a module: Tavora itself, or a package found on this computer. */
 /** Where this copy of a module came from: Official, Catalog, From file, Local, Release or Example (shared/module-tag.ts). */
@@ -56,6 +51,8 @@ const view = ref<View>(browse ? "catalog" : ((dialog.value as AddModuleRequest).
 /** How many modules have an update waiting. The Updates entry is listed while there are some (and while it is open, so it can say all is done). */
 const updateCount = computed(() => state.value!.modules.filter((module) => module.update).length);
 const query = ref("");
+/** The search opens focused; it shows its focus ring only once the user uses it. */
+const searchUsed = ref(false);
 /** How many modules the catalog lists for the search, once it has loaded. */
 const catalogCount = ref<number | null>(null);
 
@@ -84,29 +81,31 @@ function count(id: View): number {
   return searched.value.filter((module) => inView(module, id)).length;
 }
 
-/** The list on the left: the installed modules by view, then Updates (while there are some) and the catalog. */
+
+function viewItem(id: "all" | "inWorkspace" | "development") {
+  return { id, label: t(`addModule.category.${id}`), icon: VIEW_ICONS[id], badge: count(id), title: t(`addModule.about.${id}`), testid: `module-category-${id}` };
+}
+
+/**
+ * The menu on the left: one short, plain list of your modules (Updates while there are some; Development only for
+ * people who make modules, as Settings' developer pages, since the bundled examples alone don't make a developer).
+ * Community modules is a tile of its own below it, the way out to the shop.
+ */
 const navGroups = computed<NavGroup[]>(() => [
   {
-    heading: t("addModule.installed"),
-    items: VIEWS.map((item) => ({
-      id: item.id,
-      label: t(`addModule.category.${item.id}`),
-      icon: item.icon,
-      badge: count(item.id),
-      title: t(`addModule.about.${item.id}`),
-      testid: `module-category-${item.id}`,
-    })),
-  },
-  {
-    heading: t("addModule.more"),
     items: [
+      viewItem("all"),
+      viewItem("inWorkspace"),
       ...(updateCount.value || view.value === "updates"
         ? [{ id: "updates", label: t("addModule.category.updates"), icon: CloudDownload, badge: updateCount.value, badgeAccent: true, badgeTestid: "module-updates-count", title: t("addModule.about.updates"), testid: "module-category-updates" }]
         : []),
-      { id: "catalog", label: t("addModule.tab.browse"), icon: Store, title: t("addModule.about.catalog"), testid: "module-tab-browse" },
+      ...(makesModules.value || view.value === "development" ? [viewItem("development")] : []),
     ],
   },
 ]);
+
+/** The Community modules entry's three fanned icons: plain line icons, back to front, the last one on top. */
+const TILE_ICONS = [Globe, Activity, NotebookPen];
 
 /** The modules shown, by kind; a kind with nothing shown is left out. */
 const groups = computed(() => {
@@ -120,8 +119,6 @@ const resultCount = computed(() => groups.value.reduce((total, group) => total +
 const showHeadings = computed(() => view.value === "all" || view.value === "inWorkspace");
 
 const title = computed(() => (view.value === "catalog" ? t("addModule.tab.browse") : t(`addModule.category.${view.value}`)));
-/** The header's icon: the chosen view's own from the list on the left. */
-const viewIcon = computed(() => (view.value === "catalog" ? Store : view.value === "updates" ? CloudDownload : (VIEWS.find((item) => item.id === view.value)?.icon ?? Blocks)));
 const shownCount = computed(() => (view.value === "catalog" ? catalogCount.value : view.value === "updates" ? updateCount.value : resultCount.value));
 
 /** How many panels of a module (of one of its panel types, if given) are already open in this workspace. */
@@ -211,32 +208,92 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
       :aria-describedby="undefined"
       @escape-key-down="closeMenuFirst"
     >
-      <aside class="bg-background flex shrink-0 flex-col gap-4 border-b p-4 sm:w-64 sm:gap-5 sm:border-r sm:border-b-0">
-        <DialogTitle class="sr-only px-2 pt-1 text-xl font-semibold sm:not-sr-only">{{ t("addModule.title") }}</DialogTitle>
-        <form class="relative" @submit.prevent="submit">
+      <aside class="thin-scroll module-menu bg-background flex shrink-0 flex-col gap-3 border-b px-4 pb-4 sm:w-56 sm:overflow-y-auto sm:border-r sm:border-b-0 lg:w-64">
+        <form class="relative flex h-16 flex-none items-center" @submit.prevent="submit">
           <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
           <label class="sr-only" for="module-search">{{ t("addModule.search") }}</label>
-          <Input id="module-search" v-model="query" class="h-10 pr-3 pl-9" :placeholder="t('addModule.search')" autocomplete="off" data-testid="module-search" autofocus />
+          <!-- Opens focused, so typing searches; the focus ring shows only once the search is used, as in Settings. -->
+          <Input
+            id="module-search"
+            v-model="query"
+            :class="cn('h-10 pr-3 pl-9', !searchUsed && 'focus-visible:border-input focus-visible:ring-0')"
+            :placeholder="t('addModule.search')"
+            autocomplete="off"
+            data-testid="module-search"
+            autofocus
+            @pointerdown="searchUsed = true"
+            @input="searchUsed = true"
+            @blur="searchUsed = true"
+          />
         </form>
-        <NavList v-model="view" class="flex-row overflow-x-auto sm:flex-col" heading-class="hidden sm:block" icon-class="hidden sm:block" :label="t('addModule.categories')" :groups="navGroups" />
-        <Button variant="ghost" class="text-muted-foreground justify-start sm:mt-auto" data-testid="manage-modules" @click="manage">
-          <Settings2 :stroke-width="1.5" /> {{ t("addModule.manage") }}
-        </Button>
+        <NavList
+          v-model="view"
+          class="flex-row overflow-x-auto sm:flex-col sm:overflow-visible"
+          icon-class="hidden sm:block"
+          :label="t('addModule.categories')"
+          :groups="navGroups"
+        />
+        <!-- Community modules: the way out to the shop, right under your modules and set off by a line. A menu entry
+             like the ones above (same hover, lit the same while its page is open), with three module icons fanned out. -->
+        <div class="border-t pt-3 sm:mt-1">
+          <button
+            type="button"
+            :class="
+              cn(
+                'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
+                view === 'catalog' && 'bg-primary/10 text-foreground hover:bg-primary/15',
+              )
+            "
+            :aria-current="view === 'catalog' ? 'page' : undefined"
+            :title="t('addModule.about.catalog')"
+            data-testid="module-tab-browse"
+            @click="view = 'catalog'"
+          >
+            <span class="relative hidden h-8 w-12 flex-none sm:block" aria-hidden="true" data-testid="community-tile-icons">
+              <span
+                v-for="(icon, index) in TILE_ICONS"
+                :key="index"
+                :class="
+                  cn(
+                    'bg-background absolute top-2 grid size-6 place-items-center rounded-md border shadow-sm',
+                    index === 0 && 'left-0 -rotate-12',
+                    index === 1 && 'left-6 rotate-12',
+                    index === 2 && 'top-0.5 left-3 z-10 transition-colors',
+                    index === 2 && (view === 'catalog' ? 'border-primary/60 text-primary' : 'group-hover:border-primary/40 group-hover:text-primary/80'),
+                  )
+                "
+              >
+                <component :is="icon" class="size-3.5" :stroke-width="1.75" />
+              </span>
+            </span>
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="truncate text-sm font-medium">{{ t("addModule.tab.browse") }}</span>
+              <span class="text-muted-foreground hidden truncate text-xs sm:block">{{ t("addModule.catalogTile") }}</span>
+            </span>
+          </button>
+        </div>
+        <!-- Module settings, as Settings' About & updates: rarely needed, so it sits at the foot. -->
+        <button
+          type="button"
+          class="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring flex h-9 flex-none items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 sm:mt-auto"
+          data-testid="manage-modules"
+          @click="manage"
+        >
+          <Settings2 class="size-4 flex-none" :stroke-width="1.75" aria-hidden="true" />
+          <span class="min-w-0 flex-1 truncate">{{ t("addModule.manage") }}</span>
+        </button>
       </aside>
 
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header class="flex h-[72px] shrink-0 items-center gap-3 border-b px-5 sm:px-8">
-          <span class="bg-primary/15 text-primary flex size-10 flex-none items-center justify-center rounded-lg" aria-hidden="true">
-            <component :is="viewIcon" class="size-5" :stroke-width="1.75" />
-          </span>
-          <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-            <div class="flex min-w-0 items-baseline gap-3">
-              <h2 class="truncate text-xl font-semibold" data-testid="module-view-title">{{ title }}</h2>
-              <span v-if="shownCount !== null" class="text-muted-foreground text-sm tabular-nums" role="status" data-testid="module-result-count">{{
-                t("addModule.results", { count: shownCount })
-              }}</span>
-            </div>
-            <p class="text-muted-foreground truncate text-sm" data-testid="module-view-about">{{ t(`addModule.about.${view}`) }}</p>
+        <!-- Where you are, as in Settings: Modules / the view, with how many it shows. -->
+        <header class="flex h-16 shrink-0 items-center gap-4 border-b px-6 lg:px-10">
+          <div class="flex min-w-0 flex-1 items-center gap-2.5 text-base">
+            <DialogTitle class="text-muted-foreground flex-none text-base font-medium">{{ t("addModule.title") }}</DialogTitle>
+            <span class="text-muted-foreground/60 flex-none" aria-hidden="true">/</span>
+            <h2 class="truncate font-semibold" :title="t(`addModule.about.${view}`)" data-testid="module-view-title">{{ title }}</h2>
+            <span v-if="shownCount !== null" class="text-muted-foreground flex-none pl-1 text-sm tabular-nums" role="status" data-testid="module-result-count">{{
+              t("addModule.results", { count: shownCount })
+            }}</span>
           </div>
           <DialogClose as-child>
             <Button variant="ghost" size="icon" class="flex-none" :aria-label="t('common.close')" :title="t('common.close')"><X :stroke-width="1.5" /></Button>
@@ -245,7 +302,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
 
         <CatalogBrowse v-if="view === 'catalog'" :query="query" :open="browse" @count="catalogCount = $event" />
         <ModuleUpdates v-else-if="view === 'updates'" :query="query" />
-        <div v-else class="min-h-0 flex-1 overflow-y-auto px-5 pb-8 sm:px-8" data-testid="module-results">
+        <div v-else class="thin-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-8 [scrollbar-gutter:stable] lg:px-10" data-testid="module-results">
           <section v-for="group in groups" :key="group.id" :aria-label="group.label" class="pt-6">
             <h3 v-if="showHeadings" class="text-muted-foreground flex items-center gap-2 pb-3 text-xs font-semibold tracking-wider uppercase">
               {{ group.label }} <span class="text-muted-foreground/70 font-normal tabular-nums">{{ group.items.length }}</span>
@@ -386,3 +443,12 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
     </DialogContent>
   </Dialog>
 </template>
+
+<style scoped>
+/* The menu fits a normal window; there it scrolls by wheel or keys without a bar beside it. */
+@media (min-height: 640px) {
+  .module-menu::-webkit-scrollbar {
+    width: 0;
+  }
+}
+</style>

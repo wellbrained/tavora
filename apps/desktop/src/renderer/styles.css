@@ -401,3 +401,42 @@ nav[data-expanded="true"] .footer-slot > [aria-hidden="true"] {
   scrollbar-width: thin !important;
   scrollbar-color: var(--input) transparent;
 }
+
+/* Menus of groups as plates (Settings, Modules): each group washed in a colour of its own, the theme's accent for the
+   first, turned around the colour wheel for the others, so every theme keeps three that go together. Put
+   `nav-plates` on a NavList and `nav-plate-turn-1` or `-2` on a group. */
+.nav-plates [data-slot="nav-group"] {
+  --tone: var(--primary);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 13%, transparent), color-mix(in srgb, var(--tone) 3%, transparent) 70%);
+  border-color: color-mix(in srgb, var(--tone) 18%, transparent);
+}
+.nav-plates .nav-plate-turn-1 {
+  --tone: oklch(from var(--primary) l c calc(h + 110));
+}
+.nav-plates .nav-plate-turn-2 {
+  --tone: oklch(from var(--primary) l c calc(h + 220));
+}
+.nav-plates [data-slot="nav-group"] > h3 {
+  color: color-mix(in srgb, var(--tone) 80%, var(--foreground));
+}
+.nav-plates [data-slot="nav-group"] [aria-current="page"] {
+  background: color-mix(in srgb, var(--tone) 22%, transparent);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
+}
+
+/* Thin scrollbars in theme colours, without the system's arrow buttons. Only the webkit rules: Chromium ignores them
+   once the standard scrollbar-width or scrollbar-color is set, and then draws arrows again. */
+.thin-scroll {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--input);
+  border-radius: 4px;
+}
