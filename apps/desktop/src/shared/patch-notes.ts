@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.20",
+    date: "2026-10-31",
+    title: "A clearer Settings menu",
+    notes: [
+      "Each group in the Settings menu sits on its own tinted plate, so the groups are easy to tell apart.",
+      "The page title shows where you are, like Settings / Games / Workspaces. Click Games to go back.",
+      "Search sits at the top of the menu.",
+    ],
+    prs: [
+      { number: 558, title: "Settings: tinted plates for the menu groups, a breadcrumb title, search on top" },
+    ],
+    tags: ["settings", "ui-kit"],
+  },
+  {
     version: "0.23.19",
     date: "2026-10-31",
     title: "Clearer theme choice",
