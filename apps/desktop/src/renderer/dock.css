@@ -83,6 +83,11 @@
 .workspace-canvas {
   background: var(--panel-canvas);
 }
+/* Dockview paints its root in the theme's background; the gaps between panels show the canvas instead, like the header. */
+.dockview-theme-tavora.dv-dockview,
+.dockview-theme-tavora .dv-dockview {
+  background-color: transparent;
+}
 .dockview-theme-tavora {
   --dv-activegroup-visiblepanel-tab-color: var(--foreground);
   --dv-inactivegroup-visiblepanel-tab-color: color-mix(in srgb, var(--foreground) 75%, transparent);
