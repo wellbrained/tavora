@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.2",
+    "date": "2026-10-31",
+    "notes": [
+      "The tile map shows a layer over the map and under the pins, such as a fog of war."
+    ]
+  },
+  {
     "version": "0.1.1",
     "date": "2026-10-31",
     "notes": [
