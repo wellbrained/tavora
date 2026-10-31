@@ -38,6 +38,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # pnpm can call an install done while a patched dependency is still unpatched (scripts/check-patches.mjs).
+      - run: pnpm check:patches
       # Before anything is built, as in a fresh checkout: `pnpm dev` builds the host, the main process and every repo
       # module once and stops (dev.mjs --check). A broken dev start went unnoticed for a day after #494.
       - name: pnpm dev builds from a clean checkout

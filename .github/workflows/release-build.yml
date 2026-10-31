@@ -52,8 +52,9 @@ jobs:
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Not a version: $VERSION"; exit 1; }
           actual="$(node -p 'require("./apps/desktop/package.json").version')"
           [[ "$actual" == "$VERSION" ]] || { echo "apps/desktop/package.json says $actual, not $VERSION"; exit 1; }
-      # A fresh install on every run, so a patched dependency is always really patched.
+      # A fresh install on every run, and a check that every patched dependency really is patched.
       - run: pnpm install --frozen-lockfile
+      - run: pnpm check:patches
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
@@ -89,6 +90,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm check:patches
       - name: Test the media helper
         working-directory: packages/media-helper
         run: cargo test --release --locked

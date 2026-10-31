@@ -16,11 +16,13 @@
     "release": "pnpm --filter @tavora/desktop release",
     "perf:system-info": "pnpm --filter @tavora/desktop perf:system-info",
     "perf:media": "pnpm --filter @tavora/desktop perf:media",
+    "release:fold": "pnpm --filter @tavora/desktop release:fold",
     "release:sdk": "node scripts/release-sdk.mjs",
     "pack-module": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source packages/pack/src/cli.ts",
     "tavora-pack": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source packages/pack/src/cli.ts",
     "tavora-catalog-sign": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source scripts/catalog-sign.ts",
-    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
+    "check:patches": "node scripts/check-patches.mjs",
+    "check": "pnpm check:patches && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

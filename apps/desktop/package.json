@@ -10,6 +10,7 @@
     "test:e2e": "playwright test",
     "package": "electron-builder",
     "release": "node scripts/release.mjs",
+    "release:fold": "node scripts/fold-notes.mjs",
     "dev": "node --conditions=source scripts/dev.mjs",
     "perf:system-info": "node scripts/perf-system-info.mjs",
     "perf:media": "node scripts/perf-media.mjs"
