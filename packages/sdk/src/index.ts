@@ -16,6 +16,7 @@ import {
   JSON_SAVE_PATH,
   JSON_OPEN_PATH,
   READ_ONLY_FILE_PATH,
+  type PickNear,
   type ReadOnlyFile,
   type ReadOnlyFileState,
   HELLO_MESSAGE,
@@ -86,6 +87,7 @@ import {
 } from "./protocol.js";
 
 export type {
+  PickNear,
   ReadOnlyFile,
   ReadOnlyFileState,
   LeaderboardMine,
@@ -382,10 +384,14 @@ export interface TavoraSDK {
     writeImage(png: Blob): Promise<void>;
   };
   files: {
-    /** Opens Tavora's native picker after a real click and remembers read-only access on this PC. */
-    pickReadOnly(options: { extensions: string[]; multiple?: false }): Promise<ReadOnlyFile | null>;
+    /**
+     * Opens Tavora's native picker after a real click and remembers read-only access on this PC. `near` opens it in
+     * the folder of a file this module linked, `up` folders higher (0 to 3), such as the save next to one picked
+     * before; it only chooses where the picker starts and grants nothing. Tavora 0.23.30+; older ones ignore it.
+     */
+    pickReadOnly(options: { extensions: string[]; multiple?: false; near?: PickNear }): Promise<ReadOnlyFile | null>;
     /** The same, letting the user pick several files; an empty list when the dialog was closed. Tavora 0.23.6+. */
-    pickReadOnly(options: { extensions: string[]; multiple: true }): Promise<ReadOnlyFile[]>;
+    pickReadOnly(options: { extensions: string[]; multiple: true; near?: PickNear }): Promise<ReadOnlyFile[]>;
     /** Rereads only a file previously picked by this module in this workspace. At most 50 MiB (32 MiB before Tavora 0.23.6). */
     read(id: string): Promise<Uint8Array>;
     /** Whether a picked file is still there, with its size and last change, without reading it. Tavora 0.23.6+. */
@@ -932,7 +938,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       },
     },
     files: {
-      pickReadOnly: ((options: { extensions: string[]; multiple?: boolean }) => call('files.pickReadOnly',options,MENU_TIMEOUT_MS)) as TavoraSDK['files']['pickReadOnly'],
+      pickReadOnly: ((options: { extensions: string[]; multiple?: boolean; near?: PickNear }) => call('files.pickReadOnly',options,MENU_TIMEOUT_MS)) as TavoraSDK['files']['pickReadOnly'],
       forget: async id => { await call('files.forget',{id}); },
       check: id => call('files.check',{id}),
       showInFolder: async id => { await call('files.showInFolder',{id}); },

@@ -77,7 +77,7 @@ export const PANEL_DIALOG = { min: 240, max: 2000, width: 560, height: 640 } as 
  */
 export interface BridgeContext {
   readOnlyFiles?: {
-    pick(extensions: string[], multiple: boolean): Promise<import('@tavora/sdk/protocol').ReadOnlyFile[]>;
+    pick(extensions: string[], multiple: boolean, near?: import('@tavora/sdk/protocol').PickNear): Promise<import('@tavora/sdk/protocol').ReadOnlyFile[]>;
     forget(id:string):Promise<void>;
     check(id:string):Promise<import('@tavora/sdk/protocol').ReadOnlyFileState>;
     showInFolder(id:string):Promise<void>;
@@ -266,6 +266,15 @@ function fileReference(params: unknown): string {
   return id;
 }
 
+/** Where files.pickReadOnly starts: next to a linked file, up to three folders higher. Only a start, never access. */
+function pickNear(value: unknown): import('@tavora/sdk/protocol').PickNear | undefined {
+  if (value === undefined) return undefined;
+  const near = object(value), up = near.up ?? 0;
+  if (typeof near.file !== 'string' || !/^[a-f0-9]{32}$/.test(near.file)) throw new HostError('INVALID_PARAMS','near.file must be a linked file id.');
+  if (typeof up !== 'number' || !Number.isInteger(up) || up < 0 || up > 3) throw new HostError('INVALID_PARAMS','near.up must be 0 to 3.');
+  return { file: near.file, up };
+}
+
 /** A workspace as game.getCurrent says it. */
 function legacyGame({ id, displayName, kind }: TavoraWorkspace): TavoraGame {
   return { id, displayName, kind: kind === "personal" ? "workspace" : "game" };
@@ -277,8 +286,9 @@ const handlers = new Map<string, Handler>([
     if (!Array.isArray(extensions) || !extensions.length || extensions.length>10 || extensions.some(e=>typeof e!=='string'|| !/^[a-z0-9]{1,12}$/.test(e))) throw new HostError('INVALID_PARAMS','Choose up to ten file extensions.');
     const multiple = object(params).multiple;
     if (multiple !== undefined && typeof multiple !== 'boolean') throw new HostError('INVALID_PARAMS','multiple must be true or false.');
+    const near = pickNear(object(params).near);
     if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to remember files.');
-    const picked = await s.context.readOnlyFiles.pick(extensions, multiple === true);
+    const picked = await s.context.readOnlyFiles.pick(extensions, multiple === true, near);
     return multiple === true ? picked : (picked[0] ?? null);
   }],
   ['files.forget', async (s,params) => {

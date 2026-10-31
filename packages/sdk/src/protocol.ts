@@ -751,6 +751,8 @@ export type HotkeySetResult = "set" | "removed" | "cancelled";
 
 /** Request methods and their params/result types. */
 export interface ReadOnlyFile { id: string; name: string; size: number }
+/** Where files.pickReadOnly starts: in the folder of a file this module linked, `up` folders higher (0 to 3). */
+export interface PickNear { file: string; up?: number }
 /**
  * What files.check found. `found`: the file is where it was, with its size in bytes and when it last changed (ms since
  * 1970). `gone`: it was deleted, moved or renamed. `unlinked`: this PC has no link for the id (another PC made it, or
@@ -763,7 +765,7 @@ export interface Methods {
    * Opens Tavora's open dialog after a click and remembers read-only access to the file picked. With `multiple: true`
    * the user can pick several, and the answer is a list (empty when the dialog was closed). `multiple` needs Tavora 0.23.6.
    */
-  "files.pickReadOnly": { params: { extensions: string[]; multiple?: boolean }; result: ReadOnlyFile | ReadOnlyFile[] | null };
+  "files.pickReadOnly": { params: { extensions: string[]; multiple?: boolean; near?: PickNear }; result: ReadOnlyFile | ReadOnlyFile[] | null };
   "files.forget": { params: { id: string }; result: null };
   /** Whether a file this module linked in this workspace is still there, without reading it. Tavora 0.23.6 and newer. */
   "files.check": { params: { id: string }; result: ReadOnlyFileState };

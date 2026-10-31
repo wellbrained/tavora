@@ -3641,8 +3641,9 @@ export class Host {
       savePicture: (png, name) => this.savePictureAs(png, name),
       saveJson: (data, name) => this.saveJsonAs(module, data, name),
       openJson: () => this.openJsonFrom(module),
-      pickReadOnlyFile: async (extensions, multiple) => {
-        const defaultPath=await saveDialogDirectory(new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id),this.library.workspaces[workspace.id]?.catalogId ?? workspace.id);
+      pickReadOnlyFile: async (extensions, multiple, near) => {
+        const files=new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id);
+        const defaultPath=(near ? await files.directoryNear(near.file,near.up ?? 0) : undefined) ?? await saveDialogDirectory(files,this.library.workspaces[workspace.id]?.catalogId ?? workspace.id);
         const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+this.shown(module.manifest).name+' verknüpfen':'Link a file to '+this.shown(module.manifest).name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:multiple?['openFile','multiSelections']:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
         return picked.canceled ? [] : multiple ? picked.filePaths : picked.filePaths.slice(0,1);
       },

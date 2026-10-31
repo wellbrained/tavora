@@ -44,3 +44,13 @@ it('ignores corrupt picker hints and retains old reference-directory compatibili
 });
 it('checks a linked file without reading it: found with size and change time, gone, or not linked here',async()=>{const{root,file,files}=await setup();const ref=await files.remember(file);const first=await files.check(ref.id);expect(first).toMatchObject({found:true,size:5});await writeFile(file,'a longer text');const changed=await files.check(ref.id);expect(changed).toMatchObject({found:true,size:13});await rm(file);expect(await files.check(ref.id)).toEqual({found:false,reason:'gone'});expect(await new ReadOnlyFiles(root,'local','local.other.map','enshrouded').check(ref.id)).toEqual({found:false,reason:'unlinked'});await expect(files.check('not-an-id')).rejects.toThrow('Invalid file reference');});
 it('locates only a linked file that is still there',async()=>{const{file,files}=await setup();const ref=await files.remember(file);expect(await files.locate(ref.id)).toBe(await realpath(file));await rm(file);await expect(files.locate(ref.id)).rejects.toThrow('may have moved');await files.forget(ref.id);await expect(files.locate(ref.id)).rejects.toThrow('no longer linked');});
+
+it('starts the picker next to a linked file, folders higher, but only for its own files',async()=>{
+ const {root,files}=await setup();const deep=path.join(root,'world','Players');await mkdir(deep,{recursive:true});const save=path.join(deep,'player.sav');await writeFile(save,'p');
+ const ref=await files.remember(save);
+ expect(await files.directoryNear(ref.id,0)).toBe(deep);
+ expect(await files.directoryNear(ref.id,1)).toBe(path.join(root,'world'));
+ expect(await files.directoryNear(ref.id,9)).toBe(path.dirname(path.dirname(path.join(root,'world'))));
+ expect(await new ReadOnlyFiles(root,'local','local.other.map','enshrouded').directoryNear(ref.id,1)).toBeUndefined();
+ expect(await files.directoryNear('nope',1)).toBeUndefined();
+});

@@ -72,7 +72,7 @@ export interface ModuleViewOptions {
   /** Shows a module's menu in the host UI, over this panel (host.ts); resolves with the chosen id, or null. */
   showMenu(menu: CheckedMenu): Promise<string | null>;
   /** files.pickReadOnly, after its click was taken: Tavora's open dialog; the chosen paths (one unless `multiple`), empty when closed. */
-  pickReadOnlyFile?(extensions:string[], multiple:boolean):Promise<string[]>;
+  pickReadOnlyFile?(extensions:string[], multiple:boolean, near?:import('@tavora/sdk/protocol').PickNear):Promise<string[]>;
   /** pictures.save, after its click was taken: Tavora's save dialog for the checked PNG; the file name, or null when the user closed it. */
   savePicture(png: Buffer, name: string): Promise<string | null>;
   /** files.saveJson, after its click was taken: Tavora's save dialog for the formatted JSON; the file name, or null when the user closed it. */
@@ -684,10 +684,10 @@ export class ModuleView {
           close:(id,hoverOnly)=>this.options.tooltip?.close(id,hoverOnly),
         },
         readOnlyFiles: {
-          pick: async (extensions, multiple) => {
+          pick: async (extensions, multiple, near) => {
             this.refuseOverGame('files.pickReadOnly');
             await this.takeGesture('files.pickReadOnly');
-            const selected = (await this.options.pickReadOnlyFile?.(extensions, multiple)) ?? [];
+            const selected = (await this.options.pickReadOnlyFile?.(extensions, multiple, near)) ?? [];
             if (!selected.length || this.bridge !== bridge) return [];
             const files = new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id);
             const picked: ReadOnlyFile[] = [];
