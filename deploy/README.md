@@ -104,15 +104,14 @@ both in your password manager.
    ssh-keyscan -p 2222 -t ed25519 100.92.36.114 | Out-File -Append -Encoding ascii "$HOME\.ssh\known_hosts"
    node scripts/deploy-client.mjs hello
    ```
-   Each job should say `OK`. From now on deploy only with the new scripts: the old ones would write as root
+   Each job should say `OK`. If they time out, the tailnet's access rules must let this PC reach the server on
+   TCP 2222. From now on deploy only with the new scripts: the old ones would write as root
    into folders that now belong to the deploy users.
-8. **Take the old key off the server** and check it no longer gets in. The check goes over the public address
-   (`mytavora.app`): on the tailnet address Tailscale SSH answers and never looks at keys.
+8. **Take the old key off the server** (over the tailnet, where Tailscale SSH lets you in without a key) and
+   check on the server that it is gone:
    ```powershell
    $body = (ssh-keygen -y -f "D:\Server\old-root.key").Split(' ')[1]
-   ssh root@100.92.36.114 "cp -p /root/.ssh/authorized_keys /root/.ssh/authorized_keys.before-rotation && grep -vF '$body' /root/.ssh/authorized_keys.before-rotation > /root/.ssh/authorized_keys; grep -c . /root/.ssh/authorized_keys"
-   ssh -i "D:\Server\vpn ssh-key-2026-10-05.key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new root@mytavora.app "echo new key works on the public address"
-   ssh -i "D:\Server\old-root.key" -o IdentitiesOnly=yes -o BatchMode=yes root@mytavora.app "echo STILL WORKS"
+   if ($body) { ssh root@100.92.36.114 "cp -p /root/.ssh/authorized_keys /root/.ssh/authorized_keys.before-rotation && grep -vF '$body' /root/.ssh/authorized_keys.before-rotation > /root/.ssh/authorized_keys; echo old key lines left: `$(grep -cF '$body' /root/.ssh/authorized_keys); echo keys left: `$(grep -c . /root/.ssh/authorized_keys)" } else { "Could not read the old key; nothing changed." }
    ```
-   The second command must print its message; the last must fail with `Permission denied`. Then delete the old key:
+   It must say `old key lines left: 0`, and `keys left` must be at least 1 (the new root key). Then delete the old key:
    `Remove-Item "D:\Server\old-root.key", "D:\Server\old-root.key.pub" -ErrorAction SilentlyContinue`.

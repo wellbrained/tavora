@@ -135,10 +135,8 @@ cat > "$dropin" <<EOF
 # Written by setup-deploy-access.sh (Tavora). Tavora's deploy users can only run tavora-receive, with the
 # keys in $KEYS (root's, so a deploy can't change them), and nothing else: no shell, no tty, no forwarding.
 # They log in on port $DEPLOY_PORT only, and port $DEPLOY_PORT takes nobody else. Port 22 stays as it was.
-ListenAddress 0.0.0.0:22
-ListenAddress [::]:22
-ListenAddress 0.0.0.0:$DEPLOY_PORT
-ListenAddress [::]:$DEPLOY_PORT
+Port 22
+Port $DEPLOY_PORT
 Match LocalPort $DEPLOY_PORT User *$notlist
     DenyUsers *
 Match LocalPort 22 User $userlist
@@ -177,10 +175,23 @@ if ! cmp -s "$dropin" "$DROPIN"; then
     sshd -T -C "user=$user,$probe22" | grep -qixF 'denyusers *' || restore "$user would be allowed on port 22"
   done
   # New ports need sshd (or Ubuntu's ssh.socket) to listen again; open sessions stay.
-  if systemctl is-active --quiet ssh.socket; then systemctl daemon-reload && systemctl restart ssh.socket
-  elif systemctl is-active --quiet ssh.service; then systemctl restart ssh.service
-  elif systemctl is-active --quiet sshd.service; then systemctl restart sshd.service
-  else say 'sshd is not running as a service; start it to use the new ports'; fi
+  relisten() {
+    if systemctl is-active --quiet ssh.socket || systemctl is-enabled --quiet ssh.socket 2>/dev/null; then
+      systemctl daemon-reload && systemctl restart ssh.socket
+    elif systemctl is-active --quiet ssh.service; then systemctl restart ssh.service
+    elif systemctl is-active --quiet sshd.service; then systemctl restart sshd.service
+    else say 'sshd is not running as a service; start it to use the new ports'; return 0; fi
+  }
+  listening() { ! command -v ss >/dev/null || [[ -n "$(ss -ltnH "sport = :$1")" ]]; }
+  relisten || true
+  sleep 1
+  if ! listening 22 || ! listening "$DEPLOY_PORT"; then
+    # Put the previous setup back and listen as before, so port 22 never stays down.
+    if [[ "$had" == 1 ]]; then install -m 644 "$old" "$DROPIN"; else rm -f "$DROPIN"; fi
+    relisten || true
+    rm -f "$old" "$dropin"
+    die "sshd did not come up on ports 22 and $DEPLOY_PORT; put the previous sshd setup back"
+  fi
   rm -f "$old"
   say "wrote $DROPIN; sshd listens on 22 and $DEPLOY_PORT"
 fi
