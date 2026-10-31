@@ -85,19 +85,17 @@ describe("fetchSteamLibrary", () => {
   it("words a reason code from the service in the user's language, and falls back for one it does not know", async () => {
     const refuse = (language: "en" | "de", status: number, body: unknown) =>
       fetchSteamLibrary({ ...options((async () => answer(body, status)) as unknown as typeof fetch), language }, "x");
-    expect(await refuse("de", 404, { error: "Steam has no profile with that name.", code: "no-such-profile" })).toEqual({
+    expect(await refuse("de", 404, { error: "Steam has no profile with that name.", reason: "no-such-profile" })).toEqual({
       status: "error",
       error: "Steam findet dieses Profil nicht. Prüf den Link und versuch es noch mal.",
     });
-    expect(await refuse("en", 502, { error: "Steam did not return a game list.", code: "no-game-list" })).toMatchObject({ error: expect.stringContaining("Public") });
-    // Newer services name it `reason`, as every other API answer does.
     expect(await refuse("en", 502, { error: "Steam did not return a game list.", reason: "no-game-list" })).toMatchObject({ error: expect.stringContaining("Public") });
-    expect(await refuse("de", 429, { error: "Too many requests.", code: "too-many" })).toMatchObject({ error: expect.stringContaining("Zu viele") });
-    expect(await refuse("de", 400, { error: "English text", code: "made-up-later" })).toEqual({
+    expect(await refuse("de", 429, { error: "Too many requests.", reason: "too-many" })).toMatchObject({ error: expect.stringContaining("Zu viele") });
+    expect(await refuse("de", 400, { error: "English text", reason: "made-up-later" })).toEqual({
       status: "error",
       error: "Der Steam-Import klappt gerade nicht. Versuch es gleich noch mal.",
     });
-    expect(await refuse("en", 400, { error: "English text", code: "constructor" })).toEqual({
+    expect(await refuse("en", 400, { error: "English text", reason: "constructor" })).toEqual({
       status: "error",
       error: "Can't import from Steam right now. Try again in a bit.",
     });

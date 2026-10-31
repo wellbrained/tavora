@@ -82,8 +82,8 @@ export interface AppOptions {
 /** Why an icon offer was refused, by its status. */
 const SUBMIT_REASONS = { 400: "bad-request", 409: "has-icon", 413: "too-big", 429: "too-many", 503: "unavailable" } as const;
 
-/** Steam import refusals also carry their reason as `code`, which Tavoras from before the sign-in gate read. */
-const steamFail = (context: Context, status: ContentfulStatusCode, reason: string, error: string) => context.json({ error, reason, code: reason }, status);
+/** A Steam import refusal: the English message and its reason code. */
+const steamFail = (context: Context, status: ContentfulStatusCode, reason: string, error: string) => context.json({ error, reason }, status);
 
 export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, officialPins = OFFICIAL_PINS, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats, countryOf, siteRateLimiter }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
