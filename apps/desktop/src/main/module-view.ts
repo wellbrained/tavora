@@ -63,6 +63,8 @@ export interface ModuleViewOptions {
   onReveal?(): void;
   /** The page has drawn for the first time in its slot (see ModuleView.firstDrawn). */
   onDrawn?(): void;
+  /** The panel's page took the keyboard focus (a click or Tab into it), so its dock group becomes the active one. */
+  onFocus?(): void;
   /** The user opened a web address from the module (links.open); it was checked to be one. */
   onOpenLink(url: string): void;
   /** A call that needs Tavora's own window was refused because the panel is over the game; the host tells the user (once per press). */
@@ -367,6 +369,8 @@ export class ModuleView {
     const origin = moduleOrigin(module.manifest.id);
     const sameModule = (url: string) => url.startsWith(`${origin}/`);
 
+    // The page is a native view, so a click in it never reaches the dock: the host makes its group active instead.
+    contents.on("focus", () => this.options.onFocus?.());
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
     contents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
     contents.on("will-navigate", (event) => {

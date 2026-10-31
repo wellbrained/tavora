@@ -3620,6 +3620,7 @@ export class Host {
         this.pushStateSoon();
       },
       onDrawn: () => this.pushStateSoon(),
+      onFocus: () => this.window.webContents.send("host:shortcut", `panel:${record.instanceId}`),
       onOpenLink: (url) => this.openLinkFromModule(url, workspace.id),
       onNeedsTavora: () => {
         this.notice = translate(this.language, "overlays.bringBackFirst");
