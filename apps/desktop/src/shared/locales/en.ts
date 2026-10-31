@@ -50,6 +50,7 @@ export const en = {
   "settings.theme.search": "Colors and corners. Modules match it.",
   "settings.theme.keywords": "theme, colour, color, look, style, dark, palette, skin, appearance",
   "settings.theme.description": "Colors and corners. Modules match it.",
+  "settings.theme.inUse": "In use",
   "settings.appearance-mode.label": "Light or dark",
   "settings.appearance-mode.search": "Follow your system, or stay dark or light.",
   "settings.appearance-mode.keywords": "follow system, system, automatic, auto, dark, light, dark mode, light mode, night, day, os, windows, mac",

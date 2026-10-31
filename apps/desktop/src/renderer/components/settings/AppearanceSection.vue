@@ -127,12 +127,16 @@ const showVariation = computed(() => {
             :key="theme.id"
             :value="theme.id"
             :description="theme.description ?? undefined"
-            class="gap-3"
+            class="items-center! gap-3 pr-2 [&>span:first-child]:hidden"
             :data-testid="`theme-${theme.id}`"
           >
+            <!-- The theme in use is marked with a tag after its name, not the list's check; the text sits centred on the preview. -->
             <template #thumb><ThemePreview :variation="previewOf(theme)" size="md" /></template>
             <span class="flex items-center gap-2">
               {{ theme.name }}
+              <Badge v-if="theme.id === appearance.themeId" class="bg-primary/15 text-primary flex-none border-transparent py-0 text-[10px] font-semibold" data-testid="theme-in-use">{{
+                t("settings.theme.inUse")
+              }}</Badge>
               <Badge v-if="mixedThemes" variant="outline" :class="cn('flex-none py-0 font-normal', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')">{{
                 theme.provenance === "official" ? t("common.official") : t("common.local")
               }}</Badge>
