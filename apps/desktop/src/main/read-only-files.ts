@@ -33,6 +33,15 @@ export class ReadOnlyFiles {
     }
     return undefined;
   }
+  /** The folder of a linked file, `up` folders higher: a local picker start, never file authority, never returned to a module. */
+  async directoryNear(id: string, up: number): Promise<string | undefined> {
+    if (!ID.test(id)) return undefined;
+    const entry = (await this.entries().catch(() => ({} as Record<string, Entry>)))[id];
+    if (!entry) return undefined;
+    let directory = path.dirname(entry.path);
+    for (let step = 0; step < Math.min(3, Math.max(0, up)); step++) directory = path.dirname(directory);
+    return (await stat(directory).catch(() => null))?.isDirectory() ? directory : undefined;
+  }
   private async entries(): Promise<Record<string, Entry>> {
     try {
       const entries = JSON.parse(await readFile(this.file, 'utf8'));

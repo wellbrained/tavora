@@ -71,7 +71,7 @@ File access stays on this PC, outside backups and cloud copies. Restoring map da
 
 Some calls change something outside the module's panel. They work only within 2 seconds of a real click or key press in that panel; a script cannot fake one, and each press allows one call, whether the module makes it through the bridge or through an address Tavora answers for the panel (the clipboard, pictures and files).
 
-- **`files.pickReadOnly`** opens a native file picker; one press opens it once. Only the files you select can be remembered, reread through `files.read` and checked through `files.check`. `files.forget` revokes that reference.
+- **`files.pickReadOnly`** opens a native file picker; one press opens it once. It may start next to a file the module already linked (`near`), but the module never learns that folder and gets no access from it. Only the files you select can be remembered, reread through `files.read` and checked through `files.check`. `files.forget` revokes that reference.
 - **`files.showInFolder`** opens the folder of a file the module linked, in Explorer or Finder, with the file selected; one press opens one folder. It works only for a file that is still the one you picked, and the module learns nothing back.
 - **`links.open`** opens an `http` or `https` address in Tavora's Browser panel, or, after the user confirms, in the system browser. The module learns nothing back. Addresses on the user's PC or local network (loopback, private and link-local addresses, local name endings and router names) are refused, and so are such links on a catalog listing (homepage, support link, readme) or from a developer's contact link.
 - **`clipboard.writeImage`** puts a checked PNG on the clipboard. There is no call to read the clipboard.
