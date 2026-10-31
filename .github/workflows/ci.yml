@@ -87,7 +87,7 @@ jobs:
     needs: e2e-scope
     if: needs.e2e-scope.outputs.run == 'true'
     name: e2e (${{ matrix.shard }}/8)
-    runs-on: ubuntu-24.04
+    runs-on: windows-2025
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -102,12 +102,14 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      # Ubuntu 24.04 blocks the unprivileged user namespaces Chromium's sandbox
-      # uses. Re-enable them rather than running Electron with --no-sandbox, so
-      # the e2e gate tests run with the real OS sandbox.
-      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      # xvfb-run's default screen is 640x480, which squeezes docked panels into tabs.
-      - run: xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm --filter @tavora/desktop test:e2e --shard=${{ matrix.shard }}/8
+      # A small screen squeezes docked panels into tabs.
+      - name: Screen 1920x1080
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Get-CimInstance Win32_VideoController | Select-Object CurrentHorizontalResolution, CurrentVerticalResolution
+      - run: pnpm --filter @tavora/desktop test:e2e --shard=${{ matrix.shard }}/8
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
