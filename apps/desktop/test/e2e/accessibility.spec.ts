@@ -174,15 +174,20 @@ test("small text, off switches and disabled buttons keep their contrast in every
       await expect
         .poll(() => inModule<string>(app, NOTES, `getComputedStyle(document.documentElement).getPropertyValue("--tavora-background").trim()`).catch(() => null))
         .toBe(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--background").trim()));
-      // The panel is made again after a workspace switch, so the editor and its placeholder take a moment.
+      // The panel is made again after a workspace switch, so the editor and its placeholder take a moment, and its
+      // colours may still be on their way to the theme: measure once two readings in a row agree.
       let placeholder: Painted = null;
+      let previous = "";
       await expect
         .poll(async () => {
           placeholder =
             (await paintedInNotes(app, ".note-content p.is-editor-empty:first-child", "::before").catch(() => null)) ??
             (await paintedInNotes(app, "input[placeholder]", "::placeholder").catch(() => null));
-          return placeholder !== null;
-        })
+          const reading = JSON.stringify(placeholder);
+          const steady = placeholder !== null && reading === previous;
+          previous = reading;
+          return steady;
+        }, { intervals: [250] })
         .toBe(true);
       record(theme.name, mode, "Notes placeholder", placeholder);
     }
