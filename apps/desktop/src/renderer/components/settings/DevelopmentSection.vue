@@ -185,7 +185,7 @@ onMounted(() => {
 
     <SettingGroup v-if="official.available" :title="t('officialPublish.title')" :description="t('officialPublish.description')">
       <template #actions>
-        <Button variant="ghost" size="sm" :disabled="official.checking" data-testid="official-publish-refresh" @click="checkOfficial">
+        <Button variant="ghost" size="sm" :disabled="official.checking || (official.run !== null && !official.run.preview)" data-testid="official-publish-refresh" @click="checkOfficial">
           <Loader v-if="official.checking" class="animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
           <RefreshCw v-else :stroke-width="1.5" aria-hidden="true" />
           {{ official.checking ? t("officialPublish.checking") : t("officialPublish.refresh") }}

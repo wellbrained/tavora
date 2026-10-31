@@ -467,6 +467,7 @@ export class OfficialPublisher {
     if (!changed.some((file) => file.startsWith(`${SHARED_PATH}/`) && !isTestFile(file))) return blockingChanges(changed, new Set());
     const files = (await git("ls-tree", "-r", "--name-only", commit, "--", ...HOST_PATHS, SHARED_PATH)).split(/\r?\n/).filter(Boolean);
     // Plain output whatever git is set to; a failure refuses, since counting nothing would let host changes through.
+    // (git grep also exits 1 when nothing matches; main always imports shared code, so that never happens here.)
     const grep = await git("-c", "color.ui=never", "-c", "core.quotePath=false", "grep", "--no-color", "-I", "-E", "-e", "(from|import)[[:space:]]*\\(?[[:space:]]*[\"'][.]{1,2}/", commit, "--", ...HOST_PATHS, SHARED_PATH).catch((error: unknown) => {
       if (error instanceof PublishCancelled) throw error;
       throw new UserError("officialPublish.error.changes");
