@@ -28,6 +28,15 @@ export const THEME_LIMITS = {
   radius: { min: 4, max: 12 },
 } as const;
 
+/** Whether a value is a corner radius a theme, or the user over it, may set. */
+export const isThemeRadius = (value: unknown): value is number =>
+  Number.isInteger(value) && (value as number) >= THEME_LIMITS.radius.min && (value as number) <= THEME_LIMITS.radius.max;
+
+/** The variation with the user's own corner radius, when they set one (Settings > Appearance). */
+export function withRadius<V extends { radius: number }>(variation: V, radius: number | null): V {
+  return radius === null || radius === variation.radius ? variation : { ...variation, radius };
+}
+
 /** Minimum contrast ratios from the style guide; high-contrast variations need AAA for text. */
 const TEXT_AA = 4.5;
 const TEXT_AAA = 7;
