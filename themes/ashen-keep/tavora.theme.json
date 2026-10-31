@@ -1,0 +1,71 @@
+{
+  "id": "tavora.ashen-keep",
+  "name": "Ashen Keep",
+  "description": "Cold ash, bone-white text and a red ember glow.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "variations": [
+    {
+      "id": "dark",
+      "name": "Dark",
+      "mode": "dark",
+      "radius": 4,
+      "colors": {
+        "background": "#131314",
+        "foreground": "#e6e2da",
+        "card": "#1b1b1d",
+        "card-foreground": "#e6e2da",
+        "popover": "#1b1b1d",
+        "popover-foreground": "#e6e2da",
+        "primary": "#e2552d",
+        "primary-hover": "#ea6c48",
+        "primary-foreground": "#131314",
+        "secondary": "#252527",
+        "secondary-foreground": "#e6e2da",
+        "muted": "#252527",
+        "muted-foreground": "#8f8b85",
+        "accent": "#252527",
+        "accent-foreground": "#e6e2da",
+        "destructive": "#f06a80",
+        "border": "#2e2e31",
+        "input": "#69666a",
+        "ring": "#e2552d",
+        "rail": "#0b0b0c",
+        "success": "#8fb07a",
+        "warning": "#d9b45a",
+        "info": "#7d9cc0"
+      }
+    },
+    {
+      "id": "light",
+      "name": "Light",
+      "mode": "light",
+      "radius": 4,
+      "colors": {
+        "background": "#f0f0ef",
+        "foreground": "#1d1c1b",
+        "card": "#fafafa",
+        "card-foreground": "#1d1c1b",
+        "popover": "#fafafa",
+        "popover-foreground": "#1d1c1b",
+        "primary": "#b33a17",
+        "primary-hover": "#962f12",
+        "primary-foreground": "#ffffff",
+        "secondary": "#e4e3e1",
+        "secondary-foreground": "#1d1c1b",
+        "muted": "#e4e3e1",
+        "muted-foreground": "#5f5c58",
+        "accent": "#e4e3e1",
+        "accent-foreground": "#1d1c1b",
+        "destructive": "#b4234d",
+        "border": "#d3d1ce",
+        "input": "#85827d",
+        "ring": "#b33a17",
+        "rail": "#e6e5e3",
+        "success": "#3d6b2f",
+        "warning": "#7a5a00",
+        "info": "#2f5e8c"
+      }
+    }
+  ]
+}

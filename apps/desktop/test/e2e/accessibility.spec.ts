@@ -76,6 +76,9 @@ const THEMES = [
   { id: "tavora.dusk-rose", name: "Dusk Rose" },
   { id: "tavora.garnet", name: "Garnet" },
   { id: "tavora.amethyst", name: "Amethyst" },
+  { id: "tavora.ashen-keep", name: "Ashen Keep" },
+  { id: "tavora.tidewater", name: "Tidewater" },
+  { id: "tavora.graphite", name: "Graphite" },
   { id: "tavora.hearthwood", name: "Hearthwood" },
   { id: "tavora.nightfall", name: "Nightfall" },
 ] as const;

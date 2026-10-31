@@ -130,7 +130,7 @@ describe("the official themes", () => {
   it("are all valid, and the default's Dark is exactly the look in code and styles.css", async () => {
     const { themes, problems } = await discoverThemes({ official: [officialDir] });
     expect(problems).toEqual([]);
-    expect([...themes.keys()].sort()).toEqual(["tavora.amethyst", "tavora.default", "tavora.dusk-rose", "tavora.garnet", "tavora.hearthwood", "tavora.nightfall"]);
+    expect([...themes.keys()].sort()).toEqual(["tavora.amethyst", "tavora.ashen-keep", "tavora.default", "tavora.dusk-rose", "tavora.garnet", "tavora.graphite", "tavora.hearthwood", "tavora.nightfall", "tavora.tidewater"]);
     expect([...themes.values()].every((entry) => entry.provenance === "official")).toBe(true);
     // Every official theme comes in Dark and Light, nothing else.
     for (const { theme } of themes.values()) expect(theme.variations.map((item) => [item.id, item.mode])).toEqual([["dark", "dark"], ["light", "light"]]);
