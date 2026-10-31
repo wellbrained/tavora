@@ -101,6 +101,8 @@ export interface AccountClientOptions {
   os: DeviceOs;
   /** This PC's name (its computer name), which a new sign-in goes by until the user renames it. */
   deviceName?: string;
+  /** The raw network name older versions signed in with; a device still going by it gets deviceName instead. */
+  rawDeviceName?: string;
   language: () => Language;
   canKeepSignIn: () => boolean;
   /** The saved sign-in; the cloud copy and pairing hold the same one. */
@@ -468,9 +470,11 @@ export class AccountClient {
     if (!this.options.enabled || !this.saved) return;
     const answer = await this.call("GET", "/", undefined, true);
     this.devices = Array.isArray(answer.devices) ? answer.devices.map(device).filter((item): item is AccountDevice => item !== null) : [];
-    // A sign-in from before devices had names gets this PC's.
-    const unnamed = this.devices.find((item) => item.current && item.name === null);
+    // A sign-in from before devices had names, or one still going by the raw network name, gets this PC's
+    // name. A name the user typed is never touched.
     const name = this.options.deviceName?.trim().slice(0, 40);
+    const raw = this.options.rawDeviceName?.trim().slice(0, 40);
+    const unnamed = this.devices.find((item) => item.current && (item.name === null || (raw !== undefined && item.name === raw && item.name !== name)));
     if (unnamed && name) {
       await this.call("PUT", `/devices/${encodeURIComponent(unnamed.id)}/name`, { name }, true).then(
         () => (unnamed.name = name),

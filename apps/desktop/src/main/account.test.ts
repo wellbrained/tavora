@@ -54,7 +54,7 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 
 const EMPTY_PROFILE: ProfileData = { name: "", initials: "", picture: null, updatedAt: null };
 
-function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null; deviceName?: string; enabled?: boolean; canKeep?: boolean; profile?: ProfileData; discordLogin?: () => Promise<{ code: string; verifier: string }> } = {}) {
+function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null; deviceName?: string; rawDeviceName?: string; enabled?: boolean; canKeep?: boolean; profile?: ProfileData; discordLogin?: () => Promise<{ code: string; verifier: string }> } = {}) {
   const views: AccountView[] = [];
   const kept: (SavedAccount | null)[] = [];
   /** This PC's profile, and every profile the account put in its place. */
@@ -65,6 +65,7 @@ function client(fetchImpl: typeof fetch, options: { saved?: SavedAccount | null;
     fetch: fetchImpl,
     os: "windows",
     ...(options.deviceName ? { deviceName: options.deviceName } : {}),
+    ...(options.rawDeviceName ? { rawDeviceName: options.rawDeviceName } : {}),
     language: () => "de",
     canKeepSignIn: () => options.canKeep ?? true,
     signIn: new SignIn({ enabled: options.enabled ?? true, load: async () => options.saved ?? null, save: async (value) => void kept.push(value) }),
@@ -263,6 +264,37 @@ describe("signed in", () => {
     await account.renameDevice("dev1", " Living room ");
     expect(calls.filter((call) => call.method === "PUT").at(-1)!.body).toEqual({ name: "Living room" });
     expect(account.view().devices![0]!.name).toBe("Living room");
+  });
+});
+
+describe("a device still going by its network name", () => {
+  const named = (name: string) => {
+    let devices = [{ ...DEVICE, name }];
+    const { calls, fetchImpl } = service({
+      "GET /": () => json({ devices }),
+      "PUT /devices/dev1/name": (body) => {
+        devices = [{ ...DEVICE, name: String(body?.name) }];
+        return new Response(null, { status: 204 });
+      },
+    });
+    return { calls, fetchImpl };
+  };
+
+  it("gets this PC's friendly name", async () => {
+    const { calls, fetchImpl } = named("MacBookPro.fritz.box");
+    const { account } = client(fetchImpl, { saved: SAVED, deviceName: "Brain MacBook Pro", rawDeviceName: "MacBookPro.fritz.box" });
+    await account.init();
+    await account.refresh();
+    expect(calls.find((call) => call.method === "PUT")!.body).toEqual({ name: "Brain MacBook Pro" });
+    expect(account.view().devices![0]!.name).toBe("Brain MacBook Pro");
+  });
+
+  it("keeps a name the user typed", async () => {
+    const { calls, fetchImpl } = named("Living room");
+    const { account } = client(fetchImpl, { saved: SAVED, deviceName: "Brain MacBook Pro", rawDeviceName: "MacBookPro.fritz.box" });
+    await account.init();
+    await account.refresh();
+    expect(calls.some((call) => call.method === "PUT")).toBe(false);
   });
 });
 
