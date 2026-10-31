@@ -21,3 +21,11 @@ it('uses a remembered folder before detection and degrades to the normal picker 
  const local=path.join(options.home,'Saved Games','keen games','Enshrouded','default');await save(local,'world0.ksd',1000);
  expect(await saveDialogDirectory({lastPickedDirectory:async()=>undefined},'enshrouded',options)).toBe(local);
 });
+it('finds the Players folder of the Palworld world played last',async()=>{
+ const options=await setup(),localAppData=path.join(options.home,'AppData','Local'),games=path.join(localAppData,'Pal','Saved','SaveGames','76561198000000000');
+ const older=path.join(games,'A'.repeat(32),'Players'),newer=path.join(games,'B'.repeat(32),'Players');
+ await save(older,'0'.repeat(31)+'1.sav',1000);await save(newer,'0'.repeat(31)+'1.sav',2000);
+ await save(path.join(games,'C'.repeat(32)),'Level.sav',3000);await save(path.join(games,'not-a-world','Players'),'0'.repeat(31)+'1.sav',4000);
+ expect(await detectSaveDirectory('palworld',{...options,localAppData})).toBe(newer);
+ expect(await detectSaveDirectory('palworld',{...options,localAppData,platform:'linux'})).toBeUndefined();
+});
