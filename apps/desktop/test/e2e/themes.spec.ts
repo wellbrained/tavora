@@ -61,6 +61,7 @@ test("the user's own corner radius sits on top of the theme, reaches modules, an
   await expect.poll(() => inModule<string>(app, VANILLA, `getComputedStyle(document.documentElement).getPropertyValue("--tavora-radius").trim()`)).toBe("12px");
   await expect(page.getByTestId("reset-theme")).toBeEnabled();
   // Another theme keeps the user's corners.
+  await page.getByTestId("theme-select").click();
   await page.getByTestId("theme-tavora.nightfall").click();
   await expect.poll(() => rootToken(page, "background")).toBe("#12161c");
   await expect.poll(() => rootToken(page, "radius")).toBe("12px");
