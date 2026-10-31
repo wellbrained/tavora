@@ -86,6 +86,25 @@ const dots: MapPin[] = Array.from({ length: 120 }, (_, index) => {
 
 const done = ref(new Set(placed.filter((_, index) => index % 7 === 0).map((pin) => pin.id)));
 const showDots = ref(true);
+const showFog = ref(false);
+
+/** The layer specimen: a fog over the whole map with the explored part (around the west) cleared, drawn small and stretched. */
+let fogUrl = "";
+function fog(): string {
+  if (fogUrl) return fogUrl;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const context = canvas.getContext("2d")!;
+  context.fillStyle = "rgb(0 0 0 / 0.6)";
+  context.fillRect(0, 0, 256, 256);
+  context.globalCompositeOperation = "destination-out";
+  context.filter = "blur(8px)";
+  context.beginPath();
+  context.ellipse(256 * 0.36, 256 * 0.44, 256 * 0.2, 256 * 0.16, 0, 0, Math.PI * 2);
+  context.fill();
+  fogUrl = canvas.toDataURL();
+  return fogUrl;
+}
 const highlightEggs = ref(false);
 const selected = ref<string | null>(null);
 
@@ -115,6 +134,9 @@ function toggleDone() {
       <template #pin="{ pin }">
         <component :is="ICONS[kindOf.get(pin.id) ?? 'tower']" class="text-foreground size-5" :stroke-width="1.5" aria-hidden="true" />
       </template>
+      <template v-if="showFog" #layer>
+        <img :src="fog()" alt="" draggable="false" class="size-full max-w-none select-none">
+      </template>
     </TileMap>
     <p class="text-muted-foreground text-xs">{{ picked ? `Picked ${picked.label}.` : "Click a pin to pick it; a group with a number zooms in." }}</p>
     <div class="flex flex-wrap gap-2">
@@ -122,6 +144,7 @@ function toggleDone() {
       <Button size="xs" variant="secondary" :disabled="off" @click="highlightEggs = !highlightEggs">{{ highlightEggs ? "Stop highlighting" : "Highlight the eggs (highlight)" }}</Button>
       <Button size="xs" variant="secondary" :disabled="off" @click="map?.showPins(eggs)">Show all eggs (showPins)</Button>
       <Button size="xs" variant="secondary" :disabled="off" @click="showDots = !showDots">{{ showDots ? "Hide the spawn dots" : "Show the spawn dots" }}</Button>
+      <Button size="xs" variant="secondary" :disabled="off" @click="showFog = !showFog">{{ showFog ? "Hide the fog (layer)" : "Show a fog (layer)" }}</Button>
       <Button size="xs" variant="secondary" :disabled="off" @click="saved = map?.camera ? { ...map.camera } : undefined">Save this view (camera)</Button>
       <Button size="xs" variant="secondary" :disabled="off || !saved" @click="saved && map?.setCamera(saved)">Back to saved view (setCamera)</Button>
     </div>

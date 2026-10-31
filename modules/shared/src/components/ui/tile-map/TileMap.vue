@@ -8,7 +8,8 @@
 // fades every other pin and keeps those on top; the `selected` pin is never merged. A click on a pin sends `select`.
 // The pins are for the pointer; give keyboards and screen readers the same places as a list next to the map.
 // For a saved view use `camera` and setCamera() (the world point in the middle and the zoom); showPins() zooms to
-// a set of pins.
+// a set of pins. The `layer` slot lies over the tiles and under the pins, in map pixels (it zooms with the map): a
+// picture the size of the map, such as a fog of war over the parts not explored yet.
 import { Check } from "@lucide/vue"
 import { computed, ref, shallowRef, type HTMLAttributes } from "vue"
 import { cn } from "../../../lib/utils"
@@ -38,6 +39,8 @@ const emit = defineEmits<{ select: [pin: MapPin] }>()
 defineSlots<{
   /** The picture on a pin (default: its `icon`); for a group, its most common pin. */
   pin?: (props: { pin: MapPin }) => unknown
+  /** Over the tiles and under the pins, in map pixels: fill the map's size (`source.size`) to cover it. */
+  layer?: () => unknown
 }>()
 
 const pane = ref<InstanceType<typeof ZoomPane> | null>(null)
@@ -140,6 +143,9 @@ defineExpose({ showPins, camera, setCamera, fit: () => pane.value?.fit(), zoomIn
         :style="{ left: `${tile.left}px`, top: `${tile.top}px`, width: `${tile.size}px`, height: `${tile.size}px` }"
         @error="onTileError(tile.key)"
       >
+      <div v-if="$slots.layer" data-slot="tile-map-layer" class="pointer-events-none absolute inset-0">
+        <slot name="layer" />
+      </div>
     </div>
     <template #overlay>
       <button
