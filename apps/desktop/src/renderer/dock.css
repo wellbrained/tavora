@@ -142,6 +142,12 @@
   overflow: hidden;
 }
 
+/* Dockview draws a straight 1px line on the edge of every split view. With rounded cards and a gap between them it
+   pokes out beside each card's corner; the cards carry their own border, so the line goes. */
+.dockview-theme-tavora .dv-split-view-container.dv-separator-border .dv-view::before {
+  display: none;
+}
+
 .dockview-theme-tavora .dv-groupview.dv-active-group {
   border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
 }

@@ -430,3 +430,36 @@ test("the templates submenu opens level with its entry and stays open on the way
   await expect(page.locator("[data-testid^='empty-slot-']")).toHaveCount(3);
   await app.close();
 });
+
+test("focusing a panel's page makes its group the active one, and the page keeps the focus", async () => {
+  const { app, page } = await launch();
+  await layOutColumns(page, 2);
+  await openModule(page, VANILLA);
+  await openModule(page, VUE);
+  await waitForShown(app, VANILLA);
+  await waitForShown(app, VUE);
+  await groups(page).first().locator(".dv-tab").first().click();
+  await expect(groups(page).first()).toHaveClass(/dv-active-group/);
+
+  // The page is a native view, so this stands in for a click into it.
+  const focused = () =>
+    app.evaluate(({ BrowserWindow, WebContentsView }, id) => {
+      const view = BrowserWindow.getAllWindows()[0]!.contentView.children.find(
+        (child): child is Electron.WebContentsView => child instanceof WebContentsView && child.webContents.getURL().startsWith(`tavora-module://${id}/`),
+      )!;
+      view.webContents.focus();
+      return view.webContents.isFocused();
+    }, VUE);
+  await focused();
+  await expect(groups(page).nth(1)).toHaveClass(/dv-active-group/);
+  await expect(groups(page).first()).not.toHaveClass(/dv-active-group/);
+  await expect
+    .poll(() =>
+      app.evaluate(({ BrowserWindow, WebContentsView }, id) =>
+        BrowserWindow.getAllWindows()[0]!.contentView.children.some(
+          (child) => child instanceof WebContentsView && child.webContents.getURL().startsWith(`tavora-module://${id}/`) && child.webContents.isFocused(),
+        ), VUE),
+    )
+    .toBe(true);
+  await app.close();
+});

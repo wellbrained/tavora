@@ -129,7 +129,7 @@ async function savePicture(png: string) {
           <span :class="cn('min-w-0 truncate pb-1.5 text-lg font-semibold', !shownName && 'text-muted-foreground')" data-testid="profile-dialog-name">{{ shownName || t("profile.yours") }}</span>
         </div>
         <NavList
-          class="profile-plates m-3 mt-4"
+          class="nav-plates m-3 mt-4"
           group-class="rounded-xl border p-1"
           :model-value="shown"
           :label="t('profile.sections')"
@@ -165,15 +165,3 @@ async function savePicture(png: string) {
 
   <ImageCropDialog :src="cropping" :title="t('onboarding.crop')" round @save="savePicture" @cancel="cropping = null" />
 </template>
-
-<style scoped>
-/* The menu on a plate in the theme's accent, like the groups in Settings. */
-.profile-plates :deep([data-slot="nav-group"]) {
-  background: linear-gradient(160deg, color-mix(in srgb, var(--primary) 13%, transparent), color-mix(in srgb, var(--primary) 3%, transparent) 70%);
-  border-color: color-mix(in srgb, var(--primary) 18%, transparent);
-}
-.profile-plates :deep([data-slot="nav-group"] [aria-current="page"]) {
-  background: color-mix(in srgb, var(--primary) 22%, transparent);
-  box-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
-}
-</style>
