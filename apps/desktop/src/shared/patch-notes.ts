@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.16",
+    date: "2026-10-31",
+    title: "Easier theme picking",
+    notes: [
+      "Settings > Appearance lists the themes one per row, with a bigger preview next to each name.",
+      "Ashen Keep's ember colour is a bit lighter, so small labels on it are easier to read.",
+    ],
+    prs: [
+      { number: 554, title: "List themes one per row in Settings > Appearance" },
+    ],
+    tags: ["settings", "themes"],
+  },
+  {
     version: "0.23.15",
     date: "2026-10-31",
     title: "Three more themes",
