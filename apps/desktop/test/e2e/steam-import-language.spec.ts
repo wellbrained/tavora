@@ -12,7 +12,7 @@ for (const [locale, texts] of [
   ["de", ["Steam findet dieses Profil nicht. Prüf den Link und versuch es noch mal.", "Deine Spiele sind nicht sichtbar. Stell die Spieldetails in deinem Steam-Profil auf Öffentlich und versuch es noch mal.", "Der Steam-Import klappt gerade nicht. Versuch es gleich noch mal."]],
 ] as const) {
   test(`the Steam import says why it failed in ${locale}`, async () => {
-    let answer: Answer = { status: 404, body: { error: "Steam has no profile with that name.", code: "no-such-profile" } };
+    let answer: Answer = { status: 404, body: { error: "Steam has no profile with that name.", reason: "no-such-profile" } };
     const server = createServer((request, response) => {
       request.resume();
       response.writeHead(answer.status, { "content-type": "application/json" });
@@ -34,12 +34,12 @@ for (const [locale, texts] of [
       await lookUp();
       await expect(error).toHaveText(texts[0]);
 
-      answer = { status: 502, body: { error: "Steam did not return a game list. Check that Game details are public on the profile.", code: "no-game-list" } };
+      answer = { status: 502, body: { error: "Steam did not return a game list. Check that Game details are public on the profile.", reason: "no-game-list" } };
       await lookUp();
       await expect(error).toHaveText(texts[1]);
 
       // A reason this app does not know yet: the general line, never the service's English.
-      answer = { status: 502, body: { error: "Something new went wrong.", code: "made-up-later" } };
+      answer = { status: 502, body: { error: "Something new went wrong.", reason: "made-up-later" } };
       await lookUp();
       await expect(error).toHaveText(texts[2]);
 
