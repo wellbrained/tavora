@@ -6,8 +6,9 @@
 // then, and Let's go shows them, kept in the library (so in backups and the cloud copy). Once we know publishing
 // isn't set up, a card offers the developer onboarding; on a new PC of a developer, a line points to the recovery key
 // on Publishing instead.
-import { CircleAlert, KeyRound, Rocket, Upload } from "@lucide/vue";
+import { CircleAlert, KeyRound, Loader, RefreshCw, Rocket, Upload } from "@lucide/vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import type { SettingsSection } from "./settings-index";
@@ -15,7 +16,7 @@ import { account, act, developerKeys, developerState, dialog, inbox, makesModule
 import { t } from "../../i18n";
 import DevModuleRow from "../developer/DevModuleRow.vue";
 import { devModules, waitsForPublish } from "../developer/dev-modules";
-import ModuleRow from "./ModuleRow.vue";
+import ModuleIcon from "../ModuleIcon.vue";
 import SettingGroup from "./SettingGroup.vue";
 
 const props = defineProps<{ highlight: string | null }>();
@@ -76,14 +77,41 @@ watch(
   },
   { immediate: true },
 );
-/** Built-in modules that can update from the catalogue; a dev build with that switched on can publish them. */
-// Every built-in module: a dev build never marks them updatable, since it loads no downloaded copies.
-const builtIn = computed(() => state.value!.modules.filter((module) => module.provenance === "official").sort((a, b) => a.name.localeCompare(b.name)));
+// Built-in modules with a newer version on main than in the last release (main/official-publish.ts), checked when
+// the page opens; Publish opens OfficialPublishDialog, which shows the steps and the preview.
+const official = computed(() => state.value!.officialPublish);
+const officialRows = computed(() => official.value.overview?.rows ?? []);
+const STATUS_BADGE = { ready: "success", published: "outline", catalogueNewer: "outline", waitForRelease: "warning", ciPending: "info", ciFailed: "destructive" } as const;
+const hostChanges = computed(() => {
+  const overview = official.value.overview;
+  if (!overview?.hostChanges.length || !overview.rows.some((row) => row.status === "waitForRelease")) return "";
+  const shown = overview.hostChanges.slice(0, 3).map((file) => file.replace(/^apps\/desktop\/src\//, ""));
+  const more = overview.hostChanges.length - shown.length;
+  const files = more > 0 ? t("officialPublish.hostChangesMore", { files: shown.join(", "), count: more }) : shown.join(", ");
+  return t("officialPublish.hostChanges", { release: overview.release, files });
+});
 
-async function publishOfficial(moduleId: string) {
-  const result = await act({ type: "publish-official-module", moduleId });
-  if (result.ok && result.id) showToast(t("officialPublish.done", { name: result.id }));
+function checkOfficial() {
+  void act({ type: "official-publish-check" }, { quiet: true });
 }
+
+function publishOfficial(moduleId: string) {
+  void act({ type: "publish-official-module", moduleId });
+}
+
+async function forgetKey() {
+  const result = await act({ type: "official-publish-forget-key" });
+  if (result.ok) showToast(t("officialPublish.forgotten"));
+}
+
+// Checked each time the group comes into view: on opening the page, or once Let's go shows the developer tools.
+watch(
+  () => official.value.available && showTools.value,
+  (shown) => {
+    if (shown) checkOfficial();
+  },
+  { immediate: true },
+);
 
 onMounted(() => {
   // The developer side and the contact settings as the service has them now; quietly, offline is fine.
@@ -155,19 +183,44 @@ onMounted(() => {
       <Button variant="link" class="h-auto p-0" @click="emit('show', 'dev-folders')">{{ t("settings.section.dev-folders") }}</Button>
     </p>
 
-    <SettingGroup v-if="state!.officialPublish.available && builtIn.length" :title="t('officialPublish.title')" :description="t('officialPublish.description')">
-      <ul class="flex flex-col" :aria-label="t('officialPublish.title')" data-testid="official-publish">
-        <ModuleRow v-for="module in builtIn" :key="module.id" :module="module" hide-origin>
+    <SettingGroup v-if="official.available" :title="t('officialPublish.title')" :description="t('officialPublish.description')">
+      <template #actions>
+        <Button variant="ghost" size="sm" :disabled="official.checking || (official.run !== null && !official.run.preview)" data-testid="official-publish-refresh" @click="checkOfficial">
+          <Loader v-if="official.checking" class="animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
+          <RefreshCw v-else :stroke-width="1.5" aria-hidden="true" />
+          {{ official.checking ? t("officialPublish.checking") : t("officialPublish.refresh") }}
+        </Button>
+      </template>
+      <p v-if="official.checkError" class="text-destructive py-4 text-sm" role="alert" data-testid="official-publish-error">{{ official.checkError }}</p>
+      <p v-else-if="!official.overview" class="text-muted-foreground py-4 text-sm" role="status">{{ t("officialPublish.checking") }}</p>
+      <p v-else-if="!officialRows.length" class="text-muted-foreground py-4 text-sm" data-testid="official-publish-none">{{ t("officialPublish.none") }}</p>
+      <ul v-if="officialRows.length" class="flex flex-col" :aria-label="t('officialPublish.title')" data-testid="official-publish">
+        <li v-for="row in officialRows" :key="row.id" class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b py-4 last:border-b-0" :data-testid="`official-row-${row.id}`" :data-status="row.status">
+          <span class="module-tile size-10" aria-hidden="true"><ModuleIcon :module-id="row.id" size="size-[34px]" /></span>
+          <div class="flex min-w-0 flex-1 basis-48 flex-col gap-0.5">
+            <span class="flex min-w-0 items-center gap-2">
+              <span class="truncate font-medium">{{ row.name }}</span>
+              <span class="text-muted-foreground flex-none text-xs tabular-nums">{{ t("officialPublish.versions", { shipped: row.shipped, version: row.version }) }}</span>
+            </span>
+            <span><Badge :variant="STATUS_BADGE[row.status]" class="py-0">{{ t(`officialPublish.status.${row.status}`, { listed: row.listed ?? "" }) }}</Badge></span>
+          </div>
           <Button
+            v-if="row.status === 'ready'"
             variant="secondary"
-            :disabled="state!.officialPublish.busy !== null"
-            :data-testid="`publish-official-${module.id}`"
-            @click="publishOfficial(module.id)"
+            :disabled="official.run !== null || official.checking"
+            :data-testid="`publish-official-${row.id}`"
+            @click="publishOfficial(row.id)"
           >
-            <Upload :stroke-width="1.5" /> {{ state!.officialPublish.busy === module.id ? t("officialPublish.working") : t("officialPublish.button") }}
+            <Upload :stroke-width="1.5" /> {{ t("officialPublish.button") }}
           </Button>
-        </ModuleRow>
+        </li>
       </ul>
+      <p v-if="hostChanges" class="text-muted-foreground pb-4 text-xs break-words" data-testid="official-publish-host-changes">{{ hostChanges }}</p>
+      <div v-if="official.key.saved" class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-4" data-testid="official-publish-key">
+        <KeyRound class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+        <span class="min-w-0 flex-1 text-sm">{{ t("officialPublish.keySaved") }}</span>
+        <Button variant="ghost" size="sm" :disabled="official.run !== null" data-testid="official-publish-forget-key" @click="forgetKey">{{ t("officialPublish.forgetKey") }}</Button>
+      </div>
     </SettingGroup>
   </template>
 </template>
