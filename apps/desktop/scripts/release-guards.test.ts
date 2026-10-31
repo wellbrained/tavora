@@ -148,6 +148,13 @@ describe("the split release (CI builds, the PC checks and uploads)", () => {
     expect(hashes.get("latest.yml")).toBe("d".repeat(64));
     // The summary step's own script text must not count: it has no 64-hex hash.
     expect(readCiHashes('$line = "RELEASE-SHA256 $(...)  $name"').size).toBe(0);
+    // Only the package job counts: an e2e shard printing such a line is ignored.
+    const shard = `e2e (3/8)\tRun pnpm\t2026-10-31T12:10:00.1Z RELEASE-SHA256 ${"e".repeat(64)}  latest.yml\n`;
+    expect(readCiHashes(shard + log).get("latest.yml")).toBe("d".repeat(64));
+    expect(readCiHashes(log + shard).get("latest.yml")).toBe("d".repeat(64));
+    // The same file with two different hashes is not taken.
+    const twice = readCiHashes(`${log}package\tSHA-256\t2026-10-31T12:20:01Z RELEASE-SHA256 ${"f".repeat(64)}  latest.yml\n`);
+    expect(twice.get("latest.yml")).toBeNull();
   });
 
   it("accepts only the files CI built, with a latest.yml that names this installer", () => {
@@ -159,6 +166,7 @@ describe("the split release (CI builds, the PC checks and uploads)", () => {
     expect(checkDownload(version, downloaded, ci, yml)).toEqual([]);
     expect(checkDownload(version, downloaded, new Map([...ci, ["latest.yml", "f".repeat(64)]]), yml).join(" ")).toContain("latest.yml is not the file");
     expect(checkDownload(version, new Map([...downloaded].slice(1)), ci, yml).join(" ")).toContain("Tavora-Setup-0.24.0.exe is missing");
+    expect(checkDownload(version, downloaded, new Map([...ci, ["latest.yml", null]]), yml).join(" ")).toContain("two different SHA-256 for latest.yml");
     expect(checkDownload(version, downloaded, ci, yml.replace(/^sha512: .*$/m, "sha512: OTHER==")).join(" ")).toContain("sha512 is not the installer's");
     expect(checkDownload(version, downloaded, ci, yml.replace("version: 0.24.0", "version: 0.23.0")).join(" ")).toContain("does not say version");
   });
