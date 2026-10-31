@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.21",
+    date: "2026-10-31",
+    title: "Calmer fields",
+    notes: [
+      "In Dark mode, text fields and dropdowns have a much fainter fill, so they no longer stand out as bright grey blocks. Their edge stays as clear as before.",
+    ],
+    prs: [
+      { number: 562, title: "Kit: fainter fill for fields and dropdowns in Dark mode" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "themes", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.23.20",
     date: "2026-10-31",
     title: "A clearer Settings menu",
