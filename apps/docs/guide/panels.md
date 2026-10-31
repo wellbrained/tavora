@@ -136,24 +136,7 @@ Tavora lays it out only inside this panel's group: the Overview panel, clicked, 
 
 ## Show a welcome on first add
 
-A panel the user just added may open its dialog once on its own, to greet them and offer a first step. It is the same page in a bigger place: show the welcome while the dialog is open, then the panel's usual content.
-
-```ts
-const launch = await tavora.panel.getLaunch();
-const seen = await tavora.storage.get<boolean>("welcomeSeen");
-if (launch.reason === "add" && !seen) {
-  tavora.panel.onDialogChange((open) => {
-    showWelcome(open);
-    if (!open) void tavora.storage.set("welcomeSeen", true);
-  });
-  // Older Tavora versions refuse this without a click: then show the welcome in the panel.
-  await tavora.panel.openDialog({ width: 720, height: 560 }).catch(() => showWelcome(true));
-}
-```
-
-- It works once, within 10 seconds of the page starting, and only for `add`: not after a restore or reload, not for a panel `panels.open` opened, and not over the game.
-- This dialog doesn't close on a click beside it. Give the welcome its own button that calls `panel.closeDialog()`, and close it on Esc; Tavora's close button always works too.
-- Ask only once: remember that the user saw it, as above.
+A panel the user just added may open its dialog once on its own, within 10 seconds of its page starting, to greet them. When to show it, what goes in it and how it looks: [A welcome for your module](./module-welcome.md).
 
 ## Checklist
 

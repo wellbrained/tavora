@@ -53,6 +53,7 @@ export default defineConfig({
           { text: "Look and languages", link: "/guide/look-and-languages" },
           { text: "Several panels", link: "/guide/panels" },
           { text: "Settings for your module", link: "/guide/module-settings" },
+          { text: "A welcome for your module", link: "/guide/module-welcome" },
           { text: "Leaderboards", link: "/guide/leaderboards" },
           { text: "Your publisher key", link: "/guide/publisher-key" },
           { text: "Publishing to the catalog", link: "/guide/publishing" },
