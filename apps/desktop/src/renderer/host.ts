@@ -467,6 +467,8 @@ export const railToggles = ref(0);
 export const addressFocus = shallowRef<{ instanceId: string } | null>(null);
 /** Asks the workspace to bring a panel to the front of its group (panels.open); a new object each time. */
 export const panelToShow = shallowRef<{ instanceId: string } | null>(null);
+/** Ctrl+Tab and Ctrl+Shift+Tab: the workspace steps through the tabs of the panel you work in; a new object each time. */
+export const tabStep = shallowRef<{ by: 1 | -1 } | null>(null);
 /**
  * After panels.openMany: brings the panels that were open already to the front of their groups, then gives the focus
  * back to the panel that asked (`anchor`); a new object each time.
@@ -490,6 +492,7 @@ function runShortcut(shortcut: HostShortcut): void {
     const section = SETTING_SECTIONS.find(([id]) => id === setting)?.[1];
     if (section) openSettings({ section, setting });
   }
+  else if (shortcut === "next-tab" || shortcut === "previous-tab") tabStep.value = { by: shortcut === "next-tab" ? 1 : -1 };
   else if (shortcut === "search") searchOpen.value = !searchOpen.value;
   else if (shortcut === "shortcuts") openSettings({ section: "shortcuts" });
   else if (shortcut === "settings") openSettings();

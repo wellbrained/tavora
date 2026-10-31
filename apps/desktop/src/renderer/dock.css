@@ -172,6 +172,12 @@
 
 .dockview-theme-tavora .dv-tab {
   padding: 0;
+  /* Tabs keep their size; the ones that don't fit scroll out of the row (GroupActions lists them). */
+  flex-shrink: 0;
+}
+/* Dockview's own list of hidden tabs would open under the module views; GroupActions has the kit's instead. */
+.dockview-theme-tavora .dv-tabs-overflow-dropdown-root {
+  display: none;
 }
 
 .dockview-theme-tavora .dv-tab:focus-visible {

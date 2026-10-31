@@ -58,4 +58,15 @@ describe("shortcutForKey (shared with the host page)", () => {
     expect(shortcutForKey(event({ control: true, type: "keyUp" }), false)).toBeNull();
     expect(shortcutForKey(event({}), false)).toBeNull();
   });
+
+  it("steps through a panel's tabs with Ctrl+Tab and Ctrl+Shift+Tab, Ctrl on a Mac too", () => {
+    for (const mac of [false, true]) {
+      expect(shortcutForKey(event({ key: "Tab", control: true }), mac)).toBe("next-tab");
+      expect(shortcutForKey(event({ key: "Tab", control: true, shift: true }), mac)).toBe("previous-tab");
+    }
+    expect(shortcutForKey(event({ key: "Tab" }), false)).toBeNull();
+    expect(shortcutForKey(event({ key: "Tab", shift: true }), false)).toBeNull();
+    expect(shortcutForKey(event({ key: "Tab", control: true, alt: true }), false)).toBeNull();
+    expect(shortcutForKey(event({ key: "Tab", meta: true }), true)).toBeNull();
+  });
 });

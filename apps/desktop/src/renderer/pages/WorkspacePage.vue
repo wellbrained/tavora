@@ -18,7 +18,7 @@ import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds, SavedLayout } from "../../shared/host-api";
 import { keepSlots } from "../../shared/panel-layout";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { act, api as host, dialog, dragging, nextPanelSlot, panelsToFront, panelToMaximize, panelToShow, state } from "../host";
+import { act, api as host, dialog, dragging, nextPanelSlot, panelsToFront, panelToMaximize, panelToShow, state, tabStep } from "../host";
 import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import {
@@ -307,6 +307,15 @@ watch(panelToShow, (request) => {
   const column = columns.value.find((item) => item.hidden && item.panels.includes(request.instanceId));
   if (column) setColumnHidden(column.side, false);
   dock.getPanel(request.instanceId)?.api.setActive();
+});
+// Ctrl+Tab and Ctrl+Shift+Tab: the next or previous tab of the panel you work in, round at the ends.
+watch(tabStep, (request) => {
+  if (!request || !dock) return;
+  tabStep.value = null;
+  const group = dock.activeGroup;
+  if (!group || group.panels.length < 2) return;
+  const index = group.panels.findIndex((panel) => panel.id === group.activePanel?.id);
+  group.panels[(index + request.by + group.panels.length) % group.panels.length]?.api.setActive();
 });
 // After panels.openMany: the panels that were open already come to the front where they are, and the panel that asked
 // keeps the focus. One in that panel's own group stays behind it, so the panel that asked stays the one shown.

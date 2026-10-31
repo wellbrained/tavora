@@ -231,6 +231,7 @@ export function hostActionTable(c: HostChecks) {
     "set-steam-icons": { enabled: bool },
     "set-module-icons": { enabled: bool },
     "set-panel-style": { style: oneOf("classic", "framed", "folders") },
+    "set-tab-overflow": { mode: oneOf("list", "arrows") },
     "set-toasts": { position: oneOf("bottom-center", "bottom-right", "top-center") },
 
     // Streaming

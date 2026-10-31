@@ -29,7 +29,11 @@ export function shortcutGroups(): { title: string; rows: ShortcutRow[] }[] {
     },
     {
       title: t("shortcuts.group.workspaces"),
-      rows: [{ action: t("shortcuts.openWorkspace"), keys: [mod, "1–9"] }],
+      rows: [
+        { action: t("shortcuts.openWorkspace"), keys: [mod, "1–9"] },
+        { action: t("shortcuts.nextTab"), keys: [t("shortcuts.ctrl"), "Tab"] },
+        { action: t("shortcuts.previousTab"), keys: [t("shortcuts.ctrl"), "Shift", "Tab"] },
+      ],
     },
     {
       title: t("shortcuts.group.browser"),

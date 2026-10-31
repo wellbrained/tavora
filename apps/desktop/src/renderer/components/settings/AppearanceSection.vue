@@ -59,6 +59,16 @@ const panelStyleOptions = computed(() =>
   (["classic", "framed", "folders"] as const).map((value) => ({ value, label: t(`settings.panel-style.${value}`), testid: `panel-style-${value}` })),
 );
 
+type TabOverflow = HostViewState["library"]["tabOverflow"];
+
+const tabOverflow = computed({
+  get: () => state.value!.library.tabOverflow,
+  set: (mode: TabOverflow) => void act({ type: "set-tab-overflow", mode }),
+});
+const tabOverflowOptions = computed(() =>
+  (["list", "arrows"] as const).map((value) => ({ value, label: t(`settings.tab-overflow.${value}`), testid: `tab-overflow-${value}` })),
+);
+
 type ToastPosition = HostViewState["library"]["toasts"];
 
 // Where toasts show in every panel; the app's own messages stay at the top, over the toolbar.
@@ -191,6 +201,14 @@ const showVariation = computed(() => {
       :highlighted="highlight === 'panel-style'"
     >
       <SegmentedControl v-model="panelStyle" :label="t('settings.panel-style.label')" :options="panelStyleOptions" />
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.tab-overflow.label')"
+      :description="t('settings.tab-overflow.description')"
+      setting="tab-overflow"
+      :highlighted="highlight === 'tab-overflow'"
+    >
+      <SegmentedControl v-model="tabOverflow" :label="t('settings.tab-overflow.label')" :options="tabOverflowOptions" />
     </SettingRow>
     <SettingRow
       :label="t('settings.module-icons.label')"

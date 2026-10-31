@@ -36,6 +36,7 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "set-steam-icons", enabled: true }],
   [{ type: "set-module-icons", enabled: false }],
   [{ type: "set-panel-style", style: "folders" }],
+  [{ type: "set-tab-overflow", mode: "arrows" }],
   [{ type: "set-toasts", position: "bottom-right" }],
   [{ type: "set-stream-overlays", enabled: true }],
   [{ type: "set-overlay-port", port: 47820 }],
