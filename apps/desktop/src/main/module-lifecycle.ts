@@ -6,7 +6,7 @@
 import path from "node:path";
 import { LOCAL_OWNER, OFFICIAL_OWNER, type Connector } from "@tavora/module-schema";
 import type { CatalogClient } from "./catalog-client";
-import { CatalogUpdater, type CatalogInstalled } from "./catalog-updates";
+import { CatalogUpdater, asksNothing, type CatalogInstalled } from "./catalog-updates";
 import type { GrantStore } from "./grants";
 import { checkZipData, forgetOwner, installZip, installZipData, type InstallOptions, type Installed } from "./installer";
 import { LibraryError } from "./library";
@@ -118,7 +118,8 @@ export class ModuleLifecycle {
   /**
    * The user said yes to an update that asks for more (exactly the version they were shown): it is
    * checked and installed by every installer rule again, what it asked for is granted, and its panels
-   * reload with the new version.
+   * reload with the new version. The install already started them; only a new grant starts them again,
+   * so they connect with it.
    */
   async applyUpdate(moduleId: string, version: string): Promise<string> {
     const module = this.options.modules().get(moduleId) ?? this.options.blocked().get(moduleId);
@@ -128,7 +129,7 @@ export class ModuleLifecycle {
     const updated = this.options.modules().get(moduleId);
     if (updated) {
       await this.options.grants().grant(updated, asks);
-      this.options.panels.reload(moduleId);
+      if (!asksNothing(asks)) this.options.panels.reload(moduleId);
     }
     return installed.manifest.id;
   }
