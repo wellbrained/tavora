@@ -28,6 +28,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.24",
+    date: "2026-10-31",
+    title: "Palworld saves are easier to find",
+    notes: [
+      "Linking a Palworld save opens the dialog in the Players folder of the world you played last.",
+    ],
+    prs: [
+      { number: 566, title: "Linking a Palworld save opens the dialog in the Players folder of the world played last" },
+    ],
+  },
+  {
     version: "0.23.23",
     date: "2026-10-31",
     title: "No loose text at the top of pages",
