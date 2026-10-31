@@ -69,6 +69,11 @@ const NAV_GROUPS: NavGroup[] = [
   { heading: "Installed", items: [{ id: "all", label: "All", icon: Blocks, badge: 12 }, { id: "workspace", label: "In this workspace", icon: LayoutGrid, badge: 3 }] },
   { heading: "More", items: [{ id: "catalog", label: "Catalog", icon: Store }, { id: "featured", label: "Featured", level: 1 }, { id: "recent", label: "Recent", level: 2 }] },
 ];
+/** The same groups as plates: each group sets --tone, its colour. */
+const PLATE_GROUPS: NavGroup[] = [
+  { ...NAV_GROUPS[0]!, icon: Blocks, class: "[--tone:var(--primary)]" },
+  { ...NAV_GROUPS[1]!, icon: Store, class: "[--tone:var(--info)]" },
+];
 function bump(by: number) {
   progress.value = Math.min(100, Math.max(0, progress.value + by));
 }
@@ -328,6 +333,16 @@ function bump(by: number) {
 <DemoSection v-if="visible.has('navlist')" id="navlist" :title="title('navlist')" description="The list of categories beside a page, like in Settings. Arrow keys, Home and End move through it.">
         <Specimen label="Grouped, with counts" column>
           <NavList v-model="navSelected" class="w-56" label="Categories" :groups="NAV_GROUPS" />
+        </Specimen>
+        <Specimen label="Groups as plates, each in a colour of its own" column>
+          <NavList
+            v-model="navSelected"
+            class="w-56 gap-2.5"
+            label="Categories"
+            :groups="PLATE_GROUPS"
+            group-class="rounded-xl border border-[color-mix(in_srgb,var(--tone)_18%,transparent)] bg-[linear-gradient(160deg,color-mix(in_srgb,var(--tone)_13%,transparent),color-mix(in_srgb,var(--tone)_3%,transparent)_70%)] p-1 [&_[aria-current=page]]:bg-[color-mix(in_srgb,var(--tone)_22%,transparent)]"
+            heading-class="pt-1 text-[color-mix(in_srgb,var(--tone)_80%,var(--foreground))]"
+          />
         </Specimen>
       </DemoSection>
 

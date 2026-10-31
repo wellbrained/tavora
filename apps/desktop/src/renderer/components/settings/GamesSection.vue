@@ -2,6 +2,7 @@
 // Settings > Games: what happens when a game starts or closes, the library (the rail's order, every workspace and
 // the Trash, each a page of its own, and the Steam import), and what Tavora asks its service for (game search,
 // icons, the module catalog).
+import { LayoutGrid, Trash2 } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -101,6 +102,7 @@ watch(gameEndOpen, trackGameEnd);
     <SettingRow
       :label="t('settings.section.workspaces')"
       :description="t('settings.workspaces.summary', { count: workspaceCount })"
+      :icon="LayoutGrid"
       opens
       data-testid="games-open-workspaces"
       @open="emit('show', 'workspaces')"
@@ -108,6 +110,7 @@ watch(gameEndOpen, trackGameEnd);
     <SettingRow
       :label="t('settings.section.trash')"
       :description="library.trash.length ? t('settings.trash.summary', { count: library.trash.length }) : t('settings.trash.summaryEmpty')"
+      :icon="Trash2"
       opens
       data-testid="games-open-trash"
       @open="emit('show', 'trash')"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Settings > About & updates: this version (its patch notes are a page of their own), updates, backups and the
 // diagnostic info.
+import { ScrollText } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
@@ -53,6 +54,7 @@ async function copyDiagnostics() {
       :description="t('settings.about.versionHint')"
       setting="app-version"
       :highlighted="highlight === 'app-version'"
+      :icon="ScrollText"
       opens
       data-testid="open-patch-notes"
       @open="emit('patchNotes')"

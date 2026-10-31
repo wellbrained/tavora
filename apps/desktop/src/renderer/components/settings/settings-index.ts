@@ -1,13 +1,15 @@
-import { Blocks, Gamepad2, Globe, Keyboard, Package, Palette, PictureInPicture2, Plug, SlidersHorizontal } from "@lucide/vue";
+import { Blocks, CodeXml, Gamepad2, Globe, House, Keyboard, Package, Palette, PictureInPicture2, Plug, SlidersHorizontal } from "@lucide/vue";
 import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 
 // The section menu, in groups. It stays short on purpose, so it fits a normal window without scrolling: a new setting
 // gets a row or a block on a page, and a long list opens inside its row or as a page of its own (SUB_PAGES). Names
-// come from the locale files: `settings.group.<id>` and `settings.section.<id>`.
+// come from the locale files: `settings.group.<id>` and `settings.section.<id>`. Each group is a plate in a colour of
+// its own (SettingsDialog.vue), with its icon beside the heading.
 export const GROUPS = [
   {
     id: "app",
+    icon: House,
     sections: [
       { id: "general", icon: SlidersHorizontal },
       { id: "appearance", icon: Palette },
@@ -17,6 +19,7 @@ export const GROUPS = [
   },
   {
     id: "modules",
+    icon: Blocks,
     sections: [
       { id: "modules", icon: Blocks },
       { id: "connections", icon: Plug },
@@ -28,6 +31,7 @@ export const GROUPS = [
   // start; the badge counts what waits for Publish.
   {
     id: "development",
+    icon: CodeXml,
     sections: [{ id: "development", icon: Package }],
   },
 ] as const;

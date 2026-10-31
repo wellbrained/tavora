@@ -23,11 +23,16 @@ function contrast(a: number[], b: number[]): number {
  */
 const PAINTED = `
   (selector, pseudo) => {
+    // Any CSS colour (rgb, oklch, color-mix …), read back as sRGB through one canvas pixel.
+    const pen = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
     const parse = (value) => {
-      const match = value.match(/rgba?\\(([^)]+)\\)/);
-      if (!match) return null;
-      const parts = match[1].split(/[\\s,\\/]+/).filter(Boolean).map(Number);
-      return { rgb: parts.slice(0, 3), alpha: parts.length > 3 ? parts[3] : 1 };
+      if (!value || value === "transparent") return null;
+      pen.clearRect(0, 0, 1, 1);
+      pen.fillStyle = "rgba(0, 0, 0, 0)";
+      pen.fillStyle = value;
+      pen.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = pen.getImageData(0, 0, 1, 1).data;
+      return { rgb: [r, g, b], alpha: a / 255 };
     };
     const over = (top, alpha, under) => top.map((channel, i) => Math.round(channel * alpha + under[i] * (1 - alpha)));
     const element = document.querySelector(selector);
@@ -35,6 +40,10 @@ const PAINTED = `
     // Background: walk up until something opaque, compositing translucent layers on the way down.
     const layers = [];
     for (let node = element.parentElement; node; node = node.parentElement) {
+      // A gradient wash (the Settings menu's plates) counts with its first, strongest colour; it lies over the fill.
+      const wash = getComputedStyle(node).backgroundImage.match(/gradient\\([^,]*,\\s*((?:rgba?|color|oklch|oklab|lab|lch|hsla?)\\((?:[^()]|\\([^()]*\\))*\\))/);
+      const washed = wash && parse(wash[1]);
+      if (washed && washed.alpha > 0) layers.push({ ...washed, opacity: Number(getComputedStyle(node).opacity) });
       const background = parse(getComputedStyle(node).backgroundColor);
       if (background && background.alpha > 0) layers.push({ ...background, opacity: Number(getComputedStyle(node).opacity) });
       if (background && background.alpha >= 1) break;
