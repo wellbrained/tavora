@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, compareVersions, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes } from "./release-guards.mjs";
+import { CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, compareVersions, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
 
 const ready = { branch: "main", dirty: false, ahead: 0, behind: 0, tags: [] as string[], noteVersions: ["0.4.0"] };
 
@@ -128,14 +128,17 @@ describe("asksHandChecks", () => {
 
 describe("the split release (CI builds, the PC checks and uploads)", () => {
   const sha = "a".repeat(40);
-  const since = new Date("2026-10-31T12:00:00Z");
-  const run = (over: object) => ({ databaseId: 1, headSha: sha, createdAt: "2026-10-31T12:00:05Z", status: "queued", event: "workflow_dispatch", ...over });
+  const title = releaseRunTitle("0.24.0", true, "n0nce");
+  const run = (over: object) => ({ databaseId: 1, headSha: sha, displayTitle: title, status: "queued", event: "workflow_dispatch", ...over });
 
-  it("finds the run it started, waits while GitHub hasn't listed it, and stops when main moved", () => {
-    expect(findDispatchedRun([run({ createdAt: "2026-10-31T10:00:00Z" })], since, sha)).toEqual({ wait: true });
-    expect(findDispatchedRun([run({ event: "push" })], since, sha)).toEqual({ wait: true });
-    expect(findDispatchedRun([run({ databaseId: 1, createdAt: "2026-10-31T12:00:05Z" }), run({ databaseId: 2, createdAt: "2026-10-31T12:00:09Z" })], since, sha).run?.databaseId).toBe(2);
-    expect(findDispatchedRun([run({ headSha: "b".repeat(40) })], since, sha).problem).toContain("main moved");
+  it("finds exactly the run it started (by its nonce), waits while GitHub hasn't listed it, and stops when main moved", () => {
+    expect(title).toBe("Release build 0.24.0 e2e=true (n0nce)");
+    expect(findDispatchedRun([], title, sha)).toEqual({ wait: true });
+    // Someone else's run of the same commit, even a newer one or one without e2e, is never taken.
+    expect(findDispatchedRun([run({ databaseId: 9, displayTitle: releaseRunTitle("0.24.0", false, "other") })], title, sha)).toEqual({ wait: true });
+    expect(findDispatchedRun([run({ event: "push" })], title, sha)).toEqual({ wait: true });
+    expect(findDispatchedRun([run({ databaseId: 9, displayTitle: "Release build 0.24.0 e2e=true (x)" }), run({ databaseId: 2 })], title, sha).run?.databaseId).toBe(2);
+    expect(findDispatchedRun([run({ headSha: "b".repeat(40) })], title, sha).problem).toContain("main moved");
   });
 
   it("reads the hashes CI printed, with the runner's log prefixes", () => {

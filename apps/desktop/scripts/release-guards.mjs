@@ -77,18 +77,22 @@ export function releaseFiles(version) {
 }
 
 /**
- * The Release build run `pnpm release` just started, from `gh run list --json databaseId,headSha,createdAt,status,event`:
- * the newest workflow_dispatch run created since `since` (a Date, less a minute for clock skew).
- * Returns { run } or { wait: true } while GitHub hasn't listed it yet, or { problem } when it built another commit.
+ * The name the Release build gives its run (run-name in release-build.yml). The nonce is new for every
+ * `pnpm release`, so the run with this name is the one it started, with these inputs, and no other.
  */
-export function findDispatchedRun(runs, since, sha) {
-  const fresh = runs
-    .filter((run) => run.event === "workflow_dispatch" && new Date(run.createdAt).getTime() >= since.getTime() - 60_000)
-    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  if (fresh.length === 0) return { wait: true };
-  const run = fresh[0];
+export function releaseRunTitle(version, e2e, nonce) {
+  return `Release build ${version} e2e=${e2e} (${nonce})`;
+}
+
+/**
+ * The Release build run `pnpm release` just started, from `gh run list --json databaseId,headSha,displayTitle,event`.
+ * Returns { run } or { wait: true } while GitHub hasn't listed it yet, or { problem } when it builds another commit.
+ */
+export function findDispatchedRun(runs, title, sha) {
+  const run = runs.find((candidate) => candidate.event === "workflow_dispatch" && candidate.displayTitle === title);
+  if (!run) return { wait: true };
   if (run.headSha !== sha) {
-    return { problem: `The Release build runs on ${run.headSha.slice(0, 7)}, not ${sha.slice(0, 7)}: main moved. Nothing was published; pull and start again.` };
+    return { run, problem: `The Release build runs on ${run.headSha.slice(0, 7)}, not ${sha.slice(0, 7)}: main moved. Nothing was published; pull and start again.` };
   }
   return { run };
 }
@@ -116,9 +120,10 @@ export function checkDownload(version, downloaded, ciHashes, latestYml) {
   }
   const lines = String(latestYml).split(/\r?\n/);
   if (!lines.includes(`version: ${version}`)) problems.push(`latest.yml does not say version ${version}.`);
-  if (!lines.includes(`path: ${installer}`)) problems.push(`latest.yml does not point at ${installer}.`);
+  // electron-updater reads files[0] (url and sha512); path and the top-level sha512 are the older fields.
+  if (!lines.includes(`path: ${installer}`) || !lines.includes(`  - url: ${installer}`)) problems.push(`latest.yml does not point at ${installer}.`);
   const sha512 = downloaded.get(installer)?.sha512;
-  if (sha512 && !lines.includes(`sha512: ${sha512}`)) problems.push("latest.yml's sha512 is not the installer's.");
+  if (sha512 && (!lines.includes(`sha512: ${sha512}`) || !lines.includes(`    sha512: ${sha512}`))) problems.push("latest.yml's sha512 is not the installer's.");
   return problems;
 }
 

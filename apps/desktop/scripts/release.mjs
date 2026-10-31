@@ -5,7 +5,7 @@
 //                             pushes the tag and creates the GitHub release
 //   pnpm release --dry-run    the same up to and including the download check, then stops before the upload
 //   pnpm release --skip-e2e   the Release build leaves out the e2e suite (only for a retry after it passed)
-//   pnpm release --skip-ci-check  releases without asking GitHub whether Checks passed (offline only)
+//   pnpm release --skip-ci-check  doesn't wait for main's Checks run (the Release build runs the same tests)
 //
 // Before 1.0 the by-hand checks are listed with what already covers them, not asked (asksHandChecks).
 //
@@ -15,13 +15,13 @@
 // installer and its blockmap first and latest.yml last, so a manifest never points at a file that is not
 // there yet, and refuses a version that is not newer than the live one.
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, findDispatchedRun, readCiHashes, releaseFiles, releaseNotes } from "./release-guards.mjs";
+import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, findDispatchedRun, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
 
 /** The version of the Tavora installed for this user (asar is off, so its package.json is a plain file), or null. */
@@ -56,6 +56,11 @@ const REPO = "wellbrained/tavora";
 function fail(message) {
   console.error(message);
   process.exit(1);
+}
+/** Stops a Release build this run no longer needs (best effort). */
+function cancelRun(id) {
+  if (!id) return;
+  spawnSync("gh", ["run", "cancel", id, "--repo", REPO], { stdio: "ignore" });
 }
 
 function run(command, args, options = {}) {
@@ -118,24 +123,36 @@ const installer = feedFiles[0];
 
 // CI builds and tests with no secrets (.github/workflows/release-build.yml); this PC only checks and uploads.
 step("Release build on GitHub: tests, installer, install-and-start check");
-const since = new Date();
-run("gh", ["workflow", "run", "release-build.yml", "--repo", REPO, "--ref", "main", "-f", `version=${version}`, "-f", `e2e=${!skipE2e}`]);
+// A new nonce in the run's name: the run with exactly this name is the one started here, with these inputs.
+const title = releaseRunTitle(version, !skipE2e, randomBytes(8).toString("hex"));
+const nonce = /\(([0-9a-f]+)\)$/.exec(title)[1];
+run("gh", ["workflow", "run", "release-build.yml", "--repo", REPO, "--ref", "main", "-f", `version=${version}`, "-f", `e2e=${!skipE2e}`, "-f", `nonce=${nonce}`]);
 let ciRun;
 for (let attempt = 0; attempt < 30 && !ciRun; attempt++) {
-  const runs = JSON.parse(run("gh", ["run", "list", "--repo", REPO, "--workflow", "release-build.yml", "--branch", "main", "--limit", "10", "--json", "databaseId,headSha,createdAt,status,event"], { capture: true }));
-  const found = findDispatchedRun(runs, since, built);
-  if (found.problem) fail(found.problem);
+  const runs = JSON.parse(run("gh", ["run", "list", "--repo", REPO, "--workflow", "release-build.yml", "--branch", "main", "--event", "workflow_dispatch", "--limit", "20", "--json", "databaseId,headSha,displayTitle,status,event"], { capture: true }));
+  const found = findDispatchedRun(runs, title, built);
+  if (found.problem) {
+    cancelRun(String(found.run?.databaseId ?? ""));
+    fail(found.problem);
+  }
   if (found.run) ciRun = found.run;
   else await new Promise((resolve) => setTimeout(resolve, 4000));
 }
-if (!ciRun) fail("GitHub did not start the Release build within two minutes. Nothing was published.");
+if (!ciRun) fail(`GitHub did not list the Release build "${title}" within two minutes. Nothing was published; check the Actions tab.`);
 const runId = String(ciRun.databaseId);
+// From here on, stopping early (a failed check, Ctrl+C) also stops the run on GitHub.
+let finished = false;
+process.on("SIGINT", () => {
+  if (!finished) cancelRun(runId);
+  process.exit(130);
+});
 console.log(`https://github.com/${REPO}/actions/runs/${runId} (about 25 minutes${skipE2e ? ", without e2e" : ""})`);
 try {
   run("gh", ["run", "watch", runId, "--repo", REPO, "--exit-status", "--interval", "30"]);
 } catch {
   fail(`The Release build failed; see the run above. Nothing was published or tagged.`);
 }
+finished = true;
 
 step("Downloading and checking what CI built");
 rmSync(releaseDir, { recursive: true, force: true });
@@ -148,7 +165,16 @@ for (const name of allFiles) {
   const bytes = readFileSync(file);
   downloaded.set(name, { sha256: createHash("sha256").update(bytes).digest("hex"), sha512: createHash("sha512").update(bytes).digest("base64") });
 }
-const ciHashes = readCiHashes(run("gh", ["run", "view", runId, "--repo", REPO, "--log"], { capture: true }));
+// The log can take a moment to be ready after the run ends.
+let ciLog = "";
+for (let attempt = 0; attempt < 5 && !ciLog; attempt++) {
+  try {
+    ciLog = run("gh", ["run", "view", runId, "--repo", REPO, "--log"], { capture: true });
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 6000));
+  }
+}
+const ciHashes = readCiHashes(ciLog);
 const latestYml = existsSync(path.join(releaseDir, "latest.yml")) ? readFileSync(path.join(releaseDir, "latest.yml"), "utf8") : "";
 const downloadProblems = checkDownload(version, downloaded, ciHashes, latestYml);
 if (downloadProblems.length) fail(`Not releasing ${version}:\n  - ${downloadProblems.join("\n  - ")}\nNothing was published or tagged.`);
@@ -203,9 +229,19 @@ try {
   rmSync(bundle, { force: true });
 }
 
+// The update is live from here on; what fails now is finished by hand, and the script says how.
 step("Tagging");
-git("tag", "-a", `v${version}`, built, "-m", `Tavora ${version}`);
-git("push", "origin", `v${version}`);
+try {
+  git("tag", "-a", `v${version}`, built, "-m", `Tavora ${version}`);
+  git("push", "origin", `v${version}`);
+} catch (error) {
+  fail(
+    `${version} is published, but tagging failed (${error.message}). Finish by hand:\n` +
+      `  git tag -a v${version} ${built} -m "Tavora ${version}"   (skip if the tag exists)\n` +
+      `  git push origin v${version}\n` +
+      `  gh release create v${version} --repo ${REPO} --verify-tag --title "Tavora ${version} (preview build)" ${allFiles.map((name) => `"${path.join(releaseDir, name)}"`).join(" ")}`,
+  );
+}
 
 // The GitHub release gets the same verified files (and the zip), with the version's patch notes.
 step("GitHub release");
