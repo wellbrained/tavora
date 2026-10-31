@@ -335,8 +335,16 @@ export function hostActionTable(c: HostChecks) {
     "collapse-development-folder": { folder: filled(500), collapsed: bool },
     /** Copies an example into a new project in a development folder, or in a folder the user picks (null); answers with the new project. */
     "copy-example": { moduleId: c.moduleId, name: named(80), folder: nullable(filled(500)) },
-    /** Dev builds only: builds a built-in module from origin/main, signs it with a Tavora key file the user picks and uploads it. Answers with "id version". */
+    /** Dev builds only: works out which built-in modules have a newer version on main to publish (state.officialPublish.overview). */
+    "official-publish-check": {},
+    /** Dev builds only: builds a built-in module from origin/main and packs it, unsigned, for the preview (state.officialPublish.run). */
     "publish-official-module": { moduleId: c.moduleId },
+    /** Dev builds only: signs the previewed build with the saved Tavora key or a key file the user picks, and uploads it; `remember` saves a picked key on this PC. Answers with "id version". */
+    "official-publish-confirm": { remember: bool },
+    /** Dev builds only: stops the publish in progress or throws its preview away. */
+    "official-publish-cancel": {},
+    /** Dev builds only: deletes the Tavora key saved on this PC. */
+    "official-publish-forget-key": {},
     /** Opens a module project of a development folder (a `developmentFolders` project) in the file manager. */
     "open-development-project": { project: filled(500) },
     /** Opens an example's folder in the file manager, to look at its sources. */

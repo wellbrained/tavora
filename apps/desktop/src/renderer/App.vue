@@ -7,6 +7,7 @@ import PairingDialog from "./components/PairingDialog.vue";
 import CopyExampleDialog from "./components/developer/CopyExampleDialog.vue";
 import DeveloperStartDialog from "./components/developer/DeveloperStartDialog.vue";
 import RecoveryAskDialog from "./components/settings/RecoveryAskDialog.vue";
+import OfficialPublishDialog from "./components/developer/OfficialPublishDialog.vue";
 import PublishDialog from "./components/developer/PublishDialog.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import GrantDialog from "./components/GrantDialog.vue";
@@ -72,6 +73,7 @@ const toastPosition = computed(() => (settingsOpen.value && state.value ? state.
     <CloudCopyDialog />
     <HotkeyDialog />
     <PublishDialog />
+    <OfficialPublishDialog />
     <PairingDialog />
 
     <!-- At the top, over the toolbar: module panels are native views drawn

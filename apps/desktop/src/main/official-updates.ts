@@ -157,6 +157,15 @@ export class OfficialUpdates {
     return isOfficialSigner(safety.firstKeyChain(signer), safety.revoked(signer, sha256), pins);
   }
 
+  /**
+   * Whether a key may sign new Tavora modules at all, before there is a zip: on the pinned chain and not revoked. A
+   * revoked key fails even when some of its old zips are still allowed, since nothing new may be signed with it.
+   */
+  keyTrusted(signer: string): boolean {
+    const { safety, pins } = this.options;
+    return isOfficialSigner(safety.firstKeyChain(signer), safety.revoked(signer, ""), pins);
+  }
+
   /** Runs an install of `id`; cleanup skips its folder meanwhile. */
   async install<T>(id: string, run: () => Promise<T>): Promise<T> {
     this.installing.add(id);

@@ -311,6 +311,68 @@ export interface DeveloperKeysView {
  * folder as it is, signed with a kept publisher key, and shows what would be published. Its Publish uploads
  * exactly that zip; the click is the approval. Sent on its own channel; null while no review is open.
  */
+/** A step of publishing a built-in module, shown while it runs. */
+export type OfficialPublishStep = "fetch" | "check" | "worktree" | "install" | "build" | "pack" | "sign" | "upload";
+
+/**
+ * Where a built-in module's newer version on main stands: `ready` to publish, already `published`, the catalogue has a
+ * newer one (`catalogueNewer`), host code changed since the last release (`waitForRelease`), or CI for main is still
+ * running or failed.
+ */
+export type OfficialPublishStatus = "ready" | "published" | "catalogueNewer" | "waitForRelease" | "ciPending" | "ciFailed";
+
+export interface OfficialPublishRow {
+  id: string;
+  name: string;
+  /** The version on main. */
+  version: string;
+  /** The version in the last app release. */
+  shipped: string;
+  /** The catalogue's newest, null when it has none. */
+  listed: string | null;
+  status: OfficialPublishStatus;
+}
+
+export interface OfficialPublishOverview {
+  /** origin/main's commit and the last release tag the rows were worked out for. */
+  commit: string;
+  release: string;
+  /** Built-in modules whose version on main is newer than in the last release. */
+  rows: OfficialPublishRow[];
+  /** Host files changed since the release that make modules wait for the next one (at most 20). */
+  hostChanges: string[];
+}
+
+/** What Sign and upload sends: built and packed, not signed yet. */
+export interface OfficialPublishPreview {
+  id: string;
+  name: string;
+  version: string;
+  shipped: string;
+  listed: string | null;
+  commit: string;
+  release: string;
+  minTavora: string;
+  /** This version's patch notes from the module's changelog. */
+  notes: string[];
+  files: { name: string; size: number }[];
+  /** Bytes, unpacked. */
+  size: number;
+}
+
+export interface OfficialPublishView {
+  available: boolean;
+  /** The overview is being worked out (git fetch, catalogue, CI). */
+  checking: boolean;
+  overview: OfficialPublishOverview | null;
+  /** Why the last check failed (a message for the user), or null. */
+  checkError: string | null;
+  /** The publish in progress: its step, and the preview once it is built. */
+  run: { moduleId: string; name: string; step: OfficialPublishStep; preview: OfficialPublishPreview | null } | null;
+  /** The Tavora key: saved on this PC (sealed by the system), and whether this PC can save it at all. */
+  key: { saved: boolean; canRemember: boolean };
+}
+
 export interface PublishView {
   /** The project folder, as Settings > Development lists it. */
   project: string;
@@ -637,13 +699,13 @@ export interface HostViewState {
   /** Folders in the modules folder that could not be loaded, and why, for module authors. */
   /** `path` is the folder's full path. Settings words the problem from `kind` and `values`; `message` is the English line for logs. */
   moduleProblems: { folder: string; path: string; message: string; kind?: ModuleProblemKind; values?: ModuleProblemValues }[];
+  /** Settings > Development in a dev build with Tavora's own modules updating: the built-in modules can be published. */
+  officialPublish: OfficialPublishView;
   /**
    * Folders added in Settings > Development: a module project, or a folder of projects. `problem` is
    * set when the folder itself has none or is gone; each project says the module it loads or why not.
    * `kind` lets Settings suggest the fix: "not-built", "no-module" or "missing".
    */
-  /** Settings > Development in a dev build with Tavora's own modules updating: the built-in modules can be published. `busy` is the id being published. */
-  officialPublish: { available: boolean; busy: string | null };
   developmentFolders: {
     folder: string;
     /** The user closed it: Settings shows only its heading. */
