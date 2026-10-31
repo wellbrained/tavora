@@ -20,6 +20,9 @@ admin work and is never in a `TAVORA_*` setting.
 - sshd forces every login of these users into `/usr/local/sbin/tavora-receive`
   ([server/tavora-receive](server/tavora-receive)): no shell, no tty, no forwarding, no scp or sftp, and the keys
   work only from this PC's tailnet address. The keys sit in `/etc/ssh/tavora-deploy-keys/<user>`, owned by root.
+- The deploy users log in on **sshd's port 2222** only, and port 2222 takes nobody else. Port 22 on the
+  tailnet address belongs to Tailscale SSH, which decides by tailnet policy, ignores keys and would skip every
+  restriction here; Nik keeps it for his own devices (decided 2026-10-31). Root's SSH on port 22 is unchanged.
 - A deploy sends one tar over stdin with its SHA-256 ([../scripts/deploy-client.mjs](../scripts/deploy-client.mjs)).
   The receiver checks the hash and every entry (plain files and folders, safe names, only the expected files),
   unpacks it as the job's user and publishes it. Nothing uploaded is ever run on the server by root.
@@ -93,18 +96,23 @@ both in your password manager.
    foreach ($k in @{UPDATES='tavora-updates'; DOCS='tavora-docs'; API='tavora-api-deploy'; ADMIN='tavora-admin-deploy'}.GetEnumerator()) { setx "TAVORA_$($k.Key)_SSH_KEY" "$HOME\.ssh\$($k.Value)" }
    [Environment]::SetEnvironmentVariable('TAVORA_DEPLOY_SSH_KEY', $null, 'User')
    ```
-7. **Run the server setup** from a checkout of this branch (new terminal), then check all four keys:
+7. **Run the server setup** from a checkout of this branch (new terminal). Then let this PC learn the
+   server's key on the deploy port (over the tailnet, which already proves it is your server) and check all
+   four keys:
    ```powershell
    node deploy/send-server-setup.mjs --admin-key "D:\Server\vpn ssh-key-2026-10-05.key"
+   ssh-keyscan -p 2222 -t ed25519 100.92.36.114 | Out-File -Append -Encoding ascii "$HOME\.ssh\known_hosts"
    node scripts/deploy-client.mjs hello
    ```
    Each job should say `OK`. From now on deploy only with the new scripts: the old ones would write as root
    into folders that now belong to the deploy users.
-8. **Take the old key off the server** and check it no longer gets in:
+8. **Take the old key off the server** and check it no longer gets in. The check goes over the public address
+   (`mytavora.app`): on the tailnet address Tailscale SSH answers and never looks at keys.
    ```powershell
    $body = (ssh-keygen -y -f "D:\Server\old-root.key").Split(' ')[1]
-   ssh -i "D:\Server\vpn ssh-key-2026-10-05.key" -o IdentitiesOnly=yes root@100.92.36.114 "cp -p /root/.ssh/authorized_keys /root/.ssh/authorized_keys.before-rotation && grep -vF '$body' /root/.ssh/authorized_keys.before-rotation > /root/.ssh/authorized_keys; grep -c . /root/.ssh/authorized_keys"
-   ssh -i "D:\Server\old-root.key" -o IdentitiesOnly=yes -o BatchMode=yes root@100.92.36.114 "echo STILL WORKS"
+   ssh root@100.92.36.114 "cp -p /root/.ssh/authorized_keys /root/.ssh/authorized_keys.before-rotation && grep -vF '$body' /root/.ssh/authorized_keys.before-rotation > /root/.ssh/authorized_keys; grep -c . /root/.ssh/authorized_keys"
+   ssh -i "D:\Server\vpn ssh-key-2026-10-05.key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new root@mytavora.app "echo new key works on the public address"
+   ssh -i "D:\Server\old-root.key" -o IdentitiesOnly=yes -o BatchMode=yes root@mytavora.app "echo STILL WORKS"
    ```
-   The last command must fail with `Permission denied`. Then delete the old key:
+   The second command must print its message; the last must fail with `Permission denied`. Then delete the old key:
    `Remove-Item "D:\Server\old-root.key", "D:\Server\old-root.key.pub" -ErrorAction SilentlyContinue`.
