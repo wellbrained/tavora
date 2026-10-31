@@ -96,7 +96,7 @@ test("the profile dialog saves on Enter and on leaving a field, and has the acco
 
     await profile.getByTestId("profile-name").fill("Mara Stone");
     // The name beside the picture follows what is typed.
-    await expect(profile.getByRole("heading", { name: "Mara Stone" })).toBeVisible();
+    await expect(profile.getByTestId("profile-dialog-name")).toHaveText("Mara Stone");
     await profile.getByTestId("profile-name").press("Enter");
     await expect(profile.getByTestId("profile-status")).toHaveText("Saved");
     await expect(page.getByTestId("rail-profile")).toHaveAttribute("aria-label", "Profile: Mara Stone");
@@ -111,6 +111,31 @@ test("the profile dialog saves on Enter and on leaving a field, and has the acco
     await expect(profile.getByTestId("account")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(profile).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
+test("the profile banner is picked beside it, applies at once and is kept", async () => {
+  const { app, page } = await launch();
+  try {
+    await page.getByTestId("rail-profile").click();
+    const profile = page.getByTestId("profile-dialog");
+    // Without a picture the banner starts as stripes, and Your picture is not offered.
+    await expect(profile.locator("[data-banner]").first()).toHaveAttribute("data-banner", "stripes");
+    await profile.getByTestId("profile-banner-change").click();
+    await expect(page.getByTestId("profile-banner-picture")).toHaveCount(0);
+    await page.getByTestId("profile-banner-forest").click();
+    await expect(page.getByTestId("profile-banner-forest")).toHaveAttribute("aria-checked", "true");
+    await expect(profile.locator("[data-banner]").first()).toHaveAttribute("data-banner", "forest");
+    // Escape closes the banners first, then the dialog.
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("profile-banners")).toHaveCount(0);
+    await expect(profile.getByTestId("profile-banner-change")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(profile).toHaveCount(0);
+    await page.getByTestId("rail-profile").click();
+    await expect(page.getByTestId("profile-dialog").locator("[data-banner]").first()).toHaveAttribute("data-banner", "forest");
   } finally {
     await app.close();
   }

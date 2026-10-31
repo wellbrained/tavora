@@ -19,6 +19,7 @@ import type {
 } from "./host-api";
 import { CONTACT_KINDS, CONVERSATION_REPORT_REASONS, MODULE_REPORT_REASONS, OUTCOMES, REQUEST_TYPES } from "./conversations";
 import { isLanguageSetting, type LanguageSetting } from "./i18n";
+import { isProfileBanner, type ProfileBanner } from "./profile-banner";
 import { GRID_LIMITS, layoutTemplate, type LayoutTemplateId } from "./layout-templates";
 
 const BAD: unique symbol = Symbol("bad");
@@ -293,6 +294,8 @@ export function hostActionTable(c: HostChecks) {
     "set-language": { language: check<LanguageSetting>(isLanguageSetting) },
     /** The ranks in the profile card: hide or show them, and the period they show. */
     "set-profile-ranks": { hidden: optional(bool), period: optional(oneOf("day", "week", "month", "year", "all")) },
+    /** The banner behind the picture in the profile dialog; null goes back to the default. */
+    "set-profile-banner": { banner: nullable(check<ProfileBanner>(isProfileBanner)) },
     /** Remembers the Steam profile for the import on this PC; null forgets it. */
     "set-steam-profile": { profile: nullable((value) => (typeof value === "string" && value.length <= 200 && value.trim() !== "" ? value.trim() : BAD)) },
     /** Done ends the first-run welcome; false shows it again. */
