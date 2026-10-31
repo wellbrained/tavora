@@ -25,10 +25,11 @@ die() { echo "tavora-receive: $*" >&2; exit 1; }
 [[ "$(id -u)" != 0 ]] || die 'never runs as root'
 user="$(id -un)"
 case "$user" in
-  tavora-updates) job=updates; limit=$((512 * 1024 * 1024)) ;;
-  tavora-docs) job=docs; limit=$((256 * 1024 * 1024)) ;;
-  tavora-api-deploy) job=api; limit=$((1024 * 1024 * 1024)) ;;
-  tavora-admin-deploy) job=admin; limit=$((128 * 1024 * 1024)) ;;
+  # limit: the upload's size; unpacked_limit: its files together once unpacked; entries: files and folders.
+  tavora-updates) job=updates; limit=$((512 * 1024 * 1024)); unpacked_limit=$((768 * 1024 * 1024)); entries=10 ;;
+  tavora-docs) job=docs; limit=$((256 * 1024 * 1024)); unpacked_limit=$((512 * 1024 * 1024)); entries=20000 ;;
+  tavora-api-deploy) job=api; limit=$((1024 * 1024 * 1024)); unpacked_limit=$((2048 * 1024 * 1024)); entries=20000 ;;
+  tavora-admin-deploy) job=admin; limit=$((128 * 1024 * 1024)); unpacked_limit=$((256 * 1024 * 1024)); entries=5000 ;;
   *) die "$user is not a deploy user" ;;
 esac
 # The user's own folder (mode 0700, made by the setup); uploads wait here, out of everyone else's reach.
@@ -52,6 +53,10 @@ else
   [[ "$id" =~ ^[0-9]{14}-[0-9a-f]{12}$ ]] || die "not a release name: $id"
 fi
 
+# One publish per job at a time.
+exec 9> "$home/.lock"
+flock -n 9 || die 'another publish of this job is running; try again when it is done'
+
 # --- Receive: at most $limit bytes, then the hash the client sent.
 work="$(mktemp -d "$home/incoming.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
@@ -65,9 +70,15 @@ size="$(stat -c %s "$work/upload.tar")"
 # Names may start with ./ (Windows' tar writes them so); no absolute paths, no .., no links or devices.
 names="$work/names"
 tar -tf "$work/upload.tar" > "$names" 2>/dev/null || die 'the upload is not a tar archive'
-types="$(tar -tvf "$work/upload.tar" | cut -c1 | sort -u | tr -d '\n')"
+listing="$work/listing"
+tar -tvf "$work/upload.tar" > "$listing" 2>/dev/null || die 'the upload is not a tar archive'
+types="$(cut -c1 "$listing" | sort -u | tr -d '\n')"
 [[ "$types" =~ ^[-d]+$ ]] || die 'the upload holds something other than files and folders (a link?)'
-[[ "$(wc -l < "$names")" == "$(tar -tvf "$work/upload.tar" | wc -l)" ]] || die 'the upload has a name with a line break'
+[[ "$(wc -l < "$names")" == "$(wc -l < "$listing")" ]] || die 'the upload has a name with a line break'
+(( $(wc -l < "$names") <= entries )) || die "the upload has more than $entries files and folders"
+# The unpacked size from the listing (third column), so a small archive can't fill the disk once unpacked.
+total="$(awk '{ s += $3 } END { printf "%.0f", s }' "$listing")"
+[[ "$total" =~ ^[0-9]+$ ]] && (( total <= unpacked_limit )) || die "the upload unpacks to more than $((unpacked_limit / 1024 / 1024)) MB"
 while IFS= read -r name; do
   [[ "$name" =~ ^(\./)?([A-Za-z0-9_@+~-][A-Za-z0-9._@+~-]*/)*([A-Za-z0-9_@+~-][A-Za-z0-9._@+~-]*)?$ ]] || die "unsafe name in the upload: $name"
 done < "$names"
@@ -109,6 +120,11 @@ switch_site() { # root releases_to_keep health_url
   prune "$root/releases" "$keep"
 }
 
+# Deletes a release that never went live; one `current` points at stays, so the site never points at nothing.
+drop_unless_live() { # root target
+  [[ "$(readlink -f "$1/current" 2>/dev/null || true)" == "$(readlink -f "$2")" ]] || rm -rf -- "$2"
+}
+
 # Deletes all but the newest $2 releases (names start with the UTC time), never the live one.
 prune() {
   local dir="$1" keep="$2" live
@@ -124,10 +140,12 @@ case "$job" in
     # never points at a file that is not there yet. Keeps the three newest versions for differential updates.
     root=/srv/tavora-updates
     installer="Tavora-Setup-$id.exe"
-    only "(\./)?($installer|$installer\.blockmap|latest\.yml)"
+    id_re="$(printf '%s' "$id" | sed 's/\./\\./g')"
+    only "(\./)?(Tavora-Setup-$id_re\.exe|Tavora-Setup-$id_re\.exe\.blockmap|latest\.yml)"
     for f in "$installer" "$installer.blockmap" latest.yml; do [[ -s "$unpacked/$f" ]] || die "missing in the upload: $f"; done
     grep -qxF "version: $id" "$unpacked/latest.yml" || die "latest.yml does not say version $id"
     grep -qxF "path: $installer" "$unpacked/latest.yml" || die "latest.yml does not point at $installer"
+    grep -qxF "  - url: $installer" "$unpacked/latest.yml" || die "latest.yml's files list does not point at $installer"
     digest="$(openssl dgst -sha512 -binary "$unpacked/$installer" | base64 -w0)"
     grep -qxF "sha512: $digest" "$unpacked/latest.yml" || die "latest.yml's sha512 is not the installer's"
     # Only forward: a version that is not newer than the live one is refused (a bad release is fixed by a newer one).
@@ -145,7 +163,8 @@ case "$job" in
       die "the feed answers '$live', not $id"
     fi
     rm -f "$root/latest.yml.previous"
-    mapfile -t keep < <(find "$root" -maxdepth 1 -type f -name 'Tavora-Setup-*.exe' -printf '%f\n' | sed -E 's/^Tavora-Setup-(.+)\.exe$/\1/' | sort -rV | head -n 3)
+    # The three newest versions, and always the live one.
+    mapfile -t keep < <({ echo "$id"; find "$root" -maxdepth 1 -type f -name 'Tavora-Setup-*.exe' -printf '%f\n' | sed -E 's/^Tavora-Setup-(.+)\.exe$/\1/' | sort -rV | head -n 3; } | sort -u)
     find "$root" -maxdepth 1 -type f \( -name 'Tavora-Setup-*.exe' -o -name 'Tavora-Setup-*.exe.blockmap' \) -printf '%f\n' | while IFS= read -r f; do
       v="$(echo "$f" | sed -E 's/^Tavora-Setup-(.+)\.exe(\.blockmap)?$/\1/')"
       printf '%s\n' "${keep[@]}" | grep -qxF "$v" || rm -f -- "${root:?}/$f"
@@ -164,7 +183,7 @@ case "$job" in
     [[ ! -e "$target" ]] || die "release $id exists already"
     mv "$unpacked" "$target"
     # Root switches `current`, restarts the service and checks its health (rolling back if it fails).
-    sudo -n /usr/local/sbin/tavora-api-switch "$id" || { rm -rf -- "$target"; die 'the switch failed; the previous release stays live'; }
+    sudo -n /usr/local/sbin/tavora-api-switch "$id" || { drop_unless_live /srv/tavora-api "$target"; die 'the switch failed; the previous release stays live'; }
     prune /srv/tavora-api/releases 5
     ;;
   admin)
@@ -175,7 +194,7 @@ case "$job" in
     [[ ! -e "$target" ]] || die "release $id exists already"
     mv "$unpacked/proxy.mjs" "$home/proxy.mjs"
     mv "$unpacked/site" "$target"
-    sudo -n /usr/local/sbin/tavora-admin-switch "$id" || { rm -rf -- "$target"; die 'the switch failed; the previous release stays live'; }
+    sudo -n /usr/local/sbin/tavora-admin-switch "$id" || { drop_unless_live /srv/tavora-admin "$target"; die 'the switch failed; the previous release stays live'; }
     prune /srv/tavora-admin/releases 3
     ;;
 esac

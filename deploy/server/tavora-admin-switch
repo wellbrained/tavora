@@ -4,7 +4,7 @@
 # restart needed) and, when the uploaded gateway proxy differs from the installed one, installs it and
 # restarts tavora-admin-proxy. Installed by the maintainer (setup-deploy-access.sh); never uploaded.
 # The uploaded proxy.mjs is read with the deploy user's rights, never root's, so a link in its place
-# can't make root copy a file the deploy user may not read.
+# can't make root copy a file the deploy user may not read. Any failure puts the previous release back.
 set -euo pipefail
 umask 022
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -18,14 +18,36 @@ releases="$root/releases"
 [[ -d "$releases" && ! -L "$releases" ]] || die "$releases is missing or a link"
 target="$releases/$release"
 [[ -d "$target" && ! -L "$target" ]] || die "no release $release"
-
-ln -sfn "$target" "$root/current-next"
-mv -Tf "$root/current-next" "$root/current"
+# The proxy is set up once by tavora-admin's proxy/setup-server.sh; without it there is nothing to update.
+[[ -d "$root/proxy" && ! -L "$root/proxy" ]] || die "$root/proxy is missing; run tavora-admin's proxy/setup-server.sh first"
+systemctl cat tavora-admin-proxy.service >/dev/null 2>&1 || die 'tavora-admin-proxy.service is not installed; run proxy/setup-server.sh first'
 
 proxy="$(mktemp)"
-trap 'rm -f "$proxy"' EXIT
+old_proxy="$(mktemp)"
+previous="$(readlink "$root/current" || true)"
+point() { ln -sfn "$1" "$root/current-next" && mv -Tf "$root/current-next" "$root/current"; }
+switched=0
+proxy_changed=0
+cleanup() {
+  local status=$?
+  if [[ "$status" != 0 && "$switched" == 1 ]]; then
+    if [[ -n "$previous" ]]; then point "$previous" && echo 'Put the previous release back.' >&2; fi
+    if [[ "$proxy_changed" == 1 && -s "$old_proxy" ]]; then
+      install -m 644 -o root -g root "$old_proxy" "$root/proxy/proxy.mjs" && systemctl restart tavora-admin-proxy || true
+      echo 'Put the previous proxy back.' >&2
+    fi
+  fi
+  rm -f "$proxy" "$old_proxy"
+}
+trap cleanup EXIT
+
+point "$target"
+switched=1
+
 if runuser -u tavora-admin-deploy -- cat /var/lib/tavora-deploy/tavora-admin-deploy/proxy.mjs > "$proxy" 2>/dev/null && [[ -s "$proxy" ]]; then
   if ! cmp -s "$proxy" "$root/proxy/proxy.mjs"; then
+    if [[ -f "$root/proxy/proxy.mjs" ]]; then cp -p "$root/proxy/proxy.mjs" "$old_proxy"; fi
+    proxy_changed=1
     install -m 644 -o root -g root "$proxy" "$root/proxy/proxy.mjs"
     systemctl restart tavora-admin-proxy
     echo 'Proxy restarted.'
@@ -33,4 +55,5 @@ if runuser -u tavora-admin-deploy -- cat /var/lib/tavora-deploy/tavora-admin-dep
 else
   echo 'No proxy.mjs in the upload; the proxy is unchanged.' >&2
 fi
+switched=0
 echo "Tavora Admin $release is live."

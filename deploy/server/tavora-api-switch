@@ -35,7 +35,7 @@ rollback() {
 }
 
 point "$target"
-systemctl restart tavora-api
+systemctl restart tavora-api || rollback 'The service did not restart.'
 
 health="$(mktemp)"
 trap 'rm -f "$health"' EXIT

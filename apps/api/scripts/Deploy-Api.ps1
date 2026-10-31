@@ -2,14 +2,23 @@
 # (systemd unit tavora-api, 127.0.0.1:4010, behind Caddy at api.mytavora.app).
 # Needs a real dataset: run `pnpm --filter @tavora/api dataset` first. Only apps/api
 # has to be committed (Tavora Admin, which the API serves, deploys from its own repo, wellbrained/tavora-admin); other changes in the repository do not block a deploy.
+#
+# The upload uses the restricted tavora-api-deploy key (TAVORA_DEPLOY_HOST, TAVORA_API_SSH_KEY), which can only
+# hand over this one upload: the server unpacks it, switches to it, restarts the service and rolls back if it
+# isn't healthy. The systemd unit, Caddy site and helpers are not part of a deploy; when they changed, the
+# client says so and the server setup is run first (deploy/README.md).
 param([switch]$AllowSmallDataset)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $api = Join-Path $repo 'apps\api'
+$client = Join-Path $repo 'scripts\deploy-client.mjs'
 $changes = & git -C $repo status --porcelain -- apps/api
 if ($LASTEXITCODE -ne 0 -or $changes) { throw 'Commit the changes in apps/api before deploying.' }
 $revision = (& git -C $repo rev-parse --short=12 HEAD).Trim()
 if ($revision -notmatch '^[a-f0-9]{12}$') { throw 'Invalid source revision.' }
+# Check the key and the server setup before building.
+& node $client hello api
+if ($LASTEXITCODE -ne 0) { throw 'The deploy key or the server setup is not ready; see above.' }
 
 $dataset = Join-Path $api 'data\games.sqlite'
 if (-not (Test-Path $dataset)) { throw 'No dataset. Run: pnpm --filter @tavora/api dataset' }
@@ -28,17 +37,14 @@ New-Item -ItemType Directory -Path $staging | Out-Null
 try {
   Copy-Item $bundle (Join-Path $staging 'server.mjs')
   # The maintainer's tool for adding catalog modules by hand (tavora-api-catalog on the server).
-  Copy-Item (Join-Path $api 'distcatalog.mjs') (Join-Path $staging 'catalog.mjs')
+  Copy-Item (Join-Path $api 'dist\catalog.mjs') (Join-Path $staging 'catalog.mjs')
   Copy-Item $dataset (Join-Path $staging 'games.sqlite')
   # The hosted game icons travel with the release. They are only served once TAKEDOWN_CONTACT is set in shared/production.env.
-  $icons = Join-Path $api 'dataicons'
+  $icons = Join-Path $api 'data\icons'
   if (Test-Path (Join-Path $icons 'index.json')) { Copy-Item $icons (Join-Path $staging 'icons') -Recurse }
-  # Windows' own tar: from Git Bash, `tar.exe` is GNU tar, which reads C:... as a remote host.
-  & (Join-Path $env:SystemRoot 'System32	ar.exe') -czf $archive -C $staging .
+  # Windows' own tar: from Git Bash, `tar.exe` is GNU tar, which reads C:\... as a remote host.
+  & (Join-Path $env:SystemRoot 'System32\tar.exe') -czf $archive -C $staging .
   if ($LASTEXITCODE -ne 0) { throw 'Archive failed.' }
-  # The server unpacks it into a new release, switches to it, restarts the service and rolls back if it
-  # isn't healthy. The systemd unit, Caddy site and helpers are not part of a deploy: when they changed,
-  # the client says so and the server setup is run first (deploy/README.md).
   & node $client publish api $release $archive
   if ($LASTEXITCODE -ne 0) { throw 'Deployment failed; inspect the server output. The previous release is kept.' }
 } finally {

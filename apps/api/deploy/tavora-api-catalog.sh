@@ -10,7 +10,9 @@
 #   tavora-api-catalog set-list <revocations|blocks|successions> <file.json>
 #                                           a list signed offline with pnpm tavora-catalog-sign
 set -euo pipefail
-run() { runuser -u tavora-api -- env TAVORA_STATE_DIR=/var/lib/tavora-api /usr/local/bin/node --no-warnings /srv/tavora-api/current/catalog.mjs "$@"; }
+# setsid: catalog.mjs comes with each API deploy, so it runs without root's terminal as its controlling terminal
+# (it can't push keystrokes into the maintainer's shell).
+run() { setsid --wait runuser -u tavora-api -- env TAVORA_STATE_DIR=/var/lib/tavora-api /usr/local/bin/node --no-warnings /srv/tavora-api/current/catalog.mjs "$@"; }
 case "${1:-}" in
   add)
     [[ $# -eq 2 && -f "$2" ]] || { echo 'Usage: tavora-api-catalog add <module.zip>'; exit 2; }

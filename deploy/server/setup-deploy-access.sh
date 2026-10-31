@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run by the maintainer as root on the server, through deploy/Send-ServerSetup.ps1, which uploads the files
+# Run by the maintainer as root on the server, through deploy/send-server-setup.mjs, which uploads the files
 # it needs as a folder that mirrors the repo (plus keys/<user>.pub and pc-address). Safe to run again: it
 # changes only what differs and says what it did. It is the only way the deploy setup changes; a deploy
 # can't change any of it.
@@ -54,11 +54,12 @@ echo 'Users'
 for user in "${USERS[@]}"; do
   home="/var/lib/tavora-deploy/$user"
   if ! id "$user" >/dev/null 2>&1; then
-    # A shell is needed: sshd runs the forced command through it. No password ('*': none can match).
-    useradd --system --home-dir "$home" --no-create-home --shell /bin/bash --user-group "$user"
+    useradd --system --home-dir "$home" --no-create-home --shell /bin/sh --user-group "$user"
     say "created $user"
   fi
-  usermod -p '*' "$user"
+  # A shell is needed: sshd runs the forced command through it. /bin/sh (dash) reads no startup file, so
+  # nothing in the home folder runs first. No password ('*': none can match).
+  usermod -p '*' -s /bin/sh "$user"
   install -d -m 755 -o root -g root /var/lib/tavora-deploy
   install -d -m 700 -o "$user" -g "$user" "$home"
 done
@@ -156,7 +157,10 @@ if ! cmp -s "$dropin" "$DROPIN"; then
     done
     if grep -qiE '^(allowusers|allowgroups) ' <<< "$effective"; then restore "sshd has AllowUsers/AllowGroups; add the deploy users there first"; fi
   done
-  systemctl reload ssh.service 2>/dev/null || systemctl reload sshd.service 2>/dev/null || true
+  # Ubuntu's ssh.socket starts sshd per connection, which reads the new file anyway; a running sshd is reloaded.
+  if systemctl is-active --quiet ssh.service; then systemctl reload ssh.service
+  elif systemctl is-active --quiet sshd.service; then systemctl reload sshd.service
+  else say 'sshd is not running as a service; the next connection reads the new setup'; fi
   rm -f "$old"
   say "wrote $DROPIN and reloaded sshd"
 fi
