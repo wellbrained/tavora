@@ -666,7 +666,7 @@ export function setHintFloating(open: boolean): void {
 }
 
 /** A note about the inbox (or the developer note) waits and nothing else is open, so InboxNotes.vue shows it. */
-export const noteShown = computed(() => (inbox.value.note !== null || inbox.value.developerNote) && dialog.value === null && !settingsOpen.value && inboxOpen.value === null);
+export const noteShown = computed(() => (inbox.value.note !== null || inbox.value.developerNote) && dialog.value === null && !settingsOpen.value && !profileOpen.value && inboxOpen.value === null);
 
 export const overlayOpen = computed(
   () =>
@@ -678,6 +678,7 @@ export const overlayOpen = computed(
     state.value?.hotkeyRequest != null ||
     publish.value !== null ||
     settingsOpen.value ||
+    profileOpen.value ||
     panelDialog.value !== null ||
     searchOpen.value ||
     dragging.value,
