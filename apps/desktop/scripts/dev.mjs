@@ -15,7 +15,20 @@ import { buildFilterEngine } from "./filters.mjs";
 import { rendererConfig, root, targets } from "./targets.mjs";
 
 // `pnpm dev --port <n>` picks the port, so a process manager can decide it.
-const { values } = parseArgs({ options: { port: { type: "string", default: "4000" } }, strict: false });
+// `pnpm dev --check` builds everything once, the way a dev session does, and stops without starting Tavora: exit code
+// 0 when the host, the main process and every repo module built, 1 when one did not. CI runs it on a clean checkout.
+const { values } = parseArgs({ options: { port: { type: "string", default: "4000" }, check: { type: "boolean", default: false } }, strict: false });
+const checkOnly = values.check === true;
+if (checkOnly) {
+  // A watch build that never finishes would otherwise keep CI waiting until the job's timeout.
+  setTimeout(() => checkFailed("everything within 5 minutes"), 5 * 60_000).unref();
+}
+
+/** `--check`: a first build failed, so the check fails. Nothing has started Tavora, so plain exit is enough. */
+function checkFailed(what) {
+  console.error(`[dev] check failed: ${what} did not build`);
+  process.exit(1);
+}
 const port = Number(values.port);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   console.error(`[dev] --port must be a port number, got "${values.port}"`);
@@ -75,6 +88,13 @@ function start() {
   });
 }
 
+/** Everything has built once: a dev session starts Tavora, `--check` is done. */
+function allBuilt() {
+  if (!checkOnly) return start();
+  console.log("[dev] check passed: the host, the main process and every repo module built");
+  void stop(0);
+}
+
 /** A module in the repo was rebuilt: its open panels load the new build, without restarting Tavora. */
 function moduleBuilt(dir) {
   if (stopped) return restart();
@@ -101,10 +121,13 @@ const reload = {
   setup(build) {
     let first = true;
     build.onEnd((result) => {
-      if (result.errors.length) return console.log("[dev] build failed; fix the error and save again");
+      if (result.errors.length) {
+        if (checkOnly && first) return checkFailed("the main process or a preload");
+        return console.log("[dev] build failed; fix the error and save again");
+      }
       if (first) {
         first = false;
-        if (--pending === 0) start();
+        if (--pending === 0) allBuilt();
       } else if (pending === 0) {
         console.log("[dev] main process changed, restarting Tavora");
         restart();
@@ -127,6 +150,9 @@ pending += moduleProjects.length;
 
 // One after another, each from its own folder: moduleConfig takes the project folder from the working directory, as
 // `vite build` run in the project gives it. The config is read before build() answers; later rebuilds keep its paths.
+// Node loads each vite.config.ts itself (configLoader "native"), and `pnpm dev` runs this script with
+// --conditions=source, so `@tavora/pack/vite` comes from packages/pack/src: a fresh checkout has no dist to load, and
+// an old dist would hide a change to moduleConfig.
 const here = process.cwd();
 const watchers = [];
 for (const dir of moduleProjects) {
@@ -136,6 +162,7 @@ for (const dir of moduleProjects) {
   try {
     watcher = await build({
       configFile: path.join(dir, "vite.config.ts"),
+      configLoader: "native",
       root: existsSync(path.join(dir, "src", "index.html")) ? path.join(dir, "src") : dir,
       logLevel: "warn",
       build: { watch: {} },
@@ -145,11 +172,14 @@ for (const dir of moduleProjects) {
   }
   let first = true;
   watcher.on("event", (event) => {
-    if (event.code === "ERROR") console.log(`[dev] module ${name} failed to build; fix the error and save again`);
+    if (event.code === "ERROR") {
+      if (checkOnly && first) return checkFailed(`module ${name}`);
+      console.log(`[dev] module ${name} failed to build; fix the error and save again`);
+    }
     if (event.code !== "END") return;
     if (first) {
       first = false;
-      if (--pending === 0) start();
+      if (--pending === 0) allBuilt();
     } else if (pending === 0) {
       console.log(`[dev] module ${name} changed, reloading its panels`);
       moduleBuilt(dir);
