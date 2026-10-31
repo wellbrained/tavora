@@ -146,7 +146,7 @@ process.on("SIGINT", () => {
   if (!finished) cancelRun(runId);
   process.exit(130);
 });
-console.log(`https://github.com/${REPO}/actions/runs/${runId} (about 25 minutes${skipE2e ? ", without e2e" : ""})`);
+console.log(`https://github.com/${REPO}/actions/runs/${runId} (about ${skipE2e ? "10 minutes, without e2e" : "15 minutes"})`);
 try {
   run("gh", ["run", "watch", runId, "--repo", REPO, "--exit-status", "--interval", "30"]);
 } catch {
