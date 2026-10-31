@@ -111,24 +111,32 @@ const showVariation = computed(() => {
     >
       <!-- One choice: closed it shows the theme in use, open it lists every theme with a preview in its own colours. -->
       <Select :model-value="appearance.themeId" @update:model-value="(id) => pickId(String(id))">
-        <SelectTrigger class="h-auto! min-w-60 py-1.5 pl-1.5" :aria-label="t('settings.theme.label')" data-testid="theme-select">
+        <SelectTrigger class="h-auto! w-72 py-1.5 pl-1.5 text-left" :aria-label="t('settings.theme.label')" data-testid="theme-select">
           <span class="flex min-w-0 items-center gap-2.5">
             <ThemePreview v-if="active" :variation="previewOf(active)" size="sm" />
-            <span class="truncate font-medium">{{ active?.name }}</span>
+            <span class="flex min-w-0 flex-col">
+              <span class="truncate font-medium">{{ active?.name }}</span>
+              <span v-if="active?.description" class="text-muted-foreground truncate text-xs">{{ active.description }}</span>
+            </span>
           </span>
         </SelectTrigger>
-        <SelectContent class="max-h-[min(70vh,36rem)] w-[26rem]" data-testid="themes">
+        <!-- The kit's list hides its scrollbar; this list is long, so it shows one. -->
+        <SelectContent class="theme-list max-h-[min(70vh,36rem)] w-[26rem]" data-testid="themes">
           <SelectItem
             v-for="theme in appearance.themes"
             :key="theme.id"
             :value="theme.id"
             :description="theme.description ?? undefined"
-            class="gap-3"
+            class="items-center! gap-3 pr-2 [&>span:first-child]:hidden"
             :data-testid="`theme-${theme.id}`"
           >
+            <!-- The theme in use is marked with a tag after its name, not the list's check; the text sits centred on the preview. -->
             <template #thumb><ThemePreview :variation="previewOf(theme)" size="md" /></template>
             <span class="flex items-center gap-2">
               {{ theme.name }}
+              <Badge v-if="theme.id === appearance.themeId" class="bg-primary/15 text-primary flex-none border-transparent py-0 text-[10px] font-semibold" data-testid="theme-in-use">{{
+                t("settings.theme.inUse")
+              }}</Badge>
               <Badge v-if="mixedThemes" variant="outline" :class="cn('flex-none py-0 font-normal', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')">{{
                 theme.provenance === "official" ? t("common.official") : t("common.local")
               }}</Badge>

@@ -400,3 +400,9 @@ nav[data-expanded="true"] .footer-slot > [aria-hidden="true"] {
 [data-slot="textarea"]:disabled {
   opacity: var(--disabled-opacity);
 }
+
+/* Settings > Appearance: the theme list is long, so it shows a scrollbar, which the select list otherwise hides. */
+.theme-list [data-reka-select-viewport] {
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--input) transparent;
+}

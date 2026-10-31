@@ -35,13 +35,17 @@ defineProps<{ variation: ThemeVariationView; size: "sm" | "md" }>();
   </span>
   <span
     v-else
-    class="flex h-7 w-11 flex-none overflow-hidden rounded-[5px] border"
+    class="flex h-10 w-16 flex-none overflow-hidden rounded-md border"
     :style="{ background: variation.colors.background, borderColor: variation.colors.border }"
     aria-hidden="true"
   >
-    <span class="w-2.5 flex-none" :style="{ background: variation.colors.rail }" />
-    <span class="m-1 flex flex-1 items-end rounded-[3px] p-1" :style="{ background: variation.colors.card }">
-      <span class="h-1.5 w-4 rounded-[2px]" :style="{ background: variation.colors.primary }" />
+    <span class="flex w-3.5 flex-none flex-col items-center pt-1.5" :style="{ background: variation.colors.rail }">
+      <span class="size-2 rounded-[2px]" :style="{ background: variation.colors.primary }" />
+    </span>
+    <span class="m-1 flex flex-1 flex-col gap-1 rounded-[3px] p-1" :style="{ background: variation.colors.card }">
+      <span class="h-0.5 w-3/4 rounded-full" :style="{ background: variation.colors.foreground }" />
+      <span class="h-0.5 w-1/2 rounded-full" :style="{ background: variation.colors['muted-foreground'] }" />
+      <span class="mt-auto h-1.5 w-5 rounded-[2px]" :style="{ background: variation.colors.primary }" />
     </span>
   </span>
 </template>
