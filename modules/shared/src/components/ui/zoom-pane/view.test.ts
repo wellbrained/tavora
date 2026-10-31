@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { areaView, clampPan, FIT_PADDING, fitView, zoomAt } from "./view"
+import { areaView, clampPan, containZoom, FIT_PADDING, fitView, zoomAt } from "./view"
 
 const limits = { min: 0.25, max: 2 }
 const pane = { width: 400, height: 300 }
@@ -103,5 +103,20 @@ describe("areaView", () => {
     const view = areaView(pane, { x: 0, y: 0, width: 704, height: 504 }, limits, 24)
     expect(view.zoom).toBeCloseTo(0.5)
     expect(view.y).toBeCloseTo(24)
+  })
+})
+
+describe("bounds content", () => {
+  const pane = { width: 400, height: 300 }
+  const content = { width: 1000, height: 1000 }
+  it("keeps the pane covered where the content is bigger", () => {
+    expect(clampPan({ x: 50, y: -900, zoom: 1 }, pane, content, "content")).toEqual({ x: 0, y: -700, zoom: 1 })
+  })
+  it("centres the content where it is smaller", () => {
+    expect(clampPan({ x: 999, y: 999, zoom: 0.3 }, pane, content, "content")).toEqual({ x: 50, y: 0, zoom: 0.3 })
+  })
+  it("knows the zoom that shows the whole content", () => {
+    expect(containZoom(pane, content)).toBe(0.3)
+    expect(containZoom({ width: 0, height: 0 }, content)).toBe(0)
   })
 })

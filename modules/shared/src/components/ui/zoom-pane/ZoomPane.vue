@@ -17,7 +17,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { uiText } from "../text"
-import { areaView, clampPan, clampZoom, fitView, type Size, type ZoomAlign, type ZoomArea, type ZoomFit, zoomAt, type ZoomView } from "./view"
+import { areaView, clampPan, clampZoom, containZoom, fitView, type Size, type ZoomAlign, type ZoomArea, type ZoomBounds, type ZoomFit, zoomAt, type ZoomView } from "./view"
 
 const props = withDefaults(defineProps<{
   /** Smallest and largest zoom, 1 = 100 %. */
@@ -32,6 +32,11 @@ const props = withDefaults(defineProps<{
   autoFit?: boolean
   /** What a plain wheel does: scroll the page (Ctrl + wheel zooms), or zoom, as on a map. */
   wheel?: "scroll" | "zoom"
+  /**
+   * "content" keeps the pane covered by the content (centred where it is smaller), never zooms out past the whole
+   * content and fits it edge to edge: for a map. "loose" (default) lets an edge move to the middle of the pane.
+   */
+  bounds?: ZoomBounds
   /** What the pane shows, for screen readers. */
   label?: string
   class?: HTMLAttributes["class"]
@@ -42,6 +47,7 @@ const props = withDefaults(defineProps<{
   fit: "whole",
   autoFit: true,
   wheel: "scroll",
+  bounds: "loose",
 })
 const emit = defineEmits<{
   /** The view or the pane's size changed. */
@@ -63,25 +69,30 @@ const view = ref<ZoomView>({ x: 0, y: 0, zoom: 1 })
 const dragging = ref(false)
 const hint = ref(false)
 
-const limits = computed(() => ({ min: props.minZoom, max: props.maxZoom }))
+/** With bounds "content" the least zoom shows the whole content, no smaller. */
+const limits = computed(() => {
+  const min = props.bounds === "content" ? Math.max(props.minZoom, containZoom(paneSize.value, contentSize.value)) : props.minZoom
+  return { min, max: Math.max(props.maxZoom, min) }
+})
 const paneSize = ref<Size>({ width: 0, height: 0 })
 const contentSize = ref<Size>({ width: 0, height: 0 })
 const transform = computed(() => `translate(${view.value.x}px, ${view.value.y}px) scale(${view.value.zoom})`)
 
 function fit() {
-  view.value = fitView(paneSize.value, contentSize.value, limits.value, props.fitFloor ?? props.minZoom, props.align, props.fit)
+  if (props.bounds === "content") view.value = clampPan({ x: 0, y: 0, zoom: limits.value.min }, paneSize.value, contentSize.value, "content")
+  else view.value = fitView(paneSize.value, contentSize.value, limits.value, props.fitFloor ?? props.minZoom, props.align, props.fit)
 }
 
 const middle = () => ({ x: paneSize.value.width / 2, y: paneSize.value.height / 2 })
 function zoomBy(factor: number, at = middle()) {
-  view.value = zoomAt(view.value, factor, at, limits.value, paneSize.value, contentSize.value)
+  view.value = zoomAt(view.value, factor, at, limits.value, paneSize.value, contentSize.value, props.bounds)
 }
 /** Shows the content at its real size (100 %), around the middle of the pane. */
 function actualSize() {
   zoomBy(1 / view.value.zoom)
 }
 function panBy(dx: number, dy: number, from = view.value) {
-  view.value = clampPan({ ...from, x: from.x + dx, y: from.y + dy }, paneSize.value, contentSize.value)
+  view.value = clampPan({ ...from, x: from.x + dx, y: from.y + dy }, paneSize.value, contentSize.value, props.bounds)
 }
 /**
  * The content is about to be drawn shifted by dx, dy (content pixels), for example because it grew to the
@@ -104,7 +115,7 @@ function setCenter(point: { x: number, y: number }, zoom?: number) {
   })
 }
 function applyView(next: ZoomView) {
-  view.value = clampPan({ ...next, zoom: clampZoom(next.zoom, limits.value) }, paneSize.value, contentSize.value)
+  view.value = clampPan({ ...next, zoom: clampZoom(next.zoom, limits.value) }, paneSize.value, contentSize.value, props.bounds)
 }
 function whenMeasured(next: () => ZoomView) {
   if (measured()) applyView(next())
@@ -170,7 +181,7 @@ function onPointerMove(event: PointerEvent) {
   if (pinch && pointers.size === 2) {
     const [a, b] = [...pointers.values()] as [{ x: number, y: number }, { x: number, y: number }]
     const middleNow = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-    const zoomed = zoomAt(pinch.from, distance(a, b) / pinch.distance, pinch.middle, limits.value, paneSize.value, contentSize.value)
+    const zoomed = zoomAt(pinch.from, distance(a, b) / pinch.distance, pinch.middle, limits.value, paneSize.value, contentSize.value, props.bounds)
     panBy(middleNow.x - pinch.middle.x, middleNow.y - pinch.middle.y, zoomed)
     return
   }
@@ -268,7 +279,7 @@ onMounted(() => {
       pendingView = undefined
     }
     else if ((contentChanged && props.autoFit) || paneWasEmpty || widthChanged) fit()
-    else view.value = clampPan(view.value, nextPane, nextContent)
+    else view.value = clampPan({ ...view.value, zoom: clampZoom(view.value.zoom, limits.value) }, nextPane, nextContent, props.bounds)
   })
   observer.observe(pane.value!)
   observer.observe(content.value!)

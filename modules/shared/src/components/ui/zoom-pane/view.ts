@@ -32,10 +32,20 @@ export function clampZoom(zoom: number, limits: ZoomLimits): number {
   return clamp(zoom, limits.min, limits.max)
 }
 
-/** Keeps the content in reach: an edge may move at most to the middle of the pane. */
-export function clampPan(view: ZoomView, pane: Size, content: Size): ZoomView {
+/**
+ * How far the content may move. "loose": an edge may reach the middle of the pane. "content": the content always
+ * covers the pane where it is bigger, and is centred where it is smaller (a map that never drifts off into nothing).
+ */
+export type ZoomBounds = "loose" | "content"
+
+/** Keeps the content in reach, as `bounds` says. */
+export function clampPan(view: ZoomView, pane: Size, content: Size, bounds: ZoomBounds = "loose"): ZoomView {
   const width = content.width * view.zoom
   const height = content.height * view.zoom
+  if (bounds === "content") {
+    const axis = (at: number, size: number, room: number) => (size <= room ? (room - size) / 2 : clamp(at, room - size, 0))
+    return { zoom: view.zoom, x: axis(view.x, width, pane.width), y: axis(view.y, height, pane.height) }
+  }
   return {
     zoom: view.zoom,
     x: clamp(view.x, pane.width / 2 - width, pane.width / 2),
@@ -44,10 +54,16 @@ export function clampPan(view: ZoomView, pane: Size, content: Size): ZoomView {
 }
 
 /** Zooms by `factor`, keeping the content under `at` (a point in the pane) in place. */
-export function zoomAt(view: ZoomView, factor: number, at: { x: number, y: number }, limits: ZoomLimits, pane: Size, content: Size): ZoomView {
+export function zoomAt(view: ZoomView, factor: number, at: { x: number, y: number }, limits: ZoomLimits, pane: Size, content: Size, bounds: ZoomBounds = "loose"): ZoomView {
   const zoom = clampZoom(view.zoom * factor, limits)
   const scale = zoom / view.zoom
-  return clampPan({ zoom, x: at.x - (at.x - view.x) * scale, y: at.y - (at.y - view.y) * scale }, pane, content)
+  return clampPan({ zoom, x: at.x - (at.x - view.x) * scale, y: at.y - (at.y - view.y) * scale }, pane, content, bounds)
+}
+
+/** The zoom at which the whole content just fits the pane, edge to edge; 0 before either has a size. */
+export function containZoom(pane: Size, content: Size): number {
+  if (pane.width <= 0 || pane.height <= 0 || content.width <= 0 || content.height <= 0) return 0
+  return Math.min(pane.width / content.width, pane.height / content.height)
 }
 
 /** A rectangle of the content, in content pixels at zoom 1. */

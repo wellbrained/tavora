@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // A map made of picture tiles with pins on it, on top of ZoomPane: drag pans, a plain wheel or a pinch zooms, the
-// corner buttons zoom and fit. Only the tiles in view load, at the level that is sharp for the zoom; the least detailed
+// corner buttons zoom and fit. The map always fills the pane: it never drifts off or shrinks past its whole size; what
+// is left beside it when fitted shows the background (give the map's own sea colour with a bg-* class). Only the tiles in view load, at the level that is sharp for the zoom; the least detailed
 // level stays underneath, so nothing goes blank while the sharper tiles come in, and a missing tile (sea) shows it.
 // Pins keep their size while zooming. Pins close together merge into a group with a count; a click on a group zooms
 // in until it splits. Dots (many small points, such as spawns) merge among themselves, never with pins. `highlight`
@@ -120,6 +121,7 @@ defineExpose({ showPins, camera, setCamera, fit: () => pane.value?.fit(), zoomIn
     ref="pane"
     data-slot="tile-map"
     wheel="zoom"
+    bounds="content"
     :min-zoom="minZoom"
     :max-zoom="maxZoom"
     :label="label"
