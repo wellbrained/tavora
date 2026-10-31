@@ -9,8 +9,9 @@
 //
 // Before 1.0 the by-hand checks are listed with what already covers them, not asked (asksHandChecks).
 //
-// Order on the server: the installer and its blockmap first, latest.yml last, so a
-// manifest never points at a file that is not there yet (deploy/tavora-updates-publish.sh).
+// Uploads with the restricted tavora-updates key (deploy/README.md). On the server tavora-receive puts the
+// installer and its blockmap first and latest.yml last, so a manifest never points at a file that is not
+// there yet, and refuses a version that is not newer than the live one.
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkInstalled, checkRelease } from "./release-guards.mjs";
 import { checkStart } from "./start-check.mjs";
+import { hello, publish } from "../../../scripts/deploy-client.mjs";
 
 /** The version of the Tavora installed for this user (asar is off, so its package.json is a plain file), or null. */
 function readInstalledVersion() {
@@ -42,14 +44,14 @@ const skipE2e = process.argv.includes("--skip-e2e");
 const allowPatch = process.argv.includes("--allow-patch");
 const skipCi = process.argv.includes("--skip-ci-check");
 
-// Same server and key as the docs and the service use, from the maintainer's environment:
-// TAVORA_DEPLOY_HOST (user@host) and TAVORA_DEPLOY_SSH_KEY (path to the private key).
-const key = process.env.TAVORA_DEPLOY_SSH_KEY ?? "";
-const remote = process.env.TAVORA_DEPLOY_HOST ?? "";
-const sshOptions = ["-i", key, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15"];
-if (!dryRun && (!key || !remote)) {
-  console.error("Set TAVORA_DEPLOY_HOST and TAVORA_DEPLOY_SSH_KEY first. Nothing was built or published.");
-  process.exit(1);
+// The upload key is checked before anything is built: TAVORA_DEPLOY_HOST and TAVORA_UPDATES_SSH_KEY.
+if (!dryRun) {
+  try {
+    hello("updates");
+  } catch (error) {
+    console.error(`${error.message}\nNothing was built or published.`);
+    process.exit(1);
+  }
 }
 const feed = "https://updates.mytavora.app";
 
@@ -171,14 +173,15 @@ if (!asksHandChecks(version)) {
 }
 
 step(`Publishing ${version} to ${feed}`);
-// Staged in root's own home (mode 0700), never in /tmp: another user on the server could otherwise
-// create the folder first and swap the installer or the script root runs (security review, finding 6).
-const incoming = "/root/tavora-incoming/updates";
-const script = path.join(desktop, "deploy", "tavora-updates-publish.sh");
-const ssh = (command) => run("ssh.exe", [...sshOptions, remote, command]);
-ssh(`rm -rf ${incoming} && install -d -m 700 /root/tavora-incoming ${incoming}`);
-run("scp.exe", [...sshOptions, ...files, script, `${remote}:${incoming}/`]);
-ssh(`bash ${incoming}/tavora-updates-publish.sh ${version}${allowPatch ? " allow-patch" : ""}`);
+// One tar with the three files; Windows' own tar (from Git Bash, `tar` is GNU tar, which reads C:\... as a host).
+const bundle = path.join(tmpdir(), `tavora-updates-${version}.tar`);
+const tar = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
+try {
+  run(tar, ["-cf", bundle, "-C", releaseDir, ...files.map((file) => path.basename(file))]);
+  publish("updates", version, bundle);
+} finally {
+  rmSync(bundle, { force: true });
+}
 
 step("Tagging");
 git("tag", "-a", `v${version}`, built, "-m", `Tavora ${version}`);

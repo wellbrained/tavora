@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Run by root through sudo, for tavora-admin-deploy only (/etc/sudoers.d/tavora-deploy): switches
+# /srv/tavora-admin/current to a release tavora-receive has unpacked (the API serves it from there, no
+# restart needed) and, when the uploaded gateway proxy differs from the installed one, installs it and
+# restarts tavora-admin-proxy. Installed by the maintainer (setup-deploy-access.sh); never uploaded.
+# The uploaded proxy.mjs is read with the deploy user's rights, never root's, so a link in its place
+# can't make root copy a file the deploy user may not read.
+set -euo pipefail
+umask 022
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
+die() { echo "tavora-admin-switch: $*" >&2; exit 1; }
+
+[[ "$#" == 1 && "$1" =~ ^[0-9]{14}-[0-9a-f]{12}$ ]] || die 'usage: tavora-admin-switch <yyyymmddhhmmss-12 hex>'
+release="$1"
+root=/srv/tavora-admin
+releases="$root/releases"
+[[ -d "$releases" && ! -L "$releases" ]] || die "$releases is missing or a link"
+target="$releases/$release"
+[[ -d "$target" && ! -L "$target" ]] || die "no release $release"
+
+ln -sfn "$target" "$root/current-next"
+mv -Tf "$root/current-next" "$root/current"
+
+proxy="$(mktemp)"
+trap 'rm -f "$proxy"' EXIT
+if runuser -u tavora-admin-deploy -- cat /var/lib/tavora-deploy/tavora-admin-deploy/proxy.mjs > "$proxy" 2>/dev/null && [[ -s "$proxy" ]]; then
+  if ! cmp -s "$proxy" "$root/proxy/proxy.mjs"; then
+    install -m 644 -o root -g root "$proxy" "$root/proxy/proxy.mjs"
+    systemctl restart tavora-admin-proxy
+    echo 'Proxy restarted.'
+  fi
+else
+  echo 'No proxy.mjs in the upload; the proxy is unchanged.' >&2
+fi
+echo "Tavora Admin $release is live."

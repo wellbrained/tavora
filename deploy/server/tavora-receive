@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# The only command Tavora's deploy users can run over SSH: sshd forces every login of them into this
+# script (ForceCommand in /etc/ssh/sshd_config.d/60-tavora-deploy.conf, written by setup-deploy-access.sh).
+# Installed by the maintainer as root:root 0755 in /usr/local/sbin; a deploy never uploads or replaces it.
+#
+# The job comes from the Unix user alone (one user and one key per job), never from what the client sends:
+#   tavora-updates       the app's update feed      /srv/tavora-updates
+#   tavora-docs          docs.mytavora.app          /srv/tavora-docs
+#   tavora-api-deploy    the API service            /srv/tavora-api/releases, switched by sudo tavora-api-switch
+#   tavora-admin-deploy  Tavora Admin               /srv/tavora-admin/releases, switched by sudo tavora-admin-switch
+#
+# The client's SSH command is one of:
+#   hello                     prints the banner and the setup's file hashes (/etc/tavora-deploy/installed.sha256)
+#   publish <id> <sha256>     reads a tar from stdin, checks its SHA-256 and every entry, then publishes it;
+#                             <id> is the version (updates) or the release name yyyymmddhhmmss-<12 hex> (others)
+# Nothing that is uploaded is ever run.
+set -euo pipefail
+umask 022
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
+readonly PROTOCOL=1
+
+die() { echo "tavora-receive: $*" >&2; exit 1; }
+
+[[ "$(id -u)" != 0 ]] || die 'never runs as root'
+user="$(id -un)"
+case "$user" in
+  tavora-updates) job=updates; limit=$((512 * 1024 * 1024)) ;;
+  tavora-docs) job=docs; limit=$((256 * 1024 * 1024)) ;;
+  tavora-api-deploy) job=api; limit=$((1024 * 1024 * 1024)) ;;
+  tavora-admin-deploy) job=admin; limit=$((128 * 1024 * 1024)) ;;
+  *) die "$user is not a deploy user" ;;
+esac
+# The user's own folder (mode 0700, made by the setup); uploads wait here, out of everyone else's reach.
+home=/var/lib/tavora-deploy/$user
+[[ -d "$home" && ! -L "$home" && -O "$home" ]] || die "$home is missing or not $user's"
+
+request="${SSH_ORIGINAL_COMMAND:-}"
+
+if [[ "$request" == hello ]]; then
+  echo "tavora-receive $PROTOCOL $job"
+  if [[ -r /etc/tavora-deploy/installed.sha256 ]]; then sed 's/^/installed /' /etc/tavora-deploy/installed.sha256; fi
+  exit 0
+fi
+
+[[ "$request" =~ ^publish\ ([0-9a-z.-]{1,40})\ ([0-9a-f]{64})$ ]] || die 'unknown request (expected: hello, or publish <id> <sha256>)'
+id="${BASH_REMATCH[1]}"
+sum="${BASH_REMATCH[2]}"
+if [[ "$job" == updates ]]; then
+  [[ "$id" =~ ^[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}$ ]] || die "not a version: $id"
+else
+  [[ "$id" =~ ^[0-9]{14}-[0-9a-f]{12}$ ]] || die "not a release name: $id"
+fi
+
+# --- Receive: at most $limit bytes, then the hash the client sent.
+work="$(mktemp -d "$home/incoming.XXXXXX")"
+trap 'rm -rf "$work"' EXIT
+head -c "$((limit + 1))" > "$work/upload.tar"
+size="$(stat -c %s "$work/upload.tar")"
+(( size > 0 )) || die 'nothing was uploaded'
+(( size <= limit )) || die "the upload is larger than $((limit / 1024 / 1024)) MB"
+[[ "$(sha256sum "$work/upload.tar" | cut -d' ' -f1)" == "$sum" ]] || die 'the upload does not match its SHA-256 (cut off on the way?)'
+
+# --- Check every entry before unpacking: only plain files and folders, safe relative names.
+# Names may start with ./ (Windows' tar writes them so); no absolute paths, no .., no links or devices.
+names="$work/names"
+tar -tf "$work/upload.tar" > "$names" 2>/dev/null || die 'the upload is not a tar archive'
+types="$(tar -tvf "$work/upload.tar" | cut -c1 | sort -u | tr -d '\n')"
+[[ "$types" =~ ^[-d]+$ ]] || die 'the upload holds something other than files and folders (a link?)'
+[[ "$(wc -l < "$names")" == "$(tar -tvf "$work/upload.tar" | wc -l)" ]] || die 'the upload has a name with a line break'
+while IFS= read -r name; do
+  [[ "$name" =~ ^(\./)?([A-Za-z0-9_@+~-][A-Za-z0-9._@+~-]*/)*([A-Za-z0-9_@+~-][A-Za-z0-9._@+~-]*)?$ ]] || die "unsafe name in the upload: $name"
+done < "$names"
+# The pattern above never lets a part start with a dot, so . and .. can't appear (except the leading ./).
+
+unpacked="$work/unpacked"
+mkdir "$unpacked"
+tar -xf "$work/upload.tar" -C "$unpacked" --no-same-owner --no-same-permissions
+rm -f "$work/upload.tar"
+[[ -z "$(find "$unpacked" ! -type f ! -type d -print -quit)" ]] || die 'the upload unpacked into something other than files and folders'
+find "$unpacked" -type d -exec chmod 755 {} +
+find "$unpacked" -type f -exec chmod 644 {} +
+
+# Only the names a job expects, nothing else (for the static sites any file is fine).
+only() {
+  local extra
+  extra="$(cd "$unpacked" && find . -mindepth 1 \( -type f -o -type d \) | sed 's|^\./||' | grep -vxE "$1" || true)"
+  [[ -z "$extra" ]] || die "unexpected files in the upload: $(echo "$extra" | head -n 5 | tr '\n' ' ')"
+}
+
+# Moves the unpacked site into releases/<id> and switches `current` to it (both in a folder this user owns).
+switch_site() { # root releases_to_keep health_url
+  local root="$1" keep="$2" url="$3" previous target
+  install -d -m 755 "$root/releases"
+  target="$root/releases/$id"
+  [[ ! -e "$target" ]] || die "release $id exists already"
+  previous="$(readlink "$root/current" || true)"
+  mv "$unpacked" "$target"
+  ln -sfn "$target" "$root/current-next"
+  mv -Tf "$root/current-next" "$root/current"
+  if ! curl --fail --silent --show-error --max-time 20 "$url" -o /dev/null; then
+    if [[ -n "$previous" ]]; then
+      ln -sfn "$previous" "$root/current-next"
+      mv -Tf "$root/current-next" "$root/current"
+      die "$url did not answer; put the previous release back"
+    fi
+    die "$url did not answer; there is no previous release to put back"
+  fi
+  prune "$root/releases" "$keep"
+}
+
+# Deletes all but the newest $2 releases (names start with the UTC time), never the live one.
+prune() {
+  local dir="$1" keep="$2" live
+  live="$(basename "$(readlink -f "$(dirname "$dir")/current" 2>/dev/null || true)")"
+  find "$dir" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r | tail -n "+$((keep + 1))" | while IFS= read -r old; do
+    [[ "$old" == "$live" ]] || rm -rf -- "${dir:?}/$old"
+  done
+}
+
+case "$job" in
+  updates)
+    # The installer and its blockmap go in first and latest.yml last (replaced in one step), so the feed
+    # never points at a file that is not there yet. Keeps the three newest versions for differential updates.
+    root=/srv/tavora-updates
+    installer="Tavora-Setup-$id.exe"
+    only "(\./)?($installer|$installer\.blockmap|latest\.yml)"
+    for f in "$installer" "$installer.blockmap" latest.yml; do [[ -s "$unpacked/$f" ]] || die "missing in the upload: $f"; done
+    grep -qxF "version: $id" "$unpacked/latest.yml" || die "latest.yml does not say version $id"
+    grep -qxF "path: $installer" "$unpacked/latest.yml" || die "latest.yml does not point at $installer"
+    digest="$(openssl dgst -sha512 -binary "$unpacked/$installer" | base64 -w0)"
+    grep -qxF "sha512: $digest" "$unpacked/latest.yml" || die "latest.yml's sha512 is not the installer's"
+    # Only forward: a version that is not newer than the live one is refused (a bad release is fixed by a newer one).
+    previous="$(grep -m1 '^version: ' "$root/latest.yml" 2>/dev/null | cut -d' ' -f2 || true)"
+    if [[ -n "$previous" ]]; then
+      [[ "$previous" != "$id" && "$(printf '%s\n%s\n' "$previous" "$id" | sort -V | tail -n1)" == "$id" ]] || die "$id is not newer than the live version $previous"
+    fi
+    install -m 644 "$unpacked/$installer" "$root/$installer.part" && mv -f "$root/$installer.part" "$root/$installer"
+    install -m 644 "$unpacked/$installer.blockmap" "$root/$installer.blockmap.part" && mv -f "$root/$installer.blockmap.part" "$root/$installer.blockmap"
+    if [[ -f "$root/latest.yml" ]]; then cp -p "$root/latest.yml" "$root/latest.yml.previous"; fi
+    install -m 644 "$unpacked/latest.yml" "$root/latest.yml.new" && mv -f "$root/latest.yml.new" "$root/latest.yml"
+    live="$(curl --fail --silent --show-error --max-time 30 https://updates.mytavora.app/latest.yml | grep -m1 '^version: ' | cut -d' ' -f2 || true)"
+    if [[ "$live" != "$id" ]]; then
+      if [[ -f "$root/latest.yml.previous" ]]; then mv -f "$root/latest.yml.previous" "$root/latest.yml"; die "the feed answers '$live', not $id; put the previous latest.yml back"; fi
+      die "the feed answers '$live', not $id"
+    fi
+    rm -f "$root/latest.yml.previous"
+    mapfile -t keep < <(find "$root" -maxdepth 1 -type f -name 'Tavora-Setup-*.exe' -printf '%f\n' | sed -E 's/^Tavora-Setup-(.+)\.exe$/\1/' | sort -rV | head -n 3)
+    find "$root" -maxdepth 1 -type f \( -name 'Tavora-Setup-*.exe' -o -name 'Tavora-Setup-*.exe.blockmap' \) -printf '%f\n' | while IFS= read -r f; do
+      v="$(echo "$f" | sed -E 's/^Tavora-Setup-(.+)\.exe(\.blockmap)?$/\1/')"
+      printf '%s\n' "${keep[@]}" | grep -qxF "$v" || rm -f -- "${root:?}/$f"
+    done
+    printf 'Published %s at https://updates.mytavora.app/%s (was %s)\n' "$id" "$installer" "${previous:-nothing}"
+    ;;
+  docs)
+    [[ -f "$unpacked/index.html" ]] || die 'the docs build has no index.html'
+    switch_site /srv/tavora-docs 5 https://docs.mytavora.app/
+    printf 'Published %s at https://docs.mytavora.app/\n' "$id"
+    ;;
+  api)
+    only '(server\.mjs|catalog\.mjs|games\.sqlite|icons|icons/[A-Za-z0-9._@+~-]+)'
+    [[ -s "$unpacked/server.mjs" && -s "$unpacked/games.sqlite" ]] || die 'the upload is missing server.mjs or games.sqlite'
+    target="/srv/tavora-api/releases/$id"
+    [[ ! -e "$target" ]] || die "release $id exists already"
+    mv "$unpacked" "$target"
+    # Root switches `current`, restarts the service and checks its health (rolling back if it fails).
+    sudo -n /usr/local/sbin/tavora-api-switch "$id" || { rm -rf -- "$target"; die 'the switch failed; the previous release stays live'; }
+    prune /srv/tavora-api/releases 5
+    ;;
+  admin)
+    # site/ is the built Tavora Admin; proxy.mjs the gateway proxy (installed by root only if it changed).
+    only '(site|site/.+|proxy\.mjs)'
+    [[ -f "$unpacked/site/index.html" && -s "$unpacked/proxy.mjs" ]] || die 'the upload is missing site/index.html or proxy.mjs'
+    target="/srv/tavora-admin/releases/$id"
+    [[ ! -e "$target" ]] || die "release $id exists already"
+    mv "$unpacked/proxy.mjs" "$home/proxy.mjs"
+    mv "$unpacked/site" "$target"
+    sudo -n /usr/local/sbin/tavora-admin-switch "$id" || { rm -rf -- "$target"; die 'the switch failed; the previous release stays live'; }
+    prune /srv/tavora-admin/releases 3
+    ;;
+esac
