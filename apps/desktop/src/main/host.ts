@@ -172,6 +172,7 @@ import type { Shell } from "./shell";
 
 import { CopySync } from "./cloud-copy-sync";
 import { Inbox } from "./inbox";
+import { thisDeviceName } from "./device-name";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { discordLogin } from "./discord-login";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
@@ -718,7 +719,7 @@ export class Host {
       copySync: this.copySync,
       account: this.account,
       serviceUrl: accountServiceUrl(options),
-      deviceName: os.hostname(),
+      deviceName: thisDeviceName().name,
       keyKept: () => this.developerKeys.refresh(),
       onChange: (view) => {
         if (!this.window.isDestroyed()) this.window.webContents.send("host:pairing", view);
@@ -3441,7 +3442,8 @@ export class Host {
       baseUrl: serviceUrl(options.accountUrl ?? options.apiUrl),
       fetch: (input, init) => fetch(input, init),
       os: deviceOs(process.platform),
-      deviceName: os.hostname(),
+      deviceName: thisDeviceName().name,
+      rawDeviceName: thisDeviceName().raw,
       language,
       canKeepSignIn: () => encryptor.isAvailable(),
       signIn,
