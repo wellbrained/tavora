@@ -402,7 +402,7 @@ nav[data-expanded="true"] .footer-slot > [aria-hidden="true"] {
   scrollbar-color: var(--input) transparent;
 }
 
-/* Menus of groups as plates (Settings, Modules): each group washed in a colour of its own, the theme's accent for the
+/* Menus of groups as plates (Settings, Profile): each group washed in a colour of its own, the theme's accent for the
    first, turned around the colour wheel for the others, so every theme keeps three that go together. Put
    `nav-plates` on a NavList and `nav-plate-turn-1` or `-2` on a group. */
 .nav-plates [data-slot="nav-group"] {
@@ -422,6 +422,16 @@ nav[data-expanded="true"] .footer-slot > [aria-hidden="true"] {
 .nav-plates [data-slot="nav-group"] [aria-current="page"] {
   background: color-mix(in srgb, var(--tone) 22%, transparent);
   box-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
+}
+/* Hover tints in the plate's own colour instead of the kit's grey. */
+.nav-plates [data-slot="nav-group"] [data-nav-item]:hover {
+  background: color-mix(in srgb, var(--tone) 12%, transparent);
+}
+.nav-plates [data-slot="nav-group"] [data-nav-item]:not([aria-current]):hover > svg {
+  color: color-mix(in srgb, var(--tone) 85%, var(--foreground));
+}
+.nav-plates [data-slot="nav-group"] [data-nav-item][aria-current="page"]:hover {
+  background: color-mix(in srgb, var(--tone) 28%, transparent);
 }
 
 /* Thin scrollbars in theme colours, without the system's arrow buttons. Only the webkit rules: Chromium ignores them
