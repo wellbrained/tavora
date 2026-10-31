@@ -23,6 +23,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, findDispatchedRun, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
+import { lockPath, takeLock } from "./release-lock.mjs";
 
 /** The version of the Tavora installed for this user (asar is off, so its package.json is a plain file), or null. */
 function readInstalledVersion() {
@@ -51,6 +52,31 @@ if (!dryRun) {
     process.exit(1);
   }
 }
+// Ctrl+C anywhere: stop this run's Release build on GitHub (once there is one), then exit, which removes the lock.
+let activeRun = null;
+process.on("SIGINT", () => {
+  if (activeRun) cancelRun(activeRun);
+  process.exit(130);
+});
+
+// While a real release runs, nothing may merge into main (CLAUDE.md > Versioning): RELEASE-RUNNING says so, and goes
+// when this script ends, however it ends.
+if (!dryRun) {
+  const lockVersion = JSON.parse(readFileSync(path.join(desktop, "package.json"), "utf8")).version;
+  const file = lockPath(repo);
+  if (!file) console.warn("No releases folder found above this checkout, so no RELEASE-RUNNING lock; set TAVORA_RELEASE_LOCK to its path.");
+  else {
+    const lock = takeLock(file, lockVersion);
+    if (lock.problem) {
+      console.error(`${lock.problem}
+Nothing was built or published.`);
+      process.exit(1);
+    }
+    process.on("exit", lock.release);
+    console.log(`Release lock: ${file}`);
+  }
+}
+
 const feed = "https://updates.mytavora.app";
 const REPO = "wellbrained/tavora";
 function fail(message) {
@@ -141,11 +167,7 @@ for (let attempt = 0; attempt < 30 && !ciRun; attempt++) {
 if (!ciRun) fail(`GitHub did not list the Release build "${title}" within two minutes. Nothing was published; check the Actions tab.`);
 const runId = String(ciRun.databaseId);
 // From here on, stopping early (a failed check, Ctrl+C) also stops the run on GitHub.
-let finished = false;
-process.on("SIGINT", () => {
-  if (!finished) cancelRun(runId);
-  process.exit(130);
-});
+activeRun = runId;
 console.log(`https://github.com/${REPO}/actions/runs/${runId} (about ${skipE2e ? "10 minutes, without e2e" : "15 minutes"})`);
 try {
   run("gh", ["run", "watch", runId, "--repo", REPO, "--exit-status", "--interval", "30"]);
@@ -154,7 +176,7 @@ try {
   cancelRun(runId);
   fail(`The Release build failed or was stopped; see the run above. Nothing was published or tagged.`);
 }
-finished = true;
+activeRun = null;
 
 step("Downloading and checking what CI built");
 rmSync(releaseDir, { recursive: true, force: true });

@@ -7,7 +7,7 @@
 - PRs that only change docs, CI or tooling add no note.
 - 1.0.0 is reserved for the first public release.
 - Asked to release: first run `pnpm release:fold`. If it folded anything, go over the wording with the checklist it prints, then open and merge that pull request. Only then run `pnpm release`.
-- While a release is being prepared or published, nothing merges into main: a new commit there makes the release start over. The release session creates `D:\Github\Tavora\releases\RELEASE-RUNNING` (one line: version and start time) and deletes it when done. Before merging a pull request, check for that file; if it is there, wait and say so.
+- While a release is being prepared or published, nothing merges into main: a new commit there makes the release start over. `pnpm release` (not `--dry-run`) creates `D:\Github\Tavora\releases\RELEASE-RUNNING` (one line: version and start time) when it starts, deletes it when it ends, and won't start while the file is there. Before merging a pull request, check for that file; if it is there, wait and say so.
 
 ## Built-in modules
 
