@@ -33,6 +33,10 @@ ProtectHome=true
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Only its own two ports: it can't take over another app's port while that app restarts.
+SocketBindAllow=tcp:4010
+SocketBindAllow=tcp:4011
+SocketBindDeny=any
 CapabilityBoundingSet=
 
 [Install]

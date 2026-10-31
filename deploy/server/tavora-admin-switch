@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Run by root through sudo, for tavora-admin-deploy only (/etc/sudoers.d/tavora-deploy): switches
+# /srv/tavora-admin/current to a release tavora-receive has unpacked. The API serves the panel from there, so
+# no restart is needed. Installed by the maintainer (setup-deploy-access.sh); never uploaded.
+# The gateway proxy is not part of a deploy: it holds CoreHub's login secret, so only the maintainer installs
+# it, as root, with tavora-admin's proxy/setup-server.sh (decided 2026-10-31).
+set -euo pipefail
+umask 022
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
+die() { echo "tavora-admin-switch: $*" >&2; exit 1; }
+
+[[ "$#" == 1 && "$1" =~ ^[0-9]{14}-[0-9a-f]{12}$ ]] || die 'usage: tavora-admin-switch <yyyymmddhhmmss-12 hex>'
+release="$1"
+root=/srv/tavora-admin
+releases="$root/releases"
+[[ -d "$releases" && ! -L "$releases" ]] || die "$releases is missing or a link"
+target="$releases/$release"
+[[ -d "$target" && ! -L "$target" ]] || die "no release $release"
+
+ln -sfn "$target" "$root/current-next"
+mv -Tf "$root/current-next" "$root/current"
+echo "Tavora Admin $release is live."

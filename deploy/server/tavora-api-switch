@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Run by root through sudo, for tavora-api-deploy only (/etc/sudoers.d/tavora-deploy): switches
+# /srv/tavora-api/current to a release tavora-receive has unpacked, restarts the service and checks its
+# health, rolling back to the previous release when it fails. Installed by the maintainer
+# (setup-deploy-access.sh); never uploaded. It never reads the release's files: those belong to the
+# deploy user, and only the service (user tavora-api) runs them.
+set -euo pipefail
+umask 022
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
+die() { echo "tavora-api-switch: $*" >&2; exit 1; }
+
+[[ "$#" == 1 && "$1" =~ ^[0-9]{14}-[0-9a-f]{12}$ ]] || die 'usage: tavora-api-switch <yyyymmddhhmmss-12 hex>'
+release="$1"
+root=/srv/tavora-api
+releases="$root/releases"
+# The releases folder is the deploy user's; it must still be a real folder in root's /srv/tavora-api.
+[[ -d "$releases" && ! -L "$releases" ]] || die "$releases is missing or a link"
+target="$releases/$release"
+[[ -d "$target" && ! -L "$target" ]] || die "no release $release"
+
+previous="$(readlink "$root/current" || true)"
+point() { ln -sfn "$1" "$root/current-next" && mv -Tf "$root/current-next" "$root/current"; }
+rollback() {
+  echo "$1" >&2
+  if [[ -n "$previous" && "$previous" != "$target" ]]; then
+    point "$previous"
+    systemctl restart tavora-api || true
+    echo 'Restored the previous release.' >&2
+  else
+    systemctl stop tavora-api || true
+    echo 'No previous release to restore; the service is stopped.' >&2
+  fi
+  exit 1
+}
+
+point "$target"
+systemctl restart tavora-api || rollback 'The service did not restart.'
+
+health="$(mktemp)"
+trap 'rm -f "$health"' EXIT
+healthy=0
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if curl --fail --silent --max-time 3 http://127.0.0.1:4010/v1/health -o "$health"; then healthy=1; break; fi
+  sleep 1
+done
+[[ "$healthy" == 1 ]] || rollback 'Health check failed.'
+grep -q '"ok":true' "$health" || rollback 'Health check did not report ok.'
+cat "$health"; echo
+printf 'Published %s (service on 127.0.0.1:4010)\n' "$release"
