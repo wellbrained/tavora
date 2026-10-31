@@ -70,9 +70,68 @@ export function checkInstalled(installed, version) {
   return undefined;
 }
 
+/** The files a release consists of: the three the update feed serves, and the zip for the GitHub release. */
+export function releaseFiles(version) {
+  const installer = `Tavora-Setup-${version}.exe`;
+  return { feed: [installer, `${installer}.blockmap`, "latest.yml"], all: [installer, `${installer}.blockmap`, "latest.yml", `Tavora-${version}-win.zip`] };
+}
+
+/**
+ * The Release build run `pnpm release` just started, from `gh run list --json databaseId,headSha,createdAt,status,event`:
+ * the newest workflow_dispatch run created since `since` (a Date, less a minute for clock skew).
+ * Returns { run } or { wait: true } while GitHub hasn't listed it yet, or { problem } when it built another commit.
+ */
+export function findDispatchedRun(runs, since, sha) {
+  const fresh = runs
+    .filter((run) => run.event === "workflow_dispatch" && new Date(run.createdAt).getTime() >= since.getTime() - 60_000)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  if (fresh.length === 0) return { wait: true };
+  const run = fresh[0];
+  if (run.headSha !== sha) {
+    return { problem: `The Release build runs on ${run.headSha.slice(0, 7)}, not ${sha.slice(0, 7)}: main moved. Nothing was published; pull and start again.` };
+  }
+  return { run };
+}
+
+/** The "RELEASE-SHA256 <hash>  <file>" lines the Release build printed, as a Map of file name to hash. */
+export function readCiHashes(log) {
+  const hashes = new Map();
+  for (const match of String(log).matchAll(/RELEASE-SHA256 ([0-9a-f]{64}) {2}([A-Za-z0-9._-]+)\s*$/gm)) hashes.set(match[2], match[1]);
+  return hashes;
+}
+
+/**
+ * What is wrong with the downloaded files. Empty means they are the ones CI built and printed.
+ * downloaded: Map of file name to { sha256 (hex), sha512 (base64) }, missing files left out.
+ */
+export function checkDownload(version, downloaded, ciHashes, latestYml) {
+  const problems = [];
+  const { all } = releaseFiles(version);
+  const installer = all[0];
+  for (const name of all) {
+    const file = downloaded.get(name);
+    if (!file) problems.push(`${name} is missing from the download.`);
+    else if (!ciHashes.has(name)) problems.push(`The Release build printed no SHA-256 for ${name}.`);
+    else if (ciHashes.get(name) !== file.sha256) problems.push(`${name} is not the file the Release build made (its SHA-256 differs).`);
+  }
+  const lines = String(latestYml).split(/\r?\n/);
+  if (!lines.includes(`version: ${version}`)) problems.push(`latest.yml does not say version ${version}.`);
+  if (!lines.includes(`path: ${installer}`)) problems.push(`latest.yml does not point at ${installer}.`);
+  const sha512 = downloaded.get(installer)?.sha512;
+  if (sha512 && !lines.includes(`sha512: ${sha512}`)) problems.push("latest.yml's sha512 is not the installer's.");
+  return problems;
+}
+
+/** The GitHub release's text: the patch-notes entry of this version. */
+export function releaseNotes(note) {
+  const lines = ["Windows preview build of Tavora. These are the same verified files currently published through Tavora's update service.", "", `### In ${note.version}`, ""];
+  for (const line of note.notes) lines.push(`- ${line}`);
+  return lines.join("\n");
+}
+
 /** The by-hand checks before an installer goes out, asked one by one, each with what already checks it automatically. */
 export const CHECKLIST = [
-  { check: "The installed build starts (run the new installer from the release folder).", coveredBy: "CI installs it and starts it (packaged-start), and the start check above" },
+  { check: "The installed build starts (run the new installer from the release folder).", coveredBy: "the Release build installed this very installer and started it" },
   { check: "A game can be added and removed.", coveredBy: "e2e: library.spec" },
   { check: "A module opens in a game.", coveredBy: "e2e: workspace.spec, official-modules.spec" },
   { check: "Settings opens.", coveredBy: "e2e: search.spec, nested-dialogs.spec" },

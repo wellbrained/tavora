@@ -1,0 +1,141 @@
+name: Release build
+
+# Started by `pnpm release` on the maintainer's PC (gh workflow run), on main only. It tests and builds the
+# Windows installer with no secrets at all and attests what it built (build provenance, signed by GitHub for
+# this workflow, this repo and this commit). The PC then downloads the files, checks them against these
+# attestations and the SHA-256 this run printed, and uploads them with its own restricted key. Nothing here
+# can publish: there is no key, token or upload step (decided 2026-10-30/31, CoreHub #421).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The app version to build (must match apps/desktop/package.json)
+        required: true
+        type: string
+      e2e:
+        description: Run the e2e suite (off only for a retry after it passed)
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-build
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: The version to build is this commit's
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Not a version: $VERSION"; exit 1; }
+          actual="$(node -p 'require("./apps/desktop/package.json").version')"
+          [[ "$actual" == "$VERSION" ]] || { echo "apps/desktop/package.json says $actual, not $VERSION"; exit 1; }
+      # A fresh install on every run, so a patched dependency is always really patched.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      # See ci.yml: Chromium's sandbox needs unprivileged user namespaces, and a bigger screen than xvfb's default.
+      - if: inputs.e2e
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - if: inputs.e2e
+        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm test:e2e
+      - if: failure() && inputs.e2e
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-results
+          path: apps/desktop/test-results
+          retention-days: 7
+
+  package:
+    needs: test
+    runs-on: windows-2025
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Test the media helper
+        working-directory: packages/media-helper
+        run: cargo test --release --locked
+      - run: pnpm build
+      - name: Package
+        shell: pwsh
+        run: |
+          pnpm --filter @tavora/desktop package --win --publish never
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging failed.' }
+          if (-not (Test-Path apps/desktop/release/win-unpacked/resources/media-helper/tavora-media.exe)) { throw 'tavora-media.exe is missing from the package.' }
+          foreach ($name in "Tavora-Setup-$env:VERSION.exe", "Tavora-Setup-$env:VERSION.exe.blockmap", 'latest.yml', "Tavora-$env:VERSION-win.zip") {
+            if (-not (Test-Path "apps/desktop/release/$name")) { throw "The build did not produce $name." }
+          }
+          if (-not (Select-String -Path apps/desktop/release/latest.yml -Pattern "^version: $([regex]::Escape($env:VERSION))$" -Quiet)) { throw "latest.yml does not say version $env:VERSION." }
+      - name: Install like a user (silent, per-user)
+        shell: pwsh
+        run: |
+          $p = Start-Process "apps/desktop/release/Tavora-Setup-$env:VERSION.exe" -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "The installer exited with $($p.ExitCode)." }
+      - name: Start the installed Tavora
+        shell: pwsh
+        env:
+          START_CHECK_SCREENSHOT: ${{ runner.temp }}\start-check.png
+        run: node apps/desktop/scripts/start-check.mjs "$env:LOCALAPPDATA\Programs\Tavora\Tavora.exe"
+      - if: failure()
+        name: Startup log
+        shell: pwsh
+        run: Get-Content "$env:APPDATA\@tavora\desktop\logs\startup.log" -ErrorAction SilentlyContinue
+      # The PC compares these lines (from this run's log) with the files it downloads.
+      - name: SHA-256 of the release files
+        shell: pwsh
+        run: |
+          "### Tavora $env:VERSION" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          foreach ($name in "Tavora-Setup-$env:VERSION.exe", "Tavora-Setup-$env:VERSION.exe.blockmap", 'latest.yml', "Tavora-$env:VERSION-win.zip") {
+            $line = "RELEASE-SHA256 $((Get-FileHash -Algorithm SHA256 "apps/desktop/release/$name").Hash.ToLower())  $name"
+            Write-Output $line
+            $line | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          }
+          '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            apps/desktop/release/Tavora-Setup-${{ inputs.version }}.exe
+            apps/desktop/release/Tavora-Setup-${{ inputs.version }}.exe.blockmap
+            apps/desktop/release/latest.yml
+            apps/desktop/release/Tavora-${{ inputs.version }}-win.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tavora-release-${{ inputs.version }}
+          path: |
+            apps/desktop/release/Tavora-Setup-${{ inputs.version }}.exe
+            apps/desktop/release/Tavora-Setup-${{ inputs.version }}.exe.blockmap
+            apps/desktop/release/latest.yml
+            apps/desktop/release/Tavora-${{ inputs.version }}-win.zip
+          if-no-files-found: error
+          retention-days: 7
