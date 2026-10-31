@@ -6,7 +6,8 @@
 #
 # What it sets up (decided 2026-10-31, CoreHub #421):
 #  - four deploy users, one per job, each with one key that only works from this PC's tailnet address
-#    and only runs /usr/local/sbin/tavora-receive (sshd ForceCommand + authorized_keys restrict);
+#    and only runs /usr/local/sbin/tavora-receive (sshd ForceCommand + authorized_keys restrict), on sshd's
+#    own port 2222 (port 22 on the tailnet stays with Tailscale SSH, which would skip all of this);
 #  - the folders those users publish into (updates and docs need no root at all);
 #  - one sudo rule each for the API and Admin switch helpers;
 #  - the API service's root-level files the deploy used to install: the systemd unit, the Caddy site,
@@ -32,6 +33,8 @@ readonly KEYS=/etc/ssh/tavora-deploy-keys
 readonly DROPIN=/etc/ssh/sshd_config.d/60-tavora-deploy.conf
 readonly SUDOERS=/etc/sudoers.d/tavora-deploy
 readonly MANIFEST=/etc/tavora-deploy/installed.sha256
+# sshd's port for the deploy users only (port 22 on the tailnet may belong to Tailscale SSH). Same in scripts/deploy-client.mjs.
+readonly DEPLOY_PORT=2222
 
 # --- Inputs: this PC's tailnet address and one public key per user.
 pc="$(tr -d ' \r\n' < "$src/pc-address")"
@@ -45,10 +48,6 @@ done
 # One key per job: the same key twice would let one job's key run another job.
 [[ "$(for u in "${USERS[@]}"; do cut -d' ' -f2 "$src/keys/$u.pub"; done | sort -u | wc -l)" == "${#USERS[@]}" ]] || die 'two users got the same key; make one key per job'
 
-# --- Tailscale SSH would answer port 22 on the tailnet address itself and skip everything below.
-if command -v tailscale >/dev/null && tailscale debug prefs 2>/dev/null | grep -q '"RunSSH": *true'; then
-  die 'Tailscale SSH is on; it would bypass sshd and these restrictions. Turn it off first: tailscale set --ssh=false'
-fi
 
 echo 'Users'
 for user in "${USERS[@]}"; do
@@ -120,13 +119,31 @@ for user in "${USERS[@]}"; do
   fi
 done
 grep -qE '^[[:space:]]*Include[[:space:]]+/etc/ssh/sshd_config\.d/\*\.conf' /etc/ssh/sshd_config || die '/etc/ssh/sshd_config does not include sshd_config.d/*.conf'
-probe="host=pc,addr=$pc"
-before="$(sshd -T -C "user=root,$probe")"
+# The deploys use their own port: Tailscale SSH (if on) answers port 22 on the tailnet address itself and would
+# skip everything here. Setting the ports here replaces sshd's default (all addresses, port 22), so this only
+# works where nothing else sets them.
+others="$(grep -lEis '^[[:space:]]*(Port|ListenAddress)[[:space:]]' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf | grep -vxF "$DROPIN" || true)"
+[[ -z "$others" ]] || die "sshd's ports are set in $others; add port $DEPLOY_PORT there by hand instead"
+userlist="$(IFS=,; echo "${USERS[*]}")"
+notlist="$(printf ',!%s' "${USERS[@]}")"
+probe22="host=pc,addr=$pc,laddr=127.0.0.1,lport=22"
+probe_deploy="host=pc,addr=$pc,laddr=127.0.0.1,lport=$DEPLOY_PORT"
+strip_ports() { grep -viE '^(port|listenaddress) '; }
+before="$(sshd -T -C "user=root,$probe22" | strip_ports)"
 dropin="$(mktemp)"
 cat > "$dropin" <<EOF
 # Written by setup-deploy-access.sh (Tavora). Tavora's deploy users can only run tavora-receive, with the
 # keys in $KEYS (root's, so a deploy can't change them), and nothing else: no shell, no tty, no forwarding.
-Match User $(IFS=,; echo "${USERS[*]}")
+# They log in on port $DEPLOY_PORT only, and port $DEPLOY_PORT takes nobody else. Port 22 stays as it was.
+ListenAddress 0.0.0.0:22
+ListenAddress [::]:22
+ListenAddress 0.0.0.0:$DEPLOY_PORT
+ListenAddress [::]:$DEPLOY_PORT
+Match LocalPort $DEPLOY_PORT User *$notlist
+    DenyUsers *
+Match LocalPort 22 User $userlist
+    DenyUsers *
+Match User $userlist
     AuthorizedKeysFile $KEYS/%u
     AuthenticationMethods publickey
     PasswordAuthentication no
@@ -149,22 +166,33 @@ if ! cmp -s "$dropin" "$DROPIN"; then
   install -m 644 -o root -g root "$dropin" "$DROPIN"
   restore() { if [[ "$had" == 1 ]]; then install -m 644 "$old" "$DROPIN"; else rm -f "$DROPIN"; fi; rm -f "$old" "$dropin"; die "$1; put the previous sshd setup back"; }
   sshd -t || restore 'sshd rejected the new config'
-  [[ "$(sshd -T -C "user=root,$probe")" == "$before" ]] || restore "the change would also have changed root's SSH settings"
+  [[ "$(sshd -T -C "user=root,$probe22" | strip_ports)" == "$before" ]] || restore "the change would also have changed root's SSH settings on port 22"
+  sshd -T -C "user=root,$probe_deploy" | grep -qixF 'denyusers *' || restore "root would be allowed on port $DEPLOY_PORT"
   for user in "${USERS[@]}"; do
-    effective="$(sshd -T -C "user=$user,$probe")"
+    effective="$(sshd -T -C "user=$user,$probe_deploy")"
     for want in 'forcecommand /usr/local/sbin/tavora-receive' "authorizedkeysfile $KEYS/%u" 'permittty no' 'allowtcpforwarding no' 'passwordauthentication no'; do
       grep -qixF "$want" <<< "$effective" || restore "sshd would not apply '$want' to $user"
     done
-    if grep -qiE '^(allowusers|allowgroups) ' <<< "$effective"; then restore "sshd has AllowUsers/AllowGroups; add the deploy users there first"; fi
+    if grep -qiE '^(allowusers|allowgroups|denyusers) ' <<< "$effective"; then restore "sshd would not let $user in on port $DEPLOY_PORT (AllowUsers/AllowGroups/DenyUsers elsewhere)"; fi
+    sshd -T -C "user=$user,$probe22" | grep -qixF 'denyusers *' || restore "$user would be allowed on port 22"
   done
-  # Ubuntu's ssh.socket starts sshd per connection, which reads the new file anyway; a running sshd is reloaded.
-  if systemctl is-active --quiet ssh.service; then systemctl reload ssh.service
-  elif systemctl is-active --quiet sshd.service; then systemctl reload sshd.service
-  else say 'sshd is not running as a service; the next connection reads the new setup'; fi
+  # New ports need sshd (or Ubuntu's ssh.socket) to listen again; open sessions stay.
+  if systemctl is-active --quiet ssh.socket; then systemctl daemon-reload && systemctl restart ssh.socket
+  elif systemctl is-active --quiet ssh.service; then systemctl restart ssh.service
+  elif systemctl is-active --quiet sshd.service; then systemctl restart sshd.service
+  else say 'sshd is not running as a service; start it to use the new ports'; fi
   rm -f "$old"
-  say "wrote $DROPIN and reloaded sshd"
+  say "wrote $DROPIN; sshd listens on 22 and $DEPLOY_PORT"
 fi
 rm -f "$dropin"
+# A firewall on the server itself must let the tailnet reach the deploy port (Hetzner's cloud firewall never
+# sees tailnet traffic, which arrives inside WireGuard).
+if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
+  if ! ufw status | grep -qE "^$DEPLOY_PORT/tcp on tailscale0 +ALLOW"; then
+    ufw allow in on tailscale0 to any port "$DEPLOY_PORT" proto tcp comment 'Tavora deploys' >/dev/null
+    say "ufw: allowed port $DEPLOY_PORT on tailscale0"
+  fi
+fi
 
 echo 'API service'
 # What Deploy-Api.ps1 installed as root until 2026-10-31: the service user, its settings folder, the

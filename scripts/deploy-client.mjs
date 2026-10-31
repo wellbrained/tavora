@@ -84,8 +84,11 @@ export function committedHash(file) {
   return createHash("sha256").update(result.stdout).digest("hex");
 }
 
+/** sshd's port for the deploy users only: port 22 on the tailnet may be Tailscale SSH, which would skip the restrictions. */
+export const DEPLOY_PORT = 2222;
+
 function sshArgs({ key, user, host }, command) {
-  return ["-i", key, "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15", "-T", `${user}@${host}`, command];
+  return ["-p", String(DEPLOY_PORT), "-i", key, "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15", "-T", `${user}@${host}`, command];
 }
 
 /** Asks the server who answers for `job`; throws with a clear message when it isn't the right restricted key. */
@@ -94,7 +97,13 @@ export function hello(job, env = process.env) {
   if (where.problems.length) throw new Error(where.problems.join("\n"));
   const result = spawnSync("ssh.exe", sshArgs(where, "hello"), { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`Could not reach ${where.user}@${where.host} (exit ${result.status}): ${String(result.stderr).trim()}`);
+  if (result.status !== 0) {
+    const detail = String(result.stderr).trim();
+    const hint = /host key is known|Host key verification failed/i.test(detail)
+      ? ` This PC doesn't know the server's key on port ${DEPLOY_PORT} yet; see deploy/README.md, first-time setup.`
+      : "";
+    throw new Error(`Could not reach ${where.user}@${where.host}:${DEPLOY_PORT} (exit ${result.status}): ${detail}${hint}`);
+  }
   const answer = parseHello(result.stdout, job);
   if (answer.error) throw new Error(answer.error);
   const stale = staleSetup(job, answer.installed, committedHash);
