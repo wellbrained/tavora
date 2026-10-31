@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Settings > Account > Cloud copy: turning it on, on our server or in a folder the
+// Profile dialog > Cloud copy: turning it on, on our server or in a folder the
 // user picks (a new recovery key, or the account's key another PC made), its
 // state, where it's kept, and the buttons to upload, restore, turn it off or
 // delete it. When it syncs is up to the main process. A folder works signed out too.

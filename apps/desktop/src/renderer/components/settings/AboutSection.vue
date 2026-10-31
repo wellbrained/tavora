@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Settings > About: this version and its patch notes, updates, backups and the diagnostic info.
+// Settings > About & updates: this version (its patch notes are a page of their own), updates, backups and the
+// diagnostic info.
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
@@ -52,23 +53,24 @@ async function copyDiagnostics() {
       :description="t('settings.about.versionHint')"
       setting="app-version"
       :highlighted="highlight === 'app-version'"
-    >
-      <Button variant="secondary" data-testid="open-patch-notes" @click="emit('patchNotes')">{{ t("settings.section.patch-notes") }}</Button>
-    </SettingRow>
+      opens
+      data-testid="open-patch-notes"
+      @open="emit('patchNotes')"
+    />
     <SettingRow :label="t('settings.check-updates.label')" :description="updateRow.text" setting="check-updates" :highlighted="highlight === 'check-updates'">
       <Button variant="secondary" :disabled="updateRow.busy" data-testid="check-updates" @click="pressUpdateButton">{{ updateRow.button }}</Button>
     </SettingRow>
-    <SettingRow :label="t('settings.auto-update.label')" :description="t('settings.auto-update.description')" setting="auto-update" :highlighted="highlight === 'auto-update'">
+    <SettingRow :label="t('settings.auto-update.label')" :description="t('settings.auto-update.description')" :details="t('settings.auto-update.details')" setting="auto-update" :highlighted="highlight === 'auto-update'">
       <Switch v-model="autoUpdate" :aria-label="t('settings.auto-update.label')" data-testid="auto-update" />
     </SettingRow>
   </SettingGroup>
   <SettingGroup :title="t('settings.heading.yourData')">
-    <SettingRow :label="t('settings.backups.label')" :description="t('settings.backups.description')" setting="backups" :highlighted="highlight === 'backups'">
+    <SettingRow :label="t('settings.backups.label')" :description="t('settings.backups.description')" :details="t('settings.backups.details')" setting="backups" :highlighted="highlight === 'backups'">
       <Button variant="secondary" data-testid="open-backups" @click="submitAction({ type: 'open-backups' })">{{ t("common.openFolder") }}</Button>
     </SettingRow>
   </SettingGroup>
   <SettingGroup :title="t('settings.heading.help')">
-    <SettingRow :label="t('settings.diagnostics.label')" :description="t('settings.diagnostics.description')" setting="diagnostics" :highlighted="highlight === 'diagnostics'">
+    <SettingRow :label="t('settings.diagnostics.label')" :description="t('settings.diagnostics.description')" :details="t('settings.diagnostics.details')" setting="diagnostics" :highlighted="highlight === 'diagnostics'">
       <Button variant="secondary" data-testid="copy-diagnostics" @click="copyDiagnostics">{{ copied ? t("settings.diagnostics.copied") : t("settings.diagnostics.copy") }}</Button>
     </SettingRow>
   </SettingGroup>

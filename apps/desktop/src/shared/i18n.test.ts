@@ -38,7 +38,8 @@ describe("locale files", () => {
       expect(keys).toContain(`settings.group.${group.id}`);
       for (const section of group.sections) expect(keys).toContain(`settings.section.${section.id}`);
     }
-    expect(keys).toContain("settings.section.patch-notes");
+    for (const section of ["about", "patch-notes", "workspaces", "trash", "dev-folders", "dev-publishing", "dev-help"]) expect(keys).toContain(`settings.section.${section}`);
+    expect(keys).toContain("settings.nav.development");
   });
 });
 

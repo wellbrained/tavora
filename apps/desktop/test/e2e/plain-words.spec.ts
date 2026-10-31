@@ -34,14 +34,17 @@ test("Development shows its tools only after Let's go, kept in the library file"
     await first.page.getByTestId("settings-nav-development").click();
     await expect(first.page.getByTestId("development-intro")).toBeVisible();
     await expect(first.page.getByTestId("settings-heading")).toHaveText("Make modules");
-    await expect(first.page.getByTestId("settings-nav-dev-folders")).toHaveCount(0);
-    await expect(first.page.getByTestId("settings-nav-dev-help")).toHaveCount(0);
+    await expect(first.page.getByTestId("settings-tab-dev-folders")).toHaveCount(0);
+    await expect(first.page.getByTestId("settings-tab-dev-help")).toHaveCount(0);
     await first.page.getByTestId("development-start").click();
-    await expect(first.page.getByTestId("settings-heading")).toHaveText("Your modules");
+    await expect(first.page.getByTestId("settings-heading")).toHaveText("Developer");
+    await expect(first.page.getByTestId("settings-tab-development")).toHaveAttribute("data-state", "active");
     await expect(first.page.getByTestId("dev-modules-none")).toBeVisible();
-    await first.page.getByTestId("settings-nav-dev-folders").click();
+    await first.page.getByTestId("settings-nav-development").click();
+    await first.page.getByTestId("settings-tab-dev-folders").click();
     await expect(first.page.getByTestId("add-development-folder")).toBeVisible();
-    await first.page.getByTestId("settings-nav-dev-help").click();
+    await first.page.getByTestId("settings-nav-development").click();
+    await first.page.getByTestId("settings-tab-dev-help").click();
     await expect(first.page.getByTestId("development-examples")).toBeVisible();
     await expect(first.page.getByTestId("development-examples")).not.toContainText("test ids");
     await expect.poll(() => makesModulesIn(userData)).toBe(true);
@@ -57,7 +60,8 @@ test("Development shows its tools only after Let's go, kept in the library file"
     await again.page.getByTestId("rail-settings").click();
     await again.page.getByTestId("settings-nav-development").click();
     await expect(again.page.getByTestId("development-intro")).toHaveCount(0);
-    await again.page.getByTestId("settings-nav-dev-folders").click();
+    await again.page.getByTestId("settings-nav-development").click();
+    await again.page.getByTestId("settings-tab-dev-folders").click();
     await expect(again.page.getByTestId("add-development-folder")).toBeVisible();
   } finally {
     await again.app.close();
@@ -73,7 +77,8 @@ test("a Let's go kept in the window's local storage moves into the library once"
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-development").click();
     await expect(page.getByTestId("development-intro")).toHaveCount(0);
-    await page.getByTestId("settings-nav-dev-folders").click();
+    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("settings-tab-dev-folders").click();
     await expect(page.getByTestId("add-development-folder")).toBeVisible();
     await expect.poll(() => makesModulesIn(userData)).toBe(true);
     await expect.poll(() => page.evaluate(() => localStorage.getItem("tavora.makesModules"))).toBeNull();
@@ -82,29 +87,30 @@ test("a Let's go kept in the window's local storage moves into the library once"
   }
 });
 
-test("the profile card saves on Enter, keeps initials behind a link and opens the account", async () => {
+test("the profile dialog saves on Enter and on leaving a field, and has the account in its menu", async () => {
   const { app, page } = await launch();
   try {
     await page.getByTestId("rail-profile").click();
-    const card = page.getByTestId("profile-card");
-    await expect(card.getByRole("button", { name: "Save" })).toHaveCount(0);
-    await expect(card.getByTestId("profile-initials")).toHaveCount(0);
+    const profile = page.getByTestId("profile-dialog");
+    await expect(profile.getByRole("button", { name: "Save" })).toHaveCount(0);
 
-    await card.getByTestId("profile-name").fill("Mara Stone");
-    await card.getByTestId("profile-name").press("Enter");
-    await expect(card.getByTestId("profile-status")).toHaveText("Saved");
+    await profile.getByTestId("profile-name").fill("Mara Stone");
+    // The name beside the picture follows what is typed.
+    await expect(profile.getByRole("heading", { name: "Mara Stone" })).toBeVisible();
+    await profile.getByTestId("profile-name").press("Enter");
+    await expect(profile.getByTestId("profile-status")).toHaveText("Saved");
     await expect(page.getByTestId("rail-profile")).toHaveAttribute("aria-label", "Profile: Mara Stone");
 
-    await card.getByTestId("profile-change-initials").click();
-    await expect(card.getByTestId("profile-initials")).toBeFocused();
-    await card.getByTestId("profile-initials").fill("MS");
+    await profile.getByTestId("profile-initials").fill("MS");
     // Leaving the field saves too.
-    await card.getByTestId("profile-name").focus();
-    await expect(card.getByTestId("profile-status")).toHaveText("Saved");
+    await profile.getByTestId("profile-name").focus();
+    await expect(profile.getByTestId("profile-status")).toHaveText("Saved");
 
-    await card.getByTestId("profile-account").click();
-    await expect(card).toHaveCount(0);
-    await expect(page.getByTestId("settings-nav-account")).toHaveAttribute("aria-current", "page");
+    await profile.getByTestId("profile-nav-account").click();
+    await expect(profile.getByTestId("profile-nav-account")).toHaveAttribute("aria-current", "page");
+    await expect(profile.getByTestId("account")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(profile).toHaveCount(0);
   } finally {
     await app.close();
   }

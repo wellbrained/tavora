@@ -525,14 +525,14 @@ test("a user reports a module from Browse and from Settings, and only its id, ke
   const sent = { headers: { cookie: null, referer: null }, body: { id: "wellbrained.tracker", owner, sha256, reason: "unsafe" } };
   try {
     // Reporting needs a sign-in.
-    await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-account").click();
+    await page.getByTestId("rail-profile").click();
+    await page.getByTestId("profile-nav-account").click();
     await page.getByTestId("account-email").fill("user@example.com");
     await page.getByTestId("account-send-code").click();
     await page.getByTestId("account-code").fill("123456");
     await page.getByTestId("account-verify").click();
     await expect(page.getByTestId("account")).toContainText("user@example.com");
-    await page.getByTestId("settings-close").click();
+    await page.getByTestId("profile-close").click();
 
     await openWorkspace(page, "poe2");
     await page.getByTestId("add-module").click();

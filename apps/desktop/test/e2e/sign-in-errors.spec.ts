@@ -12,8 +12,8 @@ test("sign-in errors show under the email field, offline and when the service fa
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as { port: number }).port;
   const sendCode = async (page: import("@playwright/test").Page) => {
-    await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-account").click();
+    await page.getByTestId("rail-profile").click();
+    await page.getByTestId("profile-nav-account").click();
     await page.getByTestId("account-email").fill("user@example.com");
     await page.getByTestId("account-send-code").click();
   };

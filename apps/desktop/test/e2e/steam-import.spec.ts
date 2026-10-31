@@ -24,7 +24,7 @@ test("a user who can't import from Steam is told what happened and what to do", 
   };
   try {
     await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-workspaces").click();
+    await page.getByTestId("settings-nav-games").click();
     await page.getByTestId("open-steam-import-settings").click();
     const error = page.getByTestId("steam-import-error");
 

@@ -20,9 +20,9 @@ npm install
 npm run dev     # builds, then rebuilds on every change: leave it running
 ```
 
-In Tavora, open **Settings > Project folders**, choose **Add folder…** and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves when `npm run dev` rebuilds.
+In Tavora, open **Settings > Developer > Project folders**, choose **Add folder…** and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves when `npm run dev` rebuilds.
 
-To add the SDK to a project of your own instead: `npm install @tavora/sdk`, and follow [Build the module](#build-the-module). The same small module is also built three ways in Tavora's repository: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). A module that offers several panels is shown in the [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) (see [Panel types](../reference/manifest.md#panel-types)). These examples ship with Tavora too: under Examples in **Settings > Project folders**, **Make a copy** turns one into a project of your own, with its own id and the SDK from npm, in a project folder or a folder you pick.
+To add the SDK to a project of your own instead: `npm install @tavora/sdk`, and follow [Build the module](#build-the-module). The same small module is also built three ways in Tavora's repository: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). A module that offers several panels is shown in the [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) (see [Panel types](../reference/manifest.md#panel-types)). These examples ship with Tavora too: under Examples in **Settings > Developer > Project folders**, **Make a copy** turns one into a project of your own, with its own id and the SDK from npm, in a project folder or a folder you pick.
 
 ## Talk to the host
 
@@ -117,7 +117,7 @@ Every item on Tavora's rail is a workspace: a game workspace, linked to a game, 
 
 ## Share the module
 
-Publish from Tavora: open **Settings > Your modules** and press **Publish** next to your module. The first time, Tavora walks you through signing in and choosing a developer name; saving the name makes your [publisher key](./publisher-key.md) and claims your prefix. Tavora keeps the key for you, and your recovery key is its backup. Read [Your publisher key](./publisher-key.md) before your first publish: updates and your users' data depend on that key.
+Publish from Tavora: open **Settings > Developer** and press **Publish** next to your module. The first time, Tavora walks you through signing in and choosing a developer name; saving the name makes your [publisher key](./publisher-key.md) and claims your prefix. Tavora keeps the key for you, and your recovery key is its backup. Read [Your publisher key](./publisher-key.md) before your first publish: updates and your users' data depend on that key.
 
 Tavora packs what's already built, so keep `npm run dev` running or run `npm run build` first. The review screen shows what will go out: the name, version, patch notes, what the module asks for, and when it was built. When the catalog has this version already, it offers the next one and a box for its patch notes, and **Save to project** writes both into your files. Press **Publish** there to sign and upload; users find your module under **Browse** in the module library.
 

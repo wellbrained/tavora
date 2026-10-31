@@ -89,7 +89,7 @@ const title = computed(() => {
 /** The accounts are chosen in Settings; the dialog closes so the page is not behind it. */
 function editAccounts() {
   dialog.value = null;
-  openSettings({ section: "integrations", setting: "ai-usage-accounts" });
+  openSettings({ section: "connections", setting: "ai-usage-accounts" });
 }
 
 async function allow() {

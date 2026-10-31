@@ -4,7 +4,7 @@ Tavora's module catalog is where users find community modules: under **Browse** 
 
 ## Before the first upload
 
-1. **Set up once.** Under **Settings > Your modules**, the **Want to make modules?** card walks you through signing in (email or Discord) and choosing a developer name. Saving the name makes your publisher key, links it to your account and claims your name as your prefix. Users see your name as "by *your name*" next to your module. Pressing Publish before that opens the same steps.
+1. **Set up once.** Under **Settings > Developer**, the **Want to make modules?** card walks you through signing in (email or Discord) and choosing a developer name. Saving the name makes your publisher key, links it to your account and claims your name as your prefix. Users see your name as "by *your name*" next to your module. Pressing Publish before that opens the same steps.
 2. **Use an id with your own prefix.** The part of your module id before the first dot is your prefix, such as `wellbrained` in `wellbrained.timer`. Once it's yours, nobody else can publish under it. An account holds up to 3 prefixes: **Add another** under Module developer checks one and claims it. Words a developer name couldn't be are refused, such as `tavora`, `official` and `local`, so an id from the starter (`local.…`) needs your prefix; the review screen lets you change the id before the first publish. Prefixes stay taken when an account is deleted, and a prefix that already has a module from another developer is taken even if nobody claimed it.
 3. **Say where the module belongs.** `games` lists the games it is made for, or stays empty for any game. A module for any game is offered in personal workspaces too, unless you set `personalWorkspaces` to `false`. See the [manifest reference](../reference/manifest.md).
 4. **Write a description and patch notes.** The listing shows your manifest's `name`, `description`, `version` and what it asks for (`permissions.network` and `connectors`) and the zip's size. Each version's lines from [`changelog.json`](./getting-started.md#patch-notes) show up as its patch notes. It is shown as plain text, never HTML.
@@ -30,7 +30,7 @@ The **Publish** review shows the description as it will appear, with a tip when 
 
 ## Publish
 
-Build the module (`npm run dev` keeps `dist/` up to date), then press **Publish** next to it in **Settings > Your modules**, or in its menu in Add module. Tavora packs the folder as it is and opens a review screen:
+Build the module (`npm run dev` keeps `dist/` up to date), then press **Publish** next to it in **Settings > Developer**, or in its menu in Add module. Tavora packs the folder as it is and opens a review screen:
 
 - the name, icon, version and this version's patch notes
 - your description as the catalog page will show it
@@ -68,7 +68,7 @@ To take a waiting version back, run `TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pa
 - **Your module's page** opens from its card: your icon, readme, screenshots and homepage, this version's patch notes, when it was updated and what it can reach. The description shows your readme as text: headings, paragraphs, lists, code, bold, italic and links to web pages (a click opens them in a Browser panel); pictures and HTML are never shown. Below it are this version's patch notes and a collapsed list of every version. The page also shows the network hosts and connectors it wants, so users see them before they install.
 - **Ratings and reviews** are on your module's page: 1 to 5 stars from signed-in users, with an optional review of up to 500 characters. Every version's ratings count, and each review shows the version it was given on. You can't rate your own module, but you can post one reply under each review (Reply, signed in with the account that publishes the module). Reviews with slurs, links or email addresses wait until Tavora checks them; users can report a review, and Tavora can hide its text. Its stars still count. To keep ratings honest, an account can rate only once it is a day old and at most 10 modules a day, and a module's ratings beyond 20 new ones in a day wait for Tavora before they count.
 - **Install** downloads the zip, checks it against the listing and your key's signature, and installs it like Install from zip. Installing grants nothing: users are asked for your network hosts and connectors when they add the module, as with any zip.
-- **Contact the developer** is on your module's page. You choose what it does under **Settings > Your modules** (open the module): **In Tavora** (the default) sends messages to your Tavora inbox without users' names; **Email**, **GitHub**, **Discord server**, **Discord user** or **Website** shows that address instead, so it isn't anonymous for either side; **Nobody** says you don't take messages. **Settings > Publishing** sets what modules without their own choice use.
+- **Contact the developer** is on your module's page. You choose what it does under **Settings > Developer** (open the module): **In Tavora** (the default) sends messages to your Tavora inbox without users' names; **Email**, **GitHub**, **Discord server**, **Discord user** or **Website** shows that address instead, so it isn't anonymous for either side; **Nobody** says you don't take messages. **Settings > Developer > Publishing** sets what modules without their own choice use.
 - Their data and permissions belong to your module id and your key, as [Your publisher key](./publisher-key.md#what-the-key-decides) explains.
 
 ## Updates
@@ -93,7 +93,7 @@ An account can publish 10 versions a day and keep 200 MB of zips in the catalog.
 | Publishing needs your Tavora account | Publish from Tavora, or from CI with a key file and a publish token in `TAVORA_PUBLISH_TOKEN`. |
 | This publisher key is linked to another Tavora account | Sign in to Tavora with the account the key is linked to, or use that account's publish token. |
 | A publish token publishes only under id prefixes your account has | Publish the module's first version from Tavora, or claim the prefix there first. |
-| Your publisher key is not linked to a Tavora account yet | Press **Link** next to it under Settings > Publishing > Publisher keys and CI. A key file: **Get a link code** under Publisher keys and CI, then `tavora-pack link <code> --key <file>`. |
+| Your publisher key is not linked to a Tavora account yet | Press **Link** next to it under Settings > Developer > Publishing > Publisher keys and CI. A key file: **Get a link code** under Publisher keys and CI, then `tavora-pack link <code> --key <file>`. |
 | Another developer publishes under this id prefix | Give the module an id with a prefix of your own. |
 | This id prefix is reserved | Pick another prefix; reserved words such as `tavora` and `local` are refused. |
 | Your account already publishes under 3 id prefixes | Use one of the prefixes you have. |
@@ -108,7 +108,7 @@ An account can publish 10 versions a day and keep 200 MB of zips in the catalog.
 
 ## Publish from CI
 
-A build server can publish too, with the `@tavora/pack` command line tool. It needs two secrets from **Settings > Publishing > Publisher keys and CI**:
+A build server can publish too, with the `@tavora/pack` command line tool. It needs two secrets from **Settings > Developer > Publishing > Publisher keys and CI**:
 
 1. **Your key as a file.** Press **Export** next to the key and save it. Pass it with `--key <file>`.
 2. **A publish token.** Type a name (like "GitHub Actions") and press **Make a token**. Copy it right away: Tavora shows it only once. Put it in the `TAVORA_PUBLISH_TOKEN` environment variable.
@@ -133,14 +133,14 @@ If the module breaks the rules, Tavora can take it out of the catalog (users who
 
 Tavora can hand your modules to a new key, but only if the old key was linked to your account. It signs a statement, offline with its own key, that the new key replaces the old one. Users' Tavora then takes updates signed by the new key for the old key's modules, and their data stays where it was.
 
-Ask in the app: Settings > Publishing > Publisher keys and CI (press **Show**), then **Lost it?** next to the key.
+Ask in the app: Settings > Developer > Publishing > Publisher keys and CI (press **Show**), then **Lost it?** next to the key.
 
 - **I lost it:** your modules move to your newest key that Tavora keeps and that is linked to your account. If there is none, Tavora makes one and links it. Keys Tavora keeps are lost only with your recovery key.
 - **It was leaked:** the same, and Tavora also revokes the old key. From the moment you ask, the catalog takes nothing new signed by it. Once revoked, it can't publish or install anything new. Modules users already have keep running, and so do the zips Tavora lists as published before the revocation.
 
 Your account's email address gets a note that you asked. The key shows **Waiting for Tavora** until a person at Tavora has checked the request and signed it, then **Done**. Both keys stay linked while it waits. If something can't be done in the app, write to [tavora.app@gmail.com](mailto:tavora.app@gmail.com).
 
-**A publish token leaked?** Remove it under Settings > Publishing > Publisher keys and CI. It stops working at once. A token alone can't publish; it needs your key too.
+**A publish token leaked?** Remove it under Settings > Developer > Publishing > Publisher keys and CI. It stops working at once. A token alone can't publish; it needs your key too.
 
 Once Tavora has signed the statement, publish new versions of your modules with the new key as usual. The catalog takes them because the statement names your account, and users' Tavora updates to them and keeps their data.
 

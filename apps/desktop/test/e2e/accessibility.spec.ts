@@ -130,16 +130,21 @@ test("small text, off switches and disabled buttons keep their contrast in every
       record(theme.name, mode, "Disabled secondary button", await painted(page, '[data-testid="reset-theme"]'));
       await page.getByTestId("reset-theme").evaluate((button) => ((button as HTMLButtonElement).disabled = false));
       // "Remove" waits for a ticked workspace, and "Send code" for an email: both are disabled on a fresh profile.
-      await page.getByTestId("settings-nav-workspaces").click();
+      await page.getByTestId("settings-nav-games").click();
+      await page.getByTestId("games-open-workspaces").click();
       await expect(page.getByTestId("workspaces-remove")).toBeDisabled();
       await settled(page);
       record(theme.name, mode, "Disabled danger button", await painted(page, '[data-testid="workspaces-remove"]'));
-      await page.getByTestId("settings-nav-account").click();
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("settings")).toHaveCount(0);
+      // The account is in the profile dialog.
+      await page.getByTestId("rail-profile").click();
+      await page.getByTestId("profile-nav-account").click();
       await expect(page.getByTestId("account-send-code")).toBeDisabled();
       await settled(page);
       record(theme.name, mode, "Disabled primary button", await painted(page, '[data-testid="account-send-code"]'));
       await page.keyboard.press("Escape");
-      await expect(page.getByTestId("settings")).toHaveCount(0);
+      await expect(page.getByTestId("profile-dialog")).toHaveCount(0);
 
       await openWorkspace(page, "poe2");
       await settled(page);
@@ -217,10 +222,17 @@ test("every button on Home, in a workspace and in Settings has a name", async ()
 
   await page.getByTestId("rail-settings").click();
   await expect(page.getByTestId("settings")).toBeVisible();
-  const sections = await page.locator('[data-testid^="settings-nav-"]:not([data-testid$="-count"])').evaluateAll((items) => items.map((item) => item.getAttribute("data-testid")!));
+  const sections = await page.locator('[data-testid^="settings-nav-"]:not([data-testid$="-count"]):not([data-testid$="-new"])').evaluateAll((items) => items.map((item) => item.getAttribute("data-testid")!));
   for (const section of sections) {
     await page.getByTestId(section).click();
     found[section] = await unnamedButtons(page);
+  }
+  await page.keyboard.press("Escape");
+  await page.getByTestId("rail-profile").click();
+  const parts = await page.locator('[data-testid^="profile-nav-"]').evaluateAll((items) => items.map((item) => item.getAttribute("data-testid")!));
+  for (const part of parts) {
+    await page.getByTestId(part).click();
+    found[part] = await unnamedButtons(page);
   }
 
   const problems = Object.entries(found).flatMap(([where, list]) => list.map((item) => `${where}: ${item}`));

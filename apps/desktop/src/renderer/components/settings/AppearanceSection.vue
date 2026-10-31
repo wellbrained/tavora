@@ -170,6 +170,7 @@ const showVariation = computed(() => {
       v-if="showVariation"
       :label="t('settings.theme-variation.label')"
       :description="t('settings.theme-variation.description', { name: active?.name ?? '' })"
+      :details="t('settings.theme-variation.details')"
       setting="theme-variation"
       :highlighted="highlight === 'theme-variation'"
     >
@@ -195,6 +196,7 @@ const showVariation = computed(() => {
     <SettingRow
       :label="t('settings.grayscale-text.label')"
       :description="t('settings.grayscale-text.description')"
+      :details="t('settings.grayscale-text.details')"
       setting="grayscale-text"
       :highlighted="highlight === 'grayscale-text'"
     >
@@ -206,6 +208,7 @@ const showVariation = computed(() => {
     <SettingRow
       :label="t('settings.own-themes.label')"
       :description="t('settings.own-themes.description')"
+      :details="t('settings.own-themes.details')"
       setting="own-themes"
       :highlighted="highlight === 'own-themes'"
     >

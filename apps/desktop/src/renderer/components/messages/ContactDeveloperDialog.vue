@@ -10,7 +10,7 @@ import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { MAX_MESSAGE_LENGTH, messageProblem, REQUEST_TYPES, type ContactDraft, type RequestType } from "../../../shared/conversations";
-import { act, api, openInbox, openSettings, showToast } from "../../host";
+import { act, api, openInbox, openProfile, showToast } from "../../host";
 import type { MessageKey } from "../../../shared/i18n";
 import { t } from "../../i18n";
 import ModalDialog from "../ModalDialog.vue";
@@ -55,7 +55,7 @@ async function openLink() {
 
 function signIn() {
   emit("close");
-  openSettings({ section: "account" });
+  openProfile("account");
 }
 </script>
 

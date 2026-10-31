@@ -271,7 +271,8 @@ test("a removed workspace keeps its data in Trash and comes back when restored",
   await expect(panels(page)).toHaveCount(0);
 
   await page.getByTestId("rail-settings").click();
-  await page.getByTestId("settings-nav-trash").click();
+  await page.getByTestId("settings-nav-games").click();
+  await page.getByTestId("games-open-trash").click();
   await expect(page.getByTestId("trash-satisfactory")).toContainText("Satisfactory");
   await page.getByTestId("restore-satisfactory").click();
   await expect(page.getByTestId("trash-empty")).toBeVisible();
@@ -304,7 +305,9 @@ test("many workspaces are moved to Trash, restored and deleted together from Set
   await expect(page.getByTestId("rail-workspace-poe2")).toHaveCount(0);
   await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveCount(0);
 
-  await page.getByTestId("settings-nav-trash").click();
+  await page.getByTestId("settings-nav-games").click();
+
+  await page.getByTestId("games-open-trash").click();
   await page.getByTestId("trash-tick-poe2").check();
   await page.getByTestId("trash-restore-selected").click();
   await expect(page.getByTestId("trash-poe2")).toHaveCount(0);
@@ -329,7 +332,8 @@ test("a workspace in Trash is deleted for good after 30 days or when the user sa
 
   // Delete now, from Settings.
   await page.getByTestId("rail-settings").click();
-  await page.getByTestId("settings-nav-trash").click();
+  await page.getByTestId("settings-nav-games").click();
+  await page.getByTestId("games-open-trash").click();
   await page.getByTestId("delete-poe2").click();
   await page.getByTestId("confirm-submit").click();
   // The confirmation opened over Settings, which is still open.
@@ -353,7 +357,8 @@ test("a workspace in Trash is deleted for good after 30 days or when the user sa
 
   const again = await launch(userData);
   await again.page.getByTestId("rail-settings").click();
-  await again.page.getByTestId("settings-nav-trash").click();
+  await again.page.getByTestId("settings-nav-games").click();
+  await again.page.getByTestId("games-open-trash").click();
   await expect(again.page.getByTestId("trash-empty")).toBeVisible();
   expect(await exists(dataDir)).toBe(false);
   expect(await gamePartitions()).toEqual([]);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Settings > Account > Messages: the email copy switch, and the conversations that are closed (they leave the inbox
+// Profile dialog > Messages: the email copy switch, and the conversations that are closed (they leave the inbox
 // icon but stay readable here).
 import { computed, ref } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";

@@ -7,9 +7,9 @@
 // adds it too. Remove moves it to the recycle bin. A module's data stays, so
 // adding it again finds it. A module installed from the catalog can be
 // reported to Tavora, and its patch notes open in a dialog. Below the list
-// are the websites modules may reach, and where module files live. What
-// module developers use (development folders, the examples) is in
-// Settings > Development instead.
+// is where module files live, and the data removed modules left behind.
+// What modules may reach is in Settings > Connections; what module
+// developers use is in Settings > Developer.
 import { ArrowRightLeft, ChevronDown, CircleAlert, CloudDownload, Ellipsis, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Store, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
@@ -21,9 +21,9 @@ import { act, confirmAction, dialog, workspacesUsing, listOf, settingsOpen, show
 import { problemText } from "../../../shared/module-problem";
 import { asksMore } from "../../../shared/module-updates";
 import { t } from "../../i18n";
-import ModuleGrantsSection from "./ModuleGrantsSection.vue";
 import ModuleNotesDialog from "./ModuleNotesDialog.vue";
 import ModuleRow from "./ModuleRow.vue";
+import SettingExpand from "./SettingExpand.vue";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
@@ -211,6 +211,7 @@ function remove(module: ModuleView) {
     <SettingRow
       :label="t('settings.auto-update-modules.label')"
       :description="t('settings.auto-update-modules.description')"
+      :details="t('settings.auto-update-modules.details')"
       setting="auto-update-modules"
       :highlighted="highlight === 'auto-update-modules'"
     >
@@ -284,12 +285,11 @@ function remove(module: ModuleView) {
   </SettingGroup>
   <ModuleNotesDialog v-if="notesModule" :key="notesModule.id" :module="notesModule" @close="notesOpen = null" />
 
-  <ModuleGrantsSection :highlight="highlight" />
-
   <SettingGroup :title="t('settings.heading.files')">
     <SettingRow
       :label="t('settings.module-files.label')"
       :description="t('settings.module-files.description')"
+      :details="t('settings.module-files.details')"
       setting="module-files"
       :highlighted="highlight === 'module-files'"
     >
@@ -310,14 +310,18 @@ function remove(module: ModuleView) {
         </Button>
       </span>
     </SettingRow>
-    <div v-if="leftover.length" class="py-4" data-testid="leftover-data">
-      <p class="font-medium">{{ t("settings.modules.leftover") }}</p>
-      <p class="text-muted-foreground text-sm">{{ t("settings.modules.leftoverHint") }}</p>
-      <ul class="mt-2 flex flex-col" :aria-label="t('settings.modules.leftover')">
+    <SettingExpand
+      v-if="leftover.length"
+      :label="t('settings.modules.leftover')"
+      :description="t('settings.modules.leftoverCount', { count: leftover.length })"
+      :details="t('settings.modules.leftoverHint')"
+      testid="leftover-data"
+    >
+      <ul class="flex flex-col" :aria-label="t('settings.modules.leftover')">
         <li
           v-for="entry in leftover"
           :key="`${entry.owner}/${entry.moduleId}`"
-          class="flex items-center gap-4 border-b py-3 last:border-b-0"
+          class="flex items-center gap-4 border-b border-dashed py-2 last:border-b-0"
           :data-testid="`leftover-${entry.owner}-${entry.moduleId}`"
         >
           <span class="flex min-w-0 flex-1 items-center gap-2">
@@ -326,11 +330,11 @@ function remove(module: ModuleView) {
               {{ entry.publisher ? t("settings.modules.publisher", { short: entry.publisher.slice(0, 8) }) : t(`settings.modules.leftoverOwner.${entry.owner as "local" | "official"}`) }}
             </Badge>
           </span>
-          <Button variant="danger" :aria-label="t('settings.modules.deleteDataLabel', { id: entry.moduleId })" :data-testid="`delete-data-${entry.owner}-${entry.moduleId}`" @click="deleteData(entry)">
+          <Button variant="danger" size="sm" :aria-label="t('settings.modules.deleteDataLabel', { id: entry.moduleId })" :data-testid="`delete-data-${entry.owner}-${entry.moduleId}`" @click="deleteData(entry)">
             <Trash2 :stroke-width="1.5" /> {{ t("settings.modules.deleteData") }}
           </Button>
         </li>
       </ul>
-    </div>
+    </SettingExpand>
   </SettingGroup>
 </template>

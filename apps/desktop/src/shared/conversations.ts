@@ -83,7 +83,7 @@ export interface Contact {
 export interface ModuleContact extends Contact {
   id: string;
   name: string;
-  /** Set for this module; otherwise it follows the default (Settings > Development > Publishing). */
+  /** Set for this module; otherwise it follows the default (Settings > Developer > Publishing). */
   own: boolean;
 }
 
@@ -216,8 +216,8 @@ export const BUILT_IN_TEXTS: Record<NoteKey, Record<Language, string>> = {
     de: "Der Entwickler von *{module}* hat auf deine Anfrage geantwortet. Du kannst sie hier lesen und antworten.\n\nDieses Symbol verschwindet wieder, wenn die Unterhaltung geschlossen ist.",
   },
   "inbox.gone": {
-    en: "All your conversations are closed, so the inbox icon went away.\n\nYou can still read them in Settings > Account > Messages.",
-    de: "Alle deine Unterhaltungen sind geschlossen, deshalb ist das Postfach-Symbol verschwunden.\n\nDu findest sie weiterhin unter Einstellungen > Konto > Nachrichten.",
+    en: "All your conversations are closed, so the inbox icon went away.\n\nYou can still read them under Messages in your profile.",
+    de: "Alle deine Unterhaltungen sind geschlossen, deshalb ist das Postfach-Symbol verschwunden.\n\nDu findest sie weiterhin in deinem Profil unter Nachrichten.",
   },
 };
 

@@ -60,7 +60,7 @@ Values you store must be JSON. Type parameters such as `get<number>()` are not c
 | `tavora.connectors.media` | What plays on the PC, with the `media` connector: `watch()`, `unwatch()`, `onChange`, `control(session, action)`. |
 | `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
 
-What needs the user's permission (`permissions.network` and `permissions.connectors` in the [manifest](https://docs.mytavora.app/reference/manifest)) works only once the user has granted it: they are asked when they add the module and can take it back in Settings > Integrations. Until then the call fails with `PERMISSION_DENIED`; `tavora.host.capabilities` lists what was granted when the module connected. See [Capabilities](https://docs.mytavora.app/reference/protocol#capabilities) and [Connectors](https://docs.mytavora.app/reference/protocol#connectors).
+What needs the user's permission (`permissions.network` and `permissions.connectors` in the [manifest](https://docs.mytavora.app/reference/manifest)) works only once the user has granted it: they are asked when they add the module and can take it back in Settings > Connections. Until then the call fails with `PERMISSION_DENIED`; `tavora.host.capabilities` lists what was granted when the module connected. See [Capabilities](https://docs.mytavora.app/reference/protocol#capabilities) and [Connectors](https://docs.mytavora.app/reference/protocol#connectors).
 
 ## Examples
 
