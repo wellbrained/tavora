@@ -73,6 +73,9 @@ async function paintedInNotes(app: Parameters<typeof inModule>[0], selector: str
 
 const THEMES = [
   { id: "tavora.default", name: "Tavora" },
+  { id: "tavora.dusk-rose", name: "Dusk Rose" },
+  { id: "tavora.garnet", name: "Garnet" },
+  { id: "tavora.amethyst", name: "Amethyst" },
   { id: "tavora.hearthwood", name: "Hearthwood" },
   { id: "tavora.nightfall", name: "Nightfall" },
 ] as const;

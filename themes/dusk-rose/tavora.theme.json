@@ -1,0 +1,71 @@
+{
+  "id": "tavora.dusk-rose",
+  "name": "Dusk Rose",
+  "description": "Plum shadows with a soft rose glow.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "variations": [
+    {
+      "id": "dark",
+      "name": "Dark",
+      "mode": "dark",
+      "radius": 10,
+      "colors": {
+        "background": "#1a1418",
+        "foreground": "#f3e9ee",
+        "card": "#241c22",
+        "card-foreground": "#f3e9ee",
+        "popover": "#241c22",
+        "popover-foreground": "#f3e9ee",
+        "primary": "#e88aa8",
+        "primary-hover": "#f0a3bb",
+        "primary-foreground": "#1a1418",
+        "secondary": "#2f252c",
+        "secondary-foreground": "#f3e9ee",
+        "muted": "#2f252c",
+        "muted-foreground": "#a8979f",
+        "accent": "#2f252c",
+        "accent-foreground": "#f3e9ee",
+        "destructive": "#ef6b5e",
+        "border": "#3a2e36",
+        "input": "#7a6872",
+        "ring": "#e88aa8",
+        "rail": "#120e11",
+        "success": "#8cc49a",
+        "warning": "#e6c56a",
+        "info": "#8fb0e8"
+      }
+    },
+    {
+      "id": "light",
+      "name": "Light",
+      "mode": "light",
+      "radius": 10,
+      "colors": {
+        "background": "#f7f0f3",
+        "foreground": "#2a1d24",
+        "card": "#fffafc",
+        "card-foreground": "#2a1d24",
+        "popover": "#fffafc",
+        "popover-foreground": "#2a1d24",
+        "primary": "#a23a62",
+        "primary-hover": "#8a2f52",
+        "primary-foreground": "#ffffff",
+        "secondary": "#efe3e9",
+        "secondary-foreground": "#2a1d24",
+        "muted": "#efe3e9",
+        "muted-foreground": "#6e5a64",
+        "accent": "#efe3e9",
+        "accent-foreground": "#2a1d24",
+        "destructive": "#b0322a",
+        "border": "#e0d0d8",
+        "input": "#8c7782",
+        "ring": "#a23a62",
+        "rail": "#ede2e7",
+        "success": "#2d7136",
+        "warning": "#7f6100",
+        "info": "#25619c"
+      }
+    }
+  ]
+}
