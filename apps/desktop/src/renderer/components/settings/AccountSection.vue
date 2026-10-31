@@ -135,10 +135,9 @@ function startDelete() {
 
 <template>
   <section data-testid="account">
-    <p class="text-muted-foreground mb-6 max-w-prose text-sm">{{ t("account.intro") }}</p>
-
-    <!-- Signed out: an address, then its code, then (for a new address) yes to an account. -->
-    <SettingGroup v-if="!signedIn" :title="t('account.title')">
+    <!-- Signed out: what an account is for, an address, then its code, then (for a new address) yes to an account.
+         Signed in, the page starts with the sign-in methods: the user knows what it is for. -->
+    <SettingGroup v-if="!signedIn" :title="t('account.title')" :description="t('account.intro')">
       <SignInForm setting="account" />
     </SettingGroup>
 
