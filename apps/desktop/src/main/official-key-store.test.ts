@@ -64,8 +64,11 @@ describe("the Tavora key saved on this PC", () => {
   it("Forget key deletes it", async () => {
     const store = new OfficialKeyStore(userData, encryptor());
     await store.save(generateKeyPairSync("ed25519").privateKey);
+    // A save that failed half-way leaves a sealed .tmp copy; Forget removes that too.
+    await writeFile(`${file()}.tmp`, "sealed");
     await store.forget();
     expect(store.hasKey()).toBe(false);
+    expect(existsSync(`${file()}.tmp`)).toBe(false);
     expect(existsSync(file())).toBe(false);
     expect(await store.load()).toBeNull();
   });

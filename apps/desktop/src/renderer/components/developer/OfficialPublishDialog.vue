@@ -53,7 +53,7 @@ async function upload() {
 }
 
 function cancel() {
-  if (!uploading.value) void act({ type: "official-publish-cancel" });
+  if (!uploading.value && !busy.value) void act({ type: "official-publish-cancel" });
 }
 </script>
 

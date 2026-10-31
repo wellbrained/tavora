@@ -84,7 +84,7 @@ const officialRows = computed(() => official.value.overview?.rows ?? []);
 const STATUS_BADGE = { ready: "success", published: "outline", catalogueNewer: "outline", waitForRelease: "warning", ciPending: "info", ciFailed: "destructive" } as const;
 const hostChanges = computed(() => {
   const overview = official.value.overview;
-  if (!overview?.hostChanges.length) return "";
+  if (!overview?.hostChanges.length || !overview.rows.some((row) => row.status === "waitForRelease")) return "";
   const shown = overview.hostChanges.slice(0, 3).map((file) => file.replace(/^apps\/desktop\/src\//, ""));
   const more = overview.hostChanges.length - shown.length;
   const files = more > 0 ? t("officialPublish.hostChangesMore", { files: shown.join(", "), count: more }) : shown.join(", ");
@@ -104,8 +104,16 @@ async function forgetKey() {
   if (result.ok) showToast(t("officialPublish.forgotten"));
 }
 
+// Checked each time the group comes into view: on opening the page, or once Let's go shows the developer tools.
+watch(
+  () => official.value.available && showTools.value,
+  (shown) => {
+    if (shown) checkOfficial();
+  },
+  { immediate: true },
+);
+
 onMounted(() => {
-  if (official.value.available && showTools.value) checkOfficial();
   // The developer side and the contact settings as the service has them now; quietly, offline is fine.
   if (signedIn.value) {
     void act({ type: "account-refresh" }, { quiet: true });
@@ -184,7 +192,8 @@ onMounted(() => {
         </Button>
       </template>
       <p v-if="official.checkError" class="text-destructive py-4 text-sm" role="alert" data-testid="official-publish-error">{{ official.checkError }}</p>
-      <p v-else-if="official.overview && !officialRows.length" class="text-muted-foreground py-4 text-sm" data-testid="official-publish-none">{{ t("officialPublish.none") }}</p>
+      <p v-else-if="!official.overview" class="text-muted-foreground py-4 text-sm" role="status">{{ t("officialPublish.checking") }}</p>
+      <p v-else-if="!officialRows.length" class="text-muted-foreground py-4 text-sm" data-testid="official-publish-none">{{ t("officialPublish.none") }}</p>
       <ul v-if="officialRows.length" class="flex flex-col" :aria-label="t('officialPublish.title')" data-testid="official-publish">
         <li v-for="row in officialRows" :key="row.id" class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b py-4 last:border-b-0" :data-testid="`official-row-${row.id}`" :data-status="row.status">
           <span class="module-tile size-10" aria-hidden="true"><ModuleIcon :module-id="row.id" size="size-[34px]" /></span>

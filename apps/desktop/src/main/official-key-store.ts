@@ -50,8 +50,15 @@ export class OfficialKeyStore {
     if (!this.saved && !existsSync(this.file)) return null;
     // The system's protection is off for now (a locked keyring): keep the file, ask for the key file this time.
     if (!this.encryptor.isAvailable()) return null;
+    // A file that can't be read right now (held by a virus scan) stays; only one that doesn't open is deleted.
+    let sealed: Buffer;
     try {
-      const key = createPrivateKey(this.encryptor.decrypt(await readFile(this.file)));
+      sealed = await readFile(this.file);
+    } catch {
+      return null;
+    }
+    try {
+      const key = createPrivateKey(this.encryptor.decrypt(sealed));
       if (key.asymmetricKeyType !== "ed25519") throw new Error("not a publisher key");
       this.saved = true;
       return key;
@@ -61,8 +68,9 @@ export class OfficialKeyStore {
     }
   }
 
-  /** Deletes the saved key. */
+  /** Deletes the saved key, and a half-written copy a failed save left. */
   async forget(): Promise<void> {
+    await rm(`${this.file}.tmp`, { force: true });
     await rm(this.file, { force: true });
     this.saved = existsSync(this.file);
   }

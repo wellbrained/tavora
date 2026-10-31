@@ -1292,6 +1292,8 @@ export const de: Record<keyof typeof en, string> = {
   "officialPublish.error.notPrepared": "Nichts ist bereit zum Veröffentlichen. Fang neu an.",
   "officialPublish.error.changed": "Der Build hat sich nach der Vorschau geändert. Fang neu an.",
   "officialPublish.error.remember": "Der Schlüssel lässt sich auf diesem PC nicht speichern.",
+  "officialPublish.error.localPack": "Pack-Code oder Schema dieser Kopie weichen vom letzten Release ab. Veröffentliche aus einer Kopie von main.",
+  "officialPublish.error.changes": "Was sich seit dem letzten Release geändert hat, lässt sich nicht feststellen.",
   "browser.error.cert": "Das Sicherheitszertifikat dieser Seite ist nicht vertrauenswürdig, deshalb öffnet Tavora sie nicht.",
   "browser.error.notFound": "Tavora konnte diese Seite nicht finden. Prüfe die Adresse.",
   "browser.error.offline": "Du bist offline.",

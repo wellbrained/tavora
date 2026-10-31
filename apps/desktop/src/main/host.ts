@@ -465,6 +465,8 @@ export class Host {
   private readonly officialKeys: OfficialKeyStore;
   /** Settings > Development's Built-in modules list and the publish in progress (state.officialPublish). */
   private officialPublish: Omit<OfficialPublishView, "available" | "key"> = { checking: false, overview: null, checkError: null, run: null };
+  /** Sign and upload was pressed and hasn't finished (picking the key, signing, uploading): Cancel waits for it. */
+  private officialConfirming = false;
   /** Stream overlays and hotkeys for module actions (streaming.ts); made by Host.create once the Host is there, before any module panel opens. */
   private streaming!: Streaming;
   /** Module overlay pages shown over the game in front (game-overlay-service.ts). */
@@ -1988,7 +1990,8 @@ export class Host {
   /** Dev builds only: works out which built-in modules have something to publish (Settings > Development). */
   private async checkOfficialPublish(): Promise<void> {
     const trust = this.officialPublishTrust();
-    if (!trust || this.officialPublish.checking) return;
+    // Not while a build runs: both fetch in the same checkout.
+    if (!trust || this.officialPublish.checking || (this.officialPublish.run && !this.officialPublish.run.preview)) return;
     this.officialPublish = { ...this.officialPublish, checking: true, checkError: null };
     this.pushState();
     try {
@@ -2009,7 +2012,7 @@ export class Host {
   private async publishOfficialModule(moduleId: string): Promise<void> {
     const trust = this.officialPublishTrust();
     if (!trust) throw new UserError("officialPublish.error.notBuiltIn");
-    if (this.officialPublish.run) throw new UserError("officialPublish.error.busy");
+    if (this.officialPublish.run || this.officialPublish.checking) throw new UserError("officialPublish.error.busy");
     const name = this.officialPublish.overview?.rows.find((row) => row.id === moduleId)?.name ?? moduleId;
     const publisher = this.officialPublisherFor(trust);
     this.officialPublish = { ...this.officialPublish, run: { moduleId, name, step: "fetch", preview: null } };
@@ -2036,6 +2039,16 @@ export class Host {
     const run = this.officialPublish.run;
     const publisher = this.officialPublisher;
     if (!trust || !run?.preview || !publisher?.preview) throw new UserError("officialPublish.error.notPrepared");
+    if (this.officialConfirming) throw new UserError("officialPublish.error.busy");
+    this.officialConfirming = true;
+    try {
+      return await this.signAndUpload(trust, publisher, run, remember);
+    } finally {
+      this.officialConfirming = false;
+    }
+  }
+
+  private async signAndUpload(trust: OfficialUpdates, publisher: OfficialPublisher, run: NonNullable<OfficialPublishView["run"]>, remember: boolean): Promise<string | void> {
     let key = await this.officialKeys.load();
     // A saved key that may no longer sign (revoked, or the pins moved on) is not kept.
     if (key && !trust.keyTrusted(fingerprint(key))) {
@@ -2067,7 +2080,7 @@ export class Host {
       return `${published.id} ${published.version}`;
     } catch (error) {
       // A wrong key keeps the preview, to try another; anything else ends the run.
-      this.officialPublish = { ...this.officialPublish, run: publisher.preview ? { ...run, step: "pack" } : null };
+      this.officialPublish = { ...this.officialPublish, run: publisher.preview && this.officialPublish.run ? { ...run, step: "pack" } : null };
       throw error;
     } finally {
       this.pushState();
@@ -2083,7 +2096,8 @@ export class Host {
 
   /** Stops the build in progress (its own catch ends the run) or throws the preview away. */
   private async cancelOfficialPublish(): Promise<void> {
-    if (!this.officialPublisher) return;
+    // Signing or uploading can't be stopped; the dialog stays until it is done.
+    if (!this.officialPublisher || this.officialConfirming || this.officialPublisher.uploading) return;
     await this.officialPublisher.cancel();
     if (this.officialPublish.run?.preview) this.officialPublish = { ...this.officialPublish, run: null };
     this.pushState();

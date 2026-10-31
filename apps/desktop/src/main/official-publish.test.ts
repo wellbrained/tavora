@@ -11,8 +11,12 @@ const SHA = "a".repeat(40);
 const manifest = (version: string, extra: object = {}) => ({ id: "tavora.notes", name: "Notes", version, apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] }, changelog: "CHANGELOG.json", ...extra });
 
 interface World {
-  /** Files changed since the last release (git diff --name-only). */
+  /** Files changed on main since the last release (git diff --name-only release commit). */
   changed: string;
+  /** Files this checkout changed since the last release (git diff --name-only release). */
+  local: string;
+  /** git grep fails. */
+  grepFails: boolean;
   checks: { status: string; conclusion: string | null }[];
   version: string;
   shipped: string;
@@ -32,7 +36,7 @@ let key: KeyObject;
 let trustedKey: string;
 
 beforeEach(async () => {
-  world = { changed: "", checks: [{ status: "completed", conclusion: "success" }], version: "0.7.0", shipped: "0.6.1", listed: { version: "0.6.1" }, calls: [], uploads: [], worktrees: [], buildGate: null };
+  world = { changed: "", local: "", grepFails: false, checks: [{ status: "completed", conclusion: "success" }], version: "0.7.0", shipped: "0.6.1", listed: { version: "0.6.1" }, calls: [], uploads: [], worktrees: [], buildGate: null };
   userData = await mkdtemp(path.join(tmpdir(), "tavora-publish-test-"));
   temp = path.join(userData, "temp");
   await mkdir(temp);
@@ -47,22 +51,36 @@ afterEach(async () => {
 
 const run: Run = async (command, args, options) => {
   world.calls.push([command.replace(/.cmd$/, ""), ...args].join(" "));
-  const [first, second] = args;
+  // git -c name=value … : the settings come first.
+  let rest = args;
+  while (command === "git" && rest[0] === "-c") rest = rest.slice(2);
+  const [first, second] = rest;
   if (command === "git") {
     if (first === "fetch") return "";
     if (first === "rev-parse") return `${SHA}\n`;
     if (first === "tag") return "v0.23.0\nv0.22.0\nv0.9.0\n";
     if (first === "ls-tree" && second === "--name-only") return "modules/notes\nmodules/shared\nmodules/playground\n";
     if (first === "ls-tree") return "apps/desktop/src/main/index.ts\napps/desktop/src/shared/wire.ts\napps/desktop/src/shared/patch-notes.ts\n";
-    if (first === "grep") return `${SHA}:apps/desktop/src/main/index.ts:import { send } from "../shared/wire";\n`;
+    if (first === "grep") {
+      if (world.grepFails) throw new Error("git grep failed");
+      return `${SHA}:apps/desktop/src/main/index.ts:import { send } from "../shared/wire";\n`;
+    }
     if (first === "show") {
       if (second?.endsWith("modules/shared/tavora.module.json")) throw new Error("missing");
       if (second?.endsWith("modules/playground/tavora.module.json")) return JSON.stringify(manifest("9.9.9", { id: "tavora.playground" }));
       return JSON.stringify(manifest(second?.startsWith("v0.23.0") ? world.shipped : world.version));
     }
-    if (first === "diff") return world.changed;
+    if (first === "diff") {
+      // `diff --name-only <release> -- …` is this checkout; with a commit it is main. Only the paths asked for.
+      const paths = rest.slice(rest.indexOf("--") + 1);
+      const local = rest[3] === "--";
+      return (local ? world.local : world.changed)
+        .split("\n")
+        .filter((file) => file && paths.some((root) => file.startsWith(`${root}/`)))
+        .join("\n");
+    }
     if (first === "worktree" && second === "add") {
-      const dir = args[3]!;
+      const dir = rest[3]!;
       world.worktrees.push(dir);
       const module = path.join(dir, "modules", "notes");
       await mkdir(path.join(module, "dist"), { recursive: true });
@@ -227,6 +245,58 @@ describe("publishing a built-in module from a dev build", () => {
     release();
     expect(one.preview).toBeNull();
     expect(await readdir(temp)).toEqual([]);
+  });
+
+  it("refuses when this checkout's pack code or schema isn't the released one, since it signs with them", async () => {
+    world.local = "packages/pack/src/signature.ts";
+    await expect(publisher().prepare("tavora.notes")).rejects.toMatchObject({ key: "officialPublish.error.localPack" });
+    world.local = "apps/desktop/src/renderer/App.vue\npackages/pack/src/pack.test.ts";
+    await publisher().prepare("tavora.notes");
+  });
+
+  it("refuses when it can't tell which shared files the host loads, rather than letting a change through", async () => {
+    world.changed = "apps/desktop/src/shared/wire.ts";
+    world.grepFails = true;
+    await expect(publisher().prepare("tavora.notes")).rejects.toMatchObject({ key: "officialPublish.error.changes" });
+    expect(world.calls.find((call) => call.includes(" grep "))).toContain("--no-color");
+  });
+
+  it("a change to the pack format blocks like the SDK", async () => {
+    world.changed = "packages/pack/src/zip.ts";
+    await expect(publisher().prepare("tavora.notes")).rejects.toMatchObject({ key: "officialPublish.error.waitForRelease" });
+  });
+
+  it("refuses a same-size change after the preview, and can't be cancelled while uploading", async () => {
+    const one = publisher();
+    await one.prepare("tavora.notes");
+    const page = path.join(world.worktrees[0]!, "modules", "notes", "dist", "index.html");
+    await writeFile(page, "<p>NOTES</p>");
+    await expect(one.finish(key)).rejects.toMatchObject({ key: "officialPublish.error.changed" });
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const slow = publisher({
+      upload: async (_key, zip) => {
+        await gate;
+        world.uploads.push(zip);
+        return { id: "tavora.notes", version: world.version, sha256: "b".repeat(64), status: "published", reasons: [] };
+      },
+    });
+    await slow.prepare("tavora.notes");
+    const steps: string[] = [];
+    const finishing = slow.finish(key, (step) => steps.push(step));
+    while (!steps.includes("upload")) await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(slow.uploading).toBe(true);
+    await slow.cancel();
+    expect(slow.preview).not.toBeNull();
+    release();
+    await finishing;
+    expect(world.uploads).toHaveLength(1);
+  });
+
+  it("takes only release tags that are on main", async () => {
+    await publisher().check();
+    expect(world.calls).toContain("git tag --list v* --merged origin/main --sort=-v:refname");
   });
 
   it("sweeps worktrees an earlier run left behind once they are old, never a fresh one", async () => {

@@ -26,8 +26,10 @@ export const GITHUB_REPO = "wellbrained/tavora";
 const BRANCH = "main";
 
 const APP = "apps/desktop/src";
-/** The module protocol and the manifest rules: any source change here means the shipped app may not understand the module. */
-export const PROTOCOL_PATHS = ["packages/sdk/src", "packages/module-schema/src"] as const;
+/** The module protocol, the manifest rules and the zip and signature format: any source change here means the shipped app may not understand the module. */
+export const PROTOCOL_PATHS = ["packages/sdk/src", "packages/module-schema/src", "packages/pack/src"] as const;
+/** What this dev Tavora itself uses to check, pack and sign: it must be the released code, or the zip may not be one the shipped app accepts. */
+export const SIGNING_PATHS = ["packages/pack/src", "packages/module-schema/src"] as const;
 /** The host code: everything in the main process and the preloads. */
 export const HOST_PATHS = [`${APP}/main`, `${APP}/preload`] as const;
 /** Shared code: it counts when the main process or a preload loads it (import graph), not when only the renderer does. */
@@ -56,18 +58,36 @@ export type Run = (command: string, args: readonly string[], options: RunOptions
 export const runCommand: Run = (command, args, { cwd, timeoutMs = 600_000, signal }) =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new PublishCancelled());
-    const shell = process.platform === "win32" && command.endsWith(".cmd");
-    const child = execFile(command, [...args], { cwd, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, shell, windowsHide: true }, (error, stdout, stderr) => {
+    const windows = process.platform === "win32";
+    const shell = windows && command.endsWith(".cmd");
+    let timedOut = false;
+    // Elsewhere the command leads its own process group, so stop() reaches what it started too.
+    // execFile hands `detached` on to spawn; its types just don't list it.
+    const options = { cwd, encoding: "utf8" as const, maxBuffer: 32 * 1024 * 1024, shell, windowsHide: true, detached: !windows };
+    const child = execFile(command, [...args], options, (error, stdout, stderr) => {
+      clearTimeout(timer);
       signal?.removeEventListener("abort", stop);
       if (signal?.aborted) return reject(new PublishCancelled());
       if (!error) return resolve(stdout);
-      reject(new Error(`${command} ${args[0] ?? ""} failed: ${(stderr || error.message).trim().slice(0, 500)}`));
+      const why = timedOut ? "took too long" : (stderr || error.message).trim().slice(0, 500);
+      reject(new Error(`${command} ${args[0] ?? ""} failed: ${why}`));
     });
-    // Killing a shell on Windows leaves what it started running; taskkill ends the whole tree.
+    // Ends the whole tree: killing only a shell (Windows) or the leader (elsewhere) leaves pnpm and its builds running.
     function stop() {
-      if (process.platform === "win32" && child.pid) execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }, () => undefined);
-      else child.kill();
+      if (!child.pid) return;
+      if (windows) execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }, () => undefined);
+      else {
+        try {
+          process.kill(-child.pid, "SIGTERM");
+        } catch {
+          child.kill();
+        }
+      }
     }
+    const timer = setTimeout(() => {
+      timedOut = true;
+      stop();
+    }, timeoutMs);
     signal?.addEventListener("abort", stop, { once: true });
   });
 
@@ -177,6 +197,8 @@ interface Prepared {
   moduleDir: string;
   commit: string;
   preview: OfficialPublishPreview;
+  /** SHA-256 of each file the preview showed, by name: the zip must hold exactly these. */
+  hashes: Map<string, string>;
 }
 
 type Git = (...args: string[]) => Promise<string>;
@@ -184,6 +206,8 @@ type Git = (...args: string[]) => Promise<string>;
 export class OfficialPublisher {
   private readonly run: Run;
   private busy = false;
+  /** Signing or uploading: nothing can stop it now. */
+  private finishing = false;
   private prepared: Prepared | null = null;
   private abort: AbortController | null = null;
 
@@ -198,7 +222,7 @@ export class OfficialPublisher {
     const candidates = (await this.candidates(git, head)).filter((item) => compareModuleVersions(item.version, item.shipped) > 0);
     if (!candidates.length) return { ...head, rows: [], hostChanges: [] };
     const hostChanges = await this.hostChanges(git, head);
-    const ci = await this.ciState(head.commit);
+    const ci = await this.ciState(head.commit, undefined);
     const rows = await Promise.all(
       candidates.map(async (item): Promise<OfficialPublishRow> => {
         const listed = (await this.listed(item.id))?.version ?? null;
@@ -231,6 +255,9 @@ export class OfficialPublisher {
       const head = await this.head(git);
 
       step("check");
+      // This dev Tavora packs and signs with its own copy of the pack code and the manifest rules.
+      const local = (await git("diff", "--name-only", head.release, "--", ...SIGNING_PATHS)).split(/\r?\n/).filter((file) => file && !isTestFile(file));
+      if (local.length) throw new UserError("officialPublish.error.localPack");
       const item = (await this.candidates(git, head)).find((candidate) => candidate.id === moduleId);
       if (!item) throw new UserError("officialPublish.error.notBuiltIn");
       // Newer than the module in the app people have, and than the catalogue.
@@ -239,7 +266,7 @@ export class OfficialPublisher {
       if (listed && compareModuleVersions(item.version, listed) <= 0) throw new UserError("officialPublish.error.notNewer", { version: item.version, other: listed });
       // Host code that changed since the release means the shipped app can't run this build yet.
       if ((await this.hostChanges(git, head)).length) throw new UserError("officialPublish.error.waitForRelease");
-      const ci = await this.ciState(head.commit);
+      const ci = await this.ciState(head.commit, abort.signal);
       if (ci !== "green") throw new UserError("officialPublish.error.ciNotGreen");
 
       step("worktree");
@@ -272,7 +299,7 @@ export class OfficialPublisher {
         size: files.reduce((sum, file) => sum + file.data.length, 0),
       };
       if (abort.signal.aborted) throw new PublishCancelled();
-      this.prepared = { worktree, moduleDir, commit: head.commit, preview };
+      this.prepared = { worktree, moduleDir, commit: head.commit, preview, hashes: new Map(files.map((file) => [file.name, sha256Of(file.data)])) };
       worktree = undefined;
       return preview;
     } catch (error) {
@@ -298,6 +325,7 @@ export class OfficialPublisher {
     const prepared = this.prepared;
     if (!prepared || this.busy) throw new UserError("officialPublish.error.notPrepared");
     this.busy = true;
+    this.finishing = true;
     let done = false;
     try {
       onStep("sign");
@@ -310,7 +338,7 @@ export class OfficialPublisher {
       // What goes up is what the preview showed: same names, same sizes, nothing added.
       const packed = readZip(zip).filter((file) => file.name !== SIGNATURE_FILE);
       const shown = prepared.preview.files;
-      if (packed.length !== shown.length || packed.some((file, index) => file.name !== shown[index]!.name || file.data.length !== shown[index]!.size)) {
+      if (packed.length !== shown.length || packed.some((file, index) => file.name !== shown[index]!.name || prepared.hashes.get(file.name) !== sha256Of(file.data))) {
         done = true;
         throw new UserError("officialPublish.error.changed");
       }
@@ -329,12 +357,19 @@ export class OfficialPublisher {
       return result;
     } finally {
       this.busy = false;
+      this.finishing = false;
       if (done) await this.discard();
     }
   }
 
+  /** Signing or uploading right now: Cancel can't stop that. */
+  get uploading(): boolean {
+    return this.finishing;
+  }
+
   /** Stops a prepare in progress, or throws away a prepared build. */
   async cancel(): Promise<void> {
+    if (this.finishing) return;
     this.abort?.abort();
     if (!this.busy) await this.discard();
   }
@@ -390,7 +425,7 @@ export class OfficialPublisher {
       throw new UserError("officialPublish.error.fetch");
     });
     const commit = await git("rev-parse", `origin/${BRANCH}`);
-    const tags = (await git("tag", "--list", "v*", "--sort=-v:refname")).split(/\r?\n/).filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag));
+    const tags = (await git("tag", "--list", "v*", "--merged", `origin/${BRANCH}`, "--sort=-v:refname")).split(/\r?\n/).filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag));
     if (!tags[0]) throw new UserError("officialPublish.error.noRelease");
     return { commit, release: tags[0] };
   }
@@ -431,19 +466,19 @@ export class OfficialPublisher {
     // Only a shared file needs the import graph; main and preload files count anyway.
     if (!changed.some((file) => file.startsWith(`${SHARED_PATH}/`) && !isTestFile(file))) return blockingChanges(changed, new Set());
     const files = (await git("ls-tree", "-r", "--name-only", commit, "--", ...HOST_PATHS, SHARED_PATH)).split(/\r?\n/).filter(Boolean);
-    const grep = await git("grep", "-I", "-E", "-e", "(from|import)[[:space:]]*\\(?[[:space:]]*[\"'][.]{1,2}/", commit, "--", ...HOST_PATHS, SHARED_PATH).catch((error: unknown) => {
+    // Plain output whatever git is set to; a failure refuses, since counting nothing would let host changes through.
+    const grep = await git("-c", "color.ui=never", "-c", "core.quotePath=false", "grep", "--no-color", "-I", "-E", "-e", "(from|import)[[:space:]]*\\(?[[:space:]]*[\"'][.]{1,2}/", commit, "--", ...HOST_PATHS, SHARED_PATH).catch((error: unknown) => {
       if (error instanceof PublishCancelled) throw error;
-      // git grep exits 1 when nothing matches.
-      return "";
+      throw new UserError("officialPublish.error.changes");
     });
     return blockingChanges(changed, hostSharedFiles(grep, files));
   }
 
   /** Whether CI finished green for that exact commit, still runs (or hasn't started), or failed. */
-  private async ciState(commit: string): Promise<"green" | "pending" | "failed"> {
+  private async ciState(commit: string, signal: AbortSignal | undefined): Promise<"green" | "pending" | "failed"> {
     let answer: string;
     try {
-      answer = await this.run("gh", ["api", `repos/${GITHUB_REPO}/commits/${commit}/check-runs?per_page=100`], { cwd: this.options.repo, timeoutMs: 60_000, signal: this.abort?.signal });
+      answer = await this.run("gh", ["api", `repos/${GITHUB_REPO}/commits/${commit}/check-runs?per_page=100`], { cwd: this.options.repo, timeoutMs: 60_000, signal });
     } catch (error) {
       if (error instanceof PublishCancelled) throw error;
       throw new UserError("officialPublish.error.ci");
@@ -504,6 +539,10 @@ export class OfficialPublisher {
       return [];
     }
   }
+}
+
+function sha256Of(data: Uint8Array): string {
+  return createHash("sha256").update(data).digest("hex");
 }
 
 /** Deletes a folder with retries: on Windows an antivirus scan or a closing build tool can hold a file for a moment. */

@@ -1290,6 +1290,8 @@ export const en = {
   "officialPublish.error.notPrepared": "Nothing is ready to publish. Start again.",
   "officialPublish.error.changed": "The build changed after the preview. Start again.",
   "officialPublish.error.remember": "Can't save the key on this PC.",
+  "officialPublish.error.localPack": "This checkout's pack code or schema differs from the last release. Publish from a checkout of main.",
+  "officialPublish.error.changes": "Can't work out what changed since the last release.",
   "browser.error.cert": "This site's security certificate isn't trusted, so Tavora won't open it.",
   "browser.error.notFound": "Tavora couldn't find this site. Check the address.",
   "browser.error.offline": "You're offline.",
