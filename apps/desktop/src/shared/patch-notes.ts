@@ -30,27 +30,16 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.23.14",
     date: "2026-10-31",
-    title: "Nicer device names",
+    title: "New themes and nicer device names",
     notes: [
-      "Your Mac shows up by its own name in your devices, not its network name.",
-      "Network endings like .fritz.box or .local are gone from device names.",
-    ],
-    prs: [
-      { number: 549, title: "Devices go by a friendly name" },
-    ],
-    tags: ["accounts"],
-  },
-  {
-    version: "0.23.13",
-    date: "2026-10-31",
-    title: "Three new themes",
-    notes: [
-      "Pick Dusk Rose, Garnet or Amethyst in Settings > Appearance, each in Dark and Light.",
+      "Three new themes: pick Dusk Rose, Garnet or Amethyst in Settings > Appearance, each in Dark and Light.",
+      "Your devices show their own names, like your Mac's, without network endings such as .fritz.box or .local.",
     ],
     prs: [
       { number: 550, title: "Add the Dusk Rose, Garnet and Amethyst themes" },
+      { number: 549, title: "Devices go by a friendly name" },
     ],
-    tags: ["themes"],
+    tags: ["accounts", "themes"],
   },
   {
     version: "0.23.12",
