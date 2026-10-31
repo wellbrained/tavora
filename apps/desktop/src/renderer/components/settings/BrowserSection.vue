@@ -51,8 +51,7 @@ function clear(scope: "workspace" | "shared") {
 </script>
 
 <template>
-  <p class="text-muted-foreground mb-6 max-w-prose text-sm">{{ t("settings.browser.intro") }}</p>
-  <SettingGroup :title="t('settings.heading.sites')">
+  <SettingGroup :title="t('settings.heading.sites')" :description="t('settings.browser.intro')">
     <SettingRow
       v-for="list in LISTS"
       :key="list.id"
