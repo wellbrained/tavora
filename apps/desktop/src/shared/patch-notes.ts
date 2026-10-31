@@ -49,23 +49,13 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "Each setting says in one short line what it does. Rest the pointer on a dotted name for more.",
       "Settings you haven't seen yet say New.",
       "Click your picture in the rail for your profile: name, initials and ranks, plus your account, the cloud copy and messages.",
-    ],
-    prs: [
-      { number: 544, title: "Settings: a short menu with one row per setting, and a profile dialog" },
-    ],
-    tags: ["accounts", "catalog", "icons", "overlays", "privacy", "profile", "publishing", "sdk", "service", "settings", "website"],
-  },
-  {
-    version: "0.23.10",
-    date: "2026-10-31",
-    title: "Smoother built-in module updates",
-    notes: [
       "An updated built-in module now starts once in its open panels, not twice.",
     ],
     prs: [
+      { number: 544, title: "Settings: a short menu with one row per setting, and a profile dialog" },
       { number: 538, title: "Start an updated built-in module's panels once" },
     ],
-    tags: ["modules"],
+    tags: ["accounts", "catalog", "icons", "modules", "overlays", "privacy", "profile", "publishing", "sdk", "service", "settings", "website"],
   },
   {
     version: "0.23.9",
