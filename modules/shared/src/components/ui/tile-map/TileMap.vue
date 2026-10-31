@@ -103,8 +103,11 @@ function showPins(ids: readonly string[]) {
   const least = Math.max(paneSize.value.width, paneSize.value.height, 256)
   pane.value?.showArea(pinsArea(found, found.length === 1 ? least : Math.min(least, props.source.size / 16)), { padding: props.cell })
 }
-/** The world point in the middle of the map and the zoom: what to save to come back to the same view. */
-const camera = computed(() => pane.value?.center ?? { x: props.source.size / 2, y: props.source.size / 2, zoom: view.value.zoom })
+/**
+ * The world point in the middle of the map and the zoom: what to save to come back to the same view. Null until the
+ * map has been shown and measured, so a view saved too early never replaces the first fit.
+ */
+const camera = computed(() => (paneSize.value.width > 0 && paneSize.value.height > 0 && pane.value ? pane.value.center : null))
 function setCamera(next: { x: number, y: number, zoom: number }) {
   pane.value?.setCenter(next, next.zoom)
 }
