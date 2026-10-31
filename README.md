@@ -146,7 +146,7 @@ pnpm release --allow-patch            # publish a patch release
 pnpm release                         # publish an approved x.y.0 release
 ```
 
-The script currently requires `--allow-patch` for patch releases. It checks versions, tags and patch notes, runs automated checks, packages and starts the app, then requires checks of the **new installed version**: startup, game add/remove, opening a module, and Settings. The server publishes the installer and blockmap before atomically switching `latest.yml`; the release is tagged afterward. Finally, verify that a previously installed version updates successfully. Deployment scripts live in `apps/desktop/deploy`.
+The script currently requires `--allow-patch` for patch releases. It checks versions, tags and patch notes, runs automated checks, packages and starts the app, then requires checks of the **new installed version**: startup, game add/remove, opening a module, and Settings. The server publishes the installer and blockmap before atomically switching `latest.yml`; the release is tagged afterward. Finally, verify that a previously installed version updates successfully. The upload uses the restricted `tavora-updates` key; every deploy (update feed, docs, API, Tavora Admin) has its own key that can only hand over one upload, set up as described in [deploy/README.md](deploy/README.md).
 
 ## License and security
 
