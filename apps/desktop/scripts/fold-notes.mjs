@@ -46,11 +46,12 @@ export function formatEntry(entry, eol = "\n") {
 
 /**
  * patch-notes.ts with the entries since `previous` folded into one. `entries` is PATCH_NOTES as the file exports it.
- * Returns { text, folded } (folded: the versions folded away), or { problem }.
+ * Returns { text, folded } (folded: the versions folded away), { nothing } when there is nothing to fold (the normal
+ * case right after a release; not an error), or { problem }.
  */
 export function foldText(text, entries, previous) {
   const fold = unreleased(entries, previous);
-  if (fold.length < 2) return { problem: `Nothing to fold: ${fold.length ? `only ${fold[0].version} is` : "no entry is"} newer than ${previous ?? "the start"}.` };
+  if (fold.length < 2) return { nothing: `Nothing to fold: ${fold.length ? `only ${fold[0].version} is` : "no entry is"} newer than ${previous ?? "the start"}.` };
   if (entries.slice(0, fold.length).some((entry, i) => entry !== fold[i])) return { problem: "The patch-notes entries are not newest first; sort them before folding." };
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
   // Only the folded entries and the one after them need this layout; older ones are never touched.
@@ -84,6 +85,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const previous = lastReleased(git("tag", "--list", "v*").split(/\r?\n/).filter(Boolean));
   const { PATCH_NOTES } = await import(pathToFileURL(file).href);
   const result = foldText(readFileSync(file, "utf8"), PATCH_NOTES, previous);
+  if (result.nothing) {
+    console.log(result.nothing);
+    process.exit(0);
+  }
   if (result.problem) {
     console.error(result.problem);
     process.exit(1);
