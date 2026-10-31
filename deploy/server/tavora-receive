@@ -187,12 +187,12 @@ case "$job" in
     prune /srv/tavora-api/releases 5
     ;;
   admin)
-    # site/ is the built Tavora Admin; proxy.mjs the gateway proxy (installed by root only if it changed).
-    only '(site|site/.+|proxy\.mjs)'
-    [[ -f "$unpacked/site/index.html" && -s "$unpacked/proxy.mjs" ]] || die 'the upload is missing site/index.html or proxy.mjs'
+    # site/ is the built Tavora Admin, nothing else: the gateway proxy holds CoreHub's login secret, so it is
+    # only ever installed by the maintainer as root (tavora-admin's proxy/setup-server.sh), never by a deploy.
+    only '(site|site/.+)'
+    [[ -f "$unpacked/site/index.html" ]] || die 'the upload is missing site/index.html'
     target="/srv/tavora-admin/releases/$id"
     [[ ! -e "$target" ]] || die "release $id exists already"
-    mv "$unpacked/proxy.mjs" "$home/proxy.mjs"
     mv "$unpacked/site" "$target"
     sudo -n /usr/local/sbin/tavora-admin-switch "$id" || { drop_unless_live /srv/tavora-admin "$target"; die 'the switch failed; the previous release stays live'; }
     prune /srv/tavora-admin/releases 3

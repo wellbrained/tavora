@@ -10,7 +10,7 @@ hand over one upload** (decided 2026-10-31, CoreHub #421). No deploy key gets a 
 | updates | `tavora-updates` | `TAVORA_UPDATES_SSH_KEY` | `/srv/tavora-updates` (a newer version only) |
 | docs | `tavora-docs` | `TAVORA_DOCS_SSH_KEY` | `/srv/tavora-docs` |
 | api | `tavora-api-deploy` | `TAVORA_API_SSH_KEY` | `/srv/tavora-api/releases`, then a switch and restart through `tavora-api-switch` |
-| admin | `tavora-admin-deploy` | `TAVORA_ADMIN_SSH_KEY` | `/srv/tavora-admin/releases` and the gateway proxy, through `tavora-admin-switch` |
+| admin | `tavora-admin-deploy` | `TAVORA_ADMIN_SSH_KEY` | `/srv/tavora-admin/releases`, then a switch through `tavora-admin-switch` (the panel only; the gateway proxy is installed by hand with tavora-admin's `proxy/setup-server.sh`) |
 
 `TAVORA_DEPLOY_HOST` is the server's tailnet address (no user). The root key is only for the maintainer's own
 admin work and is never in a `TAVORA_*` setting.
@@ -30,9 +30,14 @@ admin work and is never in a `TAVORA_*` setting.
 - The update feed refuses a version that is not newer than the live one. A bad release is fixed by a newer one.
 
 What a stolen deploy key can still do (accepted 2026-10-31): the API key runs code as the `tavora-api` service
-(that is what a deploy is), the docs key can change the docs, and the updates key can ship a bad installer
-until updates are signed (parked until the first public release). The tailnet-only rule and the passphrases
-below make using a stolen key harder.
+(that is what a deploy is), the docs key can change the docs, the Admin key can change the panel, and the
+updates key can ship a bad installer until updates are signed (parked until the first public release). The
+tailnet-only rule and the passphrases below make using a stolen key harder.
+
+**Open until it is fixed:** Caddy's admin API listens on `127.0.0.1:2019` without a password, and every
+program on the server can rewrite Caddy's config through it, code shipped with the API key included. That
+reaches the update feed, the Hetzner DNS token and the TLS keys. Moving it to a socket only root and CoreHub
+can open is its own todo (decided 2026-10-31).
 
 ## Change the server setup
 
