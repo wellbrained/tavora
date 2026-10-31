@@ -65,7 +65,8 @@ async function setup() {
   let catalogIds = new Set<string>();
   const catalog = { index: [] as CatalogEntry[], zips: new Map<string, Buffer>() };
   const counted: string[] = [];
-  const state = { online: true, binFails: false, onClose: (_moduleId: string) => {}, grantChanges: 0 };
+  // movedByReload: modules whose folder the next look moves (a built-in module's first update), so it restarts their panels itself.
+  const state = { online: true, binFails: false, onClose: (_moduleId: string) => {}, grantChanges: 0, movedByReload: new Set<string>(), autoUpdate: true };
   const publish = (entry: CatalogEntry, zip: Buffer) => {
     catalog.index = [entry];
     catalog.zips.set(entry.zip.sha256, zip);
@@ -93,7 +94,7 @@ async function setup() {
     },
     online: () => state.online,
     grantsChanged: () => void state.grantChanges++,
-    autoUpdateModules: () => true,
+    autoUpdateModules: () => state.autoUpdate,
     firstKey: (key) => key,
     panels: {
       reload: (moduleId) => steps.push(`reload panels ${moduleId}`),
@@ -113,6 +114,10 @@ async function setup() {
       modules = await discoverModules({ local: [userModules], tavoraVersion: TAVORA });
       applyOwners(modules, userModules, records);
       catalogIds = new Set([...modules.keys()].filter((id) => records[id]?.catalog && records[id]?.id === id));
+      const moved = new Set(state.movedByReload);
+      for (const id of moved) steps.push(`reload panels ${id}`);
+      state.movedByReload.clear();
+      return moved;
     },
     introduce: async (owner) => void steps.push(`introduce ${owner}`),
   });
@@ -131,6 +136,16 @@ describe("ModuleLifecycle", () => {
     expect(await lifecycle.installFile(await zipFile(zipOf("1.0.0", key)))).toBe(ID);
     expect(steps).toEqual([`introduce ${fingerprint(key)}`, "look for modules"]);
     steps.length = 0;
+    await lifecycle.installFile(await zipFile(zipOf("1.1.0", key)));
+    expect(steps).toEqual([`introduce ${fingerprint(key)}`, "look for modules", `reload panels ${ID}`]);
+  });
+
+  it("starts an update's panels once when looking for modules already did (its folder moved)", async () => {
+    const { lifecycle, steps, state, zipFile } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    await lifecycle.installFile(await zipFile(zipOf("1.0.0", key)));
+    steps.length = 0;
+    state.movedByReload.add(ID);
     await lifecycle.installFile(await zipFile(zipOf("1.1.0", key)));
     expect(steps).toEqual([`introduce ${fingerprint(key)}`, "look for modules", `reload panels ${ID}`]);
   });
@@ -256,6 +271,22 @@ describe("ModuleLifecycle", () => {
     expect(grants.get(owner, ID)).toMatchObject({ version: "2.0.0", network: ["api.example.com"] });
     expect(steps).toEqual([`introduce ${owner}`, "look for modules", `reload panels ${ID}`, `reload panels ${ID}`]);
     expect(lifecycle.updates.pending(ID)).toBeUndefined();
+  });
+
+  it("starts the panels once for a waiting update that asks for nothing new", async () => {
+    const { lifecycle, publish, steps, state } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const owner = fingerprint(key);
+    publish(listing("1.0.0", zipOf("1.0.0", key), owner), zipOf("1.0.0", key));
+    await lifecycle.installFromCatalog(ID);
+    // With automatic updates off, an update waits even when it asks for nothing new.
+    state.autoUpdate = false;
+    const update = zipOf("2.0.0", key);
+    publish(listing("2.0.0", update, owner), update);
+    expect((await lifecycle.updates.check()).waiting).toHaveLength(1);
+    steps.length = 0;
+    await lifecycle.applyUpdate(ID, "2.0.0");
+    expect(steps).toEqual([`introduce ${owner}`, "look for modules", `reload panels ${ID}`]);
   });
 
   it("installs an update that asks for nothing new during the check", async () => {
