@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.19",
+    date: "2026-10-31",
+    title: "Clearer theme choice",
+    notes: [
+      "The theme choice shows a bigger preview and the theme's line under its name.",
+      "In the theme list, the theme you use says \"In use\", and the list has a scrollbar.",
+    ],
+    prs: [
+      { number: 560, title: "Bigger preview and a scrollbar in the theme choice" },
+    ],
+    tags: ["settings", "themes"],
+  },
+  {
     version: "0.23.18",
     date: "2026-10-31",
     title: "A tidier theme choice",
