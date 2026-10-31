@@ -2,10 +2,10 @@ name: Checks
 
 # Typecheck, unit tests and build run for every pull request to main, for every
 # push to main and for release tags, and next to them a Windows job installs and
-# starts the packaged app (packaged-start, below). The e2e suite takes about 14 minutes, so it
-# runs only for release tags or when started by hand from the Actions tab (Run
-# workflow, pick the branch). A new push to the same pull request cancels the run
-# before it.
+# starts the packaged app (packaged-start, below). The e2e suite runs in shards
+# on Windows (e2e, below) for release tags, for pull requests that change what it tests
+# (e2e-scope) and when started by hand from the Actions tab (Run workflow, pick
+# the branch). A new push to the same pull request cancels the run before it.
 on:
   pull_request:
     branches: [main]
@@ -30,8 +30,6 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    env:
-      E2E: ${{ (github.event_name == 'workflow_dispatch' && inputs.e2e) || startsWith(github.ref, 'refs/tags/') }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -40,21 +38,83 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Before anything is built, as in a fresh checkout: `pnpm dev` builds the host, the main process and every repo
+      # module once and stops (dev.mjs --check). A broken dev start went unnoticed for a day after #494.
+      - name: pnpm dev builds from a clean checkout
+        run: pnpm dev --check
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
-      # Ubuntu 24.04 blocks the unprivileged user namespaces Chromium's sandbox
-      # uses. Re-enable them rather than running Electron with --no-sandbox, so
-      # the e2e gate tests run with the real OS sandbox.
-      - if: env.E2E == 'true'
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      # xvfb-run's default screen is 640x480, which squeezes docked panels into tabs.
-      - if: env.E2E == 'true'
-        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm test:e2e
-      - if: failure() && env.E2E == 'true'
+
+  # Whether this run needs the e2e suite: always for release tags, by the checkbox when started by hand, and for a pull
+  # request that changes the app, a module or the kit, the SDK, the packer, the manifest schema, the examples, the
+  # dependencies or this file. Twice a broken e2e test only showed up while a release was running (0.23.0, 0.23.9).
+  # Change notes alone don't count. If GitHub can't list the files, the suite runs.
+  e2e-scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.scope.outputs.run }}
+    steps:
+      - id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          PR: ${{ github.event.pull_request.number }}
+          BY_HAND: ${{ inputs.e2e }}
+          PATHS: ^(apps/desktop/|modules/|examples/|packages/(sdk|pack|module-schema)/|patches/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|\.github/workflows/ci\.yml$)
+        run: |
+          if [[ "$REF" == refs/tags/* ]]; then run=true
+          elif [[ "$EVENT" == workflow_dispatch ]]; then run=$BY_HAND
+          elif [[ "$EVENT" == pull_request ]]; then
+            if files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename'); then
+              if grep -v '^apps/desktop/changes/' <<<"$files" | grep -qE "$PATHS"; then run=true; else run=false; fi
+            else
+              run=true
+            fi
+          else run=false
+          fi
+          echo "e2e: $run"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  # Windows, like the users and `pnpm release`: on Ubuntu the suite needed well over an hour and 17 tests failed only
+  # there. Split over 8 runners side by side, each shard takes about 5 minutes with its own install (from the pnpm
+  # cache) and build, rather than waiting on the check job.
+  e2e:
+    needs: e2e-scope
+    if: needs.e2e-scope.outputs.run == 'true'
+    name: e2e (${{ matrix.shard }}/8)
+    runs-on: windows-2025
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # A small screen squeezes docked panels into tabs.
+      - name: Screen 1920x1080
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Get-CimInstance Win32_VideoController | Select-Object CurrentHorizontalResolution, CurrentVerticalResolution
+      - run: pnpm --filter @tavora/desktop test:e2e --shard=${{ matrix.shard }}/8
+      - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-results
+          name: e2e-results-${{ matrix.shard }}
           path: apps/desktop/test-results
           retention-days: 7
 

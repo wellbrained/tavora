@@ -11,6 +11,8 @@ export default defineConfig({
   globalSetup: "./test/e2e/global-setup.ts",
   timeout: 60_000,
   workers: 1,
+  // On GitHub's runners a test that fails is tried once more; one that then passes is listed as flaky, not failed.
+  retries: process.env.GITHUB_ACTIONS ? 1 : 0,
   reporter: "list",
   outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR ?? "test-results",
 });

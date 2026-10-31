@@ -33,7 +33,7 @@ test("a user who can't import from Steam is told what happened and what to do", 
     await expect(error).toHaveText("Enter a steamcommunity.com profile link.");
 
     // A private profile says where to change it.
-    answer = { status: 502, body: { error: "Steam did not return a game list. Check that Game details are public on the profile.", code: "no-game-list" } };
+    answer = { status: 502, body: { error: "Steam did not return a game list. Check that Game details are public on the profile.", reason: "no-game-list" } };
     await lookUp("https://steamcommunity.com/id/someone");
     await expect(error).toContainText("Set Game details on your Steam profile to Public");
 

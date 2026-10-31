@@ -64,7 +64,7 @@ pnpm build
 pnpm dev
 ```
 
-`pnpm dev` opens Tavora with hot reload at `http://127.0.0.1:4000`. Use `pnpm dev --port <n>` to choose another port. Closing Tavora or pressing Ctrl+C ends the development session.
+`pnpm dev` opens Tavora with hot reload at `http://127.0.0.1:4000`. Use `pnpm dev --port <n>` to choose another port. `pnpm dev --check` builds everything once and stops without opening Tavora (CI runs it). Closing Tavora or pressing Ctrl+C ends the development session.
 
 - Host UI edits reload in place.
 - Main-process and preload edits restart Tavora automatically.

@@ -42,6 +42,8 @@ test("the Memory card lists the apps", async () => {
 });
 
 test("Traffic in the menu shows this week and the last months, as Windows counts them", async () => {
+  // GitHub's Windows Server runners keep no Data usage record, so Windows never answers there; it runs on a real PC.
+  test.skip(!!process.env.GITHUB_ACTIONS, "no Data usage record on GitHub's runners");
   const { app, page } = await launch();
   try {
     await openWorkspace(page, "poe2");
