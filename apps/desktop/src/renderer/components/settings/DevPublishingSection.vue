@@ -4,7 +4,7 @@
 // the account; signed out, the page says so.
 import { computed, onMounted } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { account, act, developerKeys, openSettings } from "../../host";
+import { account, act, developerKeys, openProfile } from "../../host";
 import { t } from "../../i18n";
 import ModuleDeveloperSettings from "../developer/ModuleDeveloperSettings.vue";
 import RecoveryKeySettings from "./RecoveryKeySettings.vue";
@@ -34,7 +34,7 @@ onMounted(() => {
   </template>
   <SettingGroup v-else-if="accounts">
     <SettingRow :label="t('settings.dev-publishing.signIn')" :description="t('settings.dev-publishing.signInHint')">
-      <Button data-testid="dev-publishing-sign-in" @click="openSettings({ section: 'account' })">{{ t("catalog.reviews.signInButton") }}</Button>
+      <Button data-testid="dev-publishing-sign-in" @click="openProfile('account')">{{ t("catalog.reviews.signInButton") }}</Button>
     </SettingRow>
   </SettingGroup>
   <p v-else class="text-muted-foreground text-sm" data-testid="dev-publishing-none">{{ t("settings.dev-publishing.none") }}</p>

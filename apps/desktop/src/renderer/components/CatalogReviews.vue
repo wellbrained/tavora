@@ -6,7 +6,7 @@
 // and a reviewer's picture is a PNG the main process checked by its hash. Report sends only the review's id.
 import { computed, onMounted, ref } from "vue";
 import type { CatalogReviewsResult, CatalogReviewView } from "../../shared/host-api";
-import { act, api, dialog, openSettings } from "../host";
+import { act, api, dialog, openProfile } from "../host";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
@@ -99,7 +99,7 @@ async function report(review: CatalogReviewView) {
 
 function signIn() {
   dialog.value = null;
-  openSettings({ section: "account" });
+  openProfile("account");
 }
 
 const nameOf = (review: CatalogReviewView) => review.author.name ?? t("catalog.reviews.anonymous");

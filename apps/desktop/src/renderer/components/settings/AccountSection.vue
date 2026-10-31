@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// Settings > Account: the optional Tavora account. Signing in is an emailed
+// Profile dialog > Account: the optional Tavora account. Signing in is an emailed
 // code or a Discord login in the browser, never a password (SignInForm.vue). The main process
 // talks to the service and keeps the sign-in; this page only sees the sign-in
-// methods, the devices and where a sign-in is. What module developers need is in
-// Settings > Development (ModuleDeveloperSettings.vue).
+// methods, the devices and where a sign-in is. The cloud copy and messages are parts of
+// their own in the profile dialog; what module developers need is in Settings > Developer
+// (ModuleDeveloperSettings.vue).
 import { computed, onMounted, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { CodeInput, codeDigits } from "@tavora/official-ui/components/ui/code-input";
@@ -11,8 +12,6 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import type { AccountDevice, HostAction } from "../../../shared/host-api";
 import { account, act, confirmAction, prompt, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
-import CloudCopySettings from "./CloudCopySettings.vue";
-import MessagesSettings from "./MessagesSettings.vue";
 import RecoveryKeySettings from "./RecoveryKeySettings.vue";
 import SignInForm from "./SignInForm.vue";
 import SettingGroup from "./SettingGroup.vue";
@@ -232,11 +231,7 @@ function startDelete() {
 
       </SettingGroup>
 
-      <MessagesSettings />
-
       <RecoveryKeySettings />
-
-      <CloudCopySettings />
 
       <SettingGroup :title="t('account.heading.manage')">
       <SettingRow :label="t('account.signOut')" :description="t('account.signOutHint')">
@@ -283,9 +278,6 @@ function startDelete() {
       </SettingRow>
       </SettingGroup>
     </template>
-
-    <!-- Signed out, the cloud copy can still go in a folder of your own. -->
-    <CloudCopySettings v-if="!signedIn" />
 
     <p v-if="waitingDiscord" class="text-muted-foreground mt-4" role="status" data-testid="account-discord-waiting">{{ t("account.discord.waiting") }}</p>
     <p v-if="view && !view.canKeepSignIn" class="text-muted-foreground mt-4 text-sm" data-testid="account-cant-keep">{{ t("account.cantKeep") }}</p>

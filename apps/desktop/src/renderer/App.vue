@@ -4,6 +4,7 @@ import AddGameDialog from "./components/AddGameDialog.vue";
 import AddModuleDialog from "./components/AddModuleDialog.vue";
 import CloudCopyDialog from "./components/CloudCopyDialog.vue";
 import PairingDialog from "./components/PairingDialog.vue";
+import ProfileDialog from "./components/profile/ProfileDialog.vue";
 import CopyExampleDialog from "./components/developer/CopyExampleDialog.vue";
 import DeveloperStartDialog from "./components/developer/DeveloperStartDialog.vue";
 import RecoveryAskDialog from "./components/settings/RecoveryAskDialog.vue";
@@ -53,6 +54,8 @@ const toastPosition = computed(() => (settingsOpen.value && state.value ? state.
     </div>
 
     <SettingsDialog />
+    <!-- After Settings, so the account opened from a Settings page comes on top of it. -->
+    <ProfileDialog />
     <SearchDialog />
     <AddGameDialog v-if="dialog?.kind === 'add-game'" />
     <SteamImportDialog v-else-if="dialog?.kind === 'steam-import'" />

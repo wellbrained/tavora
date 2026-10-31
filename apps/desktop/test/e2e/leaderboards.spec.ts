@@ -53,10 +53,10 @@ test.afterAll(async () => {
   await rm(stateDir, { recursive: true, force: true }).catch(() => undefined);
 });
 
-/** Makes an account with an emailed code, in Settings > Account, and closes Settings. */
+/** Makes an account with an emailed code, in the profile dialog's Account, and closes the dialog. */
 async function signUp(page: Page, email: string) {
-  await page.getByTestId("rail-settings").click();
-  await page.getByTestId("settings-nav-account").click();
+  await page.getByTestId("rail-profile").click();
+  await page.getByTestId("profile-nav-account").click();
   await page.getByTestId("account-email").fill(email);
   await page.getByTestId("account-send-code").click();
   let code = "";
@@ -72,7 +72,7 @@ async function signUp(page: Page, email: string) {
   await page.getByTestId("account-age").check();
   await page.getByTestId("account-create").click();
   await expect(page.getByTestId("account")).toContainText(email);
-  await page.getByTestId("settings-close").click();
+  await page.getByTestId("profile-close").click();
 }
 
 /** A real key press in the probe's page, so what follows counts as the user's own click. */
@@ -156,19 +156,20 @@ test("a module's results go public only after the user says yes in its panel, an
     expect(await call(app, "leaderboards.submit", { board: "fastest", results: [time] })).toMatchObject({ ok: true, result: { accepted: [time.id] } });
     expect(await call(app, "leaderboards.mine", { day })).toMatchObject({ ok: true, result: { boards: [{ id: "daily" }, { id: "fastest", periods: { all: { rank: 1, of: 1, value: 83 } } }] } });
 
-    // The profile card lists catalog modules only, so a development copy never shows there; the card can be hidden and shown.
+    // The profile lists catalog modules only, so a development copy never shows there; the ranks can be hidden and shown.
     await page.getByTestId("rail-profile").click();
     await expect(page.getByTestId("profile-ranks")).toContainText("Join a game's leaderboard");
-    await page.getByTestId("profile-ranks-hide").click();
-    await expect(page.getByTestId("profile-ranks")).toContainText("Ranks hidden");
-    await page.getByTestId("profile-ranks-show").click();
+    await page.getByTestId("profile-ranks-shown").click();
+    await expect(page.getByTestId("profile-ranks")).not.toContainText("Join a game's leaderboard");
+    await page.getByTestId("profile-ranks-shown").click();
     await expect(page.getByTestId("profile-ranks")).toContainText("Join a game's leaderboard");
     await page.keyboard.press("Escape");
-    await expect(page.getByTestId("profile-card")).toHaveCount(0);
+    await expect(page.getByTestId("profile-dialog")).toHaveCount(0);
 
     // Leaving from Settings takes the user off and deletes the results there.
     await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-integrations").click();
+    await page.getByTestId("settings-nav-connections").click();
+    await page.getByTestId("connection-leaderboards-toggle").click();
     await page.getByTestId(`leaderboards-leave-${PROBE}`).click();
     await page.getByTestId("confirm-submit").click();
     await expect(page.getByTestId("confirm")).toHaveCount(0);
@@ -193,8 +194,8 @@ test("signed out, the question offers to sign in, and the module says offline in
     await clickInModule(app, PROBE, "probe-show");
     await expect(page.getByTestId("leaderboard-question")).toContainText("Sign in to show your results");
     await page.getByTestId("leaderboard-question-yes").click();
-    await expect(page.getByTestId("settings-nav-account")).toHaveAttribute("aria-current", "page");
-    await page.getByTestId("settings-close").click();
+    await expect(page.getByTestId("profile-nav-account")).toHaveAttribute("aria-current", "page");
+    await page.getByTestId("profile-close").click();
     await expect.poll(async () => (await answers(app, "show")).length).toBe(1);
     expect((await answers(app, "show"))[0]).toMatchObject({ ok: true, result: { signedIn: false, shown: false } });
   } finally {

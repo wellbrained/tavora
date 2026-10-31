@@ -1,61 +1,86 @@
 <script setup lang="ts">
-// Settings: the sections in groups on the left, with a search that finds any setting; the chosen
-// section on the right, under a title that stays put while it scrolls. Each section is its own
+// Settings: a short menu of pages in groups on the left, with a search that finds any setting, and About & updates
+// at its foot; the chosen page on the right, under a title that stays put while it scrolls. A page that opens from a
+// row (SUB_PAGES) has a way back in its title; the developer pages are tabs under one entry. Each page is its own
 // component; settings-index.ts lists them and every setting the search can find.
-import { RotateCw, ScrollText, Search, Settings as SettingsIcon, X } from "@lucide/vue";
+import { ChevronRight, Info, RotateCw, ScrollText, Search, Settings as SettingsIcon, X } from "@lucide/vue";
 import { computed, nextTick, provide, ref, watch } from "vue";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
+import { Tabs, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import { rank } from "@/lib/search";
 import { cn } from "@/lib/utils";
-import { act, hiddenSettingIds, hiddenSettings, makesModules, menuHiddenSettings, refreshReleaseStatuses, releasePendingCount, settingsOpen, settingsTarget, state } from "../../host";
+import { act, hiddenSettingIds, hiddenSettings, makesModules, openSettings, refreshReleaseStatuses, releasePendingCount, settingsOpen, settingsTarget, state } from "../../host";
 import { formatDate, t } from "../../i18n";
 import AboutSection from "./AboutSection.vue";
-import AccountSection from "./AccountSection.vue";
 import AppearanceSection from "./AppearanceSection.vue";
 import BrowserSection from "./BrowserSection.vue";
+import ConnectionsSection from "./ConnectionsSection.vue";
 import DevelopmentSection from "./DevelopmentSection.vue";
 import DevFoldersSection from "./DevFoldersSection.vue";
 import DevHelpSection from "./DevHelpSection.vue";
 import DevPublishingSection from "./DevPublishingSection.vue";
-import WorkspacesSection from "./WorkspacesSection.vue";
+import GamesSection from "./GamesSection.vue";
 import GeneralSection from "./GeneralSection.vue";
-import IntegrationsSection from "./IntegrationsSection.vue";
 import ModulesSection from "./ModulesSection.vue";
-import OnlineSection from "./OnlineSection.vue";
+import OverlaysSection from "./OverlaysSection.vue";
 import PatchNotesSection from "./PatchNotesSection.vue";
 import ShortcutsSection from "./ShortcutsSection.vue";
-import OverlaysSection from "./OverlaysSection.vue";
-import StreamingSection from "./StreamingSection.vue";
 import TrashSection from "./TrashSection.vue";
-import { DEVELOPER_SECTIONS, GROUPS, groupLabel, sectionLabel, settingEntries, type SettingsSection } from "./settings-index";
+import WorkspacesSection from "./WorkspacesSection.vue";
+import { hasNewSettings, markSeen } from "./new-settings";
+import {
+  ABOUT_SECTION,
+  DEVELOPER_SECTIONS,
+  DEVELOPER_TABS,
+  GROUPS,
+  SUB_PAGES,
+  groupLabel,
+  menuEntry,
+  menuLabel,
+  sectionLabel,
+  settingEntries,
+  type SettingsPlace,
+  type SettingsSection,
+} from "./settings-index";
 import { SETTINGS_PAGE_TITLE } from "./settings-page";
-
-/** The icon shown in the page header: the section's own, a magnifier for search results. */
-const headerIcon = computed(() => {
-  if (query.value.trim()) return Search;
-  if (section.value === "patch-notes") return ScrollText;
-  for (const group of GROUPS) for (const item of group.sections) if (item.id === section.value) return item.icon;
-  return SettingsIcon;
-});
 
 const section = ref<SettingsSection>("general");
 const query = ref("");
+/** The menu entry lit for the page. */
+const entry = computed(() => menuEntry(section.value));
+/** The page a sub-page opened from, for the way back in its title. */
+const parent = computed<SettingsSection | null>(() => (section.value in SUB_PAGES ? SUB_PAGES[section.value as keyof typeof SUB_PAGES] : null));
+/** The developer tabs show once the user makes modules; before, the page is Make modules with Let's go. */
+const devTabs = computed(() => entry.value === "development" && makesModules.value);
+
+/** The icon shown in the page header: the menu entry's own, a magnifier for search results. */
+const headerIcon = computed(() => {
+  if (query.value.trim()) return Search;
+  if (section.value === "patch-notes") return ScrollText;
+  if (entry.value === ABOUT_SECTION) return Info;
+  for (const group of GROUPS) for (const item of group.sections) if (item.id === entry.value) return item.icon;
+  return SettingsIcon;
+});
+
 /** What the page header says; a group with the same title leaves its own out. */
-const pageTitle = computed(() => (query.value.trim() ? t("settings.results.title") : sectionLabel(section.value, makesModules.value)));
+const pageTitle = computed(() => (query.value.trim() ? t("settings.results.title") : parent.value ? sectionLabel(section.value) : menuLabel(section.value, makesModules.value)));
 provide(SETTINGS_PAGE_TITLE, pageTitle);
 /** The setting a search result led to, tinted for a moment. */
 const highlight = ref<string | null>(null);
 let highlightTimer: ReturnType<typeof setTimeout> | undefined;
-/** The section's scrolling area, back at the top for every new section. */
+/** The page's scrolling area, back at the top for every new page. */
 const scroller = ref<HTMLElement | null>(null);
 
-// Settings opens where it was asked to: its first section, or a setting
-// found with Ctrl+K.
+// Settings opens where it was asked to: its first page, or a setting found with Ctrl+K.
 watch(settingsOpen, (open) => {
-  if (!open) return;
+  if (!open) {
+    markSeen(section.value);
+    return;
+  }
   query.value = "";
   void show(settingsTarget.value.section, settingsTarget.value.setting);
   void refreshReleaseStatuses();
@@ -66,8 +91,10 @@ watch(settingsTarget, (target) => {
 });
 
 async function show(target: SettingsSection, setting?: string) {
-  // A search led someone who doesn't make modules yet to a developer page: that is a start, so the menu shows the pages.
+  // A search led someone who doesn't make modules yet to a developer page: that is a start, so the tabs show.
   if (!makesModules.value && (DEVELOPER_SECTIONS as readonly string[]).includes(target)) void act({ type: "set-makes-modules", on: true }, { quiet: true });
+  // New marks of the page left go now; they stayed while the user was on it.
+  if (target !== section.value) markSeen(section.value);
   section.value = target;
   query.value = "";
   clearTimeout(highlightTimer);
@@ -83,27 +110,37 @@ async function show(target: SettingsSection, setting?: string) {
 
 const library = computed(() => state.value!.library);
 
-/** The categories on the left, in their groups; a counter shows where something is waiting. */
+/** The pages on the left, in their groups: a counter shows what waits for Publish, a New mark what's new. */
 const navGroups = computed<NavGroup[]>(() =>
   GROUPS.map((group) => ({
     heading: groupLabel(group.id),
-    items: group.sections
-      .filter((entry) => !menuHiddenSettings.value.has(entry.id))
-      .map((item) => ({
+    items: group.sections.map((item) => {
+      const fresh = item.id !== entry.value && hasNewSettings(item.id);
+      return {
         id: item.id,
-        label: sectionLabel(item.id, makesModules.value),
+        label: menuLabel(item.id, makesModules.value),
         icon: item.icon,
-        badge: item.id === "trash" && library.value.trash.length ? library.value.trash.length : item.id === "development" && releasePendingCount.value ? releasePendingCount.value : undefined,
-        badgeTestid: item.id === "development" ? "settings-nav-development-count" : undefined,
+        badge: item.id === "development" && releasePendingCount.value ? releasePendingCount.value : fresh ? t("settings.new") : undefined,
+        badgeAccent: fresh && !(item.id === "development" && releasePendingCount.value),
+        badgeTestid: item.id === "development" && releasePendingCount.value ? "settings-nav-development-count" : fresh ? `settings-nav-${item.id}-new` : undefined,
         testid: `settings-nav-${item.id}`,
-      })),
+      };
+    }),
   })),
 );
 const version = computed(() => state.value!.appVersion);
 
+/** Where a result is: its page, or for a page opened from a row, the way there. */
+function placeLabel(place: SettingsPlace): string {
+  if (place === "account") return `${t("profile.label")} › ${sectionLabel(place)}`;
+  if (place in SUB_PAGES) return `${menuLabel(SUB_PAGES[place as keyof typeof SUB_PAGES])} › ${sectionLabel(place)}`;
+  if ((DEVELOPER_TABS as readonly string[]).includes(place) && place !== "development") return `${menuLabel(place)} › ${sectionLabel(place)}`;
+  return menuLabel(place, makesModules.value);
+}
+
 interface Result {
   id: string;
-  section: SettingsSection;
+  section: SettingsPlace;
   label: string;
   description: string;
   keywords: string[];
@@ -112,18 +149,24 @@ interface Result {
 // Settings, plus the workspaces in Trash, so "valheim" finds a removed one.
 const results = computed<Result[]>(() => {
   if (!query.value.trim()) return [];
-  const trashed = library.value.trash.map((entry) => ({
-    id: `trash-${entry.workspace.id}`,
+  const trashed = library.value.trash.map((item) => ({
+    id: `trash-${item.workspace.id}`,
     section: "trash" as const,
-    label: entry.workspace.name,
-    description: t("settings.results.trashUntil", { date: formatDate(entry.purgeAt) }),
+    label: item.workspace.name,
+    description: t("settings.results.trashUntil", { date: formatDate(item.purgeAt) }),
     keywords: [],
   }));
   return rank([...settingEntries(hiddenSettings.value, hiddenSettingIds.value), ...trashed], query.value, (item) => ({
     name: item.label,
-    extra: [item.description, sectionLabel(item.section), ...item.keywords],
+    extra: [item.description, placeLabel(item.section), ...item.keywords],
   }));
 });
+
+/** A result leads to its page; the account is in the profile dialog. */
+function open(result: Result) {
+  if (result.section === "account") openSettings({ section: "account", setting: result.id });
+  else void show(result.section, result.id);
+}
 
 const resultsAnnouncement = computed(() => {
   const text = query.value.trim();
@@ -138,7 +181,7 @@ function onSearchKey(event: KeyboardEvent) {
     event.stopPropagation();
     query.value = "";
   } else if (event.key === "Enter" && results.value[0]) {
-    void show(results.value[0].section, results.value[0].id);
+    open(results.value[0]);
   }
 }
 </script>
@@ -167,21 +210,24 @@ function onSearchKey(event: KeyboardEvent) {
             @keydown="onSearchKey"
           />
         </div>
-        <NavList :model-value="query ? null : section" :label="t('settings.sections')" :groups="navGroups" @select="(id: string) => show(id as SettingsSection)" />
+        <NavList :model-value="query ? null : entry" :label="t('settings.sections')" :groups="navGroups" @select="(id: string) => show(id as SettingsSection)" />
+        <!-- About & updates, with the version: rarely needed, so it sits at the foot. -->
         <button
           type="button"
           :class="
             cn(
-              'text-muted-foreground hover:bg-accent hover:text-foreground mt-auto rounded-lg px-3 py-2 text-left text-xs tabular-nums',
-              !query && section === 'patch-notes' && 'bg-primary/10 text-foreground',
+              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mt-auto flex h-9 flex-none items-center gap-3 rounded-lg border-t px-3 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
+              !query && entry === 'about' && 'bg-primary/10 text-foreground',
             )
           "
-          :title="t('settings.version')"
-          :aria-label="`Tavora ${version}, ${t('settings.version')}`"
-          data-testid="settings-version"
-          @click="show('patch-notes')"
+          :aria-current="!query && entry === 'about' ? 'page' : undefined"
+          :aria-label="`${t('settings.section.about')}, Tavora ${version}`"
+          data-testid="settings-nav-about"
+          @click="show('about')"
         >
-          Tavora {{ version }}
+          <Info class="size-4 flex-none" :stroke-width="1.75" aria-hidden="true" />
+          <span class="min-w-0 flex-1 truncate">{{ t("settings.section.about") }}</span>
+          <span class="text-xs tabular-nums" data-testid="settings-version">{{ version }}</span>
         </button>
       </div>
 
@@ -194,7 +240,15 @@ function onSearchKey(event: KeyboardEvent) {
             <span class="bg-primary/15 text-primary flex size-9 flex-none items-center justify-center rounded-lg" aria-hidden="true">
               <component :is="headerIcon" class="size-5" :stroke-width="1.75" />
             </span>
-            <h2 class="truncate text-xl font-semibold" data-testid="settings-heading">{{ pageTitle }}</h2>
+            <h2 class="flex min-w-0 items-center gap-2 text-xl font-semibold">
+              <template v-if="parent && !query.trim()">
+                <button type="button" class="text-muted-foreground hover:text-foreground flex-none rounded-md font-medium" data-testid="settings-back" @click="show(parent)">
+                  {{ menuLabel(parent) }}
+                </button>
+                <ChevronRight class="text-muted-foreground size-4 flex-none" :stroke-width="1.75" aria-hidden="true" />
+              </template>
+              <span class="truncate" data-testid="settings-heading">{{ pageTitle }}</span>
+            </h2>
           </div>
           <DialogClose as-child>
             <Button variant="ghost" size="icon" class="flex-none" data-testid="settings-close" :aria-label="t('settings.close')" :title="t('common.close')">
@@ -207,7 +261,7 @@ function onSearchKey(event: KeyboardEvent) {
              first group sits right under the header. -->
         <p class="sr-only" role="status">{{ resultsAnnouncement }}</p>
         <div ref="scroller" class="settings-scroll relative min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]" data-testid="settings-body">
-          <div class="px-6 pt-8 pb-12 lg:px-10">
+          <div class="px-6 pt-6 pb-12 lg:px-10">
             <template v-if="query.trim()">
               <p v-if="!results.length" class="text-muted-foreground" data-testid="settings-no-results">{{ t("settings.results.none", { query: query.trim() }) }}</p>
               <ul v-else class="-mx-3 flex flex-col gap-1" :aria-label="t('settings.results.title')" data-testid="settings-results">
@@ -216,33 +270,42 @@ function onSearchKey(event: KeyboardEvent) {
                     type="button"
                     class="hover:bg-accent focus-visible:bg-accent flex w-full flex-col gap-1 rounded-lg px-3 py-3 text-left"
                     :data-testid="`settings-result-${result.id}`"
-                    @click="show(result.section, result.id)"
+                    @click="open(result)"
                   >
-                    <span class="text-primary text-xs font-medium">{{ sectionLabel(result.section) }}</span>
+                    <span class="text-primary text-xs font-medium">{{ placeLabel(result.section) }}</span>
                     <span class="font-medium">{{ result.label }}</span>
                     <span class="text-muted-foreground text-sm">{{ result.description }}</span>
                   </button>
                 </li>
               </ul>
             </template>
-            <AccountSection v-else-if="section === 'account'" :highlight="highlight" />
-            <GeneralSection v-else-if="section === 'general'" :highlight="highlight" />
-            <AppearanceSection v-else-if="section === 'appearance'" :highlight="highlight" />
-            <OnlineSection v-else-if="section === 'online'" :highlight="highlight" />
-            <ShortcutsSection v-else-if="section === 'shortcuts'" />
-            <AboutSection v-else-if="section === 'about'" :highlight="highlight" @patch-notes="show('patch-notes')" />
-            <ModulesSection v-else-if="section === 'modules'" :highlight="highlight" />
-            <IntegrationsSection v-else-if="section === 'integrations'" :highlight="highlight" />
-            <StreamingSection v-else-if="section === 'streaming'" :highlight="highlight" />
-            <OverlaysSection v-else-if="section === 'overlays'" :highlight="highlight" />
-            <BrowserSection v-else-if="section === 'browser'" :highlight="highlight" />
-            <DevelopmentSection v-else-if="section === 'development'" :highlight="highlight" @show="show" />
-            <DevFoldersSection v-else-if="section === 'dev-folders'" :highlight="highlight" />
-            <DevPublishingSection v-else-if="section === 'dev-publishing'" :highlight="highlight" />
-            <DevHelpSection v-else-if="section === 'dev-help'" :highlight="highlight" />
-            <WorkspacesSection v-else-if="section === 'workspaces'" :highlight="highlight" />
-            <TrashSection v-else-if="section === 'trash'" :highlight="highlight" />
-            <PatchNotesSection v-else-if="section === 'patch-notes'" />
+            <template v-else>
+              <!-- The developer pages, as tabs; Your modules counts what waits for Publish. -->
+              <Tabs v-if="devTabs" :model-value="section" class="mb-6" @update:model-value="(id) => show(id as SettingsSection)">
+                <TabsList class="h-10 w-full justify-start gap-2" :aria-label="t('settings.nav.development')">
+                  <TabsTrigger v-for="tab in DEVELOPER_TABS" :key="tab" :value="tab" class="px-3" :data-testid="`settings-tab-${tab}`">
+                    {{ sectionLabel(tab) }}
+                    <Badge v-if="tab === 'development' && releasePendingCount" variant="secondary" class="text-primary py-0 tabular-nums">{{ releasePendingCount }}</Badge>
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <GeneralSection v-if="section === 'general'" :highlight="highlight" />
+              <AppearanceSection v-else-if="section === 'appearance'" :highlight="highlight" />
+              <GamesSection v-else-if="section === 'games'" :highlight="highlight" @show="show" />
+              <ShortcutsSection v-else-if="section === 'shortcuts'" />
+              <ModulesSection v-else-if="section === 'modules'" :highlight="highlight" />
+              <ConnectionsSection v-else-if="section === 'connections'" :highlight="highlight" />
+              <OverlaysSection v-else-if="section === 'overlays'" :highlight="highlight" />
+              <BrowserSection v-else-if="section === 'browser'" :highlight="highlight" />
+              <DevelopmentSection v-else-if="section === 'development'" :highlight="highlight" @show="show" />
+              <DevFoldersSection v-else-if="section === 'dev-folders'" :highlight="highlight" />
+              <DevPublishingSection v-else-if="section === 'dev-publishing'" :highlight="highlight" />
+              <DevHelpSection v-else-if="section === 'dev-help'" :highlight="highlight" />
+              <AboutSection v-else-if="section === 'about'" :highlight="highlight" @patch-notes="show('patch-notes')" />
+              <WorkspacesSection v-else-if="section === 'workspaces'" :highlight="highlight" />
+              <TrashSection v-else-if="section === 'trash'" :highlight="highlight" />
+              <PatchNotesSection v-else-if="section === 'patch-notes'" />
+            </template>
           </div>
         </div>
 
@@ -275,7 +338,7 @@ function onSearchKey(event: KeyboardEvent) {
   border-radius: 4px;
 }
 /* The menu fits a normal window; there it scrolls by wheel or keys without a bar beside it. */
-@media (min-height: 860px) {
+@media (min-height: 640px) {
   .settings-menu::-webkit-scrollbar {
     width: 0;
   }

@@ -86,8 +86,8 @@ async function codeFor(email: string): Promise<string> {
 test("a user creates an account with an emailed code, sees this PC, and signs out", async () => {
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: apiUrl } });
   try {
-    await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-account").click();
+    await page.getByTestId("rail-profile").click();
+    await page.getByTestId("profile-nav-account").click();
 
     await page.getByTestId("account-email").fill("user@example.com");
     await page.getByTestId("account-send-code").click();
@@ -122,8 +122,8 @@ test("a user creates an account with an emailed code, sees this PC, and signs ou
 test("a user creates a Discord-only account in the browser, adds an email, and the last way in stays", async () => {
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: apiUrl, TAVORA_DISCORD_AUTHORIZE_URL: `${discordUrl}/oauth2/authorize` } });
   try {
-    await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-account").click();
+    await page.getByTestId("rail-profile").click();
+    await page.getByTestId("profile-nav-account").click();
 
     await page.getByTestId("account-discord-sign-in").click();
     // A new Discord login: the app asks, with the age tick box.
@@ -206,8 +206,8 @@ test("a developer chooses a public name and links a key file with tavora-pack li
   await writeFile(keyFile, generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }));
   const project = await moduleProject("keyfile.tracker");
   try {
-    await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-account").click();
+    await page.getByTestId("rail-profile").click();
+    await page.getByTestId("profile-nav-account").click();
     await page.getByTestId("account-email").fill("developer@example.com");
     await page.getByTestId("account-send-code").click();
     await page.getByTestId("account-code").fill(await codeFor("developer@example.com"));
@@ -215,12 +215,15 @@ test("a developer chooses a public name and links a key file with tavora-pack li
     await page.getByTestId("account-age").check();
     await page.getByTestId("account-create").click();
     await expect(page.getByTestId("account-sign-out")).toBeVisible();
+    await page.getByTestId("profile-close").click();
 
-    // The developer settings are under Development > Publishing; linking a key file is part of publishing from CI.
+    // The developer settings are under Developer > Publishing; linking a key file is part of publishing from CI.
+    await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-development").click();
     // Not a developer yet: the tools show after Let's go.
     await page.getByTestId("development-start").click();
-    await page.getByTestId("settings-nav-dev-publishing").click();
+    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("settings-tab-dev-publishing").click();
     const developer = page.getByTestId("account-developer");
     await expect(developer).toBeVisible();
     await page.getByTestId("developer-ci-toggle").click();
@@ -284,9 +287,12 @@ test("Tavora keeps a developer's publisher key, and tavora-pack without a key fi
   const project = await moduleProject("keykeeper.tracker");
   try {
     await signIn(page, "keeper@example.com", true);
+    await page.getByTestId("profile-close").click();
+    await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-development").click();
     await page.getByTestId("development-start").click();
-    await page.getByTestId("settings-nav-dev-publishing").click();
+    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("settings-tab-dev-publishing").click();
     await page.getByTestId("developer-ci-toggle").click();
     await expect(page.getByTestId("developer-keys-none")).toBeVisible();
     await expect(page.getByTestId("developer-key-create")).toBeDisabled();
@@ -300,11 +306,16 @@ test("Tavora keeps a developer's publisher key, and tavora-pack without a key fi
     await expect(recovery).toHaveText(/^[0-9A-Z-]{40,}$/);
     const recoveryKey = await recovery.textContent();
     await page.getByTestId("recovery-key-saved").click();
-    await page.getByTestId("settings-nav-account").click();
+    await page.getByTestId("settings-close").click();
+    await page.getByTestId("rail-profile").click();
+    await page.getByTestId("profile-nav-account").click();
     await page.getByTestId("recovery-key-show").click();
     await expect(recovery).toHaveText(recoveryKey!);
     await page.getByTestId("recovery-key-saved").click();
-    await page.getByTestId("settings-nav-dev-publishing").click();
+    await page.getByTestId("profile-close").click();
+    await page.getByTestId("rail-settings").click();
+    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("settings-tab-dev-publishing").click();
     await page.getByTestId("developer-ci-toggle").click();
     const kept = page.getByTestId("developer-keys-list").locator("li");
     await expect(kept).toHaveCount(1);
@@ -323,10 +334,10 @@ test("Tavora keeps a developer's publisher key, and tavora-pack without a key fi
   }
 });
 
-/** Signs in to an account that exists already, from Settings > Account. */
+/** Signs in from the profile dialog's Account, making the account first with `create`. The dialog stays open. */
 async function signIn(page: import("@playwright/test").Page, email: string, create = false) {
-  await page.getByTestId("rail-settings").click();
-  await page.getByTestId("settings-nav-account").click();
+  await page.getByTestId("rail-profile").click();
+  await page.getByTestId("profile-nav-account").click();
   await page.getByTestId("account-email").fill(email);
   await page.getByTestId("account-send-code").click();
   await expect(page.getByTestId("account-code-sent")).toContainText(email);
@@ -349,6 +360,7 @@ test("the cloud copy takes one PC's workspaces to another, with the recovery key
   let key = "";
   try {
     await signIn(a.page, "copy@example.com", true);
+    await a.page.getByTestId("profile-nav-cloud-copy").click();
     await a.page.getByTestId("cloud-copy-on").click();
     await expect(a.page.getByTestId("cloud-copy-key-text")).toBeVisible();
     key = (await a.page.getByTestId("cloud-copy-key-text").textContent()) ?? "";
@@ -365,6 +377,7 @@ test("the cloud copy takes one PC's workspaces to another, with the recovery key
     // The account has a recovery key: signing in asks for it, and it can wait.
     await b.page.getByTestId("recovery-ask-later").click();
     await expect(b.page.getByTestId("recovery-ask")).toHaveCount(0);
+    await b.page.getByTestId("profile-nav-cloud-copy").click();
     await b.page.getByTestId("cloud-copy-on").click();
     await b.page.getByTestId("cloud-copy-key-input").fill(key);
     await b.page.getByTestId("cloud-copy-key-submit").click();
@@ -397,6 +410,7 @@ test("a new PC gets the recovery key from another PC, once both show the same co
   const b = await launch(undefined, [], { env, seed: false });
   try {
     await signIn(a.page, "pair@example.com", true);
+    await a.page.getByTestId("profile-nav-cloud-copy").click();
     await a.page.getByTestId("cloud-copy-on").click();
     await expect(a.page.getByTestId("cloud-copy-key-text")).toBeVisible();
     const key = (await a.page.getByTestId("cloud-copy-key-text").textContent())?.trim() ?? "";
@@ -457,6 +471,7 @@ test("when the cloud can't be reached the copy says so and Try again works once 
   const a = await launch(undefined, [], { env });
   try {
     await signIn(a.page, "offline@example.com", true);
+    await a.page.getByTestId("profile-nav-cloud-copy").click();
     await a.page.getByTestId("cloud-copy-on").click();
     await a.page.getByTestId("cloud-copy-key-saved").click();
     await expect(a.page.getByTestId("cloud-copy-status")).toContainText("Saved");
@@ -491,8 +506,8 @@ test("a cloud copy in a folder that went missing says so and offers another fold
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as unknown as typeof dialog.showOpenDialog;
     }, picked);
   try {
-    await a.page.getByTestId("rail-settings").click();
-    await a.page.getByTestId("settings-nav-account").click();
+    await a.page.getByTestId("rail-profile").click();
+    await a.page.getByTestId("profile-nav-cloud-copy").click();
 
     // A folder that isn't there at the start: nothing turns on, and the user hears why.
     await pick(path.join(a.userData, "never-existed"));

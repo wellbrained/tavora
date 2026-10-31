@@ -116,9 +116,10 @@ test("a module with the discord connector asks first, connects once approved and
     await clickInModule(app, DISCORD, "probe-join-11");
     await expect.poll(() => fake.commands.find((c) => c.cmd === "SELECT_VOICE_CHANNEL")?.args).toEqual({ channel_id: "11", force: true });
 
-    // Settings > Integrations > Discord lists the module (it asks for the connector).
+    // Settings > Connections > Discord lists the module (it asks for the connector).
     await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-integrations").click();
+    await page.getByTestId("settings-nav-connections").click();
+    await page.getByTestId("connection-discord-toggle").click();
     await expect(page.getByTestId(`discord-user-${DISCORD}`)).toBeVisible();
   } finally {
     await app.close();

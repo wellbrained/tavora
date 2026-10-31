@@ -106,7 +106,7 @@ function add(moduleId: string) {
 
 function settings() {
   dialog.value = null;
-  openSettings({ section: "online", setting: "online-search" });
+  openSettings({ section: "games", setting: "online-search" });
 }
 </script>
 

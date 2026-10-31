@@ -7,7 +7,7 @@ import { Label } from "@tavora/official-ui/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { MAX_NOTE_LENGTH, MODULE_REPORT_REASONS, type ModuleReportReason } from "../../../shared/conversations";
-import { account, act, openSettings, showToast } from "../../host";
+import { account, act, openProfile, showToast } from "../../host";
 import { t } from "../../i18n";
 import ModalDialog from "../ModalDialog.vue";
 
@@ -39,7 +39,7 @@ async function send() {
 
 function signIn() {
   emit("close");
-  openSettings({ section: "account" });
+  openProfile("account");
 }
 </script>
 

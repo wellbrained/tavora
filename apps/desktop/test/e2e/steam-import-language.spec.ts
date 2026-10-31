@@ -27,7 +27,7 @@ for (const [locale, texts] of [
     };
     try {
       await page.getByTestId("rail-settings").click();
-      await page.getByTestId("settings-nav-workspaces").click();
+      await page.getByTestId("settings-nav-games").click();
       await page.getByTestId("open-steam-import-settings").click();
       const error = page.getByTestId("steam-import-error");
 

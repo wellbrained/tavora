@@ -8,11 +8,10 @@ import { confirmAction, showToast, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import WorkspaceIcon from "../WorkspaceIcon.vue";
 import SettingGroup from "./SettingGroup.vue";
-import SteamSection from "./SteamSection.vue";
 
-// Settings > Workspaces: every workspace in one list, to move many to Trash at once
+// Settings > Games > Workspaces: every workspace in one list, to move many to Trash at once
 // (a Steam import can add hundreds). Shift-click ticks a run of workspaces. The
-// Steam import itself sits on top, as it is Tavora's own and not a module's.
+// Steam import is on Games.
 defineProps<{ highlight: string | null }>();
 
 const filter = ref("");
@@ -83,7 +82,6 @@ function removeSelected() {
 </script>
 
 <template>
-  <SteamSection :highlight="highlight" />
   <SettingGroup :title="t('settings.workspaces.listTitle')">
     <div :class="cn('-mx-5 border-b px-5 py-4 transition-colors duration-500 last:border-b-0', highlight === 'workspaces' && 'bg-primary/10')" data-setting="workspaces">
       <p class="text-muted-foreground text-sm">{{ t("settings.workspaces.intro") }}</p>

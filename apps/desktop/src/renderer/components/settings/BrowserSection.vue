@@ -24,6 +24,7 @@ const LISTS = [
     setting: "browser-shared-sites",
     label: () => t("settings.browser-shared-sites.label"),
     description: () => t("settings.browser-shared-sites.description"),
+    details: () => t("settings.browser-shared-sites.details"),
     empty: () => t("settings.browser.sharedEmpty"),
     sites: () => browser.value.sharedSites,
   },
@@ -32,6 +33,7 @@ const LISTS = [
     setting: "browser-adblock-off",
     label: () => t("settings.browser-adblock-off.label"),
     description: () => t("settings.browser-adblock-off.description"),
+    details: () => t("settings.browser-adblock-off.details"),
     empty: () => t("settings.browser.adblockEmpty"),
     sites: () => browser.value.adblockOff,
   },
@@ -51,27 +53,27 @@ function clear(scope: "workspace" | "shared") {
 <template>
   <p class="text-muted-foreground mb-6 max-w-prose text-sm">{{ t("settings.browser.intro") }}</p>
   <SettingGroup :title="t('settings.heading.sites')">
-    <div
+    <SettingRow
       v-for="list in LISTS"
       :key="list.id"
-      class="-mx-5 border-b px-5 py-4 transition-colors duration-500 last:border-b-0"
-      :class="highlight === list.setting && 'bg-primary/10'"
-      :data-setting="list.setting"
+      :label="list.label()"
+      :description="list.description()"
+      :details="list.details()"
+      :setting="list.setting"
+      :highlighted="highlight === list.setting"
     >
-      <div class="flex flex-col gap-0.5">
-        <span class="font-medium">{{ list.label() }}</span>
-        <span class="text-muted-foreground text-sm">{{ list.description() }}</span>
-      </div>
-      <p v-if="!list.sites().length" class="text-muted-foreground mt-3 text-sm">{{ list.empty() }}</p>
-      <ul v-else class="mt-3 flex flex-wrap gap-2" :data-testid="list.setting">
-        <li v-for="site in list.sites()" :key="site" class="bg-secondary flex h-8 items-center gap-1 rounded-md pr-1 pl-3 text-sm">
-          {{ site }}
-          <Button variant="danger" size="icon-xs" :aria-label="t('settings.browser.removeSite', { site })" @click="act({ type: 'browser-forget-site', list: list.id, site })">
-            <X :stroke-width="1.5" />
-          </Button>
-        </li>
-      </ul>
-    </div>
+      <template #below>
+        <p v-if="!list.sites().length" class="text-muted-foreground/80 mt-2 text-sm">{{ list.empty() }}</p>
+        <ul v-else class="mt-2 flex flex-wrap gap-2" :data-testid="list.setting">
+          <li v-for="site in list.sites()" :key="site" class="bg-secondary flex h-8 items-center gap-1 rounded-md pr-1 pl-3 text-sm">
+            {{ site }}
+            <Button variant="danger" size="icon-xs" :aria-label="t('settings.browser.removeSite', { site })" @click="act({ type: 'browser-forget-site', list: list.id, site })">
+              <X :stroke-width="1.5" />
+            </Button>
+          </li>
+        </ul>
+      </template>
+    </SettingRow>
   </SettingGroup>
   <SettingGroup :title="t('settings.heading.browserData')">
     <SettingRow

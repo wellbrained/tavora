@@ -5,7 +5,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { MAX_SHARE_BATCH } from "../../shared/host-actions";
 import type { HostAction } from "../../shared/host-api";
-import { account, act, api, dialog, openSettings, showToast, state, type ShareIconsRequest } from "../host";
+import { account, act, api, dialog, openProfile, showToast, state, type ShareIconsRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
@@ -44,7 +44,7 @@ const signedIn = computed(() => Boolean(account.value?.account));
 
 function signIn() {
   dialog.value = null;
-  openSettings({ section: "account" });
+  openProfile("account");
 }
 const count = computed(() => chosen.value.length);
 /** Nothing found to share: the dialog says just that and offers Close. */

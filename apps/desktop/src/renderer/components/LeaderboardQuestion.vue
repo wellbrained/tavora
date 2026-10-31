@@ -4,7 +4,7 @@
 // can't answer it or change what it says. Signed out, it offers to sign in instead; the module asks again later.
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { act, openSettings, state } from "../host";
+import { act, openProfile, state } from "../host";
 import type { HostViewState } from "../../shared/host-api";
 import { t } from "../i18n";
 import ModuleIcon from "./ModuleIcon.vue";
@@ -18,7 +18,7 @@ async function answer(allow: boolean) {
   busy.value = true;
   await act({ type: "leaderboard-answer", id: props.question.id, allow }, { quiet: true });
   busy.value = false;
-  if (allow && props.question.kind === "sign-in") openSettings({ section: "account" });
+  if (allow && props.question.kind === "sign-in") openProfile("account");
 }
 </script>
 

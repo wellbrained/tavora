@@ -50,9 +50,12 @@ test("panels of the old Discord and AI Usage modules say they moved, and their s
     const kept = JSON.parse(await readFile(file, "utf8")).workspaces.poe2.instances as { moduleId: string }[];
     expect(kept.map((record) => record.moduleId).sort()).toEqual(["wellbrained.ai-usage", "wellbrained.discord"]);
 
-    // No installed module asks for Discord or AI usage, so Settings > Integrations leaves them out.
+    // No installed module asks for Discord or AI usage, so Settings > Connections leaves them out.
     await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-integrations").click();
+    await page.getByTestId("settings-nav-connections").click();
+    await expect(page.getByTestId("connection-discord")).toHaveCount(0);
+    await expect(page.getByTestId("connection-ai-usage")).toHaveCount(0);
+    await page.getByTestId("connection-system-info-toggle").click();
     await expect(page.getByTestId("system-info-users-none").or(page.getByTestId("system-info-users"))).toBeVisible();
     await expect(page.getByTestId("discord-settings-connect")).toHaveCount(0);
     await expect(page.getByTestId("discord-sign-out")).toHaveCount(0);

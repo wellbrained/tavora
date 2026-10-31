@@ -5,7 +5,7 @@ import { toast } from "@tavora/official-ui/components/ui/toast";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
-import { DEVELOPER_SECTIONS, SETTING_SECTIONS, type SettingsSection } from "./components/settings/settings-index";
+import { SETTING_SECTIONS, type SettingsPlace, type SettingsSection } from "./components/settings/settings-index";
 import { numberedWorkspaces } from "./shortcuts";
 import { setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
@@ -53,20 +53,20 @@ export const releasePendingCount = computed(() => {
   return releaseCopies().filter((copy) => known[copy.id] === "new-version" || known[copy.id] === "not-published").length;
 });
 
-/** Settings > Integrations > Discord: the Discord connector's sign-in. */
+/** Settings > Connections > Discord: the Discord connector's sign-in. */
 export const discord = shallowRef<DiscordView | null>(null);
 api.onDiscord((next) => (discord.value = next));
 void api.getDiscord().then((initial) => {
   if (initial && !discord.value) discord.value = initial;
 });
 
-/** Whether an installed module asks for this connector; Settings > Integrations shows Discord and AI usage only then. */
+/** Whether an installed module asks for this connector; Settings > Connections shows Discord and AI usage only then. */
 export function asksFor(connector: ModuleConnector): boolean {
   return (state.value?.modules ?? []).some((module) => module.permissions.asks.connectors.includes(connector));
 }
 
 /**
- * The AI usage accounts, for Settings > Integrations and the consent dialog. Asked for only once a
+ * The AI usage accounts, for Settings > Connections and the consent dialog. Asked for only once a
  * module wants them, so Tavora reads no AI login for a user without such a module.
  */
 export const aiUsage = shallowRef<AiUsageView | null>(null);
@@ -171,23 +171,28 @@ export const copyQuestion = computed<"closing" | "conflict" | "newer" | null>(()
   return null;
 });
 
-/** Settings sections not shown on this run: Account until accounts are on. */
-export const hiddenSettings = computed<ReadonlySet<SettingsSection>>(
-  () => new Set<SettingsSection>([...(account.value?.enabled ? [] : (["account"] as const)), ...(state.value?.gameOverlays.supported ? [] : (["overlays"] as const))]),
-);
+/** Places the search leaves out on this run: the account until accounts are on. */
+export const hiddenSettings = computed<ReadonlySet<SettingsPlace>>(() => new Set<SettingsPlace>(account.value?.enabled ? [] : ["account"]));
+
+/** The settings for overlays over a game, on PCs that can show them. */
+export const GAME_OVERLAY_SETTINGS = ["game-overlays", "overlay-layer-key", "overlays-stay", "overlay-sidebar"] as const;
 
 /** The user makes modules: they pressed Let's go, or have project folders or a developer account. */
 export const makesModules = computed(() => Boolean(state.value?.library.makesModules || state.value?.developmentFolders.length || account.value?.developer));
 
-/**
- * The sections in the Settings menu: the shown ones, without the developer pages for someone who doesn't make modules
- * yet. Search still finds those; opening one counts as starting (SettingsDialog).
- */
-export const menuHiddenSettings = computed<ReadonlySet<SettingsSection>>(() => new Set([...hiddenSettings.value, ...(makesModules.value ? [] : DEVELOPER_SECTIONS)]));
 
-/** Single settings not shown on this run: Discord and AI usage until an installed module asks for them. */
+/**
+ * Single settings not shown on this run: Discord and AI usage until an installed module asks for them, Leaderboards
+ * until one offers them, and the game overlays on a PC that can't show them.
+ */
 export const hiddenSettingIds = computed<ReadonlySet<string>>(
-  () => new Set([...(asksFor("discord") ? [] : ["discord-connection"]), ...(asksFor("ai-usage") ? [] : ["ai-usage-accounts"])]),
+  () =>
+    new Set([
+      ...(asksFor("discord") ? [] : ["discord-connection"]),
+      ...(asksFor("ai-usage") ? [] : ["ai-usage-accounts"]),
+      ...(asksFor("leaderboards") ? [] : ["leaderboards"]),
+      ...(state.value?.gameOverlays.supported ? [] : GAME_OVERLAY_SETTINGS),
+    ]),
 );
 
 let shown: ReturnType<typeof toast> | undefined;
@@ -411,9 +416,24 @@ export const settingsOpen = ref(false);
 /** Where Settings opens: a section, and optionally a setting to point out. */
 export const settingsTarget = shallowRef<{ section: SettingsSection; setting?: string }>({ section: "general" });
 
-export function openSettings(target: { section: SettingsSection; setting?: string } = { section: "general" }): void {
-  settingsTarget.value = target;
+/** Opens Settings on a page. The account is in the profile dialog, so a way to it (such as a search result) opens that, over Settings if it is open. */
+export function openSettings(target: { section: SettingsPlace; setting?: string } = { section: "general" }): void {
+  if (target.section === "account") {
+    openProfile("account");
+    return;
+  }
+  settingsTarget.value = { section: target.section, setting: target.setting };
   settingsOpen.value = true;
+}
+
+/** The parts of the profile dialog, in its menu. */
+export type ProfileSection = "profile" | "account" | "cloud-copy" | "messages";
+/** The profile dialog: the user's picture, name and ranks, the account, the cloud copy and messages. */
+export const profileOpen = ref(false);
+export const profileTarget = shallowRef<ProfileSection>("profile");
+export function openProfile(section: ProfileSection = "profile"): void {
+  profileTarget.value = section;
+  profileOpen.value = true;
 }
 
 // A copy added, removed or built to another version while Settings is open: ask again.

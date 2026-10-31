@@ -33,7 +33,8 @@ test("a development folder loads its module, reloads its panels on a new build, 
     // Settings > Development lists both folders: one with its module under it, the other says why it can't.
     // The module is listed once, under its folder, which already says where it comes from.
     await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-dev-folders").click();
+    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("settings-tab-dev-folders").click();
     const folders = page.getByTestId("development-folder");
     await expect(folders).toHaveCount(2);
     await expect(folders.nth(0).getByTestId(`module-${ID}`)).toContainText("Tracker");
@@ -74,7 +75,8 @@ test("a development folder loads its module, reloads its panels on a new build, 
     const folders = last.page.getByTestId("development-folder");
     // Removing the folder removes the module; the project itself stays.
     await last.page.getByTestId("rail-settings").click();
-    await last.page.getByTestId("settings-nav-dev-folders").click();
+    await last.page.getByTestId("settings-nav-development").click();
+    await last.page.getByTestId("settings-tab-dev-folders").click();
     await folders.nth(0).getByTestId("remove-development-folder").click();
     await last.page.getByTestId("confirm-submit").click();
     await expect(folders).toHaveCount(1);
@@ -100,7 +102,8 @@ test("a folder of projects loads every project in it, says which still needs a b
   const { app, page } = await launch(userData);
   try {
     await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-dev-folders").click();
+    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("settings-tab-dev-folders").click();
     const folder = page.getByTestId("development-folder");
     const waiting = folder.getByTestId("development-project");
     await expect(folder.getByTestId("module-devtest.planner")).toBeVisible();
@@ -157,7 +160,8 @@ test("an example is copied into a project folder as a new project of its own", a
   const { app, page } = await launch(userData);
   try {
     await page.getByTestId("rail-settings").click();
-    await page.getByTestId("settings-nav-dev-help").click();
+    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("settings-tab-dev-help").click();
 
     // The examples have their own list; the UI Playground isn't one of them.
     const examples = page.getByTestId("development-examples");
@@ -185,7 +189,8 @@ test("an example is copied into a project folder as a new project of its own", a
     await mkdir(path.join(project, "dist"), { recursive: true });
     await writeFile(path.join(project, "dist", "index.html"), "<!doctype html><title>Boss Timer</title>");
     await expect(page.getByTestId("development-folder").getByTestId("module-local.boss-timer")).toBeVisible();
-    await page.getByTestId("settings-nav-dev-help").click();
+    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("settings-tab-dev-help").click();
     await expect(examples.getByTestId(`module-${VANILLA}`)).toBeVisible();
 
     // The same name again is refused, and nothing is copied.
@@ -210,7 +215,8 @@ test("an example copied into another folder adds its project as a project folder
 
     // Without project folders the tools show after Let's go, and there is nothing to choose: the folder is picked after Copy.
     await page.getByTestId("development-start").click();
-    await page.getByTestId("settings-nav-dev-help").click();
+    await page.getByTestId("settings-nav-development").click();
+    await page.getByTestId("settings-tab-dev-help").click();
     await page.getByTestId(`copy-example-${VUE}`).click();
     await expect(page.getByTestId("copy-example-folder")).toHaveCount(0);
     await expect(page.getByTestId("copy-example-name")).toHaveValue("My Vue Module");
@@ -235,7 +241,8 @@ test("development folders close, stay closed, and go in the order the developer 
   const first = await launch(userData);
   try {
     await first.page.getByTestId("rail-settings").click();
-    await first.page.getByTestId("settings-nav-dev-folders").click();
+    await first.page.getByTestId("settings-nav-development").click();
+    await first.page.getByTestId("settings-tab-dev-folders").click();
     const folders = first.page.getByTestId("development-folder");
     // Closing a folder hides its modules and says how many projects it holds.
     await folders.nth(0).getByTestId("development-folder-toggle").click();
@@ -256,7 +263,8 @@ test("development folders close, stay closed, and go in the order the developer 
   const again = await launch(userData);
   try {
     await again.page.getByTestId("rail-settings").click();
-    await again.page.getByTestId("settings-nav-dev-folders").click();
+    await again.page.getByTestId("settings-nav-development").click();
+    await again.page.getByTestId("settings-tab-dev-folders").click();
     await expect.poll(() => paths(again.page)).toEqual([missing, dir]);
     const folders = again.page.getByTestId("development-folder");
     await expect(folders.nth(1)).toHaveAttribute("data-collapsed", "true");

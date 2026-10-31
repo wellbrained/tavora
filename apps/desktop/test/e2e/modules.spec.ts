@@ -229,6 +229,7 @@ test("data left by modules that are gone is listed and deleted, and a local copy
   const { app, page } = await launch(userData);
   await page.getByTestId("rail-settings").click();
   await page.getByTestId("settings-nav-modules").click();
+  await openLeftover(page);
   await expect(page.getByTestId("leftover-local-wellbrained.gone")).toBeVisible();
   await page.getByTestId("delete-data-local-wellbrained.gone").click();
   await page.getByTestId("confirm-submit").click();
@@ -239,6 +240,7 @@ test("data left by modules that are gone is listed and deleted, and a local copy
   await fromMore(page, "install-module");
   await expect(page.getByTestId("module-publisher-wellbrained.mini")).toBeVisible();
   // Installing never hands data over; the local copy's data waits and is offered.
+  await openLeftover(page);
   await expect(page.getByTestId("leftover-local-wellbrained.mini")).toBeVisible();
   expect(await exists(path.join(userData, "module-data", fingerprint(key)))).toBe(false);
 
@@ -357,3 +359,9 @@ test("a module's patch notes show in Settings, and an update marks the new ones 
   await expect(page.getByTestId("module-notes-toggle-tavora.notes")).toBeVisible();
   await app.close();
 });
+
+/** Opens the data removed modules left behind, a list folded into its row on Settings > Modules. */
+async function openLeftover(page: import("@playwright/test").Page) {
+  const toggle = page.getByTestId("leftover-data-toggle");
+  if ((await toggle.getAttribute("data-state")) !== "open") await toggle.click();
+}
