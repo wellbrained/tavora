@@ -37,10 +37,12 @@ What a stolen deploy key can still do (accepted 2026-10-31): the API key runs co
 updates key can ship a bad installer until updates are signed (parked until the first public release). The
 tailnet-only rule and the passphrases below make using a stolen key harder.
 
-**Open until it is fixed:** Caddy's admin API listens on `127.0.0.1:2019` without a password, and every
-program on the server can rewrite Caddy's config through it, code shipped with the API key included. That
-reaches the update feed, the Hetzner DNS token and the TLS keys. Moving it to a socket only root and CoreHub
-can open is its own todo (decided 2026-10-31).
+**Caddy's admin API** listens only on the Unix socket `/run/caddy-admin/admin.sock`, which only root, Caddy
+and CoreHub (the `corehub` group) can open (CoreHub #422, decided 2026-10-31). Before, it listened on
+`127.0.0.1:2019` without a password, so any program on the server, code shipped with the API key included,
+could rewrite Caddy and reach the update feed, the Hetzner DNS token and the TLS keys. The root helpers here
+keep using `systemctl reload caddy`, which finds the socket in the Caddyfile. CoreHub's
+`scripts/secure-caddy-admin.sh --check` (as root on the server) says whether it is still in place.
 
 ## Change the server setup
 
