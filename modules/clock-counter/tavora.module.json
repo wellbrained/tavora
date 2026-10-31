@@ -3,7 +3,7 @@
   "id": "tavora.clock-counter",
   "name": "Clock & Counter",
   "description": "Countdowns, stopwatches and counters for this game, with hotkeys and overlays for your stream or over your game.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "apiVersion": "1",
   "entry": "dist/index.html",
   "overlay": "dist/overlay.html",

@@ -18,7 +18,7 @@ export const buttonVariants = cva(
         danger:
           "bg-destructive/10 text-destructive hover:bg-destructive/25 hover:text-destructive dark:bg-destructive/15 dark:hover:bg-destructive/30",
         outline:
-          "border bg-background shadow-xs hover:border-input hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/60",
+          "border bg-background shadow-xs hover:border-input hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] hover:text-accent-foreground dark:bg-input/10 dark:border-input dark:hover:bg-input/25",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--secondary))]",
         ghost:

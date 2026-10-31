@@ -31,7 +31,7 @@ const model = defineModel<number>({ required: true })
     :step="step"
     :disabled="disabled"
     :class="cn(
-      'border-input dark:bg-input/30 focus-within:border-ring focus-within:ring-ring/50 inline-flex h-8 w-fit items-center overflow-hidden rounded-md border bg-transparent shadow-xs transition-[color,box-shadow] focus-within:ring-3 data-[disabled]:opacity-50',
+      'border-input dark:bg-input/10 focus-within:border-ring focus-within:ring-ring/50 inline-flex h-8 w-fit items-center overflow-hidden rounded-md border bg-transparent shadow-xs transition-[color,box-shadow] focus-within:ring-3 data-[disabled]:opacity-50',
       props.class,
     )"
   >
