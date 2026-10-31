@@ -1,7 +1,7 @@
 // Panel style (Settings > Appearance): Classic, Framed or Folders. Framed is the default; the framed styles set the
 // module inside its panel's frame, and the choice is kept after a restart.
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { launch, NOTES, openModule, openWorkspace, waitForShown } from "./harness";
+import { launch, layOutColumns, NOTES, openModule, openWorkspace, waitForShown } from "./harness";
 
 /** Where the Notes panel's own view sits in the window. */
 const viewBounds = (app: ElectronApplication) =>
@@ -38,4 +38,19 @@ test("the panel style is Framed at first, can be changed in Settings, and is kep
   const again = await launch(userData);
   await expect(again.page.locator("html")).toHaveAttribute("data-panel-style", "folders");
   await again.app.close();
+});
+
+test("the gaps between panels have the same colour as the header above them, in every style", async () => {
+  const { app, page } = await launch();
+  await layOutColumns(page, 2);
+  const groups = page.locator(".dv-groupview");
+  const [left, right] = [(await groups.nth(0).boundingBox())!, (await groups.nth(1).boundingBox())!];
+  const x = Math.round((left.x + left.width + right.x) / 2);
+  const workspace = (await page.getByTestId("workspace").boundingBox())!;
+  const pixel = (y: number) => page.screenshot({ clip: { x, y, width: 1, height: 1 } });
+  for (const style of ["classic", "framed", "folders"]) {
+    await page.evaluate((s) => (document.documentElement.dataset.panelStyle = s), style);
+    expect(await pixel(Math.round(left.y + left.height / 2)), style).toEqual(await pixel(Math.round(workspace.y + 4)));
+  }
+  await app.close();
 });
