@@ -65,7 +65,7 @@
    - framed: a frame around the module, tabs underlined, with a line between them;
    - folders: a frame around the module, tabs like folder tabs.
    All of them: a darker canvas between the panels; the panel you work in is a step lighter, and only its open tab's
-   title is bright, with a gold icon. Every other title is grey. */
+   title is bright. Every other title is grey. Icons keep their own colours. */
 :root {
   --panel-canvas: color-mix(in srgb, var(--background) 93%, black);
   --panel-lift: color-mix(in srgb, var(--foreground) 6%, var(--card));
@@ -94,9 +94,6 @@
 }
 .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
   font-weight: 600;
-}
-.dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab svg.lucide {
-  color: var(--primary);
 }
 /* A tab draws its divider and its underline as two shadows, so a style can set either. */
 .dockview-theme-tavora .dv-tab {
