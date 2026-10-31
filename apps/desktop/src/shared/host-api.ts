@@ -2,6 +2,7 @@ import type { Language, LanguageSetting, MessageKey } from "./i18n";
 // Contract between the trusted host UI (renderer) and the main process.
 // Types only: imported by both sides, so it must not import Electron or Node.
 import type { IconTone } from "./icon-tone";
+import type { ProfileBanner } from "./profile-banner";
 import type { ModuleProblemKind, ModuleProblemValues } from "./module-problem";
 import type { ContactDraft, ConversationDetailResult, InboxView } from "./conversations";
 import type { HostAction } from "./host-actions";
@@ -749,7 +750,7 @@ export interface HostViewState {
   snapshots: SnapshotView[];
   notice: string | null;
   /** The user's local profile. */
-  profile: { name: string; initials: string; pictureUrl: string | null; ranks: ProfileRanksSetting };
+  profile: { name: string; initials: string; pictureUrl: string | null; ranks: ProfileRanksSetting; banner: ProfileBanner };
   /** A setting that only applies on start was changed since Tavora started. */
   restartPending: boolean;
   /** Where the app is with finding and installing a newer version. */

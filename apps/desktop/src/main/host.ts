@@ -2399,6 +2399,9 @@ export class Host {
       "set-profile-ranks": saved((action) => {
         this.library.profileRanks = { hidden: action.hidden ?? this.library.profileRanks.hidden, period: action.period ?? this.library.profileRanks.period };
       }),
+      "set-profile-banner": saved((action) => {
+        this.library.profileBanner = action.banner;
+      }),
       "set-steam-profile": saved((action) => {
         this.library.steamProfile = action.profile;
       }),
@@ -4373,6 +4376,7 @@ export class Host {
         initials: this.profile.initials,
         pictureUrl: this.profile.picture ? PROFILE_URL + this.profile.picture : null,
         ranks: { ...library.profileRanks },
+        banner: library.profileBanner ?? (this.profile.picture ? "picture" : "stripes"),
       },
       restartPending: library.grayscaleText !== this.options.grayscaleText,
       appearance: this.appearanceView(),

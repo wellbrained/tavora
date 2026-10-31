@@ -4,6 +4,7 @@ import { isGameId, isLeaderboardPeriod, isModuleId, type LeaderboardPeriod } fro
 import { TOAST_POSITIONS, type ToastPosition } from "@tavora/sdk/protocol";
 import { isWorkspaceId } from "./workspace-id";
 import type { GameStart, RootItem, RootSort, Startup } from "../shared/host-api";
+import { isProfileBanner, type ProfileBanner } from "../shared/profile-banner";
 import { isSite } from "./browser-url";
 import { isLanguageSetting, type LanguageSetting } from "../shared/i18n";
 import { UserError } from "./messages";
@@ -126,6 +127,8 @@ export interface Library {
   language: LanguageSetting;
   /** The ranks in the profile card: hidden by the user, and the period they show. */
   profileRanks: { hidden: boolean; period: LeaderboardPeriod };
+  /** The banner behind the picture in the profile dialog; null: the picture when there is one, else stripes. */
+  profileBanner: ProfileBanner | null;
   /** The picked theme and variation. Kept even while that theme is not installed, which shows the default. */
   theme: { id: string; variation: string };
   /** Show the variation that matches the system's light or dark setting, and change with it. */
@@ -238,6 +241,7 @@ export function emptyLibrary(): Library {
     iconsOffered: [],
     language: "system",
     profileRanks: { hidden: false, period: "all" },
+    profileBanner: null,
     theme: { ...DEFAULT_THEME },
     followSystem: true,
     radius: null,
@@ -786,6 +790,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   const ranks = asRecord(saved.profileRanks);
   if (typeof ranks.hidden === "boolean") library.profileRanks.hidden = ranks.hidden;
   if (isLeaderboardPeriod(ranks.period)) library.profileRanks.period = ranks.period;
+  if (isProfileBanner(saved.profileBanner)) library.profileBanner = saved.profileBanner;
   if (typeof saved.steamProfile === "string" && saved.steamProfile.trim() && saved.steamProfile.length <= 200) library.steamProfile = saved.steamProfile.trim();
   if (Array.isArray(saved.iconsOffered)) {
     library.iconsOffered = [...new Set(saved.iconsOffered.filter((id): id is string => isGameId(id) && !id.startsWith("local-")))].slice(-MAX_ICONS_OFFERED);

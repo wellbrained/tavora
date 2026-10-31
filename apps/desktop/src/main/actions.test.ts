@@ -220,6 +220,8 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "set-language", language: "de" }],
   [{ type: "set-profile-ranks", hidden: true }],
   [{ type: "set-profile-ranks", period: "week" }],
+  [{ type: "set-profile-banner", banner: "forest" }],
+  [{ type: "set-profile-banner", banner: null }],
   [{ type: "create-starter-theme" }],
   [{ type: "open-developer-link", link: "docs" }],
   [{ type: "open-developer-link", link: "discussions" }],

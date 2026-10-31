@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // The profile dialog, opened from the avatar in the rail (ProfileMenu.vue) or wherever the account is needed
-// (openProfile). On the left: the picture on a banner, the name and what the user is up to, and a short menu: Profile
-// (name, initials, ranks), Account (signing in and everything about the account), Cloud copy and Messages. The menu
-// shows only what this run has: Account once accounts are on, Cloud copy and Messages once they are there. On the
-// right: the chosen part, like a Settings page.
+// (openProfile). On the left: the picture over a banner the user picks (BannerPicker.vue), the name beside it, and a
+// short menu on a plate like Settings': Name & ranks, Account (signing in and everything about the account), Cloud copy
+// and Messages. The menu shows only what this run has: Account once accounts are on, Cloud copy and Messages once they
+// are there. On the right: the chosen part, under Profile / its name, like a Settings page.
 import { Camera, Cloud, Mail, UserRound, UserRoundPen, X } from "@lucide/vue";
 import { computed, provide, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -19,7 +19,9 @@ import MessagesSettings from "../settings/MessagesSettings.vue";
 import { SETTINGS_PAGE_TITLE } from "../settings/settings-page";
 import { autoInitials } from "./initials";
 import { readPicture } from "./picture";
+import BannerPicker from "./BannerPicker.vue";
 import ProfileAvatar from "./ProfileAvatar.vue";
+import ProfileBanner from "./ProfileBanner.vue";
 import ProfileEditor from "./ProfileEditor.vue";
 
 const profile = computed(() => state.value!.profile);
@@ -39,7 +41,6 @@ const shown = computed<ProfileSection>(() => (sections.value.some((item) => item
 const navGroups = computed<NavGroup[]>(() => [{ items: sections.value.map((item) => ({ id: item.id, label: item.label, icon: item.icon, testid: `profile-nav-${item.id}` })) }]);
 const pageTitle = computed(() => sections.value.find((item) => item.id === shown.value)?.label ?? "");
 provide(SETTINGS_PAGE_TITLE, pageTitle);
-const pageIcon = computed(() => sections.value.find((item) => item.id === shown.value)?.icon ?? UserRoundPen);
 
 /** Name and initials as typed on Profile, shown beside the avatar as they are typed; saved by ProfileEditor. */
 const draft = ref({ name: "", initials: "" });
@@ -65,16 +66,6 @@ function pick(id: string) {
   section.value = id as ProfileSection;
 }
 
-/**
- * The second line under the name: the game running now, else whether the user is signed in. That is the game the rail
- * offers to switch to, else the open workspace's own game while it runs (runningGameId leaves that one out).
- */
-const runningGame = computed(() => {
-  const view = state.value!;
-  const id = view.runningGameId ?? (view.workspaceRunning ? view.currentWorkspaceId : null);
-  return id ? (view.library.workspaces[id] ?? null) : null;
-});
-const status = computed(() => (runningGame.value ? t("rail.playing", { name: runningGame.value.name }) : account.value?.account ? t("rail.signedIn") : t("rail.signedOut")));
 
 // The picture: picked from a file, cropped round in its own dialog over this one.
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -100,13 +91,15 @@ async function savePicture(png: string) {
       :aria-describedby="undefined"
     >
       <div class="bg-background flex w-60 flex-none flex-col overflow-y-auto border-r lg:w-64">
-        <!-- Banner: a blurred copy of the picture, or a warm pattern without one. -->
-        <div class="profile-banner relative h-24 flex-none overflow-hidden" aria-hidden="true">
-          <img v-if="profile.pictureUrl" :src="profile.pictureUrl" alt="" class="absolute inset-0 size-full scale-150 object-cover blur-xl brightness-[0.55] saturate-150" />
+        <!-- The banner the user picked, with Change in its corner. -->
+        <div class="relative h-24 flex-none">
+          <ProfileBanner :banner="profile.banner" :picture-url="profile.pictureUrl" aria-hidden="true" />
+          <BannerPicker :banner="profile.banner" :picture-url="profile.pictureUrl" />
         </div>
-        <div class="flex flex-col gap-3 border-b px-5 pb-4">
-          <!-- The avatar overlaps the banner; a click changes the picture, the small button removes it. -->
-          <div class="profile-pop relative -mt-11 w-fit">
+        <!-- The avatar overlaps the banner, the name beside it on the line of its lower edge. A click on the avatar changes
+             the picture, the small button removes it. -->
+        <div class="flex items-end gap-3 px-5">
+          <div class="profile-pop relative -mt-11 w-fit flex-none">
             <button
               type="button"
               class="group/avatar ring-background focus-visible:outline-ring relative block rounded-full ring-4 focus-visible:outline-2 focus-visible:outline-offset-4"
@@ -133,21 +126,24 @@ async function savePicture(png: string) {
             </button>
           </div>
           <input ref="fileInput" type="file" class="hidden" accept="image/png,image/jpeg,image/webp" data-testid="profile-file" @change="onFile" />
-          <div class="flex min-w-0 flex-col">
-            <DialogTitle :class="cn('truncate text-lg font-semibold', !shownName && 'text-muted-foreground')">{{ shownName || t("profile.yours") }}</DialogTitle>
-            <span :class="cn('truncate text-sm', runningGame ? 'text-success' : 'text-muted-foreground')" data-testid="profile-dialog-status">{{ status }}</span>
-          </div>
+          <span :class="cn('min-w-0 truncate pb-1.5 text-lg font-semibold', !shownName && 'text-muted-foreground')" data-testid="profile-dialog-name">{{ shownName || t("profile.yours") }}</span>
         </div>
-        <NavList class="p-3" :model-value="shown" :label="t('profile.sections')" :groups="navGroups" @select="pick" />
+        <NavList
+          class="profile-plates m-3 mt-4"
+          group-class="rounded-xl border p-1"
+          :model-value="shown"
+          :label="t('profile.sections')"
+          :groups="navGroups"
+          @select="pick"
+        />
       </div>
 
       <div class="flex min-w-0 flex-1 flex-col">
-        <header class="flex h-[72px] flex-none items-center justify-between gap-4 border-b px-6 lg:px-10">
-          <div class="flex min-w-0 items-center gap-3">
-            <span class="bg-primary/15 text-primary flex size-9 flex-none items-center justify-center rounded-lg" aria-hidden="true">
-              <component :is="pageIcon" class="size-5" :stroke-width="1.75" />
-            </span>
-            <h2 class="truncate text-xl font-semibold" data-testid="profile-heading">{{ pageTitle }}</h2>
+        <header class="flex h-16 flex-none items-center justify-between gap-4 border-b px-6 lg:px-10">
+          <div class="flex min-w-0 items-center gap-2.5 text-base">
+            <DialogTitle class="text-muted-foreground flex-none text-base font-medium">{{ t("profile.label") }}</DialogTitle>
+            <span class="text-muted-foreground/60 flex-none" aria-hidden="true">/</span>
+            <h2 class="truncate font-semibold" data-testid="profile-heading">{{ pageTitle }}</h2>
           </div>
           <DialogClose as-child>
             <Button variant="ghost" size="icon" class="flex-none" data-testid="profile-close" :aria-label="t('profile.close')" :title="t('common.close')">
@@ -169,3 +165,15 @@ async function savePicture(png: string) {
 
   <ImageCropDialog :src="cropping" :title="t('onboarding.crop')" round @save="savePicture" @cancel="cropping = null" />
 </template>
+
+<style scoped>
+/* The menu on a plate in the theme's accent, like the groups in Settings. */
+.profile-plates :deep([data-slot="nav-group"]) {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--primary) 13%, transparent), color-mix(in srgb, var(--primary) 3%, transparent) 70%);
+  border-color: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.profile-plates :deep([data-slot="nav-group"] [aria-current="page"]) {
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
+}
+</style>
