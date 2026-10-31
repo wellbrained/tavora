@@ -39,7 +39,7 @@ Tavora is a local-first gaming companion for your second monitor. Keep notes, to
 
 ## Try the Windows preview
 
-The current preview is [Tavora 0.17.6 for Windows](https://updates.mytavora.app/Tavora-Setup-0.17.6.exe). The [update feed](https://updates.mytavora.app/latest.yml) lists the latest published build. Install it, add a game, choose a layout, and use **Add module** to fill the panels. You can also start with the [source build](#run-from-source).
+Download the current preview for Windows from the [latest release](https://github.com/wellbrained/tavora/releases/latest) (the `Tavora-Setup-<version>.exe` file). The [update feed](https://updates.mytavora.app/latest.yml) lists the latest published build. Install it, add a game, choose a layout, and use **Add module** to fill the panels. You can also start with the [source build](#run-from-source).
 
 Preview builds are unsigned, so Windows may show an unrecognized-app warning. Installed Windows builds check for updates through `updates.mytavora.app`; automatic downloading can be changed in Settings.
 
