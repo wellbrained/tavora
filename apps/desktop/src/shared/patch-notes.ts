@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.25",
+    date: "2026-10-31",
+    title: "Modules, tidied up like Settings",
+    notes: [
+      "A shorter menu in Modules, with the search on top and Module settings at the foot.",
+      "Community modules sits right under your modules, set off by a line.",
+      "Official and Added by you are now sections in All modules.",
+    ],
+    prs: [
+      { number: 567, title: "Modules: a Settings-style menu" },
+    ],
+    tags: ["catalog", "modules", "settings"],
+  },
+  {
     version: "0.23.24",
     date: "2026-10-31",
     title: "Palworld saves are easier to find",
