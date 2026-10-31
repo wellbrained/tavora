@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.15",
+    date: "2026-10-31",
+    title: "Three more themes",
+    notes: [
+      "Pick Ashen Keep, Tidewater or Graphite in Settings > Appearance, each in Dark and Light.",
+    ],
+    prs: [
+      { number: 553, title: "Add the Ashen Keep, Tidewater and Graphite themes" },
+    ],
+    tags: ["themes"],
+  },
+  {
     version: "0.23.14",
     date: "2026-10-31",
     title: "New themes and nicer device names",
