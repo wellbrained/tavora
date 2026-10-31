@@ -109,9 +109,11 @@ test("the example modules are listed under Development, the playground with the 
   await expect(development.getByTestId(`module-${VUE}`)).toBeVisible();
   await expect(development.getByTestId(`module-${PLAYGROUND}`)).toHaveCount(0);
   await expect(development.getByTestId(`module-${NOTES}`)).toHaveCount(0);
-  await page.getByTestId("module-category-official").click();
-  await expect(page.getByTestId(`module-${NOTES}`)).toBeVisible();
-  await expect(page.getByTestId(`module-${PLAYGROUND}`)).toBeVisible();
+  const official = page.getByRole("region", { name: "Official" });
+  await expect(official.getByTestId(`module-${NOTES}`)).toBeVisible();
+  await expect(official.getByTestId(`module-${PLAYGROUND}`)).toBeVisible();
+  // Its own entry, under For developers, is only for people who make modules.
+  await expect(page.getByTestId("module-category-development")).toHaveCount(0);
   await app.close();
 });
 

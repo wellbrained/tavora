@@ -57,7 +57,7 @@ async function updateAll() {
 </script>
 
 <template>
-  <div class="min-h-0 flex-1 overflow-y-auto px-5 pb-8 sm:px-8" data-testid="module-updates">
+  <div class="min-h-0 flex-1 thin-scroll overflow-y-auto px-6 pb-8 [scrollbar-gutter:stable] lg:px-10" data-testid="module-updates">
     <div v-if="!shown.length" class="text-muted-foreground py-16 text-center" data-testid="module-updates-empty">
       <p>{{ t("addModule.updates.empty") }}</p>
     </div>

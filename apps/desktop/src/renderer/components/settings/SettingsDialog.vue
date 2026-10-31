@@ -101,6 +101,9 @@ async function show(target: SettingsSection, setting?: string) {
   highlightTimer = setTimeout(() => (highlight.value = null), 2000);
 }
 
+/** Each group's plate colour (styles.css): the accent for Tavora, turned around the wheel for the others. */
+const PLATE_TURN: Record<string, string | undefined> = { modules: "nav-plate-turn-1", development: "nav-plate-turn-2" };
+
 const library = computed(() => state.value!.library);
 
 /** The pages on the left, in their groups: a counter shows what waits for Publish, a New mark what's new. */
@@ -108,7 +111,7 @@ const navGroups = computed<NavGroup[]>(() =>
   GROUPS.map((group) => ({
     heading: groupLabel(group.id),
     icon: group.icon,
-    class: `settings-plate-${group.id}`,
+    class: PLATE_TURN[group.id],
     items: group.sections.map((item) => {
       const fresh = item.id !== entry.value && hasNewSettings(item.id);
       return {
@@ -189,7 +192,7 @@ function onSearchKey(event: KeyboardEvent) {
       :show-close-button="false"
       :aria-describedby="undefined"
     >
-      <div class="settings-scroll settings-menu bg-background flex w-56 flex-none flex-col gap-3 overflow-y-auto border-r px-4 pb-4 lg:w-64">
+      <div class="thin-scroll settings-menu bg-background flex w-56 flex-none flex-col gap-3 overflow-y-auto border-r px-4 pb-4 lg:w-64">
         <div class="relative flex h-16 flex-none items-center">
           <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
           <Input
@@ -211,7 +214,7 @@ function onSearchKey(event: KeyboardEvent) {
           :model-value="query ? null : entry"
           :label="t('settings.sections')"
           :groups="navGroups"
-          class="settings-plates gap-2.5"
+          class="nav-plates gap-2.5"
           group-class="rounded-xl border p-1"
           heading-class="pt-1"
           @select="(id: string) => show(id as SettingsSection)"
@@ -263,7 +266,7 @@ function onSearchKey(event: KeyboardEvent) {
         <!-- Always there, so a screen reader hears how many results each search finds. Outside the page, so the
              first group sits right under the header. -->
         <p class="sr-only" role="status">{{ resultsAnnouncement }}</p>
-        <div ref="scroller" class="settings-scroll relative min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]" data-testid="settings-body">
+        <div ref="scroller" class="thin-scroll relative min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]" data-testid="settings-body">
           <div class="px-6 pt-6 pb-12 lg:px-10">
             <template v-if="query.trim()">
               <p v-if="!results.length" class="text-muted-foreground" data-testid="settings-no-results">{{ t("settings.results.none", { query: query.trim() }) }}</p>
@@ -324,42 +327,6 @@ function onSearchKey(event: KeyboardEvent) {
 </template>
 
 <style scoped>
-/* The menu's groups as plates, each washed in a colour of its own: the theme's accent for Tavora, turned around the
-   colour wheel for the others, so every theme keeps three that go together. */
-.settings-plates :deep([data-slot="nav-group"]) {
-  --tone: var(--primary);
-  background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 13%, transparent), color-mix(in srgb, var(--tone) 3%, transparent) 70%);
-  border-color: color-mix(in srgb, var(--tone) 18%, transparent);
-}
-.settings-plates :deep(.settings-plate-modules) {
-  --tone: oklch(from var(--primary) l c calc(h + 110));
-}
-.settings-plates :deep(.settings-plate-development) {
-  --tone: oklch(from var(--primary) l c calc(h + 220));
-}
-.settings-plates :deep([data-slot="nav-group"] > h3) {
-  color: color-mix(in srgb, var(--tone) 80%, var(--foreground));
-}
-.settings-plates :deep([data-slot="nav-group"] [aria-current="page"]) {
-  background: color-mix(in srgb, var(--tone) 22%, transparent);
-  box-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
-}
-.settings-scroll {
-  scrollbar-width: auto;
-  scrollbar-color: auto;
-}
-/* Thin scrollbars in theme colours, without the system's arrow buttons. Only the webkit rules: Chromium ignores
-   them once the standard scrollbar-width or scrollbar-color is set, and then draws arrows again. */
-.settings-scroll::-webkit-scrollbar {
-  width: 8px;
-}
-.settings-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.settings-scroll::-webkit-scrollbar-thumb {
-  background: var(--input);
-  border-radius: 4px;
-}
 /* The menu fits a normal window; there it scrolls by wheel or keys without a bar beside it. */
 @media (min-height: 640px) {
   .settings-menu::-webkit-scrollbar {

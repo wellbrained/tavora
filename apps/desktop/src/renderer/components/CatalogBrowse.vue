@@ -111,7 +111,7 @@ function settings() {
 </script>
 
 <template>
-  <div class="min-h-0 flex-1 overflow-y-auto px-5 pb-8 sm:px-8" data-testid="catalog-results">
+  <div class="min-h-0 flex-1 thin-scroll overflow-y-auto px-6 pb-8 [scrollbar-gutter:stable] lg:px-10" data-testid="catalog-results">
     <p v-if="!result" class="text-muted-foreground py-16 text-center" role="status" data-testid="catalog-loading">{{ t("catalog.loading") }}</p>
     <EmptyState v-else-if="result.status !== 'ok'" class="mt-8" role="status" :title="t(`catalog.problem.${result.status}.title`)" :description="t(`catalog.problem.${result.status}.text`)" :data-testid="`catalog-${result.status}`">
       <template #icon><WifiOff /></template>
