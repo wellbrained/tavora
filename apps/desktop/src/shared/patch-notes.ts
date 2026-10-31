@@ -30,70 +30,25 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.23.30",
     date: "2026-11-01",
-    title: "Welcome when you add a module",
+    title: "Panel styles and a warm welcome",
     notes: [
+      "New in Settings > Appearance: Panel style. Framed sets each module in a frame, Folders gives tabs a folder look, Classic keeps the header bar.",
       "A module you just added can greet you in a dialog right away.",
-      "Module dialogs now sit in the middle of your workspace. The rail and header stay in sight.",
-    ],
-    prs: [
-      { number: 573, title: "Welcome dialog on first add; panel dialogs centre over the workspace" },
-    ],
-    tags: ["modules", "privacy", "sdk", "website", "workspace"],
-  },
-  {
-    version: "0.23.29",
-    date: "2026-10-31",
-    title: "Several panels from one click",
-    notes: [
-      "A module can now open several of its panels with one button, such as the ones you ticked on its welcome page.",
-      "They open right next to the panel you clicked, laid out the way the module suggests. Your other panels stay where they are.",
-      "A panel that's already open just comes to the front.",
+      "One button can open several of a module's panels, right next to the one you clicked. Your other panels stay put, and one that's already open comes to the front.",
+      "Module dialogs now sit in the middle of your workspace, so the rail and header stay in sight.",
+      "The panel you're working in is a shade lighter, and clicking into a panel makes it the active one.",
+      "The gaps between panels match the dark background, and tab icons keep their own colours.",
+      "Menu entries in Settings and your profile light up in their group's colour.",
+      "Panel borders and rounded corners look clean again, also with Windows display scaling.",
     ],
     prs: [
       { number: 575, title: "One click opens several of a module's panels, laid out next to it" },
-    ],
-    tags: ["modules", "privacy", "publishing", "sdk", "website", "workspace"],
-  },
-  {
-    version: "0.23.28",
-    date: "2026-10-31",
-    title: "Even darker gaps",
-    notes: [
-      "The gaps between your panels now match the dark background above them.",
-      "Tab icons keep their own colours, and the close button stays easy to see.",
-    ],
-    prs: [
+      { number: 573, title: "Welcome dialog on first add; panel dialogs centre over the workspace" },
       { number: 572, title: "Gaps match the canvas; tab icons keep their colours" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.23.27",
-    date: "2026-10-31",
-    title: "Pick how your panels look",
-    notes: [
-      "New in Settings > Appearance: Panel style. Framed sets each module in a frame, Folders gives tabs a folder look, Classic keeps the header bar.",
-      "The panel you're working in is a shade lighter, and only its tab title stands out.",
-      "Panels keep their full border with Windows display scaling.",
-    ],
-    prs: [
       { number: 571, title: "Panel style setting: Classic, Framed, Folders; panel borders stay visible at display scaling" },
-    ],
-    tags: ["games", "settings", "workspace"],
-  },
-  {
-    version: "0.23.26",
-    date: "2026-10-31",
-    title: "Cleaner menus and panels",
-    notes: [
-      "Hovering a menu entry in Settings or your profile now tints it in that group's colour.",
-      "No more stray lines next to the rounded corners of your panels.",
-      "Clicking into a panel now marks it as the one you're working in.",
-    ],
-    prs: [
       { number: 569, title: "Plate hover in the group's colour, no stray lines at panel corners" },
     ],
-    tags: ["accounts", "modules", "workspace"],
+    tags: ["accounts", "games", "modules", "privacy", "publishing", "sdk", "settings", "website", "workspace"],
   },
   {
     version: "0.23.25",
