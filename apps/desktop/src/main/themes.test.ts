@@ -9,6 +9,7 @@ import {
   DEFAULT_THEME,
   discoverThemes,
   FALLBACK_THEME,
+  isThemeRadius,
   moduleTheme,
   resolveTheme,
   variationForMode,
@@ -17,6 +18,7 @@ import {
   themeManifest,
   validateTheme,
   veiled,
+  withRadius,
 } from "./themes";
 
 const repo = path.resolve(__dirname, "../../../..");
@@ -233,5 +235,15 @@ describe("the starter theme", () => {
     expect(result.ok).toBe(true);
     const { themes } = await discoverThemes({ official: [officialDir] });
     if (result.ok) expect(result.theme.variations).toEqual(themes.get(DEFAULT_THEME.id)!.theme.variations);
+  });
+});
+
+describe("the user's corner radius", () => {
+  it("replaces the theme's radius only when set, and only within the theme range", () => {
+    const variation = { id: "dark", radius: 4 };
+    expect(withRadius(variation, null)).toBe(variation);
+    expect(withRadius(variation, 8)).toEqual({ id: "dark", radius: 8 });
+    expect([4, 12].every(isThemeRadius)).toBe(true);
+    expect([3, 13, 6.5, "8", null].some(isThemeRadius)).toBe(false);
   });
 });

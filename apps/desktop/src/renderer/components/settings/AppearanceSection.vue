@@ -82,6 +82,16 @@ const variation = computed({
   set: (variationId: string) => void act({ type: "set-theme", themeId: appearance.value.themeId, variationId, fixed: true }),
 });
 const variationOptions = computed(() => (active.value?.variations ?? []).map((item) => ({ value: item.id, label: item.name, testid: `variation-${item.id}` })));
+// The user's own corner radius over the theme's; "theme" keeps the theme's own.
+const radius = computed({
+  get: () => (appearance.value.radius === null ? "theme" : String(appearance.value.radius)),
+  set: (value: string) => void act({ type: "set-radius", radius: value === "theme" ? null : Number(value) }),
+});
+const radiusOptions = computed(() => [
+  { value: "theme", label: t("settings.corner-radius.theme"), testid: "radius-theme" },
+  ...[4, 6, 8, 10, 12].map((px) => ({ value: String(px), label: `${px}`, testid: `radius-${px}` })),
+]);
+
 const showVariation = computed(() => {
   const all = active.value?.variations ?? [];
   return all.length > new Set(all.map((item) => item.mode)).size;
@@ -175,6 +185,14 @@ const showVariation = computed(() => {
       :highlighted="highlight === 'theme-variation'"
     >
       <SegmentedControl v-model="variation" :label="t('settings.theme-variation.label')" :options="variationOptions" />
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.corner-radius.label')"
+      :description="t('settings.corner-radius.description')"
+      setting="corner-radius"
+      :highlighted="highlight === 'corner-radius'"
+    >
+      <SegmentedControl v-model="radius" :label="t('settings.corner-radius.label')" :options="radiusOptions" />
     </SettingRow>
   </SettingGroup>
 

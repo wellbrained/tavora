@@ -308,6 +308,8 @@ export function hostActionTable(c: HostChecks) {
     /** Follow the system's light or dark setting, or stay in one mode. */
     "set-appearance-mode": { mode: oneOf("system", "dark", "light") },
     /** Back to the Tavora default theme, whatever is active. */
+    /** The user's own corner radius in px over the theme's, or null for the theme's. */
+    "set-radius": { radius: nullable(check<number>((value) => Number.isInteger(value) && (value as number) >= 4 && (value as number) <= 12)) },
     "reset-theme": {},
     /** Looks for themes again, after the user changed their themes folder. */
     "reload-themes": {},

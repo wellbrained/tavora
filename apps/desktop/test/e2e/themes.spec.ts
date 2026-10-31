@@ -47,6 +47,39 @@ test("picking a theme recolours Tavora and its modules, and is kept after a rest
   await again.app.close();
 });
 
+test("the user's own corner radius sits on top of the theme, reaches modules, and Reset clears it", async () => {
+  const userData = await newUserData();
+  const { app, page } = await launch(userData);
+  await openWorkspace(page, "poe2");
+  await openModule(page, VANILLA);
+
+  await openAppearance(page);
+  await expect(page.getByTestId("radius-theme")).toHaveAttribute("aria-checked", "true");
+  await page.getByTestId("radius-12").click();
+  await expect.poll(() => rootToken(page, "radius")).toBe("12px");
+  await expect.poll(() => inModule<string>(app, VANILLA, `getComputedStyle(document.documentElement).getPropertyValue("--tavora-radius").trim()`)).toBe("12px");
+  await expect(page.getByTestId("reset-theme")).toBeEnabled();
+  // Another theme keeps the user's corners.
+  await page.getByTestId("theme-tavora.nightfall").click();
+  await expect.poll(() => rootToken(page, "background")).toBe("#12161c");
+  await expect.poll(() => rootToken(page, "radius")).toBe("12px");
+  await app.close();
+
+  const saved = JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { radius: unknown };
+  expect(saved.radius).toBe(12);
+
+  const again = await launch(userData);
+  await expect.poll(() => rootToken(again.page, "radius")).toBe("12px");
+  await openAppearance(again.page);
+  await again.page.getByTestId("radius-theme").click();
+  await expect.poll(() => rootToken(again.page, "radius")).toBe("8px");
+  await again.page.getByTestId("radius-4").click();
+  await again.page.getByTestId("reset-theme").click();
+  await expect(again.page.getByTestId("radius-theme")).toHaveAttribute("aria-checked", "true");
+  await expect.poll(() => rootToken(again.page, "radius")).toBe("8px");
+  await again.app.close();
+});
+
 test("Follow System shows the version that suits the system, and Dark or Light stays put", async () => {
   const userData = await newUserData();
   const { app, page } = await launch(userData, [], { systemTheme: "light" });

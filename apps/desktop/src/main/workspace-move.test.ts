@@ -120,6 +120,7 @@ const OLD_LIBRARY = {
   language: "system",
   theme: { id: "tavora.default", variation: "dark" },
   followSystem: true,
+  radius: null,
   onboarded: true,
   makesModules: false,
   browser: { sharedSites: ["youtube.com"], adblockOff: [] },
