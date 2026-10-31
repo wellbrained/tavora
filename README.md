@@ -141,11 +141,11 @@ App changes don't raise the version in the PR. They add a change note to `apps/d
 On the maintainer's PC, release from clean, up-to-date `main` after pushing and passing GitHub Checks:
 
 ```sh
-pnpm release --dry-run  # validate, test and package without publishing
+pnpm release --dry-run  # everything up to the upload: GitHub builds and tests, this PC checks the files
 pnpm release            # publish the current version (patch or minor)
 ```
 
-Patch releases are normal; the server refuses a version that is not newer than the live one. The script checks versions, tags and patch notes, runs automated checks, packages and starts the app, then requires checks of the **new installed version**: startup, game add/remove, opening a module, and Settings. The server publishes the installer and blockmap before atomically switching `latest.yml`; the release is tagged afterward. Finally, verify that a previously installed version updates successfully. The upload uses the restricted `tavora-updates` key; every deploy (update feed, docs, API, Tavora Admin) has its own key that can only hand over one upload, set up as described in [deploy/README.md](deploy/README.md).
+Patch releases are normal; the server refuses a version that is not newer than the live one. The release is split (decided 2026-10-30): the script checks versions, tags and patch notes, then starts the **Release build** workflow on GitHub, which runs typecheck, unit and e2e tests, packages the Windows app, installs and starts it, and attests the files, with no secrets. The PC downloads the files, checks them against the SHA-256 the run printed and GitHub's attestation for that commit, uploads them, tags the commit and creates the GitHub release from the same files. From 1.0 on it also asks for checks of the **new installed version** (before 1.0 they are only listed). The server publishes the installer and blockmap before atomically switching `latest.yml`. Finally, verify that a previously installed version updates successfully. The upload uses the restricted `tavora-updates` key; every deploy (update feed, docs, API, Tavora Admin) has its own key that can only hand over one upload, set up as described in [deploy/README.md](deploy/README.md).
 
 ## License and security
 

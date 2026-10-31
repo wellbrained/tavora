@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { CHECKLIST, asksHandChecks, checkCi, checkInstalled, checkRelease, compareVersions, lastReleased } from "./release-guards.mjs";
+import { CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, compareVersions, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
 
 const ready = { branch: "main", dirty: false, ahead: 0, behind: 0, tags: [] as string[], noteVersions: ["0.4.0"] };
 
@@ -123,5 +123,47 @@ describe("asksHandChecks", () => {
   it("asks them again from 1.0.0 on", () => {
     expect(asksHandChecks("1.0.0")).toBe(true);
     expect(asksHandChecks("1.2.3")).toBe(true);
+  });
+});
+
+describe("the split release (CI builds, the PC checks and uploads)", () => {
+  const sha = "a".repeat(40);
+  const title = releaseRunTitle("0.24.0", true, "n0nce");
+  const run = (over: object) => ({ databaseId: 1, headSha: sha, displayTitle: title, status: "queued", event: "workflow_dispatch", ...over });
+
+  it("finds exactly the run it started (by its nonce), waits while GitHub hasn't listed it, and stops when main moved", () => {
+    expect(title).toBe("Release build 0.24.0 e2e=true (n0nce)");
+    expect(findDispatchedRun([], title, sha)).toEqual({ wait: true });
+    // Someone else's run of the same commit, even a newer one or one without e2e, is never taken.
+    expect(findDispatchedRun([run({ databaseId: 9, displayTitle: releaseRunTitle("0.24.0", false, "other") })], title, sha)).toEqual({ wait: true });
+    expect(findDispatchedRun([run({ event: "push" })], title, sha)).toEqual({ wait: true });
+    expect(findDispatchedRun([run({ databaseId: 9, displayTitle: "Release build 0.24.0 e2e=true (x)" }), run({ databaseId: 2 })], title, sha).run?.databaseId).toBe(2);
+    expect(findDispatchedRun([run({ headSha: "b".repeat(40) })], title, sha).problem).toContain("main moved");
+  });
+
+  it("reads the hashes CI printed, with the runner's log prefixes", () => {
+    const log = `package\tSHA-256\t2026-10-31T12:20:00.0000000Z RELEASE-SHA256 ${"c".repeat(64)}  Tavora-Setup-0.24.0.exe\r\npackage\tSHA-256\t2026-10-31T12:20:00.1Z RELEASE-SHA256 ${"d".repeat(64)}  latest.yml\n`;
+    const hashes = readCiHashes(log);
+    expect(hashes.get("Tavora-Setup-0.24.0.exe")).toBe("c".repeat(64));
+    expect(hashes.get("latest.yml")).toBe("d".repeat(64));
+    // The summary step's own script text must not count: it has no 64-hex hash.
+    expect(readCiHashes('$line = "RELEASE-SHA256 $(...)  $name"').size).toBe(0);
+  });
+
+  it("accepts only the files CI built, with a latest.yml that names this installer", () => {
+    const version = "0.24.0";
+    const all: string[] = releaseFiles(version).all;
+    const downloaded = new Map(all.map((name, i) => [name, { sha256: String(i).repeat(64), sha512: "SHA512==" }]));
+    const ci = new Map(all.map((name, i) => [name, String(i).repeat(64)]));
+    const yml = "version: 0.24.0\nfiles:\n  - url: Tavora-Setup-0.24.0.exe\n    sha512: SHA512==\npath: Tavora-Setup-0.24.0.exe\nsha512: SHA512==\n";
+    expect(checkDownload(version, downloaded, ci, yml)).toEqual([]);
+    expect(checkDownload(version, downloaded, new Map([...ci, ["latest.yml", "f".repeat(64)]]), yml).join(" ")).toContain("latest.yml is not the file");
+    expect(checkDownload(version, new Map([...downloaded].slice(1)), ci, yml).join(" ")).toContain("Tavora-Setup-0.24.0.exe is missing");
+    expect(checkDownload(version, downloaded, ci, yml.replace(/^sha512: .*$/m, "sha512: OTHER==")).join(" ")).toContain("sha512 is not the installer's");
+    expect(checkDownload(version, downloaded, ci, yml.replace("version: 0.24.0", "version: 0.23.0")).join(" ")).toContain("does not say version");
+  });
+
+  it("writes the GitHub release text from the patch notes", () => {
+    expect(releaseNotes({ version: "0.24.0", notes: ["One.", "Two."] })).toContain("### In 0.24.0\n\n- One.\n- Two.");
   });
 });

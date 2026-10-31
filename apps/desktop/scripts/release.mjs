@@ -1,24 +1,27 @@
 // `pnpm release`: publishes the Windows app's current version (patch or minor) to updates.mytavora.app.
 // Run on the maintainer's PC from a clean, up-to-date main.
 //
-//   pnpm release              checks, builds, uploads, tags and pushes the tag
-//   pnpm release --dry-run    checks and builds, then stops before the upload
-//   pnpm release --skip-e2e   leaves out the e2e suite (only for a retry after it passed)
-//   pnpm release --skip-ci-check  releases without asking GitHub whether Checks passed (offline only)
+//   pnpm release              checks, has GitHub build and test it, verifies the files, uploads, tags,
+//                             pushes the tag and creates the GitHub release
+//   pnpm release --dry-run    the same up to and including the download check, then stops before the upload
+//   pnpm release --skip-e2e   the Release build leaves out the e2e suite (only for a retry after it passed)
+//   pnpm release --skip-ci-check  doesn't wait for main's Checks run (the Release build runs the same tests)
 //
 // Before 1.0 the by-hand checks are listed with what already covers them, not asked (asksHandChecks).
 //
-// Uploads with the restricted tavora-updates key (deploy/README.md). On the server tavora-receive puts the
+// The split release (decided 2026-10-30/31): GitHub Actions builds and tests with no secrets
+// (.github/workflows/release-build.yml); this PC checks the files against CI's SHA-256 and GitHub's build
+// attestation, then uploads them with the restricted tavora-updates key (deploy/README.md). On the server tavora-receive puts the
 // installer and its blockmap first and latest.yml last, so a manifest never points at a file that is not
 // there yet, and refuses a version that is not newer than the live one.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkInstalled, checkRelease } from "./release-guards.mjs";
-import { checkStart } from "./start-check.mjs";
+import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, findDispatchedRun, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
 
 /** The version of the Tavora installed for this user (asar is off, so its package.json is a plain file), or null. */
@@ -30,10 +33,6 @@ function readInstalledVersion() {
     return null;
   }
 }
-
-// Some shells (an agent's in T3 Code) set this, and every Electron started below would then run as
-// plain Node: the e2e suite and the packaged start check would fail. The child processes inherit it.
-delete process.env.ELECTRON_RUN_AS_NODE;
 
 const desktop = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repo = path.dirname(path.dirname(desktop));
@@ -53,9 +52,19 @@ if (!dryRun) {
   }
 }
 const feed = "https://updates.mytavora.app";
+const REPO = "wellbrained/tavora";
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}
+/** Stops a Release build this run no longer needs (best effort). */
+function cancelRun(id) {
+  if (!id) return;
+  spawnSync("gh", ["run", "cancel", id, "--repo", REPO], { stdio: "ignore" });
+}
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { cwd: repo, stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit", encoding: "utf8", shell: false, ...options });
+  const result = spawnSync(command, args, { cwd: repo, stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit", encoding: "utf8", shell: false, maxBuffer: 512 * 1024 * 1024, ...options });
   if (result.error) throw result.error;
   if (result.status !== 0) {
     if (options.capture && result.stderr) console.error(result.stderr);
@@ -64,7 +73,6 @@ function run(command, args, options = {}) {
   return options.capture ? result.stdout.trim() : "";
 }
 const git = (...args) => run("git", args, { capture: true });
-const pnpm = (...args) => run(process.platform === "win32" ? "pnpm.cmd" : "pnpm", args, { shell: process.platform === "win32" });
 const step = (text) => console.log(`\n== ${text}`);
 
 const version = JSON.parse(readFileSync(path.join(desktop, "package.json"), "utf8")).version;
@@ -110,36 +118,77 @@ else {
   console.log("Checks passed on this commit.");
 }
 
-step("Typecheck and unit tests");
-pnpm("typecheck");
-pnpm("test");
-if (skipE2e) console.log("e2e skipped on request.");
-else {
-  step("e2e tests");
-  pnpm("build");
-  pnpm("test:e2e");
-}
+const { feed: feedFiles, all: allFiles } = releaseFiles(version);
+const installer = feedFiles[0];
 
-step("Building the installer");
-pnpm("build");
+// CI builds and tests with no secrets (.github/workflows/release-build.yml); this PC only checks and uploads.
+step("Release build on GitHub: tests, installer, install-and-start check");
+// A new nonce in the run's name: the run with exactly this name is the one started here, with these inputs.
+const title = releaseRunTitle(version, !skipE2e, randomBytes(8).toString("hex"));
+const nonce = /\(([0-9a-f]+)\)$/.exec(title)[1];
+run("gh", ["workflow", "run", "release-build.yml", "--repo", REPO, "--ref", "main", "-f", `version=${version}`, "-f", `e2e=${!skipE2e}`, "-f", `nonce=${nonce}`]);
+let ciRun;
+for (let attempt = 0; attempt < 30 && !ciRun; attempt++) {
+  const runs = JSON.parse(run("gh", ["run", "list", "--repo", REPO, "--workflow", "release-build.yml", "--branch", "main", "--event", "workflow_dispatch", "--limit", "20", "--json", "databaseId,headSha,displayTitle,status,event"], { capture: true }));
+  const found = findDispatchedRun(runs, title, built);
+  if (found.problem) {
+    cancelRun(String(found.run?.databaseId ?? ""));
+    fail(found.problem);
+  }
+  if (found.run) ciRun = found.run;
+  else await new Promise((resolve) => setTimeout(resolve, 4000));
+}
+if (!ciRun) fail(`GitHub did not list the Release build "${title}" within two minutes. Nothing was published; check the Actions tab.`);
+const runId = String(ciRun.databaseId);
+// From here on, stopping early (a failed check, Ctrl+C) also stops the run on GitHub.
+let finished = false;
+process.on("SIGINT", () => {
+  if (!finished) cancelRun(runId);
+  process.exit(130);
+});
+console.log(`https://github.com/${REPO}/actions/runs/${runId} (about 25 minutes${skipE2e ? ", without e2e" : ""})`);
+try {
+  run("gh", ["run", "watch", runId, "--repo", REPO, "--exit-status", "--interval", "30"]);
+} catch {
+  // Also reached by Ctrl+C (it stops gh run watch too): stop the run as well; a finished run stays as it is.
+  cancelRun(runId);
+  fail(`The Release build failed or was stopped; see the run above. Nothing was published or tagged.`);
+}
+finished = true;
+
+step("Downloading and checking what CI built");
 rmSync(releaseDir, { recursive: true, force: true });
-pnpm("--filter", "@tavora/desktop", "package", "--win", "--publish", "never");
-
-if (git("rev-parse", "HEAD") !== built) throw new Error("HEAD moved while building (a pull in this checkout?). Nothing was published; start again.");
-
-const installer = `Tavora-Setup-${version}.exe`;
-const files = [installer, `${installer}.blockmap`, "latest.yml"].map((name) => path.join(releaseDir, name));
-for (const file of files) if (!existsSync(file)) throw new Error(`The build did not produce ${path.basename(file)}.`);
-if (!new RegExp(`^version: ${version.replaceAll(".", "\\.")}$`, "m").test(readFileSync(files[2], "utf8"))) {
-  throw new Error(`latest.yml does not say version ${version}.`);
+mkdirSync(releaseDir, { recursive: true });
+run("gh", ["run", "download", runId, "--repo", REPO, "-n", `tavora-release-${version}`, "-D", releaseDir]);
+const downloaded = new Map();
+for (const name of allFiles) {
+  const file = path.join(releaseDir, name);
+  if (!existsSync(file)) continue;
+  const bytes = readFileSync(file);
+  downloaded.set(name, { sha256: createHash("sha256").update(bytes).digest("hex"), sha512: createHash("sha512").update(bytes).digest("base64") });
 }
-console.log(`Built ${installer} and its update files.`);
-
-// The installed app's full start is checked on CI (Checks, packaged-start); this catches a
-// build that quits at once. Next to a running Tavora it can only get as far as the handover.
-step("Starting the packaged build");
-const started = await checkStart(path.join(releaseDir, "win-unpacked", "Tavora.exe"), { allowHandover: true });
-console.log(started === "window" ? "It started and showed its window." : "It handed over to a Tavora that is already running (the window check ran on CI).");
+// The log can take a moment to be ready after the run ends.
+let ciLog = "";
+for (let attempt = 0; attempt < 5 && !ciLog; attempt++) {
+  try {
+    ciLog = run("gh", ["run", "view", runId, "--repo", REPO, "--log"], { capture: true });
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 6000));
+  }
+}
+const ciHashes = readCiHashes(ciLog);
+const latestYml = existsSync(path.join(releaseDir, "latest.yml")) ? readFileSync(path.join(releaseDir, "latest.yml"), "utf8") : "";
+const downloadProblems = checkDownload(version, downloaded, ciHashes, latestYml);
+if (downloadProblems.length) fail(`Not releasing ${version}:\n  - ${downloadProblems.join("\n  - ")}\nNothing was published or tagged.`);
+// GitHub's signed statement that exactly these bytes came from this workflow, on main, at the commit checked above.
+for (const name of allFiles) {
+  try {
+    run("gh", ["attestation", "verify", path.join(releaseDir, name), "--repo", REPO, "--signer-workflow", `${REPO}/.github/workflows/release-build.yml`, "--source-ref", "refs/heads/main", "--source-digest", built, "--deny-self-hosted-runners"], { capture: true });
+  } catch {
+    fail(`${name} has no valid attestation from the Release build of ${built.slice(0, 7)}. Nothing was published or tagged.`);
+  }
+}
+console.log(`The files match what the Release build made from ${built.slice(0, 7)} (SHA-256 and attestation), and latest.yml points at the installer.`);
 
 if (dryRun) {
   console.log("\nDry run: stopping before the upload. Nothing was published or tagged.");
@@ -176,15 +225,38 @@ step(`Publishing ${version} to ${feed}`);
 const bundle = path.join(tmpdir(), `tavora-updates-${version}.tar`);
 const tar = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
 try {
-  run(tar, ["-cf", bundle, "-C", releaseDir, ...files.map((file) => path.basename(file))]);
+  run(tar, ["-cf", bundle, "-C", releaseDir, ...feedFiles]);
   publish("updates", version, bundle);
 } finally {
   rmSync(bundle, { force: true });
 }
 
+// The update is live from here on; what fails now is finished by hand, and the script says how.
 step("Tagging");
-git("tag", "-a", `v${version}`, built, "-m", `Tavora ${version}`);
-git("push", "origin", `v${version}`);
+try {
+  git("tag", "-a", `v${version}`, built, "-m", `Tavora ${version}`);
+  git("push", "origin", `v${version}`);
+} catch (error) {
+  fail(
+    `${version} is published, but tagging failed (${error.message}). Finish by hand:\n` +
+      `  git tag -a v${version} ${built} -m "Tavora ${version}"   (skip if the tag exists)\n` +
+      `  git push origin v${version}\n` +
+      `  gh release create v${version} --repo ${REPO} --verify-tag --title "Tavora ${version} (preview build)" --notes "Windows preview build of Tavora." ${allFiles.map((name) => `"${path.join(releaseDir, name)}"`).join(" ")}`,
+  );
+}
+
+// The GitHub release gets the same verified files (and the zip), with the version's patch notes.
+step("GitHub release");
+try {
+  const { PATCH_NOTES } = await import(pathToFileURL(path.join(desktop, "src", "shared", "patch-notes.ts")).href);
+  const note = PATCH_NOTES.find((entry) => entry.version === version);
+  const notesFile = path.join(tmpdir(), `tavora-release-notes-${version}.md`);
+  writeFileSync(notesFile, releaseNotes(note));
+  run("gh", ["release", "create", `v${version}`, "--repo", REPO, "--verify-tag", "--title", `Tavora ${version} (preview build)`, "--notes-file", notesFile, ...allFiles.map((name) => path.join(releaseDir, name))]);
+  rmSync(notesFile, { force: true });
+} catch (error) {
+  console.error(`The update is published and tagged, but the GitHub release failed (${error.message}). Create it by hand from ${releaseDir}.`);
+}
 
 console.log(`\n${AFTER_RELEASE}`);
 console.log(`\nReleased ${version}. Installed apps will pick it up within about 6 hours; new installs: ${feed}/${installer}`);
