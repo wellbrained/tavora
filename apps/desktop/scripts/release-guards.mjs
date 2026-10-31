@@ -22,15 +22,11 @@ export function lastReleased(tags) {
  * What stands in the way of releasing `version`. Empty means go.
  * state: { branch, dirty, ahead, behind, tags, noteVersions }
  *   noteVersions: every version in the patch notes, newest first.
- * options.allowPatch: a one-off release of a patch version (x.y.z), e.g. to try an update.
+ * Patch versions are released like minor ones (decided 2026-10-30); CI, e2e and the start check gate them.
  */
-export function checkRelease(version, state, options = {}) {
+export function checkRelease(version, state) {
   const problems = [];
-  const match = SEMVER.exec(version);
-  if (!match) return [`The app version "${version}" is not major.minor.patch.`];
-  if (match[3] !== "0" && !options.allowPatch) {
-    problems.push(`Only minor releases are published (x.y.0); ${version} is a patch version. Raise the minor number first (or use --allow-patch for a one-off).`);
-  }
+  if (!SEMVER.test(version)) return [`The app version "${version}" is not major.minor.patch.`];
   if (state.branch !== "main") problems.push(`Release from main, not from "${state.branch}".`);
   if (state.dirty) problems.push("There are uncommitted changes.");
   if (state.behind > 0) problems.push(`main is ${state.behind} commit(s) behind origin/main; pull first.`);
