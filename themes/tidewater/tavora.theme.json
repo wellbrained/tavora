@@ -1,0 +1,72 @@
+{
+  "id": "tavora.tidewater",
+  "name": "Tidewater",
+  "description": "Deep sea teal, calm for long sessions.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "variations": [
+    {
+      "id": "dark",
+      "name": "Dark",
+      "mode": "dark",
+      "radius": 8,
+      "colors": {
+        "background": "#0f1717",
+        "foreground": "#e4f0ee",
+        "card": "#162121",
+        "card-foreground": "#e4f0ee",
+        "popover": "#162121",
+        "popover-foreground": "#e4f0ee",
+        "primary": "#4fc4b4",
+        "primary-hover": "#6dd3c5",
+        "primary-foreground": "#0b1414",
+        "secondary": "#1f2c2c",
+        "secondary-foreground": "#e4f0ee",
+        "muted": "#1f2c2c",
+        "muted-foreground": "#8fa6a3",
+        "accent": "#1f2c2c",
+        "accent-foreground": "#e4f0ee",
+        "destructive": "#ef6b5e",
+        "border": "#2a3a3a",
+        "input": "#5f7472",
+        "ring": "#4fc4b4",
+        "rail": "#0a1010",
+        "success": "#7fd18f",
+        "warning": "#e6c56a",
+        "info": "#6fb2e8"
+      }
+    }
+    ,
+    {
+      "id": "light",
+      "name": "Light",
+      "mode": "light",
+      "radius": 8,
+      "colors": {
+        "background": "#edf4f3",
+        "foreground": "#142120",
+        "card": "#f9fdfc",
+        "card-foreground": "#142120",
+        "popover": "#f9fdfc",
+        "popover-foreground": "#142120",
+        "primary": "#0f6b60",
+        "primary-hover": "#0b5a50",
+        "primary-foreground": "#ffffff",
+        "secondary": "#dde9e7",
+        "secondary-foreground": "#142120",
+        "muted": "#dde9e7",
+        "muted-foreground": "#4e6461",
+        "accent": "#dde9e7",
+        "accent-foreground": "#142120",
+        "destructive": "#b0322a",
+        "border": "#cbdcd9",
+        "input": "#7a8f8c",
+        "ring": "#0f6b60",
+        "rail": "#e2edeb",
+        "success": "#2d7136",
+        "warning": "#7f6100",
+        "info": "#25619c"
+      }
+    }
+  ]
+}
