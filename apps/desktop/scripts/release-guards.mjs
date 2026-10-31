@@ -45,7 +45,7 @@ export function checkRelease(version, state) {
     (v) => v !== version && compareVersions(v, version) < 0 && (previous === null || compareVersions(v, previous) > 0),
   );
   if (unfolded.length) {
-    problems.push(`Fold the patch-notes entries ${unfolded.join(", ")} into the ${version} entry and remove them.`);
+    problems.push(`Fold the patch-notes entries ${unfolded.join(", ")} into the ${version} entry: pnpm release:fold, go over the wording, merge it as a pull request.`);
   }
   return problems;
 }
