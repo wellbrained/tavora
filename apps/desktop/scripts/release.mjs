@@ -1,10 +1,9 @@
-// `pnpm release`: publishes a minor version of the Windows app to updates.mytavora.app.
-// Run on the maintainer's PC from a clean, up-to-date main whose version is x.y.0.
+// `pnpm release`: publishes the Windows app's current version (patch or minor) to updates.mytavora.app.
+// Run on the maintainer's PC from a clean, up-to-date main.
 //
 //   pnpm release              checks, builds, uploads, tags and pushes the tag
 //   pnpm release --dry-run    checks and builds, then stops before the upload
 //   pnpm release --skip-e2e   leaves out the e2e suite (only for a retry after it passed)
-//   pnpm release --allow-patch  a one-off release of a patch version (x.y.z), e.g. to try an update
 //   pnpm release --skip-ci-check  releases without asking GitHub whether Checks passed (offline only)
 //
 // Before 1.0 the by-hand checks are listed with what already covers them, not asked (asksHandChecks).
@@ -41,7 +40,7 @@ const repo = path.dirname(path.dirname(desktop));
 const releaseDir = path.join(desktop, "release");
 const dryRun = process.argv.includes("--dry-run");
 const skipE2e = process.argv.includes("--skip-e2e");
-const allowPatch = process.argv.includes("--allow-patch");
+if (process.argv.includes("--allow-patch")) console.log("--allow-patch is no longer needed: patch versions are released like any other.");
 const skipCi = process.argv.includes("--skip-ci-check");
 
 // The upload key is checked before anything is built: TAVORA_DEPLOY_HOST and TAVORA_UPDATES_SSH_KEY.
@@ -81,7 +80,7 @@ const problems = checkRelease(version, {
   behind: Number(git("rev-list", "--count", "HEAD..origin/main")),
   tags: git("tag", "--list", "v*").split(/\r?\n/).filter(Boolean),
   noteVersions,
-}, { allowPatch });
+});
 if (problems.length) {
   console.error(`\nNot releasing ${version}:`);
   for (const problem of problems) console.error(`  - ${problem}`);
