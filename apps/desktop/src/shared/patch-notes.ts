@@ -30,17 +30,6 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.23.12",
     date: "2026-10-31",
-    title: "Profile over your workspace",
-    notes: [
-      "The profile dialog now opens above your workspace panels.",
-    ],
-    prs: [
-      { number: 545, title: "Profile dialog opens above workspace panels" },
-    ],
-  },
-  {
-    version: "0.23.11",
-    date: "2026-10-31",
     title: "A tidier Settings",
     notes: [
       "Settings has a shorter menu that fits without scrolling: General, Appearance, Games, Shortcuts, Modules, Connections, Overlays & streaming, Browser and Developer, with About & updates at the bottom.",
@@ -52,6 +41,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       "An updated built-in module now starts once in its open panels, not twice.",
     ],
     prs: [
+      { number: 545, title: "Profile dialog opens above workspace panels" },
       { number: 544, title: "Settings: a short menu with one row per setting, and a profile dialog" },
       { number: 538, title: "Start an updated built-in module's panels once" },
     ],
