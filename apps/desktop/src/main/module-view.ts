@@ -86,6 +86,8 @@ export interface ModuleViewOptions {
   };
   /** Why the panel's page is loading (panel.getLaunch); asked once for each page load. */
   launch(): PanelLaunch;
+  /** Whether this panel, just added, may open its dialog once without a click (false when it came with another one from the same click). */
+  mayWelcome?(): boolean;
   /** What the panel shows now (panel.setContent), already checked. */
   setContent(content: PanelContent | null): void;
   /** panels.open from this panel, after its click was taken: the host picks or opens the destination. */
@@ -547,7 +549,7 @@ export class ModuleView {
    * click, and only within ADD_DIALOG_MS of its page starting. A reload or any later page gets none.
    */
   private startPage(launch: PanelLaunch): void {
-    this.addPass = launch.reason === "add" && !this.overGame ? { until: this.pageStartedAt + ADD_DIALOG_MS } : null;
+    this.addPass = launch.reason === "add" && !this.overGame && (this.options.mayWelcome?.() ?? true) ? { until: this.pageStartedAt + ADD_DIALOG_MS } : null;
   }
 
   /** panel.setDialog: opening takes a click or key press, or the pass of a panel just added (used up either way). */

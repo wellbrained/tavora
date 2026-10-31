@@ -3,7 +3,7 @@
 
 import path from "node:path";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { desktopDir, expectModuleText, inModule, launch, openModule } from "./harness";
+import { desktopDir, expectModuleText, inModule, launch, panels } from "./harness";
 
 const PROBES = path.join(desktopDir, "test/dialog-fixtures");
 const PROBE = "local.test.welcome-probe";
@@ -21,6 +21,13 @@ async function gesture(app: ElectronApplication) {
 type Answer = { ok: boolean; error?: { code: string } };
 const openDialog = (app: ElectronApplication) => inModule<Answer>(app, PROBE, `window.probe.call("panel.setDialog", { open: true, width: 480, height: 320 })`);
 
+/** Adds one panel of the probe from the module library, which stays open for the next one. */
+async function addProbe(page: Page) {
+  await page.getByTestId("add-module").click();
+  await page.getByTestId(`panel-menu-toggle-${PROBE}`).click();
+  await page.getByTestId(`open-${PROBE}-welcome`).click();
+}
+
 /** A click on the dimmed rail, beside the dialog. */
 async function clickBeside(page: Page) {
   await page.mouse.click(30, 450);
@@ -29,11 +36,13 @@ async function clickBeside(page: Page) {
 test("a panel just added opens its welcome over the workspace, and a click beside it doesn't close it", async () => {
   const { app, page, userData } = await launch(undefined, [PROBES]);
   try {
-    await openModule(page, PROBE);
+    await addProbe(page);
     await expectModuleText(app, PROBE, "probe-auto", "opened");
     const frame = page.getByTestId("panel-dialog");
     await expect(frame).toBeVisible();
     await expect(frame).not.toHaveAttribute("data-closes-on-click-beside");
+    // The welcome is the next step after Add: the library steps aside.
+    await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
 
     // Centred over the workspace area and inside it: the rail and the header stay in sight around it.
     const area = (await page.locator("[data-workspace-area]").boundingBox())!;
@@ -78,5 +87,36 @@ test("a panel just added opens its welcome over the workspace, and a click besid
     expect((await openDialog(again.app)).error?.code).toBe("PERMISSION_DENIED");
   } finally {
     await again.app.close();
+  }
+});
+
+test("opening several panels from the dialog puts the panel back in its slot first", async () => {
+  const { app, page } = await launch(undefined, [PROBES]);
+  try {
+    await addProbe(page);
+    await expectModuleText(app, PROBE, "probe-auto", "opened");
+    await expect(page.getByTestId("panel-dialog")).toBeVisible();
+
+    await gesture(app);
+    const answer = await inModule<{ ok: boolean; result?: Record<string, string> }>(app, PROBE, `window.probe.call("panels.openMany", { types: ["welcome", "other"] })`);
+    expect(answer.result).toEqual({ welcome: "shown", other: "opened" });
+    await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
+    await expect(panels(page, PROBE)).toHaveCount(2);
+  } finally {
+    await app.close();
+  }
+});
+
+test("Add all gives one welcome, from the last panel only, the one in front", async () => {
+  const { app, page } = await launch(undefined, [PROBES]);
+  try {
+    await page.getByTestId("add-module").click();
+    await page.getByTestId(`open-all-${PROBE}`).click();
+    await expectModuleText(app, PROBE, "probe-auto", "PERMISSION_DENIED", 0);
+    await expectModuleText(app, PROBE, "probe-auto", "opened", 1);
+    await expect(page.getByTestId("panel-dialog")).toHaveCount(1);
+    await expect(panels(page, PROBE)).toHaveCount(2);
+  } finally {
+    await app.close();
   }
 });

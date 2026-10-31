@@ -345,9 +345,9 @@ describe("a panel shown again", () => {
 describe("a dialog right after Add", () => {
   type Opened = { open: boolean; byClick: boolean | undefined };
   const SIZE = { width: 560, height: 640 };
-  function made_(launch: { reason: string }) {
+  function made_(launch: { reason: string }, extra: Record<string, unknown> = {}) {
     const opened: Opened[] = [];
-    const view = make({ setDialog: (open: boolean, _size: unknown, how?: { byClick: boolean }) => void opened.push({ open, byClick: how?.byClick }) });
+    const view = make({ setDialog: (open: boolean, _size: unknown, how?: { byClick: boolean }) => void opened.push({ open, byClick: how?.byClick }), ...extra });
     const inner = view as unknown as { startPage(launch: unknown): void; requestDialog(open: boolean, size: typeof SIZE): Promise<void> };
     inner.startPage(launch);
     return { view, opened, ask: (open = true) => inner.requestDialog(open, SIZE) };
@@ -380,6 +380,12 @@ describe("a dialog right after Add", () => {
       await expect(ask()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
       expect(opened).toEqual([]);
     }
+  });
+
+  it("is not there for a panel that came with another one from the same click", async () => {
+    const { opened, ask } = made_({ reason: "add" }, { mayWelcome: () => false });
+    await expect(ask()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(opened).toEqual([]);
   });
 
   it("is not there over the game", async () => {

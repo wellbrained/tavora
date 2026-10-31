@@ -8,6 +8,22 @@
   "minTavora": "0.21.95",
   "entry": "index.html",
   "games": [],
-  "viewport": { "minWidth": 320, "minHeight": 240 },
-  "permissions": { "network": [] }
+  "viewport": {
+    "minWidth": 320,
+    "minHeight": 240
+  },
+  "panels": [
+    {
+      "id": "welcome",
+      "name": "Welcome Probe",
+      "continues": true
+    },
+    {
+      "id": "other",
+      "name": "Other"
+    }
+  ],
+  "permissions": {
+    "network": []
+  }
 }

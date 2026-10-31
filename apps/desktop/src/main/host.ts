@@ -2540,7 +2540,7 @@ export class Host {
 
       // Panels and workspace
       "open-module": (action) =>
-        this.openModule(action.moduleId, { ...(action.panelType ? { panelType: action.panelType } : {}), ...(action.reuse ? { reuse: true } : {}) }),
+        this.openModule(action.moduleId, { ...(action.panelType ? { panelType: action.panelType } : {}), ...(action.reuse ? { reuse: true } : {}), ...(action.moreFollow ? { moreFollow: true } : {}) }),
       "choose-panel-type": (action) => this.choosePanelType(action.instanceId, action.panelType),
       "close-panel": (action) => this.closePanel(action.instanceId),
       "remove-module-from-workspace": (action) => this.removeModuleFromWorkspace(action.moduleId),
@@ -3201,7 +3201,7 @@ export class Host {
    */
   private openModule(
     moduleId: string,
-    options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string; launch?: PanelLaunch; reuse?: boolean; instanceId?: string; placement?: PanelPlacement } = {},
+    options: { openedFrom?: { instanceId: string; background: boolean }; panelType?: string; launch?: PanelLaunch; reuse?: boolean; instanceId?: string; placement?: PanelPlacement; moreFollow?: boolean } = {},
   ): string | void {
     const { openedFrom } = options;
     const workspace = this.workspace;
@@ -3221,6 +3221,7 @@ export class Host {
     if (openedFrom) this.panels.setOpenedFrom(record.instanceId, openedFrom);
     if (options.placement) this.panels.setPlacement(record.instanceId, options.placement);
     this.panels.setLaunch(record.instanceId, options.launch ?? { reason: "add" });
+    if (options.moreFollow) this.panels.withholdWelcome(record.instanceId);
     this.createView(record, workspace, performance.now());
     return record.instanceId;
   }
@@ -3550,8 +3551,10 @@ export class Host {
   private applySnapshot(snapshotId: string): void {
     const { opened, closed } = this.workspaces.applySnapshot(this.currentWorkspaceId(), snapshotId);
     for (const record of closed) this.closeView(record.instanceId);
-    for (const record of opened) {
+    for (const [index, record] of opened.entries()) {
       this.panels.setLaunch(record.instanceId, { reason: "add" });
+      // A layout is one click: one welcome at most.
+      if (index < opened.length - 1) this.panels.withholdWelcome(record.instanceId);
       this.createView(record, this.workspace!);
     }
   }
@@ -3649,6 +3652,7 @@ export class Host {
       },
       tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at),close:(id,hoverOnly)=>this.tooltips.close(record.instanceId,id,hoverOnly)},
       launch: () => this.launchOf(record),
+      mayWelcome: () => this.panels.takeWelcome(record.instanceId),
       setContent: (content) => this.setPanelContent(record, content),
       openPanel: (type, content) => this.openRelatedPanel(record, type, content),
       openPanels: async (types) => this.openPanels(record, types),
@@ -3748,7 +3752,7 @@ export class Host {
    * several of the module's own panel types, each once, in the workspace shown now. A type open there already (the asking
    * panel's own, too) comes to the front where it is; the others open new, docked around the panel that asked as the
    * manifest's panelLayout says (the host UI fits it into that panel's group), else each where panels.open puts a panel.
-   * The panel that asked keeps the focus.
+   * The panel that asked keeps the focus; if it was in its dialog, the dialog closes first.
    */
   private openPanels(from: InstanceRecord, types: string[]): Record<string, PanelOpenManyResult> {
     const workspace = this.workspace;
@@ -3758,6 +3762,8 @@ export class Host {
     const known = new Set(panelTypes(manifest).map((type) => type.id));
     const unknown = types.find((type) => !known.has(type));
     if (unknown !== undefined) throw new HostError("INVALID_PARAMS", `this module has no panel type "${unknown}"`);
+    // Called from its dialog (a welcome's last step), the panel goes back in its slot first, so the layout is laid out around it.
+    this.closePanelDialog(from.instanceId);
     const result: Record<string, PanelOpenManyResult> = {};
     const shown: string[] = [];
     // The new panels' ids come first, so the layout can name them before they open.

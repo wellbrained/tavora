@@ -586,8 +586,10 @@ export function showOrAddPanel(moduleId: string, panelType: string | null): void
 /** Opens a module's panels one after another, the first into `slot`; stops at the first that fails (its error is shown). */
 export async function openPanels(moduleId: string, slot: string | null, panelTypes: string[]): Promise<void> {
   nextPanelSlot.value = slot;
-  for (const panelType of panelTypes.length ? panelTypes : [undefined]) {
-    const result = await act({ type: "open-module", moduleId, ...(panelType ? { panelType } : {}) });
+  const types = panelTypes.length ? panelTypes : [undefined];
+  for (const [index, panelType] of types.entries()) {
+    // One click, one welcome: only the last panel of an Add all, the one in front, may open its dialog on its own.
+    const result = await act({ type: "open-module", moduleId, ...(panelType ? { panelType } : {}), ...(index < types.length - 1 ? { moreFollow: true } : {}) });
     if (!result.ok) return;
   }
 }
@@ -626,7 +628,18 @@ api.onModuleMenu((menu) => (moduleMenu.value = menu));
 
 /** The panel shown big in a dialog over the workspace (PanelDialog.vue), or null. */
 export const panelDialog = shallowRef<PanelDialog | null>(null);
-api.onPanelDialog((dialog) => (panelDialog.value = dialog));
+let panelDialogChanges = 0;
+api.onPanelDialog(async (shown) => {
+  const change = ++panelDialogChanges;
+  // A welcome (a panel just added opened its dialog on its own) is the next step after Add: the library steps aside,
+  // so the welcome sits over the workspace, not inside the library.
+  if (shown && !shown.closesOnClickBeside && dialog.value?.kind === "add-module") {
+    dialog.value = null;
+    await nextTick();
+    if (change !== panelDialogChanges) return;
+  }
+  panelDialog.value = shown;
+});
 
 /** Still images of the panels, by instance id, while they are hidden. */
 export const frozen = shallowRef<Record<string, string>>({});

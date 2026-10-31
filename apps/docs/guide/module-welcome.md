@@ -6,11 +6,12 @@ The reference is Palworld's welcome (`palworld/src/Welcome.vue` in the modules r
 
 ## When it shows
 
-- **Once, right after Add.** Only a panel whose `panel.getLaunch()` answers `add` shows it, and only if the user hasn't seen it yet. A restore, a reload or a panel opened with `panels.open` never shows it.
+- **Once, right after Add.** Only a panel whose `panel.getLaunch()` answers `add` shows it, and only if the user hasn't seen it yet. A restore, a reload or a panel opened with `panels.open` or `panels.openMany` never shows it. When Add all adds several of your panels, only the last one, the one in front, may open the dialog; the others are refused like any late call.
+- **The library steps aside.** When the welcome opens, Tavora closes the module library, so the welcome sits over the workspace.
 - **In a dialog over the workspace.** Tavora lets a panel just added call `panel.openDialog()` once without a click, within 10 seconds of its page starting. Call it as soon as you know the user hasn't seen the welcome.
-- **In the panel if the dialog is refused.** Over the game, on a Tavora older than this feature, or after 10 seconds, `openDialog` fails. Show the welcome in the panel's place instead, so it's never lost.
+- **In the panel if the dialog is refused.** Over the game, on a Tavora older than this feature, or after 10 seconds, `openDialog` fails. Show the welcome in the panel's place instead, so it's never lost. With several panel types, Add all can leave copies of it in the panels behind the dialog: keep "seen" in a document then (see below), so every copy ends with it.
 - **Seen means closed.** Skip, Esc, Done, Tavora's close button and your own close all count. There's no "remind me later".
-- **Remember it where its choices live.** If the steps change settings that every workspace shares, remember it in `storage.app`, so the user sees it once. If they change data of this workspace (like Palworld's spoiler level and import, which live in the workspace's settings document), remember it there too.
+- **Remember it where its choices live.** A module with one panel type and settings every workspace shares remembers it in `storage.app`, so the user sees it once. A module with several panel types, or whose steps change this workspace's data, keeps it in a document (like Palworld's settings document): every panel hears it change through `documents.onChange`, so a copy of the welcome in another panel ends too.
 - **Existing users don't get it.** Their panels restore, so they never see an `add`. Offer it with **Show again** in your settings instead.
 
 ```ts
