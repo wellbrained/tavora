@@ -96,9 +96,9 @@ const showVariation = computed(() => {
     >
       <p class="font-medium">{{ t("settings.theme.label") }}</p>
       <p class="text-muted-foreground mt-0.5 mb-4 text-sm">{{ t("settings.theme.description") }}</p>
-      <!-- Two themes a row at least, three or four when there is room. -->
-      <div class="@container">
-        <div class="grid grid-cols-2 gap-3 @xl:grid-cols-3 @3xl:grid-cols-4" role="group" :aria-label="t('settings.theme.label')" data-testid="themes">
+      <!-- One theme a row: its preview at full size on the left, name and line next to it. -->
+      <div>
+        <div class="divide-y overflow-hidden rounded-lg border" role="group" :aria-label="t('settings.theme.label')" data-testid="themes">
           <button
             v-for="theme in appearance.themes"
             :key="theme.id"
@@ -106,15 +106,15 @@ const showVariation = computed(() => {
             :aria-pressed="theme.id === appearance.themeId"
             :class="
               cn(
-                'bg-background hover:border-input flex flex-col overflow-hidden rounded-lg border text-left',
-                theme.id === appearance.themeId && 'border-primary ring-primary/40 hover:border-primary ring-1',
+                'bg-card hover:bg-accent flex w-full items-stretch text-left transition-colors',
+                theme.id === appearance.themeId && 'bg-primary/10 hover:bg-primary/15 shadow-[inset_3px_0_0_var(--primary)]',
               )
             "
             :data-testid="`theme-${theme.id}`"
             @click="pick(theme)"
           >
             <!-- The preview: rail, window, a card with text and the primary button, in the theme's colours. -->
-            <span class="flex h-24 w-full" :style="{ background: previewOf(theme).colors.background }" aria-hidden="true">
+            <span class="flex h-24 w-52 flex-none border-r" :style="{ background: previewOf(theme).colors.background }" aria-hidden="true">
               <span class="flex w-7 flex-none flex-col items-center gap-1.5 pt-2.5" :style="{ background: previewOf(theme).colors.rail }">
                 <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.primary }" />
                 <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
@@ -143,7 +143,7 @@ const showVariation = computed(() => {
                 </span>
               </span>
             </span>
-            <span class="bg-card flex flex-1 flex-col gap-0.5 border-t px-3 py-2.5">
+            <span class="flex min-w-0 flex-1 flex-col justify-center gap-0.5 px-4 py-2.5">
               <span class="flex items-center gap-2">
                 <span class="truncate font-medium">{{ theme.name }}</span>
                 <Badge v-if="mixedThemes" variant="outline" :class="cn('flex-none font-normal', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')">{{
@@ -151,7 +151,7 @@ const showVariation = computed(() => {
                 }}</Badge>
                 <Check v-if="theme.id === appearance.themeId" class="text-primary ml-auto size-4 flex-none" :stroke-width="1.5" />
               </span>
-              <span v-if="theme.description" class="text-muted-foreground line-clamp-2 text-xs">{{ theme.description }}</span>
+              <span v-if="theme.description" class="text-muted-foreground line-clamp-2 text-sm">{{ theme.description }}</span>
               <span v-if="theme.variations.length > 1" class="text-muted-foreground text-xs">{{ theme.variations.map((item) => item.name).join(" · ") }}</span>
             </span>
           </button>
