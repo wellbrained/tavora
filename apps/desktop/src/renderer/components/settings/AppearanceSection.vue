@@ -1,13 +1,14 @@
 <script setup lang="ts">
-// Settings > Appearance: pick an installed theme and its variation. Each
-// card is a small preview of the theme drawn with its own colours, so a
-// theme can be judged before it is picked; picking applies it at once, and
+// Settings > Appearance: pick an installed theme and its variation. The theme
+// choice is a dropdown whose rows show a small preview of each theme in its own
+// colours, so a theme can be judged before it is picked; picking applies it at once, and
 // Reset always goes back to the Tavora default. Below are how text and tabs
 // look, and the user's own themes.
-import { Check, CopyPlus, FolderOpen, RefreshCw } from "@lucide/vue";
+import { CopyPlus, FolderOpen, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@tavora/official-ui/components/ui/select";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ import { act, state, tryToasts } from "../../host";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
+import ThemePreview from "./ThemePreview.vue";
 
 defineProps<{ highlight: string | null }>();
 
@@ -29,8 +31,9 @@ function previewOf(theme: ThemeView): ThemeVariationView {
   return theme.variations.find((item) => item.id === appearance.value.variationId) ?? theme.variations[0]!;
 }
 
-function pick(theme: ThemeView) {
-  if (theme.id === appearance.value.themeId) return;
+function pickId(id: string) {
+  const theme = appearance.value.themes.find((item) => item.id === id);
+  if (!theme || theme.id === appearance.value.themeId) return;
   // Keep the same kind of variation (say Light) when the new theme has one.
   const variation = theme.variations.find((item) => item.id === appearance.value.variationId) ?? theme.variations[0]!;
   void act({ type: "set-theme", themeId: theme.id, variationId: variation.id });
@@ -90,74 +93,40 @@ const showVariation = computed(() => {
 
 <template>
   <SettingGroup>
-    <div
-      :class="cn('-mx-5 border-b px-5 pt-4 pb-5 transition-colors duration-500', highlight === 'theme' && 'bg-primary/10')"
-      data-setting="theme"
+    <SettingRow
+      :label="t('settings.theme.label')"
+      :description="t('settings.theme.description')"
+      setting="theme"
+      :highlighted="highlight === 'theme'"
     >
-      <p class="font-medium">{{ t("settings.theme.label") }}</p>
-      <p class="text-muted-foreground mt-0.5 mb-4 text-sm">{{ t("settings.theme.description") }}</p>
-      <!-- One theme a row: its preview at full size on the left, name and line next to it. -->
-      <div>
-        <div class="divide-y overflow-hidden rounded-lg border" role="group" :aria-label="t('settings.theme.label')" data-testid="themes">
-          <button
+      <!-- One choice: closed it shows the theme in use, open it lists every theme with a preview in its own colours. -->
+      <Select :model-value="appearance.themeId" @update:model-value="(id) => pickId(String(id))">
+        <SelectTrigger class="h-auto! min-w-60 py-1.5 pl-1.5" :aria-label="t('settings.theme.label')" data-testid="theme-select">
+          <span class="flex min-w-0 items-center gap-2.5">
+            <ThemePreview v-if="active" :variation="previewOf(active)" size="sm" />
+            <span class="truncate font-medium">{{ active?.name }}</span>
+          </span>
+        </SelectTrigger>
+        <SelectContent class="max-h-[min(70vh,36rem)] w-[26rem]" data-testid="themes">
+          <SelectItem
             v-for="theme in appearance.themes"
             :key="theme.id"
-            type="button"
-            :aria-pressed="theme.id === appearance.themeId"
-            :class="
-              cn(
-                'bg-card hover:bg-accent flex w-full items-stretch text-left transition-colors',
-                theme.id === appearance.themeId && 'bg-primary/10 hover:bg-primary/15 shadow-[inset_3px_0_0_var(--primary)]',
-              )
-            "
+            :value="theme.id"
+            :description="theme.description ?? undefined"
+            class="gap-3"
             :data-testid="`theme-${theme.id}`"
-            @click="pick(theme)"
           >
-            <!-- The preview: rail, window, a card with text and the primary button, in the theme's colours. -->
-            <span class="flex h-24 w-52 flex-none border-r" :style="{ background: previewOf(theme).colors.background }" aria-hidden="true">
-              <span class="flex w-7 flex-none flex-col items-center gap-1.5 pt-2.5" :style="{ background: previewOf(theme).colors.rail }">
-                <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.primary }" />
-                <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
-                <span class="size-3.5 rounded-[4px]" :style="{ background: previewOf(theme).colors.secondary }" />
-              </span>
-              <span class="relative flex flex-1 p-2.5">
-                <span
-                  class="flex flex-1 flex-col gap-1.5 border p-2"
-                  :style="{
-                    background: previewOf(theme).colors.card,
-                    borderColor: previewOf(theme).colors.border,
-                    borderRadius: `${previewOf(theme).radius}px`,
-                  }"
-                >
-                  <span class="h-1.5 w-3/4 rounded-full" :style="{ background: previewOf(theme).colors.foreground }" />
-                  <span class="h-1.5 w-1/2 rounded-full" :style="{ background: previewOf(theme).colors['muted-foreground'] }" />
-                  <span class="mt-auto flex gap-1.5">
-                    <span class="h-3.5 w-10" :style="{ background: previewOf(theme).colors.primary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
-                    <span class="h-3.5 w-8" :style="{ background: previewOf(theme).colors.secondary, borderRadius: `${previewOf(theme).radius / 2}px` }" />
-                  </span>
-                </span>
-                <!-- A toast pill, as the theme colours it. -->
-                <span class="absolute bottom-1.5 left-1/2 flex h-4 w-14 -translate-x-1/2 items-center gap-1 rounded-full px-1.5" :style="{ background: previewOf(theme).colors.toast }">
-                  <span class="size-2 flex-none rounded-full" :style="{ background: previewOf(theme).colors['toast-foreground'] }" />
-                  <span class="h-1 flex-1 rounded-full" :style="{ background: previewOf(theme).colors['toast-foreground'] }" />
-                </span>
-              </span>
+            <template #thumb><ThemePreview :variation="previewOf(theme)" size="md" /></template>
+            <span class="flex items-center gap-2">
+              {{ theme.name }}
+              <Badge v-if="mixedThemes" variant="outline" :class="cn('flex-none py-0 font-normal', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')">{{
+                theme.provenance === "official" ? t("common.official") : t("common.local")
+              }}</Badge>
             </span>
-            <span class="flex min-w-0 flex-1 flex-col justify-center gap-0.5 px-4 py-2.5">
-              <span class="flex items-center gap-2">
-                <span class="truncate font-medium">{{ theme.name }}</span>
-                <Badge v-if="mixedThemes" variant="outline" :class="cn('flex-none font-normal', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')">{{
-                  theme.provenance === "official" ? t("common.official") : t("common.local")
-                }}</Badge>
-                <Check v-if="theme.id === appearance.themeId" class="text-primary ml-auto size-4 flex-none" :stroke-width="1.5" />
-              </span>
-              <span v-if="theme.description" class="text-muted-foreground line-clamp-2 text-sm">{{ theme.description }}</span>
-              <span v-if="theme.variations.length > 1" class="text-muted-foreground text-xs">{{ theme.variations.map((item) => item.name).join(" · ") }}</span>
-            </span>
-          </button>
-        </div>
-      </div>
-    </div>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </SettingRow>
     <SettingRow
       :label="t('settings.appearance-mode.label')"
       :description="t('settings.appearance-mode.description')"
