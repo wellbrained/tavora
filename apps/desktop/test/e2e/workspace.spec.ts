@@ -110,11 +110,12 @@ test("modules receive resize events matching their panel size", async () => {
 
   await setContentSize(app, RAIL_WIDTH + 1000, 700);
   // Two equal cards in 1000px less the 8px margins either side and the 8px gap
-  // between them, each less its 1px borders. Height: the window less the
-  // header (56px), the margin below (8px), the tab bar (36px) and the borders.
-  await expectModuleText(app, VANILLA, "viewport", "486 × 598");
-  await expectModuleText(app, REACT, "viewport", "486 × 598");
-  expect(await inModule(app, VANILLA, "[innerWidth, innerHeight].join('x')")).toBe("486x598");
+  // between them, each less its 1px borders and the 6px frame either side (the
+  // default panel style, Framed). Height: the window less the header (56px), the
+  // margin below (8px), the tab bar (36px), the borders and the 6px frame below.
+  await expectModuleText(app, VANILLA, "viewport", "474 × 592");
+  await expectModuleText(app, REACT, "viewport", "474 × 592");
+  expect(await inModule(app, VANILLA, "[innerWidth, innerHeight].join('x')")).toBe("474x592");
   await app.close();
 });
 

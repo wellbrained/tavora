@@ -49,6 +49,16 @@ const moduleIcons = computed({
   set: (enabled: boolean) => void act({ type: "set-module-icons", enabled }),
 });
 
+type PanelStyle = HostViewState["library"]["panelStyle"];
+
+const panelStyle = computed({
+  get: () => state.value!.library.panelStyle,
+  set: (style: PanelStyle) => void act({ type: "set-panel-style", style }),
+});
+const panelStyleOptions = computed(() =>
+  (["classic", "framed", "folders"] as const).map((value) => ({ value, label: t(`settings.panel-style.${value}`), testid: `panel-style-${value}` })),
+);
+
 type ToastPosition = HostViewState["library"]["toasts"];
 
 // Where toasts show in every panel; the app's own messages stay at the top, over the toolbar.
@@ -174,6 +184,14 @@ const showVariation = computed(() => {
   </SettingGroup>
 
   <SettingGroup :title="t('settings.heading.display')">
+    <SettingRow
+      :label="t('settings.panel-style.label')"
+      :description="t('settings.panel-style.description')"
+      setting="panel-style"
+      :highlighted="highlight === 'panel-style'"
+    >
+      <SegmentedControl v-model="panelStyle" :label="t('settings.panel-style.label')" :options="panelStyleOptions" />
+    </SettingRow>
     <SettingRow
       :label="t('settings.module-icons.label')"
       :description="t('settings.module-icons.description')"
