@@ -6,6 +6,7 @@
 - A note raises only the patch number. `bump: minor` is for a finished feature and needs the `feature-complete` label on the pull request; the Version check fails without it.
 - PRs that only change docs, CI or tooling add no note.
 - 1.0.0 is reserved for the first public release.
+- Asked to release: first run `pnpm release:fold`. If it folded anything, go over the wording with the checklist it prints, then open and merge that pull request. Only then run `pnpm release`.
 - While a release is being prepared or published, nothing merges into main: a new commit there makes the release start over. The release session creates `D:\Github\Tavora\releases\RELEASE-RUNNING` (one line: version and start time) and deletes it when done. Before merging a pull request, check for that file; if it is there, wait and say so.
 
 ## Built-in modules
