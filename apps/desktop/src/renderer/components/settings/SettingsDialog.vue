@@ -49,6 +49,8 @@ import { SETTINGS_PAGE_TITLE } from "./settings-page";
 
 const section = ref<SettingsSection>("general");
 const query = ref("");
+/** Settings opens with the search focused, so typing searches; it shows its focus ring only once the user uses it. */
+const searchUsed = ref(false);
 /** The menu entry lit for the page. */
 const entry = computed(() => menuEntry(section.value));
 /** The page a sub-page opened from, for the way back in its title. */
@@ -72,6 +74,7 @@ watch(settingsOpen, (open) => {
     return;
   }
   query.value = "";
+  searchUsed.value = false;
   void show(settingsTarget.value.section, settingsTarget.value.setting);
   void refreshReleaseStatuses();
 });
@@ -192,13 +195,16 @@ function onSearchKey(event: KeyboardEvent) {
           <Input
             v-model="query"
             type="text"
-            class="h-10 pr-3 pl-9"
+            :class="cn('h-10 pr-3 pl-9', !searchUsed && 'focus-visible:border-input focus-visible:ring-0')"
             :placeholder="t('settings.search')"
             :aria-label="t('settings.search')"
             autocomplete="off"
             maxlength="80"
             data-testid="settings-search"
             @keydown="onSearchKey"
+            @pointerdown="searchUsed = true"
+            @input="searchUsed = true"
+            @blur="searchUsed = true"
           />
         </div>
         <NavList

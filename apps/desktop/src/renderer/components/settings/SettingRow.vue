@@ -4,7 +4,8 @@
 // the control moves under the text instead of squeezing it.
 //
 // The short line says what it does; anything more (how it works, privacy, what each choice means) goes in `details`,
-// shown beside the name when the pointer rests on it or it gets keyboard focus, so pages stay short. A setting in
+// shown beside the name when the pointer rests on it or it gets keyboard focus, so pages stay short. The name's dotted
+// line shows while the pointer is on its row, so a page full of them doesn't look busy. A setting in
 // NEW_SETTINGS says New. A row with `opens` leads to a page of its own: the whole row is the button, with a chevron,
 // and its `icon` in a tile in front, so it reads as a way somewhere rather than a setting.
 import { ChevronRight } from "@lucide/vue";
@@ -30,7 +31,7 @@ const tip = useDetails();
     :type="opens ? 'button' : undefined"
     :class="
       cn(
-        '-mx-5 flex min-h-16 flex-wrap items-center gap-x-6 gap-y-3 border-b px-5 py-3.5 text-left transition-colors duration-500 last:border-b-0',
+        'group/row -mx-5 flex min-h-16 flex-wrap items-center gap-x-6 gap-y-3 border-b px-5 py-3.5 text-left transition-colors duration-500 last:border-b-0',
         opens && 'hover:bg-accent/60 focus-visible:outline-ring w-[calc(100%+2.5rem)] cursor-pointer outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
         highlighted && 'bg-primary/10',
       )
@@ -50,7 +51,7 @@ const tip = useDetails();
         <span
           v-if="details"
           ref="name"
-          class="decoration-input cursor-help font-medium underline decoration-dotted underline-offset-4"
+          class="group-hover/row:decoration-input focus-visible:decoration-input cursor-help font-medium underline decoration-transparent decoration-dotted underline-offset-4 transition-[text-decoration-color]"
           :tabindex="opens ? undefined : 0"
           data-testid="setting-details"
           @pointerenter="tip.show($event.currentTarget as Element)"
