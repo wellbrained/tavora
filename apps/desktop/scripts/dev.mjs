@@ -125,30 +125,38 @@ const moduleProjects = ["../../modules", "../../examples"].flatMap((folder) => {
 });
 pending += moduleProjects.length;
 
-const watchers = await Promise.all(
-  moduleProjects.map(async (dir) => {
-    const name = path.basename(dir);
-    const watcher = await build({
+// One after another, each from its own folder: moduleConfig takes the project folder from the working directory, as
+// `vite build` run in the project gives it. The config is read before build() answers; later rebuilds keep its paths.
+const here = process.cwd();
+const watchers = [];
+for (const dir of moduleProjects) {
+  const name = path.basename(dir);
+  process.chdir(dir);
+  let watcher;
+  try {
+    watcher = await build({
       configFile: path.join(dir, "vite.config.ts"),
       root: existsSync(path.join(dir, "src", "index.html")) ? path.join(dir, "src") : dir,
       logLevel: "warn",
       build: { watch: {} },
     });
-    let first = true;
-    watcher.on("event", (event) => {
-      if (event.code === "ERROR") console.log(`[dev] module ${name} failed to build; fix the error and save again`);
-      if (event.code !== "END") return;
-      if (first) {
-        first = false;
-        if (--pending === 0) start();
-      } else if (pending === 0) {
-        console.log(`[dev] module ${name} changed, reloading its panels`);
-        moduleBuilt(dir);
-      }
-    });
-    return watcher;
-  }),
-);
+  } finally {
+    process.chdir(here);
+  }
+  let first = true;
+  watcher.on("event", (event) => {
+    if (event.code === "ERROR") console.log(`[dev] module ${name} failed to build; fix the error and save again`);
+    if (event.code !== "END") return;
+    if (first) {
+      first = false;
+      if (--pending === 0) start();
+    } else if (pending === 0) {
+      console.log(`[dev] module ${name} changed, reloading its panels`);
+      moduleBuilt(dir);
+    }
+  });
+  watchers.push(watcher);
+}
 
 // The Browser panel's ad blocker loads a compiled engine; the lists only change by hand.
 await buildFilterEngine();
