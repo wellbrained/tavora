@@ -189,10 +189,10 @@ test("the Add a game picker works from the keyboard", async () => {
   // The top match is highlighted at once; focus stays in the field.
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");
   await expect(search).toHaveAttribute("aria-activedescendant", "game-results-option-0");
-  await expect(page.getByTestId("panel-name")).toHaveText("Elden Ring");
+  await expect(page.getByTestId("panel-heading")).toHaveText("Modules for Elden Ring");
   await search.press("ArrowDown");
   await expect(rows.nth(1)).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("panel-name")).not.toHaveText("Elden Ring");
+  await expect(page.getByTestId("panel-heading")).not.toHaveText("Modules for Elden Ring");
   await expect(search).toBeFocused();
   await search.press("ArrowUp");
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");
@@ -208,7 +208,11 @@ test("the Add a game picker works from the keyboard", async () => {
   await openAddGame(page);
   await page.getByTestId("game-search").fill("My Keyboard Game");
   await expect(page.getByTestId("add-custom")).toBeVisible();
-  await expect(page.getByTestId("panel-name")).toHaveText("My Keyboard Game");
+  await expect(page.getByTestId("panel-heading")).toHaveText("Modules for My Keyboard Game");
+  // The footer has no Your own game link: typing the name is the way, and Import from Steam stays.
+  await expect(page.getByTestId("add-game-own")).toHaveCount(0);
+  await expect(page.getByTestId("open-steam-import")).toBeVisible();
+  await expect(page.getByTestId("panel-no-modules")).toBeVisible();
   await page.getByTestId("game-search").press("Enter");
   await expect(page.getByTestId("rail-workspace-local-my-keyboard-game")).toHaveAttribute("aria-current", "page");
 

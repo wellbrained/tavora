@@ -333,19 +333,19 @@ test("the Add a game picker badges games that have modules and adds the ticked o
     { entry: listing("wellbrained.sat-map", "Sat Map", map, owner, { games: ["factorio"], description: "Map and Pings" }), body: map },
     { entry: listing("wellbrained.sat-calc", "Sat Calculator", calc, owner, { games: ["factorio"], description: "Planner" }), body: calc },
   ]);
-  const installed = JSON.stringify([{ name: "Factorio", installedAt: Date.now() - 24 * 60 * 60 * 1000 }, { name: "Mystery Game" }]);
+  const installed = JSON.stringify([{ name: "Factorio", installedAt: Date.now() - 24 * 60 * 60 * 1000 }, { name: "Mystery Game", installedAt: Date.now() - 48 * 60 * 60 * 1000 }]);
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url, TAVORA_TEST_INSTALLED: installed } });
   try {
     await openAddGame(page);
     // The badge counts the modules made for the game; a game without any has none, and its panel says so.
     await expect(page.getByTestId("module-badge-factorio")).toHaveText("2 modules");
     await expect(page.getByTestId("add-game-dialog").locator('[data-testid^="module-badge-"]')).toHaveCount(1);
-    await expect(page.getByTestId("panel-name")).toHaveText("Factorio");
+    await expect(page.getByTestId("panel-heading")).toHaveText("Modules for Factorio");
     await expect(page.getByTestId("pick-module-wellbrained.sat-map")).toBeVisible();
     await expect(page.getByTestId("pick-module-wellbrained.sat-map")).toContainText("community");
     await expect(page.getByTestId("panel-add")).toHaveText("Add game");
     await page.getByTestId("game-search").press("ArrowDown");
-    await expect(page.getByTestId("panel-name")).toHaveText("Mystery Game");
+    await expect(page.getByTestId("panel-heading")).toHaveText("Modules for Mystery Game");
     await expect(page.getByTestId("panel-no-modules")).toBeVisible();
     await expect(page.getByTestId("panel-add")).toHaveText("Add game");
     await page.getByTestId("game-search").press("ArrowUp");
