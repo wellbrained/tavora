@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.42",
+    date: "2026-11-01",
+    title: "Clock & Counter over your game",
+    notes: [
+      "Show Clock & Counter over your game from the panel's menu. Your clocks and counters stay in view, and you count or start and stop them while you hold the game layer key.",
+    ],
+    prs: [
+      { number: 591, title: "Clock & Counter 0.1.4: show it over the game" },
+    ],
+    tags: ["clock-counter", "publishing"],
+  },
+  {
     version: "0.23.41",
     date: "2026-11-01",
     title: "Add a game is quicker to reach and to open",
