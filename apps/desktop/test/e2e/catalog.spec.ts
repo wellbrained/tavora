@@ -638,3 +638,58 @@ test("offline, the catalog says what happened and how to go on, and an update ch
     server.close();
   }
 });
+
+test("the first-run welcome offers the catalog modules made for the game just added, and opens what is set up", async () => {
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const owner = fingerprint(key);
+  const tracker = await packed("wellbrained.tracker", "Tracker", key);
+  const { url, server } = await catalogServer([
+    { entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { games: ["hollow-knight"], description: "Tracks your runs" }), body: tracker },
+  ]);
+  const { app, page, userData } = await launch(undefined, [], { seed: false, env: { TAVORA_API_URL: url } });
+  try {
+    for (let step = 0; step < 3; step++) await page.getByTestId("onboarding-next").click();
+    await page.getByTestId("onboarding-pick-game").click();
+    await page.getByTestId("onboarding-search").fill("hollow");
+    await expect(page.getByTestId("onboarding-game-hollow-knight")).toBeVisible();
+    await page.getByTestId("onboarding-search").press("Enter");
+    // Optional and ticked: the module made for this game is offered, a game-free one is not.
+    await expect(page.getByTestId("onboarding-offer")).toContainText("Tracker");
+    await expect(page.getByTestId("onboarding-offer-sub")).toHaveText("Hollow Knight has Tracker made for it. Add them too?");
+    await expect(page.getByTestId("onboarding-offer-wellbrained.tracker")).toBeChecked();
+    await page.getByTestId("onboarding-setup").click();
+    await expect(page.getByTestId("onboarding-ready")).toContainText("Hollow Knight");
+    expect(await readdir(path.join(userData, "modules"))).toEqual(["wellbrained.tracker"]);
+    await page.getByTestId("onboarding-next").click();
+    await page.getByTestId("onboarding-later").click();
+    await expect(panels(page, "wellbrained.tracker")).toHaveCount(1);
+    await expect(panels(page, "tavora.notes")).toHaveCount(1);
+  } finally {
+    await app.close();
+    server.close();
+  }
+});
+
+test("the first-run welcome's Not now sets up nothing from the catalog", async () => {
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const owner = fingerprint(key);
+  const tracker = await packed("wellbrained.tracker", "Tracker", key);
+  const { url, server } = await catalogServer([{ entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { games: ["hollow-knight"] }), body: tracker }]);
+  const { app, page, userData } = await launch(undefined, [], { seed: false, env: { TAVORA_API_URL: url } });
+  try {
+    for (let step = 0; step < 3; step++) await page.getByTestId("onboarding-next").click();
+    await page.getByTestId("onboarding-pick-game").click();
+    await page.getByTestId("onboarding-search").fill("hollow");
+    await page.getByTestId("onboarding-search").press("Enter");
+    await page.getByTestId("onboarding-not-now").click();
+    await expect(page.getByTestId("onboarding-ready")).toBeVisible();
+    await page.getByTestId("onboarding-next").click();
+    await page.getByTestId("onboarding-later").click();
+    await expect(page.getByTestId("workspace")).toBeVisible();
+    await expect(panels(page, "wellbrained.tracker")).toHaveCount(0);
+    expect(await readdir(path.join(userData, "modules")).catch(() => [])).toEqual([]);
+  } finally {
+    await app.close();
+    server.close();
+  }
+});

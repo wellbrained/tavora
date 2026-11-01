@@ -722,6 +722,8 @@ export interface HostViewState {
   /** `path` is the folder's full path. Settings words the problem from `kind` and `values`; `message` is the English line for logs. */
   moduleProblems: { folder: string; path: string; message: string; kind?: ModuleProblemKind; values?: ModuleProblemValues }[];
   /** Settings > Development in a dev build with Tavora's own modules updating: the built-in modules can be published. */
+  /** True only in a build run from source (not packaged): it unlocks developer-only helpers such as trying the first-run welcome. */
+  devBuild: boolean;
   officialPublish: OfficialPublishView;
   /**
    * Folders added in Settings > Development: a module project, or a folder of projects. `problem` is
@@ -1094,6 +1096,9 @@ export type CatalogPageResult = ({ status: "ok" } & CatalogPage) | { status: "of
  */
 export type CatalogListResult = { status: "ok"; modules: CatalogModuleView[] } | { status: "off" | "unavailable" | "busy" | "unreachable" };
 
+/** Where to look in the catalog instead of the open workspace: a workspace, or a game that has none yet (the welcome's dry run). */
+export type CatalogTarget = { workspaceId: string } | { game: string };
+
 /** Exposed to the host UI as `window.tavoraHost` by the host preload. */
 export interface TavoraHostApi {
   getState(): Promise<HostViewState | null>;
@@ -1109,8 +1114,8 @@ export interface TavoraHostApi {
   steamLibrary(profile: string): Promise<SteamLibraryResult>;
   /** Of these games from the last steamLibrary answer, the ones not added whose icon this PC has and Tavora lacks. Never rejects. */
   steamShareIcons(appids: number[]): Promise<SteamShareResult>;
-  /** The catalog modules for the current workspace. Never rejects. */
-  browseCatalog(): Promise<CatalogListResult>;
+  /** The catalog modules for the current workspace, or for another target (the first-run welcome asks for a game). Never rejects. */
+  browseCatalog(target?: CatalogTarget): Promise<CatalogListResult>;
   /** A catalog module's page: its readme, screenshots and versions. Never rejects. */
   catalogPage(moduleId: string): Promise<CatalogPageResult>;
   /** An installed module's page from its own folder: readme and screenshots. Works offline. Never rejects. */
