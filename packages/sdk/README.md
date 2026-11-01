@@ -81,10 +81,13 @@ plain-data description, never HTML or CSS. Use a new id for each hover session,
 the source data, and use `onClose` to clear your local pin state. Escape and the
 host close button dismiss the current tooltip from anywhere in Tavora.
 
+Tooltips are neutral (Tavora's own colours) unless `content.look` is `'poe'`, the Path of Exile 2 item look
+(a Tavora older than SDK 0.3.6's changelog says rejects a tooltip with `look`, so catch the failure).
+
 ```ts
 await tavora.ui.tooltip.show({
   id: 'item:42', at: { x: event.clientX, y: event.clientY },
-  content: { title: 'Example spear', tone: 'rare',
+  content: { title: 'Example spear', look: 'poe', tone: 'rare',
     sections: [{ rows: [{ text: 'Adds 10 to 22 Physical Damage', badges: ['[P5]'] }] }] },
   pinned: false,
 });
