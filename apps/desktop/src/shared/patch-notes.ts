@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.34",
+    date: "2026-11-01",
+    title: "A cleaner look behind dialogs",
+    notes: [
+      "The little grip between two panels no longer shows through dialogs.",
+    ],
+    prs: [
+      { number: 582, title: "Dock: splitter grips no longer show through dialogs" },
+    ],
+    tags: ["workspace"],
+  },
+  {
     version: "0.23.33",
     date: "2026-11-01",
     title: "Add a game from the keyboard",
