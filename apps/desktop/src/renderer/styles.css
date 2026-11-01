@@ -40,6 +40,9 @@
   --ring: #e0a243;
 
   --rail: #100e0d;
+  /* The lit row of the open rail: a shade of the theme's own colour, so it follows every theme, light ones too. */
+  --rail-hover: color-mix(in oklab, var(--primary) 9%, transparent);
+  --rail-active: color-mix(in oklab, var(--primary) 16%, transparent);
   --success: #8cbf7f;
   --warning: #e3c75f;
   --info: #6fa8dc;
@@ -72,6 +75,8 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-rail: var(--rail);
+  --color-rail-hover: var(--rail-hover);
+  --color-rail-active: var(--rail-active);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);

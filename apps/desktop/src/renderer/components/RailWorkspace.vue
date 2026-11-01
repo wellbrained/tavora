@@ -47,8 +47,8 @@ defineOptions({ inheritAttrs: false });
         :class="
           cn(
             'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-            expanded ? cn('hover:bg-accent group-data-[state=open]:bg-accent', nested ? 'px-1.5 py-2' : 'px-2 py-1') : 'justify-center p-1',
-            expanded && active && 'bg-accent',
+            expanded ? cn('hover:bg-rail-hover group-data-[state=open]:bg-rail-hover', nested ? 'px-1.5 py-2' : 'px-2 py-1') : 'justify-center p-1',
+            expanded && active && 'bg-rail-active hover:bg-rail-active group-data-[state=open]:bg-rail-active',
             hint === 'into' && 'ring-primary ring-2 ring-inset',
           )
         "
@@ -58,7 +58,7 @@ defineOptions({ inheritAttrs: false });
         :aria-label="workspace.name"
         @click="emit('open')"
       >
-        <span class="rail-icon flex-none" :style="{ borderRadius: `${size / 4}px` }"><WorkspaceIcon :workspace="workspace" :size="size" /></span>
+        <span class="rail-icon flex flex-none" :style="{ borderRadius: `${size / 4}px` }"><WorkspaceIcon :workspace="workspace" :size="size" /></span>
         <span v-if="expanded" :class="cn('truncate font-medium', nested ? 'text-sm' : 'text-base')">{{ workspace.name }}</span>
         <Kbd v-if="shortcut" class="text-primary ml-auto flex-none" :data-testid="`${testid}-shortcut`">{{ shortcut }}</Kbd>
       </button>

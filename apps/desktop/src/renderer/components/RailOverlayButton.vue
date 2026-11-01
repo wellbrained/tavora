@@ -19,7 +19,7 @@ const active = computed(() => state.value!.screen === "overlay");
   <RailTooltip v-if="overlays.supported && overlays.enabled" :text="t('overlays.button.open')" :hint="t('overlays.rail.hint')" :disabled="expanded">
     <button
       type="button"
-      :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg px-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent', active && 'text-foreground', expanded && active && 'bg-accent')"
+      :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg px-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-rail-hover', active && 'text-foreground', expanded && active && 'bg-rail-active hover:bg-rail-active group-data-[state=open]:bg-rail-active')"
       data-rail-item
       data-testid="overlay-open"
       :aria-label="t('overlays.button.open')"
