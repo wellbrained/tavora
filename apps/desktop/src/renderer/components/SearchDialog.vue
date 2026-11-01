@@ -3,9 +3,10 @@
 // run an action or find a setting. Arrow keys move, Enter runs, Escape
 // closes.
 import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, SlidersHorizontal } from "@lucide/vue";
-import { computed, nextTick, ref, watch, type Component } from "vue";
+import { computed, ref, watch, type Component } from "vue";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
+import { useListNav } from "@/lib/list-nav";
 import { rank, rankByName, startsOrIsWord } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { CatalogMatch, OnlineGame, WorkspaceView } from "../../shared/host-api";
@@ -44,7 +45,6 @@ const splitWords = (text: string) =>
     .filter(Boolean);
 
 const query = ref("");
-const active = ref(0);
 const list = ref<HTMLElement | null>(null);
 
 // Opening starts from what Home handed over; keys typed there while the box is still opening are added to it.
@@ -244,6 +244,7 @@ const shown = computed<Group[]>(() => {
 });
 
 const flat = computed(() => shown.value.flatMap((group) => group.items));
+const { active, onKey } = useListNav({ count: () => flat.value.length, list, onEnter: () => flat.value[active.value]?.run() });
 watch(query, () => (active.value = 0));
 
 const optionId = (item: Item) => `search-option-${item.id}`;
@@ -251,22 +252,6 @@ const activeId = computed(() => {
   const item = flat.value[active.value];
   return item ? optionId(item) : undefined;
 });
-
-async function move(by: number) {
-  const count = flat.value.length;
-  if (!count) return;
-  active.value = (active.value + by + count) % count;
-  await nextTick();
-  list.value?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
-}
-
-function onKey(event: KeyboardEvent) {
-  if (event.key === "ArrowDown") move(1);
-  else if (event.key === "ArrowUp") move(-1);
-  else if (event.key === "Enter") void flat.value[active.value]?.run();
-  else return;
-  event.preventDefault();
-}
 </script>
 
 <template>

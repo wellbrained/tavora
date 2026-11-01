@@ -2,9 +2,12 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { CatalogMatch, OnlineGame, OnlineSearchResult } from "../../shared/host-api";
 import { act, api, dialog, state } from "../host";
+import { useListNav } from "@/lib/list-nav";
 import { rankByName } from "@/lib/search";
+import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { cn } from "@/lib/utils";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
@@ -98,10 +101,24 @@ function submitPersonal() {
   if (value) void add({ personal: value });
 }
 
+const list = ref<HTMLElement | null>(null);
+const { active, onKey } = useListNav({ count: () => rows.value.length, list, onEnter: submit });
+// The top match is highlighted again whenever the list of results changes.
+watch(
+  () => rows.value.map((row) => row.id).join("\n"),
+  () => (active.value = 0),
+);
+const optionId = (row: Row) => `game-option-${row.id}`;
+const activeId = computed(() => {
+  const row = rows.value[active.value];
+  return row ? optionId(row) : undefined;
+});
+
+// Enter adds the highlighted game; with no match, the typed name becomes a custom game.
 function submit() {
-  const exact = rows.value.find((row) => row.name.toLowerCase() === name.value.toLowerCase());
-  const first = exact ?? (name.value ? undefined : rows.value[0]);
-  if (first) void addRow(first);
+  if (busy.value) return;
+  const row = rows.value[active.value];
+  if (row) void addRow(row);
   else if (name.value) void add({ name: name.value });
 }
 </script>
@@ -144,20 +161,35 @@ function submit() {
         autocomplete="off"
         maxlength="80"
         data-testid="game-search"
+        role="combobox"
+        aria-expanded="true"
+        aria-controls="game-results"
+        aria-autocomplete="list"
+        :aria-activedescendant="activeId"
         autofocus
+        @keydown="onKey"
       />
     </form>
     <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="add-game-error">{{ error }}</p>
-    <ul class="-mx-2 max-h-[300px] overflow-y-auto [@media(max-height:640px)]:max-h-[136px]" :aria-label="t('common.games')">
-      <li v-for="row in rows" :key="row.id">
+    <ul
+      id="game-results"
+      ref="list"
+      role="listbox"
+      class="-mx-2 max-h-[300px] overflow-y-auto [@media(max-height:640px)]:max-h-[136px]"
+      :aria-label="t('common.games')"
+    >
+      <li v-for="(row, index) in rows" :id="optionId(row)" :key="row.id" role="option" :aria-selected="index === active">
         <button
           type="button"
-          class="hover:bg-accent focus-visible:bg-accent w-full rounded-md px-2 py-2 text-left"
+          tabindex="-1"
+          :class="cn('flex w-full items-center gap-2 rounded-md px-2 py-2 text-left', index === active && 'bg-accent')"
           :data-testid="`catalog-${row.id}`"
           :disabled="busy"
+          @mousemove="active = index"
           @click="addRow(row)"
         >
-          {{ row.name }}
+          <span class="min-w-0 flex-1 truncate">{{ row.name }}</span>
+          <Kbd v-if="index === active" class="font-sans" aria-hidden="true">{{ t("search.key.enter") }}</Kbd>
         </button>
       </li>
       <li v-if="name">

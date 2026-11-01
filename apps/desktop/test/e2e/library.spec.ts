@@ -111,6 +111,44 @@ test("the Add a game list ranks real name starts first and sorts by the name sho
   server.close();
 });
 
+test("the Add a game list works from the keyboard", async () => {
+  const { url, server } = await gameService([
+    { id: "eldoran", name: "Eldoran" },
+    { id: "eldevin", name: "Eldevin" },
+  ]);
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
+  await page.getByTestId("rail-add-game").click();
+  const search = page.getByTestId("game-search");
+  const rows = page.getByTestId("add-game-dialog").locator('[role="option"]');
+  await search.fill("eld");
+  await expect(page.getByTestId("catalog-eldoran")).toBeVisible();
+  // The top match is highlighted at once; focus stays in the field.
+  await expect(rows.first()).toHaveAttribute("aria-selected", "true");
+  await expect(search).toHaveAttribute("aria-activedescendant", "game-option-elden-ring");
+  await search.press("ArrowDown");
+  await expect(rows.nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(search).toBeFocused();
+  await search.press("ArrowUp");
+  await expect(rows.first()).toHaveAttribute("aria-selected", "true");
+  // Hovering moves the highlight, and the Enter hint follows it.
+  await rows.nth(2).hover();
+  await expect(rows.nth(2)).toHaveAttribute("aria-selected", "true");
+  await expect(rows.nth(2).locator("kbd")).toHaveCount(1);
+  await rows.first().hover();
+  await page.screenshot({ path: path.join(desktopDir, "test-results", "add-game-keyboard.png") });
+  await search.press("Enter");
+  await expect(page.getByTestId("rail-workspace-elden-ring")).toHaveAttribute("aria-current", "page");
+
+  // No match: Enter adds the typed name as a custom game.
+  await page.getByTestId("rail-add-game").click();
+  await page.getByTestId("game-search").fill("My Keyboard Game");
+  await page.getByTestId("game-search").press("Enter");
+  await expect(page.getByTestId("rail-workspace-local-my-keyboard-game")).toHaveAttribute("aria-current", "page");
+  await page.waitForTimeout(500);
+  await app.close();
+  server.close();
+});
+
 test("users add games from the built-in list or by name", async () => {
   const running = await launch(undefined, [], { seed: false });
   const { page, userData } = running;
