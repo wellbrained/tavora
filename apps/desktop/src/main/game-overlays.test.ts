@@ -766,6 +766,17 @@ describe("copying a setup to a game", () => {
     expect(keys(store, "elden")).toEqual(["personal/timer", "personal/note"]);
   });
 
+  it("keeps each frame's key, so several frames of one panel stay separate, each with its own place and settings", async () => {
+    const store = await loadStore(dir);
+    store.add("elden", subject("item-7", "personal"));
+    store.add("elden", subject("group-main", "personal"));
+    store.update(subject("group-main", "personal"), { mode: "toggle", rect: at(0.6, 0.6, 0.2, 0.1) }, "elden");
+    expect(store.copySetup("elden", "poe2", "replace", always)!.copied).toBe(2);
+    expect(keys(store, "poe2")).toEqual(["personal/item-7", "personal/group-main"]);
+    expect(store.find(subject("group-main", "personal"), "poe2")).toMatchObject({ mode: "toggle", rect: at(0.6, 0.6, 0.2, 0.1) });
+    expect(store.find(subject("item-7", "personal"), "poe2")).toMatchObject({ mode: "always" });
+  });
+
   it("replaces what the game had, and lists what it took out", async () => {
     const store = await elden();
     store.add("poe2", subject("old", "poe2"));
