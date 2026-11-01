@@ -123,6 +123,11 @@ const grid = computed({
 });
 const gridOptions = computed(() => GRID_SETTINGS.map((value) => ({ value, label: t(`overlays.layout.grid.${value}`) })));
 const pictureHint = computed(() => (view.value?.canTakePicture ? null : view.value?.pictureHint === "switch" ? t("overlays.layout.switchToGame") : t("overlays.layout.noGame")));
+const previewOptions = computed(() => (view.value?.preview.options ?? []).map((item) => ({ value: item.id, label: item.label })));
+const previewChoice = computed({
+  get: () => view.value?.preview.choice ?? "default",
+  set: (choice: string) => send({ type: "preview", choice }),
+});
 const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.value.picture}` : null));
 </script>
 
@@ -146,13 +151,17 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
             <span class="text-muted-foreground">{{ t("overlays.layout.grid") }}</span>
             <SegmentedControl v-model="grid" :options="gridOptions" :label="t('overlays.layout.grid')" />
           </div>
+          <label class="flex items-center gap-2 text-sm">
+            <span class="text-muted-foreground">{{ t("overlays.layout.previewAs") }}</span>
+            <Picker v-model="previewChoice" :options="previewOptions" :label="t('overlays.layout.previewAs')" testid="layout-preview" />
+          </label>
           <div class="flex items-center gap-1">
             <Button variant="ghost" size="icon-sm" :disabled="!view.canUndo" :aria-label="t('overlays.layout.undo')" :title="t('overlays.layout.undo')" data-testid="layout-undo" @click="send({ type: 'undo' })"><Undo2 :stroke-width="1.5" /></Button>
             <Button variant="ghost" size="icon-sm" :disabled="!view.canRedo" :aria-label="t('overlays.layout.redo')" :title="t('overlays.layout.redo')" data-testid="layout-redo" @click="send({ type: 'redo' })"><Redo2 :stroke-width="1.5" /></Button>
           </div>
-          <div v-if="isGame" class="ml-auto flex flex-wrap items-center gap-2">
-            <!-- A disabled button shows no hint of its own, so the hint sits on its wrapper. -->
-            <span class="inline-flex" :title="pictureHint ?? undefined" data-testid="layout-take-picture-hint">
+          <div class="ml-auto flex flex-wrap items-center gap-2">
+            <!-- A disabled button shows no hint of its own, so the hint sits on its wrapper. Everywhere and All games have no one window to take. -->
+            <span v-if="isGame" class="inline-flex" :title="pictureHint ?? undefined" data-testid="layout-take-picture-hint">
               <Button variant="secondary" size="sm" :disabled="!view.canTakePicture" :aria-description="pictureHint ?? undefined" data-testid="layout-take-picture" @click="send({ type: 'take-picture' })">{{ t("overlays.layout.takePicture") }}</Button>
             </span>
             <Button variant="secondary" size="sm" data-testid="layout-choose-picture" @click="send({ type: 'choose-picture' })"><ImageIcon :stroke-width="1.5" />{{ t("overlays.layout.choosePicture") }}</Button>
@@ -175,9 +184,10 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
             :aria-label="t('overlays.layout.canvas')"
             data-testid="layout-canvas"
           >
-            <img v-if="picture" :src="picture" alt="" class="pointer-events-none absolute inset-0 size-full object-fill opacity-40" data-testid="layout-picture" />
+            <img v-if="picture" :src="picture" alt="" class="pointer-events-none absolute inset-0 size-full object-contain opacity-40" data-testid="layout-picture" />
           </div>
           <p v-if="isGame && !view.seen" class="text-muted-foreground absolute right-4 bottom-1 left-4 truncate text-center text-xs">{{ t("overlays.layout.unseen") }}</p>
+          <p v-else-if="!view.picture" class="text-muted-foreground absolute right-4 bottom-1 left-4 truncate text-center text-xs" data-testid="layout-picture-hint">{{ t("overlays.layout.pictureHint") }}</p>
         </div>
       </section>
       <aside class="flex w-[22rem] flex-none flex-col gap-2" :aria-label="setupName">

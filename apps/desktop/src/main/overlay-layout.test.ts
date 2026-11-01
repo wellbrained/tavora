@@ -44,7 +44,7 @@ interface Item {
   opacity?: 100 | 75 | 50 | 25;
 }
 
-function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handles?: Record<string, string>; running?: string[]; sources?: SourcePanel[]; startSizes?: { overlay?: { width: number; height: number }; panel?: { width: number; height: number } }; capture?: Buffer | null | "throws"; choose?: Buffer | "cancelled" | "bad"; enabled?: boolean } = {}) {
+function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handles?: Record<string, string>; running?: string[]; sources?: SourcePanel[]; startSizes?: { overlay?: { width: number; height: number }; panel?: { width: number; height: number } }; monitors?: { id: number; width: number; height: number }[]; capture?: Buffer | null | "throws"; choose?: Buffer | "cancelled" | "bad"; enabled?: boolean } = {}) {
   const sent: LayoutView[] = [];
   const placed: { frames: LayoutFrame[]; layer: { x: number; y: number; width: number; height: number } | null; covered: boolean }[] = [];
   const world = {
@@ -151,6 +151,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     leave: () => void world.left++,
     openSettings: (target) => void world.settingsOpened.push(target),
     screen: () => ({ x: 0, y: 0, width: 2560, height: 1440 }),
+    monitors: () => options.monitors ?? [],
     settings: {
       get gameOverlays() {
         return world.enabled;
@@ -942,6 +943,185 @@ const panel = (instanceId: string, workspaceId: string, over: Partial<SourcePane
   inGame: true,
   sources: null,
   ...over,
+});
+
+describe("a picture for every setup", () => {
+  it("keeps one for Everywhere and one for All games, apart from each other and from the games'", async () => {
+    const { layout, flush, pictures } = setup([clock("a")], { choose: PNG });
+    layout.open(LAYOUT_EVERYWHERE);
+    expect(layout.view().picture).toBeNull();
+    layout.handle({ type: "choose-picture" }, true);
+    await flush();
+    expect(layout.view().picture).toMatch(/^overlay-pictures\/[0-9a-f]{24}\.png\?v=\d+$/);
+    expect(await pictures.has(LAYOUT_EVERYWHERE)).toBe(true);
+    expect(await pictures.has(LAYOUT_ALL_GAMES)).toBe(false);
+    layout.handle({ type: "game", gameId: LAYOUT_ALL_GAMES }, true);
+    await flush();
+    expect(layout.view().picture).toBeNull();
+    layout.handle({ type: "choose-picture" }, true);
+    await flush();
+    expect(layout.view().picture).not.toBeNull();
+    layout.handle({ type: "game", gameId: "elden" }, true);
+    await flush();
+    expect(layout.view().picture).toBeNull();
+    layout.handle({ type: "game", gameId: LAYOUT_EVERYWHERE }, true);
+    await flush();
+    layout.handle({ type: "remove-picture" }, true);
+    await flush();
+    expect(layout.view().picture).toBeNull();
+    expect(await pictures.has(LAYOUT_EVERYWHERE)).toBe(false);
+    expect(await pictures.has(LAYOUT_ALL_GAMES)).toBe(true);
+  });
+
+  it("takes no picture of the screen for Everywhere and All games", async () => {
+    const { layout, world, flush } = setup([clock("a")], { handles: { elden: "5" } });
+    layout.open(LAYOUT_EVERYWHERE);
+    layout.handle({ type: "take-picture" }, true);
+    await flush();
+    expect(world.captured).toEqual([]);
+    expect(layout.view().picture).toBeNull();
+  });
+});
+
+describe("Preview as", () => {
+  const MONITORS = [
+    { id: 7, width: 2560, height: 1440 },
+    { id: 9, width: 3440, height: 1440 },
+  ];
+  const find = (view: LayoutView, choice: string) => view.preview.options.find((option) => option.id === choice);
+
+  it("lists the setup's own shape, the usual ratios and every monitor", () => {
+    const { layout } = setup([clock("a")], { seen: { elden: { width: 2560, height: 1080 } }, monitors: MONITORS });
+    layout.open("elden");
+    expect(layout.view().preview).toEqual({
+      choice: "default",
+      options: [
+        { id: "default", label: "Game window · 21:9" },
+        { id: "16:9", label: "16:9" },
+        { id: "16:10", label: "16:10" },
+        { id: "21:9", label: "21:9" },
+        { id: "32:9", label: "32:9" },
+        { id: "monitor:7", label: "Monitor 1 · 2560×1440" },
+        { id: "monitor:9", label: "Monitor 2 · 3440×1440" },
+      ],
+    });
+    layout.open(LAYOUT_EVERYWHERE);
+    expect(layout.view().preview.options[0]).toEqual({ id: "default", label: "This screen · 16:9" });
+  });
+
+  it("changes only the canvas's shape, never what is saved", () => {
+    const { layout, world } = setup([{ ...clock("a"), rect: { h: "right", v: "bottom", x: 0.05, y: 0.04, width: 0.2, height: 0.1 } }], { seen: { elden: { width: 1920, height: 1080 } }, monitors: MONITORS });
+    layout.open("elden");
+    const before = layout.view().items[0]!;
+    expect(before.placed).toMatchObject({ x: 1920 - 216 - 54 });
+    layout.handle({ type: "preview", choice: "32:9" }, true);
+    const wide = layout.view();
+    expect(wide.canvas).toEqual({ width: 3840, height: 1080 });
+    expect(wide.preview.choice).toBe("32:9");
+    // Anchored to the right and bottom edges: the frame follows them to the wider canvas.
+    expect(wide.items[0]!.placed).toMatchObject({ x: 3840 - 216 - 54, y: 1080 - 108 - 43, width: 216, height: 108 });
+    expect(wide.items[0]!.rect).toEqual(before.rect);
+    expect(world.items[0]!.rect).toEqual(before.rect);
+    layout.handle({ type: "preview", choice: "monitor:9" }, true);
+    expect(layout.view().canvas).toEqual({ width: Math.round((1080 * 3440) / 1440), height: 1080 });
+    layout.handle({ type: "preview", choice: "default" }, true);
+    expect(layout.view().canvas).toEqual({ width: 1920, height: 1080 });
+    expect(layout.view().items[0]!.placed).toEqual(before.placed);
+  });
+
+  it("saves a drag in another shape through the anchored rectangle, so it lands right in the real one", () => {
+    const { layout, world } = setup([clock("a")], { seen: { elden: { width: 1920, height: 1080 } } });
+    layout.open("elden");
+    layout.handle({ type: "preview", choice: "21:9" }, true);
+    const { id } = layout.view().items[0]!;
+    // 2520 wide: dropped 40 from the right edge of the wide canvas, 100 from the top.
+    layout.handle({ type: "commit", id, rect: { x: 2520 - 40 - 300, y: 100, width: 300, height: 200 } }, false);
+    expect(world.items[0]!.rect).toMatchObject({ h: "right", v: "top", width: 300 / 1080, height: 200 / 1080 });
+    expect(world.items[0]!.rect.x).toBeCloseTo(40 / 1080);
+    expect(layout.view().items[0]!.placed).toEqual({ x: 2520 - 40 - 300, y: 100, width: 300, height: 200 });
+    layout.handle({ type: "preview", choice: "default" }, true);
+    expect(layout.view().items[0]!.placed).toEqual({ x: 1920 - 40 - 300, y: 100, width: 300, height: 200 });
+    // And undo goes back through the same rectangle.
+    layout.handle({ type: "undo" }, true);
+    expect(layout.view().items[0]!.placed).toMatchObject({ x: 39, y: 32 });
+  });
+
+  it("saves a resize, Reset position and Reset size in another shape through the anchored rectangle, and undo takes them back", () => {
+    const start: AnchoredRect = { h: "right", v: "bottom", x: 0.05, y: 0.06, width: 0.1, height: 0.1 };
+    const { layout, world } = setup([{ ...clock("a"), rect: start }], { seen: { elden: { width: 1920, height: 1080 } }, startSizes: { overlay: { width: 0.2, height: 0.12 } } });
+    layout.open("elden");
+    layout.handle({ type: "preview", choice: "32:9" }, true);
+    const { id, placed } = layout.view().items[0]!;
+    expect(placed).toEqual({ x: 3840 - 108 - 54, y: 1080 - 108 - 65, width: 108, height: 108 });
+    // Wider on its left side (the layer's resize handle): still anchored to the right and bottom, now 300 wide.
+    layout.handle({ type: "commit", id, rect: { x: placed.x - 192, y: placed.y, width: 300, height: placed.height } }, false);
+    expect(world.items[0]!.rect).toMatchObject({ h: "right", v: "bottom", width: 300 / 1080, height: 0.1 });
+    expect(world.items[0]!.rect.x).toBeCloseTo(0.05);
+    expect(layout.view().items[0]!.placed).toEqual({ x: 3840 - 300 - 54, y: placed.y, width: 300, height: 108 });
+    layout.handle({ type: "reset-size", id }, true);
+    expect(world.items[0]!.rect).toMatchObject({ h: "right", v: "bottom", width: 0.2, height: 0.12 });
+    layout.handle({ type: "reset", id }, true);
+    expect(world.items[0]!.rect).toEqual({ ...DEFAULT_RECT, width: 0.2, height: 0.12 });
+    layout.handle({ type: "undo" }, true);
+    layout.handle({ type: "undo" }, true);
+    layout.handle({ type: "undo" }, true);
+    expect(world.items[0]!.rect).toEqual(start);
+    layout.handle({ type: "preview", choice: "default" }, true);
+    expect(layout.view().items[0]!.placed).toEqual({ x: 1920 - 108 - 54, y: 1080 - 108 - 65, width: 108, height: 108 });
+  });
+
+  it("starts a frame added in another shape inside the setup's real window, as without the preview", () => {
+    const things = [{ key: "d-1", name: "Countdown", size: { width: 120, height: 48 } }];
+    const rects = [] as AnchoredRect[];
+    for (const choice of ["default", "32:9"]) {
+      const { layout, world } = setup([], { sources: [panel("cc", "personal", { moduleId: "tavora.clock-counter", sources: things })] });
+      layout.open(LAYOUT_EVERYWHERE);
+      layout.handle({ type: "preview", choice }, true);
+      layout.handle({ type: "add-source", id: "cc", key: "d-1" }, true);
+      rects.push(world.items[0]!.rect);
+    }
+    expect(rects[1]).toEqual(rects[0]);
+  });
+
+  it("is remembered per setup, only from the page, and only for choices the setup has", () => {
+    const { layout } = setup([clock("a"), clock("b", "poe2")], { seen: { elden: { width: 1920, height: 1080 } }, monitors: MONITORS });
+    layout.open("elden");
+    layout.handle({ type: "preview", choice: "21:9" }, false);
+    expect(layout.view().preview.choice).toBe("default");
+    layout.handle({ type: "preview", choice: "4:3" }, true);
+    layout.handle({ type: "preview", choice: "monitor:99" }, true);
+    expect(layout.view().preview.choice).toBe("default");
+    layout.handle({ type: "preview", choice: "21:9" }, true);
+    layout.handle({ type: "game", gameId: "poe2" }, true);
+    expect(layout.view().preview.choice).toBe("default");
+    layout.handle({ type: "preview", choice: "16:10" }, true);
+    layout.handle({ type: "game", gameId: "elden" }, true);
+    expect(layout.view()).toMatchObject({ preview: { choice: "21:9" }, canvas: { width: 2520 } });
+    layout.handle({ type: "game", gameId: "poe2" }, true);
+    expect(layout.view().preview.choice).toBe("16:10");
+  });
+
+  it("falls back to the setup's own shape when the monitor is unplugged", () => {
+    const monitors = [...MONITORS];
+    const { layout } = setup([clock("a")], { monitors });
+    layout.open(LAYOUT_EVERYWHERE);
+    layout.handle({ type: "preview", choice: "monitor:9" }, true);
+    expect(find(layout.view(), "monitor:9")).toBeDefined();
+    monitors.pop();
+    layout.refresh();
+    expect(layout.view()).toMatchObject({ preview: { choice: "default" }, canvas: { width: 1920, height: 1080 } });
+  });
+
+  it("places an item that isn't converted yet by its real shape, then anchors it", () => {
+    const { layout } = setup([{ ...clock("a"), legacy: { x: 0.75, y: 0.1, width: 0.2, height: 0.2 } }], { seen: { elden: { width: 1920, height: 1080 } } });
+    layout.open("elden");
+    const real = layout.view().items[0]!;
+    expect(real.placed).toMatchObject({ x: 1440, width: 384 });
+    layout.handle({ type: "preview", choice: "32:9" }, true);
+    // It was nearest the right edge in the real shape, so it stays 96 from it.
+    expect(layout.view().items[0]!.placed).toMatchObject({ x: 3840 - 384 - 96, y: 108, width: 384, height: 216 });
+    expect(layout.view().items[0]!.rect).toEqual(real.rect);
+  });
 });
 
 describe("the sources", () => {

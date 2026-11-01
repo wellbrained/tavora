@@ -8,8 +8,9 @@ import { LIMITS, type OverlaySource } from "@tavora/sdk/protocol";
 import { translate, type Language, type MessageKey } from "../shared/i18n";
 import { UndoStack } from "../shared/layout-history";
 import { canvasFor, gridCell, type Canvas } from "../shared/layout-math";
+import { PREVIEW_DEFAULT, PREVIEW_MONITOR, PREVIEW_RATIOS, previewAspect, ratioLabel, type Monitor } from "../shared/layout-preview";
 import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, type LayoutItemView, type LayoutMessage, type LayoutSourceChild, type LayoutSourceView, type LayoutView, type SourceBlock } from "../shared/layout-view";
-import { DEFAULT_RECT, MIN_OVERLAY_SIZE, REFERENCE_HEIGHT, anchorOf, contentScale, placeLegacy, type AnchoredRect, type Rect } from "../shared/overlay-anchor";
+import { DEFAULT_RECT, MIN_OVERLAY_SIZE, REFERENCE_HEIGHT, anchorOf, contentScale, placeAnchored, placeLegacy, type AnchoredRect, type Rect } from "../shared/overlay-anchor";
 import type { GameOverlaySource } from "./game-overlay-page";
 import type { LayoutItemInfo, LayoutSource } from "./game-overlay-service";
 import { DEFAULT_GAME_SIZE, allowedIn, isGameSetup, panelWindowId, placeItem, type OverlayScope } from "./game-overlays";
@@ -63,6 +64,8 @@ export interface OverlayLayoutOptions<W extends LayoutWindow = LayoutWindow> {
   workspaces: Pick<WorkspaceNames, "name">;
   /** The main screen's work area (DIPs): the canvas takes its shape for a game whose window was never seen. */
   screen(): Rect;
+  /** The connected monitors in their own pixels, the main one first: the choices of "Preview as". */
+  monitors(): Monitor[];
   /** The Game overlays switch in Settings > Overlays, read as it is now. */
   settings: Pick<Library, "gameOverlays">;
   language(): Language;
@@ -83,7 +86,10 @@ export interface OverlayLayoutOptions<W extends LayoutWindow = LayoutWindow> {
 
 /** The game window's height the layout works with: the one seen, or the main screen's. */
 interface Shape {
+  /** The canvas as shown: the shape of the game's window or the main screen, or the one picked in "Preview as". */
   canvas: Canvas;
+  /** The canvas in the shape the setup really has. Positions that aren't anchored yet are converted on this one. */
+  real: Canvas;
   gameHeight: number;
   seen: boolean;
 }
@@ -143,6 +149,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   /** Where an item is while it is dragged, in canvas units. */
   private readonly dragging = new Map<string, Rect>();
   private picture: string | null = null;
+  /** The shape each setup is previewed in, for this session. A preview only: saved positions never depend on it. */
+  private readonly previews = new Map<string, string>();
   /** Picture work in the background (taking, choosing, loading, removing), so a test can wait for it. */
   private readonly pending = new Set<Promise<unknown>>();
   private pictureFor = "";
@@ -269,8 +277,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     return undefined;
   }
 
-  private text(key: MessageKey): string {
-    return translate(this.options.language(), key);
+  private text(key: MessageKey, params?: Record<string, string | number>): string {
+    return translate(this.options.language(), key, params);
   }
 
   /** The setup shown: the one asked for if the picker has it, else All games (what shows over a game without its own). */
@@ -283,11 +291,26 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     return games.filter((game) => game.id !== setupId && allowedIn(game.id, info.keyTarget.workspaceId, info.scope));
   }
 
-  /** A game's setup takes the shape of the game's window; Everywhere and All games the main screen's. */
+  /** A game's setup takes the shape of the game's window; Everywhere and All games the main screen's; "Preview as" can show another. */
   private shape(gameId: string): Shape {
     const seen = isGameSetup(gameId) ? this.options.source.seenSize(gameId) : undefined;
     const size = seen ?? this.screenSize();
-    return { canvas: canvasFor(size.width / size.height), gameHeight: size.height, seen: seen !== undefined };
+    const real = canvasFor(size.width / size.height);
+    const aspect = previewAspect(this.previews.get(gameId) ?? PREVIEW_DEFAULT, this.options.monitors());
+    return { canvas: aspect === null ? real : canvasFor(aspect), real, gameHeight: size.height, seen: seen !== undefined };
+  }
+
+  /** The choices of "Preview as" for a setup, and the one in use (the default again when a monitor was unplugged). */
+  private previewOf(gameId: string, shape: Shape): LayoutView["preview"] {
+    const monitors = this.options.monitors();
+    const own = ratioLabel(shape.real.width, shape.real.height);
+    const options = [
+      { id: PREVIEW_DEFAULT, label: shape.seen ? this.text("overlays.layout.previewWindow", { ratio: own }) : this.text("overlays.layout.previewScreen", { ratio: own }) },
+      ...PREVIEW_RATIOS.map((item) => ({ id: item.id, label: item.id })),
+      ...monitors.map((monitor, index) => ({ id: `${PREVIEW_MONITOR}${monitor.id}`, label: this.text("overlays.layout.previewMonitor", { n: index + 1, size: `${monitor.width}×${monitor.height}` }) })),
+    ];
+    const choice = this.previews.get(gameId) ?? PREVIEW_DEFAULT;
+    return { choice: options.some((option) => option.id === choice) ? choice : PREVIEW_DEFAULT, options };
   }
 
   private screenSize(): { width: number; height: number } {
@@ -304,15 +327,20 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     return this.options.source.items(gameId);
   }
 
-  /** Where an item is on the canvas: one that is not converted yet (fractions of the window) the old way, on the canvas size. */
+  /**
+   * Where an item is on the canvas: one that is not converted yet (fractions of the window) the old way, on the canvas size.
+   * In another preview shape it is converted on the real one first, so it is anchored like any other.
+   */
   private placed(info: LayoutItemInfo, shape: Shape): Rect {
-    return placeItem(info, { x: 0, y: 0, ...shape.canvas }, this.minimum(shape));
+    const canvas = { x: 0, y: 0, ...shape.canvas };
+    if (info.legacy && shape.canvas.width !== shape.real.width) return placeAnchored(this.rectOf(info, shape), canvas, this.minimum(shape));
+    return placeItem(info, canvas, this.minimum(shape));
   }
 
   /** The item's position as an anchored rectangle on the canvas: what an undo step goes back to. */
   private rectOf(info: LayoutItemInfo, shape: Shape): AnchoredRect {
     if (!info.legacy) return info.rect;
-    const canvas = { x: 0, y: 0, ...shape.canvas };
+    const canvas = { x: 0, y: 0, ...shape.real };
     return anchorOf(placeLegacy(info.legacy, canvas, this.minimum(shape)), canvas);
   }
 
@@ -354,6 +382,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       gameId,
       canvas: shape.canvas,
       seen: shape.seen,
+      preview: this.previewOf(gameId, shape),
       grid,
       cell: gridCell(grid, REFERENCE_HEIGHT),
       minSize: this.minimum(shape),
@@ -470,6 +499,9 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       case "grid":
         this.options.source.setGrid(message.grid);
         break;
+      case "preview":
+        if (!fromShell || !this.setPreview(message.choice)) return;
+        break;
       case "select":
         this.selection = message.id;
         break;
@@ -537,6 +569,17 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     this.refresh();
   }
 
+  /** "Preview as": the setup shown is drawn in another shape from now on (this session); false when the choice isn't one of its choices. */
+  private setPreview(choice: string): boolean {
+    const gameId = this.current(this.games());
+    if (!this.previewOf(gameId, this.shape(gameId)).options.some((option) => option.id === choice)) return false;
+    if (choice === PREVIEW_DEFAULT) this.previews.delete(gameId);
+    else this.previews.set(gameId, choice);
+    // An item dragged in the old shape is let go; nothing was moved.
+    this.dragging.clear();
+    return true;
+  }
+
   /**
    * A panel from the Sources goes into the setup shown, if it may, and is selected; with a `key`, one thing the panel listed
    * (a panel that listed some can't be added as a whole). A new frame starts at the size its panel said it needs, in a free place.
@@ -594,7 +637,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
 
   /** A frame just added gets the size its content needs and the first place where it covers no other frame. */
   private fitNew(setupId: string, info: LayoutItemInfo, source: OverlaySource | undefined): void {
-    const shape = this.shape(setupId);
+    // A new frame is placed in the shape the setup really has, whatever "Preview as" shows: it must start inside the real window.
+    const shape = { ...this.shape(setupId), canvas: this.shape(setupId).real };
     const size = this.fitSize(source, shape);
     if (!size) return;
     const others = this.itemsOf(setupId)
