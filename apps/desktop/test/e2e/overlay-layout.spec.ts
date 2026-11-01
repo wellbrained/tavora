@@ -140,8 +140,16 @@ test("Reset position and Reset size work from the page, Take picture says why it
     await expect.poll(async () => (await state(page)).items[0]!.placed.width).toBe(first.placed.width);
 
     // The game isn't running: Take picture is off and says why.
-    await expect(page.getByTestId("layout-take-picture")).toBeDisabled();
-    await expect(page.getByTestId("layout-take-picture-hint")).toHaveAttribute("title", "Start the game first.");
+    // Off, but still hoverable: the tooltip says why.
+    const takePicture = page.getByTestId("layout-take-picture");
+    await expect(takePicture).toBeDisabled();
+    await takePicture.hover();
+    await expect(page.locator("[role=tooltip]")).toHaveText("Start the game first.");
+    // Undo and redo name their shortcut.
+    await page.getByTestId("layout-redo").hover();
+    await expect(page.locator("[role=tooltip]")).toHaveText(/^Redo \((Ctrl|Cmd)\+Y\)$/);
+    await page.getByTestId("layout-undo").hover();
+    await expect(page.locator("[role=tooltip]")).toHaveText(/^Undo \((Ctrl|Cmd)\+Z\)$/);
     expect((await state(page)).pictureHint).toBe("start");
 
     // The sidebar is on the right until Settings says otherwise, and the Overlay button stays in the header, lit.

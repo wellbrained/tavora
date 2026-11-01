@@ -4,7 +4,7 @@ import { cva } from "class-variance-authority"
 export { default as Button } from "./Button.vue"
 
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
   {
     variants: {
       variant: {
@@ -35,7 +35,22 @@ export const buttonVariants = cva(
         "icon-sm": "size-7",
         "icon-lg": "size-10",
       },
+      soft: {
+        true: "",
+        false: "",
+      },
     },
+    // A button that is off but still hoverable and focusable (so its tooltip can show) is `soft`: the hover look goes
+    // back to the resting one. Restated here, before the caller's classes, so a caller's own hover still wins.
+    compoundVariants: [
+      { variant: "default", soft: true, class: "hover:bg-primary" },
+      { variant: "destructive", soft: true, class: "hover:bg-destructive dark:hover:bg-destructive/60" },
+      { variant: "danger", soft: true, class: "hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15" },
+      { variant: "outline", soft: true, class: "hover:bg-background hover:text-inherit hover:border-border dark:hover:bg-input/10 dark:hover:border-input" },
+      { variant: "secondary", soft: true, class: "hover:bg-secondary" },
+      { variant: "ghost", soft: true, class: "hover:bg-transparent hover:text-inherit" },
+      { variant: "link", soft: true, class: "hover:no-underline" },
+    ],
     defaultVariants: {
       variant: "default",
       size: "default",

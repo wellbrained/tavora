@@ -48,7 +48,7 @@ classes where you use a control; never copy it.
 | Table of data | `Table` and its parts (`TableHeader`, `TableRow`, `TableCell`, `TableCaption`) | raw `<table>` with own CSS |
 | Tag, count, status word | `Badge` | muted `span` |
 | Menu | `ContextMenu`, `DropdownMenu`, or `sdk.ui.showMenu({ anchor: element })` | menu at the pointer, own popup |
-| Tooltip | `Tooltip` / `TooltipRows`, or a `title` (connectModule turns it into the kit tooltip) | own hover box |
+| Tooltip | `Tooltip` / `TooltipRows`, or a `title` (connectModule turns it into the kit tooltip). A disabled `Button` with a `title` (or `hinted`, when you show the tooltip yourself) stays hoverable and focusable, so say why it is off there | own hover box, a wrapper `span` around a disabled button |
 | Floating panel | `Popover` | absolutely positioned `div` |
 | Dialog | `Dialog`, `ConfirmDialog`, `NameDialog` | own overlay |
 | Nothing here yet | `EmptyState` (one sentence, one action) | a bare `<p>` |

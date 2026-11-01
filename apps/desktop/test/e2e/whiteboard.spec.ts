@@ -5,6 +5,8 @@ import { expect, test, type ElectronApplication } from "@playwright/test";
 import { inModule, launch, openModule, panels, setContentSize, shootPanels, waitForShown, WHITEBOARD } from "./harness";
 
 const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
+/** Whether a button is off: natively disabled, or `aria-disabled` when it keeps a hint that says why. */
+const off = (element: string) => `(element => element.disabled || element.getAttribute('aria-disabled') === 'true')(${element})`;
 // The shared kit shows notices and the Undo offer as toasts, newest last; a dismissed one fades out for a moment.
 const NEWEST_TOAST = `[...document.querySelectorAll('.tavora-toast-slot:not(.tavora-toast-leave-active) [data-slot="toast"]')].at(-1)`;
 const DISMISS_TOASTS = `document.querySelectorAll('[data-slot="toast"] button[aria-label="Dismiss"]').forEach((button) => button.click())`;
@@ -262,7 +264,7 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
   await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
 
   // Nothing to copy on an empty board.
-  expect(await inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(true);
+  expect(await inModule(app, WHITEBOARD, off(q("copy-picture")))).toBe(true);
 
   // A screenshot-sized picture (the largest Excalidraw keeps) with a rectangle drawn over it.
   const area = await inModule<{ x: number; y: number; width: number; height: number }>(app, WHITEBOARD, `(() => { const r = document.querySelector(".excalidraw canvas.interactive").getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
@@ -291,7 +293,7 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
   await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="toolbar-rectangle"]').click()`);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}?.dataset.locked ?? ""`), { timeout: 15_000 }).toBe("true");
   await drag(app, { x: area.x + 60, y: area.y + 60 }, { x: area.x + 260, y: area.y + 200 });
-  await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(false);
+  await expect.poll(() => inModule(app, WHITEBOARD, off(q("copy-picture")))).toBe(false);
 
   /** Copies with a real click and returns the notice and the size of the picture on the clipboard. */
   const copy = async () => {
@@ -378,9 +380,9 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
   await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("clear-board")} !== null`)).toBe(true);
   await inModule(app, WHITEBOARD, `${q("clear-board")}.click()`);
-  await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(true);
+  await expect.poll(() => inModule(app, WHITEBOARD, off(q("copy-picture")))).toBe(true);
   await inModule(app, WHITEBOARD, `${UNDO_BUTTON}.click()`);
-  await expect.poll(() => inModule(app, WHITEBOARD, `${q("copy-picture")}.disabled`)).toBe(false);
+  await expect.poll(() => inModule(app, WHITEBOARD, off(q("copy-picture")))).toBe(false);
   expect(await inModule(app, WHITEBOARD, `${q("picture-lock")} !== null`)).toBe(true);
   await app.close();
 });
@@ -636,7 +638,7 @@ test("adding a card preserves earlier deletions in Undo history", async () => {
         target.sendInputEvent({ type: "keyUp", keyCode, modifiers });
       }, { id: WHITEBOARD, keyCode, modifiers });
     };
-    await expect.poll(() => inModule(app, WHITEBOARD, `document.querySelector('[data-testid="add-card"]').disabled`)).toBe(false);
+    await expect.poll(() => inModule(app, WHITEBOARD, off(q("add-card")))).toBe(false);
     await add();
     await expect.poll(async () => (await storedBoard(userData, "Board 1"))?.elements.length).toBe(3);
     const original = (await storedBoard(userData, "Board 1"))!.elements.map((element) => element.id);
@@ -656,7 +658,7 @@ test("a broken picture card reports a localized error without changing the board
   try {
     await openModule(page, WHITEBOARD);
     await waitForShown(app, WHITEBOARD);
-    await expect.poll(() => inModule(app, WHITEBOARD, `document.querySelector('[data-testid="add-card"]').disabled`)).toBe(false);
+    await expect.poll(() => inModule(app, WHITEBOARD, off(q("add-card")))).toBe(false);
     await inModule(app, WHITEBOARD, `(() => {
       const data=new DataTransfer();data.items.add(new File(['broken'],'camp.png',{type:'image/png'}));
       const input=document.querySelector('[data-testid="card-file"]');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));
@@ -670,7 +672,7 @@ test("connector modes bind to cards, follow a moved card and edit arrowheads", a
   const { app, page, userData } = await launch();
   try {
     await openModule(page, WHITEBOARD);
-    await expect.poll(() => inModule(app, WHITEBOARD, `${q("add-card")}.disabled`).catch(() => true)).toBe(false);
+    await expect.poll(() => inModule(app, WHITEBOARD, off(q("add-card"))).catch(() => true)).toBe(false);
     const addNote = async () => { await click(app, "add-card"); await click(app, "add-note-card"); };
     const scene = async () => (await storedBoard(userData, "Board 1"))?.elements ?? [];
     await addNote();
@@ -714,7 +716,7 @@ test("idea starters keep the original board and remember the grid per board afte
   let closed = false;
   try {
     await openModule(page, WHITEBOARD);
-    await expect.poll(() => inModule(app, WHITEBOARD, `${q("add-card")}.disabled`).catch(() => true)).toBe(false);
+    await expect.poll(() => inModule(app, WHITEBOARD, off(q("add-card"))).catch(() => true)).toBe(false);
     await newBoard(app, "idea");
     await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}.textContent`)).toBe("Idea board");
     const board = await storedBoard(userData, "Idea board");
@@ -735,7 +737,7 @@ test("idea starters keep the original board and remember the grid per board afte
     const again=await launch(userData);
     try {
       await expect.poll(() => inModule(again.app,WHITEBOARD,`${q("board-name")}?.textContent`).catch(()=>"")).toBe("Idea board");
-      await expect.poll(() => inModule(again.app,WHITEBOARD,`${q("add-card")}.disabled`)).toBe(false);
+      await expect.poll(() => inModule(again.app,WHITEBOARD,off(q("add-card")))).toBe(false);
       await click(again.app,"board-menu");
       expect(await inModule(again.app,WHITEBOARD,`${q("board-grid")}.getAttribute('aria-checked')`)).toBe("true");
       await inModule(again.app,WHITEBOARD,`${q("board-menu")}.click()`);
@@ -750,7 +752,7 @@ test("screenshot starter cancellation creates nothing, then a chosen image is lo
   let closed=false;
   try {
     await openModule(page,WHITEBOARD);
-    await expect.poll(() => inModule(app,WHITEBOARD,`${q("add-card")}.disabled`).catch(()=>true)).toBe(false);
+    await expect.poll(() => inModule(app,WHITEBOARD,off(q("add-card"))).catch(()=>true)).toBe(false);
     // Cancel the native chooser without opening an OS dialog in the test run.
     await inModule(app,WHITEBOARD,`${q("starter-file")}.addEventListener('click',event=>event.preventDefault(),{once:true})`);
     await newBoard(app,"screenshot");
