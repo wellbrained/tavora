@@ -426,6 +426,12 @@ export function openSettings(target: { section: SettingsPlace; setting?: string 
   settingsOpen.value = true;
 }
 
+/**
+ * The first-run welcome run as a dry run (dev build only, from Settings > General): its screens work, but nothing is
+ * written; the game, the modules and the sign-in are only pretended. Closing it changes nothing in the library.
+ */
+export const trialWelcome = ref(false);
+
 /** The parts of the profile dialog, in its menu. */
 export type ProfileSection = "profile" | "account" | "cloud-copy" | "messages";
 /** The profile dialog: the user's picture, name and ranks, the account, the cloud copy and messages. */

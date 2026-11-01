@@ -7,7 +7,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Picker } from "@tavora/official-ui/components/ui/picker";
 import type { Startup } from "../../../shared/host-api";
 import { LANGUAGES, type LanguageSetting } from "../../../shared/i18n";
-import { act, settingsOpen, state, useFloating } from "../../host";
+import { act, settingsOpen, state, trialWelcome, useFloating } from "../../host";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
@@ -40,6 +40,13 @@ async function showWelcomeAgain() {
   if (!result.ok) return;
   settingsOpen.value = false;
   await act({ type: "show-welcome" });
+}
+/** Dev build: shows the welcome as a dry run. Only the screen changes, so panels do not float over it; the library is not touched. */
+async function tryWelcome() {
+  if (!state.value?.devBuild) return;
+  settingsOpen.value = false;
+  await act({ type: "show-welcome" });
+  trialWelcome.value = true;
 }
 </script>
 
@@ -76,6 +83,10 @@ async function showWelcomeAgain() {
     </SettingRow>
     <SettingRow :label="t('settings.welcome-tour.label')" :description="t('settings.welcome-tour.description')" setting="welcome-tour" :highlighted="highlight === 'welcome-tour'">
       <Button variant="secondary" data-testid="show-welcome-again" @click="showWelcomeAgain">{{ t("settings.welcome.button") }}</Button>
+    </SettingRow>
+    <!-- Only in a build run from source: the whole welcome as a dry run that writes nothing. -->
+    <SettingRow v-if="state!.devBuild" :label="t('settings.welcome-trial.label')" :description="t('settings.welcome-trial.description')">
+      <Button variant="secondary" data-testid="try-welcome" @click="tryWelcome">{{ t("settings.welcome-trial.button") }}</Button>
     </SettingRow>
   </SettingGroup>
 </template>

@@ -49,28 +49,31 @@ async function noteIn(running: Awaited<ReturnType<typeof launch>>, gameId: strin
   await expectModuleText(app, VANILLA, "note-revision", "1");
 }
 
-test("the first-run welcome takes a name and games, and can be shown again", async () => {
+/** Walks the map (three parts) and picks what to try first. */
+async function throughMap(page: Page, pick: "game" | "personal") {
+  for (const part of ["workspace", "panel", "module"]) {
+    await expect(page.getByTestId(`onboarding-map-${part}`)).toHaveAttribute("aria-current", "step");
+    await page.getByTestId("onboarding-next").click();
+  }
+  await page.getByTestId(`onboarding-pick-${pick}`).click();
+}
+
+test("the first-run welcome starts a game with the keyboard, lands in it, and can be shown again", async () => {
   const { app, page, userData } = await launch(undefined, [], { seed: false });
-  await page.getByTestId("onboarding-name").fill("Robin");
+  await expect(page.getByTestId("app-skeleton")).toHaveAttribute("data-lit", "workspace");
+  await throughMap(page, "game");
+  // Type, then Enter adds the top match.
+  await page.getByTestId("onboarding-search").fill("hollow");
+  await expect(page.getByTestId("onboarding-game-hollow-knight")).toBeVisible();
+  await page.getByTestId("onboarding-search").press("Enter");
+  await expect(page.getByTestId("onboarding-ready")).toContainText("Hollow Knight");
   await page.getByTestId("onboarding-next").click();
-  // Next waits for a game; skipping stays possible.
-  await expect(page.getByTestId("onboarding-next")).toBeDisabled();
-  await expect(page.getByTestId("onboarding-skip-games")).toBeVisible();
-  // A popular game is one click, and leaves the tiles once it is added.
-  await page.getByTestId("onboarding-game-minecraft").click();
-  await expect(page.getByTestId("onboarding-games")).toContainText("Minecraft");
-  await expect(page.getByTestId("onboarding-game-minecraft")).toHaveCount(0);
-  await expect(page.getByTestId("onboarding-next")).toBeEnabled();
-  // Any other game comes from the search.
-  await page.getByTestId("onboarding-add-game").click();
-  await page.getByTestId("game-search").fill("hollow");
-  await page.getByTestId("catalog-hollow-knight").click();
-  // Adding a game here keeps the welcome open and lists the game.
-  await expect(page.getByTestId("onboarding-games")).toContainText("Hollow Knight");
-  await page.getByTestId("onboarding-next").click();
-  await page.getByTestId("onboarding-done").click();
-  await expect(page.getByTestId("welcome")).toContainText("Welcome back");
-  await expect(page.getByTestId("rail-profile")).toHaveAttribute("aria-label", "Profile: Robin");
+  // The account is optional: Not now ends the welcome in the new game, with its panels open.
+  await expect(page.getByTestId("onboarding-publish")).toBeVisible();
+  await page.getByTestId("onboarding-later").click();
+  await expect(page.getByTestId("rail-workspace-hollow-knight")).toHaveAttribute("aria-current", "page");
+  await expect(panels(page, NOTES)).toHaveCount(1);
+  await expect(panels(page, TODOS)).toHaveCount(1);
   await app.close();
 
   const again = await launch(userData);
@@ -79,6 +82,29 @@ test("the first-run welcome takes a name and games, and can be shown again", asy
   await again.page.getByTestId("show-welcome-again").click();
   await expect(again.page.getByTestId("onboarding")).toBeVisible();
   await again.app.close();
+});
+
+test("the first-run welcome moves with the arrow keys, and makes a personal space with the ticked panels", async () => {
+  const { app, page } = await launch(undefined, [], { seed: false });
+  await throughMap(page, "game");
+  await page.getByTestId("onboarding-search").fill("e");
+  await expect(page.getByRole("option").nth(1)).toBeVisible();
+  await expect(page.getByRole("option").first()).toHaveAttribute("aria-selected", "true");
+  await page.getByTestId("onboarding-search").press("ArrowDown");
+  await expect(page.getByRole("option").nth(1)).toHaveAttribute("aria-selected", "true");
+  await page.getByTestId("onboarding-back").click();
+  await page.getByTestId("onboarding-pick-personal").click();
+  // Notes and To-Dos are ticked at first; Whiteboard is added.
+  await expect(page.getByTestId("onboarding-panel-tavora.notes")).toBeChecked();
+  await expect(page.getByTestId("onboarding-panel-tavora.todos")).toBeChecked();
+  await expect(page.getByTestId("onboarding-panel-tavora.whiteboard")).not.toBeChecked();
+  await page.getByTestId("onboarding-panel-tavora.whiteboard").click();
+  await page.getByTestId("onboarding-next").click();
+  await page.getByTestId("onboarding-later").click();
+  await expect(page.getByTestId("workspace")).toBeVisible();
+  await expect(panels(page, NOTES)).toHaveCount(1);
+  await expect(panels(page, TODOS)).toHaveCount(1);
+  await app.close();
 });
 
 test("the Add a game list ranks real name starts first and sorts by the name shown", async () => {
@@ -564,4 +590,25 @@ test("Home names a new Tavora version once, and its patch notes are one click aw
   } finally {
     await app.close();
   }
+});
+
+test("trying the welcome from Settings (dev build) writes nothing", async () => {
+  const { app, page, userData } = await launch();
+  const library = path.join(userData, "library.json");
+  const before = await readFile(library, "utf8");
+  await page.getByTestId("rail-settings").click();
+  await page.getByTestId("try-welcome").click();
+  await expect(page.getByTestId("onboarding-dry")).toBeVisible();
+  await throughMap(page, "game");
+  await page.getByTestId("onboarding-search").fill("hollow");
+  await page.getByTestId("onboarding-search").press("Enter");
+  await expect(page.getByTestId("onboarding-ready")).toContainText("Hollow Knight");
+  await page.getByTestId("onboarding-next").click();
+  await page.getByTestId("onboarding-later").click();
+  // Closed: back at Home, nothing added, still done, the library file as it was.
+  await expect(page.getByTestId("onboarding")).toHaveCount(0);
+  await expect(page.getByTestId("rail-workspace-hollow-knight")).toHaveCount(0);
+  await expect(page.getByTestId("welcome")).toBeVisible();
+  expect(await readFile(library, "utf8")).toBe(before);
+  await app.close();
 });

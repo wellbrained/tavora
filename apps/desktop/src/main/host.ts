@@ -1409,8 +1409,15 @@ export class Host {
   }
 
   /** Where the Browse tab of the module library looks: the current game workspace's game, or a personal workspace. */
-  private catalogScope(): CatalogScope | null {
-    const id = this.workspaceId;
+  /** The scope a host page asked for (a workspace, or a game), else the open workspace's. */
+  private catalogScopeOf(target: unknown): CatalogScope | null {
+    const asked = typeof target === "object" && target !== null ? (target as Record<string, unknown>) : {};
+    if (typeof asked.game === "string" && asked.game.length <= 80) return { game: asked.game };
+    if (typeof asked.workspaceId === "string") return this.catalogScope(asked.workspaceId);
+    return this.catalogScope();
+  }
+
+  private catalogScope(id: string | null = this.workspaceId): CatalogScope | null {
     const workspace = id ? this.library.workspaces[id] : undefined;
     if (!workspace) return null;
     return workspace.kind === "personal" ? { personal: true } : { game: workspace.catalogId ?? workspace.id };
@@ -1827,10 +1834,10 @@ export class Host {
       // Games the user already has (Trash included) are not offered again.
       return { ...result, games: result.games.filter((game) => !this.library.workspaces[game.id]) };
     });
-    ipcMain.handle("host:browse-catalog", async (event): Promise<CatalogListResult> => {
+    ipcMain.handle("host:browse-catalog", async (event, target?: unknown): Promise<CatalogListResult> => {
       if (!fromHost(event)) return { status: "unreachable" };
       if (!this.library.onlineSearch) return { status: "off" };
-      const scope = this.catalogScope();
+      const scope = this.catalogScopeOf(target);
       return scope ? this.catalog.list(scope, this.language) : { status: "ok", modules: [] };
     });
     ipcMain.handle("host:catalog-page", async (event, moduleId: unknown): Promise<CatalogPageResult> =>
@@ -4380,6 +4387,7 @@ export class Host {
         ),
       })),
       moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder && !problem.official).map(({ folder, path: full, message, kind, values }) => ({ folder, path: full, message, ...(kind ? { kind } : {}), ...(values ? { values } : {}) })),
+      devBuild: !app.isPackaged,
       officialPublish: ((available) => ({
         available,
         ...this.officialPublish,

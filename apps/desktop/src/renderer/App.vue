@@ -27,7 +27,7 @@ import SettingsDialog from "./components/settings/SettingsDialog.vue";
 import InboxDialogs from "./components/messages/InboxDialogs.vue";
 import { Toaster } from "@tavora/official-ui/components/ui/toast";
 import { computed } from "vue";
-import { dialog, settingsOpen, state } from "./host";
+import { dialog, settingsOpen, state, trialWelcome } from "./host";
 import OverlayPage from "./pages/OverlayPage.vue";
 import WorkspacePage from "./pages/WorkspacePage.vue";
 import OnboardingPage from "./pages/OnboardingPage.vue";
@@ -46,7 +46,8 @@ const toastPosition = computed(() => (settingsOpen.value && state.value ? state.
       <WorkspacePage v-if="state.screen === 'workspace' && state.currentWorkspaceId" :key="state.currentWorkspaceId" />
       <OverlayPage v-else-if="state.screen === 'overlay'" />
       <template v-else>
-        <OnboardingPage v-if="!state.library.onboarded" />
+        <OnboardingPage v-if="trialWelcome" dry />
+        <OnboardingPage v-else-if="!state.library.onboarded" />
         <WelcomePage v-else />
         <!-- Lets the window be moved from the empty top edge of Home. -->
         <div class="app-drag absolute inset-x-0 top-0 h-12" aria-hidden="true" />
