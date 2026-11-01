@@ -86,6 +86,7 @@ themes; anything hard-coded breaks in one of them.
   come from the kit. No `z-index` of your own except inside a canvas or map.
 - **Focus**: the kit controls bring the focus ring. Never remove it and never draw your own.
 - **Icons**: Lucide (`@lucide/vue`), 16 px in controls, outline only.
+- **Dropdown arrows**: a control where you pick a value shown in the field (`Select`, `Picker`) has the up/down arrow (`ChevronsUpDown`); the kit adds it. A button that opens a menu of actions has the single down arrow (`ChevronDown`). Never put a down arrow on a picker.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
 
