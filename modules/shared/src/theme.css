@@ -8,6 +8,8 @@
 /* Fonts are bundled; modules cannot load anything from the web. */
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
+/* The curves and durations every animation uses. */
+@import "./motion.css";
 
 @custom-variant dark (&:is(.dark *));
 

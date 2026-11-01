@@ -3,7 +3,7 @@
 //
 // Module panels are views drawn above the host page, so a label over the workspace would be hidden behind them.
 // While a tooltip is open it counts as an open menu: the host freezes and hides the panels, as it does for menus.
-import { Tooltip } from "@tavora/official-ui/components/tooltip";
+import { Tooltip, tooltipDelay } from "@tavora/official-ui/components/tooltip";
 import { onBeforeUnmount, ref, watch } from "vue";
 import { t } from "../i18n";
 import { useFloating } from "../host";
@@ -36,7 +36,7 @@ function show(trigger: Element | null) {
     clearTimeout(release);
     setFloating(true);
     open.value = true;
-  }, 150);
+  }, tooltipDelay(150));
 }
 /** Closing waits a moment, so moving from one icon to the next does not show and hide the panels each time. */
 function hide() {

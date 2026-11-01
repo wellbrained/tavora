@@ -1,5 +1,5 @@
 import { createApp, h, reactive } from "vue";
-import Tooltip from "./components/tooltip/Tooltip";
+import Tooltip, { tooltipDelay } from "./components/tooltip/Tooltip";
 
 const installed = new WeakMap<Document, () => void>();
 
@@ -68,7 +68,7 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
       options.onOpenChange?.(true);
       const old = element.getAttribute("aria-describedby");
       element.setAttribute("aria-describedby", old ? old + " " + id : id);
-    }, 180);
+    }, tooltipDelay(180));
   }
   const over = (event: PointerEvent) => {
     const element = target(event);

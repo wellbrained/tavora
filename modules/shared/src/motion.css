@@ -1,0 +1,70 @@
+/* Motion for the app and every module: one set of curves and durations, so nothing hand-types its own.
+   Imported by theme.css (the modules) and by the host's styles.css (the app).
+
+   Curves: ease-out for things that appear, leave or answer a touch; ease-in-out for things that move across the screen.
+   Never an ease-in on the interface: it starts slow, right when the eye is on it.
+   Durations: nothing in the interface is longer than --duration-move.
+   Not for anything a key press starts (undo, nudges, hotkeys, switching by key), nor for what is shown all day. */
+:root {
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+
+  /* A press on a button or a hover on a small thing. */
+  --duration-press: 140ms;
+  /* A tooltip. */
+  --duration-tooltip: 125ms;
+  /* A menu, dropdown, select or popover. */
+  --duration-menu: 180ms;
+  /* A panel or a bigger thing coming or going. */
+  --duration-panel: 250ms;
+  /* Something moving across the screen. The longest the interface gets. */
+  --duration-move: 300ms;
+}
+
+/* Menus, dropdowns, selects and popovers grow out of the thing that opened them, never from their own middle
+   (reka-ui tells us where that is). They leave quicker than they arrive. A tooltip does the same from its arrow
+   (tooltip.css). Dialogs are exempt: they appear in the middle. */
+@layer components {
+  .tavora-popup {
+    transform-origin: var(--reka-popper-transform-origin, center);
+  }
+  .tavora-popup[data-state="open"] {
+    animation: tavora-popup-in var(--duration-menu) var(--ease-out-strong);
+  }
+  .tavora-popup[data-state="closed"] {
+    animation: tavora-popup-out calc(var(--duration-menu) * 0.67) var(--ease-out-strong) forwards;
+  }
+  @keyframes tavora-popup-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+  }
+  @keyframes tavora-popup-out {
+    to {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+  }
+}
+
+/* Reduced motion keeps the fade and drops the movement. The rule that follows (theme.css, styles.css) stops every
+   other animation; these few are kept on purpose, so a menu still arrives gently instead of blinking in. */
+@media (prefers-reduced-motion: reduce) {
+  .tavora-popup[data-state="open"] {
+    animation: tavora-fade-in 100ms linear !important;
+  }
+  .tavora-popup[data-state="closed"] {
+    animation: tavora-fade-out 80ms linear forwards !important;
+  }
+  @keyframes tavora-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes tavora-fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+}

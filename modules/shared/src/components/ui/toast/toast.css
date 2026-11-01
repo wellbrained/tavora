@@ -4,7 +4,7 @@
    critically damped, so linear() can follow it point by point. */
 .tavora-toaster {
   --tavora-toast-spring: linear(0, 0.093 5%, 0.27 10%, 0.45 15%, 0.603 20%, 0.721 25%, 0.808 30%, 0.913 40%, 0.962 50%, 0.984 60%, 0.993 70%, 0.997 80%, 1);
-  --tavora-toast-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --tavora-toast-ease: var(--ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
   position: fixed;
   z-index: 50;
   inset-inline: 0;

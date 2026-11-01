@@ -3,7 +3,7 @@
   "id": "tavora.playground",
   "name": "UI Playground",
   "description": "Every control a module can use, side by side, to try out the look and feel.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "apiVersion": "1",
   "entry": "dist/index.html",
   "changelog": "changelog.json",
