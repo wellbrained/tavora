@@ -1,16 +1,22 @@
 // `pnpm release:sdk`: publishes the module developer packages to npm (@tavora/sdk,
-// @tavora/module-schema, @tavora/pack, @tavora/create-module). Run by hand on the
-// maintainer's PC from a clean, up-to-date main; it never runs in CI.
+// @tavora/module-schema, @tavora/pack, @tavora/create-module), from a clean, up-to-date main.
+// Usually through the "Release SDK packages" workflow (.github/workflows/release-sdk.yml): started by
+// hand, approved by the maintainer in the `npm` environment, published with npm trusted publishing (no
+// token, with provenance). It still runs on the maintainer's PC the same way.
 //
 //   pnpm release:sdk            checks, tests, builds, packs and publishes what is new
 //   pnpm release:sdk --dry-run  the same, but npm only shows what it would publish
+//   pnpm release:sdk --pack-to <folder>
+//                               the same checks, but leaves the packages in <folder> (named 1-…, 2-… in
+//                               publishing order) instead of publishing; the workflow's publish job uploads them
 //
 // A package is published when its version is not on npm yet, so raise the version
 // (and add its changelog entry) of each package that changed. npm asks for the
-// second factor of the account that owns the @tavora organisation; log in once
-// first with `npm login` (or `pnpm dlx npm@11 login` without npm installed).
+// second factor of the account that owns the @tavora organisation on a PC; log in
+// first with `npm login` (or `pnpm dlx npm@11 login` without npm installed). The login
+// expires after a while, and npm then answers a publish with "404 Not Found".
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +24,10 @@ import { checkSdkRelease, PACKAGES } from "./release-sdk-guards.mjs";
 
 const repo = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const dryRun = process.argv.includes("--dry-run");
+const packAt = process.argv.indexOf("--pack-to");
+/** Where --pack-to leaves the packages; null to publish them here. */
+const packTo = packAt === -1 ? null : path.resolve(process.argv[packAt + 1] ?? "");
+if (packTo !== null && !process.argv[packAt + 1]) throw new Error("--pack-to needs a folder.");
 const windows = process.platform === "win32";
 
 function run(command, args, options = {}) {
@@ -85,13 +95,18 @@ pnpm(["-r", "--filter", "./packages/*", "build"]);
 const out = mkdtempSync(path.join(tmpdir(), "tavora-release-sdk-"));
 try {
   for (const pkg of releasing) {
-    step(`${dryRun ? "Trying" : "Publishing"} ${pkg.name} ${pkg.version}`);
+    step(`${packTo ? "Packing" : dryRun ? "Trying" : "Publishing"} ${pkg.name} ${pkg.version}`);
     const before = new Set(readdirSync(out));
     pnpm(["pack", "--pack-destination", out], { cwd: path.join(repo, "packages", pkg.dir) });
     const tarball = readdirSync(out).find((file) => !before.has(file));
+    if (packTo) {
+      mkdirSync(packTo, { recursive: true });
+      copyFileSync(path.join(out, tarball), path.join(packTo, `${releasing.indexOf(pkg) + 1}-${tarball}`));
+      continue;
+    }
     npm(["publish", path.join(out, tarball), "--access", "public", ...(dryRun ? ["--dry-run"] : [])]);
   }
 } finally {
   rmSync(out, { recursive: true, force: true });
 }
-console.log(dryRun ? "\nDry run done; nothing was published." : `\nPublished ${releasing.map((pkg) => `${pkg.name}@${pkg.version}`).join(", ")}.`);
+console.log(packTo ? `\nPacked in ${packTo}; nothing was published.` : dryRun ? "\nDry run done; nothing was published." : `\nPublished ${releasing.map((pkg) => `${pkg.name}@${pkg.version}`).join(", ")}.`);
