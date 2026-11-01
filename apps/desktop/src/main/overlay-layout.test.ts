@@ -6,7 +6,7 @@ import type { GridSetting } from "../shared/layout-math";
 import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, type LayoutMessage, type LayoutView } from "../shared/layout-view";
 import { DEFAULT_PANEL_ANCHORED, DEFAULT_RECT, placeAnchored, placeLegacy, type AnchoredRect, type LegacyRect } from "../shared/overlay-anchor";
 import type { LayoutItemInfo, LayoutItemRef, LayoutSource } from "./game-overlay-service";
-import type { SeenSize } from "./game-overlays";
+import type { CopyOutcome, SeenSize } from "./game-overlays";
 import { LayoutPictures } from "./layout-pictures";
 import { OverlayLayout, edgesToBounds, freeSpot, type LayoutFrame, type LayoutWindow, type SourcePanel } from "./overlay-layout";
 
@@ -60,6 +60,9 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     overlaysAdded: [] as { setup: string; key: string }[],
     added: [] as { setup: string; instanceId: string }[],
     moved: [] as { from: string; to: string }[],
+    /** The copies asked for, and what the next one answers with. */
+    copies: [] as { from: string; to: string; mode: string }[],
+    copyOutcome: { copied: 1, skipped: [], removed: { overlays: [], panels: [] } } as CopyOutcome | null,
     closedWindow: () => {},
     captured: [] as { handle: string; size: { width: number; height: number } }[],
     enabled: options.enabled ?? true,
@@ -128,6 +131,10 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
       }
       return item !== undefined;
     },
+    copy: (from, to, mode) => {
+      world.copies.push({ from, to, mode });
+      return world.copyOutcome;
+    },
     startSize: (ref, size) => {
       world.sizedOn.push(size);
       return ref.kind === "panel" ? (options.startSizes?.panel ?? { width: DEFAULT_PANEL_ANCHORED.width, height: DEFAULT_PANEL_ANCHORED.height }) : (options.startSizes?.overlay ?? { width: DEFAULT_RECT.width, height: DEFAULT_RECT.height });
@@ -146,7 +153,10 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
   const layout = new OverlayLayout({
     source,
     pictures,
-    workspaces: { name: (id) => ({ elden: "Elden Ring", poe2: "Path of Exile 2", personal: "Personal" })[id] ?? null },
+    workspaces: {
+      name: (id) => ({ elden: "Elden Ring", poe2: "Path of Exile 2", valheim: "Valheim", personal: "Personal" })[id] ?? null,
+      games: () => [{ id: "poe2", name: "Path of Exile 2" }, { id: "valheim", name: "Valheim" }, { id: "elden", name: "Elden Ring" }],
+    },
     sources: () => options.sources ?? [],
     leave: () => void world.left++,
     openSettings: (target) => void world.settingsOpened.push(target),
@@ -1343,5 +1353,81 @@ describe("adding and moving", () => {
     expect(layout.view().items[0]!.from).toBe("Elden Ring");
     layout.open(LAYOUT_ALL_GAMES);
     expect(layout.view().items[0]!.from).toBe("Personal");
+  });
+});
+
+describe("copying a setup to a game", () => {
+  const outcome = (copied: number, skipped: CopyOutcome["skipped"] = []): CopyOutcome => ({ copied, skipped, removed: { overlays: [], panels: [] } });
+
+  it("lists every game but the one shown, with the frames its setup has", () => {
+    const { layout } = setup([clock("a", "elden"), clock("b", "poe2"), clock("c", "poe2", at(0.5, 0.5, 0.2, 0.2))]);
+    layout.open("elden");
+    expect(layout.view().copyTargets).toEqual([
+      { id: "poe2", name: "Path of Exile 2", frames: 2 },
+      { id: "valheim", name: "Valheim", frames: 0 },
+    ]);
+    layout.open(LAYOUT_ALL_GAMES);
+    expect(layout.view().copyTargets.map((game) => game.id)).toEqual(["elden", "poe2", "valheim"]);
+  });
+
+  it("copies the setup shown and says where it went, with Show in the note", () => {
+    const { layout, world } = setup([clock("a", "elden")]);
+    layout.open("elden");
+    layout.handle({ type: "copy-setup", to: "valheim", mode: "replace" }, true);
+    expect(world.copies).toEqual([{ from: "elden", to: "valheim", mode: "replace" }]);
+    expect(layout.view().copied).toEqual({ gameId: "valheim", text: "Copied to Valheim" });
+    expect(layout.view().notice).toBeNull();
+  });
+
+  it("passes the mode on", () => {
+    const { layout, world } = setup([clock("a", "elden")]);
+    layout.open("elden");
+    layout.handle({ type: "copy-setup", to: "poe2", mode: "add" }, true);
+    expect(world.copies).toEqual([{ from: "elden", to: "poe2", mode: "add" }]);
+  });
+
+  it("names what was left out", () => {
+    const { layout, world } = setup([clock("a", "elden")]);
+    layout.open("elden");
+    world.copyOutcome = outcome(3, [{ reason: "game-only", workspaceId: "elden" }]);
+    layout.handle({ type: "copy-setup", to: "valheim", mode: "replace" }, true);
+    expect(layout.view().copied?.text).toBe("Copied 3 frames to Valheim. 1 frame only works in Elden Ring.");
+    world.copyOutcome = outcome(1, [{ reason: "game-only", workspaceId: "elden" }, { reason: "game-only", workspaceId: "poe2" }, { reason: "not-in-game", workspaceId: "personal" }, { reason: "exists", workspaceId: "personal" }, { reason: "exists", workspaceId: "personal" }, { reason: "full", workspaceId: "personal" }]);
+    layout.handle({ type: "copy-setup", to: "valheim", mode: "add" }, true);
+    expect(layout.view().copied?.text).toBe("Copied 1 frame to Valheim. 2 frames only work in their own games. 1 frame can't show over a game. 2 frames were already there. 1 frame didn't fit.");
+  });
+
+  it("warns, without the note, when nothing could be copied", () => {
+    const { layout, world } = setup([clock("a", "elden")]);
+    layout.open("elden");
+    world.copyOutcome = outcome(0, [{ reason: "game-only", workspaceId: "elden" }]);
+    layout.handle({ type: "copy-setup", to: "valheim", mode: "replace" }, true);
+    expect(layout.view().copied).toBeNull();
+    expect(layout.view().notice).toBe("Nothing was copied. 1 frame only works in Elden Ring.");
+    world.copyOutcome = null;
+    layout.handle({ type: "copy-setup", to: "valheim", mode: "replace" }, true);
+    expect(layout.view().notice).toBe("There's nothing to copy yet.");
+  });
+
+  it("only copies into a listed game, and only on the page's word", () => {
+    const { layout, world } = setup([clock("a", "elden")]);
+    layout.open("elden");
+    layout.handle({ type: "copy-setup", to: "elden", mode: "replace" }, true);
+    layout.handle({ type: "copy-setup", to: LAYOUT_ALL_GAMES, mode: "replace" }, true);
+    layout.handle({ type: "copy-setup", to: "gone", mode: "replace" }, true);
+    layout.handle({ type: "copy-setup", to: "valheim", mode: "replace" }, false);
+    expect(world.copies).toEqual([]);
+    expect(layout.view().copied).toBeNull();
+  });
+
+  it("drops the note when the page is closed, shows the game it went to, or another setup is picked", () => {
+    const { layout } = setup([clock("a", "elden")]);
+    layout.open("elden");
+    layout.handle({ type: "copy-setup", to: "valheim", mode: "replace" }, true);
+    layout.handle({ type: "dismiss-notice" }, true);
+    expect(layout.view().copied).toBeNull();
+    layout.handle({ type: "copy-setup", to: "valheim", mode: "replace" }, true);
+    layout.handle({ type: "game", gameId: "valheim" }, true);
+    expect(layout.view().copied).toBeNull();
   });
 });

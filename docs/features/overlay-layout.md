@@ -10,6 +10,16 @@ The page edits one [overlay setup](overlay-setups.md) at a time; its dropdown li
 - Moving an item in the in-game layer writes to the setup it shows from.
 - Removing an item takes it out of the chosen setup only; closing its panel or hiding the overlay from its module takes it out of every setup.
 
+## Copy to…
+
+Next to the setup dropdown, Copy to… lists every game workspace but the one shown (those with a setup, with their frame count, and those without). It sends `{ type: "copy-setup", to, mode }`; `OverlayLayout` asks `GameOverlays.layout.copy`, which calls `GameOverlayStore.copySetup`.
+
+- A game with frames asks first (`replace` / `add` / cancel); one without is copied to at once and gets a setup of its own, empty at the start, never seeded from All games.
+- Copied: place (the anchored rectangle, so it fits any window), mode, opacity, Hide from capture, and the item itself (a module overlay by its subject and key, a panel by its instance id, so what #597 adds to an item travels with it). Never copied: the game's picture, and hotkeys (they are per item and already work in every setup it is in).
+- Left out and named in the note: a game workspace's items that only work in another game (`allowedIn`), panels whose type can't show over a game, items the target has already (`add`: its own place stays) and items past the limit of 8.
+- `replace` with nothing that can go in changes nothing. Items a `replace` took out of the game and that are in no setup any more lose their key, as with Remove.
+- The note carries Show, which sends the usual `game` message; it goes away with the next setup you pick or Close.
+
 ## Canvas and capture
 
 `OverlayLayout` owns selection, drag previews, undo and messages. `GameOverlays.layout` resolves positions for the controller; the runtime uses the same resolved positions for overlays, interactive panels and panel live views.
@@ -37,5 +47,5 @@ The list keeps its order whatever is added, removed or searched: workspaces, the
 ## Checks
 
 - Unit coverage: `game-overlays.test.ts`, `game-overlay-service.test.ts`, `overlay-layout.test.ts` and `layout-view.test.ts`.
-- Electron coverage: `pnpm --filter @tavora/desktop exec playwright test overlay-layout.spec.ts` exercises the move from a version-4 file, Del, the item toolbar, Settings over the page, per-setup places and opacity, opacity stills, mouse dragging/resizing, reset buttons, the Sources list, Add overlay / Remove overlay and Back; `overlay-button.spec.ts` the header button.
+- Electron coverage: `pnpm --filter @tavora/desktop exec playwright test overlay-layout.spec.ts` exercises the move from a version-4 file, Del, the item toolbar, Settings over the page, per-setup places and opacity, opacity stills, mouse dragging/resizing, reset buttons, the Sources list, Add overlay / Remove overlay, Copy to… and Back; `overlay-button.spec.ts` the header button.
 - Real-game screenshot capture still needs a live-game check; hidden Electron tests cannot verify it.

@@ -502,3 +502,121 @@ for (const mode of [
     }
   });
 }
+
+/** A library with a third game, Valheim, that has no overlay setup, and setups for the two others. */
+const PERSONAL = "local-notes";
+async function seedCopy(userData: string) {
+  await mkdir(userData, { recursive: true });
+  const library = seedLibrary();
+  (library.workspaces as Record<string, unknown>).valheim = { ...library.workspaces.satisfactory, id: "valheim", catalogId: "valheim", name: "Valheim" };
+  // Items from a personal workspace can go into any game's setup.
+  (library.workspaces as Record<string, unknown>)[PERSONAL] = { ...library.workspaces.satisfactory, id: PERSONAL, kind: "personal", catalogId: null, name: "Notes", lastOpenedAt: null };
+  library.root.push({ kind: "workspace", id: "valheim" }, { kind: "workspace", id: PERSONAL });
+  await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...library, gameOverlays: true }));
+  const clock = (key: string, workspaceId: string, extra: Record<string, unknown> = {}) => ({
+    owner: "official",
+    moduleId: "tavora.clock-counter",
+    workspaceId,
+    key,
+    mode: "always",
+    opacity: 100,
+    hideFromCapture: false,
+    anchor: { h: "left", v: "top", x: 0.036, y: 0.03, width: 0.2, height: 0.16 },
+    ...extra,
+  });
+  const setups = [
+    { id: "$everywhere", overlays: [], panels: [] },
+    { id: "$all", overlays: [], panels: [] },
+    // The first only works in Path of Exile 2; the second has its own place and settings.
+    { id: GAME, overlays: [clock("own", GAME), clock("shared", PERSONAL, { mode: "toggle", opacity: 50, hideFromCapture: true, anchor: { h: "right", v: "bottom", x: 0.05, y: 0.1, width: 0.25, height: 0.2 } }), clock("extra", PERSONAL)], panels: [] },
+    { id: "satisfactory", overlays: [clock("mine", "satisfactory"), clock("other", PERSONAL)], panels: [] },
+  ];
+  await writeFile(path.join(userData, "game-overlays.json"), JSON.stringify({ version: 5, setups, layout: { seen: {} } }));
+}
+
+const keysOf = async (page: Page, setup: string) => {
+  await page.getByRole("button", { name: "Overlay for", exact: true }).click();
+  await page.getByTestId(`layout-game-option-${setup}`).click();
+  await expect.poll(async () => (await state(page)).gameId).toBe(setup);
+  return (await state(page)).items.map((item) => item.id.split("\n").at(-1));
+};
+
+test("Copy to… lists the other games, copies right away to one without frames, asks before touching one that has some, and says what it left out", async () => {
+  const userData = await newUserData();
+  await seedCopy(userData);
+  const { app, page } = await launch(userData, [MODULES], { seed: false });
+  try {
+    await overlayPage(app, page, GAME);
+    await expect.poll(async () => (await state(page))?.items.length).toBe(3);
+    const copy = page.getByTestId("layout-copy");
+    await expect(copy).toBeEnabled();
+
+    // The current game is not listed; the others are, with how many frames each has.
+    await copy.click();
+    await expect(page.getByTestId("layout-copy-menu").getByRole("menuitem")).toHaveText(["Satisfactory2 frames", "ValheimNo frames"]);
+    await page.getByTestId("layout-copy-option-valheim").click();
+
+    // Valheim has none: copied at once, and the note says what could not go.
+    await expect(page.getByTestId("layout-copied")).toContainText("Copied 2 frames to Valheim. 1 frame only works in Path of Exile 2.");
+    await expect(page.getByTestId("layout-copy-dialog")).toHaveCount(0);
+    expect((await state(page)).gameId).toBe(GAME);
+    await page.getByTestId("layout-copied-show").click();
+    await expect.poll(async () => (await state(page)).gameId).toBe("valheim");
+    await expect(page.getByTestId("layout-copied")).toHaveCount(0);
+    const shown = await state(page);
+    expect(shown.items.map((item) => item.id.split("\n").at(-1))).toEqual(["shared", "extra"]);
+    // Place and settings came along.
+    expect(shown.items[0]).toMatchObject({ mode: "toggle", opacity: 50, hideFromCapture: true, rect: { h: "right", v: "bottom", x: 0.05, y: 0.1, width: 0.25, height: 0.2 } });
+
+    // Satisfactory has two: a dialog asks. Cancel changes nothing.
+    await page.getByRole("button", { name: "Overlay for", exact: true }).click();
+    await page.getByTestId(`layout-game-option-${GAME}`).click();
+    await expect.poll(async () => (await state(page)).gameId).toBe(GAME);
+    await page.getByTestId("layout-copy").click();
+    await page.getByTestId("layout-copy-option-satisfactory").click();
+    const dialog = page.getByTestId("layout-copy-dialog");
+    await expect(dialog).toContainText("Satisfactory already has 2 frames");
+    await page.getByTestId("layout-copy-cancel").click();
+    await expect(dialog).toHaveCount(0);
+    expect(await keysOf(page, "satisfactory")).toEqual(["mine", "other"]);
+
+    // Add to them: its own stay, the copies come after.
+    await page.getByRole("button", { name: "Overlay for", exact: true }).click();
+    await page.getByTestId(`layout-game-option-${GAME}`).click();
+    await expect.poll(async () => (await state(page)).gameId).toBe(GAME);
+    await page.getByTestId("layout-copy").click();
+    await page.getByTestId("layout-copy-option-satisfactory").click();
+    await page.getByTestId("layout-copy-add").click();
+    await expect(page.getByTestId("layout-copied")).toContainText("Copied 2 frames to Satisfactory. 1 frame only works in Path of Exile 2.");
+    expect(await keysOf(page, "satisfactory")).toEqual(["mine", "other", "shared", "extra"]);
+
+    // Replace them: only the copies are left.
+    await page.getByRole("button", { name: "Overlay for", exact: true }).click();
+    await page.getByTestId(`layout-game-option-${GAME}`).click();
+    await page.getByTestId("layout-copy").click();
+    await page.getByTestId("layout-copy-option-satisfactory").click();
+    await page.getByTestId("layout-copy-replace").click();
+    await expect(page.getByTestId("layout-copied")).toBeVisible();
+    expect(await keysOf(page, "satisfactory")).toEqual(["shared", "extra"]);
+  } finally {
+    await app.close();
+  }
+  const saved = JSON.parse(await readFile(path.join(userData, "game-overlays.json"), "utf8"));
+  const ids = (setup: string) => saved.setups.find((item: { id: string }) => item.id === setup).overlays.map((overlay: { key: string }) => overlay.key);
+  expect(ids("valheim")).toEqual(["shared", "extra"]);
+  expect(ids("satisfactory")).toEqual(["shared", "extra"]);
+  expect(ids(GAME)).toEqual(["own", "shared", "extra"]);
+});
+
+test("Copy to… is off with a reason while the setup is empty", async () => {
+  const userData = await newUserData();
+  await seedCopy(userData);
+  const { app, page } = await launch(userData, [MODULES], { seed: false });
+  try {
+    await overlayPage(app, page, "$everywhere");
+    await expect(page.getByTestId("layout-copy")).toBeDisabled();
+    await expect(page.getByTestId("layout-copy-hint")).toHaveAttribute("title", "Add a frame first.");
+  } finally {
+    await app.close();
+  }
+});
