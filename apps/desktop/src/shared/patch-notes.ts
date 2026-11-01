@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.49",
+    date: "2026-11-01",
+    title: "Buttons that are off still say why",
+    notes: [
+      "Hover a button that's switched off and its tooltip shows, so you can see why. Tab reaches it too.",
+      "On the Overlay page, Undo and Redo show their shortcut.",
+    ],
+    prs: [
+      { number: 599, title: "Disabled buttons keep their tooltip; Undo and Redo show their shortcut" },
+    ],
+    tags: ["hotkeys", "overlays", "ui-kit"],
+  },
+  {
     version: "0.23.48",
     date: "2026-11-01",
     title: "Copy an overlay setup to another game",
