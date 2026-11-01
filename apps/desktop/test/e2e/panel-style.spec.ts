@@ -54,3 +54,34 @@ test("the gaps between panels have the same colour as the header above them, in 
   }
   await app.close();
 });
+
+test("the window buttons sit on the page behind them: Home's background, the darker workspace canvas", async () => {
+  const { app, page } = await launch();
+  await page.getByTestId("rail-home").click();
+  await expect(page.getByTestId("welcome")).toBeVisible();
+  // The last colour the host gave the window buttons.
+  await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0]!;
+    const set = window.setTitleBarOverlay.bind(window);
+    window.setTitleBarOverlay = (options) => {
+      (globalThis as { buttons?: string | undefined }).buttons = options.color;
+      set(options);
+    };
+  });
+  const hex = (element: Element) => {
+    const context = document.createElement("canvas").getContext("2d")!;
+    context.fillStyle = getComputedStyle(element).backgroundColor;
+    context.fillRect(0, 0, 1, 1);
+    const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+    return `#${[r!, g!, b!].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+  };
+  const buttons = () => app.evaluate(() => (globalThis as { buttons?: string }).buttons);
+  await openWorkspace(page, "poe2");
+  const canvas = await page.getByTestId("workspace").evaluate(hex);
+  await expect.poll(buttons).toBe(canvas);
+  await page.getByTestId("rail-home").click();
+  const home = await page.locator("body").evaluate(hex);
+  expect(home).not.toBe(canvas);
+  await expect.poll(buttons).toBe(home);
+  await app.close();
+});

@@ -1144,6 +1144,8 @@ export interface TavoraHostApi {
   };
   /** Dims the window buttons along with the page while a dialog backdrop covers it. */
   setDimmed(dimmed: boolean): void;
+  /** The page colour behind the window buttons (#rrggbb), so they sit on it without a box of their own. */
+  setButtonsBackground(color: string): void;
   onState(listener: (state: HostViewState) => void): void;
   onFrozen(listener: (images: Record<string, string>) => void): void;
   /** The still images from `onFrozen` are on screen: the host hides the panels only then, so their slots never show empty. */
