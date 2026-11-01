@@ -45,6 +45,7 @@ import {
   sameOverlay,
   setupsOnScreen,
   type AddResult,
+  type CopyOutcome,
   type GameOverlay,
   type GameOverlayChange,
   type GameOverlaySubject,
@@ -122,6 +123,8 @@ export interface LayoutSource {
   /** An item of a personal workspace moves between Everywhere and All games with its place and settings. */
   move(ref: LayoutItemRef, from: string, to: string): AddResult | "missing";
   setRect(setupId: string, ref: LayoutItemRef, rect: AnchoredRect): boolean;
+  /** Copies the items of a setup into a game's setup, replacing what it has or adding to it; see GameOverlayStore.copySetup. */
+  copy(from: string, to: string, mode: "replace" | "add"): CopyOutcome | null;
   /** The size a new item of this kind starts with in a window of this size (Reset size), in units of the window's height. */
   startSize(ref: LayoutItemRef, window: { width: number; height: number }): { width: number; height: number };
   setOverlay(setupId: string, subject: GameOverlaySubject, change: GameOverlayChange): void;
@@ -608,13 +611,16 @@ export class GameOverlays {
     const before = this.store.panels().map((panel) => ({ ...panel }));
     if (!this.store.forgetPanels(test)) return false;
     const gone = new Map(before.filter((panel) => !this.hasPanel(panel.instanceId)).map((panel) => [panel.instanceId, panel]));
-    for (const panel of gone.values()) {
-      if (clearLive) this.clearLive(panel.instanceId);
-      this.options.streaming.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === panel.owner && record.moduleId === panel.moduleId && record.workspaceId === panel.workspaceId && record.target === panel.instanceId);
-      this.toggled.delete(liveWindowId(panel.instanceId));
-      this.revive(liveWindowId(panel.instanceId));
-    }
+    for (const panel of gone.values()) this.releasePanel(panel, clearLive);
     return true;
+  }
+
+  /** A panel is in no setup any more: its key and live state go. */
+  private releasePanel(panel: InGamePanel, clearLive: boolean): void {
+    if (clearLive) this.clearLive(panel.instanceId);
+    this.options.streaming.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === panel.owner && record.moduleId === panel.moduleId && record.workspaceId === panel.workspaceId && record.target === panel.instanceId);
+    this.toggled.delete(liveWindowId(panel.instanceId));
+    this.revive(liveWindowId(panel.instanceId));
   }
 
   /** Takes the overlays matching `test` out of their setups; one in no setup any more loses its key. Whether any went. */
@@ -622,12 +628,15 @@ export class GameOverlays {
     const before = this.store.all().map((overlay) => ({ ...overlay }));
     if (!this.store.forget(test)) return false;
     const gone = new Map(before.filter((overlay) => !this.store.find(overlay)).map((overlay) => [overlayId(overlay), overlay]));
-    for (const overlay of gone.values()) {
-      this.options.streaming.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === overlay.owner && record.moduleId === overlay.moduleId && record.workspaceId === overlay.workspaceId && record.target === overlay.key);
-      this.toggled.delete(overlayId(overlay));
-      this.revive(overlayId(overlay));
-    }
+    for (const overlay of gone.values()) this.releaseOverlay(overlay);
     return true;
+  }
+
+  /** An overlay is in no setup any more: its key goes. */
+  private releaseOverlay(overlay: GameOverlay): void {
+    this.options.streaming.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === overlay.owner && record.moduleId === overlay.moduleId && record.workspaceId === overlay.workspaceId && record.target === overlay.key);
+    this.toggled.delete(overlayId(overlay));
+    this.revive(overlayId(overlay));
   }
 
   /** Whether the game watcher is needed: overlays are on and a setup of games (All games, a game's) has something to show. */
@@ -1245,6 +1254,7 @@ export class GameOverlays {
         if (done) this.tick();
         return done;
       },
+      copy: (from, to, mode) => this.copySetup(from, to, mode),
       startSize: (ref, window) => {
         const area = { x: 0, y: 0, ...window };
         // The same lookups as when the item was made: an overlay's size from its module, a panel's from its viewport.
@@ -1290,6 +1300,21 @@ export class GameOverlays {
       this.tick();
     }
     return added;
+  }
+
+  /** Copy to… on the Overlay page: a setup's items go into a game's setup (GameOverlayStore.copySetup). */
+  private copySetup(from: string, to: string, mode: "replace" | "add"): CopyOutcome | null {
+    // The same test as prune: a panel whose type doesn't allow being shown in game can't be shown there.
+    const outcome = this.store.copySetup(from, to, mode, (item) => !("instanceId" in item) || this.options.panels === undefined || this.options.panels.info(item.instanceId, item.workspaceId)?.allowed === true);
+    if (!outcome) return null;
+    // What a replace took out and is in no setup any more loses its key, as when the user removes it.
+    for (const overlay of outcome.removed.overlays) if (!this.store.find(overlay)) this.releaseOverlay(overlay);
+    for (const panel of outcome.removed.panels) if (!this.hasPanel(panel.instanceId)) this.releasePanel(panel, false);
+    if (outcome.copied > 0 || outcome.removed.overlays.length + outcome.removed.panels.length > 0) {
+      this.tick();
+      this.options.changed();
+    }
+    return outcome;
   }
 
   /** Remove overlay: the game's setup goes with what it holds; over the game, All games shows again. */

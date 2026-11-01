@@ -13,6 +13,8 @@ import { GRID_SETTINGS, type GridSetting } from "../../shared/layout-math";
 import { state } from "../host";
 import { t } from "../i18n";
 import HeaderTools from "../components/workspace/HeaderTools.vue";
+import OverlayCopied from "../components/layout/OverlayCopied.vue";
+import OverlayCopy from "../components/layout/OverlayCopy.vue";
 import OverlaySettings from "../components/layout/OverlaySettings.vue";
 import OverlaySources from "../components/layout/OverlaySources.vue";
 import { send, stills, useLayoutKeys, view } from "../components/layout/layout-state";
@@ -147,6 +149,7 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
             <span class="text-muted-foreground">{{ t("overlays.layout.setup") }}</span>
             <Picker v-model="setup" :options="setupOptions" :label="t('overlays.layout.setup')" testid="layout-game" />
           </label>
+          <OverlayCopy />
           <div class="flex items-center gap-2 text-sm">
             <span class="text-muted-foreground">{{ t("overlays.layout.grid") }}</span>
             <SegmentedControl v-model="grid" :options="gridOptions" :label="t('overlays.layout.grid')" />
@@ -168,7 +171,8 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
             <Button v-if="view.picture" variant="ghost" size="sm" data-testid="layout-remove-picture" @click="send({ type: 'remove-picture' })"><Trash2 :stroke-width="1.5" />{{ t("overlays.layout.removePicture") }}</Button>
           </div>
         </div>
-        <div v-if="view.notice || !view.enabled" class="flex flex-col gap-2 border-b px-3 py-2">
+        <div v-if="view.notice || view.copied || !view.enabled" class="flex flex-col gap-2 border-b px-3 py-2">
+          <OverlayCopied />
           <Notice v-if="view.notice" variant="warning" data-testid="layout-notice">
             {{ view.notice }}
             <template #action><Button variant="ghost" size="xs" @click="send({ type: 'dismiss-notice' })">{{ t("common.close") }}</Button></template>

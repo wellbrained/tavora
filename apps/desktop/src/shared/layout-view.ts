@@ -94,6 +94,8 @@ export interface LayoutView {
   games: { id: string; name: string }[];
   /** Every panel from every workspace. */
   sources: LayoutSourceView[];
+  /** The games Copy to… lists: every game workspace but the setup shown, with the frames its own setup has (0 when it has none). */
+  copyTargets: { id: string; name: string; frames: number }[];
   /** Items one setup may hold. */
   limit: number;
   /** The setup shown. */
@@ -123,6 +125,8 @@ export interface LayoutView {
   enabled: boolean;
   /** A short sentence for the user (the game isn't running, a picture can't be used); null when there is none. */
   notice: string | null;
+  /** What the last Copy to… did, with the game it went to (the note offers to show it); null when there is no such note. */
+  copied: { gameId: string; text: string } | null;
 }
 
 export type LayoutMessage =
@@ -136,6 +140,8 @@ export type LayoutMessage =
   | { type: "grid"; grid: GridSetting }
   /** Preview the canvas in another shape (one of `preview.options`), for this setup. */
   | { type: "preview"; choice: string }
+  /** Copy the frames of the setup shown into a game's setup: `replace` puts them where its own were, `add` after them. */
+  | { type: "copy-setup"; to: string; mode: "replace" | "add" }
   | { type: "select"; id: string | null }
   /** The canvas area in the window (shell only), in DIPs from the window's top left; null while it can't be drawn. */
   | { type: "bounds"; bounds: Rect | null }
@@ -193,6 +199,8 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
       return isGridSetting(raw.grid) ? { type: "grid", grid: raw.grid } : null;
     case "preview":
       return text(raw.choice, 64) ? { type: "preview", choice: raw.choice } : null;
+    case "copy-setup":
+      return text(raw.to, 128) && (raw.mode === "replace" || raw.mode === "add") ? { type: "copy-setup", to: raw.to, mode: raw.mode } : null;
     case "select":
       return raw.id === null ? { type: "select", id: null } : text(raw.id) ? { type: "select", id: raw.id } : null;
     case "bounds": {

@@ -321,6 +321,14 @@ const SAVE_DELAY_MS = 250;
 /** `refused`: the item may not go into that setup (a game workspace's into another game's, or a setup that isn't there). */
 export type AddResult = "added" | "exists" | "full" | "refused";
 
+/** What copying a setup did (GameOverlayStore.copySetup): how many items went in, which were left out and why, and what a replace took out. */
+export interface CopyOutcome {
+  copied: number;
+  /** One entry per item left out, with the workspace it comes from. */
+  skipped: { reason: "game-only" | "not-in-game" | "exists" | "full"; workspaceId: string }[];
+  removed: { overlays: GameOverlay[]; panels: InGamePanel[] };
+}
+
 const INSTANCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const validField = (value: unknown) => typeof value === "string" && value.length > 0 && value.length <= 128;
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -679,6 +687,52 @@ export class GameOverlayStore {
     source.overlays = source.overlays.filter((item) => item !== overlay);
     this.saveSoon();
     return there ? "exists" : "added";
+  }
+
+  /**
+   * Copies the items of one setup into a game's setup (the Overlay page's Copy to…), with their place and settings:
+   * `replace` puts them where the game's own were, `add` puts them after those. An item that may not go there (a game
+   * workspace's into another game, a panel that can't show over a game, `canShow` says), one the game's setup has
+   * already (`add`) or one that does not fit the limit is left out and listed in `skipped`. A `replace` that has
+   * nothing to put in changes nothing, so it never empties a setup. The game gets a setup of its own only when
+   * something goes into it. Null when there is nothing to copy from or the target is not a game.
+   */
+  copySetup(from: string, to: string, mode: "replace" | "add", canShow: (item: GameOverlay | InGamePanel) => boolean): CopyOutcome | null {
+    const source = this.setup(from);
+    if (!source || !isGameSetup(to) || !validField(to) || from === to) return null;
+    const skipped: CopyOutcome["skipped"] = [];
+    const usable = <T extends GameOverlay | InGamePanel>(items: readonly T[]) =>
+      items.filter((item) => {
+        const reason = !allowedIn(to, item.workspaceId, this.scopeOf(item.workspaceId)) ? "game-only" : !canShow(item) ? "not-in-game" : null;
+        if (reason) skipped.push({ reason, workspaceId: item.workspaceId });
+        return reason === null;
+      });
+    const overlays = usable(source.overlays);
+    const panels = usable(source.panels);
+    const removed: CopyOutcome["removed"] = { overlays: [], panels: [] };
+    if (overlays.length + panels.length === 0) return { copied: 0, skipped, removed };
+    let target = this.setup(to);
+    if (!target) this.setupList.push((target = { id: to, overlays: [], panels: [] }));
+    if (mode === "replace") {
+      removed.overlays = target.overlays;
+      removed.panels = target.panels;
+      target.overlays = [];
+      target.panels = [];
+    }
+    const room = () => LIMITS.maxGameOverlays - target.overlays.length - target.panels.length;
+    let copied = 0;
+    const put = (item: GameOverlay | InGamePanel, there: boolean, push: () => void) => {
+      if (there) skipped.push({ reason: "exists", workspaceId: item.workspaceId });
+      else if (room() <= 0) skipped.push({ reason: "full", workspaceId: item.workspaceId });
+      else {
+        push();
+        copied++;
+      }
+    };
+    for (const overlay of overlays) put(overlay, target.overlays.some((other) => sameOverlay(other, overlay)), () => target.overlays.push(copyItem(overlay)));
+    for (const panel of panels) put(panel, target.panels.some((other) => other.instanceId === panel.instanceId), () => target.panels.push(copyItem(panel)));
+    this.saveSoon();
+    return { copied, skipped, removed };
   }
 
   /** The items a change is for: the one of `setupId`, or without one, the item in every setup that has it. */
