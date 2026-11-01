@@ -28,6 +28,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.32",
+    date: "2026-11-01",
+    title: "Window buttons",
+    notes: [
+      "The minimise, maximise and close buttons blend into the top bar again, with no lighter box behind them.",
+    ],
+    prs: [
+      { number: 581, title: "Window buttons take the colour of the page behind them" },
+    ],
+  },
+  {
     version: "0.23.31",
     date: "2026-11-01",
     title: "Too many tabs",
