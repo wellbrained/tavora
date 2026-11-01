@@ -2,7 +2,7 @@
 // Add a game: one search field, the games on this PC (most recently played first) on the left, and for the
 // highlighted game a panel on the right with the modules made for it to tick. Enter adds the game and the
 // ticked modules. Keyboard first, in the style of Ctrl+K.
-import { Search } from "@lucide/vue";
+import { Loader, Search } from "@lucide/vue";
 import { computed, nextTick, ref, watch } from "vue";
 import { act, dialog, openPanels, state } from "../host";
 import { useListNav } from "@/lib/list-nav";
@@ -25,6 +25,10 @@ const ownHint = ref(false);
 const input = ref<HTMLInputElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const list = ref<HTMLElement | null>(null);
+
+/** Placeholder rows shown while the games on this PC are found, with a few widths so they do not look stamped. */
+const SKELETON_ROWS = 6;
+const SKELETON_WIDTHS = [48, 36, 58, 42, 52, 32];
 
 const optionId = (index: number) => `game-results-option-${index}`;
 
@@ -183,8 +187,21 @@ function ownGame() {
       <div tabindex="-1" class="@container min-h-0 flex-1 overflow-y-auto focus-visible:outline-none @[620px]:overflow-hidden">
         <div class="grid @[620px]:h-[min(420px,calc(100vh-8vh-9rem))] @[620px]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
           <div tabindex="-1" class="flex min-w-0 flex-col focus-visible:outline-none @[620px]:min-h-0 @[620px]:overflow-y-auto @[620px]:border-r">
-            <p class="text-muted-foreground px-5 pt-3 pb-1 text-xs font-medium">{{ name ? t("addGame.found") : t("addGame.recent") }}</p>
+            <p v-if="!installedLoaded" class="text-muted-foreground flex items-center gap-2 px-5 pt-3 pb-1 text-xs font-medium" role="status" data-testid="add-game-loading">
+              <Loader class="size-3.5 flex-none animate-spin motion-reduce:animate-none" :stroke-width="1.75" aria-hidden="true" />{{ t("addGame.loadingPc") }}
+            </p>
+            <p v-else class="text-muted-foreground px-5 pt-3 pb-1 text-xs font-medium">{{ name ? t("addGame.found") : t("addGame.recent") }}</p>
             <div ref="list" class="px-2 pb-2">
+              <!-- Placeholder rows while the games on this PC are found; typing still searches, and its results come first. -->
+              <ul v-if="!installedLoaded && !name" class="m-0 list-none p-0" aria-hidden="true" data-testid="add-game-skeleton">
+                <li v-for="row in SKELETON_ROWS" :key="row" class="flex items-center gap-3 px-3 py-2">
+                  <span class="bg-muted size-7 flex-none animate-pulse rounded-md motion-reduce:animate-none" />
+                  <span class="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <span class="bg-muted h-3.5 animate-pulse rounded motion-reduce:animate-none" :style="{ width: `${SKELETON_WIDTHS[row % SKELETON_WIDTHS.length]}%` }" />
+                    <span class="bg-muted/70 h-2.5 w-1/4 animate-pulse rounded motion-reduce:animate-none" />
+                  </span>
+                </li>
+              </ul>
               <GamePickerList id="game-results" :label="t('common.games')" :rows="rows" :active="active" :custom="custom" :info="info" :busy="busy" @hover="active = $event" @pick="pick" />
               <p v-if="!rows.length && !custom && installedLoaded && !ownHint" class="text-muted-foreground px-3 py-4 text-sm" data-testid="add-game-empty">{{ t("addGame.nothingOnPc") }}</p>
               <p v-if="ownHint && !name" class="text-muted-foreground px-3 py-4 text-sm" data-testid="add-game-own-hint">{{ t("addGame.ownHint") }}</p>
@@ -240,7 +257,7 @@ function ownGame() {
                 <Button :disabled="busy" data-testid="panel-add" @click="pick(active)">{{ addLabel }}</Button>
               </div>
             </template>
-            <p v-else class="text-muted-foreground text-sm">{{ t("addGame.noModules") }}</p>
+            <p v-else-if="installedLoaded || name" class="text-muted-foreground text-sm">{{ t("addGame.noModules") }}</p>
           </section>
           <!-- Stacked in a small window the panel sits below the whole list, so its action stays in view here. -->
           <div v-if="activeRow || custom" class="bg-card sticky bottom-0 z-10 flex items-center gap-3 border-t px-4 py-2 @[620px]:hidden" aria-hidden="true">

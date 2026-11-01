@@ -515,9 +515,14 @@ test("nothing in the rail moves up or down when it opens or closes", async () =>
     await page.locator('[data-testid^="rail-folder-"][data-testid$="-toggle"]').click();
     await expect(page.getByTestId("rail-workspace-satisfactory")).toBeVisible();
 
+    // The Personal button is the one exception: it stacks under Add game when compact and sits beside it when expanded.
     const tops = () =>
       page.evaluate(() =>
-        Object.fromEntries(Array.from(document.querySelectorAll<HTMLElement>('[data-testid="rail"] [data-rail-item]'), (item) => [item.dataset.testid, Math.round(item.getBoundingClientRect().top)])),
+        Object.fromEntries(
+          Array.from(document.querySelectorAll<HTMLElement>('[data-testid="rail"] [data-rail-item]'))
+            .filter((item) => item.dataset.testid !== "rail-add-personal")
+            .map((item) => [item.dataset.testid, Math.round(item.getBoundingClientRect().top)]),
+        ),
       );
     const rail = page.getByTestId("rail");
     const compact = await tops();
@@ -656,4 +661,32 @@ test("trying the welcome from Settings (dev build) writes nothing", async () => 
   await expect(page.getByTestId("welcome")).toBeVisible();
   expect(await readFile(library, "utf8")).toBe(before);
   await app.close();
+});
+
+test("the rail's two buttons open Add a game and a personal workspace, and Add a game says it is looking while the games load", async () => {
+  const { app, page } = await launch();
+  try {
+    // The search for games on this PC never ends here, so the loading state stays.
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("host:installed-games");
+      ipcMain.handle("host:installed-games", () => new Promise(() => undefined));
+    });
+    await expect(page.getByTestId("rail-add-game")).toHaveAttribute("aria-label", "Add game");
+    await expect(page.getByTestId("rail-add-personal")).toHaveAttribute("aria-label", "New personal workspace");
+    await page.getByTestId("rail-add-game").click();
+    await expect(page.getByTestId("add-game-dialog")).toBeVisible();
+    await expect(page.getByTestId("add-game-loading")).toContainText("Looking for games on this PC");
+    await expect(page.getByTestId("add-game-skeleton")).toBeVisible();
+    // Typing still works while it looks.
+    await page.getByTestId("game-search").fill("My own game");
+    await expect(page.getByTestId("add-custom")).toBeVisible();
+    await expect(page.getByTestId("add-game-skeleton")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("add-game-dialog")).toHaveCount(0);
+
+    await page.getByTestId("rail-add-personal").click();
+    await expect(page.getByTestId("personal-name")).toBeVisible();
+  } finally {
+    await app.close();
+  }
 });
