@@ -99,3 +99,81 @@ main[data-done="flash"] .value {
     animation: none;
   }
 }
+
+/* The live view of a panel shown over the game: one row per clock or counter, the name on the left and the value on the right.
+   Like the rest of this page it draws over game art, not in the app: the colours are each item's own text colour, with a dark outline. */
+#live {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 4px;
+  height: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: hidden;
+  list-style: none;
+  font-family: "Inter Variable", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+#live[hidden] {
+  display: none;
+}
+
+#live li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--color, #fff);
+  white-space: nowrap;
+}
+
+#live li[data-font="mono"] {
+  font-family: "JetBrains Mono Variable", ui-monospace, Consolas, monospace;
+}
+
+#live li[data-font="system"] {
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+#live li[data-outline="true"] {
+  -webkit-text-stroke: 0.06em rgb(0 0 0 / 0.85);
+  paint-order: stroke fill;
+  text-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.6);
+}
+
+#live .name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  opacity: 0.9;
+  text-overflow: ellipsis;
+}
+
+#live .amount {
+  flex: none;
+  margin-left: auto;
+  margin-left: auto;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+#live li[data-done="flash"] .amount {
+  animation: flash 1s steps(2, jump-none) infinite;
+}
+
+#live .more {
+  color: #fff;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #live li[data-done="flash"] .amount {
+    animation: none;
+  }
+}
