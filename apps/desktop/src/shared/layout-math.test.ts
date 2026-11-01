@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canvasFor, gridCell, isGridSetting, nudge, snapMove, snapResize, type SnapOptions } from "./layout-math";
+import { boundsOf, canvasFor, gridCell, isGridSetting, moveTogether, nudge, snapMove, snapResize, type SnapOptions } from "./layout-math";
 
 const canvas = { width: 1920, height: 1080 };
 const rect = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
@@ -156,5 +156,16 @@ describe("nudge", () => {
   it("stays on the canvas", () => {
     expect(nudge(rect(1865, 0, 50, 50), "right", canvas, 30, false).x).toBe(1870);
     expect(nudge(rect(0, 0, 50, 50), "up", canvas, 30, false).y).toBe(0);
+  });
+});
+
+describe("moving several together", () => {
+  it("keeps their places to each other and stops the group at the canvas edge", () => {
+    const rects = [rect(100, 100, 200, 100), rect(400, 300, 100, 100)];
+    expect(boundsOf(rects)).toEqual(rect(100, 100, 400, 300));
+    expect(moveTogether(rects, 50, -20, canvas)).toEqual([rect(150, 80, 200, 100), rect(450, 280, 100, 100)]);
+    // Far to the left and up: the group stops at the corner, still arranged the same.
+    expect(moveTogether(rects, -500, -500, canvas)).toEqual([rect(0, 0, 200, 100), rect(300, 200, 100, 100)]);
+    expect(moveTogether(rects, 5000, 5000, canvas)).toEqual([rect(1520, 780, 200, 100), rect(1820, 980, 100, 100)]);
   });
 });

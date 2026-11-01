@@ -52,6 +52,7 @@ import {
   type InGamePanel,
   type InGamePanelChange,
   type ItemRef,
+  type ItemSnapshot,
   type Opacity,
   type OverlayScope,
   type Rect,
@@ -130,7 +131,17 @@ export interface LayoutSource {
   setOverlay(setupId: string, subject: GameOverlaySubject, change: GameOverlayChange): void;
   setPanel(setupId: string, instanceId: string, change: InGamePanelChange): void;
   remove(setupId: string, ref: LayoutItemRef): void;
+  /** What undo needs to bring an item back exactly: the item as the setup keeps it, its place in the list and its key; null when the setup hasn't it. */
+  snapshot(setupId: string, ref: LayoutItemRef): LayoutItemSnapshot | null;
+  /** Puts an item back as a snapshot kept it (undo of a removal, redo of an add), with its key when that is free; whether it is there now. */
+  restore(setupId: string, snapshot: LayoutItemSnapshot): boolean;
   layerOpen(): boolean;
+}
+
+/** An item as a setup kept it, and the key it had. */
+export interface LayoutItemSnapshot {
+  saved: ItemSnapshot;
+  key: HotkeyRecord | null;
 }
 
 /** What the host knows of a panel in the game. */
@@ -191,7 +202,7 @@ export interface OverlayPlatform {
 export interface GameOverlayServiceOptions {
   userData: string;
   /** Stream overlays' store of overlays and the hotkeys of Streaming, which the overlays' keys live in. */
-  streaming: Pick<Streaming, "overlayStore" | "removeKeys" | "moveKey" | "keyOf">;
+  streaming: Pick<Streaming, "overlayStore" | "removeKeys" | "moveKey" | "keyOf"> & Partial<Pick<Streaming, "keyRecord" | "restoreKey">>;
   /** The modules installed now. */
   installed: { shown(moduleId: string): StreamingModule | undefined };
   /** The library's workspaces: names, and whether one is a game workspace (something made in a personal one may go into any setup). */
@@ -1267,8 +1278,39 @@ export class GameOverlays {
       setOverlay: (setupId, subject, change) => this.update(subject, change, setupId),
       setPanel: (setupId, instanceId, change) => this.updatePanelView(instanceId, change, setupId),
       remove: (setupId, ref) => (ref.kind === "panel" ? this.stopPanel(ref.instanceId, setupId) : this.remove(ref.subject, setupId)),
+      snapshot: (setupId, ref) => {
+        const saved = this.store.snapshot(setupId, ref);
+        if (!saved) return null;
+        const subject = saved.kind === "panel" ? { owner: saved.item.owner, moduleId: saved.item.moduleId, workspaceId: saved.item.workspaceId, key: saved.item.instanceId } : saved.item;
+        return { saved, key: this.options.streaming.keyRecord?.(toggleBinding(subject)) ?? null };
+      },
+      restore: (setupId, snapshot) => this.restoreItem(setupId, snapshot),
       layerOpen: () => this.layer !== null,
     };
+  }
+
+  /** Undo on the Overlay page: an item comes back into a setup as it was, with its key if no other item took it since. */
+  private restoreItem(setupId: string, snapshot: LayoutItemSnapshot): boolean {
+    const { saved } = snapshot;
+    const result = this.store.restore(setupId, saved);
+    if (result === "exists") return true;
+    if (result !== "added") return false;
+    if (saved.kind === "overlay") {
+      const subject: GameOverlaySubject = { owner: saved.item.owner, moduleId: saved.item.moduleId, workspaceId: saved.item.workspaceId, key: saved.item.key };
+      try {
+        this.options.streaming.overlayStore.link(subject);
+      } catch {
+        // No link can be made for it any more (too many for the module): it stays out, as when it is added.
+        this.store.forget((overlay, id) => id === setupId && sameOverlay(overlay, subject));
+        return false;
+      }
+      this.revive(overlayId(subject));
+      this.options.overGameChanged?.({ owner: subject.owner, moduleId: subject.moduleId, workspaceId: subject.workspaceId });
+    } else this.revive(liveWindowId(saved.item.instanceId));
+    if (snapshot.key) this.options.streaming.restoreKey?.(snapshot.key);
+    this.options.changed();
+    this.tick();
+    return true;
   }
 
   /** A panel the user put into a setup on the Overlay page. */

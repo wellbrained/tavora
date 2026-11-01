@@ -4,6 +4,7 @@ import {
   MAX_CONTENT_SCALE,
   MIN_CONTENT_SCALE,
   MIN_OVERLAY_SIZE,
+  anchorAs,
   anchorOf,
   contentScale,
   migrateLegacy,
@@ -238,5 +239,19 @@ describe("normalizeLegacy", () => {
     expect(normalizeLegacy({ x: 0.9, y: 0, width: 0.5, height: 0.5 })).toMatchObject({ x: 0.5 });
     expect(normalizeLegacy({ x: "0", y: 0, width: 1, height: 1 })).toBeNull();
     expect(normalizeLegacy(null)).toBeNull();
+  });
+});
+
+describe("anchorAs", () => {
+  const game = { x: 0, y: 0, width: 1920, height: 1080 };
+  it("keeps the anchors it is given, wherever the rectangle is", () => {
+    // On the left, but tied to the right edge: 1920 - 100 - 216 from it.
+    expect(anchorAs({ x: 100, y: 54, width: 216, height: 108 }, game, "right", "top")).toEqual({ h: "right", v: "top", x: 1604 / 1080, y: 0.05, width: 0.2, height: 0.1 });
+    expect(anchorAs({ x: 852, y: 486, width: 216, height: 108 }, game, "center", "middle")).toEqual({ h: "center", v: "middle", x: 0, y: 0, width: 0.2, height: 0.1 });
+    expect(anchorAs({ x: 0, y: 1080 - 108 - 54, width: 216, height: 108 }, game, "left", "bottom")).toMatchObject({ x: 0, y: 0.05 });
+  });
+  it("lands where it was placed", () => {
+    const rect = { x: 300, y: 700, width: 400, height: 200 };
+    for (const h of ["left", "center", "right"] as const) for (const v of ["top", "middle", "bottom"] as const) expect(placeAnchored(anchorAs(rect, game, h, v), game)).toEqual(rect);
   });
 });

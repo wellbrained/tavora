@@ -126,6 +126,9 @@ export interface InGamePanel extends ItemSettings {
   instanceId: string;
 }
 
+/** An item as one setup keeps it, with its place in that setup's list. */
+export type ItemSnapshot = { kind: "overlay"; item: GameOverlay; index: number } | { kind: "panel"; item: InGamePanel; index: number };
+
 /** Which item: a module overlay (by its subject) or a panel (by its instance id). */
 export type ItemRef = { kind: "overlay"; subject: GameOverlaySubject } | { kind: "panel"; instanceId: string };
 
@@ -775,6 +778,38 @@ export class GameOverlayStore {
     delete target.legacy;
     this.saveSoon();
     return true;
+  }
+
+  /** A copy of an item as one setup keeps it, and its place in that setup's list (undo of a removal brings this back); null when the setup hasn't it. */
+  snapshot(setupId: string, ref: ItemRef): ItemSnapshot | null {
+    const setup = this.setup(setupId);
+    if (!setup) return null;
+    if (ref.kind === "panel") {
+      const index = setup.panels.findIndex((panel) => panel.instanceId === ref.instanceId);
+      return index < 0 ? null : { kind: "panel", item: copyItem(setup.panels[index]!), index };
+    }
+    const index = setup.overlays.findIndex((overlay) => sameOverlay(overlay, ref.subject));
+    return index < 0 ? null : { kind: "overlay", item: copyItem(setup.overlays[index]!), index };
+  }
+
+  /**
+   * Puts an item back into a setup as a snapshot kept it, at its old place in the list (undo of a removal, redo of an
+   * add). "exists" when the setup has it, "full" when there is no room, "refused" when it may not be there.
+   */
+  restore(setupId: string, snapshot: ItemSnapshot): AddResult {
+    const setup = this.target(setupId, snapshot.item.workspaceId);
+    if (!setup) return "refused";
+    if (snapshot.kind === "panel") {
+      if (setup.panels.some((panel) => panel.instanceId === snapshot.item.instanceId)) return "exists";
+      if (this.count(setupId) >= LIMITS.maxGameOverlays) return "full";
+      setup.panels.splice(Math.min(snapshot.index, setup.panels.length), 0, copyItem(snapshot.item));
+    } else {
+      if (setup.overlays.some((overlay) => sameOverlay(overlay, snapshot.item))) return "exists";
+      if (this.count(setupId) >= LIMITS.maxGameOverlays) return "full";
+      setup.overlays.splice(Math.min(snapshot.index, setup.overlays.length), 0, copyItem(snapshot.item));
+    }
+    this.saveSoon();
+    return "added";
   }
 
   /** Removes the overlays matching `test` from their setups (the user's remove, a deleted workspace, a module that is gone); whether any went. */

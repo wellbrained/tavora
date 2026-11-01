@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The small toolbar next to the selected frame on the canvas: Settings, Hide on canvas (the eye of the Sources list), Reset
-// position, Reset size, and Remove after a thin divider. It lives in the layer over the canvas, which takes the mouse;
+// position, Reset size, and Remove after a thin divider. With several frames selected it shows only what works on all of
+// them at once (Hide, Reset position, Reset size, Remove), each one undo step. It lives in the layer over the canvas, which takes the mouse;
 // LayoutCanvas.vue decides where it sits. Each button has a kit tooltip that opens on the side away from the frame, so it
 // never covers what you are arranging.
 import { Eye, EyeOff, LocateFixed, Scaling, Settings, Trash2 } from "@lucide/vue";
@@ -12,8 +13,8 @@ import type { LayoutItemView } from "../../../shared/layout-view";
 import { t } from "../../i18n";
 import { send } from "./layout-state";
 
-/** `side`: where the toolbar sits next to the frame, so its tooltips open the other way. */
-const props = defineProps<{ item: LayoutItemView; side: "top" | "bottom" }>();
+/** `items`: the frames selected (one or several); `side`: where the toolbar sits next to them, so its tooltips open the other way. */
+const props = defineProps<{ items: LayoutItemView[]; side: "top" | "bottom" }>();
 const emit = defineEmits<{ done: [] }>();
 
 interface Action {
@@ -24,14 +25,17 @@ interface Action {
 }
 
 const actions = computed<Action[]>(() => {
-  const { id, hiddenOnCanvas } = props.item;
-  return [
-    { id: "settings", icon: Settings, label: t("overlays.layout.settings"), run: () => send({ type: "settings", id }) },
-    { id: "hide", icon: hiddenOnCanvas ? EyeOff : Eye, label: hiddenOnCanvas ? t("overlays.layout.showOnCanvas") : t("overlays.layout.hideOnCanvas"), run: () => send({ type: "canvas-hidden", id, hidden: !hiddenOnCanvas }) },
-    { id: "reset", icon: LocateFixed, label: t("overlays.layout.reset"), run: () => send({ type: "reset", id }) },
-    { id: "reset-size", icon: Scaling, label: t("overlays.layout.resetSize"), run: () => send({ type: "reset-size", id }) },
-    { id: "remove", icon: Trash2, label: t("overlays.remove"), run: () => send({ type: "remove", id }) },
+  const ids = props.items.map((item) => item.id);
+  // Several: Hide hides them all, unless all are hidden already (then it shows them).
+  const hidden = props.items.every((item) => item.hiddenOnCanvas);
+  const many: Action[] = [
+    { id: "hide", icon: hidden ? EyeOff : Eye, label: hidden ? t("overlays.layout.showOnCanvas") : t("overlays.layout.hideOnCanvas"), run: () => send({ type: "canvas-hidden", ids, hidden: !hidden }) },
+    { id: "reset", icon: LocateFixed, label: t("overlays.layout.reset"), run: () => send({ type: "reset", ids }) },
+    { id: "reset-size", icon: Scaling, label: t("overlays.layout.resetSize"), run: () => send({ type: "reset-size", ids }) },
+    { id: "remove", icon: Trash2, label: t("overlays.remove"), run: () => send({ type: "remove", ids }) },
   ];
+  const one = props.items.length === 1 ? props.items[0]! : null;
+  return one ? [{ id: "settings", icon: Settings, label: t("overlays.layout.settings"), run: () => send({ type: "settings", id: one.id }) }, ...many] : many;
 });
 
 const tip = ref<{ text: string; anchor: { left: number; top: number; right: number; bottom: number } } | null>(null);
@@ -65,7 +69,7 @@ onBeforeUnmount(() => clearTimeout(delay));
   <div
     class="bg-popover text-popover-foreground absolute z-10 flex items-center gap-1 rounded-md border p-1 shadow-md"
     role="toolbar"
-    :aria-label="t('overlays.layout.itemTools')"
+    :aria-label="items.length > 1 ? t('overlays.layout.itemsTools') : t('overlays.layout.itemTools')"
     data-testid="layout-frame-toolbar"
     @pointerdown.stop
   >

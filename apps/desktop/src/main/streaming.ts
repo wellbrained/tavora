@@ -207,6 +207,18 @@ export class Streaming {
     return record ? { accelerator: record.accelerator, taken: this.registrar.taken.has(record.accelerator) } : null;
   }
 
+  /** The key record set for a binding, with its label; null when there is none. */
+  keyRecord(binding: Omit<HotkeyRecord, "label" | "accelerator">): HotkeyRecord | null {
+    const record = this.hotkeys.find(binding);
+    return record ? { ...record } : null;
+  }
+
+  /** Gives a binding back the key it had (undo of a removal), unless it has one again or another binding uses that key now. */
+  restoreKey(record: HotkeyRecord): void {
+    if (this.hotkeys.find(record) || this.hotkeys.conflict(record, record.accelerator, (key) => this.overlayKeys?.general(key) ?? false)) return;
+    if (this.hotkeys.set({ ...record })) this.changed();
+  }
+
   /** Takes away the hotkeys matching `test`. */
   removeKeys(test: (record: HotkeyRecord) => boolean): void {
     if (this.hotkeys.remove(test)) this.changed();
