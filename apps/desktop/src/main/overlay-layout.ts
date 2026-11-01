@@ -71,6 +71,8 @@ export interface OverlayLayoutOptions<W extends LayoutWindow = LayoutWindow> {
   keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): boolean[];
   /** The page asked to go back to the workspace. */
   leave(): void;
+  /** The toolbar's Settings: shows the panel behind an item where it lives (its workspace), ready to be used. */
+  openPanel(panel: { workspaceId: string; moduleId: string; instanceId: string | null }): void;
   /** The picture of the window with this handle (physical pixels at most `size`), as PNG bytes; null when it can't be taken. */
   capture(handle: string, size: { width: number; height: number }): Promise<Buffer | null>;
   /** The picture the user picks from a file, as PNG bytes; "cancelled" when they closed the dialog, "bad" when the file isn't a picture. */
@@ -447,6 +449,14 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       case "reset-size":
         this.resetSize(message.id);
         break;
+      case "remove":
+        this.removeItem(message.id);
+        break;
+      case "settings": {
+        const info = this.info(message.id);
+        if (info) this.options.openPanel({ workspaceId: info.keyTarget.workspaceId, moduleId: info.moduleId, instanceId: info.ref.kind === "panel" ? info.ref.instanceId : null });
+        return;
+      }
       case "take-picture":
         if (!fromShell) return;
         this.track(this.takePicture());
@@ -478,6 +488,15 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     const added = this.options.source.addPanel(setupId, { owner: panel.owner, moduleId: panel.moduleId, workspaceId: panel.workspaceId, instanceId });
     if (added === "full") this.say("overlays.full");
     else if (added === "added") this.selection = panelWindowId(instanceId);
+  }
+
+  /** Del and the toolbar's Remove: the item leaves the setup shown (not the others), and nothing is selected any more. */
+  private removeItem(id: string): void {
+    const info = this.info(id);
+    if (!info) return;
+    this.options.source.remove(this.gameId, info.ref);
+    this.undo.forget(id);
+    this.selection = null;
   }
 
   /** A personal item moves to the other of Everywhere and All games. */

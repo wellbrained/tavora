@@ -56,6 +56,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     opened: 0,
     destroyed: 0,
     left: 0,
+    panelsOpened: [] as { workspaceId: string; moduleId: string; instanceId: string | null }[],
     added: [] as { setup: string; instanceId: string }[],
     moved: [] as { from: string; to: string }[],
     closedWindow: () => {},
@@ -141,6 +142,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     workspaces: { name: (id) => ({ elden: "Elden Ring", poe2: "Path of Exile 2", personal: "Personal" })[id] ?? null },
     sources: () => options.sources ?? [],
     leave: () => void world.left++,
+    openPanel: (panel) => void world.panelsOpened.push(panel),
     screen: () => ({ x: 0, y: 0, width: 2560, height: 1440 }),
     settings: {
       get gameOverlays() {
@@ -727,6 +729,30 @@ describe("selection", () => {
   });
 });
 
+
+describe("the toolbar and Del", () => {
+  it("removes an item from the setup shown and lets go of the selection", () => {
+    const { layout, world } = setup([clock("a"), clock("b")]);
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "select", id: ids[0]! }, false);
+    layout.handle({ type: "remove", id: ids[0]! }, false);
+    expect(world.removed).toHaveLength(1);
+    expect(layout.view().selection).toBeNull();
+    // An id that is not in the setup changes nothing.
+    layout.handle({ type: "remove", id: "nope" }, false);
+    expect(world.removed).toHaveLength(1);
+  });
+  it("opens the panel behind an item for Settings", () => {
+    const { layout, world } = setup([clock("a")]);
+    layout.open("elden");
+    const id = layout.view().items[0]!.id;
+    layout.handle({ type: "settings", id }, false);
+    expect(world.panelsOpened).toEqual([{ workspaceId: "elden", moduleId: "tavora.clock-counter", instanceId: null }]);
+    layout.handle({ type: "settings", id: "nope" }, false);
+    expect(world.panelsOpened).toHaveLength(1);
+  });
+});
 describe("what the pages are told", () => {
   it("sends a view only when it changed", () => {
     const { layout, sent } = setup([clock("a")]);

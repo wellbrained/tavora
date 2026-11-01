@@ -1,6 +1,6 @@
 // The Overlay page's view as the main process last sent it (the page in the main window and the layer on the canvas both
-// use it), and the keys both share: the arrow keys nudge the selected item, Ctrl+Z and Ctrl+Y undo and redo, Esc lets go
-// of the selection.
+// use it), and the keys both share: the arrow keys nudge the selected item, Del and Backspace remove it, Ctrl+Z and Ctrl+Y
+// undo and redo, Esc lets go of the selection.
 import { nextTick, onBeforeUnmount, onMounted, shallowRef } from "vue";
 import type { LayoutMessage, LayoutStills, LayoutView } from "../../../shared/layout-view";
 import { nudge } from "../../../shared/layout-math";
@@ -53,6 +53,13 @@ export function onLayoutKey(event: KeyboardEvent): void {
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   if (key === "escape") {
     send({ type: "select", id: null });
+    return;
+  }
+  if (key === "delete" || key === "backspace") {
+    const selected = current.items.find((candidate) => candidate.id === current.selection);
+    if (!selected) return;
+    event.preventDefault();
+    if (!event.repeat) send({ type: "remove", id: selected.id });
     return;
   }
   const direction = ({ arrowleft: "left", arrowright: "right", arrowup: "up", arrowdown: "down" } as const)[key as "arrowleft"];

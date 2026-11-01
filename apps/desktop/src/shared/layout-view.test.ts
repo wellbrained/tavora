@@ -32,6 +32,9 @@ describe("parseLayoutMessage", () => {
     expect(parseLayoutMessage({ type: "canvas-hidden", id: "a", hidden: true })).toEqual({ type: "canvas-hidden", id: "a", hidden: true });
     expect(parseLayoutMessage({ type: "reset", id: "a" })).toEqual({ type: "reset", id: "a" });
     expect(parseLayoutMessage({ type: "reset-size", id: "a" })).toEqual({ type: "reset-size", id: "a" });
+    expect(parseLayoutMessage({ type: "remove", id: "a" })).toEqual({ type: "remove", id: "a" });
+    expect(parseLayoutMessage({ type: "settings", id: "a" })).toEqual({ type: "settings", id: "a" });
+    expect(parseLayoutMessage({ type: "remove", id: "" })).toBeNull();
     for (const type of ["undo", "redo", "drag-end", "take-picture", "choose-picture", "remove-picture", "dismiss-notice", "done"]) expect(parseLayoutMessage({ type })).toEqual({ type });
     // Gone with per-game positions: each setup has its own.
     for (const type of ["customize", "follow-all", "follow-item"]) expect(parseLayoutMessage({ type, id: "a" })).toBeNull();

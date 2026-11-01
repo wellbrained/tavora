@@ -20,8 +20,12 @@ When menus or dialogs cover the canvas, `OverlayCanvas` captures the native page
 
 Take picture requires both a running-game report and a window handle observed since launch. Changes to either refresh the layout. A disabled button distinguishes a stopped game from a running game whose window has not been seen. Capture is click-only and remains disabled in hidden test apps; the public security guide describes the capture boundary.
 
+## Keys and the item toolbar
+
+Del and Backspace remove the selected item from the setup shown (not while a text field, list or menu has the focus; no undo, as with the Remove button). The selected item also gets a small toolbar in the layer: Settings, Hide on canvas and Remove, above the item, below it when there is no room above. Hide is the eye of the Sources list. Its tooltips open on the side away from the item. Settings (the `settings` layout message) leaves the page for the panel behind the item and opens that panel big in its dialog, as a panel over the game does; a module can't be asked for one of its own settings from here yet.
+
 ## Checks
 
 - Unit coverage: `game-overlays.test.ts`, `game-overlay-service.test.ts`, `overlay-layout.test.ts` and `layout-view.test.ts`.
-- Electron coverage: `pnpm --filter @tavora/desktop exec playwright test overlay-layout.spec.ts` exercises the move from a version-4 file, per-setup places and opacity, opacity stills, mouse dragging/resizing, reset buttons, the Sources list, Add overlay / Remove overlay and Back; `overlay-button.spec.ts` the header button.
+- Electron coverage: `pnpm --filter @tavora/desktop exec playwright test overlay-layout.spec.ts` exercises the move from a version-4 file, Del and the item toolbar, per-setup places and opacity, opacity stills, mouse dragging/resizing, reset buttons, the Sources list, Add overlay / Remove overlay and Back; `overlay-button.spec.ts` the header button.
 - Real-game screenshot capture still needs a live-game check; hidden Electron tests cannot verify it.

@@ -29,7 +29,7 @@ import {
 } from "electron";
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import type { PanelDialogSize } from "./bridge";
+import { PANEL_DIALOG, type PanelDialogSize } from "./bridge";
 import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishStep, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
@@ -4294,6 +4294,22 @@ export class Host {
   }
 
   /**
+   * The Overlay page's Settings button: leaves the page for the panel's workspace and opens the panel big in its dialog, as a
+   * panel over the game does. A module can't be asked for one of its own settings from here yet, so the dialog shows the
+   * panel as it is. An overlay item names no panel, so the first panel of its module in that workspace is used.
+   */
+  private openPanelFromOverlayPage(item: { workspaceId: string; moduleId: string; instanceId: string | null }): void {
+    if (this.window.isDestroyed() || !isLive(this.library, item.workspaceId)) return;
+    const record = this.records(item.workspaceId).find((one) => (item.instanceId ? one.instanceId === item.instanceId : one.moduleId === item.moduleId));
+    const module = record && this.modules.get(record.moduleId);
+    if (!record || !module) return;
+    // It opens once the panel is in its slot, if that happens soon.
+    void this.questions.ask("dialog", { panel: record.instanceId }, { module, size: { width: PANEL_DIALOG.width, height: PANEL_DIALOG.height }, until: Date.now() + PENDING_DIALOG_MS, byClick: true });
+    if (this.workspaceId !== item.workspaceId) this.openWorkspace(item.workspaceId);
+    this.openPendingDialog();
+  }
+
+  /**
    * A panel over the game opens its dialog: the layer closes, Tavora comes to the front on the panel's workspace, and the
    * dialog opens as soon as the panel is back in its slot.
    */
@@ -4925,6 +4941,7 @@ export class Host {
           sources: () => this.overlaySources(),
           keepRunning: (panels) => this.runForOverlayPage(panels),
           leave: () => this.leaveOverlayPage(),
+          openPanel: (panel) => this.openPanelFromOverlayPage(panel),
           choosePicture: () =>
             this.pickPath(
               "layout-picture",

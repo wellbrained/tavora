@@ -1904,6 +1904,7 @@ export const de: Record<keyof typeof en, string> = {
   "overlays.layout.count": "{count} von {max}",
   "overlays.layout.settings": "Einstellungen",
   "overlays.layout.pick": "Wähl etwas auf der Fläche oder in den Quellen, um es zu ändern.",
+  "overlays.layout.itemTools": "Aktionen für das gewählte Element",
   "overlays.layout.moveEverywhere": "Nach Überall verschieben",
   "overlays.layout.moveAll": "Zu Alle Spiele verschieben",
   "overlays.layout.nothing": "Hier ist noch nichts. Füg ein Panel aus den Quellen hinzu.",

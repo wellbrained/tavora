@@ -130,6 +130,10 @@ export type LayoutMessage =
   | { type: "reset"; id: string }
   /** Reset size: back to the size a new item gets, where it is. */
   | { type: "reset-size"; id: string }
+  /** Del on the canvas and the toolbar's Remove: the item leaves the setup shown, as Remove in its settings does. */
+  | { type: "remove"; id: string }
+  /** The toolbar's Settings: the settings of what the item shows (its panel, until a module can be asked for more). */
+  | { type: "settings"; id: string }
   /** Back to the workspace. */
   | { type: "done" }
   | { type: "take-picture" }
@@ -187,6 +191,8 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
       return text(raw.id) && typeof raw.hidden === "boolean" ? { type: "canvas-hidden", id: raw.id, hidden: raw.hidden } : null;
     case "reset":
     case "reset-size":
+    case "remove":
+    case "settings":
       return text(raw.id) ? { type: raw.type, id: raw.id } : null;
     default:
       return null;

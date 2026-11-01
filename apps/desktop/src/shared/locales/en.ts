@@ -1902,6 +1902,7 @@ export const en = {
   "overlays.layout.count": "{count} of {max}",
   "overlays.layout.settings": "Settings",
   "overlays.layout.pick": "Pick something on the canvas or in Sources to change it.",
+  "overlays.layout.itemTools": "Actions for the selected item",
   "overlays.layout.moveEverywhere": "Move to Everywhere",
   "overlays.layout.moveAll": "Move to All games",
   "overlays.layout.nothing": "Nothing here yet. Add a panel from Sources.",

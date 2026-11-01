@@ -47,6 +47,7 @@ export interface OverlayHostPorts {
     sources(): SourcePanel[];
     keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): boolean[];
     leave(): void;
+    openPanel(panel: { workspaceId: string; moduleId: string; instanceId: string | null }): void;
     choosePicture(): Promise<string | undefined>;
     rememberPicture(file: string): void;
   };
@@ -175,6 +176,7 @@ function overlayLayout(wiring: OverlayWiring, gameOverlays: GameOverlays): Overl
     sources: ports.page.sources,
     keepRunning: ports.page.keepRunning,
     leave: ports.page.leave,
+    openPanel: ports.page.openPanel,
     openWindow: () => {
       const page = options.devServer ? new URL("layout.html", options.devServer) : new URL("layout.html", `${HOST_SCHEME}://app/`);
       return new OverlayCanvas({ window: wiring.window, preload: options.hostPreload, devTools: options.devTools, address: () => `${page.href.split("#")[0]}#layer` });
