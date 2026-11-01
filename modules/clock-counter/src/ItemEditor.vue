@@ -18,7 +18,7 @@ import { t } from "./i18n";
 import { ALIGNS, COLORS, defaultStored, find, FONTS, groupOf, MAX, memberNames, move, setStream, type Align, type Clock, type Counter, type Font, type Item, type ItemList, type OverlayLook } from "./items";
 import { ACTIONS, PANEL } from "./panel";
 import { counterName } from "./store";
-import { cleanName, compile, display, render } from "./template";
+import { cleanName, compile, display, keys, render } from "./template";
 import { FORMAT_PRESETS, formatSeconds, isFormat, MAX_FORMAT } from "./time";
 
 const props = defineProps<{ item: Item; first: boolean; last: boolean; page?: boolean }>();
@@ -79,7 +79,13 @@ const compiled = computed(() => compile(groupText.value, members.value));
 const problem = computed(() => {
   const result = compiled.value;
   if (result.ok) return null;
-  return t(`edit.problem.${result.error}`, { name: result.error === "unknown" ? (result.name ?? "") : "" });
+  const names = [...keys(members.value).values()].map((key) => `{${key}}`).join(", ");
+  return t(`edit.problem.${result.error}`, { name: result.error === "unknown" ? (result.name ?? "") : "", names });
+});
+/** What each chip adds and shows: the counter's short key, with its full name on hover. */
+const chips = computed(() => {
+  const written = keys(members.value);
+  return members.value.map((member) => ({ id: member.id, key: written.get(member.id)!, name: cleanName(member.name) }));
 });
 const groupPreview = computed(() => {
   if (!compiled.value.ok) return "";
@@ -98,9 +104,9 @@ function saveGroupText() {
   if (result.ok && result.stored !== effectiveStored.value) change([id.value], (data) => setStream(data, id.value, { text: result.stored }));
 }
 
-async function insertName(name: string) {
+async function insertKey(key: string) {
   const field = textField.value?.$el;
-  const token = `{${cleanName(name)}}`;
+  const token = `{${key}}`;
   const start = field?.selectionStart ?? groupText.value.length;
   const end = field?.selectionEnd ?? start;
   groupText.value = groupText.value.slice(0, start) + token + groupText.value.slice(end);
@@ -458,8 +464,8 @@ onBeforeUnmount(() => {
             <span v-if="problem" class="text-destructive flex-none" role="img" :aria-label="problem" :title="problem" data-testid="group-problem-x"><X class="size-4" :stroke-width="2" aria-hidden="true" /></span>
           </div>
           <div class="flex flex-wrap gap-1">
-            <Button v-for="member in members" :key="member.id" variant="secondary" size="xs" :aria-label="t('edit.groupInsert', { name: member.name })" :title="t('edit.groupInsert', { name: member.name })" @mousedown.prevent @click="insertName(member.name)">
-              {{ cleanName(member.name) }}
+            <Button v-for="chip in chips" :key="chip.id" variant="secondary" size="xs" :aria-label="t('edit.groupInsert', { name: chip.name })" :title="t('edit.groupInsert', { name: chip.name })" :data-testid="`group-chip-${chip.key}`" @mousedown.prevent @click="insertKey(chip.key)">
+              {{ chip.key }}
             </Button>
           </div>
           <p v-if="problem" :id="`${prefix}-gproblem`" class="text-destructive text-xs" role="alert" data-testid="group-problem">{{ problem }} {{ t("edit.groupInvalid") }}</p>
