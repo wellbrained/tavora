@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.43",
+    date: "2026-11-01",
+    title: "Place and change your overlays on the Overlay page",
+    notes: [
+      "Press Del to take the selected frame off the canvas. A double-click on it, or the gear, opens its settings right over the Overlay page.",
+      "A small bar next to the selected frame has Settings, Hide, Reset position, Reset size and Remove. Move to… sends a frame to another setup.",
+      "Clock & Counter lists each clock, counter and linked group on its own in Sources, and a new frame fits what it shows.",
+      "Sources keeps its order, shows a gear where a check mark was, and no longer folds away what can't be used.",
+    ],
+    prs: [
+      { number: 597, title: "Overlay page: pick what a panel shows, Settings over the page, a toolbar and a steadier Sources list" },
+    ],
+    tags: ["clock-counter", "modules", "overlays", "privacy", "publishing", "sdk", "website", "workspace"],
+  },
+  {
     version: "0.23.42",
     date: "2026-11-01",
     title: "Clock & Counter over your game",
