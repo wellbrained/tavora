@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.36",
+    date: "2026-11-01",
+    title: "The welcome sits in the middle",
+    notes: [
+      "The first-run welcome is now centred in the window and stays in place from step to step.",
+    ],
+    prs: [
+      { number: 587, title: "Welcome: centre it in the window, steady between steps" },
+    ],
+    tags: ["onboarding"],
+  },
+  {
     version: "0.23.35",
     date: "2026-11-01",
     title: "A quicker first start",
