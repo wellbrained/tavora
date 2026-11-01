@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canvasFor, gridCell, isGridSetting, nudge, snapMove, snapResize, type SnapOptions } from "./layout-math";
+import { boundsOf, canvasFor, gridCell, isGridSetting, moveGroup, nudge, snapMove, snapResize, touches, type SnapOptions } from "./layout-math";
 
 const canvas = { width: 1920, height: 1080 };
 const rect = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
@@ -156,5 +156,33 @@ describe("nudge", () => {
   it("stays on the canvas", () => {
     expect(nudge(rect(1865, 0, 50, 50), "right", canvas, 30, false).x).toBe(1870);
     expect(nudge(rect(0, 0, 50, 50), "up", canvas, 30, false).y).toBe(0);
+  });
+});
+
+describe("frames together", () => {
+  const canvas = { width: 1920, height: 1080 };
+  const a = { x: 100, y: 100, width: 200, height: 100 };
+  const b = { x: 400, y: 300, width: 100, height: 100 };
+
+  it("finds the box around them", () => {
+    expect(boundsOf([a, b])).toEqual({ x: 100, y: 100, width: 400, height: 300 });
+    expect(boundsOf([])).toBeNull();
+  });
+
+  it("moves them by the same amount, only as far as the whole group stays on the canvas", () => {
+    expect(moveGroup([a, b], 50, -20, canvas)).toEqual([
+      { ...a, x: 150, y: 80 },
+      { ...b, x: 450, y: 280 },
+    ]);
+    // b would leave the canvas on the right: both stop where b reaches the edge, still 300 apart.
+    const [left, right] = moveGroup([a, b], 5000, 0, canvas);
+    expect(right!.x + right!.width).toBe(1920);
+    expect(right!.x - left!.x).toBe(300);
+    expect(moveGroup([a, b], -500, -500, canvas)[0]).toMatchObject({ x: 0, y: 0 });
+  });
+
+  it("tells which frames a box touches", () => {
+    expect(touches({ x: 0, y: 0, width: 100, height: 100 }, a)).toBe(true);
+    expect(touches({ x: 0, y: 0, width: 99, height: 99 }, a)).toBe(false);
   });
 });

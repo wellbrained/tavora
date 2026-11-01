@@ -127,7 +127,24 @@ export interface LayoutSource {
   setOverlay(setupId: string, subject: GameOverlaySubject, change: GameOverlayChange): void;
   setPanel(setupId: string, instanceId: string, change: InGamePanelChange): void;
   remove(setupId: string, ref: LayoutItemRef): void;
+  /** The item as the setup has it, whole (what undo keeps), or null when the setup hasn't it. */
+  state(setupId: string, ref: LayoutItemRef): LayoutItemState | null;
+  /**
+   * Makes the item in the setup exactly what `state` says (undo and redo): puts it back when it isn't there, changes it when
+   * it is, takes it out for null. False when that can't be done (the setup is full, its module or panel is gone).
+   */
+  put(setupId: string, ref: LayoutItemRef, state: LayoutItemState | null): boolean;
   layerOpen(): boolean;
+}
+
+/** An item as one setup has it, whole: what an undo step on the Overlay page keeps, to put it back exactly. */
+export interface LayoutItemState {
+  /** The stored item: who it is, its settings and its place. */
+  item: GameOverlay | InGamePanel;
+  /** Its place in the setup's list. */
+  index: number;
+  /** Its toggle key as it was, given back when the item returns without one (taking the last copy out takes the key). */
+  key: HotkeyRecord | null;
 }
 
 /** What the host knows of a panel in the game. */
@@ -188,7 +205,7 @@ export interface OverlayPlatform {
 export interface GameOverlayServiceOptions {
   userData: string;
   /** Stream overlays' store of overlays and the hotkeys of Streaming, which the overlays' keys live in. */
-  streaming: Pick<Streaming, "overlayStore" | "removeKeys" | "moveKey" | "keyOf">;
+  streaming: Pick<Streaming, "overlayStore" | "removeKeys" | "moveKey" | "keyOf" | "keyRecord" | "restoreKey">;
   /** The modules installed now. */
   installed: { shown(moduleId: string): StreamingModule | undefined };
   /** The library's workspaces: names, and whether one is a game workspace (something made in a personal one may go into any setup). */
@@ -1257,8 +1274,58 @@ export class GameOverlays {
       setOverlay: (setupId, subject, change) => this.update(subject, change, setupId),
       setPanel: (setupId, instanceId, change) => this.updatePanelView(instanceId, change, setupId),
       remove: (setupId, ref) => (ref.kind === "panel" ? this.stopPanel(ref.instanceId, setupId) : this.remove(ref.subject, setupId)),
+      state: (setupId, ref) => {
+        const found = this.store.itemIn(setupId, ref);
+        if (!found) return null;
+        const item = found.item;
+        const keyTarget = "instanceId" in item ? { owner: item.owner, moduleId: item.moduleId, workspaceId: item.workspaceId, key: item.instanceId } : item;
+        return { item, index: found.index, key: this.options.streaming.keyRecord(toggleBinding(keyTarget)) };
+      },
+      put: (setupId, ref, state) => this.putItem(setupId, ref, state),
       layerOpen: () => this.layer !== null,
     };
+  }
+
+  /** Undo and redo on the Overlay page: the item in the setup becomes exactly `state` (null: it leaves). */
+  private putItem(setupId: string, ref: ItemRef, state: LayoutItemState | null): boolean {
+    const there = this.store.itemIn(setupId, ref) !== null;
+    if (!state) {
+      if (there) {
+        if (ref.kind === "panel") this.stopPanel(ref.instanceId, setupId);
+        else this.remove(ref.subject, setupId);
+      }
+      return true;
+    }
+    if (there) {
+      if (!this.store.replace(setupId, ref, state.item)) return false;
+    } else if (!this.bringBack(setupId, ref, state)) return false;
+    if (state.key) this.options.streaming.restoreKey(state.key);
+    this.options.changed();
+    this.tick();
+    return true;
+  }
+
+  /** An item comes back into a setup as it was: its module must still show it, a panel must still be open. */
+  private bringBack(setupId: string, ref: ItemRef, state: LayoutItemState): boolean {
+    const item = state.item;
+    if (ref.kind === "panel") {
+      if (this.options.panels && !this.options.panels.info(ref.instanceId, item.workspaceId)) return false;
+      if (this.store.restore(setupId, item, "panel", state.index) !== "added") return false;
+      this.revive(liveWindowId(ref.instanceId));
+      return true;
+    }
+    const module = this.options.installed.shown(ref.subject.moduleId);
+    if (!module || module.owner !== ref.subject.owner || !module.manifest.overlay) return false;
+    if (this.store.restore(setupId, item, "overlay", state.index) !== "added") return false;
+    try {
+      this.options.streaming.overlayStore.link(ref.subject);
+    } catch {
+      this.store.forget((overlay, id) => id === setupId && sameOverlay(overlay, ref.subject));
+      return false;
+    }
+    this.revive(overlayId(ref.subject));
+    this.options.overGameChanged?.({ owner: ref.subject.owner, moduleId: ref.subject.moduleId, workspaceId: ref.subject.workspaceId });
+    return true;
   }
 
   /** A panel the user put into a setup on the Overlay page. */

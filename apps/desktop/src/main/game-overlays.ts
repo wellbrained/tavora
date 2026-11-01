@@ -723,6 +723,45 @@ export class GameOverlayStore {
     return true;
   }
 
+  /** The item as one setup has it (a copy) and its place in the setup's list, or null when the setup hasn't it. */
+  itemIn(setupId: string, ref: ItemRef): { item: GameOverlay | InGamePanel; index: number } | null {
+    const list: readonly (GameOverlay | InGamePanel)[] = ref.kind === "panel" ? this.panelsIn(setupId) : this.overlaysIn(setupId);
+    const index = ref.kind === "panel" ? this.panelsIn(setupId).findIndex((panel) => panel.instanceId === ref.instanceId) : this.overlaysIn(setupId).findIndex((overlay) => sameOverlay(overlay, ref.subject));
+    return index < 0 ? null : { item: copyItem(list[index]!), index };
+  }
+
+  /**
+   * Puts an item back into a setup exactly as it was (undo on the Overlay page), at its place in the setup's list; the same
+   * rules as adding one: it must be allowed there, and the setup must have room.
+   */
+  restore(setupId: string, item: GameOverlay | InGamePanel, kind: ItemRef["kind"], index: number): AddResult {
+    const setup = this.target(setupId, item.workspaceId);
+    if (!setup) return "refused";
+    const there = kind === "panel" ? setup.panels.some((panel) => panel.instanceId === (item as InGamePanel).instanceId) : setup.overlays.some((overlay) => sameOverlay(overlay, item as GameOverlay));
+    if (there) return "exists";
+    if (this.count(setupId) >= LIMITS.maxGameOverlays) return "full";
+    const rect = normalizeAnchored(item.rect);
+    if (!rect) return "refused";
+    const copy = { ...copyItem(item), rect };
+    if (kind === "panel") setup.panels.splice(Math.max(0, Math.min(index, setup.panels.length)), 0, copy as InGamePanel);
+    else setup.overlays.splice(Math.max(0, Math.min(index, setup.overlays.length)), 0, copy as GameOverlay);
+    this.saveSoon();
+    return "added";
+  }
+
+  /** Makes an item of a setup what `item` says: its settings and its place, a legacy one too (undo on the Overlay page). False when the setup hasn't it. */
+  replace(setupId: string, ref: ItemRef, item: ItemSettings): boolean {
+    const target = ref.kind === "panel" ? this.panelOf(ref.instanceId, setupId) : this.find(ref.subject, setupId);
+    const rect = normalizeAnchored(item.rect);
+    if (!target || !rect) return false;
+    applySettings(target, item);
+    target.rect = rect;
+    if (item.legacy) target.legacy = { ...item.legacy };
+    else delete target.legacy;
+    this.saveSoon();
+    return true;
+  }
+
   /** Removes the overlays matching `test` from their setups (the user's remove, a deleted workspace, a module that is gone); whether any went. */
   forget(test: (overlay: GameOverlay, setupId: string) => boolean): boolean {
     let any = false;

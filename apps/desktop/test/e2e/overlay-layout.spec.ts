@@ -242,8 +242,8 @@ test("The page opens on Everywhere, lists every panel with the reason one can't 
     await overlayPage(app, page);
     // No game runs, and nothing was set up: Everywhere, and the dropdown holds only setups that exist.
     await expect.poll(async () => (await state(page))?.gameId).toBe("$everywhere");
-    // An empty canvas says what to do instead of staying blank.
-    await expect(layerOf(app).getByTestId("layout-canvas-empty")).toHaveText("Nothing here yet. Add a panel from Sources.");
+    // An empty canvas says where to find something to add instead of staying blank.
+    await expect(layerOf(app).getByTestId("layout-canvas-empty")).toHaveText("Add something from the list on the right");
     const view = await state(page);
     expect(view.games.map((game) => game.id)).toEqual(["$everywhere", "$all"]);
     expect(view.sources).toHaveLength(1);
@@ -306,6 +306,9 @@ test("the sidebar sits where Settings > Overlays puts it", async () => {
     const canvasBox = (await page.getByTestId("layout-canvas").boundingBox())!;
     const sidebarBox = (await page.getByTestId("layout-sources").boundingBox())!;
     expect(sidebarBox.x).toBeLessThan(canvasBox.x);
+    // The empty canvas names that side.
+    await expect.poll(() => app.windows().some((candidate) => candidate.url().endsWith("#layer"))).toBe(true);
+    await expect(layerOf(app).getByTestId("layout-canvas-empty")).toHaveText("Add something from the list on the left");
   } finally {
     await app.close();
   }
@@ -502,3 +505,104 @@ for (const mode of [
     }
   });
 }
+
+/** A game's setup with three Clock & Counter overlays side by side (file version 4 is moved to setups at the start). */
+async function seedThree(userData: string) {
+  await mkdir(userData, { recursive: true });
+  await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), gameOverlays: true }));
+  const overlay = (key: string, x: number, opacity: number) => ({
+    owner: "official",
+    moduleId: "tavora.clock-counter",
+    workspaceId: GAME,
+    key,
+    scope: "game",
+    mode: "always",
+    opacity,
+    hideFromCapture: false,
+    rect: { x: 0.036, y: 0.03, width: 0.2, height: 0.16 },
+    anchor: { h: "left", v: "top", x, y: 0.1, width: 0.3, height: 0.16 },
+  });
+  const overlays = [overlay("a", 0.05, 100), overlay("b", 0.45, 50), overlay("c", 0.85, 100)];
+  await writeFile(path.join(userData, "game-overlays.json"), JSON.stringify({ version: 4, overlays, panels: [], layout: { seen: { [GAME]: { width: 1920, height: 1080 } }, games: {} } }));
+}
+
+test("Ctrl+click and a box select several frames, Del removes them all, and one undo brings them back exactly", async () => {
+  const userData = await newUserData();
+  await seedThree(userData);
+  const { app, page } = await launch(userData, [MODULES], { seed: false });
+  try {
+    await overlayPage(app, page, GAME);
+    await expect.poll(async () => (await state(page))?.items?.length).toBe(3);
+    const before = (await state(page)).items;
+    const [a, b, c] = before.map((item) => item.id);
+    const layer = layerOf(app);
+    const frame = (id: string) => layer.getByTestId(`layout-item-${id}`);
+    const bar = layer.getByTestId("layout-frame-toolbar");
+    await expect(layer.getByTestId("layout-canvas-empty")).toHaveCount(0);
+
+    // A click selects one; Ctrl (Cmd) and a click adds another.
+    await frame(a!).click();
+    await expect.poll(async () => (await state(page)).selected).toEqual([a]);
+    await frame(b!).click({ modifiers: ["ControlOrMeta"] });
+    await expect.poll(async () => (await state(page)).selected).toEqual([a, b]);
+    // For several: Hide, Reset position, Reset size and Remove; the Settings box says how many, with a mixed opacity.
+    await expect(bar.getByRole("button")).toHaveCount(4);
+    await expect(bar.getByTestId("layout-frame-settings")).toHaveCount(0);
+    await expect(page.getByTestId("layout-selected-count")).toHaveText("2 frames selected");
+    await expect(page.getByTestId("layout-opacity-many")).toContainText("Mixed");
+    // Shift and a click takes one away again.
+    await frame(b!).click({ modifiers: ["Shift"] });
+    await expect.poll(async () => (await state(page)).selected).toEqual([a]);
+    await layer.locator("body").press("Escape");
+    await expect.poll(async () => (await state(page)).selected).toEqual([]);
+
+    // A box drawn on the empty canvas selects every frame it touches.
+    const first = (await frame(a!).boundingBox())!;
+    const last = (await frame(c!).boundingBox())!;
+    const below = last.y + last.height + 40;
+    await layer.mouse.move(first.x + 10, below);
+    await layer.mouse.down();
+    await layer.mouse.move(last.x + 10, below - 20, { steps: 4 });
+    await layer.mouse.move(last.x + 10, last.y + last.height - 5, { steps: 4 });
+    await expect(layer.getByTestId("layout-band")).toBeVisible();
+    await layer.mouse.up();
+    await expect.poll(async () => [...(await state(page)).selected].sort()).toEqual([a, b, c].sort());
+    await expect(page.getByTestId("layout-selected-count")).toHaveText("3 frames selected");
+
+    // Dragging one moves them all, as one step.
+    const grab = (await frame(b!).boundingBox())!;
+    await layer.mouse.move(grab.x + grab.width / 2, grab.y + grab.height / 2);
+    await layer.mouse.down();
+    await layer.mouse.move(grab.x + grab.width / 2, grab.y + grab.height / 2 + 120, { steps: 6 });
+    await layer.mouse.up();
+    await expect.poll(async () => (await state(page)).items.every((item, index) => item.placed.y > before[index]!.placed.y)).toBe(true);
+    const moved = (await state(page)).items;
+    // They snap to the grid as a group: still the same distance apart.
+    const gaps = (items: { placed: { x: number; y: number } }[]) => items.slice(1).map((item) => [item.placed.x - items[0]!.placed.x, item.placed.y - items[0]!.placed.y]);
+    expect(gaps(moved)).toEqual(gaps(before));
+    await page.getByTestId("layout-undo").click();
+    await expect.poll(async () => (await state(page)).items.map((item) => item.placed)).toEqual(before.map((item) => item.placed));
+    await page.getByTestId("layout-redo").click();
+    await expect.poll(async () => (await state(page)).items.map((item) => item.placed)).toEqual(moved.map((item) => item.placed));
+
+    // Del removes every selected frame; the empty canvas says where to add something.
+    await layer.locator("body").press("Delete");
+    await expect.poll(async () => (await state(page)).items.length).toBe(0);
+    await expect(layer.getByTestId("layout-canvas-empty")).toHaveText("Add something from the list on the right");
+
+    // One undo brings all three back, in their places with their own opacity, and selected.
+    await layer.locator("body").press("ControlOrMeta+z");
+    await expect.poll(async () => (await state(page)).items.length).toBe(3);
+    const back = (await state(page)).items;
+    expect(back.map((item) => [item.id, item.placed, item.opacity])).toEqual(moved.map((item) => [item.id, item.placed, item.opacity]));
+    expect([...(await state(page)).selected].sort()).toEqual([a, b, c].sort());
+    await expect(layer.getByTestId("layout-canvas-empty")).toHaveCount(0);
+    // Redo takes them out again; the setup's file says the same.
+    await layer.locator("body").press("ControlOrMeta+Shift+z");
+    await expect.poll(async () => (await state(page)).items.length).toBe(0);
+    await layer.locator("body").press("ControlOrMeta+z");
+    await expect.poll(async () => (await state(page)).items.length).toBe(3);
+  } finally {
+    await app.close();
+  }
+});

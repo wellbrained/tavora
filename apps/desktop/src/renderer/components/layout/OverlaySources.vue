@@ -125,7 +125,7 @@ function press(row: Row) {
   else if (row.add) send({ type: "add-source", ...row.add });
 }
 
-const selected = (row: Row) => row.item !== null && current.value?.selection === row.item;
+const selected = (row: Row) => row.item !== null && (current.value?.selected.includes(row.item) ?? false);
 </script>
 
 <template>
