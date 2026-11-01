@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.33",
+    date: "2026-11-01",
+    title: "Add a game from the keyboard",
+    notes: [
+      "Use the arrow keys in Add a game to pick a game, and press Enter to add it.",
+      "The best match is already picked, so type and press Enter.",
+    ],
+    prs: [
+      { number: 583, title: "Add a game: arrow keys and Enter pick a game" },
+    ],
+    tags: ["games"],
+  },
+  {
     version: "0.23.32",
     date: "2026-11-01",
     title: "Window buttons",
