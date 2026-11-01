@@ -35,6 +35,7 @@ const api: TavoraHostApi = {
     stillsShown: () => ipcRenderer.send("layout:stills-shown"),
   },
   setDimmed: (dimmed) => ipcRenderer.send("host:dimmed", dimmed),
+  setButtonsBackground: (color) => ipcRenderer.send("host:buttons-background", color),
   onState: (listener) => {
     ipcRenderer.on("host:state", (_event, state: HostViewState) => listener(state));
   },

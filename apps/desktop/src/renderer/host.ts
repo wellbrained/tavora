@@ -728,3 +728,31 @@ new MutationObserver(() => {
   dimmed = now;
   api.setDimmed(now);
 }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state"] });
+
+// The window buttons get their own box in one colour, so it has to be the colour of the page behind them: the workspace
+// canvas is darker than the theme's background. The first solid background under the top right corner, dialogs left out
+// (the host dims the buttons for those).
+const swatch = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+function solidHex(css: string): string | undefined {
+  if (!swatch) return undefined;
+  swatch.clearRect(0, 0, 1, 1);
+  swatch.fillStyle = "#000000";
+  swatch.fillStyle = css;
+  swatch.fillRect(0, 0, 1, 1);
+  const [r = 0, g = 0, b = 0, a = 0] = swatch.getImageData(0, 0, 1, 1).data;
+  return a === 255 ? `#${[r, g, b].map((channel) => channel.toString(16).padStart(2, "0")).join("")}` : undefined;
+}
+let buttonsBackground = "";
+let buttonsCheck = 0;
+function reportButtonsBackground(): void {
+  cancelAnimationFrame(buttonsCheck);
+  buttonsCheck = requestAnimationFrame(() => {
+    const under = document.elementsFromPoint(window.innerWidth - 2, 2).filter((element) => !element.closest('[data-slot^="dialog"], [role="dialog"]'));
+    const color = [...under, document.body, document.documentElement].map((element) => solidHex(getComputedStyle(element).backgroundColor)).find(Boolean);
+    if (!color || color === buttonsBackground) return;
+    buttonsBackground = color;
+    api.setButtonsBackground(color);
+  });
+}
+new MutationObserver(reportButtonsBackground).observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style", "data-panel-style"] });
+watch(() => [state.value?.screen, state.value?.currentWorkspaceId, state.value?.library.onboarded], () => void nextTick(reportButtonsBackground), { immediate: true });

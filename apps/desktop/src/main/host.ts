@@ -515,6 +515,8 @@ export class Host {
   private readonly files: ModuleFilesFolder;
   /** True while a dialog backdrop dims the host page, so the window buttons are dimmed too. */
   private dimmed = false;
+  /** The page colour behind the window buttons, as the page reports it (the workspace canvas is darker than the theme). */
+  private buttonsBackground?: string;
   /** True once the window has closed. */
   private windowClosed = false;
   /** True while the window is minimized or hidden. */
@@ -1601,7 +1603,8 @@ export class Host {
 
   /** The window buttons, in the theme's colours; under a dialog backdrop dimmed like the page around them. */
   private titleBarOverlay() {
-    const { background, text } = this.currentTheme.colors;
+    const { background: themeBackground, text } = this.currentTheme.colors;
+    const background = this.buttonsBackground ?? themeBackground;
     const veil = this.dimmed ? DIALOG_BACKDROP_OPACITY : 0;
     return { color: veiled(background, veil), symbolColor: veiled(text, veil), height: TITLE_BAR_HEIGHT };
   }
@@ -1881,6 +1884,12 @@ export class Host {
     ipcMain.on("host:dimmed", (event, dimmed: unknown) => {
       if (fromHost(event) && typeof dimmed === "boolean" && dimmed !== this.dimmed) {
         this.dimmed = dimmed;
+        this.applyTitleBarOverlay();
+      }
+    });
+    ipcMain.on("host:buttons-background", (event, color: unknown) => {
+      if (fromHost(event) && typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) && color !== this.buttonsBackground) {
+        this.buttonsBackground = color;
         this.applyTitleBarOverlay();
       }
     });
