@@ -32,3 +32,13 @@
 .tavora-tooltip.compact p:first-child,.tavora-tooltip.compact .tavora-tooltip-head p{color:inherit;margin-top:0}
 .tavora-tooltip.compact li{font-size:12px}
 .tavora-tooltip.compact .tavora-tooltip-head{gap:10px}
+
+/* It grows out of its arrow, a little and quickly. Straight away when another tooltip was just open (Tooltip.ts):
+   going along a row of buttons should not make you wait or watch it fade in each time. */
+.tavora-tooltip{transform-origin:var(--tavora-tooltip-arrow) 0}
+.tavora-tooltip[data-side=top]{transform-origin:var(--tavora-tooltip-arrow) 100%}
+.tavora-tooltip[data-side=right]{transform-origin:0 var(--tavora-tooltip-arrow)}
+.tavora-tooltip[data-side=left]{transform-origin:100% var(--tavora-tooltip-arrow)}
+.tavora-tooltip[data-ready=true]:not([data-instant=true]){animation:tavora-tooltip-in var(--duration-tooltip,125ms) var(--ease-out-strong,cubic-bezier(.23,1,.32,1))}
+@keyframes tavora-tooltip-in{from{opacity:0;transform:scale(.96)}}
+@media (prefers-reduced-motion:reduce){.tavora-tooltip[data-ready=true]:not([data-instant=true]){animation:tavora-tooltip-fade 100ms linear!important}@keyframes tavora-tooltip-fade{from{opacity:0}}}

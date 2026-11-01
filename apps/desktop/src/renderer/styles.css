@@ -3,6 +3,8 @@
 /* Fonts are bundled; Tavora never loads them from the web. */
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
+/* The curves and durations every animation uses (shared with the modules). */
+@import "../../../../modules/shared/src/motion.css";
 /* The shared controls (@tavora/official-ui) use Tailwind classes too. */
 @source "../../../../modules/shared/src/components";
 
@@ -155,7 +157,7 @@ html.floating-open .app-drag {
     border-radius: 0 4px 4px 0;
     background: var(--primary);
     transform: translateY(-50%);
-    transition: height 160ms ease-out;
+    transition: height var(--duration-press) var(--ease-out-strong);
     pointer-events: none;
   }
   .rail-entry:hover .rail-pill,
@@ -167,11 +169,11 @@ html.floating-open .app-drag {
   }
   .rail-icon {
     transition:
-      transform 160ms ease-out,
-      box-shadow 160ms ease-out,
-      filter 160ms ease-out,
-      background-color 160ms ease-out,
-      color 160ms ease-out;
+      transform var(--duration-press) var(--ease-out-strong),
+      box-shadow var(--duration-press) var(--ease-out-strong),
+      filter var(--duration-press) var(--ease-out-strong),
+      background-color var(--duration-press) var(--ease-out-strong),
+      color var(--duration-press) var(--ease-out-strong);
   }
   .rail-entry:hover .rail-icon {
     transform: rotate(-4deg) scale(1.06);
@@ -207,7 +209,7 @@ html.floating-open .app-drag {
   }
 }
 .rail-more svg {
-  animation: rail-nudge 1.8s ease-in-out infinite;
+  animation: rail-nudge 1.8s var(--ease-in-out-strong) infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .rail-more svg {
@@ -362,12 +364,12 @@ nav[data-expanded="true"] .footer-slot > [aria-hidden="true"] {
 /* Profile card: the avatar popping in. */
 @layer components {
   .profile-pop {
-    animation: profile-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both;
+    animation: profile-pop var(--duration-move) var(--ease-out-strong) 80ms both;
   }
   @keyframes profile-pop {
     from {
       opacity: 0;
-      transform: scale(0.6) translateY(8px);
+      transform: scale(0.85) translateY(8px);
     }
     to {
       opacity: 1;

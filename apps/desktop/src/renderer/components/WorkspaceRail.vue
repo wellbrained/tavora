@@ -173,7 +173,7 @@ onMounted(() => {
 onBeforeUnmount(() => sizeWatcher?.disconnect());
 function scrollMore() {
   const list = scroller.value;
-  if (list) list.scrollBy({ top: list.clientHeight * 0.8, behavior: "smooth" });
+  if (list) list.scrollBy({ top: list.clientHeight * 0.8, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
 }
 
 function onNavKey(event: KeyboardEvent) {

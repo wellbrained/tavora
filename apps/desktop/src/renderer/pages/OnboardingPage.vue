@@ -94,7 +94,7 @@ watch(profileOpen, (open) => {
       <ol class="mb-8 flex flex-none items-center gap-2 [@media(max-height:640px)]:mb-4" :aria-label="t('onboarding.steps')">
         <li v-for="(label, index) in STEPS" :key="label" class="flex items-center gap-2">
           <span
-            :class="cn('h-1.5 rounded-full transition-all duration-300', index === step ? 'bg-primary w-8' : index < step ? 'bg-primary/50 w-3' : 'bg-muted w-3')"
+            :class="cn('h-1.5 rounded-full transition-[width,background-color] duration-(--duration-move) ease-(--ease-in-out-strong)', index === step ? 'bg-primary w-8' : index < step ? 'bg-primary/50 w-3' : 'bg-muted w-3')"
             :aria-current="index === step ? 'step' : undefined"
             :aria-label="t(`onboarding.step.${label}`)"
           />
@@ -120,8 +120,8 @@ watch(profileOpen, (open) => {
 .step-back-enter-active,
 .step-back-leave-active {
   transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+    opacity var(--duration-menu) var(--ease-out-strong),
+    transform var(--duration-menu) var(--ease-out-strong);
 }
 .step-forward-enter-from,
 .step-back-leave-to {

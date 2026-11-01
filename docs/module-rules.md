@@ -87,6 +87,13 @@ themes; anything hard-coded breaks in one of them.
 - **Focus**: the kit controls bring the focus ring. Never remove it and never draw your own.
 - **Icons**: Lucide (`@lucide/vue`), 16 px in controls, outline only.
 - **Dropdown arrows**: a control where you pick a value shown in the field (`Select`, `Picker`) has the up/down arrow (`ChevronsUpDown`); the kit adds it. A button that opens a menu of actions has the single down arrow (`ChevronDown`). Never put a down arrow on a picker.
+- **Motion**: durations and curves come from the kit's tokens (`modules/shared/src/motion.css`: `--ease-out-strong`,
+  `--ease-in-out-strong`, `--duration-press|tooltip|menu|panel|move`), never a hand-typed `cubic-bezier` or `ease-in`.
+  Animate `transform` and `opacity` only (in Tailwind v4, `translate-*` and `scale-*` set the `translate` and `scale`
+  properties, so name those in the transition), never `transition-all`, and nothing in the interface runs longer than
+  `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed button dips to
+  0.97 on a fine pointer. Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
+  anything shown all day. Reduced motion keeps a short fade and drops the movement.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
 
@@ -135,6 +142,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] `onSuspend` / `onDispose` flush; nothing is lost when the panel is hidden or closed mid-edit.
 - [ ] Empty, loading and error states exist and use the kit.
 - [ ] Menus and tooltips anchor to their element; no hover-only actions.
+- [ ] Motion uses the kit's tokens, animates only `transform` and `opacity`, and leaves out anything a key starts.
 - [ ] Keyboard: Tab reaches everything, Escape closes, focus ring visible.
 - [ ] `pnpm typecheck`, `pnpm test` and `pnpm build` pass.
 - [ ] The module's `DESIGN.md` (if any) does not contradict this file.

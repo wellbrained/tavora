@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.7",
+    "date": "2026-11-01",
+    "notes": [
+      "Menus and tooltips open out of the spot they belong to, and buttons dip a little when you press them."
+    ]
+  },
+  {
     "version": "0.1.6",
     "date": "2026-10-31",
     "notes": [
