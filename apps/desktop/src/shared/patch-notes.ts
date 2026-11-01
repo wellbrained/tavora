@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.41",
+    date: "2026-11-01",
+    title: "Add a game is quicker to reach and to open",
+    notes: [
+      "The rail has two buttons under your games: + Game opens Add a game straight away, and + Personal starts a personal workspace.",
+      "Tavora looks for the games on your PC when it starts, so Add a game is ready when you open it. While it still looks, you see a spinner and placeholder rows.",
+    ],
+    prs: [
+      { number: 594, title: "Rail: + Game and + Personal buttons; Add a game loads in the background" },
+    ],
+    tags: ["games", "rail"],
+  },
+  {
     version: "0.23.40",
     date: "2026-11-01",
     title: "A new welcome and a quicker Add a game",
