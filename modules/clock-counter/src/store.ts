@@ -6,7 +6,10 @@ import type { TavoraSDK } from "@tavora/sdk";
 import { openDocument } from "@tavora/sdk/store";
 import { ref, shallowRef } from "vue";
 import { t } from "./i18n";
-import { find, LIST_ID, LIST_TITLE, overlayState, parseList, type ItemList } from "./items";
+import { find, groupOf, groupOverlayState, LIST_ID, LIST_TITLE, overlayState, parseList, type Counter, type ItemList } from "./items";
+
+/** A counter's name in a group's default line. */
+export const counterName = (counter: Counter): string => counter.label || t("kind.counter");
 
 export type ItemStore = Awaited<ReturnType<typeof createItemStore>>;
 
@@ -20,13 +23,21 @@ export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: nu
   /** Items changed here whose overlays have not been told yet. */
   const touched = new Set<string>();
 
-  /** Tells the overlays of these items (OBS or over the game) what they show now; an item that is gone shows nothing. */
+  /**
+   * Tells the overlays of these items (OBS or over the game) what they show now; an item that is gone shows nothing.
+   * A linked group that has a key of its own (it was shown as a whole once) hears of it too: one line for all its counters.
+   */
   function publish(ids: string[], data: ItemList): void {
+    const warn = (reason: unknown) => console.warn("[clock-counter] overlay", errorMessage(reason));
+    const groups = new Map<string, NonNullable<ReturnType<typeof groupOf>>>();
     for (const id of ids) {
       const item = find(data, id);
-      const sent = item ? sdk.overlay.publish(id, overlayState(item)) : sdk.overlay.remove(id);
-      sent.catch((reason: unknown) => console.warn("[clock-counter] overlay", errorMessage(reason)));
+      (item ? sdk.overlay.publish(id, overlayState(item)) : sdk.overlay.remove(id)).catch(warn);
+      const group = item?.kind === "counter" ? groupOf(data, id) : null;
+      if (group) groups.set(group.key, group);
     }
+    // Only a group with stream settings saved has an overlay to feed.
+    for (const group of groups.values()) if (group.members.some((member) => member.stream)) sdk.overlay.publish(group.key, groupOverlayState(group, counterName)).catch(warn);
   }
 
   doc.onChange((event) => (list.value = event.data));

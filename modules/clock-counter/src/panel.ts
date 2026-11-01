@@ -24,10 +24,12 @@ export interface PanelContext {
   act(action: string, itemId: string): void;
   setHotkey(action: string, item: Item): Promise<void>;
   copyLink(item: Item): Promise<"copied" | "off" | "denied">;
-  /** Ids of the items shown over the game now. */
+  /** Keys of the overlays shown over the game now. */
   overGame: Ref<ReadonlySet<string>>;
+  /** The key of the overlay an item's link and Over game switch belong to: its own, or its group's when shown as a whole. */
+  keyOf(item: Item): string;
   showOverGame(item: Item): Promise<GameOverlayResult>;
-  hideOverGame(item: Item): Promise<void>;
+  hideOverGame(key: string): Promise<void>;
   preview(item: Item): Promise<void>;
   resetLink(item: Item): Promise<void>;
   remove(item: Item): void;

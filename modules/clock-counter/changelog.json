@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.2",
+    "date": "2026-11-01",
+    "notes": [
+      "Every clock and counter is a single row now, so more of them fit in a panel. Settings open in a dialog in the middle, behind the gear.",
+      "Counters you linked stand together in a frame, and say what they add to and where they count from.",
+      "Show a whole group of linked counters in one overlay, with a line you write yourself like {Deaths} Death – {Sit-ups} Situps."
+    ]
+  },  {
     "version": "0.1.1",
     "date": "2026-10-31",
     "notes": [

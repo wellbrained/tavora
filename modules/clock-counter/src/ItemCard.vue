@@ -1,12 +1,12 @@
 <script setup lang="ts">
-// One clock or counter: its name, the big time or number, and the buttons to run it. The gear opens its settings
-// below it; what is open is this panel's own.
-import { Flag, Minus, Pause, Play, Plus, RotateCcw, Settings2, Timer, Hourglass, Hash } from "@lucide/vue";
+// One clock or counter as a single compact row: its name, the time or number, the buttons to run it, and a gear that
+// opens its settings in a dialog; what is open is this panel's own. On a very narrow panel the row wraps to two lines.
+import { Flag, Hash, Hourglass, Minus, Pause, Play, Plus, RotateCcw, Settings, Timer } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { computed, inject } from "vue";
 import { t } from "./i18n";
 import ItemEditor from "./ItemEditor.vue";
-import { goalReached, lapSplits, readClock, type Item } from "./items";
+import { goalReached, lapSplits, readClock, sourcesOf, type Item } from "./items";
 import { PANEL } from "./panel";
 import { formatSeconds } from "./time";
 
@@ -27,6 +27,22 @@ const display = computed(() => {
 });
 const flashing = computed(() => !!reading.value?.done && props.item.kind === "countdown" && !props.item.doneText);
 
+// What a counter adds to others ("+5 Sit-ups each") and where it is counted from ("from Deaths").
+const label = (counter: { label: string }) => counter.label || t("kind.counter");
+const adds = computed(() => {
+  const counter = props.item;
+  if (counter.kind !== "counter" || !counter.links.length) return "";
+  const others = panel.store.list.value.items;
+  const list = counter.links.map((link) => `${link.amount < 0 ? "−" : "+"}${Math.abs(link.amount)} ${label(others.find((other) => other.id === link.target) ?? { label: "" })}`);
+  return t("item.adds", { list: list.join(", ") });
+});
+const from = computed(() => {
+  if (props.item.kind !== "counter") return "";
+  const sources = sourcesOf(panel.store.list.value, props.item.id);
+  return sources.length ? t("item.from", { list: sources.map(label).join(", ") }) : "";
+});
+const hasSubline = computed(() => (props.item.kind === "counter" && props.item.goal !== null) || !!adds.value || !!from.value);
+
 const laps = computed(() => (props.item.kind === "stopwatch" && props.item.laps ? lapSplits(props.item).map((ms, index) => ({ number: index + 1, ms })).reverse().slice(0, 5) : []));
 const format = computed(() => (props.item.kind === "counter" ? "m:ss" : props.item.format));
 
@@ -39,55 +55,55 @@ const startLabel = computed(() => {
 </script>
 
 <template>
-  <article class="bg-card flex flex-col rounded-lg border" :data-testid="`item-${item.id}`">
-    <header class="flex items-center gap-2 py-1.5 pr-1 pl-3">
-      <component :is="icon" class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
-      <h2 class="min-w-0 flex-1 truncate text-sm font-medium" :title="name">{{ name }}</h2>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        :aria-label="editing ? t('item.closeEdit') : t('item.edit', { label: name })"
-        :title="editing ? t('item.closeEdit') : t('item.edit', { label: name })"
-        :aria-expanded="editing"
-        :data-testid="`edit-${item.id}`"
-        @click="emit('toggleEdit')"
-      >
-        <Settings2 :stroke-width="1.5" />
-      </Button>
-    </header>
+  <article class="bg-card rounded-lg border" :data-testid="`item-${item.id}`">
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 pr-1.5 pl-3">
+      <!-- Name and type. A small marker for linked counters ("also adds to") goes at the end of this block. -->
+      <div class="flex min-w-24 flex-[1_1_6rem] items-center gap-2" data-testid="item-name">
+        <component :is="icon" class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+        <div class="min-w-0">
+          <h2 class="truncate text-sm font-medium" :title="name">{{ name }}</h2>
+          <p v-if="hasSubline" class="text-muted-foreground flex gap-2 text-xs tabular-nums" data-testid="subline">
+            <span v-if="item.kind === 'counter' && item.goal !== null" class="flex-none" :class="goalReached(item) && 'text-success'">
+              <template v-if="goalReached(item)">{{ t("item.goalDone") }}&nbsp;</template>{{ item.value }} / {{ item.goal }}
+            </span>
+            <span v-if="adds" class="min-w-0 truncate" :title="adds" data-testid="adds">{{ adds }}</span>
+            <span v-if="from" class="min-w-0 truncate" :title="from" data-testid="from">{{ from }}</span>
+          </p>
+        </div>
+      </div>
 
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 pb-3">
-      <template v-if="item.kind === 'counter'">
-        <Button variant="secondary" size="icon" :aria-label="t('item.down')" :title="t('item.down')" :disabled="!item.negative && item.value <= 0" @click="panel.act('down', item.id)">
-          <Minus :stroke-width="1.5" />
-        </Button>
-        <span class="min-w-0 flex-1 text-center">
-          <span class="block truncate text-3xl font-semibold tabular-nums" data-testid="value">{{ display }}</span>
-          <span v-if="item.goal !== null" class="text-muted-foreground text-xs tabular-nums" :class="goalReached(item) && 'text-success'">
-            <template v-if="goalReached(item)">{{ t("item.goalDone") }}&nbsp;</template>{{ item.value }} / {{ item.goal }}
-          </span>
-        </span>
-        <Button variant="secondary" size="icon" :aria-label="t('item.up')" :title="t('item.up')" data-testid="up" @click="panel.act('up', item.id)">
-          <Plus :stroke-width="1.5" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" :aria-label="t('item.reset')" :title="t('item.reset')" @click="panel.act('reset', item.id)">
-          <RotateCcw :stroke-width="1.5" />
-        </Button>
-      </template>
+      <span class="ml-auto min-w-0 flex-[0_1_auto] truncate text-right text-xl font-semibold tabular-nums" :class="flashing && 'clock-done'" data-testid="value">{{ display }}</span>
 
-      <template v-else>
-        <span class="min-w-0 flex-1 truncate text-3xl font-semibold tabular-nums" :class="flashing && 'clock-done'" data-testid="value">{{ display }}</span>
-        <Button variant="secondary" size="icon" :aria-label="startLabel" :title="startLabel" data-testid="start-pause" @click="panel.act('start-pause', item.id)">
-          <Pause v-if="item.since !== null && !reading?.done" :stroke-width="1.5" />
-          <Play v-else :stroke-width="1.5" />
+      <div class="flex flex-none items-center gap-1">
+        <template v-if="item.kind === 'counter'">
+          <Button variant="secondary" size="icon-sm" :aria-label="t('item.down')" :title="t('item.down')" :disabled="!item.negative && item.value <= 0" @click="panel.act('down', item.id)">
+            <Minus :stroke-width="1.5" />
+          </Button>
+          <Button variant="secondary" size="icon-sm" :aria-label="t('item.up')" :title="t('item.up')" data-testid="up" @click="panel.act('up', item.id)">
+            <Plus :stroke-width="1.5" />
+          </Button>
+          <Button variant="ghost" size="icon-sm" :aria-label="t('item.reset')" :title="t('item.reset')" data-testid="reset" @click="panel.act('reset', item.id)">
+            <RotateCcw :stroke-width="1.5" />
+          </Button>
+        </template>
+
+        <template v-else>
+          <Button variant="secondary" size="icon-sm" :aria-label="startLabel" :title="startLabel" data-testid="start-pause" @click="panel.act('start-pause', item.id)">
+            <Pause v-if="item.since !== null && !reading?.done" :stroke-width="1.5" />
+            <Play v-else :stroke-width="1.5" />
+          </Button>
+          <Button v-if="item.kind === 'stopwatch' && item.laps" variant="ghost" size="icon-sm" :aria-label="t('item.lap')" :title="t('item.lap')" :disabled="item.since === null" @click="panel.act('lap', item.id)">
+            <Flag :stroke-width="1.5" />
+          </Button>
+          <Button variant="ghost" size="icon-sm" :aria-label="t('item.reset')" :title="t('item.reset')" data-testid="reset" @click="panel.act('reset', item.id)">
+            <RotateCcw :stroke-width="1.5" />
+          </Button>
+        </template>
+
+        <Button variant="ghost" size="icon-sm" :aria-label="t('item.edit', { label: name })" :title="t('item.edit', { label: name })" aria-haspopup="dialog" :data-testid="`edit-${item.id}`" @click="emit('toggleEdit')">
+          <Settings :stroke-width="1.5" />
         </Button>
-        <Button v-if="item.kind === 'stopwatch' && item.laps" variant="ghost" size="icon-sm" :aria-label="t('item.lap')" :title="t('item.lap')" :disabled="item.since === null" @click="panel.act('lap', item.id)">
-          <Flag :stroke-width="1.5" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" :aria-label="t('item.reset')" :title="t('item.reset')" data-testid="reset" @click="panel.act('reset', item.id)">
-          <RotateCcw :stroke-width="1.5" />
-        </Button>
-      </template>
+      </div>
     </div>
 
     <ol v-if="laps.length" class="text-muted-foreground flex flex-col gap-0.5 border-t px-3 py-2 text-xs tabular-nums">
@@ -97,6 +113,6 @@ const startLabel = computed(() => {
       </li>
     </ol>
 
-    <ItemEditor v-if="editing" :item="item" :first="first" :last="last" />
+    <ItemEditor v-if="editing" :item="item" :first="first" :last="last" @close="emit('toggleEdit')" />
   </article>
 </template>
