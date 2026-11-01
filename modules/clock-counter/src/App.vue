@@ -11,6 +11,7 @@ import { TavoraError, type GameOverlayResult, type MenuOptions, type TavoraSDK }
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { plural, setLanguage, t } from "./i18n";
 import ItemCard from "./ItemCard.vue";
+import ItemEditor from "./ItemEditor.vue";
 import { count, find, groupOf, insert, lap, linkedGroups, MAX, newItem, parseList, remove, resetClock, resetCounter, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
 import { de, en } from "./locales";
 import { PANEL, UNDO_MS } from "./panel";
@@ -23,6 +24,11 @@ const sdk = shallowRef<TavoraSDK | null>(null);
 const store = shallowRef<ItemStore | null>(null);
 const error = ref<string | null>(null);
 const editing = ref<string | null>(null);
+/** This panel is shown as a dialog over the workspace; its page is then the settings of the item being edited. */
+const dialogOpen = ref(false);
+/** Settings are a dialog over the workspace when Tavora can; an older one gets a dialog in the middle of the panel. */
+const overWorkspace = computed(() => sdk.value?.supports("panel.openDialog") ?? false);
+const editedItem = computed(() => (editing.value ? find(list.value, editing.value) : undefined));
 const now = ref(Date.now());
 const hotkeys = ref<ReadonlySet<string>>(new Set());
 const suspended = ref(false);
@@ -93,12 +99,44 @@ function act(action: string, id: string): void {
   });
 }
 
+/** Opens an item's settings (or closes them); from the gear's click, which Tavora needs to show the dialog. */
+function toggleEdit(id: string): void {
+  if (editing.value === id) {
+    closeEditing();
+    return;
+  }
+  openEditing(id);
+}
+
+function openEditing(id: string): void {
+  editing.value = id;
+  if (overWorkspace.value) void sdk.value!.panel.openDialog({ width: 960, height: 680 }).catch(() => (editing.value = null));
+}
+
+function closeEditing(): void {
+  editing.value = null;
+  if (dialogOpen.value) void sdk.value?.panel.closeDialog();
+}
+
+// The item is gone (deleted here or in another panel): its settings have nothing to show.
+watch(editedItem, (item) => {
+  if (!item && editing.value) closeEditing();
+});
+
+function onKey(event: KeyboardEvent): void {
+  // Esc in an open list (a Select, say) closes only that.
+  const inPopup = (event.target as Element | null)?.closest?.("[role=listbox], [role=menu], [role=dialog]");
+  if (event.key === "Escape" && dialogOpen.value && !event.defaultPrevented && !inPopup) closeEditing();
+}
+
 function addItem(kind: ItemKind): void {
   const id = crypto.randomUUID();
   const same = list.value.items.filter((item) => item.kind === kind).length;
   const label = same ? `${t(`kind.${kind}`)} ${same + 1}` : t(`kind.${kind}`);
   void store.value?.apply([id], (data) => insert(data, newItem(kind, id, label)));
-  editing.value = id;
+  // Its settings open too, to name it. From the menu there is no click left for the dialog over the workspace: it stays closed.
+  if (overWorkspace.value) openEditing(id);
+  else editing.value = id;
 }
 
 async function pickKind(event: MouseEvent): Promise<void> {
@@ -131,7 +169,7 @@ function removeItem(item: Item): void {
   const group = item.kind === "counter" ? groupOf(list.value, item.id) : null;
   void store.value?.apply([item.id, ...(group?.members.map((member) => member.id) ?? [])], (data) => remove(data, item.id));
   void hideOverGame(item.id).catch(() => undefined);
-  if (editing.value === item.id) editing.value = null;
+  if (editing.value === item.id) closeEditing();
   const shown = toast({
     title: t("app.deleted", { label: item.label || t(`kind.${item.kind}`) }),
     duration: UNDO_MS,
@@ -254,6 +292,7 @@ provide(PANEL, {
 const cleanup: (() => void)[] = [];
 
 onMounted(async () => {
+  addEventListener("keydown", onKey);
   try {
     const connection = await connectModule({ texts: { en, de } });
     if (connection.status !== "ready" || !connection.sdk) throw connection.error;
@@ -263,6 +302,10 @@ onMounted(async () => {
     cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
     const items = await createItemStore(connected);
     cleanup.push(
+      connected.panel.onDialogChange((open) => {
+        dialogOpen.value = open;
+        if (!open) editing.value = null;
+      }),
       () => void items.dispose(),
       connected.hotkeys.onPress(({ action, target }) => act(action, target)),
       connected.lifecycle.onSuspend(() => (suspended.value = true)),
@@ -281,6 +324,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  removeEventListener("keydown", onKey);
   cleanup.forEach((fn) => fn());
   clearInterval(ticker);
   if (undo.value) clearTimeout(undo.value.timer);
@@ -291,6 +335,7 @@ onBeforeUnmount(() => {
   <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
+  <ItemEditor v-else-if="dialogOpen && editedItem" page :item="editedItem" :first="placeOf(editedItem) === 0" :last="placeOf(editedItem) === order.length - 1" @close="closeEditing" />
   <div v-else class="relative flex h-full min-h-0 flex-col" data-testid="clock-counter-app">
     <header class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2" role="toolbar" :aria-label="t('app.toolbar')">
       <p class="min-w-0 flex-1 truncate px-1 text-xs" role="status">
@@ -314,17 +359,17 @@ onBeforeUnmount(() => {
       </div>
       <div class="flex flex-col gap-2">
         <template v-for="row in rows" :key="row.type === 'item' ? row.item.id : `group-${row.key}`">
-          <ItemCard v-if="row.type === 'item'" :item="row.item" :editing="editing === row.item.id" :first="placeOf(row.item) === 0" :last="placeOf(row.item) === order.length - 1" @toggle-edit="editing = editing === row.item.id ? null : row.item.id" />
+          <ItemCard v-if="row.type === 'item'" :item="row.item" :editing="editing === row.item.id && !overWorkspace" :first="placeOf(row.item) === 0" :last="placeOf(row.item) === order.length - 1" @toggle-edit="toggleEdit(row.item.id)" />
           <section v-else class="border-border flex flex-col gap-1 rounded-lg border p-1" :aria-label="t('app.linked')" data-testid="linked-group">
             <Badge variant="secondary" class="gap-1 self-start"><Link class="size-3" :stroke-width="1.5" aria-hidden="true" />{{ t("app.linked") }}</Badge>
             <ItemCard
               v-for="item in row.items"
               :key="item.id"
               :item="item"
-              :editing="editing === item.id"
+              :editing="editing === item.id && !overWorkspace"
               :first="placeOf(item) === 0"
               :last="placeOf(item) === order.length - 1"
-              @toggle-edit="editing = editing === item.id ? null : item.id"
+              @toggle-edit="toggleEdit(item.id)"
             />
           </section>
         </template>

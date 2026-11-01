@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.3",
+    "date": "2026-11-01",
+    "notes": [
+      "A clock or counter's settings now open as a big dialog over the whole workspace, not inside the small panel."
+    ]
+  },
+  {
     "version": "0.1.2",
     "date": "2026-11-01",
     "notes": [
@@ -7,7 +14,8 @@
       "Counters you linked stand together in a frame, and say what they add to and where they count from.",
       "Show a whole group of linked counters in one overlay, with a line you write yourself like {Deaths} Death – {Sit-ups} Situps."
     ]
-  },  {
+  },
+  {
     "version": "0.1.1",
     "date": "2026-10-31",
     "notes": [

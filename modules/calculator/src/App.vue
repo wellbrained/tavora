@@ -68,8 +68,25 @@ const mode = computed({ get: () => settings.value.mode, set: (value: Mode) => ch
 
 const keys = computed(() => (settings.value.mode === "basic" ? BASIC : PLUS));
 
-/** Settings is open. */
+/** Settings is open in a dialog in the middle of the panel (an older Tavora has no dialog over the workspace). */
 const settingsOpen = ref(false);
+/** This panel is shown as a dialog over the workspace; its page is then the settings. */
+const dialogOpen = ref(false);
+
+/** Opens the settings as a dialog over the workspace, or in the panel when Tavora can't. */
+function openSettings(): void {
+  const connected = sdk.value;
+  if (!connected?.supports("panel.openDialog")) {
+    settingsOpen.value = true;
+    return;
+  }
+  void connected.panel.openDialog({ width: 440, height: 380 }).catch(() => (settingsOpen.value = true));
+}
+
+function closeSettings(): void {
+  if (dialogOpen.value) void sdk.value?.panel.closeDialog();
+  settingsOpen.value = false;
+}
 
 // The Settings dialog's controls hand over strings.
 const historyLength = computed({
@@ -204,6 +221,12 @@ function confirmClear(): void {
 const elsewhere = (target: EventTarget | null) => target instanceof HTMLElement && !!target.closest("input, textarea, [role='dialog']");
 
 function onKeydown(event: KeyboardEvent): void {
+  if (dialogOpen.value) {
+    // Esc closes an open list first; the keypad keys aren't for the settings.
+    const inPopup = (event.target as Element | null)?.closest?.("[role=listbox], [role=menu]");
+    if (event.key === "Escape" && !event.defaultPrevented && !inPopup) closeSettings();
+    return;
+  }
   if (elsewhere(event.target)) return;
   const action = keyAction(event, {
     selection: !!window.getSelection()?.toString(),
@@ -216,7 +239,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function onPaste(event: ClipboardEvent): void {
-  if (elsewhere(event.target)) return;
+  if (dialogOpen.value || elsewhere(event.target)) return;
   const text = event.clipboardData?.getData("text") ?? "";
   if (!text) return;
   event.preventDefault();
@@ -244,6 +267,7 @@ onMounted(async () => {
     const stored = await createListsStore(connected);
     cleanup.push(() => void stored.dispose());
     lists.value = stored;
+    cleanup.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
     sdk.value = connected;
   } catch (reason) {
     error.value = errorMessage(reason);
@@ -260,6 +284,15 @@ onBeforeUnmount(() => {
   <p v-if="!sdk" class="text-muted-foreground p-4 text-sm" data-testid="status">
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
+  <SettingsDialog
+    v-else-if="dialogOpen"
+    page
+    v-model:decimals="decimals"
+    v-model:history-length="historyLength"
+    :short="settings.short"
+    @update:short="(on: boolean) => choose({ short: on })"
+    @close="closeSettings"
+  />
   <div v-else class="@container flex h-full min-h-0 flex-col" data-testid="calculator-app">
     <div class="flex flex-none items-center gap-2 px-3 pt-2">
       <SegmentedControl v-model="mode" :label="t('mode.label')" :options="modes" />
@@ -276,7 +309,7 @@ onBeforeUnmount(() => {
       >
         <History :stroke-width="1.5" />
       </Button>
-      <Button variant="ghost" size="icon-sm" :aria-label="t('options.title')" :title="t('options.title')" data-testid="options" @click="settingsOpen = true">
+      <Button variant="ghost" size="icon-sm" :aria-label="t('options.title')" :title="t('options.title')" data-testid="options" @click="openSettings">
         <SettingsIcon :stroke-width="1.5" />
       </Button>
       <SettingsDialog
@@ -285,7 +318,7 @@ onBeforeUnmount(() => {
         v-model:history-length="historyLength"
         :short="settings.short"
         @update:short="(on: boolean) => choose({ short: on })"
-        @close="settingsOpen = false"
+        @close="closeSettings"
       />
     </div>
     <p v-if="shownError" class="text-destructive flex-none px-3 pt-1 text-xs">{{ shownError }}</p>

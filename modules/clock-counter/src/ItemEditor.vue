@@ -1,11 +1,13 @@
 <script setup lang="ts">
-// An item's settings, in a dialog in the middle of the panel: name and how it counts, how it looks on stream with its
+// An item's settings: name and how it counts, how it looks on stream with its
 // OBS link, and its hotkeys. Every change saves at once; text and number fields save when they lose focus or on Enter,
-// not on every key, and whatever is still typed saves when the dialog closes.
+// not on every key, and whatever is still typed saves when this goes away. Tavora shows them as a dialog over the
+// workspace (`page`: the panel itself is that dialog, so this is its whole page); an older Tavora gets ItemCard's
+// dialog in the middle of the panel.
 import { ArrowDown, ArrowUp, Link, Plus, Trash2, X } from "@lucide/vue";
 import { SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
@@ -18,7 +20,7 @@ import { counterName } from "./store";
 import { cleanName, compile, display, render } from "./template";
 import { FORMAT_PRESETS, formatSeconds, isFormat, MAX_FORMAT } from "./time";
 
-const props = defineProps<{ item: Item; first: boolean; last: boolean }>();
+const props = defineProps<{ item: Item; first: boolean; last: boolean; page?: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 const panel = inject(PANEL)!;
 const id = computed(() => props.item.id);
@@ -154,15 +156,6 @@ function saveFormat(next = format.value) {
   if (isFormat(next) && props.item.kind !== "counter" && next !== props.item.format) updateClock((clock) => (clock.format = next));
 }
 
-async function pickFormat(event: MouseEvent) {
-  const picked = await panel.showMenu({
-    items: FORMAT_PRESETS.map((preset) => ({ type: "item" as const, id: preset, label: `${preset}  ·  ${formatSeconds(4 * 3600 + 5 * 60 + 9, preset)}`, checked: format.value === preset })),
-    anchor: event.currentTarget as HTMLElement,
-    align: "end",
-  });
-  if (picked) saveFormat(picked);
-}
-
 function saveDuration() {
   const ms = (number(duration.value.h, 0) * 3600 + number(duration.value.m, 0) * 60 + number(duration.value.s, 0)) * 1000;
   const next = Math.min(MAX.durationMs, Math.max(1000, ms));
@@ -197,12 +190,9 @@ const links = computed(() =>
 );
 const unlinked = computed(() => (props.item.kind === "counter" ? counters.value.filter((counter) => !(props.item as Counter).links.some((link) => link.target === counter.id)) : []));
 
-async function addLink(event: MouseEvent) {
-  const picked = await panel.showMenu({
-    items: [{ type: "heading", label: t("edit.linkPick") }, ...unlinked.value.map((counter) => ({ type: "item" as const, id: counter.id, label: counter.label || t("kind.counter") }))],
-    anchor: event.currentTarget as HTMLElement,
-  });
-  if (picked) updateCounter((counter) => counter.links.length < MAX.links && !counter.links.some((link) => link.target === picked) && counter.links.push({ target: picked, amount: 1 }));
+/** Links this counter to another: the counter picked from the menu. */
+function addLink(picked: string) {
+  updateCounter((counter) => counter.links.length < MAX.links && !counter.links.some((link) => link.target === picked) && counter.links.push({ target: picked, amount: 1 }));
 }
 
 /** What is typed in a link's amount field and not saved yet, by target. */
@@ -279,12 +269,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Dialog :open="true" @update:open="(open: boolean) => !open && emit('close')">
-    <DialogContent class="max-h-[calc(100%-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4" :data-testid="`editor-${item.id}`">
-      <DialogHeader>
-        <DialogTitle class="truncate pr-6 text-lg">{{ t("item.edit", { label: name }) }}</DialogTitle>
-      </DialogHeader>
-      <div class="-mx-6 flex min-h-0 flex-col gap-4 overflow-y-auto px-6 text-sm">
+  <div class="flex min-h-0 flex-col gap-4" :class="page && '@container h-full p-4'" :data-testid="`editor-${item.id}`">
+    <h2 v-if="page" class="truncate pr-1 text-lg font-semibold">{{ t("item.edit", { label: name }) }}</h2>
+    <!-- Two columns over the workspace when there is room: how it counts and its hotkeys on the left, stream on the right. -->
+    <div class="min-h-0 overflow-y-auto text-sm" :class="page ? 'flex-1 pr-1' : '-mx-6 px-6'">
+      <div class="grid gap-x-8 gap-y-4" :class="page && '@3xl:grid-cols-2'">
+        <div class="flex min-w-0 flex-col gap-4">
     <div class="flex flex-col gap-1.5">
       <Label :for="`${prefix}-label`">{{ t("edit.name") }}</Label>
       <Input :id="`${prefix}-label`" v-model="label" :maxlength="MAX.label" :placeholder="t(`kind.${item.kind}`)" @blur="saveLabel" @keydown.enter="saveLabel" />
@@ -295,7 +285,17 @@ onBeforeUnmount(() => {
         <Label :for="`${prefix}-format`">{{ t("edit.format") }}</Label>
         <div class="flex gap-1">
           <Input :id="`${prefix}-format`" v-model="format" class="font-mono" :maxlength="MAX_FORMAT" :aria-invalid="!formatValid" @blur="saveFormat()" @keydown.enter="saveFormat()" />
-          <Button variant="secondary" size="sm" class="h-8" :aria-label="t('edit.formatPresets')" :title="t('edit.formatPresets')" @click="pickFormat">···</Button>
+          <!-- Kit menus, not ui.showMenu: Tavora draws no module menu while the panel is a dialog over the workspace. -->
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="secondary" size="sm" class="h-8" :aria-label="t('edit.formatPresets')" :title="t('edit.formatPresets')" data-testid="format-presets">···</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuRadioGroup :model-value="format" @update:model-value="(preset) => saveFormat(String(preset))">
+                <DropdownMenuRadioItem v-for="preset in FORMAT_PRESETS" :key="preset" :value="preset" class="tabular-nums">{{ preset }} · {{ formatSeconds(4 * 3600 + 5 * 60 + 9, preset) }}</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <p v-if="!formatValid" class="text-destructive text-xs" role="alert">{{ t("edit.formatInvalid") }}</p>
         <p class="text-muted-foreground text-xs">{{ t("edit.preview", { text: preview }) }} · {{ t("edit.formatHint") }}</p>
@@ -373,10 +373,32 @@ onBeforeUnmount(() => {
             </Button>
           </li>
         </ul>
-        <Button v-if="unlinked.length && item.links.length < MAX.links" variant="secondary" size="sm" class="self-start" @click="addLink"><Plus :stroke-width="1.5" /> {{ t("edit.linkAdd") }}</Button>
+        <DropdownMenu v-if="unlinked.length && item.links.length < MAX.links">
+          <DropdownMenuTrigger as-child>
+            <Button variant="secondary" size="sm" class="self-start" data-testid="link-add"><Plus :stroke-width="1.5" /> {{ t("edit.linkAdd") }}</Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>{{ t("edit.linkPick") }}</DropdownMenuLabel>
+            <DropdownMenuItem v-for="counter in unlinked" :key="counter.id" :data-testid="`link-pick-${counter.id}`" @select="addLink(counter.id)">{{ counter.label || t("kind.counter") }}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </section>
     </template>
 
+
+    <section class="flex flex-col gap-1.5" :aria-label="t('edit.hotkeys')">
+      <h3 class="font-medium">{{ t("edit.hotkeys") }}</h3>
+      <p class="text-muted-foreground text-xs">{{ t("edit.hotkeysHint") }}</p>
+      <ul class="flex flex-col">
+        <li v-for="action in actions" :key="action" class="flex min-h-8 items-center gap-2">
+          <span class="min-w-0 flex-1 truncate">{{ t(`action.${action}`) }}</span>
+          <span class="text-muted-foreground text-xs" :data-testid="`hotkey-${action}-${item.id}`">{{ hasKey(action) ? t("edit.hotkeyOn") : t("edit.hotkeyNone") }}</span>
+          <Button variant="secondary" size="sm" :aria-label="`${t(`action.${action}`)}: ${hasKey(action) ? t('edit.hotkeyChange') : t('edit.hotkeySet')}`" @click="panel.setHotkey(action, item)">{{ hasKey(action) ? t("edit.hotkeyChange") : t("edit.hotkeySet") }}</Button>
+        </li>
+      </ul>
+    </section>
+        </div>
+        <div class="flex min-w-0 flex-col gap-4">
     <section class="flex flex-col gap-2" :aria-label="t('edit.stream')">
       <h3 class="font-medium">{{ t("edit.stream") }}</h3>
       <template v-if="group">
@@ -450,27 +472,17 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section class="flex flex-col gap-1.5" :aria-label="t('edit.hotkeys')">
-      <h3 class="font-medium">{{ t("edit.hotkeys") }}</h3>
-      <p class="text-muted-foreground text-xs">{{ t("edit.hotkeysHint") }}</p>
-      <ul class="flex flex-col">
-        <li v-for="action in actions" :key="action" class="flex min-h-8 items-center gap-2">
-          <span class="min-w-0 flex-1 truncate">{{ t(`action.${action}`) }}</span>
-          <span class="text-muted-foreground text-xs" :data-testid="`hotkey-${action}-${item.id}`">{{ hasKey(action) ? t("edit.hotkeyOn") : t("edit.hotkeyNone") }}</span>
-          <Button variant="secondary" size="sm" :aria-label="`${t(`action.${action}`)}: ${hasKey(action) ? t('edit.hotkeyChange') : t('edit.hotkeySet')}`" @click="panel.setHotkey(action, item)">{{ hasKey(action) ? t("edit.hotkeyChange") : t("edit.hotkeySet") }}</Button>
-        </li>
-      </ul>
-    </section>
 
-    <div class="flex flex-wrap items-center gap-1 border-t pt-3">
+        </div>
+      </div>
+    <div class="flex flex-wrap items-center gap-1 mt-4 border-t pt-3">
       <Button variant="ghost" size="sm" :disabled="first" @click="change([], (data) => move(data, item.id, -1))"><ArrowUp :stroke-width="1.5" /> {{ t("edit.moveUp") }}</Button>
       <Button variant="ghost" size="sm" :disabled="last" @click="change([], (data) => move(data, item.id, 1))"><ArrowDown :stroke-width="1.5" /> {{ t("edit.moveDown") }}</Button>
       <Button variant="danger" size="sm" class="ml-auto" :data-testid="`delete-${item.id}`" @click="panel.remove(item)"><Trash2 :stroke-width="1.5" /> {{ t("edit.delete") }}</Button>
     </div>
   </div>
-      <div class="flex justify-end">
-        <Button data-testid="editor-done" @click="emit('close')">{{ t("edit.done") }}</Button>
-      </div>
-    </DialogContent>
-  </Dialog>
+    <div class="flex flex-none justify-end">
+      <Button data-testid="editor-done" @click="emit('close')">{{ t("edit.done") }}</Button>
+    </div>
+  </div>
 </template>

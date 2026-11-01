@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // One clock or counter as a single compact row: its name, the time or number, the buttons to run it, and a gear that
-// opens its settings in a dialog; what is open is this panel's own. On a very narrow panel the row wraps to two lines.
+// opens its settings in a dialog over the workspace; what is open is this panel's own. On a very narrow panel the row wraps to two lines.
 import { Flag, Hash, Hourglass, Minus, Pause, Play, Plus, RotateCcw, Settings, Timer } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { computed, inject } from "vue";
 import { t } from "./i18n";
 import ItemEditor from "./ItemEditor.vue";
@@ -113,6 +114,14 @@ const startLabel = computed(() => {
       </li>
     </ol>
 
-    <ItemEditor v-if="editing" :item="item" :first="first" :last="last" @close="emit('toggleEdit')" />
+    <!-- Only for a Tavora that can't show the settings over the workspace: a dialog in the middle of the panel. -->
+    <Dialog v-if="editing" :open="true" @update:open="(open: boolean) => !open && emit('toggleEdit')">
+      <DialogContent class="max-h-[calc(100%-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-4">
+        <DialogHeader>
+          <DialogTitle class="truncate pr-6 text-lg">{{ t("item.edit", { label: name }) }}</DialogTitle>
+        </DialogHeader>
+        <ItemEditor :item="item" :first="first" :last="last" @close="emit('toggleEdit')" />
+      </DialogContent>
+    </Dialog>
   </article>
 </template>
