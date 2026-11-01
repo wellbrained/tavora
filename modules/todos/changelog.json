@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.2",
+    "date": "2026-11-01",
+    "notes": [
+      "Dropdowns where you pick a value show an up-and-down arrow."
+    ]
+  },
+  {
     "version": "0.2.1",
     "date": "2026-10-31",
     "notes": [

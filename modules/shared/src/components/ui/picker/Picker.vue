@@ -2,7 +2,7 @@
 // One choice from a list: a button showing the current one, and under it the list. With `search`
 // set, a field on top narrows the list by label and keywords, and Enter picks the first match.
 // Arrow keys, Home and End move through the list, as in any listbox.
-import { Check, ChevronDown, Search } from "@lucide/vue"
+import { Check, ChevronsUpDown, Search } from "@lucide/vue"
 import type { HTMLAttributes } from "vue"
 import { computed, ref, watch } from "vue"
 import { ListboxContent, ListboxFilter, ListboxItem, ListboxItemIndicator, ListboxRoot, PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
@@ -60,7 +60,7 @@ function pick(value: unknown) {
         aria-haspopup="listbox"
       >
         <span class="truncate">{{ current?.label }}</span>
-        <ChevronDown class="size-4 flex-none" :stroke-width="1.5" />
+        <ChevronsUpDown class="size-4 flex-none" :stroke-width="1.5" />
       </Button>
     </PopoverTrigger>
     <PopoverPortal>

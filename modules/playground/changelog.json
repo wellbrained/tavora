@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.3",
+    "date": "2026-11-01",
+    "notes": [
+      "Dropdowns where you pick a value show an up-and-down arrow, menus keep the down arrow. Both are side by side in Inputs."
+    ]
+  },
+  {
     "version": "0.1.2",
     "date": "2026-10-31",
     "notes": [
