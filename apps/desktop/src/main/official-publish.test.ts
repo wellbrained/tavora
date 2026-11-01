@@ -5,7 +5,7 @@ import path from "node:path";
 import { createKeyFile, fingerprint, readZip, verifyFiles } from "@tavora/pack";
 import type { KeyObject } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { blockingChanges, hostSharedFiles, isTestFile, OfficialPublisher, PublishCancelled, WORKTREE_PREFIX, type Run } from "./official-publish";
+import { blockingChanges, HOST_ONLY, isTestFile, moduleFacingFiles, OfficialPublisher, PublishCancelled, WORKTREE_PREFIX, type Run } from "./official-publish";
 
 const SHA = "a".repeat(40);
 const manifest = (version: string, extra: object = {}) => ({ id: "tavora.notes", name: "Notes", version, apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] }, changelog: "CHANGELOG.json", ...extra });
@@ -60,10 +60,10 @@ const run: Run = async (command, args, options) => {
     if (first === "rev-parse") return `${SHA}\n`;
     if (first === "tag") return "v0.23.0\nv0.22.0\nv0.9.0\n";
     if (first === "ls-tree" && second === "--name-only") return "modules/notes\nmodules/shared\nmodules/playground\n";
-    if (first === "ls-tree") return "apps/desktop/src/main/index.ts\napps/desktop/src/shared/wire.ts\napps/desktop/src/shared/patch-notes.ts\n";
+    if (first === "ls-tree") return "apps/desktop/src/main/index.ts\napps/desktop/src/main/bridge.ts\napps/desktop/src/main/games-seen.ts\napps/desktop/src/shared/wire.ts\napps/desktop/src/shared/patch-notes.ts\n";
     if (first === "grep") {
       if (world.grepFails) throw new Error("git grep failed");
-      return `${SHA}:apps/desktop/src/main/index.ts:import { send } from "../shared/wire";\n`;
+      return `${SHA}:apps/desktop/src/main/bridge.ts:import { send } from "../shared/wire";\n${SHA}:apps/desktop/src/main/index.ts:import { seen } from "./games-seen";\n`;
     }
     if (first === "show") {
       if (second?.endsWith("modules/shared/tavora.module.json")) throw new Error("missing");
@@ -179,8 +179,15 @@ describe("publishing a built-in module from a dev build", () => {
     expect(world.uploads).toEqual([]);
   });
 
-  it("publishes when only the renderer, renderer-only shared files, the kit or tests changed", async () => {
-    world.changed = ["apps/desktop/src/renderer/components/settings/DevelopmentSection.vue", "apps/desktop/src/shared/patch-notes.ts", "apps/desktop/src/main/host.test.ts", "packages/sdk/src/index.test.ts"].join("\n");
+  it("publishes when only the renderer, renderer-only shared files, the kit, tests, texts or host-window-only files changed", async () => {
+    world.changed = [
+      "apps/desktop/src/renderer/components/settings/DevelopmentSection.vue",
+      "apps/desktop/src/shared/patch-notes.ts",
+      "apps/desktop/src/shared/locales/en.ts",
+      "apps/desktop/src/main/games-seen.ts",
+      "apps/desktop/src/main/host.test.ts",
+      "packages/sdk/src/index.test.ts",
+    ].join("\n");
     const one = publisher();
     await one.prepare("tavora.notes");
     await one.finish(key);
@@ -333,40 +340,72 @@ describe("the list of built-in modules to publish", () => {
 });
 
 describe("which changes make a module update wait for the next app release", () => {
-  const files = ["apps/desktop/src/main/index.ts", "apps/desktop/src/main/host.ts", "apps/desktop/src/preload/module.ts", "apps/desktop/src/shared/wire.ts", "apps/desktop/src/shared/i18n.ts", "apps/desktop/src/shared/locales/en.ts", "apps/desktop/src/shared/patch-notes.ts", "apps/desktop/src/shared/only-tests.ts"];
+  const A = "apps/desktop/src";
+  const files = [`${A}/main/bridge.ts`, `${A}/main/games-seen.ts`, `${A}/main/steam-played.ts`, `${A}/main/installed-list.ts`, `${A}/main/host.ts`, `${A}/main/grants.ts`, `${A}/main/steam-import.ts`, `${A}/preload/module.ts`, `${A}/shared/wire.ts`, `${A}/shared/i18n.ts`, `${A}/shared/locales/en.ts`, `${A}/shared/host-api.ts`, `${A}/shared/patch-notes.ts`, `${A}/shared/only-tests.ts`];
   const grep = [
-    `${SHA}:apps/desktop/src/main/index.ts:import { Host } from "./host";`,
-    `${SHA}:apps/desktop/src/main/host.ts:} from "../shared/i18n";`,
-    `${SHA}:apps/desktop/src/main/host.test.ts:import { x } from "../shared/only-tests";`,
-    `${SHA}:apps/desktop/src/preload/module.ts:import { wire } from '../shared/wire.ts';`,
-    `${SHA}:apps/desktop/src/shared/i18n.ts:const en = await import("./locales/en");`,
+    `${SHA}:${A}/main/bridge.ts:import { grant } from "./grants";`,
+    `${SHA}:${A}/main/bridge.ts:import type { Api } from "../shared/host-api";`,
+    `${SHA}:${A}/main/bridge.ts:import { type Api, type Other } from "../shared/host-api";`,
+    `${SHA}:${A}/main/bridge.ts:export type { Api } from "../shared/host-api";`,
+    `${SHA}:${A}/main/grants.ts:import { steamImport } from "./steam-import";`,
+    `${SHA}:${A}/main/host.ts:import { Bridge } from "./bridge";`,
+    `${SHA}:${A}/main/host.ts:import { GamesSeen } from "./games-seen";`,
+    `${SHA}:${A}/main/grants.ts:} from "../shared/i18n";`,
+    `${SHA}:${A}/main/host.ts:import { seen } from "./installed-list";`,
+    `${SHA}:${A}/main/installed-list.ts:import { played } from "./steam-played";`,
+    `${SHA}:${A}/main/host.test.ts:import { x } from "../shared/only-tests";`,
+    `${SHA}:${A}/preload/module.ts:import { wire } from '../shared/wire.ts';`,
+    `${SHA}:${A}/shared/i18n.ts:const en = await import("./locales/en");`,
   ].join("\n");
 
-  it("follows the main process and preloads into shared code, through other shared files, never from tests", () => {
-    expect([...hostSharedFiles(grep, files)].sort()).toEqual(["apps/desktop/src/shared/i18n.ts", "apps/desktop/src/shared/locales/en.ts", "apps/desktop/src/shared/wire.ts"]);
+  it("starts from the main and preload files that are not host-window-only and follows their run-time imports, never types or tests", () => {
+    const reached = moduleFacingFiles(grep, files);
+    expect([...reached].sort()).toEqual([`${A}/main/bridge.ts`, `${A}/main/grants.ts`, `${A}/main/steam-import.ts`, `${A}/preload/module.ts`, `${A}/shared/i18n.ts`, `${A}/shared/locales/en.ts`, `${A}/shared/wire.ts`].sort());
+    // Host-window-only files nothing module-facing loads, a type-only import and a file only a test loads stay out.
+    for (const file of ["main/host.ts", "main/games-seen.ts", "main/installed-list.ts", "main/steam-played.ts", "shared/host-api.ts", "shared/only-tests.ts"]) expect(reached.has(`${A}/${file}`)).toBe(false);
   });
 
-  it("blocks on host, preload, SDK and schema sources and host-loaded shared files; never on the renderer, renderer-only shared files, the kit or tests", () => {
-    const shared = hostSharedFiles(grep, files);
+  it("blocks on SDK, schema and pack sources, on any main or preload file nobody sorted, and on host-window-only or shared files module-facing code loads", () => {
+    const reached = moduleFacingFiles(grep, files);
     const changed = [
-      "apps/desktop/src/main/steam-import.ts",
-      "apps/desktop/src/preload/relay.ts",
+      `${A}/main/bridge.ts`, // module-facing
+      `${A}/main/never-heard-of.ts`, // new, unsorted: blocks
+      `${A}/main/steam-import.ts`, // host-window-only, but grants.ts loads it
+      `${A}/preload/relay.ts`,
+      `${A}/shared/wire.ts`, // loaded by the module preload
+      `${A}/shared/i18n.ts`, // loaded by module-facing code
       "packages/sdk/src/protocol.ts",
       "packages/module-schema/src/index.ts",
-      "apps/desktop/src/shared/locales/en.ts",
-      "apps/desktop/src/shared/patch-notes.ts",
-      "apps/desktop/src/renderer/App.vue",
-      "apps/desktop/src/main/official-publish.test.ts",
-      "packages/sdk/src/store.test.ts",
-      "apps/desktop/src/main/panel-views.test-helper.ts",
+      "packages/pack/src/zip.ts",
     ];
-    expect(blockingChanges(changed, shared)).toEqual(["apps/desktop/src/main/steam-import.ts", "apps/desktop/src/preload/relay.ts", "packages/sdk/src/protocol.ts", "packages/module-schema/src/index.ts", "apps/desktop/src/shared/locales/en.ts"]);
-    expect(isTestFile("apps/desktop/src/main/steam-appinfo.fixture.ts")).toBe(true);
+    expect(blockingChanges(changed, reached)).toEqual(changed);
   });
 
-  it("on this repo: the host loads wire and the locales; patch notes are the renderer's only", () => {
-    // The real files, in git grep's form, so the rule is checked against the code as it is.
-    const root = path.resolve(__dirname, "../../../..");
+  it("does not block on tests, the renderer, text tables, type files, host-window-only files or shared files only the host window loads", () => {
+    const reached = moduleFacingFiles(grep, files);
+    const changed = [
+      `${A}/main/host.ts`,
+      `${A}/main/games-seen.ts`,
+      `${A}/main/installed-list.ts`,
+      `${A}/main/steam-played.ts`,
+      `${A}/main/index.ts`,
+      `${A}/preload/host.ts`,
+      `${A}/shared/locales/en.ts`,
+      `${A}/shared/locales/de.ts`,
+      `${A}/shared/host-api.ts`,
+      `${A}/shared/patch-notes.ts`,
+      `${A}/renderer/App.vue`,
+      `${A}/main/official-publish.test.ts`,
+      `${A}/main/panel-views.test-helper.ts`,
+      "packages/sdk/src/store.test.ts",
+    ];
+    expect(blockingChanges(changed, reached)).toEqual([]);
+    expect(isTestFile(`${A}/main/steam-appinfo.fixture.ts`)).toBe(true);
+  });
+
+  // The real files, in git grep's form, so the rule is checked against the code as it is.
+  const root = path.resolve(__dirname, "../../../..");
+  const real = () => {
     const list: string[] = [];
     const walk = (dir: string) => {
       for (const name of readdirSync(path.join(root, dir))) {
@@ -375,11 +414,41 @@ describe("which changes make a module update wait for the next app release", () 
         else list.push(rel);
       }
     };
-    for (const dir of ["apps/desktop/src/main", "apps/desktop/src/preload", "apps/desktop/src/shared"]) walk(dir);
+    for (const dir of [`${A}/main`, `${A}/preload`, `${A}/shared`]) walk(dir);
     const lines = list.filter((file) => /\.[cm]?[jt]s$/.test(file)).flatMap((file) => readFileSync(path.join(root, file), "utf8").split(/\r?\n/).map((text) => `${SHA}:${file}:${text}`));
-    const shared = hostSharedFiles(lines.join("\n"), list);
-    expect(shared.has("apps/desktop/src/shared/wire.ts")).toBe(true);
-    expect(shared.has("apps/desktop/src/shared/locales/en.ts")).toBe(true);
-    expect(shared.has("apps/desktop/src/shared/patch-notes.ts")).toBe(false);
+    return { list, reached: moduleFacingFiles(lines.join("\n"), list) };
+  };
+
+  it("on this repo: the bridge, the module view, the module preload and what they load block", () => {
+    const { reached } = real();
+    for (const file of ["main/bridge.ts", "main/module-view.ts", "main/streaming.ts", "main/game-overlay-service.ts", "main/overlays.ts", "main/hotkeys.ts", "main/leaderboards.ts", "main/assets.ts", "main/registry.ts", "main/errors.ts", "preload/module.ts", "preload/relay.ts", "shared/wire.ts", "shared/i18n.ts"]) {
+      expect(blockingChanges([`${A}/${file}`], reached), file).toEqual([`${A}/${file}`]);
+    }
+    // Patch notes are the renderer's only; the host API file is types the main process only imports as types.
+    expect(reached.has(`${A}/shared/patch-notes.ts`)).toBe(false);
+    expect(reached.has(`${A}/shared/host-api.ts`)).toBe(false);
+  });
+
+  it("on this repo: no host-window-only file is one module-facing code loads (else it must come off the list)", () => {
+    const { list, reached } = real();
+    const loaded = [...HOST_ONLY].filter((file) => reached.has(file));
+    expect(loaded).toEqual([]);
+    // And the list names real files.
+    expect([...HOST_ONLY].filter((file) => !list.includes(file))).toEqual([]);
+  });
+
+  it("on this repo: the welcome and game-detection work since v0.23.31 does not block a module", () => {
+    const { reached } = real();
+    const changed = ["catalog-client", "game-watch", "games-seen", "host", "index", "installed-list", "launcher-games", "steam-played"].map((name) => `${A}/main/${name}.ts`);
+    changed.push(`${A}/preload/host.ts`, `${A}/shared/host-api.ts`, `${A}/shared/locales/en.ts`, `${A}/shared/locales/de.ts`, `${A}/shared/patch-notes.ts`);
+    expect(blockingChanges(changed, reached)).toEqual([]);
+  });
+
+  it("on this repo: the publish tooling's own files do not block, so this change needs no app release", () => {
+    const { reached } = real();
+    const changed = [`${A}/main/official-publish.ts`, `${A}/main/official-publish.test.ts`, `${A}/renderer/components/settings/DevelopmentSection.vue`, `${A}/renderer/components/developer/OfficialPublishDialog.vue`, `${A}/shared/locales/en.ts`, `${A}/shared/locales/de.ts`];
+    expect(blockingChanges(changed, reached)).toEqual([]);
+    // Nothing module-facing loads the tooling.
+    for (const file of ["main/official-publish.ts", "main/official-key-store.ts", "main/module-publish.ts"]) expect(reached.has(`${A}/${file}`)).toBe(false);
   });
 });

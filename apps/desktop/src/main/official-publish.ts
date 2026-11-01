@@ -14,8 +14,8 @@ import { BROWSER_MODULE_ID, OFFICIAL_PREFIX } from "./registry";
 // update from the catalogue only when signed by the pinned Tavora key, so this is where that signing happens. It builds
 // nothing from the working folder: the module is built in a fresh temporary worktree at origin/main, CI must be green
 // for that commit, the version must be newer than the catalogue's and than the module in the last app release, and it
-// refuses when the host code modules run on (the main process, the preloads, the SDK, the manifest schema) changed since
-// that release, because the shipped app could not run it. The flow has two halves: prepare (build and pack, shown as a
+// refuses when the host code modules run on (the SDK, the manifest schema, the module-facing part of the main process and
+// the module preload; see blockingChanges) changed since that release, because the shipped app could not run it. The flow has two halves: prepare (build and pack, shown as a
 // preview) and finish (sign with the key the host hands in and upload exactly what the preview showed). The key is
 // never read or kept here; the host loads it for finish and drops it.
 
@@ -30,10 +30,64 @@ const APP = "apps/desktop/src";
 export const PROTOCOL_PATHS = ["packages/sdk/src", "packages/module-schema/src", "packages/pack/src"] as const;
 /** What this dev Tavora itself uses to check, pack and sign: it must be the released code, or the zip may not be one the shipped app accepts. */
 export const SIGNING_PATHS = ["packages/pack/src", "packages/module-schema/src"] as const;
-/** The host code: everything in the main process and the preloads. */
+/** The host code: the main process and the preloads. Every file in it blocks, except the host-window-only ones below that no module-facing code loads. */
 export const HOST_PATHS = [`${APP}/main`, `${APP}/preload`] as const;
-/** Shared code: it counts when the main process or a preload loads it (import graph), not when only the renderer does. */
+/** Shared code: it counts when module-facing host code loads it (import graph), not when only the renderer or the host window does. */
 export const SHARED_PATH = `${APP}/shared`;
+/** Text tables for the host's own screens. A changed word can't make a module need host behaviour the shipped app lacks. */
+const TEXT_TABLES = `${SHARED_PATH}/locales/`;
+
+/**
+ * Host files that only the host window uses: onboarding and the Add a game list, game detection, the catalogue client for
+ * the app's own pages, the account, the cloud copy and publishing screens, the host window's preload, and the files that
+ * start the app and wire these together. A change in one of them can't change what a module sees or does.
+ * Nothing else is listed (a file not listed blocks, so a new file is safe until someone decides), and a listed file still
+ * blocks when module-facing code imports it (moduleFacingFiles).
+ * `host.ts` also hands the bridge its callbacks (menus, saving, links); the module-facing behaviour behind them is in the
+ * files it calls (module-view.ts, bridge.ts and the services), which block. The wiring itself is the one thing this can't see.
+ */
+export const HOST_ONLY: ReadonlySet<string> = new Set(
+  [
+    "main/index.ts",
+    "main/host.ts",
+    "main/startup-failure.ts",
+    "main/actions.ts",
+    "main/games-seen.ts",
+    "main/steam-played.ts",
+    "main/installed-list.ts",
+    "main/launcher-games.ts",
+    "main/game-watch.ts",
+    "main/steam-import.ts",
+    "main/steam-appinfo.ts",
+    "main/steam-shortcuts.ts",
+    "main/pe-icon.ts",
+    "main/hosted-icons.ts",
+    "main/icon-sync.ts",
+    "main/share-icons.ts",
+    "main/catalog-client.ts",
+    "main/catalog-readme.ts",
+    "main/module-page.ts",
+    "main/publisher-names.ts",
+    "main/account.ts",
+    "main/account-key.ts",
+    "main/sign-in.ts",
+    "main/pairing.ts",
+    "main/developer-keys.ts",
+    "main/device-name.ts",
+    "main/inbox.ts",
+    "main/example-copy.ts",
+    "main/cloud-copy.ts",
+    "main/cloud-copy-sync.ts",
+    "main/copy-crypto.ts",
+    "main/copy-folder.ts",
+    // The publish tooling itself (this file, its key store and the module publish button).
+    "main/official-publish.ts",
+    "main/official-key-store.ts",
+    "main/module-publish.ts",
+    // The host window's preload; module pages load module.ts.
+    "preload/host.ts",
+  ].map((file) => `${APP}/${file}`),
+);
 
 /** Built-in ids that never go to the catalogue: the Browser is a host panel and the Playground a developer specimen. */
 export const NEVER_PUBLISHED: ReadonlySet<string> = new Set([BROWSER_MODULE_ID, "tavora.playground"]);
@@ -106,11 +160,23 @@ export function isTestFile(file: string): boolean {
 /** Relative imports in `git grep` lines (`<rev>:<path>:<text>`): from, import, export … from and import(). */
 const IMPORT = /(?:\bfrom|\bimport)\s*\(?\s*["'](\.{1,2}\/[^"']+)["']/g;
 
+/** An import or re-export that brings in types only: it is gone from the built code, so it loads nothing. */
+function isTypeOnly(text: string): boolean {
+  if (/^\s*(?:import|export)\s+type\b/.test(text)) return true;
+  const named = /^\s*(?:import|export)\s*\{([^}]*)\}\s*from\b/.exec(text);
+  const names = named ? named[1]!.split(",").map((name) => name.trim()).filter(Boolean) : [];
+  return names.length > 0 && names.every((name) => name.startsWith("type "));
+}
+
+const isHostFile = (file: string) => HOST_PATHS.some((root) => file.startsWith(`${root}/`));
+
 /**
- * The shared files the main process or a preload loads, directly or through other shared files, at one commit.
- * `grep` is `git grep` output over main, preload and shared; `files` lists every file there at that commit.
+ * The files module-facing host code loads at one commit. Every non-test main or preload file that is not host-window-only
+ * is a start; what it imports at run time, directly or through other files, comes with it (host-only and shared files
+ * too). `grep` is `git grep` output over main, preload and shared; `files` lists every file there at that commit.
+ * Type-only imports don't count (they are gone from the built code), and tests never do.
  */
-export function hostSharedFiles(grep: string, files: readonly string[]): Set<string> {
+export function moduleFacingFiles(grep: string, files: readonly string[]): Set<string> {
   const known = new Set(files);
   const imports = new Map<string, Set<string>>();
   for (const line of grep.split(/\r?\n/)) {
@@ -118,20 +184,21 @@ export function hostSharedFiles(grep: string, files: readonly string[]): Set<str
     const match = /^[^:]+:([^:]+):(.*)$/.exec(line);
     if (!match) continue;
     const [, file, text] = match as unknown as [string, string, string];
-    for (const found of text.matchAll(IMPORT)) {
-      const target = resolveImport(file, found[1]!, known);
+    const found = [...text.matchAll(IMPORT)];
+    // Only a line with a single import can be told apart as type-only; anything odder counts.
+    if (found.length === 1 && isTypeOnly(text)) continue;
+    for (const one of found) {
+      const target = resolveImport(file, one[1]!, known);
       if (target) imports.set(file, (imports.get(file) ?? new Set()).add(target));
     }
   }
-  const reached = new Set<string>();
-  const queue = files.filter((file) => HOST_PATHS.some((root) => file.startsWith(`${root}/`)) && !isTestFile(file));
-  const seen = new Set(queue);
+  const queue = files.filter((file) => isHostFile(file) && !HOST_ONLY.has(file) && !isTestFile(file));
+  const reached = new Set(queue);
   while (queue.length) {
     const file = queue.pop()!;
-    if (file.startsWith(`${SHARED_PATH}/`)) reached.add(file);
     for (const next of imports.get(file) ?? []) {
-      if (seen.has(next) || isTestFile(next)) continue;
-      seen.add(next);
+      if (reached.has(next) || isTestFile(next)) continue;
+      reached.add(next);
       queue.push(next);
     }
   }
@@ -144,12 +211,22 @@ function resolveImport(from: string, spec: string, known: ReadonlySet<string>): 
   return null;
 }
 
-/** Of the files changed since the last release, those the shipped app runs modules on; empty when a module update can go out. */
-export function blockingChanges(changed: readonly string[], hostShared: ReadonlySet<string>): string[] {
+/** Whether a changed file needs the import graph to be judged: a host-window-only file, or a shared file that isn't a text table. */
+const needsGraph = (file: string) => !isTestFile(file) && (HOST_ONLY.has(file) || (file.startsWith(`${SHARED_PATH}/`) && !file.startsWith(TEXT_TABLES)));
+
+/**
+ * Of the files changed since the last release, those the shipped app runs modules on; empty when a module update can go out.
+ * `moduleFacing` is moduleFacingFiles for the new commit. Blocking: the SDK, schema and pack sources; any main or preload
+ * file that isn't host-window-only (the safe default for a file nobody has sorted); a host-only or shared file that
+ * module-facing code loads. Never: tests, the renderer, text tables, host-window-only files nothing module-facing loads.
+ */
+export function blockingChanges(changed: readonly string[], moduleFacing: ReadonlySet<string>): string[] {
   return changed.filter((file) => {
     if (isTestFile(file)) return false;
-    if ([...PROTOCOL_PATHS, ...HOST_PATHS].some((root) => file.startsWith(`${root}/`))) return true;
-    return hostShared.has(file);
+    if (PROTOCOL_PATHS.some((root) => file.startsWith(`${root}/`))) return true;
+    if (isHostFile(file)) return !HOST_ONLY.has(file) || moduleFacing.has(file);
+    if (file.startsWith(TEXT_TABLES)) return false;
+    return moduleFacing.has(file);
   });
 }
 
@@ -463,8 +540,8 @@ export class OfficialPublisher {
   private async hostChanges(git: Git, { commit, release }: Head): Promise<string[]> {
     const changed = (await git("diff", "--name-only", release, commit, "--", ...PROTOCOL_PATHS, ...HOST_PATHS, SHARED_PATH)).split(/\r?\n/).filter(Boolean);
     if (!changed.length) return [];
-    // Only a shared file needs the import graph; main and preload files count anyway.
-    if (!changed.some((file) => file.startsWith(`${SHARED_PATH}/`) && !isTestFile(file))) return blockingChanges(changed, new Set());
+    // Only a host-window-only or shared file needs the import graph; the rest is judged by its path.
+    if (!changed.some(needsGraph)) return blockingChanges(changed, new Set());
     const files = (await git("ls-tree", "-r", "--name-only", commit, "--", ...HOST_PATHS, SHARED_PATH)).split(/\r?\n/).filter(Boolean);
     // Plain output whatever git is set to; a failure refuses, since counting nothing would let host changes through.
     // (git grep also exits 1 when nothing matches; main always imports shared code, so that never happens here.)
@@ -472,7 +549,7 @@ export class OfficialPublisher {
       if (error instanceof PublishCancelled) throw error;
       throw new UserError("officialPublish.error.changes");
     });
-    return blockingChanges(changed, hostSharedFiles(grep, files));
+    return blockingChanges(changed, moduleFacingFiles(grep, files));
   }
 
   /** Whether CI finished green for that exact commit, still runs (or hasn't started), or failed. */
