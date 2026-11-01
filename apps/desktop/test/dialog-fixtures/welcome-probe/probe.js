@@ -40,6 +40,8 @@ async function start() {
       waiting.delete(message.id);
     } else if (message?.event) {
       events.push(message);
+      // Told its dialog is open, the page switches to what the dialog shows (like a settings page), here a red page.
+      if (message.event === "panel.dialog") document.body.style.background = message.data?.open ? "rgb(200, 0, 0)" : "rgb(0, 200, 0)";
     }
   });
   port.start();

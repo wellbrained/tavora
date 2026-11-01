@@ -172,7 +172,7 @@ export class PanelViews {
   private openingState: { startedAt: number; timer: ReturnType<typeof setTimeout>; tag: string } | null = null;
   private overlayOpen = false;
   private overlayChanges = 0;
-  private dialogState: { instanceId: string; width: number; height: number; bounds: PanelRect | null } | null = null;
+  private dialogState: { instanceId: string; width: number; height: number; bounds: PanelRect | null; still: Promise<string | null> } | null = null;
 
   constructor(private readonly deps: PanelViewsDeps) {}
 
@@ -526,8 +526,9 @@ export class PanelViews {
     const started = (this.deps.now ?? performance.now.bind(performance))();
     await Promise.all(
       [...this.entries].map(async ([instanceId, { adapter }]) => {
-        if (this.lent.has(instanceId) || !this.bounds.has(instanceId) || adapter.status !== "ready" || !adapter.revealed || !adapter.capturable) return;
-        const image = await Promise.race([adapter.capture().catch(() => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), FREEZE_TIMEOUT_MS))]);
+        if (!this.canBePictured(instanceId, adapter)) return;
+        // A panel going into its dialog has already told its module, which may have changed the page: its picture is the one taken before.
+        const image = this.dialogState?.instanceId === instanceId ? await this.dialogState.still : await this.pictureOf(adapter);
         if (image) images[instanceId] = image;
       }),
     );
@@ -539,6 +540,16 @@ export class PanelViews {
     this.deps.log?.(`overlay: ${Object.keys(images).length} of ${this.inSlots().length} pictures taken in ${Math.round(taken - started)} ms`);
     if (change !== this.overlayChanges || this.deps.windowGone()) return;
     for (const [instanceId, { adapter }] of this.entries) if (!this.lent.has(instanceId) && !this.inDialog(instanceId)) adapter.setVisible(false);
+  }
+
+  /** A panel in its slot, ready and drawn: a still image can stand in for it. */
+  private canBePictured(instanceId: string, adapter: PanelViewAdapter): boolean {
+    return !this.lent.has(instanceId) && this.bounds.has(instanceId) && adapter.status === "ready" && adapter.revealed && adapter.capturable;
+  }
+
+  /** A still image of the panel, or null when it takes longer than FREEZE_TIMEOUT_MS. */
+  private pictureOf(adapter: PanelViewAdapter): Promise<string | null> {
+    return Promise.race([adapter.capture().catch(() => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), FREEZE_TIMEOUT_MS))]);
   }
 
   /**
@@ -572,14 +583,20 @@ export class PanelViews {
   /**
    * The panel may go in a dialog: it is in sight in the workspace, or (`unplaced`, for the Overlay page) it runs in the
    * background with no slot, and its dialog is over that page. Opens it (a dialog already open closes) unless the panel has it.
+   * The panel's module hears of the dialog only once its still image is taken (a panel with no slot has none), so the image
+   * shows the page as it was before the module switched it to what the dialog shows.
    */
   openDialog(instanceId: string, size: { width: number; height: number }, unplaced = false): boolean {
     const adapter = this.get(instanceId);
     if (!adapter || adapter.kind !== "module" || (!unplaced && !this.bounds.has(instanceId)) || this.lent.has(instanceId)) return false;
     if (this.dialogState?.instanceId === instanceId) return false;
     this.closeDialog();
-    this.dialogState = { instanceId, ...size, bounds: null };
-    adapter.setInDialog(true);
+    const still = this.canBePictured(instanceId, adapter) ? this.pictureOf(adapter) : Promise.resolve(null);
+    const state = { instanceId, ...size, bounds: null, still };
+    this.dialogState = state;
+    void still.then(() => {
+      if (this.dialogState === state) adapter.setInDialog(true);
+    });
     return true;
   }
 
