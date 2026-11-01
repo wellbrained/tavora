@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { TooltipProvider } from "reka-ui";
 import AddGameDialog from "./components/AddGameDialog.vue";
+import AddPersonalDialog from "./components/AddPersonalDialog.vue";
 import AddModuleDialog from "./components/AddModuleDialog.vue";
 import CloudCopyDialog from "./components/CloudCopyDialog.vue";
 import PairingDialog from "./components/PairingDialog.vue";
@@ -59,6 +60,7 @@ const toastPosition = computed(() => (settingsOpen.value && state.value ? state.
     <ProfileDialog />
     <SearchDialog />
     <AddGameDialog v-if="dialog?.kind === 'add-game'" />
+    <AddPersonalDialog v-if="dialog?.kind === 'add-personal'" />
     <SteamImportDialog v-else-if="dialog?.kind === 'steam-import'" />
     <AddModuleDialog v-else-if="dialog?.kind === 'add-module'" />
     <ShareIconsDialog v-else-if="dialog?.kind === 'share-icons'" :request="dialog" />

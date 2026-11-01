@@ -24,6 +24,8 @@ export interface InstalledGame {
   index: number;
   /** The game's install folder, when the launcher names it; game-watch.ts looks for running programs inside it. */
   folder?: string;
+  /** When it was installed, in milliseconds since 1970, when the launcher says (Windows' `InstallDate`). */
+  installedAt?: number;
 }
 
 /** Earlier sources win when two launchers know the same game. Battle.net comes first. */
@@ -117,9 +119,18 @@ export function gamesFromUninstall(output: string): InstalledGame[] {
     if (!name || !icon) continue;
     const source: LauncherSource = /blizzard|activision/i.test(block.publisher ?? "") ? "battlenet" : "windows";
     const folder = installFolder(block.installlocation);
-    games.push({ source, name, ...icon, ...(folder ? { folder } : {}) });
+    const installedAt = parseInstallDate(block.installdate);
+    games.push({ source, name, ...icon, ...(folder ? { folder } : {}), ...(installedAt ? { installedAt } : {}) });
   }
   return games;
+}
+
+/** Windows' `InstallDate` (`20250314`) as milliseconds since 1970, or undefined when it is not a date. */
+export function parseInstallDate(value: string | undefined): number | undefined {
+  const match = /^(\d{4})(\d{2})(\d{2})$/.exec(value?.trim() ?? "");
+  if (!match) return undefined;
+  const at = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isFinite(at) && Number(match[1]) >= 1995 ? at : undefined;
 }
 
 export function gamesFromGog(output: string): InstalledGame[] {

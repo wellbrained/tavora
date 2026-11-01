@@ -25,11 +25,10 @@ test("a personal workspace offers only modules for any game, and is worded as a 
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), developmentFolders: [forOneGame, needsAGame] }));
   const { app, page } = await launch(userData);
   try {
+    // The rail's Add button offers a personal workspace next to a game.
     await page.getByTestId("rail-add-game").click();
-    await page.getByTestId("game-search").fill("Personal");
-    await page.getByTestId("open-add-personal").click();
-    // What was typed for a game carries over as the workspace's name.
-    await expect(page.getByTestId("personal-name")).toHaveValue("Personal");
+    await page.locator('[role="menu"][data-state="open"] [data-testid="rail-add-personal-item"]').click();
+    await page.getByTestId("personal-name").fill("Personal");
     await page.getByTestId("create-personal").click();
     await expect(page.getByTestId("rail-workspace-local-personal")).toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("empty-workspace")).toBeVisible();

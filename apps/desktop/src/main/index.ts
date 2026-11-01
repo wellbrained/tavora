@@ -6,6 +6,7 @@ import { parseWindowStart } from "./background-window";
 import { errorLog } from "./diagnostics";
 import { Host } from "./host";
 import { parseTestHosts } from "./network";
+import { parseTestInstalled } from "./installed-list";
 import { readGrayscaleText } from "./saved-data";
 import { reportStartupFailure } from "./startup-failure";
 import { findUnsafeSwitch } from "./unsafe-switches";
@@ -188,6 +189,8 @@ if (!app.requestSingleInstanceLock()) {
         aiUsageUrl: !app.isPackaged && /^http:\/\/127\.0\.0\.1:\d+\//.test(process.env.TAVORA_TEST_AI_USAGE_URL ?? "") ? process.env.TAVORA_TEST_AI_USAGE_URL : undefined,
         // Tests only: Steam is taken to run this game, so a test sees a game running.
         testSteamAppId: !app.isPackaged && /^\d+$/.test(process.env.TAVORA_TEST_STEAM_APP ?? "") ? Number(process.env.TAVORA_TEST_STEAM_APP) : undefined,
+        // Tests only: the games installed on this PC are these (a JSON list of launcher games), never the PC's own.
+        testInstalled: !app.isPackaged && process.env.TAVORA_TEST_INSTALLED ? parseTestInstalled(process.env.TAVORA_TEST_INSTALLED) : undefined,
         systemLocale: !app.isPackaged ? process.env.TAVORA_LOCALE : undefined,
         systemTheme: !app.isPackaged && (process.env.TAVORA_SYSTEM_THEME === "dark" || process.env.TAVORA_SYSTEM_THEME === "light") ? process.env.TAVORA_SYSTEM_THEME : undefined,
         devServer,

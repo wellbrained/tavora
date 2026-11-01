@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, launch, newUserData, openWorkspace, panels, seedLibrary } from "./harness";
+import { expectModuleText, launch, newUserData, openAddGame, openWorkspace, panels, seedLibrary } from "./harness";
 
 interface Listed {
   entry: Record<string, unknown>;
@@ -324,6 +324,58 @@ test("a user sees a module's rating on its card, how many gave each star, and it
   }
 });
 
+test("the Add a game picker badges games that have modules and adds the ticked ones with the game", async () => {
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const owner = fingerprint(key);
+  const map = await packed("wellbrained.sat-map", "Sat Map", key);
+  const calc = await packed("wellbrained.sat-calc", "Sat Calculator", key);
+  const { url, server } = await catalogServer([
+    { entry: listing("wellbrained.sat-map", "Sat Map", map, owner, { games: ["factorio"], description: "Map and Pings" }), body: map },
+    { entry: listing("wellbrained.sat-calc", "Sat Calculator", calc, owner, { games: ["factorio"], description: "Planner" }), body: calc },
+  ]);
+  const installed = JSON.stringify([{ name: "Factorio", installedAt: Date.now() - 24 * 60 * 60 * 1000 }, { name: "Mystery Game" }]);
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url, TAVORA_TEST_INSTALLED: installed } });
+  try {
+    await openAddGame(page);
+    // The badge counts the modules made for the game; a game without any has none, and its panel says so.
+    await expect(page.getByTestId("module-badge-factorio")).toHaveText("2 modules");
+    await expect(page.getByTestId("add-game-dialog").locator('[data-testid^="module-badge-"]')).toHaveCount(1);
+    await expect(page.getByTestId("panel-name")).toHaveText("Factorio");
+    await expect(page.getByTestId("pick-module-wellbrained.sat-map")).toBeVisible();
+    await expect(page.getByTestId("pick-module-wellbrained.sat-map")).toContainText("community");
+    await expect(page.getByTestId("panel-add")).toHaveText("Add game");
+    await page.getByTestId("game-search").press("ArrowDown");
+    await expect(page.getByTestId("panel-name")).toHaveText("Mystery Game");
+    await expect(page.getByTestId("panel-no-modules")).toBeVisible();
+    await expect(page.getByTestId("panel-add")).toHaveText("Add game");
+    await page.getByTestId("game-search").press("ArrowUp");
+
+    // Tab moves into the ticks, Space ticks, Esc goes back to the search without closing.
+    await page.getByTestId("game-search").press("Tab");
+    const first = page.getByTestId("pick-module-wellbrained.sat-calc").getByRole("checkbox");
+    await expect(first).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(first).toBeChecked();
+    await expect(page.getByTestId("panel-add")).toHaveText("Add game + 1");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("game-search")).toBeFocused();
+    await expect(page.getByTestId("add-game-dialog")).toBeVisible();
+    // The tick is remembered for the game while the picker is open.
+    await page.getByTestId("game-search").press("ArrowDown");
+    await page.getByTestId("game-search").press("ArrowUp");
+    await expect(page.getByTestId("panel-add")).toHaveText("Add game + 1");
+
+    // Enter adds the game and the ticked module, which opens in the new workspace.
+    await page.getByTestId("game-search").press("Enter");
+    await expect(page.getByTestId("rail-workspace-factorio")).toHaveAttribute("aria-current", "page");
+    await expectModuleText(app, "wellbrained.sat-calc", "version", "1.0.0");
+    await expect(panels(page, "wellbrained.sat-map")).toHaveCount(0);
+  } finally {
+    await app.close();
+    server.close();
+  }
+});
+
 test("a zip that is not the listed one, or not from the listed key, writes nothing", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const stranger = generateKeyPairSync("ed25519").privateKey;
@@ -362,8 +414,8 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
   const { app, page } = await launch(userData, [], { env: { TAVORA_API_URL: url } });
   try {
     await page.getByTestId("rail-add-game").click();
-    await page.getByTestId("game-search").fill("Personal");
-    await page.getByTestId("open-add-personal").click();
+    await page.locator('[role="menu"][data-state="open"] [data-testid="rail-add-personal-item"]').click();
+    await page.getByTestId("personal-name").fill("Personal");
     await page.getByTestId("create-personal").click();
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();

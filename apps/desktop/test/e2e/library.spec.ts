@@ -5,6 +5,7 @@ import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import {
   desktopDir,
+  openAddGame,
   expectModuleText,
   launch,
   newUserData,
@@ -107,23 +108,32 @@ test("the first-run welcome moves with the arrow keys, and makes a personal spac
   await app.close();
 });
 
-test("the Add a game list ranks real name starts first and sorts by the name shown", async () => {
+
+test("the Add a game list starts with this PC's games, newest first, and ranks real name starts first when searching", async () => {
   const { url, server } = await gameService([
     { id: "eldoran", name: "Eldoran" },
     { id: "eldevin", name: "Eldevin" },
     { id: "eldgear", name: "Eldgear" },
   ]);
-  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
-  await page.getByTestId("rail-add-game").click();
-  const rows = page.getByTestId("add-game-dialog").locator('[data-testid^="catalog-"]');
-  // Nothing typed: the first games by the name you see, so Sid Meier's game is not between B and C.
-  await expect(rows.first()).toHaveAttribute("data-testid", "catalog-age-of-empires-2");
-  await expect(rows.nth(4)).toHaveAttribute("data-testid", "catalog-battlefield-6");
-  await expect(rows.nth(5)).toHaveAttribute("data-testid", "catalog-counter-strike-2");
+  const day = 24 * 60 * 60 * 1000;
+  const installed = JSON.stringify([
+    { name: "Hades II", installedAt: Date.now() - 40 * day },
+    { name: "Mystery Game", installedAt: Date.now() - 2 * day },
+    { name: "Rust", steamAppId: 252490, installedAt: Date.now() - 400 * day },
+  ]);
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url, TAVORA_TEST_INSTALLED: installed } });
+  await openAddGame(page);
+  const rows = page.getByTestId("add-game-dialog").locator('[role="option"]');
+  // Nothing typed: the games on this PC, the one installed last first.
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText("Mystery Game");
+  await expect(rows.nth(0)).toContainText("Installed 2 days ago");
+  await expect(rows.nth(1)).toContainText("Hades II");
+  await expect(rows.nth(2)).toContainText("Installed in");
 
   await page.getByTestId("game-search").fill("eld");
   await expect(page.getByTestId("catalog-eldoran")).toBeVisible();
-  const ids = await rows.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-testid")));
+  const ids = await rows.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-testid")).filter((id) => id !== "add-custom"));
   expect(ids).toEqual([
     "catalog-elden-ring",
     "catalog-eldevin",
@@ -137,22 +147,24 @@ test("the Add a game list ranks real name starts first and sorts by the name sho
   server.close();
 });
 
-test("the Add a game list works from the keyboard", async () => {
+test("the Add a game picker works from the keyboard", async () => {
   const { url, server } = await gameService([
     { id: "eldoran", name: "Eldoran" },
     { id: "eldevin", name: "Eldevin" },
   ]);
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
-  await page.getByTestId("rail-add-game").click();
+  await openAddGame(page);
   const search = page.getByTestId("game-search");
   const rows = page.getByTestId("add-game-dialog").locator('[role="option"]');
   await search.fill("eld");
   await expect(page.getByTestId("catalog-eldoran")).toBeVisible();
   // The top match is highlighted at once; focus stays in the field.
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");
-  await expect(search).toHaveAttribute("aria-activedescendant", "game-option-elden-ring");
+  await expect(search).toHaveAttribute("aria-activedescendant", "game-results-option-0");
+  await expect(page.getByTestId("panel-name")).toHaveText("Elden Ring");
   await search.press("ArrowDown");
   await expect(rows.nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("panel-name")).not.toHaveText("Elden Ring");
   await expect(search).toBeFocused();
   await search.press("ArrowUp");
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");
@@ -161,16 +173,21 @@ test("the Add a game list works from the keyboard", async () => {
   await expect(rows.nth(2)).toHaveAttribute("aria-selected", "true");
   await expect(rows.nth(2).locator("kbd")).toHaveCount(1);
   await rows.first().hover();
-  await page.screenshot({ path: path.join(desktopDir, "test-results", "add-game-keyboard.png") });
   await search.press("Enter");
   await expect(page.getByTestId("rail-workspace-elden-ring")).toHaveAttribute("aria-current", "page");
 
-  // No match: Enter adds the typed name as a custom game.
-  await page.getByTestId("rail-add-game").click();
+  // Enter adds the highlighted match; the typed name is added through its own last row.
+  await openAddGame(page);
   await page.getByTestId("game-search").fill("My Keyboard Game");
+  await expect(page.getByTestId("add-custom")).toBeVisible();
+  await expect(page.getByTestId("panel-name")).toHaveText("My Keyboard Game");
   await page.getByTestId("game-search").press("Enter");
   await expect(page.getByTestId("rail-workspace-local-my-keyboard-game")).toHaveAttribute("aria-current", "page");
-  await page.waitForTimeout(500);
+
+  // Esc in the search closes the picker.
+  await openAddGame(page);
+  await page.getByTestId("game-search").press("Escape");
+  await expect(page.getByTestId("add-game-dialog")).toHaveCount(0);
   await app.close();
   server.close();
 });
@@ -198,7 +215,7 @@ test("users add games from the built-in list or by name", async () => {
   await expect(page.getByTestId("empty-workspace")).toBeVisible();
   await expect(page.getByTestId("empty-add-module")).toBeVisible();
 
-  await page.getByTestId("rail-add-game").click();
+  await openAddGame(page);
   // Games already in the library are not offered again.
   await page.getByTestId("game-search").fill("elden");
   await expect(page.getByTestId("catalog-elden-ring")).toHaveCount(0);
@@ -429,7 +446,7 @@ test("a workspace in Trash is deleted for good after 30 days or when the user sa
   await again.page.keyboard.press("Escape");
 
   // Added again, the game starts from nothing.
-  await again.page.getByTestId("rail-add-game").click();
+  await openAddGame(again.page);
   await again.page.getByTestId("game-search").fill("satisf");
   await again.page.getByTestId("catalog-satisfactory").click();
   await expect(panels(again.page, TODOS)).toHaveCount(1);

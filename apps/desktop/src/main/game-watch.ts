@@ -82,6 +82,32 @@ export function runningGames(entries: readonly WorkspaceEntry[], installed: read
   return running;
 }
 
+/**
+ * The keys (installed-list.ts) of the installed games running now, library or not: Steam's running game, or a
+ * running program inside a game's own install folder. Used to remember when each game was last seen.
+ */
+export function runningInstalled(installed: readonly InstalledGame[], programs: Iterable<string>, steamAppId: number | null, keyOf: (game: InstalledGame) => string): Set<string> {
+  const running = new Set<string>();
+  if (steamAppId) for (const game of installed) if (game.steamAppId === steamAppId) running.add(keyOf(game));
+  const claims = new Map<string, Set<string>>();
+  for (const game of installed) {
+    const key = gameFolderKey(folderOf(game));
+    if (key) claims.set(key, (claims.get(key) ?? new Set()).add(normalizeName(game.name)));
+  }
+  const folders = new Map<string, string[]>();
+  for (const game of installed) {
+    const key = gameFolderKey(folderOf(game));
+    if (key && claims.get(key)!.size === 1) folders.set(key, [...(folders.get(key) ?? []), keyOf(game)]);
+  }
+  if (!folders.size) return running;
+  for (const program of programs) {
+    if (NOT_THE_GAME.test(path.win32.basename(program))) continue;
+    const lower = program.toLowerCase();
+    for (const [key, keys] of folders) if (lower.startsWith(key)) for (const found of keys) running.add(found);
+  }
+  return running;
+}
+
 /** Seconds between two looks at the running programs. */
 export const POLL_SECONDS = 3;
 
@@ -95,6 +121,10 @@ export interface GameWatcherOptions {
    * programs are known, is `initial`: games already running then were not just started.
    */
   onChange: (running: ReadonlySet<string>, initial: boolean) => void;
+  /** Called at every look with the installed games running now (keys from `keyOf`), to remember when each was last seen. */
+  onSeen?: (keys: ReadonlySet<string>) => void;
+  /** Names an installed game for `onSeen`. */
+  keyOf?: (game: InstalledGame) => string;
   /** Looks at the running programs; a test stands in for Windows. */
   probe?: ProgramProbe;
   /**
@@ -190,6 +220,10 @@ export class GameWatcher {
 
   private update(): void {
     if (this.stopped || !this.installedKnown || !this.looked) return;
+    if (this.options.onSeen && this.options.keyOf) {
+      const seen = runningInstalled(this.installed, this.state.programs.values(), this.state.steamAppId, this.options.keyOf);
+      if (seen.size) this.options.onSeen(seen);
+    }
     const running = runningGames(this.options.entries(), this.installed, this.state.programs.values(), this.state.steamAppId);
     const initial = !this.reported;
     if (!initial && running.size === this.running.size && [...running].every((id) => this.running.has(id))) return;

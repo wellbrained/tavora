@@ -30,7 +30,7 @@ import {
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, ModulePageResult, OfficialPublishStep, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishStep, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -132,7 +132,11 @@ import { OverlayPreviews } from "./overlay-previews";
 import { GameWatcher } from "./game-watch";
 import { moveToWorkspaces } from "./workspace-move";
 import { Streaming } from "./streaming";
-import { findInstalledGames } from "./launcher-games";
+import { findInstalledGames, normalizeName, type InstalledGame } from "./launcher-games";
+import { GamesSeen } from "./games-seen";
+import { gameKey, pickGames, withInstallDates } from "./installed-list";
+import { readSteamLastPlayed } from "./steam-played";
+import { readIcoFromFile } from "./pe-icon";
 import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
 import { documentsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
@@ -308,6 +312,8 @@ export interface HostOptions {
   systemLocale?: string | undefined;
   /** Tests only: Steam is taken to run this game (game-watch.ts), so a test can see a game running. */
   testSteamAppId?: number | undefined;
+  /** Tests only: the games installed on this PC for the Add a game list, instead of looking at the launchers. */
+  testInstalled?: InstalledGame[] | undefined;
   /** Tests only: what a module may keep in its browser storage, in bytes, instead of the usual limit. */
   moduleStorageLimit?: number | undefined;
   /** Tests only: host names network.fetch reaches on a local server, over plain http (network.ts). */
@@ -507,6 +513,8 @@ export class Host {
   private readonly gameWatcher = new GameWatcher({
     entries: () => liveWorkspaces(this.library),
     findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
+    keyOf: gameKey,
+    onSeen: (keys) => void this.gamesSeen.running(keys),
     onChange: (running, initial) => this.gamesRunning(running, initial),
     testSteamAppId: () => this.options.testSteamAppId,
     log: (line) => console.warn(`[tavora] ${line}`),
@@ -530,6 +538,10 @@ export class Host {
   /** Counts workspace openings, so the end of one that was left does not end the next. */
   private openings = 0;
   private readonly onlineSearch: OnlineSearch;
+  /** When each installed game was last seen running; local only, it orders the Add a game list. */
+  private readonly gamesSeen: GamesSeen;
+  /** The icons the Add a game list read, by game key, so the PC's programs are opened once. */
+  private readonly pickerIcons = new Map<string, string | null>();
   /** Tavora's module catalog (catalog-client.ts). */
   private readonly catalog: CatalogClient;
   /** Every workspace's panels, layout and snapshots (workspace.ts). */
@@ -584,6 +596,7 @@ export class Host {
     });
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
+    this.gamesSeen = new GamesSeen(path.join(options.userData, "games-seen.json"));
     this.catalog = new CatalogClient(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.workspaces = new Workspaces(workspaces, {
       save: (state) => this.savedData.saveWorkspace(state),
@@ -1819,6 +1832,7 @@ export class Host {
         ? searchCatalog(this.library, query).map(({ id, name }) => ({ id, name }))
         : [],
     );
+    ipcMain.handle("host:installed-games", async (event): Promise<InstalledGameView[]> => (fromHost(event) ? this.installedGames().catch(() => []) : []));
     // The first-run welcome's tiles: popular games the user does not have yet (Trash included).
     ipcMain.handle("host:popular-games", (event) =>
       fromHost(event)
@@ -1839,6 +1853,11 @@ export class Host {
       if (!this.library.onlineSearch) return { status: "off" };
       const scope = this.catalogScopeOf(target);
       return scope ? this.catalog.list(scope, this.language) : { status: "ok", modules: [] };
+    });
+    ipcMain.handle("host:catalog-for-games", async (event): Promise<CatalogListResult> => {
+      if (!fromHost(event)) return { status: "unreachable" };
+      if (!this.library.onlineSearch) return { status: "off" };
+      return this.catalog.list({ game: "" }, this.language);
     });
     ipcMain.handle("host:catalog-page", async (event, moduleId: unknown): Promise<CatalogPageResult> =>
       fromHost(event) && isModuleId(moduleId) ? this.catalogPage(moduleId) : { status: "gone" },
@@ -3109,6 +3128,59 @@ export class Host {
     if (limited && shared === 0) return { ok: false, error: translate(this.language, "error.share.limited") };
     if (unreachable && shared === 0) return { ok: false, error: translate(this.language, "error.unreachable") };
     return limited ? { ok: true, shared, limited: true } : { ok: true, shared };
+  }
+
+  /**
+   * The games installed on this PC for the Add a game list: recently played first, with their icons. Steam's own
+   * last-played times, the times Tavora saw a game running and the install dates are only read here and go nowhere.
+   */
+  private async installedGames(): Promise<InstalledGameView[]> {
+    const steamDir = this.options.testInstalled ? null : await findSteamDir();
+    const [found, steamPlayed, seen] = await Promise.all([
+      (this.options.testInstalled ? Promise.resolve(this.options.testInstalled) : findInstalledGames({ steamDir })).then(withInstallDates),
+      steamDir ? readSteamLastPlayed(steamDir) : Promise.resolve(new Map<number, number>()),
+      this.gamesSeen.all(),
+    ]);
+    const picks = pickGames(found, { steamPlayed, seen });
+    const own = liveWorkspaces(this.library);
+    const clientIcons = await this.pickerClientIcons(steamDir, picks.map((pick) => pick.steamAppId).filter((id): id is number => id !== null));
+    const views: InstalledGameView[] = [];
+    for (let at = 0; at < picks.length; at += 8) {
+      views.push(
+        ...(await Promise.all(
+          picks.slice(at, at + 8).map(async (pick) => {
+            if (!this.pickerIcons.has(pick.key)) {
+              let icon: string | null = null;
+              try {
+                const hash = pick.steamAppId === null ? undefined : clientIcons.get(pick.steamAppId);
+                const fromSteam = steamDir && hash ? await readSteamClientIcon(steamDir, hash) : null;
+                const ico = fromSteam ?? (await readIcoFromFile(pick.source.file, pick.source.index));
+                const frame = ico && icoFrameNear(ico, 48);
+                if (frame) icon = `data:image/x-icon;base64,${Buffer.from(frame).toString("base64")}`;
+              } catch {
+                // No icon is fine: the list draws the initials tile.
+              }
+              this.pickerIcons.set(pick.key, icon);
+            }
+            const name = normalizeName(pick.name);
+            const has = own.find((entry) => entry.id === pick.catalogId || (pick.steamAppId !== null && entry.steamAppId === pick.steamAppId) || normalizeName(entry.name) === name);
+            return { key: pick.key, name: pick.name, steamAppId: pick.steamAppId, catalogId: pick.catalogId, icon: this.pickerIcons.get(pick.key) ?? null, activity: pick.activity, workspaceId: has?.id ?? null };
+          }),
+        )),
+      );
+    }
+    return views;
+  }
+
+  /** Steam's own icon file names for these games, from the client's appinfo; empty when it cannot be read. */
+  private async pickerClientIcons(steamDir: string | null, appids: number[]): Promise<Map<number, string>> {
+    if (!steamDir || !appids.length) return new Map();
+    try {
+      const appInfo = await loadAppInfo(steamDir);
+      return appInfo ? readClientIcons(appInfo, new Set(appids)) : new Map();
+    } catch {
+      return new Map();
+    }
   }
 
   /** The games of the last Steam look-up, kept so their icons can be offered without adding them. */

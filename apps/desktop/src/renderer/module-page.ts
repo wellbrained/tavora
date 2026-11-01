@@ -19,6 +19,8 @@ export function pageModule(module: InstalledModule): CatalogModuleView {
     installs: 0,
     fits: module.available,
     forGames: [],
+    gameIds: [],
+    official: false,
     publishedAt: "",
     homepage: null,
     support: module.support,

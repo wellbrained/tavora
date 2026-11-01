@@ -106,6 +106,8 @@ export async function launch(
       TAVORA_PICTURES_DIR: path.join(dir, "Pictures"),
       // Tests never look at the Steam client on this machine or ask Steam for icons.
       TAVORA_STEAM_ICONS_URL: "off",
+      // Tests never see the games installed on this PC; a test that wants some sets TAVORA_TEST_INSTALLED.
+      TAVORA_TEST_INSTALLED: "[]",
       // Tests read English texts whatever language the PC they run on speaks.
       TAVORA_LOCALE: locale ?? "en",
       // Set TAVORA_HIDDEN=0 to watch the windows while debugging a test.
@@ -120,6 +122,13 @@ export async function launch(
   await expect(page.getByTestId("rail")).toBeVisible();
   await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]!.setContentSize(size.width, size.height), WINDOW);
   return { app, page, userData: dir };
+}
+
+/** Opens the Add a game picker from the rail's Add menu. */
+export async function openAddGame(page: Page): Promise<void> {
+  await page.getByTestId("rail-add-game").click();
+  await page.locator('[role="menu"][data-state="open"] [data-testid="rail-add-game-item"]').click();
+  await expect(page.getByTestId("add-game-dialog")).toBeVisible();
 }
 
 /** The Tavora window. Panels restored from the last run can open before it, so the first window is not always this one. */
