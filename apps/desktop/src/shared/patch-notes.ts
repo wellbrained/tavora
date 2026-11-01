@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.40",
+    date: "2026-11-01",
+    title: "Settings over the whole workspace",
+    notes: [
+      "Clock & Counter and Calculator open their settings in a big dialog over the workspace, not inside the small panel.",
+    ],
+    prs: [
+      { number: 590, title: "Clock & Counter 0.1.3, Calculator 0.1.10: settings in a dialog over the workspace" },
+    ],
+    tags: ["calculator", "clock-counter"],
+  },
+  {
     version: "0.23.39",
     date: "2026-11-01",
     title: "Clock & Counter: compact rows",
