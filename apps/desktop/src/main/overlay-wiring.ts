@@ -174,6 +174,14 @@ function overlayLayout(wiring: OverlayWiring, gameOverlays: GameOverlays): Overl
     pictures,
     workspaces: wiring.workspaces,
     screen: () => screen.getPrimaryDisplay().workArea,
+    // The monitors in their own pixels (DIPs times the scale), the main one first: only their shapes are used, for "Preview as".
+    monitors: () => {
+      const main = screen.getPrimaryDisplay().id;
+      return screen
+        .getAllDisplays()
+        .sort((a, b) => Number(b.id === main) - Number(a.id === main))
+        .map((display) => ({ id: display.id, width: Math.round(display.size.width * display.scaleFactor), height: Math.round(display.size.height * display.scaleFactor) }));
+    },
     settings: library,
     language: ports.language,
     sources: ports.page.sources,

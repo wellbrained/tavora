@@ -20,6 +20,8 @@ When menus or dialogs cover the canvas, `OverlayCanvas` captures the native page
 
 Take picture requires both a running-game report and a window handle observed since launch. Changes to either refresh the layout. A disabled button distinguishes a stopped game from a running game whose window has not been seen. Capture is click-only and remains disabled in hidden test apps; the public security guide describes the capture boundary.
 
+Every setup can have a picture (`LayoutPictures` keys it by the setup id, hashed, so Everywhere and All games work like a game). Take picture needs one game's window and is shown for game setups only; Choose picture… and Remove picture show for all. Preview as is per setup and lives only in `OverlayLayout` (`previews`); `shape()` draws the canvas in that shape, and legacy (unconverted) positions are anchored on the setup's real shape first, so a preview never converts them differently.
+
 ## Keys, the item toolbar and Settings
 
 Del and Backspace remove the selected item from the setup shown (not while a text field, list or menu has the focus; no undo). The selected item also gets a small toolbar in the layer, above it or below it where there is no room above: Settings, Hide on canvas (the eye of the Sources list), Reset position, Reset size, and after a thin line Remove. Its tooltips open on the side away from the item. The Settings box on the right keeps what belongs to the frame itself: Show (Always on or On a key), Opacity, Hide from capture, and Move to… (a menu of the other setups the item's workspace may be in).

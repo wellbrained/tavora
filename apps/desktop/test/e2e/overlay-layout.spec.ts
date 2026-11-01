@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { deflateSync } from "node:zlib";
 import type { ElectronApplication, Page } from "@playwright/test";
 import { launch, newUserData, openModule, seedLibrary } from "./harness";
 import type { LayoutView } from "../../src/shared/layout-view";
@@ -308,3 +310,139 @@ test("the sidebar sits where Settings > Overlays puts it", async () => {
     await app.close();
   }
 });
+
+/** A plain 1920 x 1080 picture of a "scene" (a sky, a ground and a few blocks), as PNG bytes. */
+function scenePng(): Buffer {
+  const width = 1920;
+  const height = 1080;
+  const raw = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y++) {
+    const row = y * (width * 3 + 1);
+    for (let x = 0; x < width; x++) {
+      const ground = y > height * 0.7;
+      const block = (x > 300 && x < 520 && y > 520) || (x > 1300 && x < 1700 && y > 380 && y < 760);
+      const [r, g, b] = block ? [90, 100, 130] : ground ? [60, 90, 60] : [40 + (y >> 4), 70 + (y >> 4), 120 + (y >> 4)];
+      raw.set([r, g, b], row + 1 + x * 3);
+    }
+  }
+  const crc = (buffer: Buffer) => {
+    let c = ~0;
+    for (const byte of buffer) {
+      c ^= byte;
+      for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    }
+    return ~c >>> 0;
+  };
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const out = Buffer.alloc(body.length + 8);
+    out.writeUInt32BE(data.length, 0);
+    body.copy(out, 4);
+    out.writeUInt32BE(crc(body), body.length + 4);
+    return out;
+  };
+  const head = Buffer.alloc(13);
+  head.writeUInt32BE(width, 0);
+  head.writeUInt32BE(height, 4);
+  head.set([8, 2, 0, 0, 0], 8);
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", head), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
+
+/** Where a setup's picture is kept (main/layout-pictures.ts: the setup's id, hashed). */
+const pictureFile = (userData: string, setupId: string) => path.join(userData, "overlay-pictures", `${createHash("sha256").update(setupId).digest("hex").slice(0, 24)}.png`);
+
+// With TAVORA_SHOTS=<folder> the test also saves screenshots of the page (the native views over the canvas are not in them).
+const SHOTS = process.env.TAVORA_SHOTS;
+const shot = async (page: Page, name: string) => {
+  // The views over the canvas follow a moment after the canvas moves.
+  if (SHOTS) {
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
+  }
+};
+
+for (const mode of [
+  { name: "en-dark", locale: "en", theme: "dark" },
+  { name: "de-light", locale: "de", theme: "light" },
+] as const) {
+  test(`${mode.name}: every setup can have a picture, and Preview as shows other shapes without moving anything`, async () => {
+    const userData = await newUserData();
+    await seed(userData, true);
+    await mkdir(path.join(userData, "overlay-pictures"), { recursive: true });
+    await writeFile(pictureFile(userData, "$all"), scenePng());
+    const { app, page } = await launch(userData, [MODULES], { seed: false, locale: mode.locale, systemTheme: mode.theme });
+    const en = mode.locale === "en";
+    try {
+      await overlayPage(app, page, "$all");
+      await expect.poll(async () => (await state(page)).picture).not.toBeNull();
+      // All games has a picture to choose and remove, but none to take: that needs one game's window.
+      await expect(page.getByTestId("layout-picture")).toBeVisible();
+      await expect(page.getByTestId("layout-choose-picture")).toBeVisible();
+      await expect(page.getByTestId("layout-remove-picture")).toBeVisible();
+      await expect(page.getByTestId("layout-take-picture")).toHaveCount(0);
+      await expect(page.getByTestId("layout-picture-hint")).toHaveCount(0);
+      await shot(page, `01-all-games-picture-${mode.name}`);
+
+      // Everywhere has none yet: a quiet hint says how to add one.
+      await page.getByRole("button", { name: en ? "Overlay for" : "Overlay für", exact: true }).click();
+      await page.getByTestId("layout-game-option-$everywhere").click();
+      await expect.poll(async () => (await state(page)).gameId).toBe("$everywhere");
+      await expect(page.getByTestId("layout-picture")).toHaveCount(0);
+      await expect(page.getByTestId("layout-picture-hint")).toBeVisible();
+      await expect(page.getByTestId("layout-remove-picture")).toHaveCount(0);
+      await expect(page.getByTestId("layout-take-picture")).toHaveCount(0);
+      await shot(page, `02-hint-everywhere-${mode.name}`);
+
+      // Back to All games, then Preview as.
+      await page.getByRole("button", { name: en ? "Overlay for" : "Overlay für", exact: true }).click();
+      await page.getByTestId("layout-game-option-$all").click();
+      await expect.poll(async () => (await state(page)).gameId).toBe("$all");
+      const before = (await state(page)).items.map((item) => item.rect);
+      expect(before.length).toBeGreaterThan(0);
+      const ratioOf = async () => {
+        const box = (await page.getByTestId("layout-canvas").boundingBox())!;
+        return box.width / box.height;
+      };
+      // The canvas starts in the shape of the main screen, whatever shape that is on this PC.
+      const own = (await state(page)).canvas;
+      expect(await ratioOf()).toBeCloseTo(own.width / own.height, 1);
+      await page.getByRole("button", { name: en ? "Preview as" : "Vorschau als", exact: true }).click();
+      await expect(page.getByTestId("layout-preview-option-default")).toContainText(en ? /^This screen · \d+(:\d+|\.\d+:1)$/ : /^Dieser Bildschirm · /);
+      for (const ratio of ["16:9", "16:10", "21:9", "32:9"]) await expect(page.getByTestId(`layout-preview-option-${ratio}`)).toHaveText(ratio);
+      await expect(page.locator('[data-testid^="layout-preview-option-monitor:"]').first()).toContainText(/^Monitor 1 · \d+×\d+$/);
+      await shot(page, `03-preview-picker-${mode.name}`);
+      await page.getByTestId("layout-preview-option-21:9").click();
+      await expect.poll(ratioOf).toBeCloseTo(21 / 9, 1);
+      await shot(page, `04-preview-21x9-${mode.name}`);
+      await page.getByRole("button", { name: en ? "Preview as" : "Vorschau als", exact: true }).click();
+      await page.getByTestId("layout-preview-option-32:9").click();
+      await expect.poll(ratioOf).toBeCloseTo(32 / 9, 1);
+      await shot(page, `05-preview-32x9-${mode.name}`);
+      // The layer over the canvas follows the new shape: the frame sits where the canvas puts it (a left, top frame stays in the corner).
+      const outline = layerOf(app).locator('[data-testid^="layout-item-"]').first();
+      await expect(outline).toBeVisible();
+      // The layer's own page starts at the canvas's corner, so the frame's left edge is its distance from it.
+      await expect.poll(async () => (await outline.boundingBox())!.x / (await page.getByTestId("layout-canvas").boundingBox())!.width).toBeCloseTo(39 / 3840, 2);
+      // Only the preview changed: the picture is letterboxed, and the saved positions are what they were.
+      await expect(page.getByTestId("layout-picture")).toHaveClass(/object-contain/);
+      expect((await state(page)).items.map((item) => item.rect)).toEqual(before);
+
+      // The choice is kept for the setup while the app runs; the other setup still has its own.
+      await page.getByRole("button", { name: en ? "Overlay for" : "Overlay für", exact: true }).click();
+      await page.getByTestId("layout-game-option-$everywhere").click();
+      await expect.poll(async () => (await state(page)).gameId).toBe("$everywhere");
+      expect((await state(page)).preview.choice).toBe("default");
+      await page.getByRole("button", { name: en ? "Overlay for" : "Overlay für", exact: true }).click();
+      await page.getByTestId("layout-game-option-$all").click();
+      await expect.poll(async () => (await state(page)).preview.choice).toBe("32:9");
+
+      // Remove picture takes the file away and brings the hint back.
+      await page.getByTestId("layout-remove-picture").click();
+      await expect.poll(async () => (await state(page)).picture).toBeNull();
+      await expect(page.getByTestId("layout-picture-hint")).toBeVisible();
+      await expect(access(pictureFile(userData, "$all"))).rejects.toThrow();
+    } finally {
+      await app.close();
+    }
+  });
+}

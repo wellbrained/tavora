@@ -102,6 +102,8 @@ export interface LayoutView {
   canvas: Canvas;
   /** Whether the game window's size was seen; false means the shape of the main screen is used. */
   seen: boolean;
+  /** "Preview as": the shape the canvas is shown in. Only a preview: saved positions are anchored and never change with it. */
+  preview: { choice: string; options: { id: string; label: string }[] };
   grid: GridSetting;
   /** One grid cell in canvas units (0 with the grid off). */
   cell: number;
@@ -109,7 +111,7 @@ export interface LayoutView {
   minSize: number;
   selection: string | null;
   items: LayoutItemView[];
-  /** The game's picture (a Tavora-internal address), or null. */
+  /** The setup's picture (a Tavora-internal address), or null. Any setup can have one: a game's, or Everywhere's and All games'. */
   picture: string | null;
   /** The game is running and Tavora has seen its window, so a picture can be taken. */
   canTakePicture: boolean;
@@ -132,6 +134,8 @@ export type LayoutMessage =
   /** Move to…: the item goes to another setup with its place and settings. */
   | { type: "move"; id: string; to: string }
   | { type: "grid"; grid: GridSetting }
+  /** Preview the canvas in another shape (one of `preview.options`), for this setup. */
+  | { type: "preview"; choice: string }
   | { type: "select"; id: string | null }
   /** The canvas area in the window (shell only), in DIPs from the window's top left; null while it can't be drawn. */
   | { type: "bounds"; bounds: Rect | null }
@@ -187,6 +191,8 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
       return text(raw.id) && text(raw.to, 128) ? { type: "move", id: raw.id, to: raw.to } : null;
     case "grid":
       return isGridSetting(raw.grid) ? { type: "grid", grid: raw.grid } : null;
+    case "preview":
+      return text(raw.choice, 64) ? { type: "preview", choice: raw.choice } : null;
     case "select":
       return raw.id === null ? { type: "select", id: null } : text(raw.id) ? { type: "select", id: raw.id } : null;
     case "bounds": {
