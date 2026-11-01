@@ -28,6 +28,22 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.50",
+    date: "2026-11-01",
+    title: "Smoother menus and buttons",
+    notes: [
+      "Menus, dropdowns and tooltips open out of the spot they belong to.",
+      "Going along a row of buttons, the next tooltip shows right away.",
+      "Buttons dip a little when you press them.",
+      "The running-game bar on the rail slides in and out more smoothly.",
+      "With reduced motion on, menus and tooltips fade instead of moving.",
+    ],
+    prs: [
+      { number: 605, title: "Motion: shared tokens, menus and tooltips grow from their trigger, buttons dip on press" },
+    ],
+    tags: ["calculator", "clock-counter", "games", "notes", "onboarding", "pdf-viewer", "rail", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.23.49",
     date: "2026-11-01",
     title: "Buttons that are off still say why",
