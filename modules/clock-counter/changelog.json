@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.5",
+    "date": "2026-11-01",
+    "notes": [
+      "In a linked group's line, counters now have short names without spaces: {counter2}, {bossKills}, {sitUps}. Tap a counter below the field to add it. Lines you wrote with full names keep working."
+    ]
+  },
+  {
     "version": "0.1.4",
     "date": "2026-11-01",
     "notes": [
