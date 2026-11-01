@@ -24,6 +24,7 @@ import {
   type NetworkResponse,
   type GameOverlayResult,
   type OverlayLinkResult,
+  type OverlaySource,
   type SystemConnectionLog,
   type SystemConnectionSettings,
   type SystemApps,
@@ -201,6 +202,8 @@ export interface BridgeContext {
     hideOverGame(key: string): void;
     /** The keys of this module's game overlays in the panel's workspace scope. */
     overGame(): string[];
+    /** overlay.setSources: what this panel can show over the game, by key (already checked); the list the Overlay page shows under the panel. */
+    setSources(sources: OverlaySource[]): void;
     /** Throws PERMISSION_DENIED unless the panel just got a click or key press, and INVALID_PARAMS without an overlay in the manifest. */
     preview(key: string): Promise<void>;
   };
@@ -252,6 +255,33 @@ function moduleKey(params: Record<string, unknown>, name: "key" | "target"): str
   const value = required(params, name);
   if (typeof value !== "string" || !OVERLAY_KEY.test(value)) throw new HostError("INVALID_PARAMS", `params.${name} must be 1 to 64 letters, digits, - and _`);
   return value;
+}
+
+/** The list of overlay.setSources, checked: at most LIMITS.maxOverlaySources entries, each with its own key, a name, and a size in plain numbers. */
+function overlaySources(value: unknown): OverlaySource[] {
+  if (!Array.isArray(value)) throw new HostError("INVALID_PARAMS", "params.sources must be a list");
+  if (value.length > LIMITS.maxOverlaySources) throw new HostError("QUOTA_EXCEEDED", `a panel may list at most ${LIMITS.maxOverlaySources} sources`);
+  const seen = new Set<string>();
+  return value.map((raw) => {
+    const entry = object(raw);
+    const key = moduleKey(entry, "key");
+    if (seen.has(key)) throw new HostError("INVALID_PARAMS", `the key ${key} is listed twice`);
+    seen.add(key);
+    const name = entry.name;
+    if (typeof name !== "string" || name.trim().length === 0 || name.length > LIMITS.maxOverlaySourceName) throw new HostError("INVALID_PARAMS", `each source needs a name of 1 to ${LIMITS.maxOverlaySourceName} characters`);
+    if (entry.group !== undefined && typeof entry.group !== "boolean") throw new HostError("INVALID_PARAMS", "a source's group must be true or false");
+    const source: OverlaySource = { key, name: name.replace(/[ -]+/g, " ").trim() };
+    if (entry.group === true) source.group = true;
+    if (entry.size !== undefined) {
+      const size = object(entry.size);
+      const side = (number: unknown) => (typeof number === "number" && Number.isFinite(number) && number > 0 && number <= 4000 ? Math.round(number) : null);
+      const width = side(size.width);
+      const height = side(size.height);
+      if (width === null || height === null) throw new HostError("INVALID_PARAMS", "a source's size must be a width and a height of 1 to 4000 pixels");
+      source.size = { width, height };
+    }
+    return source;
+  });
 }
 
 function actionId(value: unknown): string {
@@ -522,6 +552,8 @@ const handlers = new Map<string, Handler>([
   // Needs neither a capability nor a click: it only takes this module's own overlay away, or lists it.
   ["overlay.hideOverGame", (s, params) => (s.context.overlay.hideOverGame(moduleKey(object(params), "key")), null)],
   ["overlay.overGame", (s) => s.context.overlay.overGame()],
+  // Needs neither a capability nor a click: it only names what this panel can show; Tavora draws the names as plain text.
+  ["overlay.setSources", (s, params) => (s.context.overlay.setSources(overlaySources(required(object(params), "sources"))), null)],
   // Needs no capability: a window of Tavora's own shows the page, only after a click.
   ["overlay.preview", async (s, params) => (await s.context.overlay.preview(moduleKey(object(params), "key")), null)],
   // A module that asks for the connector on request may call it without the grant: Tavora asks the user then.

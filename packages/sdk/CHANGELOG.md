@@ -1,3 +1,12 @@
+## 0.3.5
+
+What a panel can show over the game on its own, and Settings from the Overlay page. The new call and events need Tavora 0.23.43 (`later`), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `overlay.setSources(sources)` tells Tavora what this panel can show over the game on its own: one `{ key, name, group?, size? }` per item, with the overlay key it shows from. The Overlay page lists them under the panel, and a click on one adds the overlay for its key to the setup shown, as `showOverGame` does. `size` is how big the overlay needs to be (pixels of a 1080 px high game window); a new frame starts at that size. A panel that has sent a list (an empty one too) is not offered as a whole any more. The last call wins; at most `LIMITS.maxOverlaySources` (64) entries, names of at most `LIMITS.maxOverlaySourceName` (100) characters; no click and no permission. Check `sdk.supports("overlay.setSources")`.
+- `overlay.onOverGameChange(fn)` fires with the keys now shown when the user added or removed a game overlay of the module on the Overlay page, so the panel can publish the new ones and keep its Over game switches right.
+- `panel.onOpenSettings(fn)` fires with `{ key }` when the user presses Settings on an overlay's frame on the Overlay page. Tavora has put the panel in its dialog (as `openDialog` does) over the Overlay page; show the settings of what `key` shows. A press that arrives before the handler is registered is given to it once it is. Without a handler the dialog shows the panel as it is.
+- The memory host (`@tavora/sdk/testing`) answers `overlay.setSources` (`host.sources`), and `host.setOverGame(keys)` and `host.openSettings(key)` stand in for the user. It defaults to Tavora 0.23.43.
+
 ## 0.3.4
 
 Several panels from one click. The new call needs Tavora 0.23.29 (`later`), so `MIN_TAVORA` stays (Tavora 0.19.32).

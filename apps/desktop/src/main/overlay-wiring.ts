@@ -32,6 +32,8 @@ export interface OverlayHostPorts {
   changed(): void;
   /** Something the Settings page or the game watcher depends on changed (a game overlay was added, removed or toggled). */
   overlaysChanged(): void;
+  /** A module's game overlays in one workspace changed (the Overlay page added or removed one): its panels there hear it. */
+  overGameChanged(module: { owner: string; moduleId: string; workspaceId: string }): void;
   saveLibrary(): void;
   /** The workspace shown now, or null. */
   workspaceId(): string | null;
@@ -47,6 +49,7 @@ export interface OverlayHostPorts {
     sources(): SourcePanel[];
     keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): boolean[];
     leave(): void;
+    openSettings(target: { workspaceId: string; moduleId: string; instanceId: string | null; key: string | null }): void;
     choosePicture(): Promise<string | undefined>;
     rememberPicture(file: string): void;
   };
@@ -127,6 +130,7 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
     shell: ports.shell,
     language: ports.language,
     changed: ports.overlaysChanged,
+    overGameChanged: ports.overGameChanged,
   });
   streaming.useOverlayKeys(gameOverlays);
   const previews = new OverlayPreviews({
@@ -175,6 +179,7 @@ function overlayLayout(wiring: OverlayWiring, gameOverlays: GameOverlays): Overl
     sources: ports.page.sources,
     keepRunning: ports.page.keepRunning,
     leave: ports.page.leave,
+    openSettings: ports.page.openSettings,
     openWindow: () => {
       const page = options.devServer ? new URL("layout.html", options.devServer) : new URL("layout.html", `${HOST_SCHEME}://app/`);
       return new OverlayCanvas({ window: wiring.window, preload: options.hostPreload, devTools: options.devTools, address: () => `${page.href.split("#")[0]}#layer` });

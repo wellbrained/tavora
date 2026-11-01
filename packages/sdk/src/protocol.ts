@@ -738,6 +738,24 @@ export type OverlayLinkResult = "copied" | "off" | "denied";
  */
 export type GameOverlayResult = "shown" | "off" | "full";
 
+/**
+ * One thing a panel can show over the game on its own (overlay.setSources): a clock, a counter, a group of counters as one
+ * line. The Overlay page lists these under the panel, and a click on one puts the overlay for its `key` into the setup.
+ */
+export interface OverlaySource {
+  /** The overlay key it shows from, the same as for overlay.publish and overlay.showOverGame. */
+  key: string;
+  /** What the Overlay page calls it: the item's name, or the line a group shows. At most LIMITS.maxOverlaySourceName characters. */
+  name: string;
+  /** A group of several things shown as one: the list draws a link icon instead of the item icon. */
+  group?: boolean;
+  /**
+   * How big the overlay is at its natural size, in pixels of a 1080 px high game window, as `overlaySize` in the manifest
+   * is. A new frame starts at this size (with a little room around it); without it, at the manifest's `overlaySize`.
+   */
+  size?: { width: number; height: number };
+}
+
 /** A hotkey the user set for this module in the current workspace: which action, for what. Never the key itself. */
 export interface HotkeyBinding {
   /** One of the manifest's `actions` ids. */
@@ -964,6 +982,13 @@ export interface Methods {
   /** The keys of this module's game overlays in the panel's workspace scope. Needs no capability. Tavora 0.21.3 and newer. */
   "overlay.overGame": { params: undefined; result: string[] };
   /**
+   * Tells Tavora what this panel can show over the game on its own: one entry per item, each with the overlay key it shows
+   * from. The Overlay page lists them under the panel, and a panel that has sent a list can only be added through it, not
+   * as a whole. The last call wins and is kept while the panel exists; an empty list says there is nothing to show right now (the panel is still not offered as a whole). Needs no click
+   * and no capability. At most LIMITS.maxOverlaySources entries. Tavora 0.23.43 and newer.
+   */
+  "overlay.setSources": { params: { sources: OverlaySource[] }; result: null };
+  /**
    * Opens (or brings forward) a small Tavora window with the overlay page for `key` at its real size, for the user to
    * see what it looks like. Only right after a click or key press in the panel; needs no capability, but the module must
    * have an `overlay` in its manifest. Tavora 0.21.3 and newer.
@@ -1025,6 +1050,16 @@ export interface Events {
   "panel.dialog": { open: boolean };
   /** The user pressed a hotkey set for this module (hotkeys.set). Sent to one panel of the module in the workspace shown now, the one used last. */
   "hotkeys.pressed": HotkeyBinding;
+  /**
+   * The game overlays of this module in the panel's workspace scope changed without this panel asking: the user added or
+   * removed one on the Overlay page. `keys` is the list overlay.overGame would give now. Tavora 0.23.43 and newer.
+   */
+  "overlay.overGameChanged": { keys: string[] };
+  /**
+   * The user pressed Settings on an overlay's frame on the Overlay page. Tavora has put this panel in its dialog (as after
+   * panel.setDialog) and `key` is the overlay's key: show the settings of what it shows. Tavora 0.23.43 and newer.
+   */
+  "panel.openSettings": { key: string };
   "lifecycle.suspend": null;
   "lifecycle.resume": null;
   "lifecycle.dispose": null;
@@ -1149,6 +1184,10 @@ export const LIMITS = {
   maxOverlays: 200,
   /** Game overlays (overlay.showOverGame) one game may have at once. */
   maxGameOverlays: 8,
+  /** Entries in one panel's overlay.setSources list. */
+  maxOverlaySources: 64,
+  /** Characters of the name of one of them. */
+  maxOverlaySourceName: 100,
   /** Hotkeys one module may have in one workspace. */
   maxHotkeys: 100,
   /** Characters of the label hotkeys.set shows for its target. */
@@ -1408,6 +1447,7 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "overlay.showOverGame": later("0.20.51", null, true),
   "overlay.hideOverGame": later("0.21.3"),
   "overlay.overGame": later("0.21.3"),
+  "overlay.setSources": later("0.23.43"),
   "overlay.preview": later("0.21.3", null, true),
   "hotkeys.list": call("0.19.26"),
   "hotkeys.set": call("0.19.26", null, true),

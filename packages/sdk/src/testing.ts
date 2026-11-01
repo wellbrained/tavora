@@ -10,6 +10,7 @@ import {
   LIMITS,
   METHOD_INFO,
   needsGesture,
+  OVERLAY_KEY,
   supportsCall,
   PROTOCOL_VERSION,
   THEME_TOKENS,
@@ -31,6 +32,7 @@ import {
   type LeaderboardSubmitResult,
   type MethodName,
   type Methods,
+  type OverlaySource,
   type PanelContent,
   type PanelLaunch,
   type PanelOpenManyResult,
@@ -138,6 +140,12 @@ export interface MemoryHost {
   readonly dialog: { open: boolean; width: number; height: number };
   /** What `panel.setLive` last set. */
   readonly live: JsonValue | null;
+  /** What `overlay.setSources` last set. */
+  readonly sources: readonly OverlaySource[];
+  /** The user added or removed game overlays on the Overlay page: `overlay.onOverGameChange` fires with the keys now shown. */
+  setOverGame(keys: string[]): void;
+  /** The user pressed Settings on an overlay's frame: the panel is put in its dialog (`dialog.open`) and `panel.onOpenSettings` fires with `key`. */
+  openSettings(key: string): void;
   /** Panels `panels.open` had to open new, in order. */
   readonly opened: readonly { type: string; content: PanelContent | null }[];
   /** Files and pictures the module saved, in order. */
@@ -166,7 +174,7 @@ export interface MemoryHost {
 }
 
 /** Newest Tavora the SDK knows, and the default version of a memory host. */
-export const LATEST_TAVORA = "0.23.29";
+export const LATEST_TAVORA = "0.23.43";
 /** Most panel types one call may name: as many as a manifest may declare (MAX_PANEL_TYPES in @tavora/module-schema). */
 const MAX_PANEL_TYPES = 16;
 
@@ -300,6 +308,7 @@ interface Panel {
   maximized: boolean;
   dialog: { open: boolean; width: number; height: number };
   live: JsonValue | null;
+  sources: OverlaySource[];
   navigate: ((content: PanelContent) => void | Promise<void>) | null;
   suspended: boolean;
   listeners: Map<EventName, Set<(data: unknown) => void>>;
@@ -616,6 +625,19 @@ const handlers: Handlers = {
     return null;
   },
   "overlay.overGame": ({ shared }) => [...shared.gameOverlays],
+  "overlay.setSources": (panel, { sources }) => {
+    const { limits } = panel.shared;
+    if (!Array.isArray(sources) || sources.length > limits.maxOverlaySources) fail("QUOTA_EXCEEDED", `a panel may list at most ${limits.maxOverlaySources} sources`);
+    const keys = new Set<string>();
+    for (const source of sources) {
+      if (typeof source?.key !== "string" || !OVERLAY_KEY.test(source.key)) fail("INVALID_PARAMS", "each source needs a key of letters, digits, - and _");
+      if (keys.has(source.key)) fail("INVALID_PARAMS", `the key ${source.key} is listed twice`);
+      keys.add(source.key);
+      if (typeof source.name !== "string" || source.name.length === 0 || source.name.length > limits.maxOverlaySourceName) fail("INVALID_PARAMS", `each source needs a name of 1 to ${limits.maxOverlaySourceName} characters`);
+    }
+    panel.sources = parse(JSON.stringify(sources));
+    return null;
+  },
   "hotkeys.list": ({ shared }) => shared.hotkeys.map((binding) => ({ ...binding })),
   "hotkeys.set": ({ shared }, { action, target }) => {
     if (!shared.hotkeys.some((binding) => binding.action === action && binding.target === target)) shared.hotkeys.push({ action, target });
@@ -755,6 +777,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     maximized: false,
     dialog: { open: false, width: DIALOG.width, height: DIALOG.height },
     live: null,
+    sources: [],
     navigate: null,
     suspended: false,
     listeners: new Map(),
@@ -821,6 +844,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       openDialog: async (size) => void (await call("panel.setDialog", { open: true, ...size })),
       closeDialog: async () => void (await call("panel.setDialog", { open: false })),
       onDialogChange: (fn) => on("panel.dialog", ({ open }) => fn(open)),
+      onOpenSettings: (fn) => on("panel.openSettings", ({ key }) => fn({ key })),
       onNavigate: (fn) => {
         panel.navigate = fn;
         return () => {
@@ -933,6 +957,8 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       showOverGame: (key) => call("overlay.showOverGame", { key }),
       hideOverGame: async (key) => void (await call("overlay.hideOverGame", { key })),
       overGame: () => call("overlay.overGame", undefined),
+      setSources: async (sources) => void (await call("overlay.setSources", { sources })),
+      onOverGameChange: (fn) => on("overlay.overGameChanged", ({ keys }) => fn(keys)),
       preview: async (key) => void (await call("overlay.preview", { key })),
       resetLink: async (key) => void (await call("overlay.resetLink", { key })),
     },
@@ -1001,6 +1027,20 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     },
     get live() {
       return panel.live;
+    },
+    get sources() {
+      return panel.sources.map((source) => ({ ...source }));
+    },
+    setOverGame: (keys) => {
+      shared.gameOverlays = new Set(keys);
+      for (const other of shared.panels) deliver(other, "overlay.overGameChanged", { keys: [...shared.gameOverlays] });
+    },
+    openSettings: (key) => {
+      if (!panel.dialog.open) {
+        panel.dialog = { ...panel.dialog, open: true };
+        deliver(panel, "panel.dialog", { open: true });
+      }
+      deliver(panel, "panel.openSettings", { key });
     },
     get opened() {
       return shared.opened;

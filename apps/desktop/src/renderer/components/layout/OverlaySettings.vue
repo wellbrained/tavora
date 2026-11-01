@@ -1,14 +1,16 @@
 <script setup lang="ts">
-// The Overlay page's Settings panel: everything the user sets for the selected item (when it shows: always or with a
-// key, how see-through it is, Hide from capture), plus Reset position, Reset size, Preview, Move and Remove. It is
-// sized to its content; a short hint shows while nothing is selected.
+// The Overlay page's Settings panel: what the user sets for the selected frame itself (when it shows: always or with a
+// key, how see-through it is, Hide from capture) and Move to… another setup. What the item is (its name, its look) is the
+// module's own, behind the gear; Reset position, Reset size and Remove are on the frame's toolbar. It is sized to its
+// content; a short hint shows while nothing is selected.
 import { computed } from "vue";
+import { ChevronDown } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
-import { cn } from "@/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import type { LayoutItemView } from "../../../shared/layout-view";
 import { act } from "../../host";
@@ -29,21 +31,8 @@ function change(next: Change) {
   void act(target.kind === "panel" ? { type: "set-panel-view", setup, instanceId: target.instanceId, ...next } : { type: "set-game-overlay", setup, owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key, ...next });
 }
 
-function remove() {
-  const item = props.item;
-  if (!item) return;
-  const target = item.target;
-  const setup = props.setup;
-  void act(target.kind === "panel" ? { type: "stop-panel-in-game", setup, instanceId: target.instanceId } : { type: "remove-game-overlay", setup, owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key });
-}
-
 function askKey() {
   if (props.item) void act({ type: "set-overlay-key", ...props.item.keyTarget });
-}
-
-function preview() {
-  const target = props.item?.target;
-  if (target?.kind === "overlay") void act({ type: "preview-overlay", owner: target.owner, moduleId: target.moduleId, workspaceId: target.workspaceId, key: target.key });
 }
 
 const modes = computed(() => [
@@ -54,14 +43,6 @@ const opacity = computed({
   get: () => String(props.item?.opacity ?? 100),
   set: (value: string) => change({ opacity: Number(value) as 100 | 75 | 50 | 25 }),
 });
-const removeLabel = computed(() => {
-  const item = props.item;
-  if (!item) return "";
-  return item.kind === "panel" ? t("overlays.stopShowingNamed", { name: item.name }) : t("overlays.removeLabel", { name: item.name, game: props.setupName });
-});
-// Preview and Move sit side by side; one alone takes the whole row.
-const wide = computed(() => ((props.item?.kind === "overlay" && props.item.live ? 1 : 0) + (props.item?.moveTo ? 1 : 0) === 1 ? "col-span-2" : ""));
-const moveLabel = computed(() => (props.item?.moveTo === "$everywhere" ? t("overlays.layout.moveEverywhere") : t("overlays.layout.moveAll")));
 </script>
 
 <template>
@@ -108,14 +89,18 @@ const moveLabel = computed(() => (props.item?.moveTo === "$everywhere" ? t("over
         </div>
         <p class="text-muted-foreground text-xs">{{ t("overlays.capture.hint") }}</p>
       </div>
-      <div class="grid grid-cols-2 gap-2 border-t pt-3">
-        <Button variant="secondary" size="sm" class="w-full" :data-testid="`layout-reset-${item.id}`" @click="send({ type: 'reset', id: item.id })">{{ t("overlays.layout.reset") }}</Button>
-        <Button variant="secondary" size="sm" class="w-full" :data-testid="`layout-reset-size-${item.id}`" @click="send({ type: 'reset-size', id: item.id })">{{ t("overlays.layout.resetSize") }}</Button>
-        <Button v-if="item.kind === 'overlay' && item.live" variant="secondary" size="sm" :class="cn('w-full', wide)" :aria-label="t('overlays.previewLabel', { name: item.name })" @click="preview">{{ t("overlays.layout.preview") }}</Button>
-        <Button v-if="item.moveTo" variant="secondary" size="sm" :class="cn('w-full', wide)" :data-testid="`layout-move-${item.id}`" @click="send({ type: 'move', id: item.id })">{{ moveLabel }}</Button>
-        <Button variant="danger" size="sm" class="col-span-2 w-full" :aria-label="removeLabel" :data-testid="`layout-remove-${item.id}`" @click="remove">
-          {{ item.kind === "panel" ? t("overlays.stopShowing") : t("overlays.remove") }}
-        </Button>
+      <div v-if="item.moveTargets.length" class="border-t pt-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button variant="secondary" size="sm" class="w-full justify-between" :data-testid="`layout-move-${item.id}`">
+              {{ t("overlays.layout.moveTo") }}
+              <ChevronDown :stroke-width="1.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" class="min-w-48">
+            <DropdownMenuItem v-for="target in item.moveTargets" :key="target.id" :data-testid="`layout-move-to-${target.id}`" @select="send({ type: 'move', id: item.id, to: target.id })">{{ target.name }}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   </section>

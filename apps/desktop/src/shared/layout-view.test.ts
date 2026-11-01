@@ -32,6 +32,9 @@ describe("parseLayoutMessage", () => {
     expect(parseLayoutMessage({ type: "canvas-hidden", id: "a", hidden: true })).toEqual({ type: "canvas-hidden", id: "a", hidden: true });
     expect(parseLayoutMessage({ type: "reset", id: "a" })).toEqual({ type: "reset", id: "a" });
     expect(parseLayoutMessage({ type: "reset-size", id: "a" })).toEqual({ type: "reset-size", id: "a" });
+    expect(parseLayoutMessage({ type: "remove", id: "a" })).toEqual({ type: "remove", id: "a" });
+    expect(parseLayoutMessage({ type: "settings", id: "a" })).toEqual({ type: "settings", id: "a" });
+    expect(parseLayoutMessage({ type: "remove", id: "" })).toBeNull();
     for (const type of ["undo", "redo", "drag-end", "take-picture", "choose-picture", "remove-picture", "dismiss-notice", "done"]) expect(parseLayoutMessage({ type })).toEqual({ type });
     // Gone with per-game positions: each setup has its own.
     for (const type of ["customize", "follow-all", "follow-item"]) expect(parseLayoutMessage({ type, id: "a" })).toBeNull();
@@ -55,7 +58,11 @@ describe("parseLayoutMessage", () => {
 
   it("takes the messages of the page's lists", () => {
     expect(parseLayoutMessage({ type: "add-source", id: "p1" })).toEqual({ type: "add-source", id: "p1" });
-    expect(parseLayoutMessage({ type: "move", id: "panel\np1" })).toEqual({ type: "move", id: "panel\np1" });
+    expect(parseLayoutMessage({ type: "add-source", id: "p1", key: "d-1" })).toEqual({ type: "add-source", id: "p1", key: "d-1" });
+    expect(parseLayoutMessage({ type: "add-source", id: "p1", key: "" })).toBeNull();
+    expect(parseLayoutMessage({ type: "add-source", id: "p1", key: 3 })).toBeNull();
+    expect(parseLayoutMessage({ type: "move", id: "panel\np1", to: "$all" })).toEqual({ type: "move", id: "panel\np1", to: "$all" });
+    expect(parseLayoutMessage({ type: "move", id: "panel\np1" })).toBeNull();
     // Adding a game's setup is only on the rail, never a message of the page.
     expect(parseLayoutMessage({ type: "add-setup", gameId: "poe2" })).toBeNull();
     expect(parseLayoutMessage({ type: "add-source", id: 3 })).toBeNull();

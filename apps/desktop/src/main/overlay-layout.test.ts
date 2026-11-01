@@ -8,7 +8,7 @@ import { DEFAULT_PANEL_ANCHORED, DEFAULT_RECT, placeAnchored, placeLegacy, type 
 import type { LayoutItemInfo, LayoutItemRef, LayoutSource } from "./game-overlay-service";
 import type { SeenSize } from "./game-overlays";
 import { LayoutPictures } from "./layout-pictures";
-import { OverlayLayout, edgesToBounds, type LayoutFrame, type LayoutWindow, type SourcePanel } from "./overlay-layout";
+import { OverlayLayout, edgesToBounds, freeSpot, type LayoutFrame, type LayoutWindow, type SourcePanel } from "./overlay-layout";
 
 let dir: string;
 const layouts: OverlayLayout[] = [];
@@ -56,6 +56,8 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     opened: 0,
     destroyed: 0,
     left: 0,
+    settingsOpened: [] as { workspaceId: string; moduleId: string; instanceId: string | null; key: string | null }[],
+    overlaysAdded: [] as { setup: string; key: string }[],
     added: [] as { setup: string; instanceId: string }[],
     moved: [] as { from: string; to: string }[],
     closedWindow: () => {},
@@ -100,6 +102,12 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     grid: () => world.grid,
     setGrid: (grid) => void (world.grid = grid),
     running: () => [...world.running],
+    addOverlay: (setupId, overlay) => {
+      world.overlaysAdded.push({ setup: setupId, key: overlay.key });
+      if (world.items.some((item) => setupOf(item) === setupId && !item.panel && item.key === overlay.key && item.gameId === overlay.workspaceId)) return "exists";
+      world.items.push({ key: overlay.key, gameId: overlay.workspaceId, scope: overlay.workspaceId === "personal" ? "all" : "game", setup: setupId, rect: at(0.036, 0.03, 0.356, 0.16) });
+      return "added";
+    },
     addPanel: (setupId, panel) => {
       world.added.push({ setup: setupId, instanceId: panel.instanceId });
       world.items.push({ key: panel.instanceId, gameId: panel.workspaceId, scope: panel.workspaceId === "personal" ? "all" : "game", setup: setupId, rect: DEFAULT_PANEL_ANCHORED, panel: true });
@@ -141,6 +149,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     workspaces: { name: (id) => ({ elden: "Elden Ring", poe2: "Path of Exile 2", personal: "Personal" })[id] ?? null },
     sources: () => options.sources ?? [],
     leave: () => void world.left++,
+    openSettings: (target) => void world.settingsOpened.push(target),
     screen: () => ({ x: 0, y: 0, width: 2560, height: 1440 }),
     settings: {
       get gameOverlays() {
@@ -727,6 +736,30 @@ describe("selection", () => {
   });
 });
 
+
+describe("the toolbar and Del", () => {
+  it("removes an item from the setup shown and lets go of the selection", () => {
+    const { layout, world } = setup([clock("a"), clock("b")]);
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "select", id: ids[0]! }, false);
+    layout.handle({ type: "remove", id: ids[0]! }, false);
+    expect(world.removed).toHaveLength(1);
+    expect(layout.view().selection).toBeNull();
+    // An id that is not in the setup changes nothing.
+    layout.handle({ type: "remove", id: "nope" }, false);
+    expect(world.removed).toHaveLength(1);
+  });
+  it("opens the settings of the thing an item shows", () => {
+    const { layout, world } = setup([clock("a")]);
+    layout.open("elden");
+    const id = layout.view().items[0]!.id;
+    layout.handle({ type: "settings", id }, false);
+    expect(world.settingsOpened).toEqual([{ workspaceId: "elden", moduleId: "tavora.clock-counter", instanceId: null, key: "a" }]);
+    layout.handle({ type: "settings", id: "nope" }, false);
+    expect(world.settingsOpened).toHaveLength(1);
+  });
+});
 describe("what the pages are told", () => {
   it("sends a view only when it changed", () => {
     const { layout, sent } = setup([clock("a")]);
@@ -907,6 +940,7 @@ const panel = (instanceId: string, workspaceId: string, over: Partial<SourcePane
   workspaceName: workspaceId === "personal" ? "Personal" : workspaceId === "elden" ? "Elden Ring" : "Path of Exile 2",
   scope: workspaceId === "personal" ? "all" : "game",
   inGame: true,
+  sources: null,
   ...over,
 });
 
@@ -917,10 +951,10 @@ describe("the sources", () => {
     const { layout } = setup([clock("a", "elden"), clock("b", "poe2")], { sources });
     layout.open("elden");
     expect(layout.view().sources).toEqual([
-      { id: "notes", name: "notes", moduleId: "tavora.notes", from: "Personal", game: null, block: null },
-      { id: "map", name: "map", moduleId: "tavora.notes", from: "Elden Ring", game: "Elden Ring", block: null },
-      { id: "build", name: "build", moduleId: "tavora.notes", from: "Path of Exile 2", game: "Path of Exile 2", block: "game-only" },
-      { id: "timer", name: "timer", moduleId: "tavora.notes", from: "Personal", game: null, block: "not-in-game" },
+      { id: "notes", name: "notes", moduleId: "tavora.notes", from: "Personal", game: null, block: null, children: null },
+      { id: "map", name: "map", moduleId: "tavora.notes", from: "Elden Ring", game: "Elden Ring", block: null, children: null },
+      { id: "build", name: "build", moduleId: "tavora.notes", from: "Path of Exile 2", game: "Path of Exile 2", block: "game-only", children: null },
+      { id: "timer", name: "timer", moduleId: "tavora.notes", from: "Personal", game: null, block: "not-in-game", children: null },
     ]);
   });
 
@@ -976,6 +1010,101 @@ describe("the sources", () => {
   });
 });
 
+describe("what a panel lists", () => {
+  const things = [
+    { key: "d-1", name: "Countdown", size: { width: 120, height: 48 } },
+    { key: "g-1", name: "7 Deaths", group: true, size: { width: 200, height: 48 } },
+  ];
+  const counter = (over: Partial<SourcePanel> = {}) => panel("cc", "personal", { moduleId: "tavora.clock-counter", sources: things, ...over });
+  const overlaps = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+  it("makes the panel a header over its things, in the panel's order", () => {
+    const { layout } = setup([], { sources: [counter(), panel("notes", "elden")] });
+    layout.open(LAYOUT_EVERYWHERE);
+    const [header, notes] = layout.view().sources;
+    expect(header).toMatchObject({
+      id: "cc",
+      block: null,
+      children: [
+        { key: "d-1", name: "Countdown", group: false, item: null, block: null },
+        { key: "g-1", name: "7 Deaths", group: true, item: null, block: null },
+      ],
+    });
+    expect(notes!.children).toBeNull();
+  });
+
+  it("adds a thing by its key, never the panel as a whole", () => {
+    const { layout, world } = setup([], { sources: [counter()] });
+    layout.open(LAYOUT_EVERYWHERE);
+    layout.handle({ type: "add-source", id: "cc" }, true);
+    layout.handle({ type: "add-source", id: "cc", key: "nope" }, true);
+    expect(world.overlaysAdded).toEqual([]);
+    expect(world.added).toEqual([]);
+    layout.handle({ type: "add-source", id: "cc", key: "d-1" }, true);
+    expect(world.overlaysAdded).toEqual([{ setup: LAYOUT_EVERYWHERE, key: "d-1" }]);
+    const view = layout.view();
+    expect(view.items.map((item) => item.name)).toEqual(["Countdown"]);
+    expect(view.selection).toBe(view.items[0]!.id);
+    expect(view.sources[0]!.children![0]).toMatchObject({ key: "d-1", item: view.items[0]!.id, block: "in-setup" });
+    expect(view.sources[0]!.block).toBe("in-setup");
+    // Again: it is selected, not added a second time.
+    layout.handle({ type: "select", id: null }, true);
+    layout.handle({ type: "add-source", id: "cc", key: "d-1" }, true);
+    expect(world.overlaysAdded).toHaveLength(1);
+    expect(layout.view().selection).toBe(view.items[0]!.id);
+  });
+
+  it("starts a new frame at the size its content needs, on the grid, and where no other frame is", () => {
+    const { layout } = setup([], { sources: [counter()] });
+    layout.open(LAYOUT_EVERYWHERE);
+    layout.handle({ type: "add-source", id: "cc", key: "d-1" }, true);
+    layout.handle({ type: "add-source", id: "cc", key: "g-1" }, true);
+    const [first, second] = layout.view().items.map((item) => item.placed);
+    // The content and a little room around it, snapped up to the grid: not the size a panel starts with.
+    expect(first!.width).toBeGreaterThanOrEqual(136);
+    expect(first!.width).toBeLessThan(180);
+    expect(first!.height).toBeGreaterThanOrEqual(64);
+    expect(first!.height).toBeLessThan(110);
+    expect(second!.width).toBeGreaterThanOrEqual(216);
+    expect(overlaps(first!, second!)).toBe(false);
+  });
+
+  it("leaves a frame its panel said nothing about at the size it starts with", () => {
+    const { layout } = setup([], { sources: [counter({ sources: [{ key: "d-1", name: "Countdown" }] })] });
+    layout.open(LAYOUT_EVERYWHERE);
+    layout.handle({ type: "add-source", id: "cc", key: "d-1" }, true);
+    expect(layout.view().items[0]!.placed.width).toBeGreaterThan(300);
+  });
+
+  it("puts Reset size back to what the content needs, where the frame is", () => {
+    const { layout } = setup([], { sources: [counter()] });
+    layout.open(LAYOUT_EVERYWHERE);
+    layout.handle({ type: "add-source", id: "cc", key: "d-1" }, true);
+    const item = layout.view().items[0]!;
+    layout.handle({ type: "commit", id: item.id, rect: { x: 400, y: 300, width: 500, height: 400 } }, false);
+    expect(layout.view().items[0]!.placed.width).toBe(500);
+    layout.handle({ type: "reset-size", id: item.id }, false);
+    expect(layout.view().items[0]!.placed).toMatchObject({ x: 400, y: 300, width: item.placed.width, height: item.placed.height });
+  });
+});
+
+describe("freeSpot", () => {
+  const canvas = { width: 1920, height: 1080 };
+  it("is the corner where new items start while nothing is there", () => {
+    expect(freeSpot({ width: 100, height: 50 }, canvas, [], 0)).toEqual({ x: 39, y: 32 });
+  });
+  it("goes down past what is there, then across", () => {
+    const first = { x: 39, y: 32, width: 100, height: 50 };
+    expect(freeSpot({ width: 100, height: 50 }, canvas, [first], 0).y).toBeGreaterThanOrEqual(90);
+    const column = Array.from({ length: 20 }, (_, index) => ({ x: 39, y: 32 + index * 58, width: 100, height: 50 }));
+    const spot = freeSpot({ width: 100, height: 50 }, canvas, column, 0);
+    expect(spot.x).toBeGreaterThanOrEqual(147);
+  });
+  it("snaps to the grid", () => {
+    expect(freeSpot({ width: 100, height: 50 }, canvas, [], 24)).toEqual({ x: 48, y: 24 });
+  });
+});
+
 describe("adding and moving", () => {
   it("has no way to add a game's setup: that is only on the rail", () => {
     const { layout, world } = setup([clock("a", "elden")]);
@@ -985,22 +1114,25 @@ describe("adding and moving", () => {
     expect(layout.view().gameId).toBe("elden");
   });
 
-  it("offers a personal item the other of Everywhere and All games, and nothing else", () => {
+  it("offers a personal item every other setup, and a game's own item none", () => {
     const personal = (setupId: string): Item => ({ key: "p", gameId: "personal", scope: "all", setup: setupId, rect: at(0.1, 0.1, 0.2, 0.2) });
-    const everywhere = setup([personal(LAYOUT_EVERYWHERE)]);
+    const everywhere = setup([personal(LAYOUT_EVERYWHERE), clock("own", "elden")]);
     everywhere.layout.open(LAYOUT_EVERYWHERE);
-    expect(everywhere.layout.view().items[0]!.moveTo).toBe(LAYOUT_ALL_GAMES);
+    expect(everywhere.layout.view().items[0]!.moveTargets.map((target) => target.id)).toEqual([LAYOUT_ALL_GAMES, "elden"]);
+    expect(everywhere.layout.view().items[0]!.moveTargets[1]!.name).toBe("Elden Ring");
     const all = setup([personal(LAYOUT_ALL_GAMES), clock("own", "elden")]);
     all.layout.open(LAYOUT_ALL_GAMES);
-    expect(all.layout.view().items[0]!.moveTo).toBe(LAYOUT_EVERYWHERE);
+    expect(all.layout.view().items[0]!.moveTargets.map((target) => target.id)).toEqual([LAYOUT_EVERYWHERE, "elden"]);
     all.layout.open("elden");
-    expect(all.layout.view().items.map((item) => item.moveTo)).toEqual([null]);
+    expect(all.layout.view().items.map((item) => item.moveTargets)).toEqual([[]]);
   });
 
-  it("does not offer a game's own item a move, nor a personal item in a game's setup", () => {
+  it("does not offer a game's own item a move, nor a game's setup's item another game's", () => {
     const { layout } = setup([{ key: "p", gameId: "personal", scope: "all", setup: "elden", rect: at(0.1, 0.1, 0.2, 0.2) }, clock("own", "elden")]);
     layout.open("elden");
-    expect(layout.view().items.map((item) => item.moveTo)).toEqual([null, null]);
+    const [personal, own] = layout.view().items;
+    expect(own!.moveTargets).toEqual([]);
+    expect(personal!.moveTargets.map((target) => target.id)).toEqual([LAYOUT_EVERYWHERE, LAYOUT_ALL_GAMES]);
   });
 
   it("moves an item to the other setup and lets go of the selection", () => {
@@ -1008,7 +1140,7 @@ describe("adding and moving", () => {
     layout.open(LAYOUT_EVERYWHERE);
     const id = layout.view().items[0]!.id;
     layout.handle({ type: "select", id }, true);
-    layout.handle({ type: "move", id }, true);
+    layout.handle({ type: "move", id, to: LAYOUT_ALL_GAMES }, true);
     expect(world.moved).toEqual([{ from: LAYOUT_EVERYWHERE, to: LAYOUT_ALL_GAMES }]);
     expect(layout.view().items).toEqual([]);
     expect(layout.view().selection).toBeNull();
@@ -1017,9 +1149,11 @@ describe("adding and moving", () => {
   it("moves nothing that cannot move, or on the layer's word", () => {
     const { layout, world } = setup([clock("own", "elden"), { key: "p", gameId: "personal", scope: "all", setup: LAYOUT_EVERYWHERE, rect: at(0.1, 0.1, 0.2, 0.2) }]);
     layout.open("elden");
-    layout.handle({ type: "move", id: layout.view().items[0]!.id }, true);
+    layout.handle({ type: "move", id: layout.view().items[0]!.id, to: LAYOUT_EVERYWHERE }, true);
     layout.open(LAYOUT_EVERYWHERE);
-    layout.handle({ type: "move", id: layout.view().items[0]!.id }, false);
+    layout.handle({ type: "move", id: layout.view().items[0]!.id, to: LAYOUT_ALL_GAMES }, false);
+    // Nor to a setup it may not go to.
+    layout.handle({ type: "move", id: layout.view().items[0]!.id, to: "nowhere" }, true);
     expect(world.moved).toEqual([]);
   });
 

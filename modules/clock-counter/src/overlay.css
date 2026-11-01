@@ -16,7 +16,7 @@ main {
   flex-direction: column;
   justify-content: center;
   height: 100%;
-  padding: 0;
+  padding: 0; /* overlay.ts sets the room around the text */
   background: transparent;
   color: var(--color, #fff);
   font-family: "Inter Variable", system-ui, sans-serif;
@@ -57,12 +57,24 @@ main[data-outline="true"] {
   text-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.6);
 }
 
+/* The name and the value on one line, sitting on a common baseline, one font between them (the item's Font setting). overlay.ts
+   sizes them (the name a share of the value) and sets the gap. */
+.line {
+  display: flex;
+  align-items: baseline;
+  font-family: inherit;
+}
+
 .label {
+  font-family: inherit;
+  font-variant-numeric: normal;
   font-weight: 600;
   opacity: 0.9;
 }
 
 .value {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
 
@@ -71,6 +83,7 @@ main[data-outline="true"] {
   opacity: 0.85;
 }
 
+.line,
 .label,
 .value,
 .lap {
@@ -145,10 +158,18 @@ main[data-done="flash"] .value {
   text-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.6);
 }
 
+/* The name and the value share the row's font and its baseline. The name is clipped, not hidden: a hidden overflow would take
+   its baseline from the bottom of its box and lift it above the value. */
+#live .name,
+#live .amount {
+  font-family: inherit;
+}
+
 #live .name {
   min-width: 0;
-  overflow: hidden;
+  overflow: clip;
   font-size: 16px;
+  font-variant-numeric: normal;
   font-weight: 600;
   opacity: 0.9;
   text-overflow: ellipsis;
@@ -157,8 +178,8 @@ main[data-done="flash"] .value {
 #live .amount {
   flex: none;
   margin-left: auto;
-  margin-left: auto;
   font-size: 24px;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
 

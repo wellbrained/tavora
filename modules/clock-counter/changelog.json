@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.1.6",
+    "date": "2026-11-01",
+    "notes": [
+      "Add each clock, counter or linked group to your game from the Overlay page, one by one, and place them where you like. A new frame fits its content.",
+      "Press the gear on a frame to change that clock, counter or group right over the Overlay page.",
+      "In the overlay, the name and the value now share one font and sit on one line."
+    ]
+  },
+  {
     "version": "0.1.5",
     "date": "2026-11-01",
     "notes": [

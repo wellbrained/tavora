@@ -121,7 +121,8 @@ test("Reset position and Reset size work from the page, Take picture says why it
     const dropped = (await state(page)).items[0]!.placed;
     const droppedLeft = await outline.evaluate((node) => (node as HTMLElement).style.left);
 
-    await page.locator('[data-testid^="layout-reset-"]:not([data-testid^="layout-reset-size-"])').click();
+    // Reset position and Reset size are buttons of the frame's toolbar.
+    await layer.getByTestId("layout-frame-reset").click();
     await expect.poll(async () => (await state(page)).items[0]!.placed).toMatchObject({ x: 39, y: 32, width: dropped.width, height: dropped.height });
     // The layer follows (its outline is where the item is).
     await expect.poll(() => outline.evaluate((node) => (node as HTMLElement).style.left)).not.toBe(droppedLeft);
@@ -133,7 +134,7 @@ test("Reset position and Reset size work from the page, Take picture says why it
     await layer.mouse.move(handleBox.x + handleBox.width / 2 + 60, handleBox.y + handleBox.height / 2, { steps: 6 });
     await layer.mouse.up();
     await expect.poll(async () => (await state(page)).items[0]!.placed.width).toBeGreaterThan(first.placed.width);
-    await page.locator('[data-testid^="layout-reset-size-"]').click();
+    await layer.getByTestId("layout-frame-reset-size").click();
     await expect.poll(async () => (await state(page)).items[0]!.placed.width).toBe(first.placed.width);
 
     // The game isn't running: Take picture is off and says why.
@@ -156,6 +157,79 @@ test("Reset position and Reset size work from the page, Take picture says why it
   }
 });
 
+test("Del and the toolbar next to the selected item remove it, hide it on the canvas and open its panel", async () => {
+  const userData = await newUserData();
+  await seed(userData);
+  const { app, page } = await launch(userData, [MODULES], { seed: false });
+  try {
+    // The item's panel runs in the game's workspace, so Settings has a panel to open.
+    await openModule(page, "tavora.clock-counter");
+    await overlayPage(app, page, GAME);
+    await expect.poll(async () => (await state(page))?.items?.length).toBe(1);
+    const id: string = (await state(page)).items[0]!.id;
+    const send = (message: unknown) => page.evaluate((message) => (window as unknown as Host).tavoraHost.layout.send(message), message);
+    const layer = layerOf(app);
+    const bar = layer.getByTestId("layout-frame-toolbar");
+    const outline = layer.locator('[data-testid^="layout-item-"]').first();
+    // Nothing is selected: no toolbar.
+    await expect(bar).toHaveCount(0);
+    await send({ type: "select", id });
+    await expect(bar).toBeVisible();
+    await expect(bar.getByRole("button")).toHaveCount(5);
+
+    // Where the item starts there is no room above it: the toolbar sits below, with a gap.
+    const below = { item: (await outline.boundingBox())!, bar: (await bar.boundingBox())! };
+    expect(below.bar.y).toBeGreaterThan(below.item.y + below.item.height);
+    // Dropped lower down, it sits above.
+    await send({ type: "commit", id, rect: { x: 400, y: 600, width: 300, height: 200 } });
+    await expect.poll(async () => (await state(page)).items[0]!.placed.y).toBe(600);
+    await expect.poll(async () => (await bar.boundingBox())!.y).toBeLessThan((await outline.boundingBox())!.y);
+    const above = { item: (await outline.boundingBox())!, bar: (await bar.boundingBox())! };
+    expect(above.bar.y + above.bar.height).toBeLessThan(above.item.y);
+
+    // A tooltip names a button.
+    await bar.getByTestId("layout-frame-settings").hover();
+    await expect(layer.getByRole("tooltip")).toHaveText("Settings");
+
+    // Del leaves a text field alone.
+    await page.getByTestId("layout-search").focus();
+    await page.keyboard.press("Delete");
+    await expect.poll(async () => (await state(page)).items.length).toBe(1);
+
+    // Hide on canvas is the eye of the Sources list.
+    await bar.getByTestId("layout-frame-hide").click();
+    await expect.poll(async () => (await state(page)).items[0]!.hiddenOnCanvas).toBe(true);
+    await expect(outline).toHaveCount(0);
+    await send({ type: "canvas-hidden", id, hidden: false });
+    await expect(outline).toBeVisible();
+
+    // Settings opens the panel in its dialog right over the Overlay page, which stays where it is, with the frame selected.
+    await bar.getByTestId("layout-frame-settings").click();
+    await expect(page.getByTestId("panel-dialog")).toBeVisible();
+    await expect(page.getByTestId("overlay-page")).toBeVisible();
+    await page.getByTestId("panel-dialog-close").click();
+    await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
+    await expect(page.getByTestId("overlay-page")).toBeVisible();
+    expect((await state(page)).selection).toBe(id);
+    // A double-click on the frame does the same.
+    const box = (await layer.locator('[data-testid^="layout-item-"]').first().boundingBox())!;
+    await layer.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.getByTestId("panel-dialog")).toBeVisible();
+    await page.getByTestId("panel-dialog-close").click();
+    await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
+
+    // Del on the canvas takes the selected item out of the setup.
+    await send({ type: "select", id });
+    await expect(bar).toBeVisible();
+    await layer.locator("body").press("Delete");
+    await expect.poll(async () => (await state(page)).items.length).toBe(0);
+    expect((await state(page)).selection).toBeNull();
+    await expect(bar).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
 test("The page opens on Everywhere, lists every panel with the reason one can't go in, adds one, and the rail adds and removes a game's overlay", async () => {
   const userData = await newUserData();
   await mkdir(userData, { recursive: true });
@@ -173,18 +247,17 @@ test("The page opens on Everywhere, lists every panel with the reason one can't 
     expect(view.sources).toHaveLength(1);
     const todos = view.sources[0]!;
     expect(todos).toMatchObject({ name: "To-Dos", from: "Path of Exile 2", game: "Path of Exile 2", block: "game-only" });
-    // A game's panel can't go into Everywhere: it is folded away with the others that can't be used, greyed out, with the reason.
+    // A game's panel can't go into Everywhere: it isn't listed at all, and there is no folded section for it.
     await expect(row(page, todos.id)).toHaveCount(0);
-    await page.getByTestId("layout-unusable-toggle").click();
-    await expect(row(page, todos.id)).toContainText("Only for Path of Exile 2");
-    await expect(row(page, todos.id).getByRole("button").first()).toBeDisabled();
+    await expect(page.getByTestId("layout-unusable-toggle")).toHaveCount(0);
     await expect(page.getByTestId("layout-pick")).toBeVisible();
 
-    // The search narrows the list.
-    await page.getByTestId("layout-search").fill("zzz");
-    await expect(row(page, todos.id)).toHaveCount(0);
+    // A search that names it says why in one quiet line; one that names nothing says so.
     await page.getByTestId("layout-search").fill("to-do");
-    await expect(row(page, todos.id)).toBeVisible();
+    await expect(page.getByTestId("layout-blocked")).toHaveText("To-Dos: Only for Path of Exile 2");
+    await expect(row(page, todos.id)).toHaveCount(0);
+    await page.getByTestId("layout-search").fill("zzz");
+    await expect(page.getByTestId("layout-empty")).toHaveText("No panels found.");
     await page.getByTestId("layout-search").fill("");
 
     // The game gets its setup the way a user adds it (the rail's Add overlay); the dropdown then lists it, and the panel can be added there.
@@ -197,7 +270,9 @@ test("The page opens on Everywhere, lists every panel with the reason one can't 
     expect((await state(page)).selection).toContain(todos.id);
     await expect(page.getByTestId("layout-count")).toHaveText("1 of 8");
     await expect(page.getByTestId("layout-settings")).toContainText("To-Dos");
-    await expect(row(page, todos.id).getByLabel("Already here")).toBeVisible();
+    // What the setup holds shows a gear and an eye instead of a check mark.
+    await expect(row(page, todos.id).getByLabel("Settings of To-Dos")).toBeVisible();
+    await expect(row(page, todos.id).getByTestId(/layout-eye-/)).toBeVisible();
 
     // The rail: Remove overlay for the game takes its setup away, Add overlay brings an empty one back.
     const railMenu = async (workspaceId: string, item: string) => {

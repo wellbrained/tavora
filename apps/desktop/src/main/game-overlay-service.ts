@@ -12,7 +12,7 @@
 // panels return to their workspace slots, overlays are click-through again, and the game gets the keyboard back.
 //
 // Tavora only reads which window is in front (foreground.ts) and draws its own windows above it.
-import type { GameOverlayResult, JsonValue } from "@tavora/sdk/protocol";
+import type { GameOverlayResult, JsonValue, OverlaySource } from "@tavora/sdk/protocol";
 import type { GameOverlaysView } from "../shared/host-api";
 import { translate, type Language } from "../shared/i18n";
 import { DEFAULT_RECT, anchorOf, contentScale, type AnchoredRect, type LegacyRect } from "../shared/overlay-anchor";
@@ -117,6 +117,8 @@ export interface LayoutSource {
   setGrid(grid: GridSetting): void;
   /** A panel goes into a setup, at the size its module prefers; "refused" when it may not go there. */
   addPanel(setupId: string, panel: { owner: string; moduleId: string; workspaceId: string; instanceId: string }): AddResult;
+  /** A source of a panel (an overlay for one key of its module) goes into a setup; "exists" when that setup has it. */
+  addOverlay(setupId: string, overlay: { owner: string; moduleId: string; workspaceId: string; key: string }): AddResult;
   /** An item of a personal workspace moves between Everywhere and All games with its place and settings. */
   move(ref: LayoutItemRef, from: string, to: string): AddResult | "missing";
   setRect(setupId: string, ref: LayoutItemRef, rect: AnchoredRect): boolean;
@@ -208,6 +210,8 @@ export interface GameOverlayServiceOptions {
   language(): Language;
   /** Something the Settings page or the hotkeys depend on changed. */
   changed(): void;
+  /** The overlays of a module in a workspace scope changed (the Overlay page added or removed one, or a panel did): its panels hear the keys now shown. */
+  overGameChanged?(module: { owner: string; moduleId: string; workspaceId: string }): void;
   /** How often the window in front is looked at. */
   everyMs?: number;
 }
@@ -298,6 +302,8 @@ export class GameOverlays {
   /** The one pending look after a state appeared or went, so a page calling panel.setLive in a loop costs one look. */
   private liveTick: ReturnType<typeof setTimeout> | undefined;
   private readonly liveWatchers = new Map<string, Set<(state: JsonValue | null | undefined) => void>>();
+  /** What each panel passes to overlay.setSources (its own list, last call wins); kept while the panel exists, in memory only. */
+  private readonly sourceLists = new Map<string, { owner: string; sources: OverlaySource[] }>();
 
   private constructor(
     private readonly options: GameOverlayServiceOptions,
@@ -347,11 +353,28 @@ export class GameOverlays {
       if (this.options.platform.supported) this.options.shell.openSetting("game-overlays");
       return "off";
     }
+    const added = this.putOverlay(module, workspaceId, key, landingSetup(workspaceId, this.options.workspaces.scopeOf(workspaceId)), true);
+    return added === "full" || added === "refused" ? "full" : "shown";
+  }
+
+  /**
+   * The Overlay page puts a source of a panel into the setup shown (not the landing one). Whether it went in; "exists" when
+   * the setup has it already.
+   */
+  private addOverlayTo(setupId: string, module: StreamingModule, workspaceId: string, key: string): AddResult {
+    if (!module.manifest.overlay || key.startsWith(RESERVED_KEY_PREFIX)) return "refused";
+    return this.putOverlay(module, workspaceId, key, setupId, false);
+  }
+
+  /**
+   * Puts the overlay for `key` into `setup` and links it. `anywhere`: one the user has in any setup already stays where it is
+   * (the module's own show); else only this setup counts.
+   */
+  private putOverlay(module: StreamingModule, workspaceId: string, key: string, setup: string, anywhere: boolean): AddResult {
     const subject: GameOverlaySubject = { owner: module.owner, moduleId: module.manifest.id, workspaceId, key };
-    const setup = landingSetup(workspaceId, this.options.workspaces.scopeOf(workspaceId));
     const made = !this.store.hasSetup(setup);
-    const added = this.store.find(subject) ? "exists" : this.store.add(setup, subject, startRect(module.manifest.overlaySize ?? null, this.startArea(), DEFAULT_RECT));
-    if (added === "full" || added === "refused") return "full";
+    const added = this.store.find(subject, anywhere ? undefined : setup) ? "exists" : this.store.add(setup, subject, startRect(module.manifest.overlaySize ?? null, this.startArea(), DEFAULT_RECT));
+    if (added === "full" || added === "refused") return added;
     try {
       // The link holds what the module publishes for the key; making it now means the page hears it from the start.
       // When it can't be made (too many for the module) nothing of the overlay is kept, nor the setup made for it.
@@ -365,7 +388,8 @@ export class GameOverlays {
     this.revive(overlayId(subject));
     this.options.changed();
     this.tick();
-    return "shown";
+    this.options.overGameChanged?.({ owner: module.owner, moduleId: module.manifest.id, workspaceId });
+    return added;
   }
 
   /** overlay.hideOverGame: takes this module's overlay for `key` out of every setup; nothing happens when there is none. */
@@ -433,6 +457,19 @@ export class GameOverlays {
     if (had !== (state !== null) && panel) this.lookSoon();
   }
 
+  /** overlay.setSources: what the panel can show over the game on its own (already checked); the Overlay page lists it under the panel. */
+  setSources(instanceId: string, owner: string, sources: OverlaySource[]): void {
+    // An empty list still says the panel lists its things (it has none right now), so it isn't offered as a whole either.
+    this.sourceLists.set(instanceId, { owner, sources: sources.map((source) => ({ ...source, ...(source.size ? { size: { ...source.size } } : {}) })) });
+    this.layoutPort?.refresh();
+  }
+
+  /** What a panel told overlay.setSources, if it did and its module is still its publisher's; null when it never did. */
+  sourcesOf(instanceId: string, owner: string): readonly OverlaySource[] | null {
+    const entry = this.sourceLists.get(instanceId);
+    return entry && entry.owner === owner ? entry.sources : null;
+  }
+
   /** One look at the window in front soon, however many calls ask for it before then. */
   private lookSoon(): void {
     if (this.liveTick) return;
@@ -457,6 +494,7 @@ export class GameOverlays {
 
   /** The panel is closing for good: its live state goes. */
   forgetLive(instanceId: string): void {
+    if (this.sourceLists.delete(instanceId)) this.layoutPort?.refresh();
     if (!this.liveStates.has(instanceId)) return;
     this.clearLive(instanceId);
     if (this.hasPanel(instanceId)) this.lookSoon();
@@ -504,6 +542,7 @@ export class GameOverlays {
   /** The user removed an overlay from one setup (or the module took it out of every setup), or closed it in the layer. */
   remove(subject: GameOverlaySubject, setupId?: string): void {
     this.forget((overlay, id) => sameOverlay(overlay, subject) && (setupId === undefined || id === setupId));
+    this.options.overGameChanged?.({ owner: subject.owner, moduleId: subject.moduleId, workspaceId: subject.workspaceId });
   }
 
   /** The games running now (game-watch.ts): the window remembered for a game that stopped is no window to take a picture of. */
@@ -1195,6 +1234,10 @@ export class GameOverlays {
       },
       running: () => [...this.running].sort((a, b) => Number(b === this.front) - Number(a === this.front)),
       addPanel: (setupId, panel) => this.addPanelTo(setupId, panel),
+      addOverlay: (setupId, overlay) => {
+        const module = this.options.installed.shown(overlay.moduleId);
+        return module && module.owner === overlay.owner ? this.addOverlayTo(setupId, module, overlay.workspaceId, overlay.key) : "refused";
+      },
       move: (ref, from, to) => this.moveItem(ref, from, to),
       setRect: (setupId, ref, rect) => {
         const done = this.store.setRect(setupId, ref, rect);

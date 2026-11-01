@@ -73,6 +73,7 @@ import {
   type NetworkResponse,
   type OverlayLinkResult,
   type GameOverlayResult,
+  type OverlaySource,
   type PageResponse,
   type PanelContent,
   type PanelLaunch,
@@ -106,6 +107,7 @@ export type {
   HotkeySetResult,
   OverlayLinkResult,
   GameOverlayResult,
+  OverlaySource,
   AiUsageAccountInfo,
   AiUsageReading,
   SystemApp,
@@ -173,7 +175,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.4";
+export const SDK_VERSION = "0.3.5";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -299,6 +301,13 @@ export interface TavoraSDK {
     closeDialog(): Promise<void>;
     /** Fires when this panel's dialog opens or closes, whoever did it. Needs Tavora 0.21.95 or newer. */
     onDialogChange(fn: (open: boolean) => void): Unsubscribe;
+    /**
+     * Fires when the user presses Settings on one of this module's overlays on the Overlay page. Tavora has put this panel in
+     * its dialog already (as `openDialog` does, over the Overlay page), so show the settings of what `key` shows, as you would
+     * after `openDialog`; the dialog closes with `closeDialog` or the user's close button, and the panel stays where it was. Without a
+     * handler the dialog shows the panel as it is. Needs Tavora 0.23.43 or newer.
+     */
+    onOpenSettings(fn: (target: { key: string }) => void): Unsubscribe;
     /**
      * What this panel's live view shows: while the user shows the panel in their game and the in-game layer is closed,
      * Tavora shows the module's overlay page (the manifest's `overlay`) read-only and click-through in the panel's spot,
@@ -617,6 +626,20 @@ export interface TavoraSDK {
     /** The keys of this module's game overlays in the panel's workspace scope. Tavora 0.21.3 and newer. */
     overGame(): Promise<string[]>;
     /**
+     * Tells Tavora what this panel can show over the game on its own, one entry per item with the overlay key it shows from
+     * (`OverlaySource`). The Overlay page lists them under the panel, and a click on one adds the overlay for its key to the
+     * setup, as `showOverGame` does. Once a panel has sent a list, it is not offered as a whole any more. Call it again when
+     * the items or their names change: the last call wins, and an empty list says there is nothing right now (the panel is still not offered as a whole). At most
+     * `LIMITS.maxOverlaySources` entries; needs no click and no permission. Needs Tavora 0.23.43 or newer.
+     */
+    setSources(sources: OverlaySource[]): Promise<void>;
+    /**
+     * Fires when the game overlays of this module in the panel's workspace scope changed without this panel asking: the user
+     * added or removed one on the Overlay page. `keys` is what `overGame()` gives now; publish the state of the new ones.
+     * Needs Tavora 0.23.43 or newer.
+     */
+    onOverGameChange(fn: (keys: string[]) => void): Unsubscribe;
+    /**
      * Opens a small Tavora window with the overlay for `key` at its real size, on a dark, light or checkered background,
      * so the user can see what it looks like. Call it from the click or key press that asked for it; it needs no
      * permission, but the module needs an `overlay` in its manifest. It works whether or not Game overlays and Stream
@@ -724,6 +747,8 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
   >();
   const listeners = new Map<EventName, Set<(data: unknown) => void>>();
   let suspended = false;
+  /** A Settings press that arrived before the page registered `panel.onOpenSettings` (the page was still starting): given to the first handler. */
+  let earlySettings: Events["panel.openSettings"] | null = null;
 
   port.onmessage = (event: MessageEvent<HostMessage>) => {
     const message = event.data;
@@ -732,6 +757,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     if ("event" in message) {
       if (message.event === "lifecycle.suspend") suspended = true;
       if (message.event === "lifecycle.resume") suspended = false;
+      if (message.event === "panel.openSettings" && !listeners.get(message.event)?.size) earlySettings = message.data as Events["panel.openSettings"];
       for (const fn of listeners.get(message.event) ?? []) {
         try {
           fn(message.data);
@@ -772,6 +798,15 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     if (event === "lifecycle.suspend" && suspended) {
       try {
         listener(null);
+      } catch (error) {
+        console.error(`[tavora] ${event} listener failed`, error);
+      }
+    }
+    if (event === "panel.openSettings" && earlySettings) {
+      const early = earlySettings;
+      earlySettings = null;
+      try {
+        listener(early);
       } catch (error) {
         console.error(`[tavora] ${event} listener failed`, error);
       }
@@ -862,6 +897,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         await call("panel.setDialog", { open: false });
       },
       onDialogChange: (fn) => on("panel.dialog", ({ open }) => fn(open)),
+      onOpenSettings: (fn) => on("panel.openSettings", ({ key }) => fn({ key })),
       onNavigate: (fn) => {
         navigate = fn;
         return () => {
@@ -1089,6 +1125,10 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         await call("overlay.hideOverGame", { key });
       },
       overGame: () => call("overlay.overGame", undefined),
+      setSources: async (sources) => {
+        await call("overlay.setSources", { sources });
+      },
+      onOverGameChange: (fn) => on("overlay.overGameChanged", ({ keys }) => fn(keys)),
       preview: async (key) => {
         await call("overlay.preview", { key });
       },

@@ -4,7 +4,7 @@ import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, shell, WebContentsView, type Session } from "electron";
-import type { CallName, Capability, GameOverlayResult, ReadOnlyFile, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
+import type { CallName, Capability, GameOverlayResult, ReadOnlyFile, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, OverlaySource, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
 import { gestureCounts, type Opacity } from "./game-overlays";
@@ -132,6 +132,8 @@ export interface ModuleViewOptions {
     showOverGame(key: string): GameOverlayResult;
     hideOverGame(key: string): void;
     overGame(): string[];
+    /** overlay.setSources from this panel (already checked): what it can show over the game, for the Overlay page. */
+    setSources(sources: OverlaySource[]): void;
     /** Opens the preview window of the overlay for `key`; throws INVALID_PARAMS for a module without an overlay page. */
     preview(key: string): Promise<void>;
   };
@@ -766,6 +768,7 @@ export class ModuleView {
           },
           hideOverGame: (key) => this.options.overlay.hideOverGame(key),
           overGame: () => this.options.overlay.overGame(),
+          setSources: (sources) => this.options.overlay.setSources(sources),
           preview: async (key) => {
             // One click opens one window, so a page cannot keep opening windows.
             this.refuseOverGame("overlay.preview");
@@ -936,6 +939,18 @@ export class ModuleView {
       unsubscribe: (event, channelId) => connector.unsubscribe(instanceId, event, channelId),
       image: (url) => connector.image(url),
     };
+  }
+
+  /** The Overlay page added or removed one of this module's game overlays in this workspace scope: `keys` is what overlay.overGame gives now. */
+  overGameChanged(keys: string[]): void {
+    this.bridge?.emit("overlay.overGameChanged", { keys: [...keys] });
+  }
+
+  /** The user pressed Settings on an overlay's frame on the Overlay page: the panel is in its dialog, and shows the settings of what `key` shows. False while the page has not connected yet. */
+  openSettings(key: string): boolean {
+    if (!this.bridge) return false;
+    this.bridge.emit("panel.openSettings", { key });
+    return true;
   }
 
   /** The user pressed a hotkey set for this module in this workspace. */

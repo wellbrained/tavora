@@ -569,10 +569,13 @@ export class PanelViews {
     return this.dialogState?.instanceId === instanceId && this.dialogState.bounds !== null;
   }
 
-  /** The panel may go in a dialog: it is in sight in the workspace. Opens it (a dialog already open closes) unless the panel has it. */
-  openDialog(instanceId: string, size: { width: number; height: number }): boolean {
+  /**
+   * The panel may go in a dialog: it is in sight in the workspace, or (`unplaced`, for the Overlay page) it runs in the
+   * background with no slot, and its dialog is over that page. Opens it (a dialog already open closes) unless the panel has it.
+   */
+  openDialog(instanceId: string, size: { width: number; height: number }, unplaced = false): boolean {
     const adapter = this.get(instanceId);
-    if (!adapter || adapter.kind !== "module" || !this.bounds.has(instanceId) || this.lent.has(instanceId)) return false;
+    if (!adapter || adapter.kind !== "module" || (!unplaced && !this.bounds.has(instanceId)) || this.lent.has(instanceId)) return false;
     if (this.dialogState?.instanceId === instanceId) return false;
     this.closeDialog();
     this.dialogState = { instanceId, ...size, bounds: null };
