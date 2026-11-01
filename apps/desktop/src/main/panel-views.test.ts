@@ -392,6 +392,7 @@ describe("panel dialog", () => {
     const b = rig.add(B);
     rig.views.place([place(A), place(B, 400)]);
     rig.views.openDialog(A, { width: 600, height: 400 });
+    await vi.advanceTimersByTimeAsync(0);
     expect(a.inDialog).toBe(true);
     expect(rig.views.snapshot().dialog).toEqual({ instanceId: A, width: 600, height: 400, placed: false });
     await rig.views.freeze(true);
@@ -403,11 +404,12 @@ describe("panel dialog", () => {
     expect(rig.views.snapshot().dialog?.placed).toBe(true);
   });
 
-  it("ignores a bad frame, and closing puts the panel back in its slot", () => {
+  it("ignores a bad frame, and closing puts the panel back in its slot", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);
     rig.views.place([place(A, 10, 10, 300, 200)]);
     rig.views.openDialog(A, { width: 600, height: 400 });
+    await vi.advanceTimersByTimeAsync(0);
     rig.views.placeDialog({ x: 0, y: 0, width: 0, height: 100 });
     rig.views.placeDialog({ x: "a" });
     expect(rig.views.inDialog(A)).toBe(false);
@@ -421,12 +423,55 @@ describe("panel dialog", () => {
     expect(a.bounds).toEqual({ x: 10, y: 10, width: 300, height: 200 });
   });
 
-  it("opens another dialog by closing the one before", () => {
+  it("shows the panel as it was before the dialog opened, though its module switched the page when told", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    const before = a.image;
+    let release: (image: string | null) => void = () => undefined;
+    a.capture = () => new Promise((resolve) => (release = resolve));
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    // The module is told once the picture is taken, not before.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.inDialog).toBe(false);
+    const freezing = rig.views.freeze(true);
+    a.capture = () => Promise.resolve("data:image/jpeg;base64,SETTINGS");
+    release(before);
+    await freezing;
+    expect(a.inDialog).toBe(true);
+    expect(rig.frozen).toEqual([{ [A]: before }]);
+  });
+
+  it("lets a panel with no slot open its dialog (over the Overlay page), telling its module without a picture", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    expect(rig.views.openDialog(A, { width: 600, height: 400 })).toBe(false);
+    expect(rig.views.openDialog(A, { width: 600, height: 400 }, true)).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.inDialog).toBe(true);
+    await rig.views.freeze(true);
+    expect(rig.frozen).toEqual([{}]);
+  });
+
+  it("does not tell the module of a dialog that closed before its picture was taken", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    a.capture = () => new Promise(() => undefined);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    rig.views.closeDialog(A);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(a.inDialog).toBe(false);
+  });
+
+  it("opens another dialog by closing the one before", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);
     rig.add(B);
     rig.views.place([place(A), place(B, 400)]);
     rig.views.openDialog(A, { width: 1, height: 1 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.inDialog).toBe(true);
     rig.views.openDialog(B, { width: 2, height: 2 });
     expect(a.inDialog).toBe(false);
     expect(rig.views.dialog?.instanceId).toBe(B);

@@ -120,3 +120,37 @@ test("Add all gives one welcome, from the last panel only, the one in front", as
     await app.close();
   }
 });
+
+test("the picture behind a dialog shows the panel as it was, not the page the dialog switched it to", async () => {
+  const { app, page } = await launch(undefined, [PROBES]);
+  try {
+    await addProbe(page);
+    await expectModuleText(app, PROBE, "probe-auto", "opened");
+    await page.getByTestId("panel-dialog-close").click();
+    await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
+    // The page is green until its module is told a dialog is open, then red, and green again once it closes (probe.js).
+    await expectModuleText(app, PROBE, "probe-status", "ready");
+    await page.waitForTimeout(800);
+    await expect.poll(() => inModule<string>(app, PROBE, "document.body.style.background")).toBe("rgb(0, 200, 0)");
+
+    await gesture(app);
+    expect((await openDialog(app)).ok).toBe(true);
+    await expect(page.getByTestId("panel-dialog")).toBeVisible();
+    const still = page.locator('img[elementtiming^="frozen:"]');
+    await expect(still).toHaveCount(1);
+    await page.screenshot({ path: process.env.DIALOG_STILL_SHOT ?? test.info().outputPath("dialog-still.png") });
+    const [red, green] = await still.evaluate(async (img: HTMLImageElement) => {
+      await img.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const context = canvas.getContext("2d")!;
+      context.drawImage(img, 0, 0);
+      const [r = 0, g = 0] = context.getImageData(Math.floor(canvas.width / 2), 20, 1, 1).data;
+      return [r, g];
+    });
+    expect(green).toBeGreaterThan(red);
+  } finally {
+    await app.close();
+  }
+});
