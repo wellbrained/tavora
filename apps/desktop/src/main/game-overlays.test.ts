@@ -863,3 +863,30 @@ describe("copying a setup to a game", () => {
     expect(again.find(subject("clock", "personal"), "valheim")).toMatchObject({ mode: "toggle", opacity: 50, hideFromCapture: true });
   });
 });
+
+describe("snapshots for undo", () => {
+  it("bring a removed overlay and panel back as they were, in their places in the list", async () => {
+    const store = await loadStore(dir);
+    store.add("poe2", subject("a"));
+    store.add("poe2", subject("b"));
+    store.add("poe2", subject("c"));
+    store.addPanel("poe2", panel());
+    store.update(subject("b"), { mode: "toggle", opacity: 25, hideFromCapture: true, rect: at(0.5, 0.25, 0.1, 0.1) }, "poe2");
+    const overlay = store.snapshot("poe2", { kind: "overlay", subject: subject("b") })!;
+    const inGame = store.snapshot("poe2", { kind: "panel", instanceId: ID })!;
+    expect(overlay).toMatchObject({ kind: "overlay", index: 1 });
+    store.forget((item) => item.key === "b");
+    store.forgetPanels(() => true);
+    expect(store.restore("poe2", overlay)).toBe("added");
+    expect(store.restore("poe2", inGame)).toBe("added");
+    expect(keys(store, "poe2")).toEqual(["poe2/a", "poe2/b", "poe2/c"]);
+    expect(store.find(subject("b"), "poe2")).toMatchObject({ mode: "toggle", opacity: 25, hideFromCapture: true, rect: at(0.5, 0.25, 0.1, 0.1) });
+    expect(panelIds(store, "poe2")).toEqual([ID]);
+    // Already there: nothing doubles.
+    expect(store.restore("poe2", overlay)).toBe("exists");
+    // A snapshot is a copy: changing the item later doesn't change it.
+    store.update(subject("b"), { opacity: 100 }, "poe2");
+    expect(overlay.item.opacity).toBe(25);
+    expect(store.snapshot("poe2", { kind: "overlay", subject: subject("nope") })).toBeNull();
+  });
+});

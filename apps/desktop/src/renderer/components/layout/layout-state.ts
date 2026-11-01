@@ -1,9 +1,9 @@
 // The Overlay page's view as the main process last sent it (the page in the main window and the layer on the canvas both
-// use it), and the keys both share: the arrow keys nudge the selected item, Del and Backspace remove it, Ctrl+Z and Ctrl+Y
-// undo and redo, Esc lets go of the selection.
+// use it), and the keys both share: the arrow keys nudge the selected frames together (Shift: 5 cells), Del and Backspace
+// remove them, Ctrl+Z and Ctrl+Y (or Ctrl+Shift+Z) undo and redo, Esc lets go of the selection.
 import { nextTick, onBeforeUnmount, onMounted, shallowRef } from "vue";
 import type { LayoutMessage, LayoutStills, LayoutView } from "../../../shared/layout-view";
-import { nudge } from "../../../shared/layout-math";
+import { boundsOf, moveTogether, nudge } from "../../../shared/layout-math";
 import { api } from "../../host";
 
 export const view = shallowRef<LayoutView | null>(null);
@@ -52,21 +52,30 @@ export function onLayoutKey(event: KeyboardEvent): void {
   }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   if (key === "escape") {
-    send({ type: "select", id: null });
+    if (current.selected.length) send({ type: "select", ids: [] });
     return;
   }
+  const selected = current.items.filter((candidate) => current.selected.includes(candidate.id));
   if (key === "delete" || key === "backspace") {
-    const selected = current.items.find((candidate) => candidate.id === current.selection);
-    if (!selected) return;
+    if (!selected.length) return;
     event.preventDefault();
-    if (!event.repeat) send({ type: "remove", id: selected.id });
+    if (!event.repeat) send({ type: "remove", ids: selected.map((item) => item.id) });
     return;
   }
   const direction = ({ arrowleft: "left", arrowright: "right", arrowup: "up", arrowdown: "down" } as const)[key as "arrowleft"];
-  const item = current.items.find((candidate) => candidate.id === current.selection);
-  if (!direction || !item || item.hiddenOnCanvas) return;
+  // Frames hidden on the canvas can't be seen, so they don't move with the keys.
+  const moving = selected.filter((item) => !item.hiddenOnCanvas);
+  if (!direction || !moving.length) return;
   event.preventDefault();
-  send({ type: "commit", id: item.id, rect: nudge(item.placed, direction, current.canvas, current.cell, event.shiftKey) });
+  const box = boundsOf(moving.map((item) => item.placed));
+  const to = nudge(box, direction, current.canvas, current.cell, event.shiftKey);
+  const rects = moveTogether(
+    moving.map((item) => item.placed),
+    to.x - box.x,
+    to.y - box.y,
+    current.canvas,
+  );
+  send(moving.length === 1 ? { type: "commit", id: moving[0]!.id, rect: rects[0]! } : { type: "commit", items: moving.map((item, index) => ({ id: item.id, rect: rects[index]! })) });
 }
 
 /** Installs the shared keys on the page while the component is mounted. */

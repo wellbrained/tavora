@@ -143,6 +143,20 @@ export function anchorOf(rect: Rect, game: Rect): AnchoredRect {
   })!;
 }
 
+/**
+ * The anchored rectangle of a rectangle on screen that keeps the anchors it had (`h`, `v`): what several frames moved
+ * together get, so each stays tied to its own edge or centre however far the group went.
+ */
+export function anchorAs(rect: Rect, game: Rect, h: HorizontalAnchor, v: VerticalAnchor): AnchoredRect {
+  if (game.width <= 0 || game.height <= 0) return { ...DEFAULT_RECT };
+  const unit = game.height;
+  const left = rect.x - game.x;
+  const top = rect.y - game.y;
+  const x = h === "left" ? left : h === "right" ? game.width - left - rect.width : left + rect.width / 2 - game.width / 2;
+  const y = v === "top" ? top : v === "bottom" ? game.height - top - rect.height : top + rect.height / 2 - game.height / 2;
+  return normalizeAnchored({ h, v, x: x / unit, y: y / unit, width: rect.width / unit, height: rect.height / unit })!;
+}
+
 /** A legacy rectangle that makes sense, or null (what version 2 files held). */
 export function normalizeLegacy(rect: unknown): LegacyRect | null {
   if (typeof rect !== "object" || rect === null) return null;

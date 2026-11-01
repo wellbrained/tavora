@@ -147,6 +147,27 @@ export function nudge(rect: Rect, direction: "left" | "right" | "up" | "down", c
   };
 }
 
+/** The box around several rectangles (the selection moved as one). */
+export function boundsOf(rects: readonly Rect[]): Rect {
+  if (rects.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
+  const left = Math.min(...rects.map((rect) => rect.x));
+  const top = Math.min(...rects.map((rect) => rect.y));
+  const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
+ * Several rectangles moved together by (`dx`, `dy`), the move cut short so the box around them stays on the canvas:
+ * they keep their places to each other.
+ */
+export function moveTogether(rects: readonly Rect[], dx: number, dy: number, canvas: Canvas): Rect[] {
+  const box = boundsOf(rects);
+  const x = clamp(Math.round(dx), -box.x, Math.max(-box.x, canvas.width - box.x - box.width));
+  const y = clamp(Math.round(dy), -box.y, Math.max(-box.y, canvas.height - box.y - box.height));
+  return rects.map((rect) => ({ ...rect, x: rect.x + x, y: rect.y + y }));
+}
+
 /** The canvas for a game window of this shape: the reference height and the width that matches. */
 export function canvasFor(aspect: number): Canvas {
   const valid = Number.isFinite(aspect) && aspect > 0.2 && aspect < 8 ? aspect : 16 / 9;

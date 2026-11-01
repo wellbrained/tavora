@@ -111,7 +111,12 @@ export interface LayoutView {
   cell: number;
   /** The smallest size an item can have, in canvas units. */
   minSize: number;
+  /** The one item selected, when exactly one is (its toolbar and settings show); null with none or several. */
   selection: string | null;
+  /** Every item selected, in the order of `items`. */
+  selected: string[];
+  /** The side the Sources list is on (Settings > Overlays). */
+  sidebar: "left" | "right";
   items: LayoutItemView[];
   /** The setup's picture (a Tavora-internal address), or null. Any setup can have one: a game's, or Everywhere's and All games'. */
   picture: string | null;
@@ -129,6 +134,22 @@ export interface LayoutView {
   copied: { gameId: string; text: string } | null;
 }
 
+/** What the Settings box changes on one or several items at once. */
+export interface LayoutSettingsChange {
+  mode?: "always" | "toggle";
+  opacity?: 100 | 75 | 50 | 25;
+  hideFromCapture?: boolean;
+}
+
+/** One item, or several at once (the selection). */
+export type LayoutIds = { id: string } | { ids: string[] };
+
+/** The items a message is for. */
+export const idsOf = (message: LayoutIds): string[] => ("ids" in message ? message.ids : [message.id]);
+
+/** How many items one message may name: more than a setup can hold is never needed. */
+const MAX_IDS = 64;
+
 export type LayoutMessage =
   | { type: "game"; gameId: string }
   /** Add overlay for a game workspace (the dropdown), and show it. */
@@ -143,25 +164,29 @@ export type LayoutMessage =
   /** Copy the frames of the setup shown into a game's setup: `replace` puts them where its own were, `add` after them. */
   | { type: "copy-setup"; to: string; mode: "replace" | "add" }
   | { type: "select"; id: string | null }
+  /** Several items selected at once (Ctrl or Shift and a click, or a box drawn on the canvas). */
+  | { type: "select"; ids: string[] }
   /** The canvas area in the window (shell only), in DIPs from the window's top left; null while it can't be drawn. */
   | { type: "bounds"; bounds: Rect | null }
   /** A list or menu is open over the canvas, so the live pages step aside (shell only). */
   | { type: "cover"; covered: boolean }
   /** An item is being dragged: where it is now, in canvas units. */
-  | { type: "drag"; id: string; rect: Rect }
+  | ({ type: "drag" } & Placement)
   /** The drag stopped without a drop (pointer lost, focus lost, page loaded again): nothing was moved. */
   | { type: "drag-end" }
   /** An item was dropped (or nudged): where it is, in canvas units. */
-  | { type: "commit"; id: string; rect: Rect }
+  | ({ type: "commit" } & Placement)
   | { type: "undo" }
   | { type: "redo" }
-  | { type: "canvas-hidden"; id: string; hidden: boolean }
+  | ({ type: "canvas-hidden"; hidden: boolean } & LayoutIds)
   /** Reset position: back to where a new item starts, at the size it has. */
-  | { type: "reset"; id: string }
+  | ({ type: "reset" } & LayoutIds)
   /** Reset size: back to the size a new item gets, where it is. */
-  | { type: "reset-size"; id: string }
-  /** Del on the canvas and the toolbar's Remove: the item leaves the setup shown, as Remove in its settings does. */
-  | { type: "remove"; id: string }
+  | ({ type: "reset-size" } & LayoutIds)
+  /** Del on the canvas and the toolbar's Remove: the items leave the setup shown, as Remove in its settings does. */
+  | ({ type: "remove" } & LayoutIds)
+  /** The Settings box: Show, Opacity or Hide from capture of the selected items, as one undo step. */
+  | { type: "change"; ids: string[]; change: LayoutSettingsChange }
   /** The toolbar's Settings: the settings of what the item shows (its panel, until a module can be asked for more). */
   | { type: "settings"; id: string }
   /** Back to the workspace. */
@@ -170,6 +195,12 @@ export type LayoutMessage =
   | { type: "choose-picture" }
   | { type: "remove-picture" }
   | { type: "dismiss-notice" };
+
+/** Where items are while dragged or once dropped: one, or several moved together. */
+export type Placement = { id: string; rect: Rect } | { items: { id: string; rect: Rect }[] };
+
+/** The items of a drag or a drop with where each is. */
+export const placementsOf = (message: Placement): { id: string; rect: Rect }[] => ("items" in message ? message.items : [{ id: message.id, rect: message.rect }]);
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown, max = 300): value is string => typeof value === "string" && value.length > 0 && value.length <= max;
@@ -201,8 +232,13 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
       return text(raw.choice, 64) ? { type: "preview", choice: raw.choice } : null;
     case "copy-setup":
       return text(raw.to, 128) && (raw.mode === "replace" || raw.mode === "add") ? { type: "copy-setup", to: raw.to, mode: raw.mode } : null;
-    case "select":
+    case "select": {
+      if (raw.ids !== undefined) {
+        const ids = parseIds(raw.ids);
+        return ids ? { type: "select", ids } : null;
+      }
       return raw.id === null ? { type: "select", id: null } : text(raw.id) ? { type: "select", id: raw.id } : null;
+    }
     case "bounds": {
       if (raw.bounds === null) return { type: "bounds", bounds: null };
       const bounds = parseRect(raw.bounds);
@@ -212,8 +248,19 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
       return typeof raw.covered === "boolean" ? { type: "cover", covered: raw.covered } : null;
     case "drag":
     case "commit": {
+      if (raw.items !== undefined) {
+        if (!Array.isArray(raw.items) || raw.items.length === 0 || raw.items.length > MAX_IDS) return null;
+        const items: { id: string; rect: Rect }[] = [];
+        for (const item of raw.items as unknown[]) {
+          if (!isObject(item) || !text(item.id)) return null;
+          const rect = parseRect(item.rect);
+          if (!rect) return null;
+          items.push({ id: item.id, rect });
+        }
+        return { type: raw.type, items } as LayoutMessage;
+      }
       const rect = parseRect(raw.rect);
-      return text(raw.id) && rect ? { type: raw.type, id: raw.id, rect } : null;
+      return text(raw.id) && rect ? ({ type: raw.type, id: raw.id, rect } as LayoutMessage) : null;
     }
     case "undo":
     case "redo":
@@ -224,16 +271,61 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
     case "dismiss-notice":
     case "done":
       return { type: raw.type };
-    case "canvas-hidden":
-      return text(raw.id) && typeof raw.hidden === "boolean" ? { type: "canvas-hidden", id: raw.id, hidden: raw.hidden } : null;
+    case "canvas-hidden": {
+      if (typeof raw.hidden !== "boolean") return null;
+      const many = idsIn(raw);
+      return many ? { type: "canvas-hidden", hidden: raw.hidden, ...many } : null;
+    }
     case "reset":
     case "reset-size":
-    case "remove":
+    case "remove": {
+      const many = idsIn(raw);
+      return many ? ({ type: raw.type, ...many } as LayoutMessage) : null;
+    }
+    case "change": {
+      const ids = parseIds(raw.ids);
+      const change = parseSettingsChange(raw.change);
+      return ids && ids.length > 0 && change ? { type: "change", ids, change } : null;
+    }
     case "settings":
       return text(raw.id) ? { type: raw.type, id: raw.id } : null;
     default:
       return null;
   }
+}
+
+/** A list of item ids, or null. An empty list is fine (nothing selected). */
+function parseIds(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length > MAX_IDS || !value.every((id) => text(id))) return null;
+  return [...new Set(value as string[])];
+}
+
+/** `id`, or a non-empty `ids`, of a message. */
+function idsIn(raw: Record<string, unknown>): LayoutIds | null {
+  if (raw.ids !== undefined) {
+    const ids = parseIds(raw.ids);
+    return ids && ids.length > 0 ? { ids } : null;
+  }
+  return text(raw.id) ? { id: raw.id } : null;
+}
+
+/** A Settings box change with at least one known setting, or null. */
+function parseSettingsChange(value: unknown): LayoutSettingsChange | null {
+  if (!isObject(value)) return null;
+  const change: LayoutSettingsChange = {};
+  if (value.mode !== undefined) {
+    if (value.mode !== "always" && value.mode !== "toggle") return null;
+    change.mode = value.mode;
+  }
+  if (value.opacity !== undefined) {
+    if (value.opacity !== 100 && value.opacity !== 75 && value.opacity !== 50 && value.opacity !== 25) return null;
+    change.opacity = value.opacity;
+  }
+  if (value.hideFromCapture !== undefined) {
+    if (typeof value.hideFromCapture !== "boolean") return null;
+    change.hideFromCapture = value.hideFromCapture;
+  }
+  return Object.keys(change).length > 0 ? change : null;
 }
 
 /** The labels of the grid menu, in order. */

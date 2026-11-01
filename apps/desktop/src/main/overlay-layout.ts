@@ -6,13 +6,13 @@
 // shows exactly what the canvas shows at once, and it tells the canvas where to put the live pages.
 import { LIMITS, type OverlaySource } from "@tavora/sdk/protocol";
 import { translate, type Language, type MessageKey } from "../shared/i18n";
-import { UndoStack } from "../shared/layout-history";
+import { UndoHistory, type Change, type HistoryTarget } from "../shared/layout-history";
 import { canvasFor, gridCell, type Canvas } from "../shared/layout-math";
 import { PREVIEW_DEFAULT, PREVIEW_MONITOR, PREVIEW_RATIOS, previewAspect, ratioLabel, type Monitor } from "../shared/layout-preview";
-import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, type LayoutItemView, type LayoutMessage, type LayoutSourceChild, type LayoutSourceView, type LayoutView, type SourceBlock } from "../shared/layout-view";
-import { DEFAULT_RECT, MIN_OVERLAY_SIZE, REFERENCE_HEIGHT, anchorOf, contentScale, placeAnchored, placeLegacy, type AnchoredRect, type Rect } from "../shared/overlay-anchor";
+import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, idsOf, placementsOf, type LayoutItemView, type LayoutMessage, type LayoutSettingsChange, type LayoutSourceChild, type LayoutSourceView, type LayoutView, type SourceBlock } from "../shared/layout-view";
+import { DEFAULT_RECT, MIN_OVERLAY_SIZE, REFERENCE_HEIGHT, anchorAs, anchorOf, contentScale, placeAnchored, placeLegacy, type AnchoredRect, type Rect } from "../shared/overlay-anchor";
 import type { GameOverlaySource } from "./game-overlay-page";
-import type { LayoutItemInfo, LayoutSource } from "./game-overlay-service";
+import type { LayoutItemInfo, LayoutItemRef, LayoutItemSnapshot, LayoutSource } from "./game-overlay-service";
 import { DEFAULT_GAME_SIZE, allowedIn, isGameSetup, panelWindowId, placeItem, type OverlayScope } from "./game-overlays";
 import { captureSize, type LayoutPictures } from "./layout-pictures";
 import type { Library } from "./library";
@@ -67,7 +67,7 @@ export interface OverlayLayoutOptions<W extends LayoutWindow = LayoutWindow> {
   /** The connected monitors in their own pixels, the main one first: the choices of "Preview as". */
   monitors(): Monitor[];
   /** The Game overlays switch in Settings > Overlays, read as it is now. */
-  settings: Pick<Library, "gameOverlays">;
+  settings: Pick<Library, "gameOverlays"> & Partial<Pick<Library, "overlaySidebar">>;
   language(): Language;
   /** Every panel from every workspace. */
   sources(): SourcePanel[];
@@ -134,15 +134,34 @@ export function freeSpot(size: { width: number; height: number }, canvas: Canvas
 
 const sameRect = (a: AnchoredRect, b: AnchoredRect) => a.h === b.h && a.v === b.v && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 
+/**
+ * An item of one setup as an undo step keeps it: what the page can change on it (its place, Show, Opacity, Hide from
+ * capture, hidden on the canvas) and the snapshot that brings it back exactly once it was removed.
+ */
+export interface ItemState {
+  ref: LayoutItemRef;
+  rect: AnchoredRect;
+  mode: "always" | "toggle";
+  opacity: 100 | 75 | 50 | 25;
+  hideFromCapture: boolean;
+  hidden: boolean;
+  snapshot: LayoutItemSnapshot | null;
+}
+
+/** Whether two states are the same for undo (the snapshot only brings an item back; it is not compared). */
+export const sameState = (a: ItemState | null, b: ItemState | null): boolean =>
+  a === null || b === null ? a === b : sameRect(a.rect, b.rect) && a.mode === b.mode && a.opacity === b.opacity && a.hideFromCapture === b.hideFromCapture && a.hidden === b.hidden;
 
 export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   private window: W | null = null;
   /** The setup shown (its id: Everywhere, All games, or a game's). */
   private gameId = "";
-  private selection: string | null = null;
-  /** Hidden on the canvas only (the eye in the list); forgotten when the window closes. */
-  private readonly hiddenOnCanvas = new Set<string>();
-  private readonly undo = new UndoStack<AnchoredRect>();
+  /** The items selected, in the order they were picked. */
+  private selected: string[] = [];
+  /** Hidden on the canvas only (the eye in the list), per setup; forgotten when the window closes. */
+  private readonly hiddenOnCanvas = new Map<string, Set<string>>();
+  /** Undo and redo, one history per setup, while the page is open (memory only). */
+  private readonly histories = new Map<string, UndoHistory<ItemState>>();
   private bounds: Rect | null = null;
   private covered = false;
   private notice: string | null = null;
@@ -157,8 +176,9 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   private readonly pending = new Set<Promise<unknown>>();
   private pictureFor = "";
   private sentView = "";
-  /** Items seen in the last look, to drop the undo steps of those that went. */
+  /** Items seen in the last look (of the setup `knownIn`), to drop the undo steps of those that went without the page. */
   private known = new Set<string>();
+  private knownIn = "";
   private idleTimer: ReturnType<typeof setInterval> | undefined;
   /** Whether the panel behind each item runs, as of the last look. */
   private running = new Map<string, boolean>();
@@ -187,8 +207,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       return;
     }
     this.hiddenOnCanvas.clear();
-    this.undo.clear();
-    this.selection = null;
+    this.histories.clear();
+    this.selected = [];
     this.notice = null;
     this.copied = null;
     this.sentView = "";
@@ -198,15 +218,34 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     this.refresh();
   }
 
-  /** Shows another setup: what was selected, dragged or done in the one before stays with it. */
+  /** Shows another setup: what was selected or dragged in the one before is let go; its undo history stays with it. */
   private switchTo(gameId: string): void {
     if (gameId === this.gameId) return;
     this.gameId = gameId;
-    this.selection = null;
-    this.undo.clear();
+    this.selected = [];
     this.notice = null;
     this.copied = null;
     this.dragging.clear();
+  }
+
+  /** The undo history of a setup (the one shown by default). */
+  private history(setupId = this.gameId): UndoHistory<ItemState> {
+    let history = this.histories.get(setupId);
+    if (!history) {
+      history = new UndoHistory<ItemState>();
+      this.histories.set(setupId, history);
+    }
+    return history;
+  }
+
+  /** The items of a setup hidden on the canvas. */
+  private hiddenIn(setupId: string): Set<string> {
+    let hidden = this.hiddenOnCanvas.get(setupId);
+    if (!hidden) {
+      hidden = new Set();
+      this.hiddenOnCanvas.set(setupId, hidden);
+    }
+    return hidden;
   }
 
 
@@ -386,8 +425,9 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       live: info.source !== null,
       idle: info.source === null || info.source.state() !== null ? null : this.running.get(info.id) === false ? "stopped" : "empty",
       off: info.mode === "toggle" && !info.toggledOn,
-      hiddenOnCanvas: this.hiddenOnCanvas.has(info.id),
+      hiddenOnCanvas: this.hiddenIn(gameId).has(info.id),
     }));
+    const selected = items.filter((item) => this.selected.includes(item.id)).map((item) => item.id);
     return {
       games,
       sources: this.sources(gameId, infos, panels),
@@ -400,13 +440,15 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       grid,
       cell: gridCell(grid, REFERENCE_HEIGHT),
       minSize: this.minimum(shape),
-      selection: this.selection !== null && items.some((item) => item.id === this.selection) ? this.selection : null,
+      selection: selected.length === 1 ? selected[0]! : null,
+      selected,
+      sidebar: this.options.settings.overlaySidebar ?? "right",
       items,
       picture: this.pictureFor === gameId ? this.picture : null,
       canTakePicture,
       pictureHint: canTakePicture ? null : isGameSetup(gameId) && this.options.source.gameRunning(gameId) ? "switch" : "start",
-      canUndo: this.undo.canUndo,
-      canRedo: this.undo.canRedo,
+      canUndo: this.history(gameId).canUndo,
+      canRedo: this.history(gameId).canRedo,
       enabled: this.options.settings.gameOverlays,
       notice: this.notice,
       copied: this.copied,
@@ -456,11 +498,13 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     ]);
     this.running = new Map(shown.map((info, index) => [info.id, runs[index] ?? false]));
     const view = this.view();
-    // Undo steps of an item that is gone can't be taken back.
+    // Undo steps of an item that went without the page doing it (its module removed it, its workspace was deleted) can't be taken back.
     const present = new Set(view.items.map((item) => item.id));
-    for (const id of this.known) if (!present.has(id)) this.undo.forget(id);
+    if (this.knownIn === view.gameId) for (const id of this.known) if (!present.has(id)) this.history(view.gameId).forget(view.gameId, id);
     this.known = present;
-    for (const id of [...this.hiddenOnCanvas]) if (!present.has(id)) this.hiddenOnCanvas.delete(id);
+    this.knownIn = view.gameId;
+    const hidden = this.hiddenIn(view.gameId);
+    for (const id of [...hidden]) if (!present.has(id)) hidden.delete(id);
     const text = JSON.stringify(view);
     if (text !== this.sentView) {
       this.sentView = text;
@@ -505,7 +549,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         break;
       case "add-source":
         if (!fromShell) return;
-        this.addSource(message.id, message.key);
+        this.record([this.gameId], () => this.addSource(message.id, message.key));
         break;
       case "copy-setup":
         if (!fromShell) return;
@@ -513,7 +557,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         break;
       case "move":
         if (!fromShell) return;
-        this.moveItem(message.id, message.to);
+        this.record([this.gameId, message.to], () => this.moveItem(message.id, message.to));
         break;
       case "grid":
         this.options.source.setGrid(message.grid);
@@ -522,7 +566,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         if (!fromShell || !this.setPreview(message.choice)) return;
         break;
       case "select":
-        this.selection = message.id;
+        this.selected = "ids" in message ? [...message.ids] : message.id === null ? [] : [message.id];
         break;
       case "bounds":
         if (!fromShell) return;
@@ -533,14 +577,16 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         this.covered = message.covered;
         break;
       case "drag":
-        this.dragging.set(message.id, this.fit(message.rect));
+        for (const { id, rect } of placementsOf(message)) this.dragging.set(id, this.fit(rect));
         // Only the live pages follow; the pages draw the drag themselves.
         this.placeOnly();
         return;
-      case "commit":
-        this.dragging.delete(message.id);
-        this.commit(message.id, message.rect);
+      case "commit": {
+        const placements = placementsOf(message);
+        for (const { id } of placements) this.dragging.delete(id);
+        this.record([this.gameId], () => this.commit(placements));
         break;
+      }
       case "undo":
         this.step("before");
         break;
@@ -551,18 +597,28 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         // The drag stopped without a drop (the pointer was lost, the window lost the focus, the page was loaded again).
         this.dragging.clear();
         break;
-      case "canvas-hidden":
-        if (message.hidden) this.hiddenOnCanvas.add(message.id);
-        else this.hiddenOnCanvas.delete(message.id);
+      case "canvas-hidden": {
+        const ids = idsOf(message).filter((id) => this.info(id));
+        this.record([this.gameId], () => {
+          const hidden = this.hiddenIn(this.gameId);
+          for (const id of ids) {
+            if (message.hidden) hidden.add(id);
+            else hidden.delete(id);
+          }
+        });
         break;
+      }
       case "reset":
-        this.resetPosition(message.id);
+        this.record([this.gameId], () => idsOf(message).forEach((id) => this.resetPosition(id)));
         break;
       case "reset-size":
-        this.resetSize(message.id);
+        this.record([this.gameId], () => idsOf(message).forEach((id) => this.resetSize(id)));
         break;
       case "remove":
-        this.removeItem(message.id);
+        this.record([this.gameId], () => this.removeItems(idsOf(message)));
+        break;
+      case "change":
+        this.record([this.gameId], () => this.changeSettings(message.ids, message.change));
         break;
       case "settings": {
         const info = this.info(message.id);
@@ -615,7 +671,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       const child = view.children?.find((one) => one.key === key);
       if (!child) return;
       if (child.item) {
-        this.selection = child.item;
+        this.selected = [child.item];
         return;
       }
       if (child.block !== null) {
@@ -629,7 +685,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         const info = this.itemsOf(setupId).find((one) => one.ref.kind === "overlay" && sameSubject(one.ref.subject, panel, subject.key));
         if (info) {
           this.fitNew(setupId, info, panel.sources?.find((source) => source.key === subject.key));
-          this.selection = info.id;
+          this.selected = [info.id];
         }
       }
       return;
@@ -640,7 +696,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     }
     const added = this.options.source.addPanel(setupId, { owner: panel.owner, moduleId: panel.moduleId, workspaceId: panel.workspaceId, instanceId });
     if (added === "full") this.say("overlays.full");
-    else if (added === "added") this.selection = panelWindowId(instanceId);
+    else if (added === "added") this.selected = [panelWindowId(instanceId)];
   }
 
   /** The size an overlay needs on the canvas (what its panel said, with room around it), on the grid and never below the smallest size; null when the panel said nothing. */
@@ -709,13 +765,28 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     return sentences.join(" ");
   }
 
-  /** Del and the toolbar's Remove: the item leaves the setup shown (not the others), and nothing is selected any more. */
-  private removeItem(id: string): void {
-    const info = this.info(id);
-    if (!info) return;
-    this.options.source.remove(this.gameId, info.ref);
-    this.undo.forget(id);
-    this.selection = null;
+  /** Del and the toolbar's Remove: the items leave the setup shown (not the others), and are not selected any more. */
+  private removeItems(ids: readonly string[]): void {
+    for (const id of ids) {
+      const info = this.info(id);
+      if (!info) continue;
+      this.options.source.remove(this.gameId, info.ref);
+      this.hiddenIn(this.gameId).delete(id);
+    }
+    this.selected = this.selected.filter((id) => !ids.includes(id));
+  }
+
+  /** The Settings box: Show, Opacity or Hide from capture of each item named, in the setup shown. */
+  private changeSettings(ids: readonly string[], change: LayoutSettingsChange): void {
+    for (const id of ids) {
+      const info = this.info(id);
+      if (info) this.setSettings(this.gameId, info, change);
+    }
+  }
+
+  private setSettings(setupId: string, info: Pick<LayoutItemInfo, "ref">, change: LayoutSettingsChange): void {
+    if (info.ref.kind === "panel") this.options.source.setPanel(setupId, info.ref.instanceId, change);
+    else this.options.source.setOverlay(setupId, info.ref.subject, change);
   }
 
   /** Move to…: the item goes to another setup, if its workspace may be there, with its place and settings. */
@@ -726,7 +797,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     if (!info || !this.moveTargets(info, setupId, games).some((game) => game.id === to)) return;
     const moved = this.options.source.move(info.ref, setupId, to);
     if (moved === "full") this.say("overlays.full");
-    else if (moved === "added" || moved === "exists") this.selection = null;
+    else if (moved === "added" || moved === "exists") this.selected = this.selected.filter((one) => one !== id);
   }
 
   /** Moves the live pages to the dragged rectangles without a new view. */
@@ -753,18 +824,24 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     };
   }
 
-  /** An item was dropped at `rect` (canvas units): it is kept as anchored to the nearest edges, and an undo step is made. */
-  private commit(id: string, rect: Rect): void {
-    const info = this.info(id);
-    if (!info) return;
+  /**
+   * Items were dropped (or nudged) at these rectangles (canvas units). One alone is anchored to its nearest edges; several
+   * moved together each keep the anchors they had, so the group lands as it was arranged and each stays tied to its edge.
+   */
+  private commit(placements: readonly { id: string; rect: Rect }[]): void {
     const shape = this.shape(this.current(this.games()));
-    const fitted = this.fit(rect);
-    // Dropped where it already is: nothing to keep, and no rounding of its place.
-    const now = this.placed(info, shape);
-    if (fitted.x === now.x && fitted.y === now.y && fitted.width === now.width && fitted.height === now.height) return;
-    const next = anchorOf(fitted, { x: 0, y: 0, ...shape.canvas });
-    if (sameRect(next, this.rectOf(info, shape))) return;
-    this.change(info, this.rectOf(info, shape), next);
+    const canvas = { x: 0, y: 0, ...shape.canvas };
+    for (const { id, rect } of placements) {
+      const info = this.info(id);
+      if (!info) continue;
+      const fitted = this.fit(rect);
+      // Dropped where it already is: nothing to keep, and no rounding of its place.
+      const now = this.placed(info, shape);
+      if (fitted.x === now.x && fitted.y === now.y && fitted.width === now.width && fitted.height === now.height) continue;
+      const before = this.rectOf(info, shape);
+      const next = placements.length > 1 ? anchorAs(fitted, canvas, before.h, before.v) : anchorOf(fitted, canvas);
+      this.change(info, before, next);
+    }
   }
 
   /** Reset position: back to the corner where a new item starts, at the size it has. */
@@ -794,29 +871,101 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     this.change(info, before, { ...before, ...this.options.source.startSize(info.ref, size) });
   }
 
-  /** Keeps `after` as the item's position in the setup shown when it differs from `before`, with an undo step. */
+  /** Keeps `after` as the item's position in the setup shown when it differs from `before`. */
   private change(info: LayoutItemInfo, before: AnchoredRect, after: AnchoredRect): void {
     if (sameRect(before, after)) return;
-    if (!this.options.source.setRect(this.gameId, info.ref, after)) return;
-    this.undo.push({ target: info.id, before, after: this.rectOf(this.info(info.id)!, this.shape(this.gameId)) });
+    this.options.source.setRect(this.gameId, info.ref, after);
+  }
+
+  // ── Undo ────────────────────────────────────────────────────────────
+
+  /** An item of a setup as undo sees it now; null when the setup hasn't it. */
+  private stateOf(setupId: string, id: string): ItemState | null {
+    const info = this.itemsOf(setupId).find((one) => one.id === id);
+    if (!info) return null;
+    return {
+      ref: info.ref,
+      rect: this.rectOf(info, this.shape(setupId)),
+      mode: info.mode,
+      opacity: info.opacity,
+      hideFromCapture: info.hideFromCapture,
+      hidden: this.hiddenIn(setupId).has(id),
+      snapshot: this.options.source.snapshot(setupId, info.ref),
+    };
+  }
+
+  /** Every item of these setups, as undo sees them now. */
+  private statesOf(setupIds: readonly string[]): Map<string, { setup: string; id: string; state: ItemState }> {
+    const states = new Map<string, { setup: string; id: string; state: ItemState }>();
+    for (const setup of new Set(setupIds)) {
+      for (const info of this.itemsOf(setup)) {
+        const state = this.stateOf(setup, info.id);
+        if (state) states.set(`${setup}\n${info.id}`, { setup, id: info.id, state });
+      }
+    }
+    return states;
   }
 
   /**
-   * Ctrl+Z and Ctrl+Y: sets one side of a step back, but only if the item is still where the step left it. One that was
-   * moved since (in the game, say) is not put back over that: its step is dropped and the one before it is tried.
+   * Runs one user action as one undo step: every item of the setups it may touch is looked at before and after, and what
+   * changed (added, removed, moved, set) is kept in the history of the setup shown. An action that changed nothing makes no step.
+   */
+  private record(setupIds: readonly string[], action: () => void): void {
+    const before = this.statesOf(setupIds);
+    action();
+    const after = this.statesOf(setupIds);
+    const changes: Change<ItemState>[] = [];
+    for (const [key, { setup, id, state }] of before) changes.push({ setup, id, before: state, after: after.get(key)?.state ?? null });
+    for (const [key, { setup, id, state }] of after) if (!before.has(key)) changes.push({ setup, id, before: null, after: state });
+    this.history().push(changes, sameState);
+    this.syncKnown();
+  }
+
+  /** What the page did itself is not taken for an item going without it. */
+  private syncKnown(): void {
+    this.known = new Set(this.itemsOf(this.gameId).map((info) => info.id));
+    this.knownIn = this.gameId;
+  }
+
+  /** How undo reads and writes the setups. */
+  private readonly target: HistoryTarget<ItemState> = {
+    read: (setup, id) => this.stateOf(setup, id),
+    same: sameState,
+    write: (setup, id, from, to) => {
+      const hidden = this.hiddenIn(setup);
+      if (to === null) {
+        if (from) this.options.source.remove(setup, from.ref);
+        hidden.delete(id);
+        return true;
+      }
+      if (from === null) {
+        if (!to.snapshot || !this.options.source.restore(setup, to.snapshot)) return false;
+      } else {
+        if (!sameRect(from.rect, to.rect)) this.options.source.setRect(setup, to.ref, to.rect);
+        const change: LayoutSettingsChange = {};
+        if (from.mode !== to.mode) change.mode = to.mode;
+        if (from.opacity !== to.opacity) change.opacity = to.opacity;
+        if (from.hideFromCapture !== to.hideFromCapture) change.hideFromCapture = to.hideFromCapture;
+        if (Object.keys(change).length > 0) this.setSettings(setup, to, change);
+      }
+      if (to.hidden) hidden.add(id);
+      else hidden.delete(id);
+      return true;
+    },
+  };
+
+  /**
+   * Ctrl+Z and Ctrl+Y: the newest step of the setup shown is taken back or done again, but only while every item it
+   * touched is still as the step left it; one changed since (in the game, say) is dropped and the one before it is tried.
+   * What the step touched is selected.
    */
   private step(side: "before" | "after"): void {
-    const from = side === "before" ? "after" : "before";
-    for (;;) {
-      const step = side === "before" ? this.undo.undo() : this.undo.redo();
-      if (!step) return;
-      const info = this.info(step.target);
-      if (info && sameRect(this.rectOf(info, this.shape(this.current(this.games()))), step[from])) {
-        if (this.options.source.setRect(this.gameId, info.ref, step[side])) this.selection = step.target;
-        return;
-      }
-      this.undo.discard(step);
-    }
+    const history = this.history();
+    const changes = side === "before" ? history.undo(this.target) : history.redo(this.target);
+    if (!changes) return;
+    const present = new Set(this.itemsOf(this.gameId).map((info) => info.id));
+    this.selected = [...new Set(changes.filter((change) => change.setup === this.gameId && present.has(change.id)).map((change) => change.id))];
+    this.syncKnown();
   }
 
   // ── The game's picture ──────────────────────────────────────────────

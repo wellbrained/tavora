@@ -42,6 +42,7 @@ interface Item {
   panel?: boolean;
   page?: boolean;
   opacity?: 100 | 75 | 50 | 25;
+  hideFromCapture?: boolean;
 }
 
 function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handles?: Record<string, string>; running?: string[]; sources?: SourcePanel[]; startSizes?: { overlay?: { width: number; height: number }; panel?: { width: number; height: number } }; monitors?: { id: number; width: number; height: number }[]; capture?: Buffer | null | "throws"; choose?: Buffer | "cancelled" | "bad"; enabled?: boolean } = {}) {
@@ -68,6 +69,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     enabled: options.enabled ?? true,
     changed: [] as { overlay?: unknown; panel?: unknown }[],
     removed: [] as LayoutItemRef[],
+    restored: [] as string[],
     /** The window handles seen, and the games the watcher says run (by default those with a handle). */
     handles: { ...options.handles } as Record<string, string>,
     running: new Set(options.running ?? Object.keys(options.handles ?? {})),
@@ -84,7 +86,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
       scope: item.scope,
       mode: item.mode ?? "always",
       opacity: item.opacity ?? 100,
-      hideFromCapture: false,
+      hideFromCapture: item.hideFromCapture ?? false,
       rect: item.rect,
       ...(item.legacy ? { legacy: item.legacy } : {}),
       hotkey: null,
@@ -139,9 +141,34 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
       world.sizedOn.push(size);
       return ref.kind === "panel" ? (options.startSizes?.panel ?? { width: DEFAULT_PANEL_ANCHORED.width, height: DEFAULT_PANEL_ANCHORED.height }) : (options.startSizes?.overlay ?? { width: DEFAULT_RECT.width, height: DEFAULT_RECT.height });
     },
-    setOverlay: (_setup, _subject, change) => void world.changed.push({ overlay: change }),
-    setPanel: (_setup, _id, change) => void world.changed.push({ panel: change }),
-    remove: (_setup, ref) => void world.removed.push(ref),
+    setOverlay: (setupId, subject, change) => {
+      world.changed.push({ overlay: change });
+      const item = find(setupId, { kind: "overlay", subject });
+      if (item) Object.assign(item, change);
+    },
+    setPanel: (setupId, instanceId, change) => {
+      world.changed.push({ panel: change });
+      const item = find(setupId, { kind: "panel", instanceId });
+      if (item) Object.assign(item, change);
+    },
+    remove: (setupId, ref) => {
+      world.removed.push(ref);
+      const item = find(setupId, ref);
+      if (item) world.items = world.items.filter((other) => other !== item);
+    },
+    snapshot: (setupId, ref) => {
+      const item = find(setupId, ref);
+      if (!item) return null;
+      // The stand-in keeps the test's own item; the layout never looks inside a snapshot.
+      return { saved: { item: structuredClone(item), index: world.items.indexOf(item) }, key: null } as never;
+    },
+    restore: (setupId, snapshot) => {
+      const { item, index } = (snapshot as unknown as { saved: { item: Item; index: number } }).saved;
+      if (find(setupId, item.panel ? { kind: "panel", instanceId: item.key } : { kind: "overlay", subject: { owner: "official", moduleId: "tavora.clock-counter", workspaceId: item.gameId, key: item.key } })) return true;
+      world.items.splice(index, 0, { ...structuredClone(item), setup: setupId });
+      world.restored.push(item.key);
+      return true;
+    },
     layerOpen: () => false,
   };
   const window: LayoutWindow = {
@@ -1429,5 +1456,144 @@ describe("copying a setup to a game", () => {
     layout.handle({ type: "copy-setup", to: "valheim", mode: "replace" }, true);
     layout.handle({ type: "game", gameId: "valheim" }, true);
     expect(layout.view().copied).toBeNull();
+  });
+});
+
+describe("several frames at once", () => {
+  const SEEN = { elden: { width: 1920, height: 1080 } };
+  const right = (x: number, y: number): AnchoredRect => ({ h: "right", v: "bottom", x, y, width: 0.2, height: 0.1 });
+
+  it("selects several, shows no single selection then, and keeps only those still there", () => {
+    const { layout, world } = setup([clock("a"), clock("b"), clock("c")], { seen: SEEN });
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "select", ids: [ids[2]!, ids[0]!] }, false);
+    // In the order of the items, not of the clicks.
+    expect(layout.view()).toMatchObject({ selected: [ids[0], ids[2]], selection: null });
+    world.items = world.items.filter((item) => item.key !== "c");
+    layout.refresh();
+    expect(layout.view()).toMatchObject({ selected: [ids[0]], selection: ids[0] });
+    layout.handle({ type: "select", ids: [] }, true);
+    expect(layout.view().selected).toEqual([]);
+  });
+
+  it("moves several together, each keeping its own anchor, as one undo step", () => {
+    // a is tied to the right edge although it sits on the left (the user put it there that way); b to the bottom right.
+    const { layout, world } = setup([clock("a", "elden", { h: "right", v: "top", x: 1.4, y: 0.1, width: 0.2, height: 0.1 }), clock("b", "elden", right(0.1, 0.1))], { seen: SEEN });
+    layout.open("elden");
+    const [a, b] = layout.view().items;
+    expect(a!.placed).toMatchObject({ x: 192, y: 108 });
+    const before = world.items.map((item) => item.rect);
+    // 54 canvas units = 0.05 of the height, to the right and down.
+    layout.handle({ type: "commit", items: [a!, b!].map((item) => ({ id: item.id, rect: { ...item.placed, x: item.placed.x + 54, y: item.placed.y + 54 } })) }, false);
+    expect(world.items[0]!.rect).toMatchObject({ h: "right", v: "top" });
+    expect(world.items[0]!.rect.x).toBeCloseTo(1.35, 5);
+    expect(world.items[0]!.rect.y).toBeCloseTo(0.15, 5);
+    expect(world.items[1]!.rect).toMatchObject({ h: "right", v: "bottom" });
+    expect(world.items[1]!.rect.x).toBeCloseTo(0.05, 5);
+    expect(world.items[1]!.rect.y).toBeCloseTo(0.05, 5);
+    layout.handle({ type: "undo" }, false);
+    expect(world.items.map((item) => item.rect)).toEqual(before);
+    expect(layout.view().selected).toEqual([a!.id, b!.id]);
+    expect(layout.view().canUndo).toBe(false);
+  });
+
+  it("anchors one frame alone to its nearest edges, as before", () => {
+    const { layout, world } = setup([clock("a", "elden", at(0.1, 0.1, 0.2, 0.1))], { seen: SEEN });
+    layout.open("elden");
+    const id = layout.view().items[0]!.id;
+    layout.handle({ type: "commit", items: [{ id, rect: { x: 1920 - 216 - 54, y: 1080 - 108 - 54, width: 216, height: 108 } }] }, false);
+    expect(world.items[0]!.rect).toMatchObject({ h: "right", v: "bottom", x: 0.05, y: 0.05 });
+  });
+
+  it("removes several with Del, and one undo brings them back exactly, in their places in the list", () => {
+    const { layout, world } = setup([clock("a", "elden", at(0.1, 0.1, 0.2, 0.1)), { ...clock("b", "elden", right(0.1, 0.1)), opacity: 50, mode: "toggle" }, clock("c")], { seen: SEEN });
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    const saved = structuredClone(world.items);
+    layout.handle({ type: "select", ids: [ids[0]!, ids[1]!] }, false);
+    layout.handle({ type: "canvas-hidden", id: ids[1]!, hidden: true }, true);
+    layout.handle({ type: "remove", ids: [ids[0]!, ids[1]!] }, false);
+    expect(layout.view().items.map((item) => item.id)).toEqual([ids[2]]);
+    expect(layout.view().selected).toEqual([]);
+    layout.handle({ type: "undo" }, false);
+    expect(world.items.map(({ key, rect, opacity, mode }) => ({ key, rect, opacity, mode }))).toEqual(saved.map(({ key, rect, opacity, mode }) => ({ key, rect, opacity, mode })));
+    // What was hidden on the canvas is hidden again, and the two are selected.
+    expect(layout.view().items.find((item) => item.id === ids[1])!.hiddenOnCanvas).toBe(true);
+    expect(layout.view().selected).toEqual([ids[0], ids[1]]);
+    layout.handle({ type: "redo" }, false);
+    expect(world.items.map((item) => item.key)).toEqual(["c"]);
+    layout.handle({ type: "undo" }, false);
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().items.find((item) => item.id === ids[1])!.hiddenOnCanvas).toBe(false);
+  });
+
+  it("hides, resets and changes the settings of several as one step each", () => {
+    const { layout, world } = setup([clock("a", "elden", at(0.3, 0.3, 0.2, 0.1)), clock("b", "elden", at(0.5, 0.5, 0.2, 0.1))], { seen: SEEN });
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "change", ids, change: { opacity: 25, hideFromCapture: true } }, true);
+    expect(world.items.map((item) => item.opacity)).toEqual([25, 25]);
+    layout.handle({ type: "canvas-hidden", ids, hidden: true }, false);
+    layout.handle({ type: "reset", ids }, false);
+    expect(world.items.map((item) => item.rect.x)).toEqual([DEFAULT_RECT.x, DEFAULT_RECT.x]);
+    layout.handle({ type: "undo" }, false);
+    expect(world.items.map((item) => item.rect.x)).toEqual([0.3, 0.5]);
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().items.every((item) => !item.hiddenOnCanvas)).toBe(true);
+    layout.handle({ type: "undo" }, false);
+    expect(world.items.map((item) => item.opacity ?? 100)).toEqual([100, 100]);
+    expect(world.changed.at(-1)).toEqual({ overlay: { opacity: 100, hideFromCapture: false } });
+    expect(layout.view().canUndo).toBe(false);
+  });
+
+  it("makes no step for a change that changes nothing", () => {
+    const { layout } = setup([clock("a")], { seen: SEEN });
+    layout.open("elden");
+    const id = layout.view().items[0]!.id;
+    layout.handle({ type: "change", ids: [id], change: { opacity: 100 } }, true);
+    layout.handle({ type: "remove", ids: ["nope"] }, true);
+    expect(layout.view().canUndo).toBe(false);
+  });
+
+  it("takes an added frame away again, and Move to… back", () => {
+    const { layout, world } = setup([{ key: "p", gameId: "personal", scope: "all", setup: LAYOUT_EVERYWHERE, rect: at(0.1, 0.1, 0.2, 0.2) }], { sources: [panel("notes", "personal")] });
+    layout.open(LAYOUT_EVERYWHERE);
+    layout.handle({ type: "add-source", id: "notes" }, true);
+    expect(layout.view().items).toHaveLength(2);
+    layout.handle({ type: "undo" }, true);
+    expect(layout.view().items).toHaveLength(1);
+    layout.handle({ type: "redo" }, true);
+    expect(layout.view().items).toHaveLength(2);
+    expect(world.restored).toEqual(["notes"]);
+    const id = layout.view().items[0]!.id;
+    layout.handle({ type: "move", id, to: LAYOUT_ALL_GAMES }, true);
+    expect(world.items.find((item) => item.key === "p")!.setup).toBe(LAYOUT_ALL_GAMES);
+    layout.handle({ type: "undo" }, true);
+    // Back in Everywhere at its place, and gone from All games.
+    expect(world.items.filter((item) => item.key === "p").map((item) => item.setup)).toEqual([LAYOUT_EVERYWHERE]);
+    expect(layout.view().selected).toEqual([id]);
+  });
+
+  it("keeps an undo history per setup while the page is open", () => {
+    const { layout, world } = setup([clock("a"), clock("b", "poe2")], { seen: { ...SEEN, poe2: { width: 1920, height: 1080 } } });
+    layout.open("elden");
+    layout.handle({ type: "commit", id: layout.view().items[0]!.id, rect: { x: 500, y: 500, width: 400, height: 200 } }, false);
+    layout.handle({ type: "game", gameId: "poe2" }, true);
+    expect(layout.view().canUndo).toBe(false);
+    layout.handle({ type: "game", gameId: "elden" }, true);
+    expect(layout.view().canUndo).toBe(true);
+    layout.handle({ type: "undo" }, true);
+    expect(world.items[0]!.rect).toEqual(at(0.036, 0.03, 0.356, 0.16));
+    // A new visit of the page starts over.
+    layout.close();
+    layout.open("elden");
+    expect(layout.view()).toMatchObject({ canUndo: false, canRedo: false });
+  });
+
+  it("names the side the Sources list is on", () => {
+    const { layout } = setup([]);
+    layout.open("elden");
+    expect(layout.view().sidebar).toBe("right");
   });
 });

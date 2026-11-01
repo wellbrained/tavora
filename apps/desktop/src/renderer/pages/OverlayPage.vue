@@ -119,7 +119,7 @@ const setup = computed({
 });
 const setupOptions = computed(() => (view.value?.games ?? []).map((item) => ({ value: item.id, label: item.name })));
 const setupName = computed(() => view.value?.games.find((item) => item.id === view.value?.gameId)?.name ?? "");
-const selected = computed(() => view.value?.items.find((item) => item.id === view.value?.selection) ?? null);
+const selected = computed(() => view.value?.items.filter((item) => view.value?.selected.includes(item.id)) ?? []);
 const grid = computed({
   get: () => view.value?.grid ?? "normal",
   set: (value: GridSetting) => send({ type: "grid", grid: value }),
@@ -195,7 +195,7 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
       </section>
       <aside class="flex w-[22rem] flex-none flex-col gap-2" :aria-label="setupName">
         <OverlaySources />
-        <OverlaySettings :item="selected" :setup="view.gameId" :setup-name="setupName" />
+        <OverlaySettings :items="selected" />
       </aside>
     </div>
     <div class="pointer-events-none fixed inset-0 z-10" aria-hidden="true" data-testid="layout-stills">

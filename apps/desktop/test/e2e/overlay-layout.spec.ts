@@ -4,7 +4,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { deflateSync } from "node:zlib";
 import type { ElectronApplication, Page } from "@playwright/test";
-import { launch, newUserData, openModule, seedLibrary } from "./harness";
+import { launch, newUserData, openModule, seedLibrary, shootWindow } from "./harness";
 import type { LayoutView } from "../../src/shared/layout-view";
 
 // The Overlay page, in the hidden test app (never on screen): the real controller, canvas views and pages, on the
@@ -251,7 +251,7 @@ test("The page opens on Everywhere, lists every panel with the reason one can't 
     // No game runs, and nothing was set up: Everywhere, and the dropdown holds only setups that exist.
     await expect.poll(async () => (await state(page))?.gameId).toBe("$everywhere");
     // An empty canvas says what to do instead of staying blank.
-    await expect(layerOf(app).getByTestId("layout-canvas-empty")).toHaveText("Nothing here yet. Add a panel from Sources.");
+    await expect(layerOf(app).getByTestId("layout-canvas-empty")).toHaveText("Add something from the list on the right");
     const view = await state(page);
     expect(view.games.map((game) => game.id)).toEqual(["$everywhere", "$all"]);
     expect(view.sources).toHaveLength(1);
@@ -628,3 +628,96 @@ test("Copy to… is off with a reason while the setup is empty", async () => {
     await app.close();
   }
 });
+for (const mode of [
+  { name: "en-dark", locale: "en", theme: "dark", sidebar: "right" },
+  { name: "de-light", locale: "de", theme: "light", sidebar: "left" },
+] as const) {
+  test(`${mode.name}: several frames are selected with Shift or a box, Del removes them all, and undo brings them back exactly`, async () => {
+    const userData = await newUserData();
+    await mkdir(userData, { recursive: true });
+    await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), gameOverlays: true, overlaySidebar: mode.sidebar }));
+    // Three frames apart from each other on a 1920 x 1080 window; the last one half see-through.
+    const overlay = (key: string, x: number, y: number, opacity: number) => ({
+      owner: "official",
+      moduleId: "tavora.clock-counter",
+      workspaceId: GAME,
+      key,
+      scope: "game",
+      mode: "always",
+      opacity,
+      hideFromCapture: false,
+      rect: { x: 0, y: 0, width: 0.2, height: 0.16 },
+      anchor: { h: "left", v: "top", x, y, width: 0.356, height: 0.16 },
+    });
+    const overlays = [overlay("a", 0.036, 0.03, 100), overlay("b", 0.6, 0.3, 100), overlay("c", 1.2, 0.6, 50)];
+    await writeFile(path.join(userData, "game-overlays.json"), JSON.stringify({ version: 4, overlays, panels: [], layout: { seen: { [GAME]: { width: 1920, height: 1080 } }, games: {} } }));
+    const { app, page } = await launch(userData, [MODULES], { seed: false, locale: mode.locale, systemTheme: mode.theme });
+    const en = mode.locale === "en";
+    const picture = async (name: string) => {
+      if (!SHOTS) return;
+      await page.waitForTimeout(800);
+      await shootWindow(app, page, path.join(SHOTS, `${name}-${mode.name}.png`));
+    };
+    try {
+      await overlayPage(app, page, GAME);
+      await expect.poll(async () => (await state(page))?.items?.length).toBe(3);
+      const before = (await state(page)).items.map(({ id, placed, rect, opacity }) => ({ id, placed, rect, opacity }));
+      const layer = layerOf(app);
+      const frames = layer.locator('[data-testid^="layout-item-"]');
+      await expect(frames).toHaveCount(3);
+      const bar = layer.getByTestId("layout-frame-toolbar");
+
+      // A click selects one, Shift and a click adds another.
+      await frames.nth(1).click();
+      await expect.poll(async () => (await state(page)).selected).toEqual([before[1]!.id]);
+      await frames.nth(2).click({ modifiers: ["Shift"] });
+      await expect.poll(async () => (await state(page)).selected).toEqual([before[1]!.id, before[2]!.id]);
+      // The toolbar has only what works on several, and the Settings box says how many, with Opacity mixed.
+      await expect(bar.getByRole("button")).toHaveCount(4);
+      await expect(bar.getByTestId("layout-frame-settings")).toHaveCount(0);
+      await expect(page.getByTestId("layout-selected-many")).toHaveText(en ? "2 frames selected" : "2 Rahmen ausgewählt");
+      await expect(page.getByTestId("layout-opacity-many")).toContainText(en ? "Mixed" : "Gemischt");
+      await expect(page.getByTestId("layout-mixed-mode")).toHaveCount(0);
+      await picture("01-two-selected");
+
+      // A second Shift and click takes it out again.
+      await frames.nth(2).click({ modifiers: ["Shift"] });
+      await expect.poll(async () => (await state(page)).selected).toEqual([before[1]!.id]);
+
+      // A box drawn over the empty canvas selects every frame it touches.
+      const area = (await layer.locator(".canvas-layer").boundingBox())!;
+      await layer.mouse.move(area.x + area.width - 4, area.y + area.height - 4);
+      await layer.mouse.down();
+      await layer.mouse.move(area.x + 4, area.y + 4, { steps: 8 });
+      await expect(layer.getByTestId("layout-band")).toBeVisible();
+      await layer.mouse.up();
+      await expect.poll(async () => (await state(page)).selected).toEqual(before.map((item) => item.id));
+      await expect(page.getByTestId("layout-selected-many")).toHaveText(en ? "3 frames selected" : "3 Rahmen ausgewählt");
+      await picture("02-box-selected");
+
+      // Del removes all three as one step; the empty canvas names the side the list is on.
+      await layer.locator("body").press("Delete");
+      await expect.poll(async () => (await state(page)).items.length).toBe(0);
+      await expect(layer.getByTestId("layout-canvas-empty")).toHaveText(
+        en ? "Add something from the list on the right" : "Füg etwas aus der Liste links hinzu",
+      );
+      await picture("03-empty-hint");
+
+      // Ctrl+Z brings them back exactly, selected; Ctrl+Y removes them again, and Ctrl+Z once more brings them back.
+      await layer.locator("body").press("Control+z");
+      await expect.poll(async () => (await state(page)).items.length).toBe(3);
+      expect((await state(page)).items.map(({ id, placed, rect, opacity }) => ({ id, placed, rect, opacity }))).toEqual(before);
+      expect((await state(page)).selected).toEqual(before.map((item) => item.id));
+      await layer.locator("body").press("Control+y");
+      await expect.poll(async () => (await state(page)).items.length).toBe(0);
+      await page.locator("body").press("Control+z");
+      await expect.poll(async () => (await state(page)).items.length).toBe(3);
+
+      // Esc lets go of the selection.
+      await layer.locator("body").press("Escape");
+      await expect.poll(async () => (await state(page)).selected).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
+}
