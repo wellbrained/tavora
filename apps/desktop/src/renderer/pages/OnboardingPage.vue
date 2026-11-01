@@ -75,7 +75,7 @@ watch(profileOpen, (open) => {
 </script>
 
 <template>
-  <main class="relative flex h-full flex-col items-center overflow-y-auto px-8 pt-14 pb-8 max-[760px]:px-4 [@media(max-height:640px)]:pt-10 [@media(max-height:640px)]:pb-4" data-testid="onboarding">
+  <main class="relative flex h-full flex-col items-center overflow-y-auto px-8 py-8 max-[760px]:px-4 [@media(max-height:640px)]:pt-10 [@media(max-height:640px)]:pb-4" data-testid="onboarding">
     <p v-if="dry" class="bg-warning/15 text-warning absolute top-4 left-6 rounded-md px-2 py-1 text-xs" data-testid="onboarding-dry">{{ t("onboarding.dry") }}</p>
     <!-- Skips the whole welcome. -->
     <button
@@ -87,24 +87,30 @@ watch(profileOpen, (open) => {
       {{ t("onboarding.skip") }}
     </button>
 
-    <!-- Step dots -->
-    <ol class="mb-8 flex flex-none items-center gap-2 [@media(max-height:640px)]:mb-4" :aria-label="t('onboarding.steps')">
-      <li v-for="(label, index) in STEPS" :key="label" class="flex items-center gap-2">
-        <span
-          :class="cn('h-1.5 rounded-full transition-all duration-300', index === step ? 'bg-primary w-8' : index < step ? 'bg-primary/50 w-3' : 'bg-muted w-3')"
-          :aria-current="index === step ? 'step' : undefined"
-          :aria-label="t(`onboarding.step.${label}`)"
-        />
-      </li>
-    </ol>
+    <!-- Centred in the window; the step area keeps one height, so the dots and titles don't jump between steps. A
+         taller step pushes it to the top and scrolls. -->
+    <div class="my-auto flex w-full flex-col items-center">
+      <!-- Step dots -->
+      <ol class="mb-8 flex flex-none items-center gap-2 [@media(max-height:640px)]:mb-4" :aria-label="t('onboarding.steps')">
+        <li v-for="(label, index) in STEPS" :key="label" class="flex items-center gap-2">
+          <span
+            :class="cn('h-1.5 rounded-full transition-all duration-300', index === step ? 'bg-primary w-8' : index < step ? 'bg-primary/50 w-3' : 'bg-muted w-3')"
+            :aria-current="index === step ? 'step' : undefined"
+            :aria-label="t(`onboarding.step.${label}`)"
+          />
+        </li>
+      </ol>
 
-    <Transition :name="forward ? 'step-forward' : 'step-back'" mode="out-in">
-      <OnboardingMap v-if="step === 0" key="map" @next="go(1)" />
-      <OnboardingChoice v-else-if="step === 1" key="choice" @pick="pick" @back="go(0)" />
-      <OnboardingGame v-else-if="step === 2 && choice === 'game'" key="game" :started="game" :dry="dry" @start="game = $event" @next="go(3)" @back="go(1)" />
-      <OnboardingPersonal v-else-if="step === 2" key="personal" :started="personal" :dry="dry" @start="personal = $event" @next="go(3)" @back="go(1)" />
-      <OnboardingAccount v-else key="account" @later="finish" @sign-in="signIn" @back="go(2)" />
-    </Transition>
+      <div class="flex min-h-[460px] w-full flex-col items-center [@media(max-height:640px)]:min-h-0">
+        <Transition :name="forward ? 'step-forward' : 'step-back'" mode="out-in">
+          <OnboardingMap v-if="step === 0" key="map" @next="go(1)" />
+          <OnboardingChoice v-else-if="step === 1" key="choice" @pick="pick" @back="go(0)" />
+          <OnboardingGame v-else-if="step === 2 && choice === 'game'" key="game" :started="game" :dry="dry" @start="game = $event" @next="go(3)" @back="go(1)" />
+          <OnboardingPersonal v-else-if="step === 2" key="personal" :started="personal" :dry="dry" @start="personal = $event" @next="go(3)" @back="go(1)" />
+          <OnboardingAccount v-else key="account" @later="finish" @sign-in="signIn" @back="go(2)" />
+        </Transition>
+      </div>
+    </div>
   </main>
 </template>
 
