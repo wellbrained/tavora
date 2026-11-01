@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.37",
+    date: "2026-11-01",
+    title: "Add a game is a quick picker",
+    notes: [
+      "Add a game lists the games on this PC, the ones you played last first, with their icons.",
+      "Pick a game to see the modules made for it, tick the ones you want and add them with the game.",
+      "A personal workspace now comes from the + button on the rail, next to Add game.",
+      "The first step of the welcome lists the games on this PC the same way, newest played first.",
+    ],
+    prs: [
+      { number: 586, title: "Add a game: quick picker with this PC's games, module badges and a side panel" },
+    ],
+    tags: ["catalog", "games", "modules", "privacy", "rail", "website"],
+  },
+  {
     version: "0.23.36",
     date: "2026-11-01",
     title: "The welcome sits in the middle",
