@@ -16,6 +16,7 @@ import { vaultRoutes } from "./vault.ts";
 import { catalogFilter, isOfficialId, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
 import { isBot, parseVisit, referrerDomain, SITE_CLICKS, SITE_ORIGIN, UNKNOWN_COUNTRY } from "./site-visits.ts";
 import { isAppVersion, type StatsStore } from "./stats.ts";
+import { parseRequest, type ModuleRequestStore } from "./module-requests.ts";
 import { catalogTrust, OFFICIAL_PINS, type OfficialPins } from "./catalog-trust.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
@@ -29,6 +30,8 @@ import { MAX_PROFILE_LENGTH, SteamError, type SteamClient } from "./steam.ts";
 const STEAM_BODY = 1000;
 /** A site visit is `{ referrer }` or `{ click }`; nothing bigger is read. */
 const SITE_BODY = 2000;
+/** A module request is `{ game: { name, steamAppId?, gameId? }, voter }`; nothing bigger is read. */
+const REQUEST_BODY = 1000;
 
 export interface AppOptions {
   db: DatabaseSync;
@@ -77,6 +80,10 @@ export interface AppOptions {
   countryOf?: (request: Request) => string | null;
   /** Site visits per client (site-visits.ts). */
   siteRateLimiter?: RateLimiter;
+  /** Votes for a module for a game (module-requests.ts). Absent: the route answers 503. */
+  moduleRequests?: ModuleRequestStore;
+  /** Module request votes per client. */
+  moduleRequestRateLimiter?: RateLimiter;
 }
 
 /** Why an icon offer was refused, by its status. */
@@ -85,12 +92,14 @@ const SUBMIT_REASONS = { 400: "bad-request", 409: "has-icon", 413: "too-big", 42
 /** A Steam import refusal: the English message and its reason code. */
 const steamFail = (context: Context, status: ContentfulStatusCode, reason: string, error: string) => context.json({ error, reason }, status);
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, officialPins = OFFICIAL_PINS, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats, countryOf, siteRateLimiter }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, officialPins = OFFICIAL_PINS, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats, countryOf, siteRateLimiter, moduleRequests, moduleRequestRateLimiter }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
   const steamLimiter = steamRateLimiter ?? createRateLimiter({ limit: 6, windowMs: 60_000 });
   const siteLimiter = siteRateLimiter ?? createRateLimiter({ limit: 30, windowMs: 60_000 });
+  // A person asks for a handful of games at most; the vote of one install and game counts once anyway.
+  const requestLimiter = moduleRequestRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 3_600_000 });
   const app = new Hono();
 
   // Steam appid -> canonical id, loaded the first time an import asks.
@@ -412,6 +421,25 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const body = (await context.req.json().catch(() => null)) as { version?: unknown } | null;
     if (!isAppVersion(body?.version)) return fail(context, 400, "bad-request", "Send { version }.");
     stats?.count("app-update", body.version);
+    return context.body(null, 204);
+  });
+
+  // "Ask for a module": one vote per install and game, no sign-in (module-requests.ts). JSON only, which a web
+  // page on another site cannot send without a preflight this service refuses. Answers 204 for a repeat too.
+  app.post("/v1/module-requests", bodyLimit({ maxSize: REQUEST_BODY, onError: (context) => fail(context, 413, "bad-request", "Send { game: { name }, voter }.") }), async (context) => {
+    const wait = requestLimiter.check(clientKey ? clientKey(context.req.raw) : "local");
+    if (wait > 0) return tooMany(context, wait);
+    if (!moduleRequests) return fail(context, 503, "unavailable", "Asking for modules is not available right now.");
+    if (!(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) return fail(context, 415, "bad-request", "Send JSON.");
+    let body: unknown;
+    try {
+      body = JSON.parse(await context.req.text());
+    } catch {
+      body = null;
+    }
+    const request = parseRequest(body);
+    if (!request) return fail(context, 400, "bad-request", "Send { game: { name }, voter }.");
+    if (!moduleRequests.vote(request)) return fail(context, 503, "unavailable", "Asking for modules is not available right now.");
     return context.body(null, 204);
   });
 

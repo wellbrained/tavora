@@ -659,6 +659,8 @@ export interface HostViewState {
     toasts: "bottom-center" | "bottom-right" | "top-center";
     /** The Steam profile the user asked Tavora to remember for the import, or null. */
     steamProfile: string | null;
+    /** The games the user asked a module for (Ask for a module), as module-request.ts keys them; the button there stays a thanks. */
+    askedModules: string[];
     /** False until the user finished or skipped the first-run welcome. */
     onboarded: boolean;
     /** True once the user said they want to make modules: Settings > Development shows its tools. */

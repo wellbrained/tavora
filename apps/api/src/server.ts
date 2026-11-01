@@ -17,6 +17,7 @@ import { normalize } from "./ids.ts";
 import { loadIconStore } from "./icons.ts";
 import { createBrevoMailer, createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
 import { clientOf } from "./rate-limit.ts";
+import { ModuleRequestStore } from "./module-requests.ts";
 import { StatsStore } from "./stats.ts";
 import { ReviewStore } from "./reviews.ts";
 import { ConversationStore } from "./conversations.ts";
@@ -113,6 +114,8 @@ const lifecycle = accountStore ? accountLifecycle({ accounts: accountStore, cata
 console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
 // Plain daily totals (stats.ts): nothing about a user. Once a day the account numbers are written down too.
 const stats = new StatsStore(path.join(stateDir, "stats.sqlite"));
+// Votes for a module for a game (module-requests.ts): their own file, in the daily backup.
+const moduleRequests = new ModuleRequestStore(path.join(stateDir, "module-requests.sqlite"));
 const activity = new ActivityLog(path.join(stateDir, "activity.sqlite"));
 const snapshotAccounts = () => {
   if (accountStore && !stats.hasSnapshot()) stats.snapshotAccounts(accountStore.activity(Date.now()));
@@ -149,6 +152,7 @@ const app = createApp({
   submissions,
   catalog,
   stats,
+  moduleRequests,
   countryOf: (request) => (behindProxy ? countries.country(request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()) : null),
   ...(mailer && accountStore
     ? {
@@ -203,6 +207,7 @@ if (adminToken && adminToken.length >= 24) {
     ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
     stateDir,
     stats,
+    moduleRequests,
     activity,
     ...(maintainerEmail ? { ownerEmail: maintainerEmail } : {}),
     moderation: { ...(scanner ? { scanner } : {}), ...(mailer ? { mailer } : {}), mailDailyLimit },

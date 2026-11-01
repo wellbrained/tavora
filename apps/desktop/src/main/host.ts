@@ -67,6 +67,7 @@ import {
   isLive,
   LibraryError,
   liveWorkspaces,
+  MAX_ASKED_MODULES,
   MAX_DEVELOPMENT_FOLDERS,
   markOpened,
   openedTimes,
@@ -108,6 +109,8 @@ import { CHECK_INTERVAL_MS } from "./catalog-updates";
 import { isReleaseCopies, releaseStatuses } from "./release-pending";
 import { OnlineSearch } from "./online";
 import { countAppUpdate } from "./usage-counts";
+import { newInstallId, sendModuleRequest } from "./module-request";
+import { askKey, type AskedGame } from "../shared/module-request";
 import { PublisherNames } from "./publisher-names";
 import { UpdateManager, type UpdaterLike } from "./updates";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
@@ -1439,6 +1442,25 @@ export class Host {
   }
 
   /**
+   * One anonymous vote for a module for a game that has none, because the user pressed Ask for a module.
+   * Remembered on this PC, so the button stays a thanks; a vote that can't be sent (offline, or the service
+   * has no such address yet) says so and can be tried again. Never blocks adding the game.
+   */
+  private async askModule(game: AskedGame): Promise<void> {
+    if (!game.name || [...game.name].length > 80) throw new UserError("error.askModuleFailed");
+    const key = askKey(game);
+    if (this.library.askedModules.includes(key)) return;
+    if (!this.library.onlineSearch) throw new UserError("error.askModuleOff");
+    if (!this.library.installId) {
+      this.library.installId = newInstallId();
+      this.saveLibrary();
+    }
+    if (!(await sendModuleRequest({ baseUrl: serviceUrl(this.options.apiUrl) }, game, this.library.installId))) throw new UserError("error.askModuleFailed");
+    this.library.askedModules = [...this.library.askedModules.filter((other) => other !== key), key].slice(-MAX_ASKED_MODULES);
+    this.saveLibrary();
+  }
+
+  /**
    * Reports a module to Tavora (C12). A module installed from the catalog is reported as the zip that
    * is installed, the one the user has seen; any other id as the version the catalog lists now.
    * Only the id, the key and the zip's hash are sent, and only because the user pressed Report.
@@ -2539,6 +2561,7 @@ export class Host {
         if (failed && updated + waiting === 0) throw new UserError("error.updatesFailed");
         return { ok: true, updated, waiting };
       },
+      "ask-module": (action) => this.askModule({ name: action.name.replace(/s+/g, " ").trim(), steamAppId: action.steamAppId, gameId: action.gameId }),
       "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId, { reason: action.reason, note: action.note }),
       "inbox-send-request": (action) => this.inboxAction(() => this.inbox.sendRequest(action.moduleId, action.requestType, action.text, action.previousId)),
       "inbox-reply": (action) => this.inboxAction(() => this.inbox.reply(action.id, action.text)),
@@ -4461,6 +4484,7 @@ export class Host {
         tabOverflow: library.tabOverflow,
         toasts: library.toasts,
         steamProfile: library.steamProfile,
+        askedModules: [...library.askedModules],
         onboarded: library.onboarded,
         makesModules: library.makesModules,
         seenVersion: library.seenVersion,

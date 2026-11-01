@@ -10,6 +10,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
+import { askKey, type AskedGame } from "../../shared/module-request";
 import { t } from "../i18n";
 import { addInputFor, defaultTicks, type PickerRow } from "../lib/game-picker";
 import { useGamePicker, whenOf } from "../lib/use-game-picker";
@@ -21,7 +22,6 @@ const query = ref("");
 const { name, rows, custom, count, installedLoaded, onlineStatus, catalogModules, modulesOf } = useGamePicker(query);
 const error = ref<string | null>(null);
 const busy = ref(false);
-const ownHint = ref(false);
 const input = ref<HTMLInputElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const list = ref<HTMLElement | null>(null);
@@ -44,6 +44,8 @@ const activeRow = computed<PickerRow | null>(() => rows.value[active.value] ?? n
 // ── Modules ────────────────────────────────────────────────────────────
 
 const panelModules = computed(() => modulesOf(activeRow.value));
+/** The title of the right side: the modules of the highlighted game. */
+const heading = computed(() => t("addGame.modulesForGame", { name: activeRow.value?.name ?? custom.value ?? "" }));
 /** What the user ticked per game while this dialog is open; a game not touched has Tavora's own modules ticked. */
 const ticked = ref<Record<string, string[]>>({});
 const ticksOf = (row: PickerRow | null): string[] => (row ? (ticked.value[row.key] ?? defaultTicks(modulesOf(row))) : []);
@@ -56,16 +58,54 @@ function toggle(moduleId: string, on: boolean) {
   ticked.value = { ...ticked.value, [row.key]: on ? [...rest, moduleId] : rest };
 }
 
+// ── No modules ─────────────────────────────────────────────────────────
+
+/** Tavora's everyday modules, the ones worth naming first when they are installed. */
+const EVERYDAY = ["tavora.notes", "tavora.clock-counter", "tavora.todos", "tavora.whiteboard"];
+
+/** Up to two general modules (made for no game in particular) to name as examples: Tavora's own that are installed, else the catalog's. */
+const generalNames = computed(() => {
+  const own = (state.value?.modules ?? []).filter((module) => module.provenance === "official" && !module.development && module.id !== "tavora.browser");
+  const general = own.length ? own : (catalogModules.value ?? []).filter((module) => module.gameIds.length === 0);
+  const rank = (id: string) => (EVERYDAY.includes(id) ? EVERYDAY.indexOf(id) : EVERYDAY.length);
+  const sorted = [...general].sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name));
+  return [...new Set(sorted.map((module) => module.name))].slice(0, 2);
+});
+const noModulesText = computed(() => {
+  const name = activeRow.value?.name ?? custom.value ?? "";
+  const [first, second] = generalNames.value;
+  if (!first) return t("addGame.noModulesPlain", { name });
+  return t("addGame.noModulesLike", { name, examples: second ? t("addGame.or", { a: first, b: second }) : first });
+});
+
+/** The game the highlighted row stands for, as Ask for a module names it. Not the typed name: that one is not a game anyone listed. */
+const askedGame = computed<AskedGame | null>(() => {
+  const row = activeRow.value;
+  return row ? { name: row.name, steamAppId: row.installed?.steamAppId ?? row.online?.steamAppId ?? null, gameId: row.gameId } : null;
+});
+const asked = computed(() => askedGame.value !== null && (state.value?.library.askedModules ?? []).includes(askKey(askedGame.value)));
+const asking = ref(false);
+const askFailed = ref<{ key: string; message: string } | null>(null);
+const askError = computed(() => (askedGame.value && askFailed.value?.key === askKey(askedGame.value) ? askFailed.value.message : null));
+
+/** One anonymous vote for a module for this game. Never touches adding the game; a failure says so and the button stays. */
+async function askModule() {
+  const game = askedGame.value;
+  if (!game || asking.value) return;
+  asking.value = true;
+  askFailed.value = null;
+  try {
+    const result = await act({ type: "ask-module", ...game }, { quiet: true });
+    if (!result.ok) askFailed.value = { key: askKey(game), message: result.error };
+  } finally {
+    asking.value = false;
+  }
+}
+
 // ── Words ──────────────────────────────────────────────────────────────
 
 const info = (row: PickerRow): PickerBadge => ({ modules: modulesOf(row).length, when: whenOf(row) });
 const addLabel = computed(() => (activeRow.value?.workspaceId ? t("addGame.open") : panelTicks.value.length && activeRow.value ? t("addGame.addWith", { count: panelTicks.value.length }) : t("addGame.add")));
-const lineOf = (row: PickerRow | null) => {
-  if (!row) return t("addGame.line.own");
-  const where = row.installed ? t("addGame.line.pc") : t("addGame.line.list");
-  const when = whenOf(row);
-  return when ? `${where} · ${when}` : where;
-};
 
 // ── Adding ─────────────────────────────────────────────────────────────
 
@@ -137,14 +177,6 @@ function onPanelKey(event: KeyboardEvent) {
     void pick(active.value);
   }
 }
-
-function ownGame() {
-  if (custom.value) void confirm(null);
-  else {
-    ownHint.value = true;
-    focusSearch();
-  }
-}
 </script>
 
 <template>
@@ -179,7 +211,6 @@ function ownGame() {
           maxlength="80"
           data-testid="game-search"
           @keydown="onKey"
-          @input="ownHint = false"
         />
         <Kbd class="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 font-sans" aria-hidden="true">{{ t("search.key.esc") }}</Kbd>
       </div>
@@ -203,8 +234,7 @@ function ownGame() {
                 </li>
               </ul>
               <GamePickerList id="game-results" :label="t('common.games')" :rows="rows" :active="active" :custom="custom" :info="info" :busy="busy" @hover="active = $event" @pick="pick" />
-              <p v-if="!rows.length && !custom && installedLoaded && !ownHint" class="text-muted-foreground px-3 py-4 text-sm" data-testid="add-game-empty">{{ t("addGame.nothingOnPc") }}</p>
-              <p v-if="ownHint && !name" class="text-muted-foreground px-3 py-4 text-sm" data-testid="add-game-own-hint">{{ t("addGame.ownHint") }}</p>
+              <p v-if="!rows.length && !custom && installedLoaded" class="text-muted-foreground px-3 py-4 text-sm" data-testid="add-game-empty">{{ t("addGame.nothingOnPc") }}</p>
               <p v-if="onlineStatus === 'unreachable' && name" class="text-muted-foreground px-3 py-2 text-xs" data-testid="online-unreachable">{{ t("addGame.builtInOnly") }}</p>
             </div>
           </div>
@@ -218,19 +248,13 @@ function ownGame() {
             @keydown="onPanelKey"
           >
             <template v-if="activeRow || custom">
-              <div class="flex items-center gap-3">
-                <GameTile :id="activeRow?.gameId ?? activeRow?.key ?? custom ?? ''" :name="activeRow?.name ?? custom ?? ''" :icon="activeRow?.icon ?? null" :size="40" />
-                <div class="min-w-0">
-                  <p class="truncate font-medium" data-testid="panel-name">{{ activeRow?.name ?? custom }}</p>
-                  <p class="text-muted-foreground truncate text-xs" data-testid="panel-line">{{ lineOf(activeRow) }}</p>
-                </div>
-              </div>
-
-              <template v-if="!activeRow?.workspaceId">
+              <!-- The game is the highlighted row on the left; this side is about its modules only. -->
+              <p v-if="activeRow?.workspaceId" class="text-muted-foreground text-sm">{{ t("addGame.added") }}</p>
+              <template v-else>
+                <p class="text-muted-foreground truncate text-sm font-medium" :title="heading" data-testid="panel-heading">{{ heading }}</p>
                 <div v-if="activeRow" class="flex flex-col gap-1.5">
                   <p v-if="catalogModules === null" class="text-muted-foreground text-xs" role="status">{{ t("addGame.loadingModules") }}</p>
                   <template v-else-if="panelModules.length">
-                    <p class="text-muted-foreground text-xs font-medium">{{ t("addGame.modulesFor") }}</p>
                     <label
                       v-for="module in panelModules"
                       :key="module.id"
@@ -247,9 +271,16 @@ function ownGame() {
                       </span>
                     </label>
                   </template>
-                  <p v-else class="text-muted-foreground text-sm" data-testid="panel-no-modules">{{ t("addGame.noModules") }}</p>
+                  <div v-else class="flex flex-col items-start gap-3" data-testid="panel-no-modules">
+                    <p class="text-muted-foreground text-sm">{{ noModulesText }}</p>
+                    <p v-if="asked" class="text-muted-foreground text-sm" role="status" data-testid="ask-module-thanks">{{ t("addGame.askThanks") }}</p>
+                    <template v-else>
+                      <Button variant="outline" size="sm" :disabled="asking" data-testid="ask-module" @click="askModule">{{ t("addGame.ask", { name: activeRow?.name ?? "" }) }}</Button>
+                      <p v-if="askError" class="text-muted-foreground text-xs" role="alert" data-testid="ask-module-error">{{ askError }}</p>
+                    </template>
+                  </div>
                 </div>
-                <p v-else class="text-muted-foreground text-sm" data-testid="panel-no-modules">{{ t("addGame.noModules") }}</p>
+                <p v-else class="text-muted-foreground text-sm" data-testid="panel-no-modules">{{ noModulesText }}</p>
               </template>
 
               <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="add-game-error">{{ error }}</p>
@@ -257,7 +288,6 @@ function ownGame() {
                 <Button :disabled="busy" data-testid="panel-add" @click="pick(active)">{{ addLabel }}</Button>
               </div>
             </template>
-            <p v-else-if="installedLoaded || name" class="text-muted-foreground text-sm">{{ t("addGame.noModules") }}</p>
           </section>
           <!-- Stacked in a small window the panel sits below the whole list, so its action stays in view here. -->
           <div v-if="activeRow || custom" class="bg-card sticky bottom-0 z-10 flex items-center gap-3 border-t px-4 py-2 @[620px]:hidden" aria-hidden="true">
@@ -274,7 +304,6 @@ function ownGame() {
           <Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("addGame.hint.add") }}</span
         >
         <span class="ml-auto flex gap-4">
-          <button type="button" class="text-primary underline-offset-2 hover:underline" data-testid="add-game-own" @click="ownGame">{{ t("addGame.own") }}</button>
           <button type="button" class="text-primary underline-offset-2 hover:underline" data-testid="open-steam-import" @click="dialog = { kind: 'steam-import' }">{{ t("addGame.steam") }}</button>
         </span>
       </div>

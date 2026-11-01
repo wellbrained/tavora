@@ -59,9 +59,11 @@ function listing(id: string, name: string, zip: Buffer, owner: string, fields: R
 }
 
 /** A catalog server that answers like api.mytavora.app/v1/catalog, and records what was asked. */
-async function catalogServer(modules: Listed[]): Promise<{ url: string; server: Server; asked: string[]; reports: unknown[] }> {
+async function catalogServer(modules: Listed[]): Promise<{ url: string; server: Server; asked: string[]; reports: unknown[]; moduleRequests: { status: number; bodies: unknown[] } }> {
   const asked: string[] = [];
   const reports: unknown[] = [];
+  /** Ask for a module: what the server answers (404: the address does not exist yet) and the votes it got. */
+  const moduleRequests = { status: 404, bodies: [] as unknown[] };
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://catalog");
     asked.push(url.pathname + url.search);
@@ -78,6 +80,12 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
       for await (const chunk of request) chunks.push(chunk as Buffer);
       reports.push({ headers: { cookie: request.headers.cookie ?? null, referer: request.headers.referer ?? null }, body: JSON.parse(Buffer.concat(chunks).toString("utf8")) });
       return send(202, { status: "received" });
+    }
+    if (url.pathname === "/v1/module-requests" && request.method === "POST") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(chunk as Buffer);
+      moduleRequests.bodies.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+      return moduleRequests.status === 204 ? (response.writeHead(204), response.end()) : send(moduleRequests.status, { error: "no" });
     }
     if (url.pathname === "/v1/catalog") {
       const game = url.searchParams.get("game");
@@ -115,7 +123,7 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as { port: number };
-  return { url: `http://127.0.0.1:${address.port}`, server, asked, reports };
+  return { url: `http://127.0.0.1:${address.port}`, server, asked, reports, moduleRequests };
 }
 
 test("a user browses the catalog for a game, sees who publishes a module and installs it", async () => {
@@ -324,6 +332,67 @@ test("a user sees a module's rating on its card, how many gave each star, and it
   }
 });
 
+test("a game without modules says general modules still work, and Ask for a module sends one anonymous vote that never blocks adding the game", async () => {
+  const { url, server, moduleRequests } = await catalogServer([]);
+  const installed = JSON.stringify([{ name: "Valheim", steamAppId: 892970, installedAt: Date.now() - 24 * 60 * 60 * 1000 }]);
+  const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url, TAVORA_TEST_INSTALLED: installed } });
+  try {
+    await openAddGame(page);
+    const none = page.getByTestId("panel-no-modules");
+    // The examples are general modules that ship with Tavora, two at most.
+    await expect(none).toContainText("No modules for Valheim yet. You can still add any general module, like Notes or Clock & Counter, once the game is added.");
+    const ask = page.getByTestId("ask-module");
+    await expect(ask).toHaveText("Ask for a Valheim module");
+    // The address does not exist yet (404): it says so, stays clickable, and the game can still be added.
+    await ask.click();
+    await expect(page.getByTestId("ask-module-error")).toHaveText("Couldn't send. Try again later.");
+    await expect(ask).toBeEnabled();
+    expect(moduleRequests.bodies).toHaveLength(1);
+    // The service answers: the button becomes a thanks.
+    moduleRequests.status = 204;
+    await ask.click();
+    await expect(page.getByTestId("ask-module-thanks")).toHaveText("Thanks, we'll count it ✓");
+    await expect(ask).toHaveCount(0);
+    // Only the game and a code are sent; the code is not the install's number.
+    expect(moduleRequests.bodies).toHaveLength(2);
+    const body = moduleRequests.bodies[1] as { game: unknown; voter: string };
+    expect(body.game).toEqual({ name: "Valheim", steamAppId: 892970, gameId: "valheim" });
+    expect(body.voter).toMatch(/^[0-9a-f]{64}$/);
+    const saved = JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { installId: string; askedModules: string[] };
+    expect(saved.askedModules).toEqual(["steam:892970"]);
+    expect(saved.installId).toMatch(/^[0-9a-f]{64}$/);
+    expect(saved.installId).not.toBe(body.voter);
+    // Asked once for this game on this install: it stays a thanks when the dialog opens again.
+    await page.keyboard.press("Escape");
+    await openAddGame(page);
+    await expect(page.getByTestId("ask-module-thanks")).toBeVisible();
+    expect(moduleRequests.bodies).toHaveLength(2);
+    // Adding the game works as before.
+    await page.getByTestId("panel-add").click();
+    await expect(page.getByTestId("rail-workspace-valheim")).toHaveAttribute("aria-current", "page");
+  } finally {
+    await app.close();
+    server.close();
+  }
+});
+
+test("Ask for a module needs Online features, and says so", async () => {
+  const { url, server, moduleRequests } = await catalogServer([]);
+  const installed = JSON.stringify([{ name: "Valheim", steamAppId: 892970, installedAt: Date.now() }]);
+  const userData = await newUserData();
+  await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), onlineSearch: false }));
+  const { app, page } = await launch(userData, [], { seed: false, env: { TAVORA_API_URL: url, TAVORA_TEST_INSTALLED: installed } });
+  try {
+    await openAddGame(page);
+    await page.getByTestId("ask-module").click();
+    await expect(page.getByTestId("ask-module-error")).toHaveText("Turn on online features in Settings to ask for a module.");
+    expect(moduleRequests.bodies).toHaveLength(0);
+  } finally {
+    await app.close();
+    server.close();
+  }
+});
+
 test("the Add a game picker badges games that have modules and adds the ticked ones with the game", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
@@ -333,19 +402,19 @@ test("the Add a game picker badges games that have modules and adds the ticked o
     { entry: listing("wellbrained.sat-map", "Sat Map", map, owner, { games: ["factorio"], description: "Map and Pings" }), body: map },
     { entry: listing("wellbrained.sat-calc", "Sat Calculator", calc, owner, { games: ["factorio"], description: "Planner" }), body: calc },
   ]);
-  const installed = JSON.stringify([{ name: "Factorio", installedAt: Date.now() - 24 * 60 * 60 * 1000 }, { name: "Mystery Game" }]);
+  const installed = JSON.stringify([{ name: "Factorio", installedAt: Date.now() - 24 * 60 * 60 * 1000 }, { name: "Mystery Game", installedAt: Date.now() - 48 * 60 * 60 * 1000 }]);
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url, TAVORA_TEST_INSTALLED: installed } });
   try {
     await openAddGame(page);
     // The badge counts the modules made for the game; a game without any has none, and its panel says so.
     await expect(page.getByTestId("module-badge-factorio")).toHaveText("2 modules");
     await expect(page.getByTestId("add-game-dialog").locator('[data-testid^="module-badge-"]')).toHaveCount(1);
-    await expect(page.getByTestId("panel-name")).toHaveText("Factorio");
+    await expect(page.getByTestId("panel-heading")).toHaveText("Modules for Factorio");
     await expect(page.getByTestId("pick-module-wellbrained.sat-map")).toBeVisible();
     await expect(page.getByTestId("pick-module-wellbrained.sat-map")).toContainText("community");
     await expect(page.getByTestId("panel-add")).toHaveText("Add game");
     await page.getByTestId("game-search").press("ArrowDown");
-    await expect(page.getByTestId("panel-name")).toHaveText("Mystery Game");
+    await expect(page.getByTestId("panel-heading")).toHaveText("Modules for Mystery Game");
     await expect(page.getByTestId("panel-no-modules")).toBeVisible();
     await expect(page.getByTestId("panel-add")).toHaveText("Add game");
     await page.getByTestId("game-search").press("ArrowUp");
