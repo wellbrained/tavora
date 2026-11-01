@@ -963,7 +963,7 @@ export const de: Record<keyof typeof en, string> = {
   "addPersonal.title": "Neuer persönlicher Arbeitsbereich",
   "addPersonal.name": "Name des Arbeitsbereichs",
   "addPersonal.placeholder": "Etwa Persönlich oder Arbeit",
-  "addPersonal.hint": "Ein persönlicher Arbeitsbereich gehört zu keinem Spiel. Nutze ihn für Module wie Notizen, Whiteboard und To-Dos; Module für ein bestimmtes Spiel werden dort nicht angeboten.",
+  "addPersonal.about": "Ein Platz für deine eigenen Module.",
   "addPersonal.create": "Arbeitsbereich anlegen",
   "addModule.manage": "Moduleinstellungen",
   "addModule.inWorkspace": "{count} offen",

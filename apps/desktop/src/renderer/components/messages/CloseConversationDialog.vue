@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // The developer closes a conversation with an outcome the user sees.
+import { CircleCheck } from "@lucide/vue";
 import { ref } from "vue";
-import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
 import { OUTCOMES, type Outcome } from "../../../shared/conversations";
@@ -30,8 +31,9 @@ async function close() {
 </script>
 
 <template>
-  <ModalDialog :title="t('inbox.close.title')" :description="t('inbox.close.outcome')" testid="close-conversation" @close="emit('close')">
-    <form class="grid gap-4" @submit.prevent="close">
+  <ModalDialog :title="t('inbox.close.title')" :description="t('inbox.close.outcome')" :icon="CircleCheck" testid="close-conversation" @close="emit('close')">
+    <form class="contents" @submit.prevent="close">
+      <div class="grid gap-4">
       <RadioGroup v-model="outcome" class="gap-2" :aria-label="t('inbox.close.outcome')">
         <Label v-for="option in OUTCOMES" :key="option" class="font-normal">
           <RadioGroupItem :value="option" :data-testid="`close-outcome-${option}`" />
@@ -39,10 +41,11 @@ async function close() {
         </Label>
       </RadioGroup>
       <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
-      <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" @click="emit('close')">{{ t("common.cancel") }}</Button>
-        <Button type="submit" :disabled="busy" data-testid="close-conversation-submit">{{ t("inbox.close") }}</Button>
       </div>
+      <DialogFooter>
+        <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton type="submit" :loading="busy" :disabled="busy" data-testid="close-conversation-submit">{{ t("inbox.close") }}</DialogButton>
+      </DialogFooter>
     </form>
   </ModalDialog>
 </template>

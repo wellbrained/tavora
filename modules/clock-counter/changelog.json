@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.8",
+    "date": "2026-11-01",
+    "notes": [
+      "Settings in a dialog have an icon and a Close button in the corner."
+    ]
+  },
+  {
     "version": "0.1.7",
     "date": "2026-11-01",
     "notes": [

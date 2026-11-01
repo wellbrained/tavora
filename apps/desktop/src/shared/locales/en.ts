@@ -961,7 +961,7 @@ export const en = {
   "addPersonal.title": "New personal workspace",
   "addPersonal.name": "Workspace name",
   "addPersonal.placeholder": "Such as Personal or Work",
-  "addPersonal.hint": "A personal workspace belongs to no game. Use it for modules such as Notes, Whiteboard and To-Dos; modules made for a game are not offered there.",
+  "addPersonal.about": "A space for your own modules.",
   "addPersonal.create": "Create workspace",
   "addModule.manage": "Module settings",
   "addModule.inWorkspace": "{count} open",

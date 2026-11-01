@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Report a conversation to Tavora: a reason and a note. Block is ticked by default; the other side is not told.
+import { Flag } from "@lucide/vue";
 import { computed, ref } from "vue";
-import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
@@ -39,8 +40,9 @@ async function send() {
 </script>
 
 <template>
-  <ModalDialog :title="t('inbox.report.title')" :description="t('inbox.report.hint')" testid="report-conversation" @close="emit('close')">
-    <form class="grid gap-4" @submit.prevent="send">
+  <ModalDialog :title="t('inbox.report.title')" :description="t('inbox.report.hint')" :icon="Flag" testid="report-conversation" @close="emit('close')">
+    <form class="contents" @submit.prevent="send">
+      <div class="grid gap-4">
       <RadioGroup v-model="reason" class="gap-2" :aria-label="t('inbox.report.title')">
         <Label v-for="option in CONVERSATION_REPORT_REASONS" :key="option" class="font-normal">
           <RadioGroupItem :value="option" :data-testid="`report-conversation-${option}`" />
@@ -56,10 +58,11 @@ async function send() {
         {{ t("inbox.report.block") }}
       </Label>
       <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
-      <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" @click="emit('close')">{{ t("common.cancel") }}</Button>
-        <Button type="submit" :disabled="busy || tooLong" data-testid="report-conversation-send">{{ t("inbox.report") }}</Button>
       </div>
+      <DialogFooter>
+        <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton type="submit" :icon="Flag" :loading="busy" :disabled="busy || tooLong" data-testid="report-conversation-send">{{ t("inbox.report") }}</DialogButton>
+      </DialogFooter>
     </form>
   </ModalDialog>
 </template>

@@ -13,6 +13,7 @@ export const en = {
   "mode.plus": "Plus",
 
   "options.title": "Settings",
+  "options.about": "How the calculator shows numbers.",
   done: "Done",
   "options.decimals": "Decimal places",
   "options.decimalsAuto": "Auto",
@@ -93,6 +94,7 @@ export const de: Record<keyof typeof en, string> = {
   "mode.plus": "Plus",
 
   "options.title": "Einstellungen",
+  "options.about": "Wie der Rechner Zahlen zeigt.",
   done: "Fertig",
   "options.decimals": "Nachkommastellen",
   "options.decimalsAuto": "Auto",

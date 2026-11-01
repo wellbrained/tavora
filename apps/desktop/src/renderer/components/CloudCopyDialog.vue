@@ -2,7 +2,8 @@
 // The questions the cloud copy asks over the app: which side to keep when both
 // changed, a restart for newer data from another PC, and the wait at close.
 import { computed, ref } from "vue";
-import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
+import { Cloud, HardDrive, RotateCw } from "@lucide/vue";
 import { act, cloudCopy, copyLater, copyQuestion } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
@@ -36,21 +37,21 @@ function later() {
 </script>
 
 <template>
-  <ModalDialog v-if="copyQuestion" :title="title" :description="text" testid="cloud-copy-question" @close="copyQuestion !== 'closing' && later()">
+  <ModalDialog v-if="copyQuestion" :title="title" :description="text" :icon="Cloud" testid="cloud-copy-question" @close="copyQuestion !== 'closing' && later()">
     <template v-if="copyQuestion === 'conflict'">
       <p class="text-muted-foreground text-sm">{{ t("cloudCopy.conflict.cloudHint") }}</p>
-      <div class="flex flex-wrap justify-end gap-2">
-        <Button variant="ghost" :disabled="busy" @click="later">{{ t("cloudCopy.later") }}</Button>
-        <Button variant="secondary" :disabled="busy" data-testid="cloud-copy-keep-pc" @click="run({ type: 'cloud-copy-keep', side: 'pc' })">{{ t("cloudCopy.conflict.keepPc") }}</Button>
-        <Button :disabled="busy" data-testid="cloud-copy-keep-cloud" @click="run({ type: 'cloud-copy-keep', side: 'cloud' })">{{ t("cloudCopy.conflict.useCloud") }}</Button>
-      </div>
+      <DialogFooter>
+        <DialogButton close variant="ghost" :disabled="busy" @click="later">{{ t("cloudCopy.later") }}</DialogButton>
+        <DialogButton variant="secondary" :icon="HardDrive" :disabled="busy" data-testid="cloud-copy-keep-pc" @click="run({ type: 'cloud-copy-keep', side: 'pc' })">{{ t("cloudCopy.conflict.keepPc") }}</DialogButton>
+        <DialogButton :icon="Cloud" :disabled="busy" data-testid="cloud-copy-keep-cloud" @click="run({ type: 'cloud-copy-keep', side: 'cloud' })">{{ t("cloudCopy.conflict.useCloud") }}</DialogButton>
+      </DialogFooter>
     </template>
-    <div v-else-if="copyQuestion === 'newer'" class="flex justify-end gap-2">
-      <Button variant="ghost" @click="later">{{ t("cloudCopy.later") }}</Button>
-      <Button data-testid="cloud-copy-restart" @click="run({ type: 'cloud-copy-restart' })">{{ t("cloudCopy.newer.restart") }}</Button>
-    </div>
-    <div v-else class="flex justify-end">
-      <Button variant="secondary" data-testid="cloud-copy-close-anyway" @click="run({ type: 'cloud-copy-close-anyway' })">{{ t("cloudCopy.closing.anyway") }}</Button>
-    </div>
+    <DialogFooter v-else-if="copyQuestion === 'newer'">
+      <DialogButton close variant="ghost" @click="later">{{ t("cloudCopy.later") }}</DialogButton>
+      <DialogButton :icon="RotateCw" data-testid="cloud-copy-restart" @click="run({ type: 'cloud-copy-restart' })">{{ t("cloudCopy.newer.restart") }}</DialogButton>
+    </DialogFooter>
+    <DialogFooter v-else>
+      <DialogButton variant="secondary" data-testid="cloud-copy-close-anyway" @click="run({ type: 'cloud-copy-close-anyway' })">{{ t("cloudCopy.closing.anyway") }}</DialogButton>
+    </DialogFooter>
   </ModalDialog>
 </template>
