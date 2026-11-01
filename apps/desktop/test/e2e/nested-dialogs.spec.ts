@@ -24,7 +24,7 @@ async function placement(page: Page, innerId = "confirm", maxWidth = 420, outerI
 async function gripsShow(page: Page) {
   const grips = await page.evaluate(() => {
     const box = document.querySelector('[data-testid="settings"]')!.getBoundingClientRect();
-    return [...document.querySelectorAll(".dv-vertical > .dv-sash-container > .dv-sash")]
+    return Array.from(document.querySelectorAll(".dv-vertical > .dv-sash-container > .dv-sash"))
       .map((sash) => sash.getBoundingClientRect())
       .filter((rect) => rect.width > 40)
       .map((rect) => ({ x: Math.round(rect.x + rect.width / 2 - 24), y: Math.round(rect.y + rect.height / 2 - 4), width: 48, height: 8 }))
