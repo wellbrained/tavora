@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, PanelLeftClose, PanelLeftOpen, Plus, Settings, UserRoundPlus } from "@lucide/vue";
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Gamepad2, Plus, Settings, UserRoundPlus } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
@@ -43,8 +43,8 @@ onBeforeUnmount(() => narrowQuery.removeEventListener("change", onNarrowChange))
 // Under the last workspace: add a game, or start a personal workspace (which belongs to no game). The labels are
 // short so both fit side by side in German too; the full name is the tooltip and the accessible name.
 const addButtons = computed(() => [
-  { testid: "rail-add-game", name: t("common.addGame"), label: t("rail.addGame.short"), icon: Plus, run: () => (dialog.value = { kind: "add-game" }) },
-  { testid: "rail-add-personal", name: t("rail.addPersonal"), label: t("rail.addPersonal.short"), icon: UserRoundPlus, run: () => (dialog.value = { kind: "add-personal" }) },
+  { testid: "rail-add-game", name: t("common.addGame"), label: t("rail.addGame.short"), icon: Gamepad2, badge: true, run: () => (dialog.value = { kind: "add-game" }) },
+  { testid: "rail-add-personal", name: t("rail.addPersonal"), label: t("rail.addPersonal.short"), icon: UserRoundPlus, badge: false, run: () => (dialog.value = { kind: "add-personal" }) },
 ]);
 const expanded = computed(() => (narrow.value ? peek.value : library.value.rail.expanded));
 function toggleRail() {
@@ -559,7 +559,15 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                   v-else
                   class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
                 >
-                  <component :is="add.icon" class="size-5" :stroke-width="1.75" />
+                  <!-- The game's icon carries a small plus, as the person's does, so the two tiles read as a pair. -->
+                  <span class="relative flex">
+                    <component :is="add.icon" class="size-5" :stroke-width="1.75" />
+                    <Plus
+                      v-if="add.badge"
+                      class="bg-card group-hover:bg-primary absolute -right-1 -bottom-1 size-2.5 rounded-full"
+                      :stroke-width="3"
+                    />
+                  </span>
                 </span>
               </button>
             </RailTooltip>
