@@ -43,12 +43,16 @@ test('shared module hints support pointer, keyboard, dynamic labels and narrow p
     await expect.poll(() => run('document.querySelector("[role=tooltip] p")?.textContent')).toBe('Keyboard help');
     await input({type:'keyDown',keyCode:'Escape'});
     await expect.poll(() => run('document.querySelectorAll("[role=tooltip]").length')).toBe(0);
+    // The panel's width changes at once, but its resize event comes a frame later, and a hint dismisses itself on it.
+    // Wait for that event, or it can land just after the next hint opens and close it.
+    await run('window.__resized=false;addEventListener("resize",()=>{window.__resized=true},{once:true})');
     await app.evaluate(({BrowserWindow},id)=>{
       const host=BrowserWindow.getAllWindows().find(w=>!w.webContents.getURL().startsWith('data:'))!;
       const view=host.contentView.children.find(v=>(v as any).webContents?.getURL().startsWith('tavora-module://'+id+'/'))!;
       view.setBounds({...view.getBounds(),width:400});
     },id);
     await expect.poll(() => run<number>('innerWidth')).toBeLessThanOrEqual(400);
+    await expect.poll(() => run('window.__resized')).toBe(true);
     await run('document.querySelector("#hint-target").blur();const b=[...document.querySelectorAll("#tooltips button")].find(b=>b.textContent.trim()==="Rich tooltip");b.focus();');
     await expect.poll(() => run('document.querySelector("[role=tooltip] p")?.textContent')).toContain('Readable text');
     expect(await run('getComputedStyle(document.querySelector("[role=tooltip] h2")).fontSize')).toBe('15px');

@@ -61,7 +61,7 @@ test.beforeAll(async () => {
   service = node(["src/server.ts"], { PORT: String(port), TAVORA_GAMES_DB: games, TAVORA_STATE_DIR: stateDir, TAVORA_ICONS_DIR: path.join(stateDir, "icons"), TAVORA_TEST_INBOX_PORT: String(inboxPort), DISCORD_API: `${discordUrl}/api`, NODE_ENV: "test" });
   apiUrl = `http://127.0.0.1:${port}`;
   inboxUrl = `http://127.0.0.1:${inboxPort}`;
-  await expect.poll(async () => (await fetch(`${inboxUrl}/mails`).catch(() => null))?.ok ?? false, { timeout: 15_000 }).toBe(true);
+  await expect.poll(async () => (await fetch(`${inboxUrl}/mails`).catch(() => null))?.ok ?? false, { timeout: 45_000 }).toBe(true);
 });
 
 test.afterAll(async () => {
@@ -340,6 +340,9 @@ async function signIn(page: import("@playwright/test").Page, email: string, crea
   await page.getByTestId("profile-nav-account").click();
   await page.getByTestId("account-email").fill(email);
   await page.getByTestId("account-send-code").click();
+  // The app gives the service 10 s to answer (ACCOUNT_TIMEOUT_MS), and a loaded Windows runner can be slow to; the
+  // default 5 s expectation gave up before the app did. An error from the service shows instead, and fails at once.
+  await expect(page.getByTestId("account-code-sent").or(page.getByTestId("account-error"))).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("account-code-sent")).toContainText(email);
   await page.getByTestId("account-code").fill(await codeFor(email));
   await page.getByTestId("account-verify").click();
