@@ -2,7 +2,10 @@
    dockview's dark theme; everything with a colour points at a token. */
 @import "dockview-vue/dist/styles/dockview.css";
 
+/* The dock keeps its layers to itself: its splitters (z-index 99, with their grip) never show through menus and
+   dialogs, which open on top of the page at z-50. */
 .dockview-theme-tavora {
+  isolation: isolate;
   color-scheme: dark;
   --dv-paneview-active-outline-color: var(--ring);
   --dv-tabs-and-actions-container-font-size: 13px;
