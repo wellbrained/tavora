@@ -17,7 +17,14 @@ function render(data: Data) {
     const c = data.content, card = document.getElementById("card")!;
     card.replaceChildren();
     document.body.classList.remove("compact");
-    card.style.color=data.theme.colors.text;
+    // The neutral look (the default) follows the user's theme through its tokens; the PoE look has fixed colours of its own and
+    // only takes the theme's text and background (see tooltip-document.ts).
+    const poe = c.look === "poe";
+    document.body.classList.toggle("poe", poe);
+    for (const [name, value] of Object.entries(data.theme.tokens))
+        if (typeof value === "string" && CSS.supports("color", value))
+            document.documentElement.style.setProperty("--" + name, value);
+    card.style.color = poe ? data.theme.colors.text : "";
     const bg = data.theme.colors.background;
     if (/^#[a-f0-9]{3,8}$/i.test(bg))
         card.style.setProperty("--bg", bg);
