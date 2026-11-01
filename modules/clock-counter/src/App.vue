@@ -2,15 +2,16 @@
 // Clock & Counter: a toolbar with Add, then the workspace's clocks and counters. Every panel of a workspace shows the same
 // list; which settings are open is each panel's own. Running clocks tick here only while the panel is visible: they
 // keep their start time, so nothing is lost while it is hidden. Hotkeys arrive at the panel used last.
-import { Plus } from "@lucide/vue";
+import { Link, Plus } from "@lucide/vue";
 import { connectModule, errorMessage } from "@tavora/official-ui";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
 import { TavoraError, type GameOverlayResult, type MenuOptions, type TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { plural, setLanguage, t } from "./i18n";
 import ItemCard from "./ItemCard.vue";
-import { count, find, insert, lap, MAX, newItem, parseList, remove, resetClock, resetCounter, startPause, type Item, type ItemKind, type ItemList } from "./items";
+import { count, find, groupOf, insert, lap, linkedGroups, MAX, newItem, parseList, remove, resetClock, resetCounter, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
 import { de, en } from "./locales";
 import { PANEL, UNDO_MS } from "./panel";
 import { createItemStore, type ItemStore } from "./store";
@@ -28,6 +29,33 @@ const suspended = ref(false);
 
 const list = computed<ItemList>(() => store.value?.list.value ?? EMPTY);
 const running = computed(() => list.value.items.some((item) => item.kind !== "counter" && item.since !== null));
+
+// ── What the panel shows: counters joined by links stand together in one frame ──
+
+type Row = { type: "item"; item: Item } | { type: "group"; key: string; items: Counter[] };
+
+const order = computed(() => visualOrder(list.value));
+const rows = computed<Row[]>(() => {
+  const groups = linkedGroups(list.value);
+  const done = new Set<string>();
+  const result: Row[] = [];
+  for (const item of order.value) {
+    if (done.has(item.id)) continue;
+    const group = groups.find((one) => one.members.some((member) => member.id === item.id));
+    if (group) {
+      group.members.forEach((member) => done.add(member.id));
+      result.push({ type: "group", key: group.key, items: group.members });
+    } else result.push({ type: "item", item });
+  }
+  return result;
+});
+const placeOf = (item: Item) => order.value.findIndex((other) => other.id === item.id);
+
+/** The overlay an item's OBS link and Over game switch belong to: the group's, once the group is shown as a whole. */
+function keyOf(item: Item): string {
+  const group = item.kind === "counter" ? groupOf(list.value, item.id) : null;
+  return group?.stream.whole ? group.key : item.id;
+}
 
 // ── The time now, while a clock runs and the panel shows ─────────────
 
@@ -99,9 +127,10 @@ function removeItem(item: Item): void {
     undo.value.toast.dismiss();
     forget(undo.value.item);
   }
-  // Counters linked to it lose the link; Undo brings back the item, not their links.
-  void store.value?.apply([item.id], (data) => remove(data, item.id));
-  void hideOverGame(item).catch(() => undefined);
+  // Counters linked to it lose the link; Undo brings back the item, not their links. Its group hears of it too.
+  const group = item.kind === "counter" ? groupOf(list.value, item.id) : null;
+  void store.value?.apply([item.id, ...(group?.members.map((member) => member.id) ?? [])], (data) => remove(data, item.id));
+  void hideOverGame(item.id).catch(() => undefined);
   if (editing.value === item.id) editing.value = null;
   const shown = toast({
     title: t("app.deleted", { label: item.label || t(`kind.${item.kind}`) }),
@@ -152,8 +181,9 @@ async function setHotkey(action: string, item: Item): Promise<void> {
 }
 
 async function copyLink(item: Item): Promise<"copied" | "off" | "denied"> {
+  const key = keyOf(item);
   try {
-    const result = (await sdk.value?.overlay.copyLink(item.id)) ?? "denied";
+    const result = (await sdk.value?.overlay.copyLink(key)) ?? "denied";
     if (result !== "denied" && store.value) {
       store.value.overlays.value = true;
       // The overlay shows the item from the start, before its first change.
@@ -167,19 +197,20 @@ async function copyLink(item: Item): Promise<"copied" | "off" | "denied"> {
 }
 
 async function showOverGame(item: Item): Promise<GameOverlayResult> {
-  const result = (await sdk.value?.overlay.showOverGame(item.id)) ?? "off";
+  const key = keyOf(item);
+  const result = (await sdk.value?.overlay.showOverGame(key)) ?? "off";
   // The overlay shows the item from the start, before its first change.
   if (result === "shown") {
     store.value?.publish([item.id], list.value);
-    overGame.value = new Set(overGame.value).add(item.id);
+    overGame.value = new Set(overGame.value).add(key);
   }
   return result;
 }
 
-async function hideOverGame(item: Item): Promise<void> {
-  await sdk.value?.overlay.hideOverGame(item.id);
+async function hideOverGame(key: string): Promise<void> {
+  await sdk.value?.overlay.hideOverGame(key);
   const next = new Set(overGame.value);
-  next.delete(item.id);
+  next.delete(key);
   overGame.value = next;
 }
 
@@ -190,11 +221,11 @@ async function refreshOverGame(): Promise<void> {
 }
 
 async function preview(item: Item): Promise<void> {
-  await sdk.value?.overlay.preview(item.id);
+  await sdk.value?.overlay.preview(keyOf(item));
 }
 
 async function resetLink(item: Item): Promise<void> {
-  await sdk.value?.overlay.resetLink(item.id);
+  await sdk.value?.overlay.resetLink(keyOf(item));
 }
 
 /** Before the panel is connected there is nothing to show a menu with. */
@@ -211,6 +242,7 @@ provide(PANEL, {
   setHotkey,
   copyLink,
   overGame,
+  keyOf,
   showOverGame,
   hideOverGame,
   preview,
@@ -281,15 +313,21 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="flex flex-col gap-2">
-        <ItemCard
-          v-for="(item, index) in list.items"
-          :key="item.id"
-          :item="item"
-          :editing="editing === item.id"
-          :first="index === 0"
-          :last="index === list.items.length - 1"
-          @toggle-edit="editing = editing === item.id ? null : item.id"
-        />
+        <template v-for="row in rows" :key="row.type === 'item' ? row.item.id : `group-${row.key}`">
+          <ItemCard v-if="row.type === 'item'" :item="row.item" :editing="editing === row.item.id" :first="placeOf(row.item) === 0" :last="placeOf(row.item) === order.length - 1" @toggle-edit="editing = editing === row.item.id ? null : row.item.id" />
+          <section v-else class="border-border flex flex-col gap-1 rounded-lg border p-1" :aria-label="t('app.linked')" data-testid="linked-group">
+            <Badge variant="secondary" class="gap-1 self-start"><Link class="size-3" :stroke-width="1.5" aria-hidden="true" />{{ t("app.linked") }}</Badge>
+            <ItemCard
+              v-for="item in row.items"
+              :key="item.id"
+              :item="item"
+              :editing="editing === item.id"
+              :first="placeOf(item) === 0"
+              :last="placeOf(item) === order.length - 1"
+              @toggle-edit="editing = editing === item.id ? null : item.id"
+            />
+          </section>
+        </template>
       </div>
     </div>
 

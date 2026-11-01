@@ -1,18 +1,28 @@
 import { describe, expect, it } from "vitest";
 import {
   count,
+  defaultStored,
   elapsed,
+  groupLine,
+  groupOf,
+  groupOverlayState,
   insert,
   lap,
   lapSplits,
+  linkedGroups,
   MAX,
+  memberNames,
+  move,
   newItem,
   overlayState,
   parseList,
   readClock,
   remove,
   resetClock,
+  setStream,
+  sourcesOf,
   startPause,
+  visualOrder,
   type Clock,
   type Counter,
   type ItemList,
@@ -150,5 +160,147 @@ describe("overlayState", () => {
   it("stays well under the overlay size limit", () => {
     const watch = clock("stopwatch", { laps: true, label: "x".repeat(MAX.label), lapTimes: Array.from({ length: MAX.laps }, (_, i) => i * 1000) });
     expect(JSON.stringify(overlayState(watch)).length).toBeLessThan(2_000);
+  });
+});
+
+const nameOf = (item: Counter) => item.label;
+const link = (target: string, amount = 1) => ({ target, amount });
+const ids = (items: { id: string }[]) => items.map((item) => item.id);
+
+describe("linked groups", () => {
+  const list = (): ItemList => ({
+    items: [counter("deaths", { links: [link("situps", 5)] }), clock("stopwatch", { id: "run" }), counter("solo"), counter("situps"), counter("squats", { links: [link("situps", 2)] })],
+  });
+
+  it("join counters by their links, in both directions", () => {
+    const groups = linkedGroups(list());
+    expect(groups).toHaveLength(1);
+    expect(ids(groups[0]!.members)).toEqual(["deaths", "situps", "squats"]);
+    expect(groupOf(list(), "situps")?.key).toBe(groups[0]!.key);
+    expect(groupOf(list(), "solo")).toBeNull();
+    expect(groupOf(list(), "run")).toBeNull();
+  });
+
+  it("keep two separate groups apart", () => {
+    const two: ItemList = { items: [counter("a", { links: [link("b")] }), counter("b"), counter("c", { links: [link("d")] }), counter("d")] };
+    expect(linkedGroups(two).map((group) => ids(group.members))).toEqual([["a", "b"], ["c", "d"]]);
+    expect(new Set(linkedGroups(two).map((group) => group.key)).size).toBe(2);
+  });
+
+  it("stand together in the order shown, and a group moves as one block", () => {
+    const data = list();
+    expect(ids(visualOrder(data))).toEqual(["deaths", "situps", "squats", "run", "solo"]);
+    // The stopwatch jumps over the whole group.
+    move(data, "run", -1);
+    expect(ids(visualOrder(data))).toEqual(["run", "deaths", "situps", "squats", "solo"]);
+    // Inside the group a counter moves past its neighbour; at the edge the group moves on.
+    move(data, "situps", 1);
+    expect(ids(visualOrder(data))).toEqual(["run", "deaths", "squats", "situps", "solo"]);
+    move(data, "situps", 1);
+    expect(ids(visualOrder(data))).toEqual(["run", "solo", "deaths", "squats", "situps"]);
+    move(data, "situps", 1);
+    expect(ids(visualOrder(data))).toEqual(["run", "solo", "deaths", "squats", "situps"]);
+  });
+
+  it("know who counts from whom", () => {
+    expect(ids(sourcesOf(list(), "situps"))).toEqual(["deaths", "squats"]);
+    expect(sourcesOf(list(), "deaths")).toEqual([]);
+  });
+
+  it("show per counter until a group is set to show as a whole", () => {
+    const group = linkedGroups(list())[0]!;
+    expect(group.stream).toMatchObject({ whole: false, text: "" });
+    expect(list().items.every((item) => item.kind !== "counter" || item.stream === null)).toBe(true);
+  });
+
+  it("save the stream settings in every member, and read them the same from any", () => {
+    const data = list();
+    setStream(data, "squats", { whole: true, text: "{@deaths} x" });
+    const streams = data.items.filter((item): item is Counter => item.kind === "counter" && item.id !== "solo").map((item) => item.stream);
+    expect(streams.every((stream) => stream?.whole && stream.text === "{@deaths} x")).toBe(true);
+    expect(groupOf(data, "deaths")?.stream).toEqual(groupOf(data, "situps")?.stream);
+    expect(data.items.find((item) => item.id === "solo")).toMatchObject({ stream: null });
+    // The members don't share one look object.
+    const a = (data.items[0] as Counter).stream!;
+    const b = (data.items[3] as Counter).stream!;
+    a.look.color = "#000000";
+    expect(b.look.color).not.toBe("#000000");
+  });
+
+  it("keep the overlay key when a counter joins, leaves or the first one is deleted", () => {
+    const data = list();
+    setStream(data, "deaths", { whole: true });
+    const key = groupOf(data, "deaths")!.key;
+    data.items.push(counter("pushups", { links: [link("deaths")] }));
+    expect(groupOf(data, "pushups")?.key).toBe(key);
+    remove(data, "deaths");
+    expect(groupOf(data, "situps")?.key).toBe(key);
+  });
+
+  it("give the group that splits off its own key", () => {
+    const data: ItemList = { items: [counter("a", { links: [link("b")] }), counter("b"), counter("c"), counter("d")] };
+    setStream(data, "a", { whole: true });
+    const key = groupOf(data, "a")!.key;
+    // c and d held the same settings before the group split in two.
+    (data.items[2] as Counter).stream = { ...(data.items[0] as Counter).stream! };
+    (data.items[3] as Counter).stream = { ...(data.items[0] as Counter).stream! };
+    (data.items[2] as Counter).links = [link("d")];
+    const groups = linkedGroups(data);
+    expect(groups.map((group) => group.key)[0]).toBe(key);
+    expect(groups[1]!.key).not.toBe(key);
+  });
+
+  it("show the line the user wrote with the values in", () => {
+    const data: ItemList = { items: [counter("deaths", { label: "Deaths", value: 1, links: [link("situps", 5)] }), counter("situps", { label: "Situps", value: 5 })] };
+    setStream(data, "deaths", { whole: true, text: "{@deaths} Death – {@situps} Situps 💀" });
+    expect(groupLine(groupOf(data, "deaths")!, nameOf)).toBe("1 Death – 5 Situps 💀");
+    expect(groupOverlayState(groupOf(data, "deaths")!, nameOf)).toMatchObject({ kind: "group", line: "1 Death – 5 Situps 💀" });
+  });
+
+  it("show the default line for a new group, and when the saved text no longer fits", () => {
+    const data: ItemList = { items: [counter("a", { label: "Deaths", value: 2, links: [link("b", 5)] }), counter("b", { label: "Sit-ups", value: 10 })] };
+    expect(groupLine(groupOf(data, "a")!, nameOf)).toBe("2 Deaths – 10 Sit-ups");
+    setStream(data, "a", { whole: true, text: "{@a} / {@gone}" });
+    expect(groupLine(groupOf(data, "a")!, nameOf)).toBe("2 Deaths – 10 Sit-ups");
+    expect(defaultStored(memberNames(groupOf(data, "a")!, nameOf))).toBe("{@a} Deaths – {@b} Sit-ups");
+  });
+});
+
+describe("data from before groups", () => {
+  const OLD = {
+    items: [
+      { id: "a", kind: "counter", label: "Deaths", look: { showLabel: true, color: "#ffffff", outline: true, font: "inter", align: "center" }, value: 3, step: 1, negative: false, goal: null, links: [{ target: "b", amount: 5 }] },
+      { id: "b", kind: "counter", label: "Sit-ups", look: { showLabel: true, color: "#ffffff", outline: true, font: "inter", align: "center" }, value: 15, step: 1, negative: false, goal: null, links: [] },
+    ],
+  };
+
+  it("opens, and shows each counter on its own until a group is set to show as a whole", () => {
+    const data = parseList(OLD);
+    expect(data.items.every((item) => item.kind === "counter" && item.stream === null)).toBe(true);
+    const group = groupOf(data, "a")!;
+    expect(group.stream.whole).toBe(false);
+    expect(overlayState(data.items[0]!)).toMatchObject({ kind: "counter", value: 3 });
+  });
+
+  it("ignores a stream it can't read", () => {
+    const data = parseList({ items: [{ ...OLD.items[0], stream: { key: "bad key!", whole: true } }, OLD.items[1]!] });
+    expect((data.items[0] as Counter).stream).toBeNull();
+    const kept = parseList({ items: [{ ...OLD.items[0], stream: { key: "g-1", whole: true, text: "{@a}", look: { color: "#facc15" } } }, OLD.items[1]!] });
+    expect((kept.items[0] as Counter).stream).toMatchObject({ key: "g-1", whole: true, text: "{@a}", look: { color: "#facc15" } });
+  });
+
+  it("is written so the previous version still reads it: fields are only added", () => {
+    const data = parseList(OLD);
+    setStream(data, "a", { whole: true, text: "{@a}" });
+    const saved = JSON.parse(JSON.stringify(data)) as { items: Record<string, unknown>[] };
+    // What the previous version needs from each counter is all there, with the same shapes.
+    for (const item of saved.items) {
+      expect(Object.keys(item)).toEqual(expect.arrayContaining(["id", "kind", "label", "look", "value", "step", "negative", "goal", "links"]));
+    }
+    expect(saved.items[0]!.links).toEqual([{ target: "b", amount: 5 }]);
+    // And the previous version saving it back (dropping the new fields) gives the per-counter overlays again.
+    const back = parseList(JSON.parse(JSON.stringify({ items: saved.items.map(({ stream: _stream, ...rest }) => rest) })));
+    expect(back.items.every((item) => item.kind === "counter" && item.stream === null)).toBe(true);
+    expect(groupOf(back, "a")?.stream.whole).toBe(false);
   });
 });

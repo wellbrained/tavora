@@ -1,22 +1,28 @@
 <script setup lang="ts">
-// An item's settings, below its card: name and how it counts, how it looks on stream with its OBS link, and its
-// hotkeys. Text and number fields save when they lose focus or on Enter, not on every key.
+// An item's settings, in a dialog in the middle of the panel: name and how it counts, how it looks on stream with its
+// OBS link, and its hotkeys. Every change saves at once; text and number fields save when they lose focus or on Enter,
+// not on every key, and whatever is still typed saves when the dialog closes.
 import { ArrowDown, ArrowUp, Link, Plus, Trash2, X } from "@lucide/vue";
 import { SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
-import { computed, inject, ref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { t } from "./i18n";
-import { ALIGNS, COLORS, find, FONTS, MAX, move, type Align, type Clock, type Counter, type Font, type Item, type ItemList, type OverlayLook } from "./items";
+import { ALIGNS, COLORS, defaultStored, find, FONTS, groupOf, MAX, memberNames, move, setStream, type Align, type Clock, type Counter, type Font, type Item, type ItemList, type OverlayLook } from "./items";
 import { ACTIONS, PANEL } from "./panel";
+import { counterName } from "./store";
+import { cleanName, compile, display, render } from "./template";
 import { FORMAT_PRESETS, formatSeconds, isFormat, MAX_FORMAT } from "./time";
 
 const props = defineProps<{ item: Item; first: boolean; last: boolean }>();
+const emit = defineEmits<{ close: [] }>();
 const panel = inject(PANEL)!;
 const id = computed(() => props.item.id);
+const name = computed(() => props.item.label || t(`kind.${props.item.kind}`));
 const prefix = computed(() => `cc-${props.item.id}`);
 
 const COLOR_NAMES = ["white", "yellow", "orange", "red", "pink", "violet", "blue", "teal", "green", "black"] as const;
@@ -34,7 +40,71 @@ function update(apply: (item: Item) => void): void {
 
 const updateClock = (apply: (clock: Clock) => void) => update((item) => item.kind !== "counter" && apply(item));
 const updateCounter = (apply: (counter: Counter) => void) => update((item) => item.kind === "counter" && apply(item));
-const updateLook = (apply: (look: OverlayLook) => void) => update((item) => apply(item.look));
+
+// ── Linked group on stream ───────────────────────────────────────────
+
+const group = computed(() => (props.item.kind === "counter" ? groupOf(panel.store.list.value, id.value) : null));
+const whole = computed(() => !!group.value?.stream.whole);
+const members = computed(() => (group.value ? memberNames(group.value, counterName) : []));
+/** The look the stream settings below edit: the group's once it shows as a whole. */
+const look = computed<OverlayLook>(() => (whole.value ? group.value!.stream.look : props.item.look));
+
+function updateLook(apply: (look: OverlayLook) => void) {
+  change([id.value], (data) => {
+    const found = groupOf(data, id.value);
+    if (found?.stream.whole) {
+      const next = structuredClone(found.stream.look);
+      apply(next);
+      setStream(data, id.value, { look: next });
+    } else {
+      const item = find(data, id.value);
+      if (item) apply(item.look);
+    }
+  });
+}
+
+const scope = computed({
+  get: () => (whole.value ? "group" : "self"),
+  set: (next: string) => change([id.value], (data) => setStream(data, id.value, { whole: next === "group" })),
+});
+
+const effectiveStored = computed(() => group.value?.stream.text || defaultStored(members.value));
+const shownText = () => display(effectiveStored.value, members.value);
+const groupText = ref(shownText());
+const textField = ref<{ $el: HTMLInputElement } | null>(null);
+const compiled = computed(() => compile(groupText.value, members.value));
+const problem = computed(() => {
+  const result = compiled.value;
+  if (result.ok) return null;
+  return t(`edit.problem.${result.error}`, { name: result.error === "unknown" ? (result.name ?? "") : "" });
+});
+const groupPreview = computed(() => {
+  if (!compiled.value.ok) return "";
+  const values = new Map((group.value?.members ?? []).map((member) => [member.id, String(member.value)]));
+  return render(compiled.value.stored, values) ?? "";
+});
+
+// Another panel (or a rename) changed it: show the new text, unless it is being typed in.
+watch([effectiveStored, members], () => {
+  if (document.activeElement?.id !== `${prefix.value}-gtext`) groupText.value = shownText();
+});
+
+/** Saves the text when it is usable; a broken one stays in the field and the overlay keeps the last good one. */
+function saveGroupText() {
+  const result = compiled.value;
+  if (result.ok && result.stored !== effectiveStored.value) change([id.value], (data) => setStream(data, id.value, { text: result.stored }));
+}
+
+async function insertName(name: string) {
+  const field = textField.value?.$el;
+  const token = `{${cleanName(name)}}`;
+  const start = field?.selectionStart ?? groupText.value.length;
+  const end = field?.selectionEnd ?? start;
+  groupText.value = groupText.value.slice(0, start) + token + groupText.value.slice(end);
+  await nextTick();
+  field?.focus();
+  field?.setSelectionRange(start + token.length, start + token.length);
+}
 
 // ── Fields that save when they lose focus ────────────────────────────
 
@@ -135,11 +205,17 @@ async function addLink(event: MouseEvent) {
   if (picked) updateCounter((counter) => counter.links.length < MAX.links && !counter.links.some((link) => link.target === picked) && counter.links.push({ target: picked, amount: 1 }));
 }
 
-function saveLinkAmount(target: string, value: string) {
-  const amount = Math.min(MAX.value, Math.max(-MAX.value, number(value, 1))) || 1;
+/** What is typed in a link's amount field and not saved yet, by target. */
+const amountDrafts = reactive<Record<string, string>>({});
+
+function saveLinkAmount(target: string) {
+  const draft = amountDrafts[target];
+  if (draft === undefined) return;
+  delete amountDrafts[target];
+  const amount = Math.min(MAX.value, Math.max(-MAX.value, number(draft, 1))) || 1;
   updateCounter((counter) => {
     const link = counter.links.find((item) => item.target === target);
-    if (link) link.amount = amount;
+    if (link && link.amount !== amount) link.amount = amount;
   });
 }
 
@@ -154,11 +230,11 @@ async function copyLink() {
   linkNote.value = t(result === "copied" ? "edit.copied" : result === "off" ? "edit.overlaysOff" : "edit.noOverlay");
 }
 
-const overGame = computed(() => panel.overGame.value.has(props.item.id));
+const overGame = computed(() => panel.overGame.value.has(panel.keyOf(props.item)));
 
 async function setOverGame(on: boolean) {
   if (!on) {
-    await panel.hideOverGame(props.item);
+    await panel.hideOverGame(panel.keyOf(props.item));
     linkNote.value = null;
     return;
   }
@@ -175,17 +251,40 @@ async function resetLink() {
   linkNote.value = t("edit.resetLinkDone");
 }
 
-const font = computed({ get: () => props.item.look.font, set: (next: Font) => updateLook((look) => (look.font = next)) });
-const align = computed({ get: () => props.item.look.align, set: (next: Align) => updateLook((look) => (look.align = next)) });
+const font = computed({ get: () => look.value.font, set: (next: Font) => updateLook((look) => (look.font = next)) });
+const align = computed({ get: () => look.value.align, set: (next: Align) => updateLook((look) => (look.align = next)) });
 
 // ── Hotkeys ──────────────────────────────────────────────────────────
 
 const actions = computed(() => ACTIONS[props.item.kind].filter((action) => action !== "lap" || (props.item.kind === "stopwatch" && props.item.laps)));
 const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value}`);
+
+// ── Closing ──────────────────────────────────────────────────────────
+
+/** A field that is still being typed in saves when the dialog goes, even if the browser never sends its blur. */
+onBeforeUnmount(() => {
+  saveLabel();
+  if (props.item.kind !== "counter" && isFormat(format.value)) saveFormat();
+  if (props.item.kind === "countdown") {
+    saveDuration();
+    saveDoneText();
+  }
+  if (props.item.kind === "counter") {
+    if (group.value?.stream.whole) saveGroupText();
+    saveStep();
+    saveGoal();
+    Object.keys(amountDrafts).forEach(saveLinkAmount);
+  }
+});
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 border-t px-3 py-3 text-sm" :data-testid="`editor-${item.id}`">
+  <Dialog :open="true" @update:open="(open: boolean) => !open && emit('close')">
+    <DialogContent class="max-h-[calc(100%-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4" :data-testid="`editor-${item.id}`">
+      <DialogHeader>
+        <DialogTitle class="truncate pr-6 text-lg">{{ t("item.edit", { label: name }) }}</DialogTitle>
+      </DialogHeader>
+      <div class="-mx-6 flex min-h-0 flex-col gap-4 overflow-y-auto px-6 text-sm">
     <div class="flex flex-col gap-1.5">
       <Label :for="`${prefix}-label`">{{ t("edit.name") }}</Label>
       <Input :id="`${prefix}-label`" v-model="label" :maxlength="MAX.label" :placeholder="t(`kind.${item.kind}`)" @blur="saveLabel" @keydown.enter="saveLabel" />
@@ -259,12 +358,13 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
         <ul v-if="links.length" class="flex flex-col gap-1">
           <li v-for="link in links" :key="link.target" class="flex items-center gap-2">
             <Input
-              :model-value="String(link.amount)"
+              :model-value="amountDrafts[link.target] ?? String(link.amount)"
               class="w-20 tabular-nums"
               inputmode="numeric"
               :aria-label="t('edit.linkAmount', { label: link.label })"
-              @blur="(event: FocusEvent) => saveLinkAmount(link.target, (event.target as HTMLInputElement).value)"
-              @keydown.enter="(event: KeyboardEvent) => saveLinkAmount(link.target, (event.target as HTMLInputElement).value)"
+              @update:model-value="(value: string | number) => (amountDrafts[link.target] = String(value))"
+              @blur="saveLinkAmount(link.target)"
+              @keydown.enter="saveLinkAmount(link.target)"
             />
             <Link class="text-muted-foreground size-3.5 flex-none" :stroke-width="1.5" aria-hidden="true" />
             <span class="min-w-0 flex-1 truncate">{{ link.label }}</span>
@@ -279,6 +379,45 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
 
     <section class="flex flex-col gap-2" :aria-label="t('edit.stream')">
       <h3 class="font-medium">{{ t("edit.stream") }}</h3>
+      <template v-if="group">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span class="font-medium">{{ t("edit.scope") }}</span>
+          <SegmentedControl
+            v-model="scope"
+            :label="t('edit.scope')"
+            :options="[
+              { value: 'self', label: t('edit.scopeSelf'), testid: 'scope-self' },
+              { value: 'group', label: t('edit.scopeGroup'), testid: 'scope-group' },
+            ]"
+          />
+        </div>
+        <p class="text-muted-foreground text-xs">{{ t("edit.scopeHint") }}</p>
+        <div v-if="whole" class="flex flex-col gap-1.5">
+          <Label :for="`${prefix}-gtext`">{{ t("edit.groupText") }}</Label>
+          <div class="flex items-center gap-2">
+            <Input
+              :id="`${prefix}-gtext`"
+              ref="textField"
+              v-model="groupText"
+              :maxlength="MAX.text"
+              :aria-invalid="!!problem"
+              :aria-describedby="problem ? `${prefix}-gproblem` : undefined"
+              data-testid="group-text"
+              @blur="saveGroupText"
+              @keydown.enter="saveGroupText"
+            />
+            <span v-if="problem" class="text-destructive flex-none" role="img" :aria-label="problem" :title="problem" data-testid="group-problem-x"><X class="size-4" :stroke-width="2" aria-hidden="true" /></span>
+          </div>
+          <div class="flex flex-wrap gap-1">
+            <Button v-for="member in members" :key="member.id" variant="secondary" size="xs" :aria-label="t('edit.groupInsert', { name: member.name })" :title="t('edit.groupInsert', { name: member.name })" @mousedown.prevent @click="insertName(member.name)">
+              {{ cleanName(member.name) }}
+            </Button>
+          </div>
+          <p v-if="problem" :id="`${prefix}-gproblem`" class="text-destructive text-xs" role="alert" data-testid="group-problem">{{ problem }} {{ t("edit.groupInvalid") }}</p>
+          <p v-else class="text-muted-foreground text-xs" data-testid="group-preview">{{ t("edit.preview", { text: groupPreview }) }}</p>
+          <p class="text-muted-foreground text-xs">{{ t("edit.groupHint") }}</p>
+        </div>
+      </template>
       <div class="flex flex-wrap gap-2">
         <Button size="sm" :data-testid="`copy-link-${item.id}`" @click="copyLink">{{ t("edit.copyLink") }}</Button>
         <Button size="sm" variant="secondary" :data-testid="`preview-${item.id}`" @click="previewOverlay">{{ t("edit.previewOverlay") }}</Button>
@@ -289,17 +428,17 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
         <Switch :model-value="overGame" :data-testid="`over-game-${item.id}`" @update:model-value="setOverGame" />
       </Label>
       <p v-if="linkNote" class="text-muted-foreground text-xs" role="status">{{ linkNote }}</p>
-      <Label class="justify-between font-normal">
+      <Label v-if="!whole" class="justify-between font-normal">
         {{ t("edit.showLabel") }}
-        <Switch :model-value="item.look.showLabel" @update:model-value="(on: boolean) => updateLook((look) => (look.showLabel = on))" />
+        <Switch :model-value="look.showLabel" @update:model-value="(on: boolean) => updateLook((look) => (look.showLabel = on))" />
       </Label>
       <Label class="justify-between font-normal">
         {{ t("edit.outline") }}
-        <Switch :model-value="item.look.outline" @update:model-value="(on: boolean) => updateLook((look) => (look.outline = on))" />
+        <Switch :model-value="look.outline" @update:model-value="(on: boolean) => updateLook((look) => (look.outline = on))" />
       </Label>
       <div class="flex flex-col gap-1.5">
         <span class="font-medium">{{ t("edit.color") }}</span>
-        <ColorPicker :model-value="item.look.color" :label="t('edit.color')" :colors="[...COLORS]" :labels="COLOR_NAMES.map((name) => t(`color.${name}`))" @update:model-value="(color: string) => updateLook((look) => (look.color = color))" />
+        <ColorPicker :model-value="look.color" :label="t('edit.color')" :colors="[...COLORS]" :labels="COLOR_NAMES.map((name) => t(`color.${name}`))" @update:model-value="(color: string) => updateLook((look) => (look.color = color))" />
       </div>
       <div class="flex flex-wrap items-center justify-between gap-2">
         <span class="font-medium">{{ t("edit.font") }}</span>
@@ -329,4 +468,9 @@ const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value
       <Button variant="danger" size="sm" class="ml-auto" :data-testid="`delete-${item.id}`" @click="panel.remove(item)"><Trash2 :stroke-width="1.5" /> {{ t("edit.delete") }}</Button>
     </div>
   </div>
+      <div class="flex justify-end">
+        <Button data-testid="editor-done" @click="emit('close')">{{ t("edit.done") }}</Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>

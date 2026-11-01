@@ -43,9 +43,13 @@ function draw(): void {
   root.dataset.font = look.font;
   root.dataset.align = look.align;
   root.dataset.outline = String(look.outline);
-  label.textContent = look.showLabel ? state.label : "";
+  label.textContent = state.kind !== "group" && look.showLabel ? state.label : "";
   delete root.dataset.done;
-  if (state.kind === "counter") {
+  if (state.kind === "group") {
+    // A linked group: the line the user wrote, with the values in.
+    value.textContent = state.line;
+    lap.textContent = "";
+  } else if (state.kind === "counter") {
     value.textContent = state.goal === null ? String(state.value) : `${state.value} / ${state.goal}`;
     lap.textContent = "";
   } else {
@@ -57,6 +61,8 @@ function draw(): void {
     lap.textContent = state.lastLap === null ? "" : formatSeconds(Math.floor(state.lastLap / 1000), state.clock.format);
   }
   fit();
+  // The font may still be loading for this text; fit again once it has (a wider font would run off the source).
+  void document.fonts.ready.then(fit);
 }
 
 watchOverlay((next) => {
