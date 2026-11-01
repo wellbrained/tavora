@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.46",
+    date: "2026-11-01",
+    title: "Dialogs",
+    notes: [
+      "A big dialog no longer shows the panel's settings twice, once in the dialog and once frozen behind it.",
+    ],
+    prs: [
+      { number: 600, title: "Dialogs: still behind a dialog shows the panel as it was" },
+    ],
+    tags: ["workspace"],
+  },
+  {
     version: "0.23.45",
     date: "2026-11-01",
     title: "Add a game, tidier",
