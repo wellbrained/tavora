@@ -442,6 +442,17 @@ describe("panel dialog", () => {
     expect(rig.frozen).toEqual([{ [A]: before }]);
   });
 
+  it("lets a panel with no slot open its dialog (over the Overlay page), telling its module without a picture", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    expect(rig.views.openDialog(A, { width: 600, height: 400 })).toBe(false);
+    expect(rig.views.openDialog(A, { width: 600, height: 400 }, true)).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.inDialog).toBe(true);
+    await rig.views.freeze(true);
+    expect(rig.frozen).toEqual([{}]);
+  });
+
   it("does not tell the module of a dialog that closed before its picture was taken", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);
