@@ -28,6 +28,32 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.39",
+    date: "2026-11-01",
+    title: "Clock & Counter: compact rows",
+    notes: [
+      "Every clock and counter is a single row now, so more of them fit in a panel. Settings open in a dialog behind the gear.",
+      "Counters you linked stand together, and a whole group can show in one overlay with a line you write yourself.",
+    ],
+    prs: [
+      { number: 589, title: "Clock & Counter 0.1.2: compact rows, settings dialog, linked counter groups" },
+    ],
+    tags: ["clock-counter"],
+  },
+  {
+    version: "0.23.38",
+    date: "2026-11-01",
+    title: "A softer glow on the rail",
+    notes: [
+      "The row you hover or have open in the games list now glows in your theme's colour instead of grey.",
+      "A game with its own icon sits in the middle of its row again.",
+    ],
+    prs: [
+      { number: 588, title: "Rail: rows glow in the theme's colour, and a game's own icon sits centred in its row" },
+    ],
+    tags: ["overlays", "rail"],
+  },
+  {
     version: "0.23.37",
     date: "2026-11-01",
     title: "Add a game is a quick picker",
