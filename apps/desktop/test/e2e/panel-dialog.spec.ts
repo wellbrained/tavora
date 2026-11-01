@@ -146,7 +146,7 @@ test("the picture behind a dialog shows the panel as it was, not the page the di
       canvas.height = img.naturalHeight;
       const context = canvas.getContext("2d")!;
       context.drawImage(img, 0, 0);
-      const [r, g] = context.getImageData(Math.floor(canvas.width / 2), 20, 1, 1).data;
+      const [r = 0, g = 0] = context.getImageData(Math.floor(canvas.width / 2), 20, 1, 1).data;
       return [r, g];
     });
     expect(green).toBeGreaterThan(red);
