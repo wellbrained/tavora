@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.44",
+    date: "2026-11-01",
+    title: "Clearer dropdowns",
+    notes: [
+      "Dropdowns where you pick a value now show an up-and-down arrow; menus of actions keep the down arrow.",
+    ],
+    prs: [
+      { number: 603, title: "Kit: value pickers (Select, Picker) get the up/down arrow, menus keep the down arrow" },
+    ],
+    tags: ["calculator", "modules", "todos", "ui-kit"],
+  },
+  {
     version: "0.23.43",
     date: "2026-11-01",
     title: "Place and change your overlays on the Overlay page",
