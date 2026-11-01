@@ -5,14 +5,15 @@
 // workspace (`page`: the panel itself is that dialog, so this is its whole page); an older Tavora gets ItemCard's
 // dialog in the middle of the panel.
 import { ArrowDown, ArrowUp, Link, Plus, Trash2, X } from "@lucide/vue";
-import { SegmentedControl } from "@tavora/official-ui";
+import { errorMessage, SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
-import { computed, inject, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { TavoraError } from "@tavora/sdk";
+import { computed, inject, nextTick, onBeforeUnmount, reactive, ref, watch, type Ref } from "vue";
 import { t } from "./i18n";
 import { ALIGNS, COLORS, defaultStored, find, FONTS, groupOf, MAX, memberNames, move, setStream, type Align, type Clock, type Counter, type Font, type Item, type ItemList, type OverlayLook } from "./items";
 import { ACTIONS, PANEL } from "./panel";
@@ -215,30 +216,49 @@ const removeLink = (target: string) => updateCounter((counter) => (counter.links
 
 const linkNote = ref<string | null>(null);
 
-async function copyLink() {
-  const result = await panel.copyLink(props.item);
-  linkNote.value = t(result === "copied" ? "edit.copied" : result === "off" ? "edit.overlaysOff" : "edit.noOverlay");
+/**
+ * Runs a call Tavora may refuse and tells the user what to do instead of failing without a word. A panel over the game
+ * can't open Tavora's dialogs and windows (the key dialog, the link consent, the preview): Tavora refuses with PERMISSION_DENIED.
+ */
+async function attempt(note: Ref<string | null>, run: () => Promise<void>): Promise<void> {
+  try {
+    await run();
+  } catch (reason) {
+    console.warn("[clock-counter]", errorMessage(reason));
+    note.value = reason instanceof TavoraError && reason.code === "PERMISSION_DENIED" ? t("edit.bringBack") : t("edit.failed");
+  }
+}
+
+function copyLink() {
+  return attempt(linkNote, async () => {
+    const result = await panel.copyLink(props.item);
+    linkNote.value = t(result === "copied" ? "edit.copied" : result === "off" ? "edit.overlaysOff" : "edit.noOverlay");
+  });
 }
 
 const overGame = computed(() => panel.overGame.value.has(panel.keyOf(props.item)));
 
-async function setOverGame(on: boolean) {
-  if (!on) {
-    await panel.hideOverGame(panel.keyOf(props.item));
-    linkNote.value = null;
-    return;
-  }
-  const result = await panel.showOverGame(props.item);
-  linkNote.value = result === "shown" ? t("edit.shownOverGame") : result === "full" ? t("edit.overGameFull") : null;
+function setOverGame(on: boolean) {
+  return attempt(linkNote, async () => {
+    if (!on) {
+      await panel.hideOverGame(panel.keyOf(props.item));
+      linkNote.value = null;
+      return;
+    }
+    const result = await panel.showOverGame(props.item);
+    linkNote.value = result === "shown" ? t("edit.shownOverGame") : result === "full" ? t("edit.overGameFull") : null;
+  });
 }
 
-async function previewOverlay() {
-  await panel.preview(props.item);
+function previewOverlay() {
+  return attempt(linkNote, () => panel.preview(props.item));
 }
 
-async function resetLink() {
-  await panel.resetLink(props.item);
-  linkNote.value = t("edit.resetLinkDone");
+function resetLink() {
+  return attempt(linkNote, async () => {
+    await panel.resetLink(props.item);
+    linkNote.value = t("edit.resetLinkDone");
+  });
 }
 
 const font = computed({ get: () => look.value.font, set: (next: Font) => updateLook((look) => (look.font = next)) });
@@ -248,6 +268,12 @@ const align = computed({ get: () => look.value.align, set: (next: Align) => upda
 
 const actions = computed(() => ACTIONS[props.item.kind].filter((action) => action !== "lap" || (props.item.kind === "stopwatch" && props.item.laps)));
 const hasKey = (action: string) => panel.hotkeys.value.has(`${action}:${id.value}`);
+const hotkeyNote = ref<string | null>(null);
+
+function setKey(action: string) {
+  hotkeyNote.value = null;
+  return attempt(hotkeyNote, () => panel.setHotkey(action, props.item));
+}
 
 // ── Closing ──────────────────────────────────────────────────────────
 
@@ -393,9 +419,10 @@ onBeforeUnmount(() => {
         <li v-for="action in actions" :key="action" class="flex min-h-8 items-center gap-2">
           <span class="min-w-0 flex-1 truncate">{{ t(`action.${action}`) }}</span>
           <span class="text-muted-foreground text-xs" :data-testid="`hotkey-${action}-${item.id}`">{{ hasKey(action) ? t("edit.hotkeyOn") : t("edit.hotkeyNone") }}</span>
-          <Button variant="secondary" size="sm" :aria-label="`${t(`action.${action}`)}: ${hasKey(action) ? t('edit.hotkeyChange') : t('edit.hotkeySet')}`" @click="panel.setHotkey(action, item)">{{ hasKey(action) ? t("edit.hotkeyChange") : t("edit.hotkeySet") }}</Button>
+          <Button variant="secondary" size="sm" :aria-label="`${t(`action.${action}`)}: ${hasKey(action) ? t('edit.hotkeyChange') : t('edit.hotkeySet')}`" @click="setKey(action)">{{ hasKey(action) ? t("edit.hotkeyChange") : t("edit.hotkeySet") }}</Button>
         </li>
       </ul>
+      <p v-if="hotkeyNote" class="text-muted-foreground text-xs" role="status" data-testid="hotkey-note">{{ hotkeyNote }}</p>
     </section>
         </div>
         <div class="flex min-w-0 flex-col gap-4">

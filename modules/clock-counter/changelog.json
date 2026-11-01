@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.4",
+    "date": "2026-11-01",
+    "notes": [
+      "Show Clock & Counter over your game from the panel's menu. Your clocks and counters stay in view, and you count or start and stop them while you hold the game layer key.",
+      "Add works over your game too, and a button that can't work there now tells you what to do."
+    ]
+  },
+  {
     "version": "0.1.3",
     "date": "2026-11-01",
     "notes": [

@@ -1,6 +1,7 @@
 // What a Clock & Counter panel shares with its cards: the store, the time now (ticking while a clock runs), which
-// hotkeys are set, and the calls that need the click that asked for them.
-import type { GameOverlayResult, MenuOptions } from "@tavora/sdk";
+// hotkeys are set, and the calls that need the click that asked for them. Those calls throw when Tavora refuses them
+// (a panel over the game can't use its dialogs and windows): the settings catch that and say what to do.
+import type { GameOverlayResult } from "@tavora/sdk";
 import type { InjectionKey, Ref } from "vue";
 import type { Item, ItemKind } from "./items";
 import type { ItemStore } from "./store";
@@ -33,7 +34,6 @@ export interface PanelContext {
   preview(item: Item): Promise<void>;
   resetLink(item: Item): Promise<void>;
   remove(item: Item): void;
-  showMenu(request: MenuOptions): Promise<string | null>;
 }
 
 export const PANEL: InjectionKey<PanelContext> = Symbol("clock-counter-panel");

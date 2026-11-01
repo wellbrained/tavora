@@ -6,13 +6,15 @@ import { Link, Plus } from "@lucide/vue";
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
-import { TavoraError, type GameOverlayResult, type MenuOptions, type TavoraSDK } from "@tavora/sdk";
+import type { GameOverlayResult, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { plural, setLanguage, t } from "./i18n";
 import ItemCard from "./ItemCard.vue";
 import ItemEditor from "./ItemEditor.vue";
 import { count, find, groupOf, insert, lap, linkedGroups, MAX, newItem, parseList, remove, resetClock, resetCounter, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
+import { buildLiveState } from "./live";
 import { de, en } from "./locales";
 import { PANEL, UNDO_MS } from "./panel";
 import { createItemStore, type ItemStore } from "./store";
@@ -23,6 +25,9 @@ const KINDS: ItemKind[] = ["countdown", "stopwatch", "counter"];
 const sdk = shallowRef<TavoraSDK | null>(null);
 const store = shallowRef<ItemStore | null>(null);
 const error = ref<string | null>(null);
+/** A short hint in the toolbar (a settings dialog that would not open); it goes by itself. */
+const notice = ref<string | null>(null);
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 const editing = ref<string | null>(null);
 /** This panel is shown as a dialog over the workspace; its page is then the settings of the item being edited. */
 const dialogOpen = ref(false);
@@ -108,9 +113,22 @@ function toggleEdit(id: string): void {
   openEditing(id);
 }
 
+/** Tells the user something short in the toolbar for a few seconds. */
+function say(text: string): void {
+  notice.value = text;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => (notice.value = null), UNDO_MS);
+}
+
 function openEditing(id: string): void {
   editing.value = id;
-  if (overWorkspace.value) void sdk.value!.panel.openDialog({ width: 960, height: 680 }).catch(() => (editing.value = null));
+  // Over the game this closes the game layer and opens the dialog in Tavora, so it is no different from the workspace.
+  if (overWorkspace.value) {
+    sdk.value!.panel.openDialog({ width: 960, height: 680 }).catch(() => {
+      editing.value = null;
+      say(t("app.settingsFailed"));
+    });
+  }
 }
 
 function closeEditing(): void {
@@ -129,23 +147,16 @@ function onKey(event: KeyboardEvent): void {
   if (event.key === "Escape" && dialogOpen.value && !event.defaultPrevented && !inPopup) closeEditing();
 }
 
-function addItem(kind: ItemKind): void {
+/** Adds an item. `settings` opens its settings to name it, which needs the click on the Add button itself. */
+function addItem(kind: ItemKind, settings = true): void {
   const id = crypto.randomUUID();
   const same = list.value.items.filter((item) => item.kind === kind).length;
   const label = same ? `${t(`kind.${kind}`)} ${same + 1}` : t(`kind.${kind}`);
   void store.value?.apply([id], (data) => insert(data, newItem(kind, id, label)));
-  // Its settings open too, to name it. From the menu there is no click left for the dialog over the workspace: it stays closed.
+  // Its settings open too, to name it. From the menu they stay closed: the item is in the list, the gear opens them.
+  if (!settings) return;
   if (overWorkspace.value) openEditing(id);
   else editing.value = id;
-}
-
-async function pickKind(event: MouseEvent): Promise<void> {
-  const picked = await showMenu({
-    items: KINDS.map((kind) => ({ type: "item" as const, id: kind, label: t(`kind.${kind}`) })),
-    anchor: event.currentTarget as HTMLElement,
-    align: "end",
-  });
-  if (picked) addItem(picked as ItemKind);
 }
 
 // ── Delete, with Undo ────────────────────────────────────────────────
@@ -209,29 +220,24 @@ async function refreshHotkeys(): Promise<void> {
 
 const overGame = ref<ReadonlySet<string>>(new Set());
 
+/** Tavora's key dialog; a refusal (the panel is over the game, say) goes to the settings, which tell the user. */
 async function setHotkey(action: string, item: Item): Promise<void> {
   try {
     await sdk.value?.hotkeys.set(action, item.id, item.label || t(`kind.${item.kind}`));
-  } catch (reason) {
-    error.value = errorMessage(reason);
+  } finally {
+    await refreshHotkeys();
   }
-  await refreshHotkeys();
 }
 
+/** "denied" is the user saying no to the consent dialog; a refusal (the panel is over the game) throws, and the settings say so. */
 async function copyLink(item: Item): Promise<"copied" | "off" | "denied"> {
-  const key = keyOf(item);
-  try {
-    const result = (await sdk.value?.overlay.copyLink(key)) ?? "denied";
-    if (result !== "denied" && store.value) {
-      store.value.overlays.value = true;
-      // The overlay shows the item from the start, before its first change.
-      store.value.publish([item.id], list.value);
-    }
-    return result;
-  } catch (reason) {
-    if (reason instanceof TavoraError && reason.code === "PERMISSION_DENIED") return "denied";
-    throw reason;
+  const result = (await sdk.value?.overlay.copyLink(keyOf(item))) ?? "denied";
+  if (result !== "denied" && store.value) {
+    store.value.overlays.value = true;
+    // The overlay shows the item from the start, before its first change.
+    store.value.publish([item.id], list.value);
   }
+  return result;
 }
 
 async function showOverGame(item: Item): Promise<GameOverlayResult> {
@@ -266,9 +272,6 @@ async function resetLink(item: Item): Promise<void> {
   await sdk.value?.overlay.resetLink(keyOf(item));
 }
 
-/** Before the panel is connected there is nothing to show a menu with. */
-const showMenu = (request: MenuOptions) => sdk.value?.ui.showMenu(request) ?? Promise.resolve(null);
-
 // The cards only show once the store is there.
 provide(PANEL, {
   get store() {
@@ -286,8 +289,17 @@ provide(PANEL, {
   preview,
   resetLink,
   remove: removeItem,
-  showMenu,
 });
+
+// ── Live view: what Tavora shows over the game while the game layer is closed ──
+
+let liveTimer: ReturnType<typeof setTimeout> | undefined;
+/** Hands the list to Tavora's live view a moment after it changed, so a burst of clicks sends once. */
+function sendLive(): void {
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => void sdk.value?.panel.setLive(buildLiveState(list.value, t("app.more", { count: "{count}" }))).catch(() => undefined), 100);
+}
+watch([list, sdk], () => store.value && sendLive());
 
 const cleanup: (() => void)[] = [];
 
@@ -327,6 +339,8 @@ onBeforeUnmount(() => {
   removeEventListener("keydown", onKey);
   cleanup.forEach((fn) => fn());
   clearInterval(ticker);
+  clearTimeout(liveTimer);
+  clearTimeout(noticeTimer);
   if (undo.value) clearTimeout(undo.value.timer);
 });
 </script>
@@ -340,12 +354,21 @@ onBeforeUnmount(() => {
     <header class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2" role="toolbar" :aria-label="t('app.toolbar')">
       <p class="min-w-0 flex-1 truncate px-1 text-xs" role="status">
         <span v-if="store.error.value || error" class="text-destructive">{{ store.error.value ?? error }}</span>
+        <span v-else-if="notice" class="text-foreground" data-testid="notice">{{ notice }}</span>
         <span v-else-if="list.items.length" class="text-muted-foreground tabular-nums">{{ plural("app.count", list.items.length) }}</span>
       </p>
-      <Button v-if="list.items.length" variant="ghost" size="sm" :disabled="list.items.length >= MAX.items" data-testid="add" @click="pickKind">
-        <Plus :stroke-width="1.5" />
-        {{ t("app.add") }}
-      </Button>
+      <!-- A kit menu, not ui.showMenu: Tavora draws no module menu while the panel is over the game. -->
+      <DropdownMenu v-if="list.items.length">
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="sm" :disabled="list.items.length >= MAX.items" data-testid="add">
+            <Plus :stroke-width="1.5" />
+            {{ t("app.add") }}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem v-for="kind in KINDS" :key="kind" :data-testid="`pick-${kind}`" @select="addItem(kind, false)">{{ t(`kind.${kind}`) }}</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </header>
 
     <div class="min-h-0 flex-1 overflow-y-auto p-2">
