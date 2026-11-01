@@ -54,24 +54,56 @@ async function inPersonalWorkspace(): Promise<{ app: ElectronApplication; page: 
   return { app, page };
 }
 
-test("the Overlay page offers a Clock & Counter panel of a personal workspace and takes it into the setup", async () => {
+test("the Overlay page lists a Clock & Counter's things under its panel, adds them one by one at the size they need, and opens their settings over the page", async () => {
   const { app, page } = await inPersonalWorkspace();
   try {
+    await click(app, "add-counter");
+    await click(app, "editor-done");
+    await click(app, "add");
+    await click(app, "pick-stopwatch");
+    await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]').length`)).toBe(2);
     await overlayPage(app, page);
-    const sources = (await state(page)).sources;
-    expect(sources).toHaveLength(1);
-    // Not "Can't show over a game": nothing blocks it, so it is in the list that can be used, not in the folded one.
-    expect(sources[0]).toMatchObject({ name: "Clock & Counter", from: "Personal", moduleId: ID, block: null });
+    // The panel says what it can show, so it is a header with its things under it, not something to add as a whole.
+    await expect.poll(async () => (await state(page)).sources[0]?.children?.length).toBe(2);
+    const header = (await state(page)).sources[0]!;
+    expect(header).toMatchObject({ name: "Clock & Counter", from: "Personal", moduleId: ID, block: null });
     await expect(page.getByTestId("layout-unusable-toggle")).toHaveCount(0);
-    await expect(row(page, sources[0]!.id)).toBeVisible();
-    await expect(row(page, sources[0]!.id)).not.toContainText("Can't show over a game");
+    await expect(row(page, header.id)).toBeVisible();
+    await expect(row(page, header.id).getByTestId(/layout-gear-/)).toHaveCount(0);
+    const rowIds = () => page.locator('[data-testid^="layout-source-"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-testid")));
+    const before = await rowIds();
+    expect(before).toHaveLength(3);
+    // Clicking the header folds it; it adds nothing.
+    await row(page, header.id).getByRole("button").first().click();
+    await expect(page.locator('[data-testid^="layout-source-"]')).toHaveCount(1);
+    await row(page, header.id).getByRole("button").first().click();
+    expect(await rowIds()).toEqual(before);
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "sources-addable.png") });
 
-    await row(page, sources[0]!.id).getByRole("button").first().click();
+    // The second thing goes in: its row stays where it was, and it gets a gear and an eye in place of the +.
+    const second = header.children![1]!;
+    await page.getByTestId(`layout-source-${header.id}:${second.key}`).getByRole("button").first().click();
     await expect.poll(async () => (await state(page)).items.length).toBe(1);
+    expect(await rowIds()).toEqual(before);
+    const item = (await state(page)).items[0]!;
+    expect(item.name).toBe(second.name);
+    expect((await state(page)).selection).toBe(item.id);
+    // Not the big frame a panel starts with: the size its content needs.
+    expect(item.placed.width).toBeLessThan(340);
+    expect(item.placed.height).toBeLessThan(130);
     await expect(page.getByTestId("layout-count")).toHaveText("1 of 8");
-    await expect(page.getByTestId("layout-settings")).toContainText("Clock & Counter");
+    await expect(page.getByTestId("layout-settings")).toContainText(second.name);
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "sources-added.png") });
+
+    // Settings, from the row's gear: the panel's dialog over the Overlay page, which stays where it is.
+    await page.getByTestId(`layout-gear-${item.id}`).click();
+    await expect(page.getByTestId("panel-dialog")).toBeVisible();
+    await expect(page.getByTestId("overlay-page")).toBeVisible();
+    await expect.poll(() => inModule<boolean>(app, ID, `!!document.querySelector('[data-testid^="editor-"]')`).catch(() => false)).toBe(true);
+    await page.getByTestId("panel-dialog-close").click();
+    await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
+    await expect(page.getByTestId("overlay-page")).toBeVisible();
+    expect((await state(page)).selection).toBe(item.id);
   } finally {
     await app.close();
   }

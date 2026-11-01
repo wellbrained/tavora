@@ -285,6 +285,35 @@ describe("panel", () => {
     expect(host.live).toBeNull();
   });
 
+  it("keeps the overlay sources, last call wins, and checks them", async () => {
+    const { sdk, host } = createMemoryHost({ limits: { maxOverlaySources: 2 } });
+    await sdk.overlay.setSources([{ key: "a", name: "Countdown", size: { width: 120, height: 60 } }, { key: "g-1", name: "7 Deaths", group: true }]);
+    expect(host.sources).toEqual([{ key: "a", name: "Countdown", size: { width: 120, height: 60 } }, { key: "g-1", name: "7 Deaths", group: true }]);
+    await sdk.overlay.setSources([]);
+    expect(host.sources).toEqual([]);
+    expect(await failure(sdk.overlay.setSources([{ key: "a", name: "A" }, { key: "b", name: "B" }, { key: "c", name: "C" }]))).toMatchObject({ code: "QUOTA_EXCEEDED" });
+    expect(await failure(sdk.overlay.setSources([{ key: "a", name: "A" }, { key: "a", name: "B" }]))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.overlay.setSources([{ key: "bad key", name: "A" }]))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.overlay.setSources([{ key: "a", name: "" }]))).toMatchObject({ code: "INVALID_PARAMS" });
+  });
+
+  it("tells the panel when the Overlay page changed the overlays, and when Settings was pressed", async () => {
+    const { sdk, host } = createMemoryHost();
+    const changed = vi.fn();
+    const settings = vi.fn();
+    const dialog = vi.fn();
+    sdk.overlay.onOverGameChange(changed);
+    sdk.panel.onOpenSettings(settings);
+    sdk.panel.onDialogChange(dialog);
+    host.setOverGame(["a", "b"]);
+    expect(changed).toHaveBeenCalledWith(["a", "b"]);
+    expect(await sdk.overlay.overGame()).toEqual(["a", "b"]);
+    host.openSettings("a");
+    expect(dialog).toHaveBeenCalledWith(true);
+    expect(settings).toHaveBeenCalledWith({ key: "a" });
+    expect(host.dialog.open).toBe(true);
+  });
+
   it("panels.open shows, switches or opens, like the host", async () => {
     const main = createMemoryHost({ panelType: "main", panelTypes: ["main", "side"] });
     const content = { id: "b1", title: "Build 1" };

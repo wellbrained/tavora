@@ -2142,3 +2142,31 @@ describe("the Overlay page", () => {
     expect(service.layout.running()).toEqual(["elden", "other"]);
   });
 });
+
+describe("what a panel lists", () => {
+  it("keeps each panel's list apart, for its own publisher only, until the panel goes", async () => {
+    const { service } = await setup();
+    const list = [{ key: "a", name: "Countdown", size: { width: 100, height: 50 } }];
+    service.setSources("p1", "official", list);
+    expect(service.sourcesOf("p1", "official")).toEqual(list);
+    expect(service.sourcesOf("p1", "someone-else")).toBeNull();
+    expect(service.sourcesOf("p2", "official")).toBeNull();
+    // An empty list is still a list: the panel is not offered as a whole.
+    service.setSources("p1", "official", []);
+    expect(service.sourcesOf("p1", "official")).toEqual([]);
+    service.forgetLive("p1");
+    expect(service.sourcesOf("p1", "official")).toBeNull();
+  });
+
+  it("puts a source into the setup the Overlay page shows, not the one it would land in", async () => {
+    const { service } = await setup();
+    const subject = { owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "personal", key: "item-9" };
+    expect(service.layout.addOverlay("$everywhere", subject)).toBe("added");
+    expect(service.layout.items("$everywhere").map((info) => info.ref.kind)).toEqual(["overlay"]);
+    expect(service.layout.items("$all")).toEqual([]);
+    expect(service.layout.addOverlay("$everywhere", subject)).toBe("exists");
+    // Another setup may have it too; a module that isn't installed has no overlay to add.
+    expect(service.layout.addOverlay("$all", subject)).toBe("added");
+    expect(service.layout.addOverlay("$all", { ...subject, moduleId: "nobody.nothing" })).toBe("refused");
+  });
+});

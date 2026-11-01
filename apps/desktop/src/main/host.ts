@@ -29,7 +29,7 @@ import {
 } from "electron";
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
-import { PANEL_DIALOG, type PanelDialogSize } from "./bridge";
+import type { PanelDialogSize } from "./bridge";
 import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishStep, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
@@ -254,6 +254,8 @@ const TITLE_BAR_HEIGHT = 47;
 const DIALOG_BACKDROP_OPACITY = 0.8;
 /** How long a dialog asked for from the in-game layer waits for its panel to be back in Tavora. */
 const PENDING_DIALOG_MS = 5000;
+/** How big the dialog is that Settings on an overlay's frame opens over the Overlay page (a module sets its own size when it opens its dialog itself). */
+const OVERLAY_SETTINGS_DIALOG = { width: 960, height: 680 } as const;
 /** What a game workspace the user adds starts with, side by side in this order (startWorkspace). */
 const STARTER_MODULES = ["tavora.notes", "tavora.todos"] as const;
 
@@ -2877,10 +2879,19 @@ export class Host {
           workspaceName: entry.name,
           scope: scopeForKind(entry.kind),
           inGame: this.panelTypeOf(record) !== undefined && this.canShowInGame(record),
+          sources: this.gameOverlays.sourcesOf(record.instanceId, module.owner),
         });
       }
     }
     return sources;
+  }
+
+  /** The module's panels in the workspace hear which of its game overlays are shown now (the user added or removed one on the Overlay page). */
+  private tellOverGameChanged(changed: { owner: string; moduleId: string; workspaceId: string }): void {
+    const module = this.modules.get(changed.moduleId);
+    if (!module || module.owner !== changed.owner) return;
+    const keys = this.gameOverlays.keysOf(module, changed.workspaceId);
+    for (const record of this.records(changed.workspaceId)) if (record.moduleId === changed.moduleId) this.moduleView(record.instanceId)?.overGameChanged(keys);
   }
 
   private openWorkspace(workspaceId: string): void {
@@ -3764,6 +3775,7 @@ export class Host {
         showOverGame: (key) => this.gameOverlays.show(module, workspace.id, key),
         hideOverGame: (key) => this.gameOverlays.hide(module, workspace.id, key),
         overGame: () => this.gameOverlays.keysOf(module, workspace.id),
+        setSources: (sources) => this.gameOverlays.setSources(record.instanceId, module.owner, sources),
         preview: async (key) => this.previews.show({ owner: module.owner, moduleId: module.manifest.id, workspaceId: workspace.id, key }),
       },
       hotkeys: this.streaming.hotkeysFor(module, workspace.id),
@@ -4294,19 +4306,40 @@ export class Host {
   }
 
   /**
-   * The Overlay page's Settings button: leaves the page for the panel's workspace and opens the panel big in its dialog, as a
-   * panel over the game does. A module can't be asked for one of its own settings from here yet, so the dialog shows the
-   * panel as it is. An overlay item names no panel, so the first panel of its module in that workspace is used.
+   * The Overlay page's Settings button: the panel behind the item comes up in its dialog over the page, which stays where it is
+   * (the panel runs in the background while the page is open; one that does not is started quietly), and hears which thing
+   * the user means (panel.onOpenSettings). A page without a handler shows the panel as it is. Closing the dialog leaves the
+   * user on the Overlay page. An overlay names no panel, so the first panel of its module in that workspace is used.
    */
-  private openPanelFromOverlayPage(item: { workspaceId: string; moduleId: string; instanceId: string | null }): void {
-    if (this.window.isDestroyed() || !isLive(this.library, item.workspaceId)) return;
-    const record = this.records(item.workspaceId).find((one) => (item.instanceId ? one.instanceId === item.instanceId : one.moduleId === item.moduleId));
+  private openSettingsOverOverlayPage(item: { workspaceId: string; moduleId: string; instanceId: string | null; key: string | null }): void {
+    const entry = this.library.workspaces[item.workspaceId];
+    if (this.window.isDestroyed() || !entry || entry.trashedAt) return;
+    const record = this.records(entry.id).find((one) => (item.instanceId ? one.instanceId === item.instanceId : one.moduleId === item.moduleId));
     const module = record && this.modules.get(record.moduleId);
     if (!record || !module) return;
-    // It opens once the panel is in its slot, if that happens soon.
-    void this.questions.ask("dialog", { panel: record.instanceId }, { module, size: { width: PANEL_DIALOG.width, height: PANEL_DIALOG.height }, until: Date.now() + PENDING_DIALOG_MS, byClick: true });
-    if (this.workspaceId !== item.workspaceId) this.openWorkspace(item.workspaceId);
-    this.openPendingDialog();
+    if (!this.panels.has(record.instanceId)) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+    const view = this.moduleView(record.instanceId);
+    if (!view) return;
+    if (!this.openPanelDialogOverPage(record.instanceId, module, { width: OVERLAY_SETTINGS_DIALOG.width, height: OVERLAY_SETTINGS_DIALOG.height })) return;
+    const key = item.key;
+    if (key === null) return;
+    // The page may still be starting: the key is handed over once it has connected, if that is soon.
+    const until = Date.now() + PENDING_DIALOG_MS;
+    const send = (): void => {
+      if (view.openSettings(key) || Date.now() > until || this.panels.dialog?.instanceId !== record.instanceId) return;
+      setTimeout(send, 100);
+    };
+    send();
+  }
+
+  /** A panel's dialog over a page where it has no slot (the Overlay page). Whether it opened. */
+  private openPanelDialogOverPage(instanceId: string, module: InstalledModule, size: PanelDialogSize): boolean {
+    if (!this.panels.openDialog(instanceId, size, true)) return false;
+    this.closeModuleMenu();
+    this.tooltips.close(instanceId);
+    const shown: PanelDialog = { instanceId, title: this.shown(module.manifest).name, icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null, ...size, closesOnClickBeside: true };
+    this.window.webContents.send("host:panel-dialog", shown);
+    return true;
   }
 
   /**
@@ -4930,6 +4963,7 @@ export class Host {
           this.syncGameWatcher();
           this.pushStateSoon();
         },
+        overGameChanged: (changed) => this.tellOverGameChanged(changed),
         saveLibrary: () => this.saveLibrary(),
         workspaceId: () => this.workspaceId,
         askConnector: (moduleId, connector) => this.askConnector(moduleId, connector),
@@ -4941,7 +4975,7 @@ export class Host {
           sources: () => this.overlaySources(),
           keepRunning: (panels) => this.runForOverlayPage(panels),
           leave: () => this.leaveOverlayPage(),
-          openPanel: (panel) => this.openPanelFromOverlayPage(panel),
+          openSettings: (target) => this.openSettingsOverOverlayPage(target),
           choosePicture: () =>
             this.pickPath(
               "layout-picture",

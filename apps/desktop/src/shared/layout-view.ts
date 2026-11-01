@@ -25,8 +25,8 @@ export interface LayoutItemView {
   from: string;
   moduleId: string;
   kind: "overlay" | "panel";
-  /** A personal workspace's item can move between Everywhere and All games: the setup it can move to, else null. */
-  moveTo: "$everywhere" | "$all" | null;
+  /** The other setups this item may be moved to (Move to…): a personal workspace's item any of them, a game's own only that game's. */
+  moveTargets: { id: string; name: string }[];
   /** The position as saved: an anchor and offsets and a size in units of the game window's height. */
   rect: AnchoredRect;
   /** Where it sits on the canvas, in canvas units (1080 high). */
@@ -57,6 +57,20 @@ export interface LayoutStills {
 /** Why a source can't be added to the setup shown (null: it can). */
 export type SourceBlock = "in-setup" | "game-only" | "not-in-game" | "full";
 
+/** One thing a panel listed with overlay.setSources, a row under the panel in the Sources. */
+export interface LayoutSourceChild {
+  /** The overlay key it shows from. */
+  key: string;
+  /** The item's name, or the line a group shows. */
+  name: string;
+  /** A group of linked things shown as one line. */
+  group: boolean;
+  /** The item of the setup it is, else null. */
+  item: string | null;
+  /** Why it can't go into the setup shown (null: it can; "in-setup": it is there). */
+  block: SourceBlock | null;
+}
+
 /** One panel of some workspace, listed in the Sources. */
 export interface LayoutSourceView {
   /** The panel's instance id. */
@@ -68,6 +82,11 @@ export interface LayoutSourceView {
   /** For a game workspace's panel, that game's name (it can only go into that game's setup). */
   game: string | null;
   block: SourceBlock | null;
+  /**
+   * What the panel can show on its own, in the module's order (overlay.setSources); null when it never said. A panel with a
+   * list is a header only: its things are added one by one, the panel as a whole is not.
+   */
+  children: LayoutSourceChild[] | null;
 }
 
 export interface LayoutView {
@@ -108,9 +127,10 @@ export type LayoutMessage =
   | { type: "game"; gameId: string }
   /** Add overlay for a game workspace (the dropdown), and show it. */
   /** A panel from the Sources goes into the setup shown. */
-  | { type: "add-source"; id: string }
-  /** A personal item moves to the other of Everywhere and All games. */
-  | { type: "move"; id: string }
+  /** `key`: the thing of the panel to add (one of its `children`); without it, the panel as a whole (only one that listed nothing). */
+  | { type: "add-source"; id: string; key?: string }
+  /** Move to…: the item goes to another setup with its place and settings. */
+  | { type: "move"; id: string; to: string }
   | { type: "grid"; grid: GridSetting }
   | { type: "select"; id: string | null }
   /** The canvas area in the window (shell only), in DIPs from the window's top left; null while it can't be drawn. */
@@ -160,8 +180,11 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
     case "game":
       return text(raw.gameId, 128) ? { type: "game", gameId: raw.gameId } : null;
     case "add-source":
+      if (!text(raw.id)) return null;
+      if (raw.key === undefined) return { type: "add-source", id: raw.id };
+      return text(raw.key, 64) ? { type: "add-source", id: raw.id, key: raw.key } : null;
     case "move":
-      return text(raw.id) ? { type: raw.type, id: raw.id } : null;
+      return text(raw.id) && text(raw.to, 128) ? { type: "move", id: raw.id, to: raw.to } : null;
     case "grid":
       return isGridSetting(raw.grid) ? { type: "grid", grid: raw.grid } : null;
     case "select":

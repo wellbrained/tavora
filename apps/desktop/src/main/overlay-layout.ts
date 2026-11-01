@@ -4,11 +4,11 @@
 // This file holds what the page shows (the setup, the selection, the grid, undo, the picture, the sources) and does what
 // its messages ask: it moves nothing itself, it writes the new position into the overlays (LayoutSource) so the game
 // shows exactly what the canvas shows at once, and it tells the canvas where to put the live pages.
-import { LIMITS } from "@tavora/sdk/protocol";
+import { LIMITS, type OverlaySource } from "@tavora/sdk/protocol";
 import { translate, type Language, type MessageKey } from "../shared/i18n";
 import { UndoStack } from "../shared/layout-history";
 import { canvasFor, gridCell, type Canvas } from "../shared/layout-math";
-import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, type LayoutItemView, type LayoutMessage, type LayoutSourceView, type LayoutView, type SourceBlock } from "../shared/layout-view";
+import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, type LayoutItemView, type LayoutMessage, type LayoutSourceChild, type LayoutSourceView, type LayoutView, type SourceBlock } from "../shared/layout-view";
 import { DEFAULT_RECT, MIN_OVERLAY_SIZE, REFERENCE_HEIGHT, anchorOf, contentScale, placeLegacy, type AnchoredRect, type Rect } from "../shared/overlay-anchor";
 import type { GameOverlaySource } from "./game-overlay-page";
 import type { LayoutItemInfo, LayoutSource } from "./game-overlay-service";
@@ -40,6 +40,8 @@ export interface SourcePanel {
   scope: OverlayScope;
   /** Its type allows being shown over a game (`inGame`). */
   inGame: boolean;
+  /** What the panel told overlay.setSources, in its order; null when it never did. */
+  sources: readonly OverlaySource[] | null;
 }
 
 /** The part of the canvas the controller drives (a test stands in for Electron). */
@@ -71,8 +73,8 @@ export interface OverlayLayoutOptions<W extends LayoutWindow = LayoutWindow> {
   keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): boolean[];
   /** The page asked to go back to the workspace. */
   leave(): void;
-  /** The toolbar's Settings: shows the panel behind an item where it lives (its workspace), ready to be used. */
-  openPanel(panel: { workspaceId: string; moduleId: string; instanceId: string | null }): void;
+  /** The toolbar's Settings: the panel behind an item shows in its dialog over the page, with the settings of `key` (an overlay's key; null for a panel's own item). */
+  openSettings(target: { workspaceId: string; moduleId: string; instanceId: string | null; key: string | null }): void;
   /** The picture of the window with this handle (physical pixels at most `size`), as PNG bytes; null when it can't be taken. */
   capture(handle: string, size: { width: number; height: number }): Promise<Buffer | null>;
   /** The picture the user picks from a file, as PNG bytes; "cancelled" when they closed the dialog, "bad" when the file isn't a picture. */
@@ -95,6 +97,35 @@ export function edgesToBounds(layer: Rect, placed: Rect, scale: number): Rect {
 
 /** How often the live pages are looked at for having something to show. */
 const IDLE_CHECK_MS = 1000;
+/** Room kept around what a panel says its overlay needs, on each side, in canvas units. */
+const FIT_PADDING = 8;
+/** The gap kept between a new frame and the others when it is placed, in canvas units. */
+const PLACE_GAP = 8;
+
+/** Whether an overlay subject is the thing `key` of this panel's module in its workspace. */
+const sameSubject = (subject: { owner: string; moduleId: string; workspaceId: string; key: string }, panel: { owner: string; moduleId: string; workspaceId: string }, key: string) =>
+  subject.owner === panel.owner && subject.moduleId === panel.moduleId && subject.workspaceId === panel.workspaceId && subject.key === key;
+
+const overlaps = (a: Rect, b: Rect, gap: number) => a.x < b.x + b.width + gap && b.x < a.x + a.width + gap && a.y < b.y + b.height + gap && b.y < a.y + a.height + gap;
+
+/**
+ * Where a new frame of this size goes: the first place, going down the left side and then across, where it covers no other
+ * frame (with a gap), on the grid. Where nothing is free, the corner where new items start.
+ */
+export function freeSpot(size: { width: number; height: number }, canvas: Canvas, others: readonly Rect[], cell: number): { x: number; y: number } {
+  const snap = (value: number) => (cell > 0 ? Math.round(value / cell) * cell : Math.round(value));
+  const start = { x: snap(DEFAULT_RECT.x * REFERENCE_HEIGHT), y: snap(DEFAULT_RECT.y * REFERENCE_HEIGHT) };
+  const stepX = Math.max(cell, snap(size.width + PLACE_GAP), 1);
+  const stepY = Math.max(cell, snap(size.height + PLACE_GAP), 1);
+  for (let x = start.x; x + size.width <= canvas.width; x += stepX) {
+    for (let y = start.y; y + size.height <= canvas.height; y += stepY) {
+      const spot = { x, y, ...size };
+      if (!others.some((other) => overlaps(spot, other, PLACE_GAP))) return { x, y };
+    }
+  }
+  return start;
+}
+
 const sameRect = (a: AnchoredRect, b: AnchoredRect) => a.h === b.h && a.v === b.v && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 
 
@@ -196,11 +227,24 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     return [{ id: LAYOUT_EVERYWHERE, name: this.text("overlays.everywhere") }, { id: LAYOUT_ALL_GAMES, name: this.text("overlays.allGames") }, ...list];
   }
 
-  /** Every panel of every workspace, with why it can't go into the setup shown (if it can't). */
-  private sources(setupId: string, items: readonly LayoutItemInfo[]): LayoutSourceView[] {
+  /**
+   * Every panel of every workspace, with why it can't go into the setup shown (if it can't). A panel that listed its things
+   * (overlay.setSources) is a header over them: each is added on its own, the panel as a whole is not.
+   */
+  private sources(setupId: string, items: readonly LayoutItemInfo[], panels: readonly SourcePanel[]): LayoutSourceView[] {
     const inSetup = new Set(items.flatMap((info) => (info.ref.kind === "panel" ? [info.ref.instanceId] : [])));
     const full = items.length >= LIMITS.maxGameOverlays;
-    return this.options.sources().map((panel) => {
+    return panels.map((panel) => {
+      if (panel.sources) {
+        const allowed = allowedIn(setupId, panel.workspaceId, panel.scope);
+        const children = panel.sources.map((source): LayoutSourceChild => {
+          const item = items.find((info) => info.ref.kind === "overlay" && sameSubject(info.ref.subject, panel, source.key));
+          const block: SourceBlock | null = item ? "in-setup" : !allowed ? "game-only" : full ? "full" : null;
+          return { key: source.key, name: source.name, group: source.group === true, item: item?.id ?? null, block };
+        });
+        const header: SourceBlock | null = children.some((child) => child.block === "in-setup") ? "in-setup" : children.some((child) => child.block === null) ? null : (children[0]?.block ?? "game-only");
+        return { id: panel.instanceId, name: panel.name, moduleId: panel.moduleId, from: panel.workspaceName, game: panel.scope === "game" ? panel.workspaceName : null, block: header, children };
+      }
       const block: SourceBlock | null = inSetup.has(panel.instanceId)
         ? "in-setup"
         : !allowedIn(setupId, panel.workspaceId, panel.scope)
@@ -210,8 +254,19 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
             : full
               ? "full"
               : null;
-      return { id: panel.instanceId, name: panel.name, moduleId: panel.moduleId, from: panel.workspaceName, game: panel.scope === "game" ? panel.workspaceName : null, block };
+      return { id: panel.instanceId, name: panel.name, moduleId: panel.moduleId, from: panel.workspaceName, game: panel.scope === "game" ? panel.workspaceName : null, block, children: null };
     });
+  }
+
+  /** What the panel behind an overlay told about it (overlay.setSources), when it did. */
+  private sourceOf(info: LayoutItemInfo, panels: readonly SourcePanel[]): OverlaySource | undefined {
+    if (info.ref.kind !== "overlay") return undefined;
+    const subject = info.ref.subject;
+    for (const panel of panels) {
+      const found = panel.sources?.find((source) => sameSubject(subject, panel, source.key));
+      if (found) return found;
+    }
+    return undefined;
   }
 
   private text(key: MessageKey): string {
@@ -223,10 +278,9 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     return games.some((game) => game.id === this.gameId) ? this.gameId : LAYOUT_ALL_GAMES;
   }
 
-  /** A personal workspace's item can move between Everywhere and All games. */
-  private moveTarget(info: LayoutItemInfo, setupId: string): "$everywhere" | "$all" | null {
-    if (info.scope !== "all") return null;
-    return setupId === LAYOUT_EVERYWHERE ? LAYOUT_ALL_GAMES : setupId === LAYOUT_ALL_GAMES ? LAYOUT_EVERYWHERE : null;
+  /** The other setups an item may be moved to: the ones its workspace is allowed in (a game's own item only goes to that game's). */
+  private moveTargets(info: LayoutItemInfo, setupId: string, games: readonly { id: string; name: string }[]): { id: string; name: string }[] {
+    return games.filter((game) => game.id !== setupId && allowedIn(game.id, info.keyTarget.workspaceId, info.scope));
   }
 
   /** A game's setup takes the shape of the game's window; Everywhere and All games the main screen's. */
@@ -268,6 +322,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     const gameId = this.current(games);
     const shape = this.shape(gameId);
     const infos = this.itemsOf(gameId);
+    const panels = this.options.sources();
     const grid = this.options.source.grid();
     // The game runs and its window was seen (the window in front at some look since it started), whichever window is in front now.
     const canTakePicture = isGameSetup(gameId) && this.options.source.handleOf(gameId) !== null;
@@ -275,11 +330,12 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       id: info.id,
       target: info.ref.kind === "panel" ? { kind: "panel", instanceId: info.ref.instanceId } : { kind: "overlay", ...info.ref.subject },
       keyTarget: { owner: info.keyTarget.owner, moduleId: info.keyTarget.moduleId, workspaceId: info.keyTarget.workspaceId, key: info.keyTarget.key },
-      name: info.name,
+      // A thing its panel listed goes by the name the panel gave it.
+      name: this.sourceOf(info, panels)?.name ?? info.name,
       from: this.options.workspaces.name(info.keyTarget.workspaceId) ?? "",
       moduleId: info.moduleId,
       kind: info.ref.kind,
-      moveTo: this.moveTarget(info, gameId),
+      moveTargets: this.moveTargets(info, gameId, games),
       rect: this.rectOf(info, shape),
       placed: this.dragging.get(info.id) ?? this.placed(info, shape),
       mode: info.mode,
@@ -293,7 +349,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     }));
     return {
       games,
-      sources: this.sources(gameId, infos),
+      sources: this.sources(gameId, infos, panels),
       limit: LIMITS.maxGameOverlays,
       gameId,
       canvas: shape.canvas,
@@ -348,7 +404,12 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       this.track(this.loadPicture(gameId));
     }
     const shown = this.itemsOf(this.gameId);
-    const runs = this.options.keepRunning(shown.map((info) => ({ workspaceId: info.keyTarget.workspaceId, moduleId: info.moduleId, instanceId: info.ref.kind === "panel" ? info.ref.instanceId : null })));
+    // Panels that can show over a game run too while the page is open, so what they list (overlay.setSources) is known.
+    const listed = this.options.sources().filter((panel) => panel.inGame && !shown.some((info) => (info.ref.kind === "panel" ? info.ref.instanceId === panel.instanceId : info.keyTarget.workspaceId === panel.workspaceId && info.moduleId === panel.moduleId)));
+    const runs = this.options.keepRunning([
+      ...shown.map((info) => ({ workspaceId: info.keyTarget.workspaceId, moduleId: info.moduleId, instanceId: info.ref.kind === "panel" ? info.ref.instanceId : null })),
+      ...listed.map((panel) => ({ workspaceId: panel.workspaceId, moduleId: panel.moduleId, instanceId: panel.instanceId })),
+    ]);
     this.running = new Map(shown.map((info, index) => [info.id, runs[index] ?? false]));
     const view = this.view();
     // Undo steps of an item that is gone can't be taken back.
@@ -400,11 +461,11 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         break;
       case "add-source":
         if (!fromShell) return;
-        this.addSource(message.id);
+        this.addSource(message.id, message.key);
         break;
       case "move":
         if (!fromShell) return;
-        this.moveItem(message.id);
+        this.moveItem(message.id, message.to);
         break;
       case "grid":
         this.options.source.setGrid(message.grid);
@@ -454,7 +515,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         break;
       case "settings": {
         const info = this.info(message.id);
-        if (info) this.options.openPanel({ workspaceId: info.keyTarget.workspaceId, moduleId: info.moduleId, instanceId: info.ref.kind === "panel" ? info.ref.instanceId : null });
+        if (info) this.options.openSettings({ workspaceId: info.keyTarget.workspaceId, moduleId: info.moduleId, instanceId: info.ref.kind === "panel" ? info.ref.instanceId : null, key: info.ref.kind === "overlay" ? info.ref.subject.key : null });
         return;
       }
       case "take-picture":
@@ -476,18 +537,71 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     this.refresh();
   }
 
-  /** A panel from the Sources goes into the setup shown, if it may, and is selected. */
-  private addSource(instanceId: string): void {
+  /**
+   * A panel from the Sources goes into the setup shown, if it may, and is selected; with a `key`, one thing the panel listed
+   * (a panel that listed some can't be added as a whole). A new frame starts at the size its panel said it needs, in a free place.
+   */
+  private addSource(instanceId: string, key?: string): void {
     const setupId = this.current(this.games());
-    const view = this.sources(setupId, this.itemsOf(setupId)).find((source) => source.id === instanceId);
-    const panel = this.options.sources().find((source) => source.instanceId === instanceId);
-    if (!view || !panel || view.block !== null) {
-      if (view?.block === "full") this.say("overlays.full");
+    const infos = this.itemsOf(setupId);
+    const panels = this.options.sources();
+    const view = this.sources(setupId, infos, panels).find((source) => source.id === instanceId);
+    const panel = panels.find((source) => source.instanceId === instanceId);
+    if (!view || !panel) return;
+    if (view.children !== null || key !== undefined) {
+      const child = view.children?.find((one) => one.key === key);
+      if (!child) return;
+      if (child.item) {
+        this.selection = child.item;
+        return;
+      }
+      if (child.block !== null) {
+        if (child.block === "full") this.say("overlays.full");
+        return;
+      }
+      const subject = { owner: panel.owner, moduleId: panel.moduleId, workspaceId: panel.workspaceId, key: child.key };
+      const added = this.options.source.addOverlay(setupId, subject);
+      if (added === "full") this.say("overlays.full");
+      else if (added === "added") {
+        const info = this.itemsOf(setupId).find((one) => one.ref.kind === "overlay" && sameSubject(one.ref.subject, panel, subject.key));
+        if (info) {
+          this.fitNew(setupId, info, panel.sources?.find((source) => source.key === subject.key));
+          this.selection = info.id;
+        }
+      }
+      return;
+    }
+    if (view.block !== null) {
+      if (view.block === "full") this.say("overlays.full");
       return;
     }
     const added = this.options.source.addPanel(setupId, { owner: panel.owner, moduleId: panel.moduleId, workspaceId: panel.workspaceId, instanceId });
     if (added === "full") this.say("overlays.full");
     else if (added === "added") this.selection = panelWindowId(instanceId);
+  }
+
+  /** The size an overlay needs on the canvas (what its panel said, with room around it), on the grid and never below the smallest size; null when the panel said nothing. */
+  private fitSize(source: OverlaySource | undefined, shape: Shape): { width: number; height: number } | null {
+    if (!source?.size) return null;
+    const cell = gridCell(this.options.source.grid(), REFERENCE_HEIGHT);
+    const snap = (value: number) => (cell > 0 ? Math.ceil(value / cell) * cell : Math.round(value));
+    const min = this.minimum(shape);
+    return {
+      width: Math.min(shape.canvas.width, Math.max(min, snap(source.size.width + 2 * FIT_PADDING))),
+      height: Math.min(shape.canvas.height, Math.max(min, snap(source.size.height + 2 * FIT_PADDING))),
+    };
+  }
+
+  /** A frame just added gets the size its content needs and the first place where it covers no other frame. */
+  private fitNew(setupId: string, info: LayoutItemInfo, source: OverlaySource | undefined): void {
+    const shape = this.shape(setupId);
+    const size = this.fitSize(source, shape);
+    if (!size) return;
+    const others = this.itemsOf(setupId)
+      .filter((one) => one.id !== info.id)
+      .map((one) => this.placed(one, shape));
+    const at = freeSpot(size, shape.canvas, others, gridCell(this.options.source.grid(), REFERENCE_HEIGHT));
+    this.options.source.setRect(setupId, info.ref, anchorOf({ ...at, ...size }, { x: 0, y: 0, ...shape.canvas }));
   }
 
   /** Del and the toolbar's Remove: the item leaves the setup shown (not the others), and nothing is selected any more. */
@@ -499,12 +613,12 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     this.selection = null;
   }
 
-  /** A personal item moves to the other of Everywhere and All games. */
-  private moveItem(id: string): void {
-    const setupId = this.current(this.games());
+  /** Move to…: the item goes to another setup, if its workspace may be there, with its place and settings. */
+  private moveItem(id: string, to: string): void {
+    const games = this.games();
+    const setupId = this.current(games);
     const info = this.info(id);
-    const to = info && this.moveTarget(info, setupId);
-    if (!info || !to) return;
+    if (!info || !this.moveTargets(info, setupId, games).some((game) => game.id === to)) return;
     const moved = this.options.source.move(info.ref, setupId, to);
     if (moved === "full") this.say("overlays.full");
     else if (moved === "added" || moved === "exists") this.selection = null;
@@ -562,6 +676,14 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     if (!info) return;
     const gameId = this.current(this.games());
     const before = this.rectOf(info, this.shape(gameId));
+    // An overlay whose panel said what it needs goes back to that, where it is.
+    const need = this.fitSize(this.sourceOf(info, this.options.sources()), this.shape(gameId));
+    if (need) {
+      const shape = this.shape(gameId);
+      const placed = this.placed(info, shape);
+      this.change(info, before, anchorOf(this.fit({ x: placed.x, y: placed.y, ...need }), { x: 0, y: 0, ...shape.canvas }));
+      return;
+    }
     // The size is in units of the window's height: it is worked out on the game's window, else the main screen.
     const size = this.options.source.seenSize(gameId) ?? this.screenSize();
     this.change(info, before, { ...before, ...this.options.source.startSize(info.ref, size) });

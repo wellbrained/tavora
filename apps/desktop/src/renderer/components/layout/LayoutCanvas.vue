@@ -2,8 +2,8 @@
 // The layer over the Overlay layout's canvas: a transparent page that takes the mouse (the live pages below it can't) and
 // draws what the user works with: each item's outline, the selection with its eight handles, the key of a toggle
 // item, and the guide lines while something snaps. Dragging works in canvas units (the game window at 1080 high); the
-// main process moves the live pages and keeps the result. Holding Alt places freely. The selected item gets a small
-// toolbar (Settings, Hide, Remove) above it, or below it where there is no room above.
+// main process moves the live pages and keeps the result. Holding Alt places freely. A double-click opens the item's settings. The selected item gets a small
+// toolbar (Settings, Hide, Reset position, Reset size, Remove) above it, or below it where there is no room above.
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { cn } from "@/lib/utils";
@@ -153,13 +153,24 @@ function abort() {
   send({ type: "drag-end" });
 }
 
+/** A double-click on the selected item opens its settings (the pointer is captured by the layer, so the click lands here). */
+function openSettingsAt(event: MouseEvent) {
+  const item = shown.value.find((candidate) => candidate.id === view.value?.selection);
+  const box = root.value?.getBoundingClientRect();
+  if (!item || !box) return;
+  const rect = rectOf(item);
+  const x = (event.clientX - box.left) / scale.value;
+  const y = (event.clientY - box.top) / scale.value;
+  if (x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height) send({ type: "settings", id: item.id });
+}
+
 function clearSelection() {
   root.value?.focus();
   send({ type: "select", id: null });
 }
 
 /** The toolbar's size in screen pixels (three small buttons in a padded frame) and its gap to the item, past the handles. */
-const BAR = { width: 102, height: 38, gap: 12 } as const;
+const BAR = { width: 176, height: 38, gap: 12 } as const;
 
 /** Where the selected item's toolbar sits: above the item, below it when there is no room above, else inside its top edge. */
 const toolbar = computed(() => {
@@ -189,6 +200,7 @@ const keyOf = (item: LayoutItemView) => (item.mode === "toggle" && item.hotkey ?
     @pointerdown.self="clearSelection"
     @pointermove="move"
     @pointerup="end"
+    @dblclick="openSettingsAt"
     @pointercancel="abort"
     @lostpointercapture="abort"
   >

@@ -58,7 +58,11 @@ describe("parseLayoutMessage", () => {
 
   it("takes the messages of the page's lists", () => {
     expect(parseLayoutMessage({ type: "add-source", id: "p1" })).toEqual({ type: "add-source", id: "p1" });
-    expect(parseLayoutMessage({ type: "move", id: "panel\np1" })).toEqual({ type: "move", id: "panel\np1" });
+    expect(parseLayoutMessage({ type: "add-source", id: "p1", key: "d-1" })).toEqual({ type: "add-source", id: "p1", key: "d-1" });
+    expect(parseLayoutMessage({ type: "add-source", id: "p1", key: "" })).toBeNull();
+    expect(parseLayoutMessage({ type: "add-source", id: "p1", key: 3 })).toBeNull();
+    expect(parseLayoutMessage({ type: "move", id: "panel\np1", to: "$all" })).toEqual({ type: "move", id: "panel\np1", to: "$all" });
+    expect(parseLayoutMessage({ type: "move", id: "panel\np1" })).toBeNull();
     // Adding a game's setup is only on the rail, never a message of the page.
     expect(parseLayoutMessage({ type: "add-setup", gameId: "poe2" })).toBeNull();
     expect(parseLayoutMessage({ type: "add-source", id: 3 })).toBeNull();

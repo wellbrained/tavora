@@ -1,4 +1,6 @@
-# A toolbar on the overlay you pick
+# Place and change your overlays on the Overlay page
 
-- On the Overlay page, press Del to take the selected item off the canvas.
-- A small bar next to the selected item has Settings, Hide on canvas and Remove.
+- Press Del to take the selected frame off the canvas. A double-click on it, or the gear, opens its settings right over the Overlay page.
+- A small bar next to the selected frame has Settings, Hide, Reset position, Reset size and Remove. Move to… sends a frame to another setup.
+- Clock & Counter lists each clock, counter and linked group on its own in Sources, and a new frame fits what it shows.
+- Sources keeps its order, shows a gear where a check mark was, and no longer folds away what can't be used.

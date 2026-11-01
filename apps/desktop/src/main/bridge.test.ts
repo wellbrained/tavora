@@ -86,7 +86,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     openLink: () => {},
     showMenu: () => Promise.resolve(null),
     tooltip:{show:async()=>false,move:()=>{},close:()=>{}},
-    overlay: { publish: () => {}, remove: () => {}, copyLink: () => Promise.resolve("copied"), resetLink: () => {}, showOverGame: () => Promise.resolve("shown"), hideOverGame: () => {}, overGame: () => [], preview: () => Promise.resolve() },
+    overlay: { publish: () => {}, remove: () => {}, copyLink: () => Promise.resolve("copied"), resetLink: () => {}, showOverGame: () => Promise.resolve("shown"), hideOverGame: () => {}, overGame: () => [], setSources: () => {}, preview: () => Promise.resolve() },
     hotkeys: { list: () => [], set: () => Promise.resolve("cancelled"), remove: () => {} },
     fetch: () => Promise.reject(new Error("no network in this test")),
     readPage: () => Promise.reject(new Error("no pages in this test")),
@@ -349,6 +349,7 @@ describe("overlay methods", () => {
         showOverGame: async (key) => (seen.push(`show ${key}`), "full"),
         hideOverGame: (key) => void seen.push(`hide ${key}`),
         overGame: () => ["a", "b"],
+        setSources: (sources) => void seen.push(`sources ${JSON.stringify(sources)}`),
         preview: async (key) => void seen.push(`preview ${key}`),
       },
     });
@@ -358,8 +359,15 @@ describe("overlay methods", () => {
     expect(await call(p, "overlay.preview", { key: "item-1" })).toMatchObject({ ok: true, result: null });
     expect(await call(p, "overlay.hideOverGame", { key: "item-1" })).toMatchObject({ ok: true, result: null });
     expect(await call(p, "overlay.overGame", undefined)).toMatchObject({ ok: true, result: ["a", "b"] });
+    // The list of what the panel can show: checked, cleaned, and needs no click and no capability.
+    expect(await call(p, "overlay.setSources", { sources: [{ key: "a", name: " Countdown\n", size: { width: 120.4, height: 60 } }, { key: "g-1", name: "7 Deaths", group: true }] })).toMatchObject({ ok: true, result: null });
+    expect(seen.at(-1)).toBe('sources [{"key":"a","name":"Countdown","size":{"width":120,"height":60}},{"key":"g-1","name":"7 Deaths","group":true}]');
+    for (const bad of ["nope", [{ key: "a b", name: "x" }], [{ key: "a", name: "" }], [{ key: "a", name: "x".repeat(101) }], [{ key: "a", name: "x" }, { key: "a", name: "y" }], [{ key: "a", name: "x", group: 1 }], [{ key: "a", name: "x", size: { width: 0, height: 5 } }], [{ key: "a", name: "x", size: { width: 5, height: Number.POSITIVE_INFINITY } }]]) {
+      expect(await call(p, "overlay.setSources", { sources: bad })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    }
+    expect(await call(p, "overlay.setSources", { sources: Array.from({ length: 65 }, (_, index) => ({ key: `k${index}`, name: "x" })) })).toMatchObject({ ok: false, error: { code: "QUOTA_EXCEEDED" } });
     expect(await call(port, "overlay.hideOverGame", { key: "no spaces" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
-    expect(seen).toEqual(['publish item-1 {"n":1}', "remove item-1", "show item-1", "preview item-1", "hide item-1"]);
+    expect(seen).toEqual(['publish item-1 {"n":1}', "remove item-1", "show item-1", "preview item-1", "hide item-1", expect.stringMatching(/^sources /)]);
   });
 
   it("still needs the overlay capability to reset a link", async () => {

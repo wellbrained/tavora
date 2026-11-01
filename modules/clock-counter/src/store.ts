@@ -6,7 +6,7 @@ import type { TavoraSDK } from "@tavora/sdk";
 import { openDocument } from "@tavora/sdk/store";
 import { ref, shallowRef } from "vue";
 import { t } from "./i18n";
-import { find, groupOf, groupOverlayState, LIST_ID, LIST_TITLE, overlayState, parseList, type Counter, type ItemList } from "./items";
+import { find, groupOf, groupOverlayState, LIST_ID, LIST_TITLE, linkedGroups, overlayState, parseList, type Counter, type ItemList } from "./items";
 
 /** A counter's name in a group's default line. */
 export const counterName = (counter: Counter): string => counter.label || t("kind.counter");
@@ -22,6 +22,8 @@ export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: nu
   const overlays = ref(sdk.host.capabilities.includes("overlay"));
   /** Items changed here whose overlays have not been told yet. */
   const touched = new Set<string>();
+  /** The overlay keys shown over the game now: a group's overlay is fed while it is shown, whether or not it was ever set up for stream. */
+  let shown: ReadonlySet<string> = new Set();
 
   /**
    * Tells the overlays of these items (OBS or over the game) what they show now; an item that is gone shows nothing.
@@ -36,8 +38,20 @@ export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: nu
       const group = item?.kind === "counter" ? groupOf(data, id) : null;
       if (group) groups.set(group.key, group);
     }
-    // Only a group with stream settings saved has an overlay to feed.
-    for (const group of groups.values()) if (group.members.some((member) => member.stream)) sdk.overlay.publish(group.key, groupOverlayState(group, counterName)).catch(warn);
+    // Only a group with stream settings saved, or one shown over the game, has an overlay to feed.
+    for (const group of groups.values()) if (group.members.some((member) => member.stream) || shown.has(group.key)) sdk.overlay.publish(group.key, groupOverlayState(group, counterName)).catch(warn);
+  }
+
+  /** Tells the overlay for `key` (an item's id, or a group's key) what it shows now: when the Overlay page just put it over the game, before any change. */
+  function publishKey(key: string, data: ItemList): void {
+    const item = find(data, key);
+    if (item) return publish([item.id], data);
+    const group = linkedGroups(data).find((one) => one.key === key);
+    if (group) sdk.overlay.publish(group.key, groupOverlayState(group, counterName)).catch((reason) => console.warn("[clock-counter] overlay", errorMessage(reason)));
+  }
+
+  function setShown(keys: Iterable<string>): void {
+    shown = new Set(keys);
   }
 
   doc.onChange((event) => (list.value = event.data));
@@ -57,6 +71,8 @@ export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: nu
     error,
     overlays,
     publish,
+    publishKey,
+    setShown,
     status: () => doc.status,
     /** Changes the list at once and saves it soon; the overlays of the `touched` items hear of it after the save. `change` runs again on a newer stored list, so it must not make ids. */
     apply(items: string[], change: (data: ItemList) => void): void {

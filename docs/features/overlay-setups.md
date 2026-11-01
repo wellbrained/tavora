@@ -33,8 +33,8 @@ A page in the main window that works like a workspace (no entry on the rail; onl
 - First in the toolbar above the canvas (not in the header): the setup dropdown. It opens on the running game's setup, else All games while a game runs, else Everywhere.
 - Canvas: game setups keep Take picture from the running game; Everywhere and All games use a plain screen-sized area.
 - Sidebar, two stacked panels:
-  - Sources, with search: every panel from every workspace, its source named ("Notes · Satisfactory"). Ones that can't go into the chosen setup are greyed out with the reason and folded together at the bottom ("Can't be used here"). A click adds one; a click on one already in the setup selects it.
-  - Settings of the selected item (picked in the list or on the canvas), its name at the top right, sized to its content; Show (Always on / On a key, with a line saying what it does), Key, Opacity, Hide from capture (with a line saying what it does), then Reset position / Reset size, Preview / Move, and a red Remove; a short hint when nothing is selected.
+  - Sources, with search: every panel from every workspace that can go into the chosen setup, its source named ("Notes · Satisfactory"), in a steady order. Ones that can't go in are not listed (a search that names one says why). A click adds one; a click on one already in the setup selects it, and it shows a gear (its settings) and an eye.
+  - Settings of the selected item (picked in the list or on the canvas), its name at the top right, sized to its content; Show (Always on / On a key, with a line saying what it does), Key, Opacity, Hide from capture (with a line saying what it does), then Move to…; a short hint when nothing is selected. Reset position, Reset size and Remove are on the frame's toolbar.
 
 ## Header
 
@@ -77,8 +77,8 @@ The Overlay page is `renderer/pages/OverlayPage.vue`, shown by a third screen (`
 
 - **No window of its own.** The live pages and the layer sit as native views over the page's canvas area (`main/overlay-canvas.ts`, the old window's code without the window); leaving the page (a workspace on the rail, Home, or the lit Overlay button) takes them away. The state stays `overlay-layout.ts`; the saved window place is gone from `game-overlays.json` (an older file's is ignored).
 - **Opens on** the setup asked for, else the running game's own, else All games while a game runs, else Everywhere. The dropdown always lists Everywhere and All games, then the games with a setup. Add overlay and Remove overlay are on the rail only.
-- **Sources list.** Besides every panel of every workspace, it lists the module overlays the setup already holds (they have no other place in the list, and the user selects and hides them there). Reasons shown for a panel that can't be added: only for its game, can't show over a game (its type isn't `inGame`), no room left (8 items). The eye still hides an item on the canvas only.
-- **Moving between Everywhere and All games** is a button in the Settings panel for items from personal workspaces: the item goes with its place and settings; if the other setup has it already, that one stays and this one is dropped.
+- **Sources list.** Every panel of every workspace that can go into the setup, in a steady order, plus the module overlays the setup already holds that no panel lists (last). A panel that lists what it can show (`overlay.setSources`) is a header over those things. Panels that can't be added (only for their game, can't show over a game, no room left) are not listed; a search for one says why in one line. What the setup holds shows a gear (the item's settings) and an eye (hide on the canvas only).
+- **Move to…** is a menu in the Settings panel listing the other setups the item's workspace may be in (an item of a personal workspace: all of them; a game's own: none). The item goes with its place and settings; if the other setup has it already, that one stays and this one is dropped.
 - **Hotkey dialog** is the main window's one now (the old window asked for its own).
 - Leaving goes to the last workspace, else Home.
 - **Rail menu** of a game workspace: Add overlay / Remove overlay (hidden while overlays are off in Settings); removing the setup closes its windows at once.

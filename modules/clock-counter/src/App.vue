@@ -17,6 +17,7 @@ import { count, find, groupOf, insert, lap, linkedGroups, MAX, newItem, parseLis
 import { buildLiveState } from "./live";
 import { de, en } from "./locales";
 import { PANEL, UNDO_MS } from "./panel";
+import { buildSources, canvasMeasure, itemForKey, overlayKey } from "./sources";
 import { createItemStore, type ItemStore } from "./store";
 
 const EMPTY = parseList(null);
@@ -64,8 +65,7 @@ const placeOf = (item: Item) => order.value.findIndex((other) => other.id === it
 
 /** The overlay an item's OBS link and Over game switch belong to: the group's, once the group is shown as a whole. */
 function keyOf(item: Item): string {
-  const group = item.kind === "counter" ? groupOf(list.value, item.id) : null;
-  return group?.stream.whole ? group.key : item.id;
+  return overlayKey(list.value, item);
 }
 
 // ── The time now, while a clock runs and the panel shows ─────────────
@@ -219,6 +219,8 @@ async function refreshHotkeys(): Promise<void> {
 }
 
 const overGame = ref<ReadonlySet<string>>(new Set());
+// A group's overlay is fed while it is over the game, so the store needs to know which keys are.
+watch([overGame, store], () => store.value?.setShown(overGame.value), { immediate: true });
 
 /** Tavora's key dialog; a refusal (the panel is over the game, say) goes to the settings, which tell the user. */
 async function setHotkey(action: string, item: Item): Promise<void> {
@@ -301,6 +303,39 @@ function sendLive(): void {
 }
 watch([list, sdk], () => store.value && sendLive());
 
+// ── What the Overlay page can add: each clock and counter, and each group shown as one line ──
+
+const measure = canvasMeasure();
+let sourcesTimer: ReturnType<typeof setTimeout> | undefined;
+/** An older Tavora has no Overlay page to list them on: its first answer ends the sending. */
+let sourcesUnknown = false;
+/** Tells Tavora what this panel can show over the game on its own, a moment after the list changed (a count changes a group's line). */
+function sendSources(): void {
+  clearTimeout(sourcesTimer);
+  sourcesTimer = setTimeout(() => {
+    const connected = sdk.value;
+    if (!connected || !store.value || sourcesUnknown) return;
+    connected.overlay.setSources(buildSources(list.value, measure, (item) => item.label || t(`kind.${item.kind}`))).catch((reason: { code?: string }) => {
+      if (reason?.code === "UNKNOWN_METHOD") sourcesUnknown = true;
+      else console.warn("[clock-counter] sources", errorMessage(reason));
+    });
+  }, 300);
+}
+watch([list, sdk], () => store.value && sendSources());
+
+/** The Overlay page added or removed overlays: the switches follow, and what is over the game now shows its state from the start. */
+function overGameChanged(keys: string[]): void {
+  const before = overGame.value;
+  overGame.value = new Set(keys);
+  for (const key of keys) if (!before.has(key)) store.value?.publishKey(key, list.value);
+}
+
+/** Settings on a frame of the Overlay page: Tavora has the dialog open already; it shows the item's or group's settings. */
+function openSettingsFor(key: string): void {
+  const item = itemForKey(list.value, key);
+  if (item) editing.value = item.id;
+}
+
 const cleanup: (() => void)[] = [];
 
 onMounted(async () => {
@@ -320,6 +355,8 @@ onMounted(async () => {
       }),
       () => void items.dispose(),
       connected.hotkeys.onPress(({ action, target }) => act(action, target)),
+      connected.overlay.onOverGameChange(overGameChanged),
+      connected.panel.onOpenSettings(({ key }) => openSettingsFor(key)),
       connected.lifecycle.onSuspend(() => (suspended.value = true)),
       connected.lifecycle.onResume(() => {
         suspended.value = false;
@@ -330,6 +367,10 @@ onMounted(async () => {
     store.value = items;
     await refreshHotkeys();
     await refreshOverGame();
+    // What is over the game after a restart shows nothing until its state is published again.
+    for (const key of overGame.value) items.publishKey(key, items.list.value);
+    sendSources();
+    void document.fonts.ready.then(sendSources);
   } catch (reason) {
     error.value = errorMessage(reason);
   }
@@ -340,6 +381,7 @@ onBeforeUnmount(() => {
   cleanup.forEach((fn) => fn());
   clearInterval(ticker);
   clearTimeout(liveTimer);
+  clearTimeout(sourcesTimer);
   clearTimeout(noticeTimer);
   if (undo.value) clearTimeout(undo.value.timer);
 });

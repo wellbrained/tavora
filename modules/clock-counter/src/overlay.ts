@@ -4,10 +4,14 @@
 import { watchOverlay } from "@tavora/sdk";
 import { readClock, type OverlayState } from "./items";
 import { isLive, rowText, type LiveState } from "./live";
+import { FIT_PADDING, GAP_SHARE, LABEL_SHARE, LAP_SHARE, LINE_HEIGHT } from "./sources";
 import { formatSeconds } from "./time";
 import "./overlay.css";
 
 const root = document.getElementById("overlay")!;
+// A little room around the text, as a new frame is sized with (sources.ts).
+root.style.padding = `${FIT_PADDING}px`;
+const line = root.querySelector<HTMLElement>(".line")!;
 const label = root.querySelector<HTMLElement>(".label")!;
 const value = root.querySelector<HTMLElement>(".value")!;
 const lap = root.querySelector<HTMLElement>(".lap")!;
@@ -17,22 +21,25 @@ const live = document.getElementById("live")!;
 let state: OverlayState | LiveState | null = null;
 let timer: ReturnType<typeof setInterval> | undefined;
 
-/** Sizes the text to fill the source, however big it is in OBS: the value takes most of the height. */
+/**
+ * Sizes the text to fill the source, however big it is in OBS: the value takes most of the height, the name beside it is half
+ * its size on the same baseline with a steady gap, and the last lap goes under them. The shares are the ones sources.ts
+ * measures a new frame with.
+ */
 function fit(): void {
-  const lines = [label, value, lap].filter((line) => line.textContent !== "");
-  const share = { label: 0.28, value: 1, lap: 0.32 };
-  const total = lines.reduce((sum, line) => sum + (line === value ? share.value : line === label ? share.label : share.lap), 0);
-  const height = (innerHeight * 0.96) / Math.max(total, 1) / 1.05;
-  value.style.fontSize = `${height}px`;
-  label.style.fontSize = `${height * share.label}px`;
-  lap.style.fontSize = `${height * share.lap}px`;
+  const lapShown = lap.textContent !== "";
+  const height = (innerHeight - 2 * FIT_PADDING) / (1 + (lapShown ? LAP_SHARE : 0)) / LINE_HEIGHT;
+  const size = (scale: number) => {
+    value.style.fontSize = `${height * scale}px`;
+    label.style.fontSize = `${height * scale * LABEL_SHARE}px`;
+    line.style.gap = label.textContent ? `${height * scale * GAP_SHARE}px` : "0";
+    lap.style.fontSize = `${height * scale * LAP_SHARE}px`;
+  };
+  size(1);
   // Too wide for the source: shrink everything together.
-  const widest = Math.max(...lines.map((line) => line.offsetWidth));
-  const room = innerWidth * 0.98;
-  if (widest > room) {
-    const scale = room / widest;
-    for (const line of [label, value, lap]) line.style.fontSize = `${parseFloat(line.style.fontSize) * scale}px`;
-  }
+  const widest = Math.max(line.offsetWidth, lapShown ? lap.offsetWidth : 0);
+  const room = innerWidth - 2 * FIT_PADDING;
+  if (widest > room) size(Math.max(room, 1) / widest);
 }
 
 /** The live view: one row per clock or counter. Drawn again on every tick, which is cheap for a few rows. */
