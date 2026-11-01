@@ -2,7 +2,7 @@
 // Placed against the window, it stuck out above Settings in tall and in short windows.
 import { expect, test, type Page } from "@playwright/test";
 import type { PublishView } from "../../src/shared/host-api";
-import { launch, setContentSize } from "./harness";
+import { launch, NOTES, openModule, setContentSize, TODOS } from "./harness";
 
 async function placement(page: Page, innerId = "confirm", maxWidth = 420, outerId = "settings") {
   return page.evaluate(({ innerId, maxWidth, outerId }) => {
@@ -20,9 +20,34 @@ async function placement(page: Page, innerId = "confirm", maxWidth = 420, outerI
   }, { innerId, maxWidth, outerId });
 }
 
+/** The dock's splitter grips under Settings that show through it: hiding the splitters changes their pixels. */
+async function gripsShow(page: Page) {
+  const grips = await page.evaluate(() => {
+    const box = document.querySelector('[data-testid="settings"]')!.getBoundingClientRect();
+    return Array.from(document.querySelectorAll(".dv-vertical > .dv-sash-container > .dv-sash"))
+      .map((sash) => sash.getBoundingClientRect())
+      .filter((rect) => rect.width > 40)
+      .map((rect) => ({ x: Math.round(rect.x + rect.width / 2 - 24), y: Math.round(rect.y + rect.height / 2 - 4), width: 48, height: 8 }))
+      .filter((clip) => clip.x > box.left && clip.x + clip.width < box.right && clip.y > box.top && clip.y + clip.height < box.bottom);
+  });
+  expect(grips.length).toBeGreaterThan(0);
+  const shots = () => Promise.all(grips.map((clip) => page.screenshot({ clip, animations: "disabled" })));
+  const splitters = (shown: boolean) =>
+    page.evaluate((shown) => document.querySelectorAll<HTMLElement>(".dv-sash").forEach((sash) => (sash.style.visibility = shown ? "" : "hidden")), shown);
+  const shown = await shots();
+  await splitters(false);
+  const hidden = await shots();
+  await splitters(true);
+  return grips.filter((_, index) => !shown[index]!.equals(hidden[index]!));
+}
+
 test("a confirmation opened from Settings stays inside Settings", async ({}, testInfo) => {
   const { app, page } = await launch();
   try {
+    // A column split in two, so a splitter with its grip sits under Settings.
+    await page.getByTestId("empty-template-main-stacked").click();
+    for (const moduleId of [NOTES, TODOS, "tavora.calculator"]) await openModule(page, moduleId);
+    await expect(page.locator(".dv-groupview")).toHaveCount(3);
     await page.getByTestId("rail-workspace-poe2").click({ button: "right" });
     await page.locator('[role="menu"][data-state="open"] [data-testid="menu-manage-workspaces"]').click();
     await page.getByTestId("workspaces-select-all").check();
@@ -38,6 +63,7 @@ test("a confirmation opened from Settings stays inside Settings", async ({}, tes
       await expect.poll(() => page.evaluate(() => [innerWidth, innerHeight])).toEqual([width, height]);
       await expect.poll(() => placement(page), { message: name }).toEqual({ settingsFits: true, confirmInside: true, centered: true, onTop: true, confirmWidth: true });
       await page.screenshot({ path: testInfo.outputPath(`${name}.png`), animations: "disabled" });
+      if (name === "normal") expect(await gripsShow(page)).toEqual([]);
     }
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("confirm")).toHaveCount(0);
