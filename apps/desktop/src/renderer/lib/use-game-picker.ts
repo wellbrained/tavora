@@ -3,6 +3,7 @@ import type { CatalogMatch, CatalogModuleView, InstalledGameView, OnlineGame, On
 import { api } from "../host";
 import { formatDate, t } from "../i18n";
 import { buildRows, describeActivity, modulesFor, type PickerRow } from "./game-picker";
+import { findInstalledGames, lastInstalledGames } from "./installed-games";
 
 /** How long the user has to stop typing before the Tavora service is asked. */
 const ONLINE_DELAY_MS = 250;
@@ -26,13 +27,14 @@ export function useGamePicker(query: Ref<string>, { hideAdded = false } = {}) {
   const matches = ref<CatalogMatch[]>([]);
   const online = ref<OnlineGame[]>([]);
   const onlineStatus = ref<OnlineSearchResult["status"]>("ok");
-  const installed = ref<InstalledGameView[]>([]);
-  const installedLoaded = ref(false);
+  // The list from the search the app started at launch (or the last time), shown at once while a fresh one loads.
+  const installed = ref<InstalledGameView[]>(lastInstalledGames() ?? []);
+  const installedLoaded = ref(lastInstalledGames() !== null);
   /** The catalog's modules, or null until they are known. */
   const catalogModules = ref<CatalogModuleView[] | null>(null);
 
   onMounted(async () => {
-    void api.installedGames().then((games) => {
+    void findInstalledGames().then((games) => {
       installed.value = games;
       installedLoaded.value = true;
     });

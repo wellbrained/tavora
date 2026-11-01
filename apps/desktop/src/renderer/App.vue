@@ -27,14 +27,20 @@ import SteamImportDialog from "./components/SteamImportDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
 import InboxDialogs from "./components/messages/InboxDialogs.vue";
 import { Toaster } from "@tavora/official-ui/components/ui/toast";
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import { dialog, settingsOpen, state, trialWelcome } from "./host";
 import OverlayPage from "./pages/OverlayPage.vue";
 import WorkspacePage from "./pages/WorkspacePage.vue";
 import OnboardingPage from "./pages/OnboardingPage.vue";
 import WelcomePage from "./pages/WelcomePage.vue";
+import { findInstalledGames } from "./lib/installed-games";
 
 // Settings covers the panels, so while it is open toasts show where the user wants them, as Try it shows.
+// Finding the games on this PC takes a while the first time, so it starts quietly a few seconds after launch
+// (once the app has drawn and loaded what it needs) and the Add a game dialog finds the list ready.
+const FIRST_SEARCH_DELAY_MS = 4000;
+onMounted(() => setTimeout(() => void findInstalledGames(), FIRST_SEARCH_DELAY_MS));
+
 const toastPosition = computed(() => (settingsOpen.value && state.value ? state.value.library.toasts : "top-center"));
 </script>
 

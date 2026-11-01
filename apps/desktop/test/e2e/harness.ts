@@ -124,10 +124,9 @@ export async function launch(
   return { app, page, userData: dir };
 }
 
-/** Opens the Add a game picker from the rail's Add menu. */
+/** Opens the Add a game picker from the rail's Add game button. */
 export async function openAddGame(page: Page): Promise<void> {
   await page.getByTestId("rail-add-game").click();
-  await page.locator('[role="menu"][data-state="open"] [data-testid="rail-add-game-item"]').click();
   await expect(page.getByTestId("add-game-dialog")).toBeVisible();
 }
 

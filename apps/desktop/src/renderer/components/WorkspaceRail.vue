@@ -1,15 +1,13 @@
 <script setup lang="ts">
-import { ChevronDown, PanelLeftClose, PanelLeftOpen, Plus, Settings } from "@lucide/vue";
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Gamepad2, Plus, Settings, UserRoundPlus } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
-import { act, dialog, openSettings, prompt, railToggles, state, submitAction, useFloating, type MenuItem } from "../host";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { act, dialog, openSettings, prompt, railToggles, state, submitAction } from "../host";
 import { t } from "../i18n";
 import { numberedWorkspaces } from "../shortcuts";
 import { folderMenu, workspaceMenu } from "../rail-actions";
 import MenuArea from "./menus/MenuArea.vue";
-import MenuEntries from "./menus/MenuEntries.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
 import RailFooterTile from "./RailFooterTile.vue";
 import RailInboxButton from "./RailInboxButton.vue";
@@ -42,12 +40,12 @@ function onNarrowChange() {
 narrowQuery.addEventListener("change", onNarrowChange);
 onBeforeUnmount(() => narrowQuery.removeEventListener("change", onNarrowChange));
 
-// The Add button offers a game or a personal workspace (which belongs to no game).
-const trackMenu = useFloating();
-const addMenu: MenuItem[] = [
-  { label: t("common.addGame"), testid: "rail-add-game-item", run: () => (dialog.value = { kind: "add-game" }) },
-  { label: t("rail.addPersonal"), testid: "rail-add-personal-item", run: () => (dialog.value = { kind: "add-personal" }) },
-];
+// Under the last workspace: add a game, or start a personal workspace (which belongs to no game). The labels are
+// short so both fit side by side in German too; the full name is the tooltip and the accessible name.
+const addButtons = computed(() => [
+  { testid: "rail-add-game", name: t("common.addGame"), label: t("rail.addGame.short"), icon: Gamepad2, badge: true, run: () => (dialog.value = { kind: "add-game" }) },
+  { testid: "rail-add-personal", name: t("rail.addPersonal"), label: t("rail.addPersonal.short"), icon: UserRoundPlus, badge: false, run: () => (dialog.value = { kind: "add-personal" }) },
+]);
 const expanded = computed(() => (narrow.value ? peek.value : library.value.rail.expanded));
 function toggleRail() {
   if (narrow.value) peek.value = !peek.value;
@@ -535,40 +533,45 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
             </div>
           </div>
         </template>
-        <!-- Add game is one more entry under the last workspace: a tile when compact, a quiet row when expanded. -->
-        <div class="rail-entry group relative mt-1 flex items-center px-2">
-          <DropdownMenu @update:open="trackMenu">
-          <RailTooltip :text="t('rail.addMenu')" :disabled="expanded">
-            <DropdownMenuTrigger as-child>
-            <button
-              type="button"
-              :class="
-                cn(
-                  'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-                  expanded ? 'text-muted-foreground hover:text-foreground hover:bg-rail-hover px-2 py-1' : 'justify-center p-1',
-                )
-              "
-              data-rail-item
-              data-testid="rail-add-game"
-              :aria-label="t('common.addGame')"
-            >
-              <span v-if="expanded" class="flex size-10 flex-none items-center justify-center">
-                <Plus class="size-5" :stroke-width="1.75" />
-              </span>
-              <span
-                v-else
-                class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
+        <!-- Add game and Personal are one more entry under the last workspace: two quiet buttons side by side when
+             expanded (the game one wider), two tiles stacked when compact. -->
+        <div :class="cn('mt-1 flex px-2', expanded ? 'gap-1' : 'flex-col gap-1')" data-testid="rail-add">
+          <div v-for="(add, index) in addButtons" :key="add.testid" :class="cn('rail-entry group relative flex', expanded && (index === 0 ? 'min-w-0 flex-1' : 'flex-none'))">
+            <RailTooltip :text="add.name">
+              <button
+                type="button"
+                :class="
+                  cn(
+                    'flex min-w-0 flex-1 items-center rounded-lg text-left',
+                    expanded ? 'text-muted-foreground hover:text-foreground hover:bg-rail-hover h-12 gap-1.5 px-2.5' : 'justify-center p-1',
+                  )
+                "
+                data-rail-item
+                :data-testid="add.testid"
+                :aria-label="add.name"
+                @click="add.run()"
               >
-                <Plus class="size-5" :stroke-width="1.75" />
-              </span>
-              <span v-if="expanded" class="text-base font-medium">{{ t("common.addGame") }}</span>
-            </button>
-            </DropdownMenuTrigger>
-          </RailTooltip>
-          <DropdownMenuContent data-testid="menu" side="right" align="start" class="max-w-72 min-w-52">
-            <MenuEntries :items="addMenu" kind="dropdown" />
-          </DropdownMenuContent>
-          </DropdownMenu>
+                <template v-if="expanded">
+                  <Plus class="size-4 flex-none" :stroke-width="1.75" />
+                  <span class="truncate text-sm font-medium">{{ add.label }}</span>
+                </template>
+                <span
+                  v-else
+                  class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
+                >
+                  <!-- The game's icon carries a small plus, as the person's does, so the two tiles read as a pair. -->
+                  <span class="relative flex">
+                    <component :is="add.icon" class="size-5" :stroke-width="1.75" />
+                    <Plus
+                      v-if="add.badge"
+                      class="bg-card group-hover:bg-primary absolute -right-1 -bottom-1 size-2.5 rounded-full"
+                      :stroke-width="3"
+                    />
+                  </span>
+                </span>
+              </button>
+            </RailTooltip>
+          </div>
         </div>
     </div>
     </div>
