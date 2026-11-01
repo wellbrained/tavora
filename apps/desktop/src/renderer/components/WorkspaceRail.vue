@@ -534,9 +534,9 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           </div>
         </template>
         <!-- Add game and Personal are one more entry under the last workspace: two quiet buttons side by side when
-             expanded (the game one wider), two tiles stacked when compact. -->
+             expanded (an even split), two tiles stacked when compact. -->
         <div :class="cn('mt-1 flex px-2', expanded ? 'gap-1' : 'flex-col gap-1')" data-testid="rail-add">
-          <div v-for="(add, index) in addButtons" :key="add.testid" :class="cn('rail-entry group relative flex', expanded && (index === 0 ? 'min-w-0 flex-1' : 'flex-none'))">
+          <div v-for="add in addButtons" :key="add.testid" :class="cn('rail-entry group relative flex', expanded && 'min-w-0 flex-1')">
             <RailTooltip :text="add.name">
               <button
                 type="button"

@@ -690,3 +690,18 @@ test("the rail's two buttons open Add a game and a personal workspace, and Add a
     await app.close();
   }
 });
+
+test("Add game and Personal share the expanded rail's row evenly, at any rail width", async () => {
+  for (const width of [200, 280, 420]) {
+    const userData = await newUserData();
+    await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), rail: { expanded: true, width } }));
+    const { app, page } = await launch(userData, [], { locale: "de-DE" });
+    try {
+      const game = (await page.getByTestId("rail-add-game").boundingBox())!;
+      const personal = (await page.getByTestId("rail-add-personal").boundingBox())!;
+      expect(Math.abs(game.width - personal.width)).toBeLessThan(1);
+    } finally {
+      await app.close();
+    }
+  }
+});
