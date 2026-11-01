@@ -30,118 +30,32 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.23.40",
     date: "2026-11-01",
-    title: "Settings over the whole workspace",
+    title: "A new welcome and a quicker Add a game",
     notes: [
-      "Clock & Counter and Calculator open their settings in a big dialog over the workspace, not inside the small panel.",
+      "The first-run welcome is now four short screens, centred in the window: a map of the app, what to try first, your first game or personal space, and an optional account.",
+      "Add a game lists the games on this PC, the ones you played last first, with their icons. Pick one to see the modules made for it and add them with the game.",
+      "In Add a game, the best match is already picked: type, use the arrow keys and press Enter.",
+      "A personal workspace now comes from the + button on the rail, next to Add game. Choose which panels open in it.",
+      "Clock & Counter: every clock and counter is one compact row, and its settings open in a big dialog over the workspace.",
+      "Clock & Counter: linked counters stand together, and a whole group can show in one overlay with a line you write yourself.",
+      "Calculator: settings open in a big dialog over the workspace.",
+      "The row you hover or have open on the rail glows in your theme's colour instead of grey, and a game's own icon sits centred again.",
+      "Your name and picture move to the account and the profile.",
+      "The little grip between two panels no longer shows through dialogs.",
+      "The minimise, maximise and close buttons blend into the top bar again.",
     ],
     prs: [
       { number: 590, title: "Clock & Counter 0.1.3, Calculator 0.1.10: settings in a dialog over the workspace" },
-    ],
-    tags: ["calculator", "clock-counter"],
-  },
-  {
-    version: "0.23.39",
-    date: "2026-11-01",
-    title: "Clock & Counter: compact rows",
-    notes: [
-      "Every clock and counter is a single row now, so more of them fit in a panel. Settings open in a dialog behind the gear.",
-      "Counters you linked stand together, and a whole group can show in one overlay with a line you write yourself.",
-    ],
-    prs: [
       { number: 589, title: "Clock & Counter 0.1.2: compact rows, settings dialog, linked counter groups" },
-    ],
-    tags: ["clock-counter"],
-  },
-  {
-    version: "0.23.38",
-    date: "2026-11-01",
-    title: "A softer glow on the rail",
-    notes: [
-      "The row you hover or have open in the games list now glows in your theme's colour instead of grey.",
-      "A game with its own icon sits in the middle of its row again.",
-    ],
-    prs: [
       { number: 588, title: "Rail: rows glow in the theme's colour, and a game's own icon sits centred in its row" },
-    ],
-    tags: ["overlays", "rail"],
-  },
-  {
-    version: "0.23.37",
-    date: "2026-11-01",
-    title: "Add a game is a quick picker",
-    notes: [
-      "Add a game lists the games on this PC, the ones you played last first, with their icons.",
-      "Pick a game to see the modules made for it, tick the ones you want and add them with the game.",
-      "A personal workspace now comes from the + button on the rail, next to Add game.",
-      "The first step of the welcome lists the games on this PC the same way, newest played first.",
-    ],
-    prs: [
-      { number: 586, title: "Add a game: quick picker with this PC's games, module badges and a side panel" },
-    ],
-    tags: ["catalog", "games", "modules", "privacy", "rail", "website"],
-  },
-  {
-    version: "0.23.36",
-    date: "2026-11-01",
-    title: "The welcome sits in the middle",
-    notes: [
-      "The first-run welcome is now centred in the window and stays in place from step to step.",
-    ],
-    prs: [
       { number: 587, title: "Welcome: centre it in the window, steady between steps" },
-    ],
-    tags: ["onboarding"],
-  },
-  {
-    version: "0.23.35",
-    date: "2026-11-01",
-    title: "A quicker first start",
-    notes: [
-      "The first-run welcome is now four short screens: a map of the app, what to try first, your first game or personal space, and an optional account.",
-      "Pick a game by typing its name and pressing Enter, and add the maps and planners made for it right away.",
-      "Pick a personal space and choose which panels open in it.",
-      "Your name and picture move to the account and the profile.",
-    ],
-    prs: [
+      { number: 586, title: "Add a game: quick picker with this PC's games, module badges and a side panel" },
       { number: 585, title: "First-run welcome: map, first try, start and optional account" },
-    ],
-    tags: ["onboarding", "settings"],
-  },
-  {
-    version: "0.23.34",
-    date: "2026-11-01",
-    title: "A cleaner look behind dialogs",
-    notes: [
-      "The little grip between two panels no longer shows through dialogs.",
-    ],
-    prs: [
-      { number: 582, title: "Dock: splitter grips no longer show through dialogs" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.23.33",
-    date: "2026-11-01",
-    title: "Add a game from the keyboard",
-    notes: [
-      "Use the arrow keys in Add a game to pick a game, and press Enter to add it.",
-      "The best match is already picked, so type and press Enter.",
-    ],
-    prs: [
       { number: 583, title: "Add a game: arrow keys and Enter pick a game" },
-    ],
-    tags: ["games"],
-  },
-  {
-    version: "0.23.32",
-    date: "2026-11-01",
-    title: "Window buttons",
-    notes: [
-      "The minimise, maximise and close buttons blend into the top bar again, with no lighter box behind them.",
-    ],
-    prs: [
+      { number: 582, title: "Dock: splitter grips no longer show through dialogs" },
       { number: 581, title: "Window buttons take the colour of the page behind them" },
     ],
+    tags: ["calculator", "catalog", "clock-counter", "games", "modules", "onboarding", "overlays", "privacy", "rail", "settings", "website", "workspace"],
   },
   {
     version: "0.23.31",
