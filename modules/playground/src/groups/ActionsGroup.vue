@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bold, ChevronDown, ChevronRight, CircleHelp, Copy, Folder, FolderInput, FolderPlus, Italic, Loader2, MoreHorizontal, Pencil, Pin, Plus, Settings, Trash2 } from "@lucide/vue";
+import { Bold, ChevronDown, ChevronRight, CircleHelp, Copy, Folder, FolderInput, FolderPlus, Italic, Loader2, MoreHorizontal, Pencil, Pin, Plus, Settings, Trash2, Undo2 } from "@lucide/vue";
 import { ConfirmDialog, NameDialog, Tooltip, TooltipRows, type TooltipRow } from "@tavora/official-ui";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -131,19 +131,22 @@ function slow(done: () => void) {
         <Specimen label="From a title (any element)">
           <Button title="Readable help from the shared kit." :disabled="off">Hover or focus me</Button>
           <Button size="icon" variant="secondary" aria-label="Duplicate" title="Duplicate" aria-keyshortcuts="Control+D" :disabled="off"><Copy :stroke-width="1.5" /></Button>
-          <span title="Add a name and an icon first." tabindex="0"><Button disabled class="pointer-events-none">Publish</Button></span>
           <span class="text-muted-foreground max-w-40 truncate rounded-md border px-2 py-1.5 text-sm" title="D:\Games\Steam\steamapps\common\Enshrouded\Saves">D:\Games\Steam\steamapps\common\Enshrouded\Saves</span>
         </Specimen>
+        <Specimen label="On a disabled button (says why; Tab reaches it, a click does nothing)">
+          <Button disabled title="Add a name and an icon first.">Publish</Button>
+          <Button size="icon" variant="secondary" disabled aria-label="Undo" title="Undo (Ctrl+Z)"><Undo2 :stroke-width="1.5" /></Button>
+        </Specimen>
         <Specimen label="Rich: title, text, shortcut, warning">
-          <Button variant="ghost" size="icon-sm" aria-label="About starting with Windows" v-bind="tipOn('help')" :disabled="off"><CircleHelp :stroke-width="1.5" /></Button>
-          <Button variant="secondary" v-bind="tipOn('rich')" :disabled="off">Rich tooltip</Button>
-          <Button variant="outline" class="text-warning" v-bind="tipOn('warning')" :disabled="off">92% used</Button>
+          <Button variant="ghost" size="icon-sm" aria-label="About starting with Windows" v-bind="tipOn('help')" hinted :disabled="off"><CircleHelp :stroke-width="1.5" /></Button>
+          <Button variant="secondary" v-bind="tipOn('rich')" hinted :disabled="off">Rich tooltip</Button>
+          <Button variant="outline" class="text-warning" v-bind="tipOn('warning')" hinted :disabled="off">92% used</Button>
         </Specimen>
         <Specimen label="Values: a chart bar, a game item">
           <div class="flex h-16 items-end gap-1.5">
             <button v-for="(height, index) in bars" :key="index" class="bg-primary/30 hover:bg-primary focus-visible:bg-primary w-6 rounded-t-sm" :style="{ height: height + '%' }" :aria-label="'Day ' + (index + 1)" v-bind="tipOn('chart')" />
           </div>
-          <Button variant="outline" class="size-12 text-xl" aria-label="Wolfbane Longbow" v-bind="tipOn('item')" :disabled="off">🏹</Button>
+          <Button variant="outline" class="size-12 text-xl" aria-label="Wolfbane Longbow" v-bind="tipOn('item')" hinted :disabled="off">🏹</Button>
         </Specimen>
         <Tooltip :open="tip.open === 'help'" :anchor="tip.anchor" title="Start with Windows" description="Tavora opens quietly in the tray when you sign in. Your overlays are ready when the game starts." @dismiss="hideTip" />
         <Tooltip :open="tip.open === 'rich'" :anchor="tip.anchor" title="A place worth exploring" shortcut="Ctrl+K" description="Readable text that wraps in narrow panels." @dismiss="hideTip" />
