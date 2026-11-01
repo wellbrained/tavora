@@ -356,8 +356,8 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           :class="
             cn(
               'flex h-10 items-center gap-2.5 rounded-lg',
-              expanded ? 'hover:bg-accent px-2' : 'justify-center',
-              expanded && state!.screen === 'welcome' && 'bg-accent',
+              expanded ? 'hover:bg-rail-hover px-2' : 'justify-center',
+              expanded && state!.screen === 'welcome' && 'bg-rail-active hover:bg-rail-active',
             )
           "
           data-rail-item
@@ -387,7 +387,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           cn(
             'app-no-drag text-muted-foreground hover:text-foreground focus-visible:ring-ring grid flex-none place-items-center focus-visible:ring-2 focus-visible:outline-none',
             expanded
-              ? 'hover:bg-accent size-8 rounded-md'
+              ? 'hover:bg-rail-hover size-8 rounded-md'
               : 'bg-card border-foreground/20 hover:border-foreground/40 absolute top-[18px] -right-[14px] z-20 size-7 rounded-md border opacity-0 shadow-sm shadow-black/30 transition-opacity group-hover/rail:opacity-100 focus-visible:opacity-100',
           )
         "
@@ -480,7 +480,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                   :class="
                     cn(
                       'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-                      expanded ? 'hover:bg-accent group-data-[state=open]:bg-accent px-2 py-1' : 'justify-center p-1',
+                      expanded ? 'hover:bg-rail-hover group-data-[state=open]:bg-rail-hover px-2 py-1' : 'justify-center p-1',
                       folderHint(entry.id) === 'into' && 'ring-primary ring-2 ring-inset',
                     )
                   "
@@ -535,7 +535,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               :class="
                 cn(
                   'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
-                  expanded ? 'text-muted-foreground hover:text-foreground hover:bg-accent px-2 py-1' : 'justify-center p-1',
+                  expanded ? 'text-muted-foreground hover:text-foreground hover:bg-rail-hover px-2 py-1' : 'justify-center p-1',
                 )
               "
               data-rail-item
@@ -585,7 +585,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       <RailTooltip :text="t('rail.settings')" :disabled="expanded">
         <button
           type="button"
-          :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg px-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-accent')"
+          :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg px-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-rail-hover')"
           data-rail-item
           data-testid="rail-settings"
           :aria-label="t('rail.settings')"
