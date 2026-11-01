@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.47",
+    date: "2026-11-01",
+    title: "A picture for every overlay, and Preview as",
+    notes: [
+      "Add a picture to Everywhere and All games too, to place frames on your own image or OBS scene.",
+      "Preview as shows your overlay on another shape: 16:9, 21:9, 32:9, or one of your monitors. Nothing you placed moves.",
+    ],
+    prs: [
+      { number: 602, title: "Overlay: a picture for every setup, and Preview as" },
+    ],
+    tags: ["overlays", "privacy", "website"],
+  },
+  {
     version: "0.23.46",
     date: "2026-11-01",
     title: "Dialogs",
