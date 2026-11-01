@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Loader } from "@lucide/vue";
+import { Images, Loader, LogIn, Upload } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { MAX_SHARE_BATCH } from "../../shared/host-actions";
 import type { HostAction } from "../../shared/host-api";
@@ -121,10 +122,12 @@ async function share() {
   <ModalDialog
     :title="t('shareIcons.title')"
     :description="description"
+    :icon="Images"
     testid="share-icons-dialog"
     class="sm:max-w-[460px]"
     @close="dialog = null"
   >
+    <div class="flex flex-col gap-4">
     <p v-if="looking" class="text-muted-foreground text-sm" data-testid="share-icons-looking">{{ t("shareIcons.looking") }}</p>
     <template v-else-if="rows.length">
       <div class="flex justify-end gap-2">
@@ -163,16 +166,17 @@ async function share() {
     </p>
     <p v-if="!empty && !signedIn" class="text-sm" data-testid="share-icons-sign-in">{{ t("shareIcons.signIn") }}</p>
     <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="share-icons-error">{{ error }}</p>
-    <div class="flex items-center justify-end gap-2">
+    </div>
+    <DialogFooter>
       <span v-if="progress" class="text-muted-foreground mr-auto flex items-center gap-2 text-sm tabular-nums" role="status" data-testid="share-icons-progress">
         <Loader class="size-4 animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
         {{ t("shareIcons.progress", progress) }}
       </span>
-      <Button type="button" variant="secondary" :disabled="busy" @click="dialog = null">{{ empty ? t("common.close") : t("common.cancel") }}</Button>
-      <Button v-if="!empty && !signedIn" type="button" data-testid="share-icons-sign-in-button" @click="signIn">{{ t("account.signIn") }}</Button>
-      <Button v-else-if="!empty" type="button" data-testid="share-icons-submit" :disabled="busy || looking || count === 0" @click="share">
+      <DialogButton type="button" close :disabled="busy" @click="dialog = null">{{ empty ? t("common.close") : t("common.cancel") }}</DialogButton>
+      <DialogButton v-if="!empty && !signedIn" type="button" :icon="LogIn" data-testid="share-icons-sign-in-button" @click="signIn">{{ t("account.signIn") }}</DialogButton>
+      <DialogButton v-else-if="!empty" type="button" :icon="Upload" :loading="busy" data-testid="share-icons-submit" :disabled="busy || looking || count === 0" @click="share">
         {{ t("shareIcons.submit", { count: Math.max(count, 1) }) }}
-      </Button>
-    </div>
+      </DialogButton>
+    </DialogFooter>
   </ModalDialog>
 </template>

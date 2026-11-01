@@ -50,7 +50,7 @@ classes where you use a control; never copy it.
 | Menu | `ContextMenu`, `DropdownMenu`, or `sdk.ui.showMenu({ anchor: element })` | menu at the pointer, own popup |
 | Tooltip | `Tooltip` / `TooltipRows`, or a `title` (connectModule turns it into the kit tooltip). A disabled `Button` with a `title` (or `hinted`, when you show the tooltip yourself) stays hoverable and focusable, so say why it is off there | own hover box, a wrapper `span` around a disabled button |
 | Floating panel | `Popover` | absolutely positioned `div` |
-| Dialog | `Dialog`, `ConfirmDialog`, `NameDialog` | own overlay |
+| Dialog | `ConfirmDialog` (asks), `NameDialog` (asks for a name), else `Dialog` with `DialogHeader`, `DialogFooter`, `DialogButton` (see [Dialogs](#dialogs)) | own overlay |
 | Nothing here yet | `EmptyState` (one sentence, one action) | a bare `<p>` |
 | Loading | `Progress` | "Loading…" in a `<p>` |
 | Error or warning in place | `Notice` | red text in a `<p>` |
@@ -96,6 +96,22 @@ themes; anything hard-coded breaks in one of them.
   anything shown all day. Reduced motion keeps a short fade and drops the movement.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
+
+### Dialogs
+
+Guidance, not a lint rule: stay on the kit and small deviations are fine. The UI Playground (Actions > Dialogs) shows
+each pattern.
+
+- **Header**: `<DialogHeader :icon="Share2" title="…" description="…" />`. The icon (Lucide) and the one-line
+  description are optional; the close X on the right comes with it. `ConfirmDialog` and `NameDialog` take the same
+  `icon`; `ConfirmDialog` picks one from its tone if you give none.
+- **Layout**: 24 px padding, no line above the footer or under the header, and the same gap from header to content as
+  from content to footer. Put the content in one element so that holds. Don't add your own `gap-*` to `DialogContent`.
+- **Footer**: `<DialogFooter>` with `DialogButton`, the action last. A button that does something (Save, Import,
+  Export, Add, Delete…) may carry `:icon`. A button that only closes (Cancel, Close, Done, OK) gets `close` and never
+  an icon, even when it is the primary one: `<DialogButton close>Done</DialogButton>`.
+- **Forms**: make the `form` `class="contents"` and put the `DialogFooter` inside it, so the Save button submits.
+- **Texts**: a title of a few words, one short sentence under it, in English and German like everything else.
 
 ## 4. Behaviour
 
@@ -143,6 +159,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Empty, loading and error states exist and use the kit.
 - [ ] Menus and tooltips anchor to their element; no hover-only actions.
 - [ ] Motion uses the kit's tokens, animates only `transform` and `opacity`, and leaves out anything a key starts.
+- [ ] Dialogs use the header, footer and `DialogButton` as in [Dialogs](#dialogs); a close-only button has no icon.
 - [ ] Keyboard: Tab reaches everything, Escape closes, focus ring visible.
 - [ ] `pnpm typecheck`, `pnpm test` and `pnpm build` pass.
 - [ ] The module's `DESIGN.md` (if any) does not contradict this file.

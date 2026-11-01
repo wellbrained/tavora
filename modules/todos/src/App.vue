@@ -2,7 +2,7 @@
 // To-Dos: a toolbar, current objectives, then the user's own groups. Every
 // To-Dos panel of a workspace shows the same list; what is folded, hidden or being
 // edited is each panel's own state.
-import { ChevronsDownUp, ChevronsUpDown, Settings as SettingsIcon } from "@lucide/vue";
+import { ChevronsDownUp, ChevronsUpDown, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
@@ -346,6 +346,8 @@ function dropTask() {
       :title="t('app.deleteGroupTitle', { name: pendingGroup.name })"
       :description="plural('app.deleteGroupMessage', pendingGroup.tasks.length)"
       :confirm="t('app.deleteGroupConfirm')"
+      :icon="Trash2"
+      :confirm-icon="Trash2"
       :cancel="t('cancel')"
       @confirm="removeGroup"
       @cancel="pendingGroup = null"

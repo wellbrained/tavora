@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.4",
+    "date": "2026-11-01",
+    "notes": [
+      "Delete group asks with a trash icon and a Close button in the corner."
+    ]
+  },
+  {
     "version": "0.2.3",
     "date": "2026-11-01",
     "notes": [

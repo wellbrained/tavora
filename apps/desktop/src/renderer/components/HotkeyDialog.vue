@@ -3,7 +3,8 @@
 // for one action. Tavora draws it and catches the keys, never the module, which only hears that the action fired.
 // The main process lets every hotkey go while it is open, so keys set already can be caught here too.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
+import { Keyboard, Save, Trash2 } from "@lucide/vue";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { hotkeyFromInput, hotkeyKeys } from "../../shared/hotkey-keys";
 import { act, state } from "../host";
@@ -64,6 +65,7 @@ function answer(choice: "set" | "remove" | "cancel") {
     :title="t('hotkey.title', { action: request.actionName })"
     :description="t('hotkey.for', { label: request.label, module: request.moduleName })"
     testid="hotkey-dialog"
+    :icon="Keyboard"
     @close="answer('cancel')"
   >
     <div class="bg-muted flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg px-4 py-4 text-center" aria-live="polite" data-testid="hotkey-keys">
@@ -75,10 +77,10 @@ function answer(choice: "set" | "remove" | "cancel") {
     </div>
     <p class="text-muted-foreground text-sm">{{ t("hotkey.hint") }}</p>
     <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="hotkey-error">{{ error }}</p>
-    <div class="flex flex-wrap items-center justify-end gap-2">
-      <Button v-if="request.current" type="button" variant="danger" class="mr-auto" data-testid="hotkey-remove" @click="answer('remove')">{{ t("hotkey.remove") }}</Button>
-      <Button type="button" variant="ghost" data-testid="hotkey-cancel" @click="answer('cancel')">{{ t("common.cancel") }}</Button>
-      <Button type="button" :disabled="!picked" data-testid="hotkey-save" @click="answer('set')">{{ t("hotkey.save") }}</Button>
-    </div>
+    <DialogFooter>
+      <DialogButton v-if="request.current" type="button" variant="danger" :icon="Trash2" class="mr-auto" data-testid="hotkey-remove" @click="answer('remove')">{{ t("hotkey.remove") }}</DialogButton>
+      <DialogButton type="button" close variant="ghost" data-testid="hotkey-cancel" @click="answer('cancel')">{{ t("common.cancel") }}</DialogButton>
+      <DialogButton type="button" :icon="Save" :disabled="!picked" data-testid="hotkey-save" @click="answer('set')">{{ t("hotkey.save") }}</DialogButton>
+    </DialogFooter>
   </ModalDialog>
 </template>

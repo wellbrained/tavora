@@ -4,9 +4,10 @@
 // listed with its fix right here: the next version and its patch notes, an id with the developer's own
 // prefix (Check, then Claim it), or a build. Publish uploads exactly what this shows; the click is the
 // approval, so nothing asks again.
-import { CircleAlert, Loader, TriangleAlert } from "@lucide/vue";
+import { CircleAlert, ExternalLink, Loader, TriangleAlert, Upload } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
@@ -134,14 +135,14 @@ function browse() {
 </script>
 
 <template>
-  <ModalDialog v-if="view" :title="title" class="sm:max-w-[560px]" testid="publish-review" @close="close">
+  <ModalDialog v-if="view" :title="title" :icon="Upload" class="sm:max-w-[560px]" testid="publish-review" @close="close">
     <!-- Published. -->
     <template v-if="view.status === 'published'">
       <p class="text-muted-foreground text-sm" data-testid="publish-done">{{ t(waiting ? "publish.waitingText" : "publish.doneText") }}</p>
-      <div class="flex justify-end gap-2">
-        <Button variant="ghost" @click="close">{{ t("common.close") }}</Button>
-        <Button v-if="!waiting" data-testid="publish-browse" @click="browse">{{ t("publish.browse") }}</Button>
-      </div>
+      <DialogFooter>
+        <DialogButton close variant="ghost" @click="close">{{ t("common.close") }}</DialogButton>
+        <DialogButton v-if="!waiting" :icon="ExternalLink" data-testid="publish-browse" @click="browse">{{ t("publish.browse") }}</DialogButton>
+      </DialogFooter>
     </template>
 
     <template v-else>
@@ -253,13 +254,12 @@ function browse() {
         <p v-if="view.error" class="text-destructive text-sm" role="alert" data-testid="publish-error">{{ view.error }}</p>
       </template>
 
-      <div class="flex items-center justify-end gap-2">
-        <Button variant="secondary" :disabled="view.status === 'publishing'" data-testid="publish-cancel" @click="close">{{ t("common.cancel") }}</Button>
-        <Button :disabled="busy || view.status !== 'ready' || view.problems.length > 0" data-testid="publish-upload" @click="run({ type: 'publish-upload' })">
-          <Loader v-if="view.status === 'publishing'" class="size-4 animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
+      <DialogFooter>
+        <DialogButton close :disabled="view.status === 'publishing'" data-testid="publish-cancel" @click="close">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton :icon="Upload" :loading="view.status === 'publishing'" :disabled="busy || view.status !== 'ready' || view.problems.length > 0" data-testid="publish-upload" @click="run({ type: 'publish-upload' })">
           {{ view.status === "publishing" ? t("publish.publishing") : t("publish.publish") }}
-        </Button>
-      </div>
+        </DialogButton>
+      </DialogFooter>
     </template>
   </ModalDialog>
 </template>

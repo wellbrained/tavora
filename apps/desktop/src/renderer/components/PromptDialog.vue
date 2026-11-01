@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
+import { Pencil } from "@lucide/vue";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { dialog, type PromptRequest } from "../host";
@@ -21,8 +22,8 @@ async function submit() {
 </script>
 
 <template>
-  <ModalDialog :title="request.title" testid="prompt" @close="dialog = null">
-    <form class="grid gap-4" @submit.prevent="submit">
+  <ModalDialog :title="request.title" :icon="Pencil" testid="prompt" @close="dialog = null">
+    <form class="contents" @submit.prevent="submit">
       <div class="grid gap-2">
         <Label for="prompt-input" class="text-muted-foreground font-normal">{{ request.label }}</Label>
         <Input
@@ -36,10 +37,10 @@ async function submit() {
         />
         <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="prompt-error">{{ error }}</p>
       </div>
-      <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" @click="dialog = null">{{ t("common.cancel") }}</Button>
-        <Button type="submit" data-testid="prompt-submit" :disabled="busy">{{ request.confirm }}</Button>
-      </div>
+      <DialogFooter>
+        <DialogButton type="button" close @click="dialog = null">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton type="submit" :loading="busy" data-testid="prompt-submit" :disabled="busy">{{ request.confirm }}</DialogButton>
+      </DialogFooter>
     </form>
   </ModalDialog>
 </template>
