@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// Screen 3, game pick: a game search (arrow keys move, Enter adds the highlighted game, the top match at first),
-// a few popular games as one-click chips, and, once a game is added, an optional offer to set up the catalog
+// Screen 3, game pick: the games on this PC, most recently played first, and a search (the same list as the Add a game
+// dialog: arrow keys move, Enter adds the highlighted game, the top match at first), a few popular games as
+// one-click chips when no games are found on this PC, and, once a game is added, an optional offer to set up the catalog
 // modules made for it. Adding a game is the same add-workspace the Add game dialog uses and installing a module
 // the same install-catalog-module as the library's Browse; nothing opens until the welcome ends.
 import { ArrowLeft, Check, Search } from "@lucide/vue";
@@ -9,13 +10,13 @@ import type { CatalogMatch, CatalogModuleView, OnlineGame } from "../../../share
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
-import { Kbd } from "@tavora/official-ui/components/ui/kbd";
-import { useGameSearch, type GameRow } from "@/lib/game-search";
 import { useListNav } from "@/lib/list-nav";
-import { cn } from "@/lib/utils";
+import { addInputFor, type PickerRow } from "../../lib/game-picker";
+import { useGamePicker, whenOf } from "../../lib/use-game-picker";
 import { act, api, listOf, state } from "../../host";
 import { t } from "../../i18n";
 import CatalogIcon from "../CatalogIcon.vue";
+import GamePickerList, { type PickerBadge } from "../GamePickerList.vue";
 
 /** The game added here, and the modules to open in it once the welcome ends. */
 export interface StartedGame {
@@ -29,28 +30,26 @@ const props = defineProps<{ started: StartedGame | null; dry?: boolean }>();
 const emit = defineEmits<{ start: [StartedGame]; next: []; back: [] }>();
 
 const query = ref("");
-const name = computed(() => query.value.replace(/\s+/g, " ").trim());
-const { rows, onlineStatus, addInput } = useGameSearch(query);
+// Games the user already has are left out.
+const { name, rows, custom, count, installed, installedLoaded, onlineStatus, modulesOf } = useGamePicker(query, { hideAdded: true });
+const info = (row: PickerRow): PickerBadge => ({ modules: modulesOf(row).length, when: whenOf(row) });
 const error = ref<string | null>(null);
 const busy = ref(false);
 
 // Popular games, one click each; the ones the user has are left out.
 const popular = ref<CatalogMatch[]>([]);
 onMounted(async () => (popular.value = await api.popularGames()));
-const chips = computed(() => popular.value.filter((game) => !state.value!.library.workspaces[game.id]).slice(0, 6));
+// Only when no games were found on this PC; otherwise the list of the games the user plays is the better start.
+const chips = computed(() => (installedLoaded.value && !installed.value.length ? popular.value.filter((game) => !state.value!.library.workspaces[game.id]).slice(0, 6) : []));
 
 const list = ref<HTMLElement | null>(null);
-const { active, onKey } = useListNav({ count: () => rows.value.length, list, onEnter: submit });
+const { active, onKey } = useListNav({ count: () => count.value, list, onEnter: submit });
 // The top match is highlighted again whenever the results change.
 watch(
-  () => rows.value.map((row) => row.id).join("\n"),
+  () => rows.value.map((row) => row.key).join("\n") + (custom.value ?? ""),
   () => (active.value = 0),
 );
-const optionId = (row: GameRow) => `onboarding-option-${row.id}`;
-const activeId = computed(() => {
-  const row = rows.value[active.value];
-  return row ? optionId(row) : undefined;
-});
+const activeId = computed(() => (count.value ? `onboarding-results-option-${Math.min(active.value, count.value - 1)}` : undefined));
 
 /** What is shown under the game: the search, the offer of its modules (loading, or the list), or "ready". */
 const phase = ref<"pick" | "offer" | "ready">(props.started ? "ready" : "pick");
@@ -95,8 +94,14 @@ function pretendId(input: { catalogId: string } | { online: OnlineGame } | { nam
 
 function submit() {
   const row = rows.value[active.value];
-  if (row) void add(addInput(row), row.name);
-  else if (name.value) void add({ name: name.value }, name.value);
+  if (row) void add(addInputFor(row, name.value), row.name);
+  else if (custom.value) void add({ name: custom.value }, custom.value);
+}
+
+function pickAt(index: number) {
+  const row = rows.value[index];
+  if (row) void add(addInputFor(row, name.value), row.name);
+  else if (custom.value) void add({ name: custom.value }, custom.value);
 }
 
 function toggle(id: string, on: boolean | "indeterminate") {
@@ -160,33 +165,21 @@ function notNow() {
       </div>
       <p v-if="error" class="text-destructive mt-2 text-sm" role="alert" data-testid="onboarding-error">{{ error }}</p>
 
-      <ul
-        id="onboarding-results"
-        ref="list"
-        role="listbox"
-        class="mt-2 max-h-52 w-full overflow-y-auto text-left [@media(max-height:640px)]:max-h-28"
-        :aria-label="t('common.games')"
-      >
-        <li v-for="(row, index) in rows" :id="optionId(row)" :key="row.id" role="option" :aria-selected="index === active">
-          <button
-            type="button"
-            tabindex="-1"
-            :class="cn('flex w-full items-center gap-2 rounded-md px-2 py-2 text-left', index === active && 'bg-accent')"
-            :disabled="busy"
-            :data-testid="`onboarding-game-${row.id}`"
-            @mousemove="active = index"
-            @click="add(addInput(row), row.name)"
-          >
-            <span class="min-w-0 flex-1 truncate">{{ row.name }}</span>
-            <Kbd v-if="index === active" class="font-sans" aria-hidden="true">{{ t("search.key.enter") }}</Kbd>
-          </button>
-        </li>
-        <li v-if="name">
-          <button type="button" tabindex="-1" class="text-primary hover:bg-accent w-full rounded-md px-2 py-2 text-left" :disabled="busy" data-testid="onboarding-custom" @click="add({ name }, name)">
-            {{ t("addGame.custom", { name }) }}
-          </button>
-        </li>
-      </ul>
+      <div ref="list" class="mt-2 max-h-52 w-full overflow-y-auto text-left [@media(max-height:640px)]:max-h-28">
+        <GamePickerList
+          id="onboarding-results"
+          :label="t('common.games')"
+          :rows="rows"
+          :active="active"
+          :custom="custom"
+          :info="info"
+          :busy="busy"
+          test-prefix="onboarding-game"
+          customTestid="onboarding-custom"
+          @hover="active = $event"
+          @pick="pickAt"
+        />
+      </div>
       <p v-if="onlineStatus === 'unreachable' && name" class="text-muted-foreground mt-1 text-xs">{{ t("addGame.builtInOnly") }}</p>
 
       <div v-if="chips.length && !name" class="mt-4 flex flex-col items-center gap-2">

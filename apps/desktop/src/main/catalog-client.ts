@@ -5,7 +5,7 @@
 // matches the listing. After that the zip goes through the same installer as Install from zip, which
 // checks the publisher signature itself.
 import { createHash } from "node:crypto";
-import { apiReason, isConnector, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, translationsFor, type ApiReason, type Connector } from "@tavora/module-schema";
+import { apiReason, isConnector, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, OFFICIAL_PINS, officialOn, translationsFor, type ApiReason, type Connector } from "@tavora/module-schema";
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView, CatalogOwnReview, CatalogRating } from "../shared/host-api";
 import { isWebUrl } from "./browser-url";
@@ -35,7 +35,7 @@ export interface CatalogScreenshot {
 }
 
 /** A listed module with the zip it comes as; only the main process sees the hash. */
-export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots" | "icon" | "fits" | "forGames"> {
+export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots" | "icon" | "fits" | "forGames" | "gameIds" | "official"> {
   games: string[];
   /** Whether it may be added to a personal workspace. */
   personalWorkspaces: boolean;
@@ -277,7 +277,7 @@ export function shownTexts(entry: Pick<CatalogEntry, "name" | "description" | "t
  */
 export function catalogView({ games, personalWorkspaces, zip: _zip, notes: _notes, shots, icon, translations, ...view }: CatalogEntry, language: string, scope?: CatalogScope): CatalogModuleView {
   const fits = scope ? fitsScope({ games, personalWorkspaces }, scope) : true;
-  return { ...view, ...shownTexts({ ...view, translations }, language), fits, forGames: games.map((id) => catalogGame(id)?.name ?? id), screenshots: shots.length, icon: icon !== null };
+  return { ...view, ...shownTexts({ ...view, translations }, language), fits, forGames: games.map((id) => catalogGame(id)?.name ?? id), gameIds: games, official: officialOn(OFFICIAL_PINS) && view.owner === OFFICIAL_PINS.key, screenshots: shots.length, icon: icon !== null };
 }
 
 export interface CatalogClientOptions {

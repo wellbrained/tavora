@@ -902,6 +902,22 @@ export type ActionResult =
   | { ok: true; id?: string; shared?: number; limited?: true; added?: number; updated?: number; waiting?: number }
   | { ok: false; error: string };
 
+/** A game installed on this PC, for the Add a game picker. Everything in it was read on this PC and stays on it. */
+export interface InstalledGameView {
+  /** Names the game across lists: `steam:<id>` or its name reduced to letters and digits. */
+  key: string;
+  name: string;
+  steamAppId: number | null;
+  /** The built-in game's id when it is one; the id the workspace is made with. */
+  catalogId: string | null;
+  /** The game's own icon as a data address, or null (the picker draws the rail's initials tile). */
+  icon: string | null;
+  /** Steam's last play or when Tavora last saw it running ("played"), else when it was installed; milliseconds since 1970. */
+  activity: { kind: "played" | "installed"; at: number } | null;
+  /** The workspace of this game when the user already has it. */
+  workspaceId: string | null;
+}
+
 export interface CatalogMatch {
   id: string;
   name: string;
@@ -974,6 +990,10 @@ export interface CatalogModuleView {
   fits: boolean;
   /** The games it is made for, by name; empty for any game. */
   forGames: string[];
+  /** The same games by id (the game's own id in Tavora), to find the modules made for one game. */
+  gameIds: string[];
+  /** Whether Tavora itself published it (signed with the pinned Tavora key); the picker ticks these by default. */
+  official: boolean;
   publishedAt: string;
   /** The module's web page, http or https, shown as plain text; open-catalog-homepage opens it. */
   homepage: string | null;
@@ -1104,6 +1124,8 @@ export interface TavoraHostApi {
   getState(): Promise<HostViewState | null>;
   act(action: HostAction): Promise<ActionResult>;
   searchCatalog(query: string): Promise<CatalogMatch[]>;
+  /** The games installed on this PC, most recently played first, with their icons. Never rejects; empty when nothing was found. */
+  installedGames(): Promise<InstalledGameView[]>;
   /** Popular built-in games the user does not have yet, for the first-run welcome's tiles. */
   popularGames(): Promise<CatalogMatch[]>;
   /** A module's patch notes, newest first, up to the installed version; empty without any. */
@@ -1116,6 +1138,8 @@ export interface TavoraHostApi {
   steamShareIcons(appids: number[]): Promise<SteamShareResult>;
   /** The catalog modules for the current workspace, or for another target (the first-run welcome asks for a game). Never rejects. */
   browseCatalog(target?: CatalogTarget): Promise<CatalogListResult>;
+  /** Every module in the catalog whatever workspace is open (their `gameIds` tell which games they are for), for the Add a game list. */
+  catalogForGames(): Promise<CatalogListResult>;
   /** A catalog module's page: its readme, screenshots and versions. Never rejects. */
   catalogPage(moduleId: string): Promise<CatalogPageResult>;
   /** An installed module's page from its own folder: readme and screenshots. Works offline. Never rejects. */

@@ -261,6 +261,10 @@ Tavora's own modules (ids starting with `tavora.`) ship inside the app, and the 
 - **The folder is not backed up or copied to the cloud.** It can be downloaded again, and it only ever holds signed files.
 - **Tavora's key stays with the maintainer.** These updates are signed and uploaded only from a development build of Tavora, never from the app you install. The key is a file the maintainer picks for each upload. With "Remember the key on this PC" it is kept sealed by the system (DPAPI on Windows) for that user on that PC only: never in backups, the cloud copy or the account's key vault. Forget key deletes it, and a saved key that is no longer Tavora's pinned key, or was revoked, is deleted when it would be used.
 
+## The Add a game list
+
+Tavora lists the games installed on your PC to order the Add a game picker. The main process reads them from what the launchers (Steam, Battle.net, Epic, GOG and Windows) keep on disk, and reads Steam's last-played times from its own files, read-only. Tavora also notes when it last saw each game running and uses the install date. This stays on your PC: it only orders the list, goes to Tavora's own window and nowhere else, is never sent to the Tavora service or any other address, and modules and Browser pages can't reach it.
+
 ## The Browser panel
 
 The Browser panel shows any website, so here the attacker is any page:

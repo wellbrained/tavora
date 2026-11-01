@@ -3,11 +3,13 @@ import { ChevronDown, PanelLeftClose, PanelLeftOpen, Plus, Settings } from "@luc
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
-import { act, dialog, openSettings, prompt, railToggles, state, submitAction } from "../host";
+import { act, dialog, openSettings, prompt, railToggles, state, submitAction, useFloating, type MenuItem } from "../host";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { t } from "../i18n";
 import { numberedWorkspaces } from "../shortcuts";
 import { folderMenu, workspaceMenu } from "../rail-actions";
 import MenuArea from "./menus/MenuArea.vue";
+import MenuEntries from "./menus/MenuEntries.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
 import RailFooterTile from "./RailFooterTile.vue";
 import RailInboxButton from "./RailInboxButton.vue";
@@ -40,6 +42,12 @@ function onNarrowChange() {
 narrowQuery.addEventListener("change", onNarrowChange);
 onBeforeUnmount(() => narrowQuery.removeEventListener("change", onNarrowChange));
 
+// The Add button offers a game or a personal workspace (which belongs to no game).
+const trackMenu = useFloating();
+const addMenu: MenuItem[] = [
+  { label: t("common.addGame"), testid: "rail-add-game-item", run: () => (dialog.value = { kind: "add-game" }) },
+  { label: t("rail.addPersonal"), testid: "rail-add-personal-item", run: () => (dialog.value = { kind: "add-personal" }) },
+];
 const expanded = computed(() => (narrow.value ? peek.value : library.value.rail.expanded));
 function toggleRail() {
   if (narrow.value) peek.value = !peek.value;
@@ -529,7 +537,9 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         </template>
         <!-- Add game is one more entry under the last workspace: a tile when compact, a quiet row when expanded. -->
         <div class="rail-entry group relative mt-1 flex items-center px-2">
-          <RailTooltip :text="t('common.addGame')" :disabled="expanded">
+          <DropdownMenu @update:open="trackMenu">
+          <RailTooltip :text="t('rail.addMenu')" :disabled="expanded">
+            <DropdownMenuTrigger as-child>
             <button
               type="button"
               :class="
@@ -541,7 +551,6 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               data-rail-item
               data-testid="rail-add-game"
               :aria-label="t('common.addGame')"
-              @click="dialog = { kind: 'add-game' }"
             >
               <span v-if="expanded" class="flex size-10 flex-none items-center justify-center">
                 <Plus class="size-5" :stroke-width="1.75" />
@@ -554,7 +563,12 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               </span>
               <span v-if="expanded" class="text-base font-medium">{{ t("common.addGame") }}</span>
             </button>
+            </DropdownMenuTrigger>
           </RailTooltip>
+          <DropdownMenuContent data-testid="menu" side="right" align="start" class="max-w-72 min-w-52">
+            <MenuEntries :items="addMenu" kind="dropdown" />
+          </DropdownMenuContent>
+          </DropdownMenu>
         </div>
     </div>
     </div>
