@@ -64,7 +64,7 @@ test("the window buttons sit on the page behind them: Home's background, the dar
     const window = BrowserWindow.getAllWindows()[0]!;
     const set = window.setTitleBarOverlay.bind(window);
     window.setTitleBarOverlay = (options) => {
-      (globalThis as { buttons?: string }).buttons = options.color;
+      (globalThis as { buttons?: string | undefined }).buttons = options.color;
       set(options);
     };
   });
