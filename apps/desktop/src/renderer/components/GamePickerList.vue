@@ -15,7 +15,7 @@ export interface PickerBadge {
   when: string | null;
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   id: string;
   label: string;
   rows: readonly PickerRow[];
@@ -24,7 +24,10 @@ const props = defineProps<{
   custom: string | null;
   info: (row: PickerRow) => PickerBadge;
   busy?: boolean;
-}>();
+  /** Start of each row's test id (`<prefix>-<game id>`); tests only. */
+  testPrefix?: string;
+  customTestid?: string;
+}>(), { testPrefix: "catalog", customTestid: "add-custom" });
 const emit = defineEmits<{ hover: [index: number]; pick: [index: number] }>();
 
 const optionId = (index: number) => `${props.id}-option-${index}`;
@@ -39,7 +42,7 @@ const optionId = (index: number) => `${props.id}-option-${index}`;
       role="option"
       :aria-selected="index === active"
       :class="cn('group relative flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2', index === active && 'bg-accent', row.workspaceId && 'opacity-60')"
-      :data-testid="`catalog-${row.gameId ?? row.key}`"
+      :data-testid="`${testPrefix}-${row.gameId ?? row.key}`"
       @mousemove="emit('hover', index)"
       @click="!busy && emit('pick', index)"
     >
@@ -65,7 +68,7 @@ const optionId = (index: number) => `${props.id}-option-${index}`;
       role="option"
       :aria-selected="active === rows.length"
       :class="cn('relative flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2', active === rows.length && 'bg-accent')"
-      data-testid="add-custom"
+      :data-testid="customTestid"
       @mousemove="emit('hover', rows.length)"
       @click="!busy && emit('pick', rows.length)"
     >

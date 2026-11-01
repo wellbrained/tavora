@@ -85,6 +85,34 @@ test("the first-run welcome starts a game with the keyboard, lands in it, and ca
   await again.app.close();
 });
 
+test("the first-run welcome lists the games on this PC, newest first, and shows the popular chips only without any", async () => {
+  const day = 24 * 60 * 60 * 1000;
+  const installed = JSON.stringify([
+    { name: "Hades II", installedAt: Date.now() - 40 * day },
+    { name: "Mystery Game", installedAt: Date.now() - 2 * day },
+  ]);
+  const withGames = await launch(undefined, [], { seed: false, env: { TAVORA_TEST_INSTALLED: installed } });
+  await throughMap(withGames.page, "game");
+  const rows = withGames.page.getByTestId("onboarding-game").locator('[role="option"]');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText("Mystery Game");
+  await expect(rows.first()).toContainText("Installed 2 days ago");
+  await expect(rows.first()).toHaveAttribute("aria-selected", "true");
+  await expect(withGames.page.getByTestId("onboarding-popular")).toHaveCount(0);
+  // Typing searches as in the Add a game dialog, with the typed name as an own-game row.
+  await withGames.page.getByTestId("onboarding-search").fill("Pixel Quest");
+  await expect(withGames.page.getByTestId("onboarding-custom")).toBeVisible();
+  await withGames.page.getByTestId("onboarding-search").press("Enter");
+  await expect(withGames.page.getByTestId("onboarding-ready")).toContainText("Pixel Quest");
+  await withGames.app.close();
+
+  // Nothing found on this PC: the popular games are offered as before.
+  const none = await launch(undefined, [], { seed: false });
+  await throughMap(none.page, "game");
+  await expect(none.page.getByTestId("onboarding-popular")).toBeVisible();
+  await none.app.close();
+});
+
 test("the first-run welcome moves with the arrow keys, and makes a personal space with the ticked panels", async () => {
   const { app, page } = await launch(undefined, [], { seed: false });
   await throughMap(page, "game");

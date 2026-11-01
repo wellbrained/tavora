@@ -93,3 +93,11 @@ export function describeActivity(activity: { kind: "played" | "installed"; at: n
   const month = new Date(activity.at);
   return { key: played ? "addGame.played.inMonth" : "addGame.installed.inMonth", month, withYear: month.getFullYear() !== new Date(now).getFullYear() };
 }
+
+/** The input `add-workspace` takes for a row, or for the typed name (no row) as the user's own game. */
+export function addInputFor(row: PickerRow | null, name: string): { catalogId: string } | { online: OnlineGame } | { name: string } {
+  if (!row) return { name };
+  if (row.online) return { online: row.online };
+  if (row.gameId && (!row.installed || row.installed.catalogId)) return { catalogId: row.gameId };
+  return { name: row.name };
+}

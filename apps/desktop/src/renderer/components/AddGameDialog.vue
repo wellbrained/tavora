@@ -3,81 +3,28 @@
 // highlighted game a panel on the right with the modules made for it to tick. Enter adds the game and the
 // ticked modules. Keyboard first, in the style of Ctrl+K.
 import { Search } from "@lucide/vue";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import type { CatalogMatch, CatalogModuleView, InstalledGameView, OnlineGame, OnlineSearchResult } from "../../shared/host-api";
-import { act, api, dialog, openPanels, state } from "../host";
+import { computed, nextTick, ref, watch } from "vue";
+import { act, dialog, openPanels, state } from "../host";
 import { useListNav } from "@/lib/list-nav";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
-import { formatDate, t } from "../i18n";
-import { buildRows, defaultTicks, describeActivity, modulesFor, type PickerRow } from "../lib/game-picker";
+import { t } from "../i18n";
+import { addInputFor, defaultTicks, type PickerRow } from "../lib/game-picker";
+import { useGamePicker, whenOf } from "../lib/use-game-picker";
 import CatalogIcon from "./CatalogIcon.vue";
 import GamePickerList, { type PickerBadge } from "./GamePickerList.vue";
 import GameTile from "./GameTile.vue";
 
-/** How long the user has to stop typing before the Tavora service is asked. */
-const ONLINE_DELAY_MS = 250;
-
 const query = ref("");
-const matches = ref<CatalogMatch[]>([]);
-const online = ref<OnlineGame[]>([]);
-const onlineStatus = ref<OnlineSearchResult["status"]>("ok");
-const installed = ref<InstalledGameView[]>([]);
-const installedLoaded = ref(false);
-const catalogModules = ref<CatalogModuleView[] | null>(null);
+const { name, rows, custom, count, installedLoaded, onlineStatus, catalogModules, modulesOf } = useGamePicker(query);
 const error = ref<string | null>(null);
 const busy = ref(false);
 const ownHint = ref(false);
-const name = computed(() => query.value.replace(/\s+/g, " ").trim());
 const input = ref<HTMLInputElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const list = ref<HTMLElement | null>(null);
-
-onMounted(async () => {
-  void api.installedGames().then((games) => {
-    installed.value = games;
-    installedLoaded.value = true;
-  });
-  const result = await api.catalogForGames();
-  catalogModules.value = result.status === "ok" ? result.modules : [];
-});
-
-let searchId = 0;
-watch(
-  query,
-  async (text) => {
-    const id = ++searchId;
-    const found = await api.searchCatalog(text);
-    if (id === searchId) matches.value = found;
-  },
-  { immediate: true },
-);
-
-let onlineId = 0;
-let onlineTimer: ReturnType<typeof setTimeout> | undefined;
-watch(query, (text) => {
-  clearTimeout(onlineTimer);
-  const id = ++onlineId;
-  if ([...text.trim()].length < 2) {
-    online.value = [];
-    onlineStatus.value = "ok";
-    return;
-  }
-  onlineTimer = setTimeout(async () => {
-    const result = await api.searchOnline(text);
-    if (id !== onlineId) return;
-    online.value = result.games;
-    onlineStatus.value = result.status;
-  }, ONLINE_DELAY_MS);
-});
-onBeforeUnmount(() => clearTimeout(onlineTimer));
-
-const rows = computed<PickerRow[]>(() => buildRows(installed.value, matches.value, online.value, query.value));
-// The typed name can be added as the user's own game unless a row is exactly that.
-const custom = computed(() => (name.value && !rows.value.some((row) => row.name.toLowerCase() === name.value.toLowerCase()) ? name.value : null));
-const count = computed(() => rows.value.length + (custom.value ? 1 : 0));
 
 const optionId = (index: number) => `game-results-option-${index}`;
 
@@ -92,7 +39,6 @@ const activeRow = computed<PickerRow | null>(() => rows.value[active.value] ?? n
 
 // ── Modules ────────────────────────────────────────────────────────────
 
-const modulesOf = (row: PickerRow | null) => modulesFor(catalogModules.value ?? [], row?.gameId ?? null);
 const panelModules = computed(() => modulesOf(activeRow.value));
 /** What the user ticked per game while this dialog is open; a game not touched has Tavora's own modules ticked. */
 const ticked = ref<Record<string, string[]>>({});
@@ -108,16 +54,8 @@ function toggle(moduleId: string, on: boolean) {
 
 // ── Words ──────────────────────────────────────────────────────────────
 
-function whenOf(row: PickerRow): string | null {
-  const activity = row.installed?.activity;
-  if (!activity) return null;
-  const text = describeActivity(activity, Date.now());
-  if ("n" in text) return t(text.key, { n: text.n });
-  if ("month" in text) return t(text.key, { month: formatDate(text.month, text.withYear ? { month: "long", year: "numeric" } : { month: "long" }) });
-  return t(text.key);
-}
-
 const info = (row: PickerRow): PickerBadge => ({ modules: modulesOf(row).length, when: whenOf(row) });
+const addLabel = computed(() => (activeRow.value?.workspaceId ? t("addGame.open") : panelTicks.value.length && activeRow.value ? t("addGame.addWith", { count: panelTicks.value.length }) : t("addGame.add")));
 const lineOf = (row: PickerRow | null) => {
   if (!row) return t("addGame.line.own");
   const where = row.installed ? t("addGame.line.pc") : t("addGame.line.list");
@@ -145,7 +83,7 @@ async function confirm(row: PickerRow | null) {
       return;
     }
     const moduleIds = ticksOf(row);
-    const added = await act({ type: "add-workspace", ...inputFor(row) }, { quiet: true });
+    const added = await act({ type: "add-workspace", ...addInputFor(row, name.value) }, { quiet: true });
     if (!added.ok) {
       error.value = added.error;
       return;
@@ -171,13 +109,6 @@ async function confirm(row: PickerRow | null) {
   } finally {
     busy.value = false;
   }
-}
-
-function inputFor(row: PickerRow | null) {
-  if (!row) return { name: name.value };
-  if (row.online) return { online: row.online };
-  if (row.gameId && (!row.installed || row.installed.catalogId)) return { catalogId: row.gameId };
-  return { name: row.name };
 }
 
 // ── Keys outside the list ──────────────────────────────────────────────
@@ -214,8 +145,10 @@ function ownGame() {
 
 <template>
   <Dialog :open="true" @update:open="(open) => !open && (dialog = null)">
+    <!-- The search and the footer stay put. Side by side the list and the panel each scroll; stacked (a small window)
+         the body between them is the one area that scrolls. -->
     <DialogContent
-      class="bg-card top-[8vh] w-[min(780px,calc(100vw-48px))] max-w-none translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-none"
+      class="bg-card top-[8vh] flex max-h-[calc(100vh-8vh-16px)] w-[min(780px,calc(100vw-48px))] max-w-none translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
       data-testid="add-game-dialog"
       :show-close-button="false"
       @escape-key-down="onEscape"
@@ -223,7 +156,7 @@ function ownGame() {
     >
       <DialogTitle class="sr-only">{{ t("addGame.title") }}</DialogTitle>
       <DialogDescription class="sr-only">{{ t("addGame.search") }}</DialogDescription>
-      <div class="relative border-b">
+      <div class="relative flex-none border-b">
         <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" :stroke-width="1.5" />
         <input
           id="game-search"
@@ -247,11 +180,11 @@ function ownGame() {
         <Kbd class="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 font-sans" aria-hidden="true">{{ t("search.key.esc") }}</Kbd>
       </div>
 
-      <div tabindex="-1" class="@container max-h-[calc(100vh-8vh-8.5rem)] overflow-y-auto focus-visible:outline-none">
-        <div class="grid @[620px]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-          <div class="flex min-w-0 flex-col @[620px]:border-r">
+      <div tabindex="-1" class="@container min-h-0 flex-1 overflow-y-auto focus-visible:outline-none @[620px]:overflow-hidden">
+        <div class="grid @[620px]:h-[min(420px,calc(100vh-8vh-9rem))] @[620px]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+          <div tabindex="-1" class="flex min-w-0 flex-col focus-visible:outline-none @[620px]:min-h-0 @[620px]:overflow-y-auto @[620px]:border-r">
             <p class="text-muted-foreground px-5 pt-3 pb-1 text-xs font-medium">{{ name ? t("addGame.found") : t("addGame.recent") }}</p>
-            <div ref="list" tabindex="-1" class="max-h-[150px] overflow-y-auto px-2 pb-2 @[620px]:max-h-[360px]">
+            <div ref="list" class="px-2 pb-2">
               <GamePickerList id="game-results" :label="t('common.games')" :rows="rows" :active="active" :custom="custom" :info="info" :busy="busy" @hover="active = $event" @pick="pick" />
               <p v-if="!rows.length && !custom && installedLoaded && !ownHint" class="text-muted-foreground px-3 py-4 text-sm" data-testid="add-game-empty">{{ t("addGame.nothingOnPc") }}</p>
               <p v-if="ownHint && !name" class="text-muted-foreground px-3 py-4 text-sm" data-testid="add-game-own-hint">{{ t("addGame.ownHint") }}</p>
@@ -259,7 +192,14 @@ function ownGame() {
             </div>
           </div>
 
-          <section ref="panel" class="flex min-w-0 flex-col gap-3 border-t p-5 @[620px]:border-t-0" :aria-label="t('addGame.panel')" data-testid="add-game-panel" @keydown="onPanelKey">
+          <section
+            ref="panel"
+            tabindex="-1"
+            class="flex min-w-0 flex-col gap-3 border-t p-5 focus-visible:outline-none @[620px]:min-h-0 @[620px]:overflow-y-auto @[620px]:border-t-0"
+            :aria-label="t('addGame.panel')"
+            data-testid="add-game-panel"
+            @keydown="onPanelKey"
+          >
             <template v-if="activeRow || custom">
               <div class="flex items-center gap-3">
                 <GameTile :id="activeRow?.gameId ?? activeRow?.key ?? custom ?? ''" :name="activeRow?.name ?? custom ?? ''" :icon="activeRow?.icon ?? null" :size="40" />
@@ -297,17 +237,21 @@ function ownGame() {
 
               <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="add-game-error">{{ error }}</p>
               <div class="bg-card sticky bottom-0 -mx-5 -mb-5 mt-auto px-5 py-3">
-                <Button :disabled="busy" data-testid="panel-add" @click="pick(active)">
-                  {{ activeRow?.workspaceId ? t("addGame.open") : panelTicks.length && activeRow ? t("addGame.addWith", { count: panelTicks.length }) : t("addGame.add") }}
-                </Button>
+                <Button :disabled="busy" data-testid="panel-add" @click="pick(active)">{{ addLabel }}</Button>
               </div>
             </template>
             <p v-else class="text-muted-foreground text-sm">{{ t("addGame.noModules") }}</p>
           </section>
+          <!-- Stacked in a small window the panel sits below the whole list, so its action stays in view here. -->
+          <div v-if="activeRow || custom" class="bg-card sticky bottom-0 z-10 flex items-center gap-3 border-t px-4 py-2 @[620px]:hidden" aria-hidden="true">
+            <GameTile :id="activeRow?.gameId ?? activeRow?.key ?? custom ?? ''" :name="activeRow?.name ?? custom ?? ''" :icon="activeRow?.icon ?? null" :size="28" />
+            <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ activeRow?.name ?? custom }}</span>
+            <Button size="sm" tabindex="-1" :disabled="busy" data-testid="panel-add-compact" @click="pick(active)">{{ addLabel }}</Button>
+          </div>
         </div>
       </div>
 
-      <div class="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs">
+      <div class="text-muted-foreground flex flex-none flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs">
         <span aria-hidden="true"
           ><Kbd class="font-sans">↑</Kbd> <Kbd class="font-sans">↓</Kbd> {{ t("addGame.hint.move") }} · <Kbd class="font-sans">Tab</Kbd> {{ t("addGame.hint.ticks") }} ·
           <Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("addGame.hint.add") }}</span
