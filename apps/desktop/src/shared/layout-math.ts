@@ -147,6 +147,33 @@ export function nudge(rect: Rect, direction: "left" | "right" | "up" | "down", c
   };
 }
 
+/** The box around several rectangles (frames selected together); null for none. */
+export function boundsOf(rects: readonly Rect[]): Rect | null {
+  if (rects.length === 0) return null;
+  const left = Math.min(...rects.map((rect) => rect.x));
+  const top = Math.min(...rects.map((rect) => rect.y));
+  const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
+ * Frames moved together by (dx, dy): only as far as the whole group stays on the canvas, so they keep their places to each
+ * other. (The box of the group can be snapped or nudged first, and the difference passed here.)
+ */
+export function moveGroup(rects: readonly Rect[], dx: number, dy: number, canvas: Canvas): Rect[] {
+  const box = boundsOf(rects);
+  if (!box) return [];
+  const x = clamp(Math.round(box.x + dx), 0, Math.max(0, canvas.width - box.width)) - box.x;
+  const y = clamp(Math.round(box.y + dy), 0, Math.max(0, canvas.height - box.height)) - box.y;
+  return rects.map((rect) => ({ ...rect, x: rect.x + x, y: rect.y + y }));
+}
+
+/** Whether two rectangles touch or overlap (a rubber band selects every frame it touches). */
+export function touches(a: Rect, b: Rect): boolean {
+  return a.x <= b.x + b.width && b.x <= a.x + a.width && a.y <= b.y + b.height && b.y <= a.y + a.height;
+}
+
 /** The canvas for a game window of this shape: the reference height and the width that matches. */
 export function canvasFor(aspect: number): Canvas {
   const valid = Number.isFinite(aspect) && aspect > 0.2 && aspect < 8 ? aspect : 16 / 9;

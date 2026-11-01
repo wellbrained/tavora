@@ -152,6 +152,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     layouts: [] as (string | null)[],
     notices: [] as string[],
     removedKeys: [] as HotkeyRecord[],
+    restoredKeys: [] as HotkeyRecord[],
     movedKeys: [] as { from: HotkeyRecord | undefined; to: unknown }[],
     /** Panel instances whose type no longer allows being in the game. */
     notAllowed: new Set<string>(),
@@ -203,6 +204,8 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
         for (const record of matches) world.removedKeys.push(record);
       },
       keyOf: () => null,
+      keyRecord: (binding) => keys.find((record) => record.owner === binding.owner && record.moduleId === binding.moduleId && record.workspaceId === binding.workspaceId && record.action === binding.action && record.target === binding.target) ?? null,
+      restoreKey: (record) => void world.restoredKeys.push(record),
     },
     installed: { shown: (id) => world.modules.get(id) },
     workspaces: {
@@ -517,6 +520,43 @@ describe("modes and settings", () => {
     // The game keeps its setup, now empty.
     expect(service.layout.setups()).toEqual(["$everywhere", "$all", "elden"]);
     expect(service.layout.items("elden")).toEqual([]);
+  });
+
+  it("puts an item back exactly for undo on the Overlay page, with its key and its place in the list", async () => {
+    const { service, key, world } = await setup();
+    show(service);
+    show(service, CLOCK, "elden", "item-2");
+    const subject = { owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "elden", key: "item-1" };
+    const ref = { kind: "overlay" as const, subject };
+    service.update(subject, { opacity: 50, mode: "toggle" });
+    const record = key(toggleBinding(subject));
+    const kept = service.layout.state("elden", ref)!;
+    expect(kept).toMatchObject({ index: 0, key: record, item: { opacity: 50, mode: "toggle" } });
+    expect(service.layout.put("elden", ref, null)).toBe(true);
+    expect(service.layout.items("elden").map((info) => info.ref.kind === "overlay" && info.ref.subject.key)).toEqual(["item-2"]);
+    expect(world.removedKeys).toEqual([record]);
+    expect(service.layout.put("elden", ref, kept)).toBe(true);
+    expect(service.layout.items("elden").map((info) => info.ref.kind === "overlay" && info.ref.subject.key)).toEqual(["item-1", "item-2"]);
+    expect(service.layout.state("elden", ref)).toMatchObject({ index: 0, item: { opacity: 50, mode: "toggle", rect: kept.item.rect } });
+    expect(world.restoredKeys).toEqual([record]);
+    // Changed in place: its settings and place become the kept ones.
+    service.update(subject, { opacity: 25 });
+    expect(service.layout.put("elden", ref, kept)).toBe(true);
+    expect(service.layout.state("elden", ref)!.item.opacity).toBe(50);
+  });
+
+  it("can't put an item back whose module is gone, or into a full setup", async () => {
+    const { service, world } = await setup();
+    show(service);
+    const ref = { kind: "overlay" as const, subject: { owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "elden", key: "item-1" } };
+    const kept = service.layout.state("elden", ref)!;
+    service.layout.put("elden", ref, null);
+    for (let index = 0; index < LIMITS.maxGameOverlays; index++) show(service, CLOCK, "elden", `other-${index}`);
+    expect(service.layout.put("elden", ref, kept)).toBe(false);
+    service.layout.put("elden", { kind: "overlay", subject: { ...ref.subject, key: "other-0" } }, null);
+    world.modules.delete(CLOCK.manifest.id);
+    expect(service.layout.put("elden", ref, kept)).toBe(false);
+    expect(service.layout.state("elden", ref)).toBeNull();
   });
 
   it("tells Settings the switches, and the Overlay layout the items by setup", async () => {

@@ -118,29 +118,38 @@ function nearest(first: number, second: number, third: number): number {
   return second <= third ? 1 : 2;
 }
 
+/** How far the rectangle is from each edge of `game` and from its centre, in pixels (centre: positive to the right and down). */
+function distances(rect: Rect, game: Rect) {
+  const left = rect.x - game.x;
+  const top = rect.y - game.y;
+  return {
+    left,
+    top,
+    right: game.width - left - rect.width,
+    bottom: game.height - top - rect.height,
+    center: left + rect.width / 2 - game.width / 2,
+    middle: top + rect.height / 2 - game.height / 2,
+  };
+}
+
 /**
  * The anchored rectangle of a rectangle on screen inside the game window `game`: it anchors to the nearest edge or the
  * centre on each axis (a tie goes to left and top, then right and bottom).
  */
 export function anchorOf(rect: Rect, game: Rect): AnchoredRect {
   if (game.width <= 0 || game.height <= 0) return { ...DEFAULT_RECT };
+  const away = distances(rect, game);
+  const horizontal = (["left", "right", "center"] as const)[nearest(Math.abs(away.left), Math.abs(away.right), Math.abs(away.center))]!;
+  const vertical = (["top", "bottom", "middle"] as const)[nearest(Math.abs(away.top), Math.abs(away.bottom), Math.abs(away.middle))]!;
+  return anchorIn(rect, game, horizontal, vertical);
+}
+
+/** The anchored rectangle of a rectangle on screen inside `game`, kept to the anchors given (frames moved together keep their own). */
+export function anchorIn(rect: Rect, game: Rect, h: HorizontalAnchor, v: VerticalAnchor): AnchoredRect {
+  if (game.width <= 0 || game.height <= 0) return { ...DEFAULT_RECT };
   const unit = game.height;
-  const left = rect.x - game.x;
-  const top = rect.y - game.y;
-  const right = game.width - left - rect.width;
-  const bottom = game.height - top - rect.height;
-  const centreX = left + rect.width / 2 - game.width / 2;
-  const centreY = top + rect.height / 2 - game.height / 2;
-  const horizontal = nearest(Math.abs(left), Math.abs(right), Math.abs(centreX));
-  const vertical = nearest(Math.abs(top), Math.abs(bottom), Math.abs(centreY));
-  return normalizeAnchored({
-    h: (["left", "right", "center"] as const)[horizontal],
-    v: (["top", "bottom", "middle"] as const)[vertical],
-    x: [left, right, centreX][horizontal]! / unit,
-    y: [top, bottom, centreY][vertical]! / unit,
-    width: rect.width / unit,
-    height: rect.height / unit,
-  })!;
+  const away = distances(rect, game);
+  return normalizeAnchored({ h, v, x: away[h] / unit, y: away[v] / unit, width: rect.width / unit, height: rect.height / unit })!;
 }
 
 /** A legacy rectangle that makes sense, or null (what version 2 files held). */

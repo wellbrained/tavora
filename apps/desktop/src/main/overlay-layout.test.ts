@@ -42,6 +42,7 @@ interface Item {
   panel?: boolean;
   page?: boolean;
   opacity?: 100 | 75 | 50 | 25;
+  hideFromCapture?: boolean;
 }
 
 function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handles?: Record<string, string>; running?: string[]; sources?: SourcePanel[]; startSizes?: { overlay?: { width: number; height: number }; panel?: { width: number; height: number } }; monitors?: { id: number; width: number; height: number }[]; capture?: Buffer | null | "throws"; choose?: Buffer | "cancelled" | "bad"; enabled?: boolean } = {}) {
@@ -63,6 +64,8 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     /** The copies asked for, and what the next one answers with. */
     copies: [] as { from: string; to: string; mode: string }[],
     copyOutcome: { copied: 1, skipped: [], removed: { overlays: [], panels: [] } } as CopyOutcome | null,
+    /** The copy really copies the items (Copy to… undo). */
+    copyItems: false,
     closedWindow: () => {},
     captured: [] as { handle: string; size: { width: number; height: number } }[],
     enabled: options.enabled ?? true,
@@ -73,6 +76,10 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     running: new Set(options.running ?? Object.keys(options.handles ?? {})),
     /** Sizes asked for by Reset size: the window they were worked out on. */
     sizedOn: [] as { width: number; height: number }[],
+    /** What undo and redo wrote: the setup, and whether the item is there after. */
+    puts: [] as { setupId: string; there: boolean }[],
+    /** Undo can't put an item back (its setup is full now). */
+    refusePut: false,
   };
   const info = (item: Item): LayoutItemInfo => {
     const subject = { owner: "official", moduleId: "tavora.clock-counter", workspaceId: item.gameId, key: item.key };
@@ -84,7 +91,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
       scope: item.scope,
       mode: item.mode ?? "always",
       opacity: item.opacity ?? 100,
-      hideFromCapture: false,
+      hideFromCapture: item.hideFromCapture ?? false,
       rect: item.rect,
       ...(item.legacy ? { legacy: item.legacy } : {}),
       hotkey: null,
@@ -133,15 +140,58 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     },
     copy: (from, to, mode) => {
       world.copies.push({ from, to, mode });
+      if (world.copyItems) {
+        if (mode === "replace") world.items = world.items.filter((item) => setupOf(item) !== to);
+        world.items.push(...world.items.filter((item) => setupOf(item) === from).map((item) => ({ ...item, setup: to })));
+      }
       return world.copyOutcome;
     },
     startSize: (ref, size) => {
       world.sizedOn.push(size);
       return ref.kind === "panel" ? (options.startSizes?.panel ?? { width: DEFAULT_PANEL_ANCHORED.width, height: DEFAULT_PANEL_ANCHORED.height }) : (options.startSizes?.overlay ?? { width: DEFAULT_RECT.width, height: DEFAULT_RECT.height });
     },
-    setOverlay: (_setup, _subject, change) => void world.changed.push({ overlay: change }),
-    setPanel: (_setup, _id, change) => void world.changed.push({ panel: change }),
-    remove: (_setup, ref) => void world.removed.push(ref),
+    setOverlay: (setupId, subject, change) => {
+      world.changed.push({ overlay: change });
+      const item = find(setupId, { kind: "overlay", subject });
+      if (item) Object.assign(item, change);
+    },
+    setPanel: (setupId, instanceId, change) => {
+      world.changed.push({ panel: change });
+      const item = find(setupId, { kind: "panel", instanceId });
+      if (item) Object.assign(item, change);
+    },
+    remove: (setupId, ref) => {
+      world.removed.push(ref);
+      const item = find(setupId, ref);
+      if (item) world.items = world.items.filter((other) => other !== item);
+    },
+    state: (setupId, ref) => {
+      const item = find(setupId, ref);
+      if (!item) return null;
+      const settings = { mode: item.mode ?? "always", opacity: item.opacity ?? 100, hideFromCapture: item.hideFromCapture ?? false, rect: { ...item.rect }, ...(item.legacy ? { legacy: { ...item.legacy } } : {}) };
+      const who = { owner: "official", moduleId: "tavora.clock-counter", workspaceId: item.gameId };
+      return { item: item.panel ? { ...who, instanceId: item.key, ...settings } : { ...who, key: item.key, ...settings }, index: world.items.indexOf(item), key: null };
+    },
+    put: (setupId, ref, state) => {
+      world.puts.push({ setupId, there: state !== null });
+      const item = find(setupId, ref);
+      if (!state) {
+        if (item) world.items = world.items.filter((other) => other !== item);
+        return true;
+      }
+      if (world.refusePut) return false;
+      const { mode, opacity, hideFromCapture, rect, legacy } = state.item;
+      const settings = { mode, opacity, hideFromCapture, rect: { ...rect }, ...(legacy ? { legacy: { ...legacy } } : {}) };
+      if (item) {
+        delete item.legacy;
+        Object.assign(item, settings);
+        return true;
+      }
+      const key = "instanceId" in state.item ? state.item.instanceId : state.item.key;
+      const back: Item = { key, gameId: state.item.workspaceId, scope: state.item.workspaceId === "personal" ? "all" : "game", setup: setupId, ...settings, ...(ref.kind === "panel" ? { panel: true } : {}) };
+      world.items.splice(Math.min(state.index, world.items.length), 0, back);
+      return true;
+    },
     layerOpen: () => false,
   };
   const window: LayoutWindow = {
@@ -714,19 +764,26 @@ describe("undo and redo", () => {
     expect(layout.view().items[0]!.placed).toEqual(item.placed);
   });
 
-  it("drops the steps of an item that was removed, and starts over for another game", () => {
+  it("drops the step of an item that was removed elsewhere, and keeps each setup's own steps", () => {
     const { layout, world } = setup([clock("a"), clock("b", "poe2")], { seen: { ...SEEN, poe2: { width: 1920, height: 1080 } } });
     layout.open("elden");
     layout.handle({ type: "commit", id: layout.view().items[0]!.id, rect: { x: 500, y: 500, width: 400, height: 200 } }, false);
+    // Its module took it out: the step can't be taken back, and goes when tried.
     world.items = world.items.filter((item) => item.key !== "a");
     layout.refresh();
+    layout.handle({ type: "undo" }, true);
     expect(layout.view().canUndo).toBe(false);
-    world.items.push(clock("c", "poe2"));
-    layout.handle({ type: "game", gameId: "poe2" }, true);
+    expect(world.items.map((item) => item.key)).toEqual(["b"]);
+    world.items.push(clock("c", "elden"));
     layout.handle({ type: "commit", id: layout.view().items[0]!.id, rect: { x: 500, y: 500, width: 400, height: 200 } }, false);
-    expect(layout.view().canUndo).toBe(true);
-    layout.handle({ type: "game", gameId: "elden" }, true);
+    layout.handle({ type: "game", gameId: "poe2" }, true);
     expect(layout.view()).toMatchObject({ canUndo: false, canRedo: false });
+    layout.handle({ type: "game", gameId: "elden" }, true);
+    expect(layout.view().canUndo).toBe(true);
+    // A new visit of the page starts over.
+    layout.close();
+    layout.open("elden");
+    expect(layout.view().canUndo).toBe(false);
   });
 });
 
@@ -1356,6 +1413,161 @@ describe("adding and moving", () => {
   });
 });
 
+describe("several frames at once", () => {
+  const SEEN = { elden: { width: 1920, height: 1080 } };
+  const three = () => [clock("a", "elden", at(0.1, 0.1, 0.2, 0.2)), clock("b", "elden", { h: "right", v: "bottom", x: 0.1, y: 0.1, width: 0.2, height: 0.2 }), clock("c", "elden", at(0.5, 0.5, 0.1, 0.1))];
+
+  it("selects several, keeps the order they were picked in, and has no one selection then", () => {
+    const { layout } = setup(three(), { seen: SEEN });
+    layout.open("elden");
+    const [a, b] = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "select", ids: [b!, a!, "gone"] }, false);
+    expect(layout.view()).toMatchObject({ selected: [b, a], selection: null });
+    layout.handle({ type: "select", ids: [a!] }, false);
+    expect(layout.view()).toMatchObject({ selected: [a], selection: a });
+    layout.handle({ type: "select", id: null }, false);
+    expect(layout.view().selected).toEqual([]);
+  });
+
+  it("moves several as one step, each keeping its own anchors", () => {
+    const { layout, world } = setup(three(), { seen: SEEN });
+    layout.open("elden");
+    const [a, b] = layout.view().items;
+    const before = world.items.map((item) => item.rect);
+    // Both 300 to the left and 100 up: b, anchored to the bottom right, stays anchored there.
+    const shift = (rect: { x: number; y: number; width: number; height: number }) => ({ ...rect, x: rect.x - 100, y: rect.y - 100 });
+    layout.handle({ type: "commit", rects: [{ id: a!.id, rect: shift(a!.placed) }, { id: b!.id, rect: shift(b!.placed) }] }, false);
+    expect(world.items[0]!.rect).toMatchObject({ h: "left", v: "top" });
+    expect(world.items[0]!.rect.x).toBeCloseTo(0.1 - 100 / 1080, 5);
+    expect(world.items[1]!.rect).toMatchObject({ h: "right", v: "bottom" });
+    expect(world.items[1]!.rect.x).toBeCloseTo(0.1 + 100 / 1080, 5);
+    expect(world.items[1]!.rect.y).toBeCloseTo(0.1 + 100 / 1080, 5);
+    // Still the same distance apart on the canvas.
+    const moved = layout.view().items;
+    expect(moved[1]!.placed.x - moved[0]!.placed.x).toBe(b!.placed.x - a!.placed.x);
+    layout.handle({ type: "undo" }, true);
+    expect(world.items.map((item) => item.rect)).toEqual(before);
+    expect(layout.view().canUndo).toBe(false);
+    expect(layout.view().selected).toEqual([a!.id, b!.id]);
+  });
+
+  it("anchors one frame moved alone to its nearest edges, as before", () => {
+    const { layout, world } = setup(three(), { seen: SEEN });
+    layout.open("elden");
+    const b = layout.view().items[1]!;
+    layout.handle({ type: "commit", rects: [{ id: b.id, rect: { ...b.placed, x: 40, y: 40 } }] }, false);
+    expect(world.items[1]!.rect).toMatchObject({ h: "left", v: "top" });
+  });
+
+  it("removes several as one step, and undo brings each back exactly, hidden ones too", () => {
+    const items = three();
+    items[0]!.opacity = 50;
+    items[0]!.mode = "toggle";
+    const { layout, world } = setup(items, { seen: SEEN });
+    layout.open("elden");
+    const [a, b, c] = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "canvas-hidden", id: a!, hidden: true }, false);
+    const kept = layout.view().items;
+    layout.handle({ type: "select", ids: [a!, c!] }, false);
+    layout.handle({ type: "remove", ids: [a!, c!] }, false);
+    expect(world.items.map((item) => item.key)).toEqual(["b"]);
+    expect(layout.view().selected).toEqual([]);
+    layout.handle({ type: "undo" }, false);
+    // Back in their places in the list, with their place, opacity and mode.
+    expect(layout.view().items).toEqual(kept);
+    expect(layout.view().items.map((item) => [item.id, item.hiddenOnCanvas])).toEqual([
+      [a, true],
+      [b, false],
+      [c, false],
+    ]);
+    expect(layout.view().selected).toEqual([a, c]);
+    layout.handle({ type: "redo" }, false);
+    expect(world.items.map((item) => item.key)).toEqual(["b"]);
+    // Two steps back: the removal, then the hiding.
+    layout.handle({ type: "undo" }, false);
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().items[0]!.hiddenOnCanvas).toBe(false);
+    expect(layout.view().canUndo).toBe(false);
+  });
+
+  it("hides several on the canvas as one step", () => {
+    const { layout } = setup(three(), { seen: SEEN });
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "canvas-hidden", ids, hidden: true }, false);
+    expect(layout.view().items.every((item) => item.hiddenOnCanvas)).toBe(true);
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().items.some((item) => item.hiddenOnCanvas)).toBe(false);
+    expect(layout.view().canUndo).toBe(false);
+  });
+
+  it("resets the position of several as one step", () => {
+    const { layout, world } = setup(three(), { seen: SEEN });
+    layout.open("elden");
+    const before = world.items.map((item) => item.rect);
+    layout.handle({ type: "reset", ids: layout.view().items.map((item) => item.id) }, false);
+    expect(world.items.every((item) => item.rect.h === "left" && item.rect.x === DEFAULT_RECT.x)).toBe(true);
+    layout.handle({ type: "undo" }, false);
+    expect(world.items.map((item) => item.rect)).toEqual(before);
+    expect(layout.view().canUndo).toBe(false);
+  });
+
+  it("sets Show, Opacity and Hide from capture on several as one step", () => {
+    const items = three();
+    items[1]!.opacity = 75;
+    const { layout, world } = setup(items, { seen: SEEN });
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "set", ids, change: { opacity: 25 } }, true);
+    layout.handle({ type: "set", ids: ids.slice(0, 2), change: { hideFromCapture: true, mode: "toggle" } }, true);
+    expect(layout.view().items.map((item) => [item.opacity, item.hideFromCapture, item.mode])).toEqual([
+      [25, true, "toggle"],
+      [25, true, "toggle"],
+      [25, false, "always"],
+    ]);
+    layout.handle({ type: "undo" }, true);
+    layout.handle({ type: "undo" }, true);
+    expect(world.items.map((item) => item.opacity ?? 100)).toEqual([100, 75, 100]);
+    expect(layout.view().items.map((item) => item.mode)).toEqual(["always", "always", "always"]);
+  });
+
+  it("takes adding a frame back, and adds it again", () => {
+    const { layout, world } = setup([clock("a", "elden")], { sources: [panel("map", "elden")] });
+    layout.open("elden");
+    layout.handle({ type: "add-source", id: "map" }, true);
+    expect(layout.view().items).toHaveLength(2);
+    layout.handle({ type: "undo" }, true);
+    expect(world.items.map((item) => item.key)).toEqual(["a"]);
+    layout.handle({ type: "redo" }, true);
+    expect(world.items.map((item) => item.key)).toEqual(["a", "map"]);
+    expect(layout.view().selection).toBe("panel\nmap");
+  });
+
+  it("takes Move to… back in both setups", () => {
+    const { layout, world } = setup([{ key: "p", gameId: "personal", scope: "all", setup: LAYOUT_EVERYWHERE, rect: at(0.1, 0.1, 0.2, 0.2), opacity: 50 }]);
+    layout.open(LAYOUT_EVERYWHERE);
+    const id = layout.view().items[0]!.id;
+    layout.handle({ type: "move", id, to: LAYOUT_ALL_GAMES }, true);
+    expect(world.items[0]!.setup).toBe(LAYOUT_ALL_GAMES);
+    layout.handle({ type: "undo" }, true);
+    expect(world.items.map((item) => [item.setup, item.opacity])).toEqual([[LAYOUT_EVERYWHERE, 50]]);
+    expect(layout.view().selection).toBe(id);
+    layout.handle({ type: "redo" }, true);
+    expect(world.items.map((item) => item.setup)).toEqual([LAYOUT_ALL_GAMES]);
+  });
+
+  it("leaves the frames as they are when one can't be brought back", () => {
+    const { layout, world } = setup(three(), { seen: SEEN });
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "remove", ids: ids.slice(0, 2) }, false);
+    world.refusePut = true;
+    layout.handle({ type: "undo" }, false);
+    expect(world.items.map((item) => item.key)).toEqual(["c"]);
+    expect(layout.view().canUndo).toBe(false);
+  });
+});
+
 describe("copying a setup to a game", () => {
   const outcome = (copied: number, skipped: CopyOutcome["skipped"] = []): CopyOutcome => ({ copied, skipped, removed: { overlays: [], panels: [] } });
 
@@ -1418,6 +1630,18 @@ describe("copying a setup to a game", () => {
     layout.handle({ type: "copy-setup", to: "valheim", mode: "replace" }, false);
     expect(world.copies).toEqual([]);
     expect(layout.view().copied).toBeNull();
+  });
+
+  it("takes a copy back in one step, and the game's setup is as it was", () => {
+    const { layout, world } = setup([{ key: "p", gameId: "personal", scope: "all", setup: "elden", rect: at(0.1, 0.1, 0.2, 0.2) }, { key: "own", gameId: "poe2", scope: "game", rect: at(0.3, 0.3, 0.2, 0.2), opacity: 50 }]);
+    world.copyItems = true;
+    layout.open("elden");
+    layout.handle({ type: "copy-setup", to: "poe2", mode: "replace" }, true);
+    expect(world.items.filter((item) => setupOf(item) === "poe2").map((item) => item.key)).toEqual(["p"]);
+    layout.handle({ type: "undo" }, true);
+    expect(world.items.filter((item) => setupOf(item) === "poe2").map((item) => [item.key, item.opacity])).toEqual([["own", 50]]);
+    layout.handle({ type: "redo" }, true);
+    expect(world.items.filter((item) => setupOf(item) === "poe2").map((item) => item.key)).toEqual(["p"]);
   });
 
   it("drops the note when the page is closed, shows the game it went to, or another setup is picked", () => {
