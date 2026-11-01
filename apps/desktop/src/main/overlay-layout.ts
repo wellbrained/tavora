@@ -61,7 +61,7 @@ export interface OverlayLayoutOptions<W extends LayoutWindow = LayoutWindow> {
   source: LayoutSource;
   pictures: LayoutPictures;
   /** The library's workspaces: a game's name, null once it is gone. */
-  workspaces: Pick<WorkspaceNames, "name">;
+  workspaces: Pick<WorkspaceNames, "name" | "games">;
   /** The main screen's work area (DIPs): the canvas takes its shape for a game whose window was never seen. */
   screen(): Rect;
   /** The connected monitors in their own pixels, the main one first: the choices of "Preview as". */
@@ -161,6 +161,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   private bounds: Rect | null = null;
   private covered = false;
   private notice: string | null = null;
+  /** The note after Copy to…: what it did and the game it went to; forgotten when another setup is shown. */
+  private copied: { gameId: string; text: string } | null = null;
   /** Where an item is while it is dragged, in canvas units. */
   private readonly dragging = new Map<string, Rect>();
   private picture: string | null = null;
@@ -201,6 +203,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     this.histories.clear();
     this.selection = [];
     this.notice = null;
+    this.copied = null;
     this.sentView = "";
     this.window = this.options.openWindow({ closed: () => this.closed() });
     // A page's panel starts or stops publishing without telling the layout; looked at again every second.
@@ -214,6 +217,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     this.gameId = gameId;
     this.selection = [];
     this.notice = null;
+    this.copied = null;
     this.dragging.clear();
   }
 
@@ -245,6 +249,15 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   private games(): { id: string; name: string }[] {
     const list = this.options.source.setups().filter(isGameSetup).map((id) => ({ id, name: this.options.workspaces.name(id) ?? id })).sort((a, b) => a.name.localeCompare(b.name));
     return [{ id: LAYOUT_EVERYWHERE, name: this.text("overlays.everywhere") }, { id: LAYOUT_ALL_GAMES, name: this.text("overlays.allGames") }, ...list];
+  }
+
+  /** The games Copy to… lists, in name order: every game workspace but the setup shown, with the frames its own setup has. */
+  private copyTargets(setupId: string): { id: string; name: string; frames: number }[] {
+    return this.options.workspaces
+      .games()
+      .filter((game) => game.id !== setupId)
+      .map((game) => ({ id: game.id, name: game.name, frames: this.itemsOf(game.id).length }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /**
@@ -393,6 +406,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     return {
       games,
       sources: this.sources(gameId, infos, panels),
+      copyTargets: this.copyTargets(gameId),
       limit: LIMITS.maxGameOverlays,
       gameId,
       canvas: shape.canvas,
@@ -411,6 +425,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       canRedo: history.canRedo,
       enabled: this.options.settings.gameOverlays,
       notice: this.notice,
+      copied: this.copied,
     };
   }
 
@@ -507,6 +522,10 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         if (!fromShell) return;
         this.addSource(message.id, message.key);
         break;
+      case "copy-setup":
+        if (!fromShell) return;
+        this.copySetup(message.to, message.mode);
+        break;
       case "move":
         if (!fromShell) return;
         this.moveItem(message.id, message.to);
@@ -583,6 +602,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         return;
       case "dismiss-notice":
         this.notice = null;
+        this.copied = null;
         break;
     }
     this.refresh();
@@ -787,6 +807,52 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         }
       },
     );
+  }
+
+  /** Copy to…: the frames of the setup shown go into a game's setup, and a note says what went and what could not. */
+  private copySetup(to: string, mode: "replace" | "add"): void {
+    const from = this.current(this.games());
+    const target = this.copyTargets(from).find((game) => game.id === to);
+    if (!target) return;
+    const ids = () => this.itemsOf(to).map((info) => info.id);
+    const before = new Map(ids().map((id) => [id, this.snapshot(to, id)]));
+    const outcome = this.options.source.copy(from, to, mode);
+    // One undo step in the setup shown puts the other game's setup back as it was.
+    const touched = [...new Set([...before.keys(), ...ids()])];
+    this.history(from).record(touched.map((id) => ({ setupId: to, id, before: before.get(id) ?? null, after: this.snapshot(to, id) })));
+    if (!outcome) {
+      this.copied = null;
+      return this.say("overlays.copy.nothing");
+    }
+    const skips = this.skipText(outcome.skipped);
+    if (outcome.copied === 0) {
+      this.copied = null;
+      this.notice = [this.text("overlays.copy.none"), skips].filter(Boolean).join(" ");
+    } else {
+      this.notice = null;
+      const name = target.name;
+      this.copied = { gameId: to, text: skips ? `${translate(this.options.language(), "overlays.copy.copied", { count: outcome.copied, game: name })} ${skips}` : translate(this.options.language(), "overlays.copy.copiedTo", { game: name }) };
+    }
+    this.sentView = "";
+    this.refresh();
+  }
+
+  /** The sentences about what a copy left out: frames that only work in one game, ones that can't show over a game, ones already there, ones that did not fit. */
+  private skipText(skipped: readonly { reason: "game-only" | "not-in-game" | "exists" | "full"; workspaceId: string }[]): string {
+    const language = this.options.language();
+    const count = (reason: string) => skipped.filter((item) => item.reason === reason);
+    const sentences: string[] = [];
+    const only = count("game-only");
+    if (only.length > 0) {
+      const games = new Set(only.map((item) => item.workspaceId));
+      const game = games.size === 1 ? (this.options.workspaces.name([...games][0]!) ?? "") : "";
+      sentences.push(translate(language, game ? "overlays.copy.skipGame" : "overlays.copy.skipGames", { count: only.length, game }));
+    }
+    for (const [reason, key] of [["not-in-game", "overlays.copy.skipNotInGame"], ["exists", "overlays.copy.skipExists"], ["full", "overlays.copy.skipFull"]] as const) {
+      const found = count(reason).length;
+      if (found > 0) sentences.push(translate(language, key, { count: found, max: LIMITS.maxGameOverlays }));
+    }
+    return sentences.join(" ");
   }
 
   /** Move to…: the item goes to another setup, if its workspace may be there, with its place and settings. */

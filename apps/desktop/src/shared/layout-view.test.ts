@@ -22,6 +22,8 @@ describe("parseLayoutMessage", () => {
     const rect = { x: 10, y: 20, width: 30, height: 40 };
     expect(parseLayoutMessage({ type: "game", gameId: "poe2" })).toEqual({ type: "game", gameId: "poe2" });
     expect(parseLayoutMessage({ type: "grid", grid: "coarse" })).toEqual({ type: "grid", grid: "coarse" });
+    expect(parseLayoutMessage({ type: "copy-setup", to: "valheim", mode: "add" })).toEqual({ type: "copy-setup", to: "valheim", mode: "add" });
+    expect(parseLayoutMessage({ type: "copy-setup", to: "valheim", mode: "replace", extra: 1 })).toEqual({ type: "copy-setup", to: "valheim", mode: "replace" });
     expect(parseLayoutMessage({ type: "select", id: "a" })).toEqual({ type: "select", id: "a" });
     expect(parseLayoutMessage({ type: "select", id: null })).toEqual({ type: "select", id: null });
     expect(parseLayoutMessage({ type: "bounds", bounds: rect })).toEqual({ type: "bounds", bounds: rect });
@@ -50,6 +52,9 @@ describe("parseLayoutMessage", () => {
     expect(parseLayoutMessage({ type: "game", gameId: "" })).toBeNull();
     expect(parseLayoutMessage({ type: "game", gameId: "x".repeat(200) })).toBeNull();
     expect(parseLayoutMessage({ type: "grid", grid: "huge" })).toBeNull();
+    expect(parseLayoutMessage({ type: "copy-setup", to: "valheim", mode: "merge" })).toBeNull();
+    expect(parseLayoutMessage({ type: "copy-setup", to: "", mode: "add" })).toBeNull();
+    expect(parseLayoutMessage({ type: "copy-setup", mode: "add" })).toBeNull();
     expect(parseLayoutMessage({ type: "select", id: 3 })).toBeNull();
     expect(parseLayoutMessage({ type: "bounds", bounds: { x: 0 } })).toBeNull();
     expect(parseLayoutMessage({ type: "cover", covered: "yes" })).toBeNull();

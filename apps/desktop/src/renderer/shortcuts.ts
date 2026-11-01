@@ -7,6 +7,8 @@ import { t } from "./i18n";
 const MAC = navigator.platform.startsWith("Mac");
 /** The modifier key's name: Cmd on a Mac, otherwise Ctrl (Strg in German). */
 export const MOD = (): string => (MAC ? "Cmd" : t("shortcuts.ctrl"));
+/** A label with its shortcut after it, as a tooltip shows it: "Undo (Ctrl+Z)", "Undo (Cmd+Z)" on a Mac. */
+export const withShortcut = (label: string, key: string): string => `${label} (${MOD()}+${key})`;
 
 export interface ShortcutRow {
   action: string;

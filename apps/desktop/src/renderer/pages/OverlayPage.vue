@@ -13,9 +13,12 @@ import { GRID_SETTINGS, type GridSetting } from "../../shared/layout-math";
 import { state } from "../host";
 import { t } from "../i18n";
 import HeaderTools from "../components/workspace/HeaderTools.vue";
+import OverlayCopied from "../components/layout/OverlayCopied.vue";
+import OverlayCopy from "../components/layout/OverlayCopy.vue";
 import OverlaySettings from "../components/layout/OverlaySettings.vue";
 import OverlaySources from "../components/layout/OverlaySources.vue";
 import { selectedItems, send, stills, useLayoutKeys, view } from "../components/layout/layout-state";
+import { withShortcut } from "../shortcuts";
 
 useLayoutKeys();
 
@@ -147,6 +150,7 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
             <span class="text-muted-foreground">{{ t("overlays.layout.setup") }}</span>
             <Picker v-model="setup" :options="setupOptions" :label="t('overlays.layout.setup')" testid="layout-game" />
           </label>
+          <OverlayCopy />
           <div class="flex items-center gap-2 text-sm">
             <span class="text-muted-foreground">{{ t("overlays.layout.grid") }}</span>
             <SegmentedControl v-model="grid" :options="gridOptions" :label="t('overlays.layout.grid')" />
@@ -156,19 +160,18 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
             <Picker v-model="previewChoice" :options="previewOptions" :label="t('overlays.layout.previewAs')" testid="layout-preview" />
           </label>
           <div class="flex items-center gap-1">
-            <Button variant="ghost" size="icon-sm" :disabled="!view.canUndo" :aria-label="t('overlays.layout.undo')" :title="t('overlays.layout.undo')" data-testid="layout-undo" @click="send({ type: 'undo' })"><Undo2 :stroke-width="1.5" /></Button>
-            <Button variant="ghost" size="icon-sm" :disabled="!view.canRedo" :aria-label="t('overlays.layout.redo')" :title="t('overlays.layout.redo')" data-testid="layout-redo" @click="send({ type: 'redo' })"><Redo2 :stroke-width="1.5" /></Button>
+            <Button variant="ghost" size="icon-sm" :disabled="!view.canUndo" :aria-label="t('overlays.layout.undo')" :title="withShortcut(t('overlays.layout.undo'), 'Z')" data-testid="layout-undo" @click="send({ type: 'undo' })"><Undo2 :stroke-width="1.5" /></Button>
+            <Button variant="ghost" size="icon-sm" :disabled="!view.canRedo" :aria-label="t('overlays.layout.redo')" :title="withShortcut(t('overlays.layout.redo'), 'Y')" data-testid="layout-redo" @click="send({ type: 'redo' })"><Redo2 :stroke-width="1.5" /></Button>
           </div>
           <div class="ml-auto flex flex-wrap items-center gap-2">
-            <!-- A disabled button shows no hint of its own, so the hint sits on its wrapper. Everywhere and All games have no one window to take. -->
-            <span v-if="isGame" class="inline-flex" :title="pictureHint ?? undefined" data-testid="layout-take-picture-hint">
-              <Button variant="secondary" size="sm" :disabled="!view.canTakePicture" :aria-description="pictureHint ?? undefined" data-testid="layout-take-picture" @click="send({ type: 'take-picture' })">{{ t("overlays.layout.takePicture") }}</Button>
-            </span>
+            <!-- Off, it still shows why: a disabled button with a title keeps its hint (see the kit's Button). Everywhere and All games have no one window to take. -->
+            <Button v-if="isGame" variant="secondary" size="sm" :disabled="!view.canTakePicture" :title="pictureHint ?? undefined" :aria-description="pictureHint ?? undefined" data-testid="layout-take-picture" @click="send({ type: 'take-picture' })">{{ t("overlays.layout.takePicture") }}</Button>
             <Button variant="secondary" size="sm" data-testid="layout-choose-picture" @click="send({ type: 'choose-picture' })"><ImageIcon :stroke-width="1.5" />{{ t("overlays.layout.choosePicture") }}</Button>
             <Button v-if="view.picture" variant="ghost" size="sm" data-testid="layout-remove-picture" @click="send({ type: 'remove-picture' })"><Trash2 :stroke-width="1.5" />{{ t("overlays.layout.removePicture") }}</Button>
           </div>
         </div>
-        <div v-if="view.notice || !view.enabled" class="flex flex-col gap-2 border-b px-3 py-2">
+        <div v-if="view.notice || view.copied || !view.enabled" class="flex flex-col gap-2 border-b px-3 py-2">
+          <OverlayCopied />
           <Notice v-if="view.notice" variant="warning" data-testid="layout-notice">
             {{ view.notice }}
             <template #action><Button variant="ghost" size="xs" @click="send({ type: 'dismiss-notice' })">{{ t("common.close") }}</Button></template>

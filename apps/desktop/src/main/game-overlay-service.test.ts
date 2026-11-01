@@ -2139,6 +2139,44 @@ describe("the Overlay page", () => {
     expect(service.layout.items("elden").map((item) => item.id)).toEqual([`panel\n${PANEL}`]);
   });
 
+  it("copies a setup to a game with place and settings, takes the keys of what a replace removed for good, and shows the result at once", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    const panel = { owner: "official", moduleId: TODOS.manifest.id, workspaceId: "personal", instanceId: PANEL };
+    service.layout.addPanel("$all", panel);
+    service.layout.setPanel("$all", PANEL, { opacity: 50, mode: "toggle" });
+    service.addSetup("poe2");
+    // poe2 has its own overlay (only for poe2) and the copy of the panel from All games; Elden Ring has its own overlay too.
+    service.show(CLOCK, "poe2", "mine");
+    key(toggleBinding({ owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "poe2", key: "mine" }));
+    const changes = world.changes;
+    const outcome = service.layout.copy("elden", "poe2", "replace");
+    // Elden Ring's overlay only works in Elden Ring; poe2 has nothing else of Elden Ring's to take, so its own stays.
+    expect(outcome).toMatchObject({ copied: 0, skipped: [{ reason: "game-only", workspaceId: "elden" }] });
+    expect(service.layout.items("poe2").map((item) => item.name)).toContain("Clock & Counter");
+    expect(world.removedKeys).toEqual([]);
+
+    // All games to poe2: the panel replaces poe2's setup, and poe2's own overlay loses its key (no other setup has it).
+    const copied = service.layout.copy("$all", "poe2", "replace")!;
+    expect(copied.copied).toBe(1);
+    expect(service.layout.items("poe2").map((item) => item.ref.kind)).toEqual(["panel"]);
+    expect(service.layout.items("poe2")[0]).toMatchObject({ opacity: 50, mode: "toggle" });
+    expect(world.removedKeys.map((record) => record.target)).toEqual(["mine"]);
+    expect(world.changes).toBeGreaterThan(changes);
+  });
+
+  it("copies nothing a panel's type does not allow in game, and a copy with nothing in it changes nothing", async () => {
+    const { service, world } = await setup();
+    const panel = { owner: "official", moduleId: TODOS.manifest.id, workspaceId: "personal", instanceId: PANEL };
+    service.layout.addPanel("$everywhere", panel);
+    world.notAllowed.add(PANEL);
+    const changes = world.changes;
+    expect(service.layout.copy("$everywhere", "poe2", "replace")).toMatchObject({ copied: 0, skipped: [{ reason: "not-in-game", workspaceId: "personal" }] });
+    expect(service.layout.setups()).not.toContain("poe2");
+    expect(world.changes).toBe(changes);
+    expect(service.layout.copy("$everywhere", "$all", "replace")).toBeNull();
+  });
+
   it("puts a panel into a setup at the size its module prefers, once", async () => {
     const { service, world } = await setup();
     world.preferred.set(PANEL, { width: 360, height: 200 });

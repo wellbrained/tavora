@@ -10,6 +10,16 @@ The page edits one [overlay setup](overlay-setups.md) at a time; its dropdown li
 - Moving an item in the in-game layer writes to the setup it shows from.
 - Removing an item takes it out of the chosen setup only; closing its panel or hiding the overlay from its module takes it out of every setup.
 
+## Copy to…
+
+Next to the setup dropdown, Copy to… lists every game workspace but the one shown (those with a setup, with their frame count, and those without). It sends `{ type: "copy-setup", to, mode }`; `OverlayLayout` asks `GameOverlays.layout.copy`, which calls `GameOverlayStore.copySetup`.
+
+- A game with frames asks first (`replace` / `add` / cancel); one without is copied to at once and gets a setup of its own, empty at the start, never seeded from All games.
+- Copied: place (the anchored rectangle, so it fits any window), mode, opacity, Hide from capture, and the item itself (a module overlay by its subject and key, a panel by its instance id, so what #597 adds to an item travels with it). Never copied: the game's picture, and hotkeys (they are per item and already work in every setup it is in).
+- Left out and named in the note: a game workspace's items that only work in another game (`allowedIn`), panels whose type can't show over a game, items the target has already (`add`: its own place stays) and items past the limit of 8.
+- `replace` with nothing that can go in changes nothing. Items a `replace` took out of the game and that are in no setup any more lose their key, as with Remove.
+- The note carries Show, which sends the usual `game` message; it goes away with the next setup you pick or Close.
+
 ## Canvas and capture
 
 `OverlayLayout` owns selection, drag previews, undo and messages. `GameOverlays.layout` resolves positions for the controller; the runtime uses the same resolved positions for overlays, interactive panels and panel live views.
@@ -32,7 +42,7 @@ An empty setup shows "Add something from the list on the right" in the canvas, n
 
 ## Undo
 
-`OverlayLayout` keeps one `LayoutHistory` (`shared/layout-history.ts`) per setup, in memory, cleared when the page is opened again. A step is one user action: add, remove (one or many), hide or show on the canvas, move or resize (one or many), Reset position or size, Move to…, a change in the Settings box. It holds snapshots, not commands: for each item it touched, in each setup it touched it in, the item's whole saved state before and after (`LayoutSource.state`: the stored item, its index in the setup's list and its toggle key) and whether it was hidden on the canvas, or null where it wasn't in that setup. Undo writes every "before" back, redo every "after" (`LayoutSource.put`): an item that isn't there is put back exactly (same place in the list, settings, position and key; its module must still show it, a panel must still be open, the setup must have room), one that is there gets its settings and position, null takes it out. Items leave first, so a swap in a full setup works. A step applies only while every item is still as the step left it; one changed since (moved in the game, removed by its module) is never written over: the step is dropped and the one before it is tried. A write that fails puts back what was written and drops the step. Saved data is unchanged.
+`OverlayLayout` keeps one `LayoutHistory` (`shared/layout-history.ts`) per setup, in memory, cleared when the page is opened again. A step is one user action: add, remove (one or many), hide or show on the canvas, move or resize (one or many), Reset position or size, Move to… (both setups), Copy to… (the game's setup it went into), a change in the Settings box. It holds snapshots, not commands: for each item it touched, in each setup it touched it in, the item's whole saved state before and after (`LayoutSource.state`: the stored item, its index in the setup's list and its toggle key) and whether it was hidden on the canvas, or null where it wasn't in that setup. Undo writes every "before" back, redo every "after" (`LayoutSource.put`): an item that isn't there is put back exactly (same place in the list, settings, position and key; its module must still show it, a panel must still be open, the setup must have room), one that is there gets its settings and position, null takes it out. Items leave first, so a swap in a full setup works. A step applies only while every item is still as the step left it; one changed since (moved in the game, removed by its module) is never written over: the step is dropped and the one before it is tried. A write that fails puts back what was written and drops the step. Saved data is unchanged.
 
 ## Keys, the item toolbar and Settings
 
@@ -49,5 +59,5 @@ The list keeps its order whatever is added, removed or searched: workspaces, the
 ## Checks
 
 - Unit coverage: `game-overlays.test.ts`, `game-overlay-service.test.ts`, `overlay-layout.test.ts`, `layout-history.test.ts`, `layout-math.test.ts` and `layout-view.test.ts`.
-- Electron coverage: `pnpm --filter @tavora/desktop exec playwright test overlay-layout.spec.ts` exercises the move from a version-4 file, Del, the item toolbar, Settings over the page, per-setup places and opacity, opacity stills, mouse dragging/resizing, reset buttons, selecting several (Ctrl+click, a box), Del of several and undo, the Sources list, Add overlay / Remove overlay and Back; `overlay-button.spec.ts` the header button.
+- Electron coverage: `pnpm --filter @tavora/desktop exec playwright test overlay-layout.spec.ts` exercises the move from a version-4 file, Del, the item toolbar, Settings over the page, per-setup places and opacity, opacity stills, mouse dragging/resizing, reset buttons, selecting several (Ctrl+click, a box), Del of several and undo, the Sources list, Add overlay / Remove overlay, Copy to… and Back; `overlay-button.spec.ts` the header button.
 - Real-game screenshot capture still needs a live-game check; hidden Electron tests cannot verify it.

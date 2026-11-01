@@ -724,3 +724,142 @@ describe("the Live badge", () => {
     expect(isLive(false, 0)).toBe(false);
   });
 });
+
+describe("copying a setup to a game", () => {
+  const always = () => true;
+
+  /** Elden Ring's setup: its own overlay, a personal overlay and panel, and a panel of its own. */
+  async function elden() {
+    const store = await loadStore(dir);
+    store.add("elden", subject("own", "elden"));
+    store.add("elden", subject("clock", "personal"));
+    store.update(subject("clock", "personal"), { mode: "toggle", opacity: 50, hideFromCapture: true, rect: at(0.4, 0.3, 0.2, 0.1) }, "elden");
+    store.addPanel("elden", panel(ID, "personal"));
+    store.addPanel("elden", panel(ID2, "elden"));
+    return store;
+  }
+
+  it("keeps place, mode, opacity and hide from capture of what can show in the game, and says what stayed behind", async () => {
+    const store = await elden();
+    const outcome = store.copySetup("elden", "valheim", "replace", always)!;
+    expect(outcome).toEqual({ copied: 2, skipped: [{ reason: "game-only", workspaceId: "elden" }, { reason: "game-only", workspaceId: "elden" }], removed: { overlays: [], panels: [] } });
+    expect(keys(store, "valheim")).toEqual(["personal/clock"]);
+    expect(panelIds(store, "valheim")).toEqual([ID]);
+    expect(store.find(subject("clock", "personal"), "valheim")).toEqual(store.find(subject("clock", "personal"), "elden"));
+    expect(store.find(subject("clock", "personal"), "valheim")).toMatchObject({ mode: "toggle", opacity: 50, hideFromCapture: true, rect: at(0.4, 0.3, 0.2, 0.1) });
+    // The source stays as it was, and the copy is its own: a change in one leaves the other.
+    expect(keys(store, "elden")).toEqual(["elden/own", "personal/clock"]);
+    store.update(subject("clock", "personal"), { opacity: 25 }, "valheim");
+    expect(store.find(subject("clock", "personal"), "elden")!.opacity).toBe(50);
+  });
+
+  it("copies from Everywhere and All games too, and a game workspace's own items back into its game", async () => {
+    const store = await loadStore(dir);
+    store.add(ALL_GAMES, subject("timer", "personal"));
+    store.add(EVERYWHERE, subject("note", "personal"));
+    expect(store.copySetup(ALL_GAMES, "elden", "replace", always)!.copied).toBe(1);
+    expect(store.copySetup(EVERYWHERE, "elden", "add", always)!.copied).toBe(1);
+    expect(keys(store, "elden")).toEqual(["personal/timer", "personal/note"]);
+    // poe2's setup starts with a copy of All games' timer, which Elden Ring has already; its own overlay can't go to Elden Ring.
+    store.add("poe2", subject("own", "poe2"));
+    expect(store.copySetup("poe2", "elden", "add", always)!.skipped).toEqual([{ reason: "game-only", workspaceId: "poe2" }, { reason: "exists", workspaceId: "personal" }]);
+    expect(keys(store, "elden")).toEqual(["personal/timer", "personal/note"]);
+  });
+
+  it("keeps each frame's key, so several frames of one panel stay separate, each with its own place and settings", async () => {
+    const store = await loadStore(dir);
+    store.add("elden", subject("item-7", "personal"));
+    store.add("elden", subject("group-main", "personal"));
+    store.update(subject("group-main", "personal"), { mode: "toggle", rect: at(0.6, 0.6, 0.2, 0.1) }, "elden");
+    expect(store.copySetup("elden", "poe2", "replace", always)!.copied).toBe(2);
+    expect(keys(store, "poe2")).toEqual(["personal/item-7", "personal/group-main"]);
+    expect(store.find(subject("group-main", "personal"), "poe2")).toMatchObject({ mode: "toggle", rect: at(0.6, 0.6, 0.2, 0.1) });
+    expect(store.find(subject("item-7", "personal"), "poe2")).toMatchObject({ mode: "always" });
+  });
+
+  it("replaces what the game had, and lists what it took out", async () => {
+    const store = await elden();
+    store.add("poe2", subject("old", "poe2"));
+    store.add("poe2", subject("clock", "personal"));
+    store.addPanel("poe2", panel(ID3, "personal"));
+    const outcome = store.copySetup("elden", "poe2", "replace", always)!;
+    expect(keys(store, "poe2")).toEqual(["personal/clock"]);
+    expect(panelIds(store, "poe2")).toEqual([ID]);
+    expect(outcome.removed.overlays.map((overlay) => overlay.key)).toEqual(["old", "clock"]);
+    expect(outcome.removed.panels.map((item) => item.instanceId)).toEqual([ID3]);
+    // The place and settings are Elden Ring's now, not what poe2 had for the same item.
+    expect(store.find(subject("clock", "personal"), "poe2")).toMatchObject({ mode: "toggle", opacity: 50 });
+  });
+
+  it("adds after what the game has and keeps its own for an item both have", async () => {
+    const store = await elden();
+    store.add("poe2", subject("old", "poe2"));
+    store.add("poe2", subject("clock", "personal"));
+    store.update(subject("clock", "personal"), { opacity: 75 }, "poe2");
+    const outcome = store.copySetup("elden", "poe2", "add", always)!;
+    expect(outcome.copied).toBe(1);
+    expect(outcome.skipped).toEqual([
+      { reason: "game-only", workspaceId: "elden" },
+      { reason: "game-only", workspaceId: "elden" },
+      { reason: "exists", workspaceId: "personal" },
+    ]);
+    expect(keys(store, "poe2")).toEqual(["poe2/old", "personal/clock"]);
+    expect(store.find(subject("clock", "personal"), "poe2")!.opacity).toBe(75);
+    expect(panelIds(store, "poe2")).toEqual([ID]);
+    expect(outcome.removed).toEqual({ overlays: [], panels: [] });
+  });
+
+  it("stops at the limit and says how many did not fit", async () => {
+    const store = await loadStore(dir);
+    // The game's setup is made first, so it doesn't start with copies of All games' items.
+    for (let i = 0; i < LIMITS.maxGameOverlays - 1; i++) store.add("poe2", subject(`p-${i}`, "poe2"));
+    for (let i = 0; i < 3; i++) store.add(ALL_GAMES, subject(`g-${i}`, "personal"));
+    const outcome = store.copySetup(ALL_GAMES, "poe2", "add", always)!;
+    expect(outcome.copied).toBe(1);
+    expect(outcome.skipped.map((item) => item.reason)).toEqual(["full", "full"]);
+    expect(store.count("poe2")).toBe(LIMITS.maxGameOverlays);
+  });
+
+  it("leaves out a panel whose type can't show over a game, and never empties a game for a copy with nothing in it", async () => {
+    const store = await elden();
+    store.add("poe2", subject("old", "poe2"));
+    const outcome = store.copySetup("elden", "poe2", "replace", (item) => !("instanceId" in item));
+    expect(outcome!.copied).toBe(1);
+    expect(panelIds(store, "poe2")).toEqual([]);
+    expect(outcome!.skipped.filter((item) => item.reason === "not-in-game")).toHaveLength(1);
+
+    const own = await loadStore(dir);
+    own.add("elden", subject("own", "elden"));
+    own.add("poe2", subject("old", "poe2"));
+    expect(own.copySetup("elden", "poe2", "replace", always)).toEqual({ copied: 0, skipped: [{ reason: "game-only", workspaceId: "elden" }], removed: { overlays: [], panels: [] } });
+    expect(keys(own, "poe2")).toEqual(["poe2/old"]);
+  });
+
+  it("makes a setup for a game without one only when something goes in, and not with All games' items", async () => {
+    const store = await loadStore(dir);
+    store.add("elden", subject("own", "elden"));
+    store.add(ALL_GAMES, subject("timer", "personal"));
+    expect(store.copySetup("elden", "valheim", "add", always)!.copied).toBe(0);
+    expect(store.hasSetup("valheim")).toBe(false);
+    store.add("elden", subject("shared", "personal"));
+    expect(store.copySetup("elden", "valheim", "add", always)!.copied).toBe(1);
+    expect(keys(store, "valheim")).toEqual(["personal/shared"]);
+  });
+
+  it("refuses what is not a game, is the same setup, or has nothing to copy from", async () => {
+    const store = await elden();
+    expect(store.copySetup("elden", ALL_GAMES, "replace", always)).toBeNull();
+    expect(store.copySetup("elden", EVERYWHERE, "replace", always)).toBeNull();
+    expect(store.copySetup("elden", "elden", "replace", always)).toBeNull();
+    expect(store.copySetup("nowhere", "poe2", "replace", always)).toBeNull();
+  });
+
+  it("is kept across a restart", async () => {
+    const store = await elden();
+    store.copySetup("elden", "valheim", "replace", always);
+    await store.save();
+    const again = await loadStore(dir);
+    expect(keys(again, "valheim")).toEqual(["personal/clock"]);
+    expect(again.find(subject("clock", "personal"), "valheim")).toMatchObject({ mode: "toggle", opacity: 50, hideFromCapture: true });
+  });
+});

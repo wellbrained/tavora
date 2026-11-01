@@ -28,6 +28,33 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.49",
+    date: "2026-11-01",
+    title: "Buttons that are off still say why",
+    notes: [
+      "Hover a button that's switched off and its tooltip shows, so you can see why. Tab reaches it too.",
+      "On the Overlay page, Undo and Redo show their shortcut.",
+    ],
+    prs: [
+      { number: 599, title: "Disabled buttons keep their tooltip; Undo and Redo show their shortcut" },
+    ],
+    tags: ["hotkeys", "overlays", "ui-kit"],
+  },
+  {
+    version: "0.23.48",
+    date: "2026-11-01",
+    title: "Copy an overlay setup to another game",
+    notes: [
+      "On the Overlay page, press Copy to… next to Overlay for to copy the frames you see to another game.",
+      "A game that already has frames asks first: replace them or add to them.",
+      "Frames that only work in another game stay behind, and a note says so. Press Show to switch to the game you copied to.",
+    ],
+    prs: [
+      { number: 601, title: "Overlay page: Copy to… copies a setup's frames to another game" },
+    ],
+    tags: ["overlays"],
+  },
+  {
     version: "0.23.47",
     date: "2026-11-01",
     title: "A picture for every overlay, and Preview as",
