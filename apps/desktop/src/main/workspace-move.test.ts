@@ -116,6 +116,8 @@ const OLD_LIBRARY = {
   moduleFolders: {},
   moduleNotesSeen: { "official:tavora.notes": "1.4.0" },
   steamProfile: null,
+  installId: null,
+  askedModules: [],
   iconsOffered: ["hades"],
   language: "system",
   theme: { id: "tavora.default", variation: "dark" },

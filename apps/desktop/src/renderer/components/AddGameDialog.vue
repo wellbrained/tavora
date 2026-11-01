@@ -10,6 +10,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
+import { askKey, type AskedGame } from "../../shared/module-request";
 import { t } from "../i18n";
 import { addInputFor, defaultTicks, type PickerRow } from "../lib/game-picker";
 import { useGamePicker, whenOf } from "../lib/use-game-picker";
@@ -55,6 +56,50 @@ function toggle(moduleId: string, on: boolean) {
   if (!row) return;
   const rest = ticksOf(row).filter((id) => id !== moduleId);
   ticked.value = { ...ticked.value, [row.key]: on ? [...rest, moduleId] : rest };
+}
+
+// ── No modules ─────────────────────────────────────────────────────────
+
+/** Tavora's everyday modules, the ones worth naming first when they are installed. */
+const EVERYDAY = ["tavora.notes", "tavora.clock-counter", "tavora.todos", "tavora.whiteboard"];
+
+/** Up to two general modules (made for no game in particular) to name as examples: Tavora's own that are installed, else the catalog's. */
+const generalNames = computed(() => {
+  const own = (state.value?.modules ?? []).filter((module) => module.provenance === "official" && !module.development && module.id !== "tavora.browser");
+  const general = own.length ? own : (catalogModules.value ?? []).filter((module) => module.gameIds.length === 0);
+  const rank = (id: string) => (EVERYDAY.includes(id) ? EVERYDAY.indexOf(id) : EVERYDAY.length);
+  const sorted = [...general].sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name));
+  return [...new Set(sorted.map((module) => module.name))].slice(0, 2);
+});
+const noModulesText = computed(() => {
+  const name = activeRow.value?.name ?? custom.value ?? "";
+  const [first, second] = generalNames.value;
+  if (!first) return t("addGame.noModulesPlain", { name });
+  return t("addGame.noModulesLike", { name, examples: second ? t("addGame.or", { a: first, b: second }) : first });
+});
+
+/** The game the highlighted row stands for, as Ask for a module names it. Not the typed name: that one is not a game anyone listed. */
+const askedGame = computed<AskedGame | null>(() => {
+  const row = activeRow.value;
+  return row ? { name: row.name, steamAppId: row.installed?.steamAppId ?? row.online?.steamAppId ?? null, gameId: row.gameId } : null;
+});
+const asked = computed(() => askedGame.value !== null && (state.value?.library.askedModules ?? []).includes(askKey(askedGame.value)));
+const asking = ref(false);
+const askFailed = ref<{ key: string; message: string } | null>(null);
+const askError = computed(() => (askedGame.value && askFailed.value?.key === askKey(askedGame.value) ? askFailed.value.message : null));
+
+/** One anonymous vote for a module for this game. Never touches adding the game; a failure says so and the button stays. */
+async function askModule() {
+  const game = askedGame.value;
+  if (!game || asking.value) return;
+  asking.value = true;
+  askFailed.value = null;
+  try {
+    const result = await act({ type: "ask-module", ...game }, { quiet: true });
+    if (!result.ok) askFailed.value = { key: askKey(game), message: result.error };
+  } finally {
+    asking.value = false;
+  }
 }
 
 // ── Words ──────────────────────────────────────────────────────────────
@@ -226,9 +271,16 @@ function onPanelKey(event: KeyboardEvent) {
                       </span>
                     </label>
                   </template>
-                  <p v-else class="text-muted-foreground text-sm" data-testid="panel-no-modules">{{ t("addGame.noModules") }}</p>
+                  <div v-else class="flex flex-col items-start gap-3" data-testid="panel-no-modules">
+                    <p class="text-muted-foreground text-sm">{{ noModulesText }}</p>
+                    <p v-if="asked" class="text-muted-foreground text-sm" role="status" data-testid="ask-module-thanks">{{ t("addGame.askThanks") }}</p>
+                    <template v-else>
+                      <Button variant="outline" size="sm" :disabled="asking" data-testid="ask-module" @click="askModule">{{ t("addGame.ask", { name: activeRow?.name ?? "" }) }}</Button>
+                      <p v-if="askError" class="text-muted-foreground text-xs" role="alert" data-testid="ask-module-error">{{ askError }}</p>
+                    </template>
+                  </div>
                 </div>
-                <p v-else class="text-muted-foreground text-sm" data-testid="panel-no-modules">{{ t("addGame.noModules") }}</p>
+                <p v-else class="text-muted-foreground text-sm" data-testid="panel-no-modules">{{ noModulesText }}</p>
               </template>
 
               <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="add-game-error">{{ error }}</p>
@@ -236,7 +288,6 @@ function onPanelKey(event: KeyboardEvent) {
                 <Button :disabled="busy" data-testid="panel-add" @click="pick(active)">{{ addLabel }}</Button>
               </div>
             </template>
-            <p v-else-if="installedLoaded || name" class="text-muted-foreground text-sm">{{ t("addGame.noModules") }}</p>
           </section>
           <!-- Stacked in a small window the panel sits below the whole list, so its action stays in view here. -->
           <div v-if="activeRow || custom" class="bg-card sticky bottom-0 z-10 flex items-center gap-3 border-t px-4 py-2 @[620px]:hidden" aria-hidden="true">

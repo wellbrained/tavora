@@ -115,8 +115,9 @@ describe("deleting an account", () => {
     const opened = [...source.matchAll(/new (\w+)\(path\.join\(stateDir/g)].map((match) => match[1]).sort();
     const inLifecycle = { AccountStore: "accounts", CatalogStore: "catalog", CopyStore: "copies", ReviewStore: "reviews", ConversationStore: "conversations", LeaderboardStore: "leaderboards", IconState: "icons" };
     // Daily totals keep nothing about a person; the activity log is the maintainer's own record and holds only ids;
-    // the country lookup is a read-only map of IP ranges to countries.
-    const noAccountData = ["StatsStore", "ActivityLog", "CountryLookup"];
+    // the country lookup is a read-only map of IP ranges to countries; module requests are votes by an anonymous code per install
+    // and game, never tied to an account.
+    const noAccountData = ["StatsStore", "ActivityLog", "CountryLookup", "ModuleRequestStore"];
     expect(opened).toEqual([...Object.keys(inLifecycle), ...noAccountData].sort());
     const built = /accountLifecycle\(\{([^}]*)\}\)/.exec(source)?.[1] ?? "";
     for (const key of Object.values(inLifecycle)) expect(built).toMatch(new RegExp(`\\b${key}\\b`));

@@ -260,6 +260,13 @@ describe("Steam icons", () => {
     expect(emptyLibrary().steamProfile).toBeNull();
     expect(sanitizeLibrary({ steamProfile: "  https://steamcommunity.com/id/me " }).steamProfile).toBe("https://steamcommunity.com/id/me");
     for (const bad of ["", "   ", 5, "x".repeat(201)]) expect(sanitizeLibrary({ steamProfile: bad }).steamProfile).toBeNull();
+    // Ask for a module: a random install number kept on this PC, and the games asked for, each once.
+    expect(emptyLibrary().installId).toBeNull();
+    expect(emptyLibrary().askedModules).toEqual([]);
+    expect(sanitizeLibrary({ installId: "a".repeat(64) }).installId).toBe("a".repeat(64));
+    for (const bad of ["", "A".repeat(64), "a".repeat(63), 5]) expect(sanitizeLibrary({ installId: bad }).installId).toBeNull();
+    expect(sanitizeLibrary({ askedModules: ["steam:892970", "steam:892970", "", 5, "x".repeat(201), "name:siedler3"] }).askedModules).toEqual(["steam:892970", "name:siedler3"]);
+    expect(sanitizeLibrary({ askedModules: "nope" }).askedModules).toEqual([]);
     // Icons offered for games not in the library: known ids, each once.
     expect(emptyLibrary().iconsOffered).toEqual([]);
     expect(sanitizeLibrary({ iconsOffered: ["elden-ring", "elden-ring", "local-x", "../x", 5] }).iconsOffered).toEqual(["elden-ring"]);

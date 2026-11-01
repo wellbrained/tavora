@@ -132,6 +132,10 @@ export interface Library {
   steamProfile: string | null;
   /** Ids of games not in the library whose icon the user offered to the Tavora service (Steam import), so they are not offered again. */
   iconsOffered: string[];
+  /** A random number made the first time the user asks for a module; only a code made from it and a game leaves this PC (module-request.ts). */
+  installId: string | null;
+  /** The games the user asked a module for (module-request.ts keys), so the button there stays a thanks. */
+  askedModules: string[];
   /** The language of Tavora's texts: one of them, or the system's. */
   language: LanguageSetting;
   /** The ranks in the profile card: hidden by the user, and the period they show. */
@@ -174,6 +178,8 @@ export const MAX_NOTES_SEEN = 1000;
 export const MAX_MODULE_FOLDERS = 1000;
 /** Offered icons of games not in the library that are remembered; as many as a Steam import can list. */
 export const MAX_ICONS_OFFERED = 5000;
+/** Games asked a module for that are remembered. */
+export const MAX_ASKED_MODULES = 2000;
 
 /** Absolute paths only, each once (ignoring case on Windows), at most MAX_DEVELOPMENT_FOLDERS. */
 export function cleanDevelopmentFolders(values: unknown[]): string[] {
@@ -250,6 +256,8 @@ export function emptyLibrary(): Library {
     moduleNotesSeen: {},
     steamProfile: null,
     iconsOffered: [],
+    installId: null,
+    askedModules: [],
     language: "system",
     profileRanks: { hidden: false, period: "all" },
     profileBanner: null,
@@ -807,6 +815,10 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.steamProfile === "string" && saved.steamProfile.trim() && saved.steamProfile.length <= 200) library.steamProfile = saved.steamProfile.trim();
   if (Array.isArray(saved.iconsOffered)) {
     library.iconsOffered = [...new Set(saved.iconsOffered.filter((id): id is string => isGameId(id) && !id.startsWith("local-")))].slice(-MAX_ICONS_OFFERED);
+  }
+  if (typeof saved.installId === "string" && /^[0-9a-f]{64}$/.test(saved.installId)) library.installId = saved.installId;
+  if (Array.isArray(saved.askedModules)) {
+    library.askedModules = [...new Set(saved.askedModules.filter((key): key is string => typeof key === "string" && key.length > 0 && key.length <= 200))].slice(-MAX_ASKED_MODULES);
   }
   const theme = asRecord(saved.theme);
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };

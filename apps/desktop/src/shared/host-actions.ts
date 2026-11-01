@@ -378,6 +378,11 @@ export function hostActionTable(c: HostChecks) {
      * from the catalog, otherwise the listed one. Sends only the module id, its key and the zip's hash.
      */
     "report-catalog-module": { moduleId: c.moduleId, reason: oneOf(...MODULE_REPORT_REASONS), note: nullable(text(1000)) },
+    /**
+     * Asks for a module for a game that has none: one anonymous vote, sent only because the user pressed the button.
+     * It carries the game's name and ids and a code made from a random number on this PC and the game (module-request.ts).
+     */
+    "ask-module": { name: named(80), steamAppId: nullable(c.steamAppId), gameId: nullable(c.gameId) },
     /** Opens a catalog module's homepage like a module link: the address is the one the main process reads from the listing again. */
     "open-catalog-homepage": { moduleId: c.moduleId },
     /**

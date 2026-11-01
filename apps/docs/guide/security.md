@@ -263,7 +263,16 @@ Tavora's own modules (ids starting with `tavora.`) ship inside the app, and the 
 
 ## The Add a game list
 
-Tavora lists the games installed on your PC to order the Add a game picker. The main process reads them from what the launchers (Steam, Battle.net, Epic, GOG and Windows) keep on disk, and reads Steam's last-played times from its own files, read-only. Tavora also notes when it last saw each game running and uses the install date. This stays on your PC: it only orders the list, goes to Tavora's own window and nowhere else, is never sent to the Tavora service or any other address, and modules and Browser pages can't reach it.
+Tavora lists the games installed on your PC to order the Add a game picker. The main process reads them from what the launchers (Steam, Battle.net, Epic, GOG and Windows) keep on disk, and reads Steam's last-played times from its own files, read-only. Tavora also notes when it last saw each game running and uses the install date. This stays on your PC: it only orders the list, goes to Tavora's own window and nowhere else, is never sent to the Tavora service or any other address (the one exception is a game's name when you press Ask for a module, below), and modules and Browser pages can't reach it.
+
+## Ask for a module
+
+When a game has no modules, Add a game offers **Ask for a <game> module**. It is one click and needs no account, and nothing is sent before you press it. The main process then makes one request to Tavora's service, only while Online features are on, with no cookies, referrer or sign-in:
+
+- **What is sent:** the game's name, its Steam application id and Tavora's id for it when it has them, and a code. The code is made on your PC from a random number kept there and the game, so the service can count one vote per PC and game but can't tell which games came from the same PC, and it is not your account. Nothing else goes: not your other games, your modules or your address (the service doesn't keep addresses; it only uses it to limit how often one connection can ask).
+- **What is kept:** per game, its name and ids, how many votes it has and the day of the first and last vote; per vote, the code. The private admin page lists the games by votes. Nothing is shared or sold, and a vote is never tied to an account.
+- **Asking twice does nothing.** Pressing it again, or from the same PC on another day, doesn't add a vote. Tavora remembers on your PC that you asked, so the button turns into a thanks.
+- **It never blocks adding the game.** If the service can't be reached, the button says so and the game is added as usual. The service is limited to 20 votes an hour per connection.
 
 ## The Browser panel
 

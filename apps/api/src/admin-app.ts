@@ -22,6 +22,7 @@ import type { ReviewStore } from "./reviews.ts";
 import { accountName, createConversationNotifier, type ConversationStore } from "./conversations.ts";
 import { conversationsAdminRoutes, textsAdminRoutes } from "./conversations-admin.ts";
 import { leaderboardsAdminRoutes, type LeaderboardStore } from "./leaderboards.ts";
+import type { ModuleRequestStore } from "./module-requests.ts";
 import { statsRange, type StatsStore } from "./stats.ts";
 import type { Submissions } from "./submissions.ts";
 
@@ -78,6 +79,8 @@ export interface AdminOptions {
   stateDir?: string;
   /** The plain daily totals for GET /api/stats. Absent: the route answers 503. */
   stats?: StatsStore;
+  /** The votes for modules for games, for GET /api/module-requests. Absent: the route answers 503. */
+  moduleRequests?: ModuleRequestStore;
   /** The review before listing (`/api/moderation/*`; needs `catalog` and `accounts`): the scanner, and how developers are emailed. */
   /** The owner's address (MAINTAINER_EMAIL): that account is marked as the owner and can't be suspended or banned. */
   ownerEmail?: string;
@@ -90,7 +93,7 @@ export interface AdminOptions {
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, conversations, leaderboards, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moderation, ownerEmail, activity, lifecycle: given }: AdminOptions) {
+export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, conversations, leaderboards, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moduleRequests, moderation, ownerEmail, activity, lifecycle: given }: AdminOptions) {
   const lifecycle = given ?? (accounts ? accountLifecycle({ accounts, catalog, copies, reviews, conversations, leaderboards, icons: state }) : undefined);
   const app = new Hono();
   const expected = digest(token);
@@ -487,6 +490,11 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     const range = statsRange(context.req.query(), Date.now());
     if (!range) return context.json({ error: "Ask for ?days=1-730 or ?from=&to= as YYYY-MM-DD." }, 400);
     return context.json({ ...range, ...stats.series(range.from, range.to) });
+  });
+  // The games users asked a module for, most votes first (module-requests.ts).
+  app.get("/api/module-requests", (context) => {
+    if (!moduleRequests) return context.json({ error: "Module requests are off." }, 503);
+    return context.json({ requests: moduleRequests.ranked() });
   });
   // Approval: versions waiting for review, Approve, Decline, Ban, and the one-time check of what is live (moderation-admin.ts).
   if (catalog && accounts) app.route("/api/moderation", moderationRoutes({ catalog, accounts, ...moderation, ownerEmail, lifecycle }));

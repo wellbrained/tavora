@@ -49,7 +49,7 @@ An account is optional: email-code or Discord sign-in is available, but your loc
 
 Game workspaces and module data are stored on your PC. On Windows, installed Tavora uses `%APPDATA%\@tavora\desktop`. Pictures normally live under that profile; their folder can be moved in Settings. Tavora keeps local backups and has **Copy diagnostic info** for troubleshooting.
 
-Online features make their own connections: game search and accounts use Tavora's service; game icons can come from this PC, Steam and Tavora's icon service; Browser pages connect to the sites you open. Game search and icon fetching have switches in Settings.
+Online features make their own connections: game search and accounts use Tavora's service; game icons can come from this PC, Steam and Tavora's icon service; Browser pages connect to the sites you open. Game search and icon fetching have switches in Settings. Pressing Ask for a module for a game without modules sends that game's name and an anonymous code, nothing else.
 
 Module pages run in a sandbox. The host validates their requests, scopes stored data by publisher, module and workspace, and checks granted capabilities on every call. Network grants name the allowed hosts; Discord and AI Usage use dedicated host connectors. An installable module does not get arbitrary access to your files, processes or account credentials. See the [security model](https://docs.mytavora.app/guide/security) for the precise boundaries and known limits.
 
