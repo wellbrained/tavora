@@ -637,7 +637,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
 
   /** A frame just added gets the size its content needs and the first place where it covers no other frame. */
   private fitNew(setupId: string, info: LayoutItemInfo, source: OverlaySource | undefined): void {
-    const shape = this.shape(setupId);
+    // A new frame is placed in the shape the setup really has, whatever "Preview as" shows: it must start inside the real window.
+    const shape = { ...this.shape(setupId), canvas: this.shape(setupId).real };
     const size = this.fitSize(source, shape);
     if (!size) return;
     const others = this.itemsOf(setupId)

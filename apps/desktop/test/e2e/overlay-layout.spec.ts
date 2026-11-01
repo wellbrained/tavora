@@ -311,6 +311,62 @@ test("the sidebar sits where Settings > Overlays puts it", async () => {
   }
 });
 
+test("Dragging, resizing and the frame toolbar in another preview shape save through the anchored rectangle", async () => {
+  const userData = await newUserData();
+  await seed(userData);
+  const { app, page } = await launch(userData, [MODULES], { seed: false });
+  try {
+    await overlayPage(app, page, GAME);
+    await expect.poll(async () => (await state(page))?.items?.length).toBe(1);
+    const first = (await state(page)).items[0]!;
+    await row(page, first.id).getByRole("button").first().click();
+    await expect.poll(async () => (await state(page)).selection).toBe(first.id);
+    await page.getByRole("button", { name: "Preview as", exact: true }).click();
+    await page.getByTestId("layout-preview-option-32:9").click();
+    await expect.poll(async () => (await state(page)).canvas.width).toBe(3840);
+    // Only the preview changed: the saved rectangle is the one it was.
+    expect((await state(page)).items[0]!.rect).toEqual(first.rect);
+
+    // Drag it to the right end of the wide canvas with the mouse: it is saved anchored to the right edge.
+    const layer = layerOf(app);
+    const outline = layer.locator('[data-testid^="layout-item-"]').first();
+    await expect(outline).toBeVisible();
+    const box = (await outline.boundingBox())!;
+    const canvasWidth = (await page.getByTestId("layout-canvas").boundingBox())!.width;
+    await layer.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await layer.mouse.down();
+    await layer.mouse.move(canvasWidth - box.width / 2 - 8, box.y + box.height / 2, { steps: 8 });
+    await layer.mouse.up();
+    await expect.poll(async () => (await state(page)).items[0]!.rect.h).toBe("right");
+    const dragged = (await state(page)).items[0]!;
+    expect(dragged.rect.x).toBeLessThan(0.1);
+    expect(dragged.rect.width).toBeCloseTo(first.rect.width, 2);
+    expect(dragged.placed.x + dragged.placed.width).toBeGreaterThan(3840 - 100);
+
+    // Resize with the handle, then the toolbar's Reset size and Reset position.
+    const handle = layer.getByTestId("layout-handle-l");
+    const handleBox = (await handle.boundingBox())!;
+    await layer.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await layer.mouse.down();
+    await layer.mouse.move(handleBox.x + handleBox.width / 2 - 80, handleBox.y + handleBox.height / 2, { steps: 6 });
+    await layer.mouse.up();
+    await expect.poll(async () => (await state(page)).items[0]!.rect.width).toBeGreaterThan(dragged.rect.width);
+    expect((await state(page)).items[0]!.rect.h).toBe("right");
+    await layer.getByTestId("layout-frame-reset-size").click();
+    await expect.poll(async () => (await state(page)).items[0]!.rect.width).toBeCloseTo(first.rect.width, 2);
+    await layer.getByTestId("layout-frame-reset").click();
+    await expect.poll(async () => (await state(page)).items[0]!.rect).toMatchObject({ h: "left", v: "top", x: 0.036, y: 0.03 });
+
+    // Back in the real shape the frame is where the saved rectangle puts it.
+    await page.getByRole("button", { name: "Preview as", exact: true }).click();
+    await page.getByTestId("layout-preview-option-default").click();
+    await expect.poll(async () => (await state(page)).canvas.width).toBeLessThan(3840);
+    expect((await state(page)).items[0]!.placed).toMatchObject({ x: 39, y: 32 });
+  } finally {
+    await app.close();
+  }
+});
+
 /** A plain 1920 x 1080 picture of a "scene" (a sky, a ground and a few blocks), as PNG bytes. */
 function scenePng(): Buffer {
   const width = 1920;

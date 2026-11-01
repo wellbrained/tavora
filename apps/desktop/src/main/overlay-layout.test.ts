@@ -1046,6 +1046,43 @@ describe("Preview as", () => {
     expect(layout.view().items[0]!.placed).toMatchObject({ x: 39, y: 32 });
   });
 
+  it("saves a resize, Reset position and Reset size in another shape through the anchored rectangle, and undo takes them back", () => {
+    const start: AnchoredRect = { h: "right", v: "bottom", x: 0.05, y: 0.06, width: 0.1, height: 0.1 };
+    const { layout, world } = setup([{ ...clock("a"), rect: start }], { seen: { elden: { width: 1920, height: 1080 } }, startSizes: { overlay: { width: 0.2, height: 0.12 } } });
+    layout.open("elden");
+    layout.handle({ type: "preview", choice: "32:9" }, true);
+    const { id, placed } = layout.view().items[0]!;
+    expect(placed).toEqual({ x: 3840 - 108 - 54, y: 1080 - 108 - 65, width: 108, height: 108 });
+    // Wider on its left side (the layer's resize handle): still anchored to the right and bottom, now 300 wide.
+    layout.handle({ type: "commit", id, rect: { x: placed.x - 192, y: placed.y, width: 300, height: placed.height } }, false);
+    expect(world.items[0]!.rect).toMatchObject({ h: "right", v: "bottom", width: 300 / 1080, height: 0.1 });
+    expect(world.items[0]!.rect.x).toBeCloseTo(0.05);
+    expect(layout.view().items[0]!.placed).toEqual({ x: 3840 - 300 - 54, y: placed.y, width: 300, height: 108 });
+    layout.handle({ type: "reset-size", id }, true);
+    expect(world.items[0]!.rect).toMatchObject({ h: "right", v: "bottom", width: 0.2, height: 0.12 });
+    layout.handle({ type: "reset", id }, true);
+    expect(world.items[0]!.rect).toEqual({ ...DEFAULT_RECT, width: 0.2, height: 0.12 });
+    layout.handle({ type: "undo" }, true);
+    layout.handle({ type: "undo" }, true);
+    layout.handle({ type: "undo" }, true);
+    expect(world.items[0]!.rect).toEqual(start);
+    layout.handle({ type: "preview", choice: "default" }, true);
+    expect(layout.view().items[0]!.placed).toEqual({ x: 1920 - 108 - 54, y: 1080 - 108 - 65, width: 108, height: 108 });
+  });
+
+  it("starts a frame added in another shape inside the setup's real window, as without the preview", () => {
+    const things = [{ key: "d-1", name: "Countdown", size: { width: 120, height: 48 } }];
+    const rects = [] as AnchoredRect[];
+    for (const choice of ["default", "32:9"]) {
+      const { layout, world } = setup([], { sources: [panel("cc", "personal", { moduleId: "tavora.clock-counter", sources: things })] });
+      layout.open(LAYOUT_EVERYWHERE);
+      layout.handle({ type: "preview", choice }, true);
+      layout.handle({ type: "add-source", id: "cc", key: "d-1" }, true);
+      rects.push(world.items[0]!.rect);
+    }
+    expect(rects[1]).toEqual(rects[0]);
+  });
+
   it("is remembered per setup, only from the page, and only for choices the setup has", () => {
     const { layout } = setup([clock("a"), clock("b", "poe2")], { seen: { elden: { width: 1920, height: 1080 } }, monitors: MONITORS });
     layout.open("elden");
