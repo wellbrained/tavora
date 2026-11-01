@@ -1,30 +1,17 @@
 <script setup lang="ts">
 // Calculator: the sum and its result as you type, a keypad (the keyboard works too, with the Windows shortcuts @ for √,
 // q for x² and F9 for ±), Copy, and the workspace's last results. The toolbar switches between the Basic keypad and Plus,
-// which is laid out like the Windows one, and shows or hides the history; its ⚙ menu picks the history length, the
+// which is laid out like the Windows one, and shows or hides the history; its Settings dialog picks the history length, the
 // decimal places and the short form (1.5M) results show with. All of these hold in every workspace.
 // The keypad keeps a calculator size: its keys never shrink below a button nor grow past a big one. The history sits
 // beside it once the panel is wide enough for both, else below; a panel too short for both scrolls.
 // Save as… keeps the result under a name; the Values tab taps it into a sum, where it counts with its number now.
 // The history and the values are one document of the workspace, so every panel of the workspace shares them and sees
 // another panel's change at once.
-import { BookmarkPlus, Check, Copy, Delete, Ellipsis, History, Pencil, Settings2, Trash2 } from "@lucide/vue";
+import { BookmarkPlus, Check, Copy, Delete, Ellipsis, History, Pencil, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage, SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@tavora/official-ui/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
@@ -34,7 +21,8 @@ import { BASIC, keyAction, pasteKeys, PLUS, type Key } from "./keys";
 import { createListsStore, type ListsStore } from "./lists";
 import { locale, setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
-import { DECIMALS, DEFAULT_SETTINGS, HISTORY_LENGTHS, parseSettings, SETTINGS_KEY, type Decimals, type Mode, type Settings } from "./settings";
+import { DECIMALS, DEFAULT_SETTINGS, HISTORY_LENGTHS, parseSettings, SETTINGS_KEY, type Mode, type Settings } from "./settings";
+import SettingsDialog from "./SettingsDialog.vue";
 import ValueDialog from "./ValueDialog.vue";
 import { deleteValue, lookup, renameValue, saveValue, type Value } from "./values";
 
@@ -80,7 +68,10 @@ const mode = computed({ get: () => settings.value.mode, set: (value: Mode) => ch
 
 const keys = computed(() => (settings.value.mode === "basic" ? BASIC : PLUS));
 
-// The ⚙ menu's radio groups hand over strings.
+/** Settings is open. */
+const settingsOpen = ref(false);
+
+// The Settings dialog's controls hand over strings.
 const historyLength = computed({
   get: () => String(settings.value.historyLength),
   set: (value: string) => {
@@ -97,7 +88,6 @@ const decimals = computed({
     if (picked !== undefined) choose({ decimals: picked });
   },
 });
-const decimalsLabel = (option: Decimals) => (option === "auto" ? t("options.decimalsAuto") : String(option));
 /** The history as long as the player picked. */
 const recent = computed(() => history.value.slice(0, settings.value.historyLength));
 
@@ -286,42 +276,17 @@ onBeforeUnmount(() => {
       >
         <History :stroke-width="1.5" />
       </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="icon-sm" :aria-label="t('options.title')" :title="t('options.title')" data-testid="options">
-            <Settings2 :stroke-width="1.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" class="w-56">
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger data-testid="options-decimals">
-              {{ t("options.decimals") }}
-              <span class="text-muted-foreground ml-auto pl-2">{{ decimalsLabel(settings.decimals) }}</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuRadioGroup v-model="decimals">
-                <DropdownMenuRadioItem v-for="option in DECIMALS" :key="option" :value="String(option)" :data-testid="`decimals-${option}`">
-                  {{ decimalsLabel(option) }}
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuCheckboxItem
-            :model-value="settings.short"
-            data-testid="options-short"
-            @update:model-value="(on: boolean) => choose({ short: on })"
-          >
-            {{ t("options.short") }}
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>{{ t("options.historyLength") }}</DropdownMenuLabel>
-          <DropdownMenuRadioGroup v-model="historyLength">
-            <DropdownMenuRadioItem v-for="option in HISTORY_LENGTHS" :key="option" :value="String(option)" :data-testid="`history-length-${option}`">
-              {{ t("options.results", { count: option }) }}
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button variant="ghost" size="icon-sm" :aria-label="t('options.title')" :title="t('options.title')" data-testid="options" @click="settingsOpen = true">
+        <SettingsIcon :stroke-width="1.5" />
+      </Button>
+      <SettingsDialog
+        v-if="settingsOpen"
+        v-model:decimals="decimals"
+        v-model:history-length="historyLength"
+        :short="settings.short"
+        @update:short="(on: boolean) => choose({ short: on })"
+        @close="settingsOpen = false"
+      />
     </div>
     <p v-if="shownError" class="text-destructive flex-none px-3 pt-1 text-xs">{{ shownError }}</p>
     <div

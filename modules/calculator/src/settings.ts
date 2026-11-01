@@ -1,4 +1,4 @@
-// The user's Calculator choices from the toolbar and its ⚙ menu, the same in every workspace (kept in the module's app
+// The user's Calculator choices from the toolbar and its Settings dialog, the same in every workspace (kept in the module's app
 // storage).
 import type { JsonValue } from "@tavora/sdk";
 

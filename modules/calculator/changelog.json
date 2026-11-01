@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.9",
+    "date": "2026-11-01",
+    "notes": [
+      "Settings now open in a dialog in the middle of the panel, behind the usual gear icon."
+    ]
+  },
+  {
     "version": "0.1.8",
     "date": "2026-10-31",
     "notes": [

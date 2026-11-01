@@ -12,7 +12,8 @@ export const en = {
   "mode.basic": "Basic",
   "mode.plus": "Plus",
 
-  "options.title": "Options",
+  "options.title": "Settings",
+  done: "Done",
   "options.decimals": "Decimal places",
   "options.decimalsAuto": "Auto",
   "options.short": "Short numbers, like 1.5M",
@@ -91,7 +92,8 @@ export const de: Record<keyof typeof en, string> = {
   "mode.basic": "Einfach",
   "mode.plus": "Plus",
 
-  "options.title": "Optionen",
+  "options.title": "Einstellungen",
+  done: "Fertig",
   "options.decimals": "Nachkommastellen",
   "options.decimalsAuto": "Auto",
   "options.short": "Kurze Zahlen, wie 1,5M",
