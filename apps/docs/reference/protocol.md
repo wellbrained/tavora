@@ -598,12 +598,17 @@ Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain
 - `ui.tooltip.close({ id })` explicitly closes the owner's matching tooltip.
 - `ui.tooltipClosed` carries `{ id }` when the host dismisses or replaces details.
 
-`TooltipContent` contains a title (200 characters), optional subtitle, rarity
-`tone`, bundle-relative raster `image` (`dist/...png`, JPEG, WebP or GIF), up to
+`TooltipContent` contains a title (200 characters), optional subtitle, a `look`
+(`"neutral"`, the default, or `"poe"`), rarity `tone`, bundle-relative raster `image` (`dist/...png`, JPEG, WebP or GIF), up to
 8 badges and requirements, 20 properties, and 12 sections with up to 100 rows in
 total. A row has text, optional right-aligned badges/status and a connected-affix
 marker. Content is limited to 40,000 characters; no HTML, CSS or links. Raster
 assets are capped at 512 KB. See the SDK's exported types for individual bounds.
+
+The neutral look draws with Tavora's own colours and follows the user's theme; `tone` and the affix
+colours are ignored there. The `poe` look is the gold, brown and purple one of Path of Exile 2 item
+tooltips, with fixed colours; ask for it only for items that look like that in the game. A Tavora before
+this field rejects a tooltip that has `look` (`INVALID_PARAMS`), so be ready for `show` to fail.
 
 Use `ui.tooltip.onClose` to clear local pin state. Close details before changing
 source data or destroying the triggering UI. Underlying panels remain live.

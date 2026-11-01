@@ -22,10 +22,15 @@ export function checkTooltip(v: unknown): TooltipRequest {
     const o = obj(v, ["id", "at", "content", "pinned"]), anchor = checkTooltipAnchor({ id: o.id, at: o.at });
     if (o.pinned !== undefined && typeof o.pinned !== "boolean")
         fail();
-    const c = obj(o.content, ["title", "subtitle", "tone", "image", "badges", "requirements", "properties", "sections"]);
+    const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "badges", "requirements", "properties", "sections"]);
     const content: TooltipContent = { title: text(c.title, 200) };
     if (c.subtitle !== undefined)
         content.subtitle = text(c.subtitle, 300);
+    if (c.look !== undefined) {
+        if (!["neutral", "poe"].includes(c.look as string))
+            fail();
+        content.look = c.look as NonNullable<TooltipContent["look"]>;
+    }
     if (c.tone !== undefined) {
         if (!["normal", "magic", "rare", "unique"].includes(c.tone as string))
             fail();

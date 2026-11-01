@@ -71,3 +71,39 @@ test('a pinned tooltip stays on app focus loss and closes with a hidden source',
   await expect.poll(async()=> (await tooltip(app))?.visible).toBe(false);
  }finally{await app.close();}
 });
+
+test('the shared tooltip is neutral unless the content asks for the poe look', async () => {
+    const { app, page } = await launch(undefined, [await fixture()]);
+    try {
+        await openModule(page, ID);
+        await waitForShown(app, ID);
+        await expect.poll(() => inModule(app, ID, "document.querySelector('#result').textContent")).toBe('ready');
+        const content = { title: 'Armageddon Edge', tone: 'rare', properties: [{ label: 'Damage', value: '10 to 22' }], sections: [{ rows: [{ text: 'Adds 10 to 22 Physical Damage', badges: ['[P5]'] }] }] };
+        const looks = async (id: string, extra: object) => {
+            await input(app, 'mouseMove');
+            await inModule(app, ID, `call('ui.tooltip.show',{id:${JSON.stringify(id)},at:{x:110,y:130},content:${JSON.stringify({ ...content, ...extra })}})`);
+            await expect.poll(async () => (await tooltip(app))?.visible).toBe(true);
+            const style = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('data:text/html'))!.webContents.executeJavaScript('(()=>{const s=(e,p)=>getComputedStyle(document.querySelector(e))[p];return{poe:document.body.classList.contains("poe"),border:s("#card","borderTopColor"),radius:s("#card","borderTopLeftRadius"),title:s("h2","color"),value:s(".value","color"),bullet:getComputedStyle(document.querySelector("li .text"),"::before").color}})()'));
+            await inModule(app, ID, `call('ui.tooltip.close',{id:${JSON.stringify(id)}})`);
+            await expect.poll(async () => (await tooltip(app))?.visible).toBe(false);
+            return style;
+        };
+        // No look: neutral. Tavora's colours, no rarity colour, no gold or purple.
+        for (const style of [await looks('look:none', {}), await looks('look:neutral', { look: 'neutral' })]) {
+            expect(style.poe).toBe(false);
+            expect(style.border).not.toBe('rgb(129, 97, 62)');
+            expect(style.title).not.toBe('rgb(240, 221, 121)');
+            expect(style.value).not.toBe('rgb(170, 170, 255)');
+            expect(style.bullet).not.toBe('rgb(160, 139, 85)');
+            expect(style.radius).toBe('8px');
+        }
+        // The poe look keeps the colours the tooltip always had.
+        const poe = await looks('look:poe', { look: 'poe' });
+        expect(poe).toEqual({ poe: true, border: 'rgb(129, 97, 62)', radius: '0px', title: 'rgb(240, 221, 121)', value: 'rgb(170, 170, 255)', bullet: 'rgb(160, 139, 85)' });
+        // Any other look is refused.
+        expect(await inModule(app, ID, `call('ui.tooltip.show',{id:'look:bad',at:{x:110,y:130},content:{title:'x',look:'gold'}}).then(String,e=>e.code)`)).toBe('INVALID_PARAMS');
+    }
+    finally {
+        await app.close();
+    }
+});
