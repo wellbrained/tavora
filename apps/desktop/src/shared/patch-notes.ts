@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.72",
+    date: "2026-11-02",
+    title: "Maps and zoomable views share one set of controls",
+    notes: [
+      "Maps, trees and pictures have the same group in the corner: zoom out, the zoom % (click it to go back to 100 %), zoom in, and show the whole thing.",
+      "Double-click a map to zoom in toward that spot. Showing the whole thing glides there, unless your system is set to less motion.",
+    ],
+    prs: [
+      { number: 627, title: "Kit: one set of controls for maps and zoomable views" },
+    ],
+    tags: ["pdf-viewer", "ui-kit"],
+  },
+  {
     version: "0.23.71",
     date: "2026-11-02",
     title: "Clock & Counter settings are tidier",
