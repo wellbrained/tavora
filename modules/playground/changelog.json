@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.17",
+    "date": "2026-11-02",
+    "notes": [
+      "Settings shows a dialog with one page and one with several pages, with the rules for descriptions and units."
+    ]
+  },
+  {
     "version": "0.1.16",
     "date": "2026-11-02",
     "notes": [

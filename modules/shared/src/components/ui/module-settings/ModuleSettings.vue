@@ -3,8 +3,10 @@
 // module's own first, then an Overlays group with an on/off dot per overlay), the open page on the
 // right, and a footer to reset the page and see that changes are saved. Changes apply at once.
 // Each page is a SettingsPage. Undo after a reset shows as a toast, so the page needs a Toaster.
+// With only one page there is no menu: the rows sit straight on the dialog, which asks for a narrower size
+// (settingsDialogSize({ pages: 1 }) for panel.openDialog). There is no Done button; the dialog's close button is enough.
 import { Check, RotateCcw } from "@lucide/vue";
-import { onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { Button } from "../button";
 import { NavList, type NavGroup } from "../nav-list";
 import { uiText } from "../text";
@@ -21,6 +23,9 @@ const props = defineProps<{
   savedAt?: number;
 }>();
 const page = defineModel<string>("page", { required: true });
+
+/** Only one page: no menu to pick from. */
+const single = computed(() => props.groups.reduce((count, group) => count + group.items.length, 0) <= 1);
 
 // The page picked takes the old one's place: it fades in and settles from 4px below (a pick by key stays instant).
 const holder = ref<HTMLElement>();
@@ -46,8 +51,8 @@ function resetPage() {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0" data-slot="module-settings" data-testid="module-settings">
-    <NavList v-model="page" :groups="groups" :label="label" class="bg-background w-[200px] flex-none overflow-y-auto border-r p-3" />
+  <div class="flex h-full min-h-0" data-slot="module-settings" :data-single="single ? '' : undefined" data-testid="module-settings">
+    <NavList v-if="!single" v-model="page" :groups="groups" :label="label" class="bg-background w-[200px] flex-none overflow-y-auto border-r p-3" />
     <div class="flex min-w-0 flex-1 flex-col">
       <div ref="holder" class="flex min-h-0 flex-1 flex-col"><slot /></div>
       <footer class="text-muted-foreground flex h-12 flex-none items-center gap-2 border-t pr-6 pl-4 text-xs">

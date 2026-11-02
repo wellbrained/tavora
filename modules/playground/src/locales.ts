@@ -278,8 +278,14 @@ export const en = {
   "ex.map.TileMap": "Tile map",
   "ex.map.TileMap.note": "Pins close together merge into a group with a count; dots merge only among themselves. Give keyboards the same places as a list next to the map.",
 
-  "ex.settings.ModuleSettings": "Settings dialog",
-  "ex.settings.ModuleSettings.note": "960 × 680 in the app.",
+  "ex.settings.OnePage": "One page",
+  "ex.settings.OnePage.note": "Narrower than the usual 960 by the menu (760), and at least six rows tall. Ask for that size with settingsDialogSize({ pages: 1, rows }).",
+  "ex.settings.OnePage.rule": "One page has no menu: the rows sit straight on the dialog. Every row in a section has a description or none does, and units go in the description (\"In minutes.\"), never next to the last option.",
+  "ex.settings.SeveralPages": "Several pages",
+  "ex.settings.SeveralPages.note": "Like System Monitor: Show · Drives · Connection. 960 × 680 in the app.",
+  "ex.settings.SeveralPages.rule": "Every row in a section has a description or none does. Units go in the description (\"In seconds.\"), never next to the last option.",
+  "ex.settings.ModuleSettings": "With overlays",
+  "ex.settings.ModuleSettings.note": "Pages, then an Overlays group. 960 × 680 in the app.",
   "ex.settings.ModuleSettings.rule": "A module's settings page uses ModuleSettings and its parts, not a layout of its own.",
 };
 
@@ -562,7 +568,13 @@ export const de: Record<TextKey, string> = {
   "ex.map.TileMap": "Kachelkarte",
   "ex.map.TileMap.note": "Pins nah beieinander werden zu einer Gruppe mit Anzahl; Punkte nur untereinander. Gib der Tastatur dieselben Orte als Liste neben der Karte.",
 
-  "ex.settings.ModuleSettings": "Einstellungsdialog",
-  "ex.settings.ModuleSettings.note": "In der App 960 × 680.",
+  "ex.settings.OnePage": "Eine Seite",
+  "ex.settings.OnePage.note": "Um das Menü schmaler als die üblichen 960 (760) und mindestens sechs Zeilen hoch. Diese Größe fragst du mit settingsDialogSize({ pages: 1, rows }) an.",
+  "ex.settings.OnePage.rule": "Eine Seite hat kein Menü: Die Zeilen liegen direkt auf dem Dialog. In einem Abschnitt haben alle Zeilen eine Beschreibung oder keine, und Einheiten stehen in der Beschreibung (\"In Minuten.\"), nie neben der letzten Option.",
+  "ex.settings.SeveralPages": "Mehrere Seiten",
+  "ex.settings.SeveralPages.note": "Wie der System-Monitor: Anzeige · Laufwerke · Verbindung. In der App 960 × 680.",
+  "ex.settings.SeveralPages.rule": "In einem Abschnitt haben alle Zeilen eine Beschreibung oder keine. Einheiten stehen in der Beschreibung (\"In Sekunden.\"), nie neben der letzten Option.",
+  "ex.settings.ModuleSettings": "Mit Overlays",
+  "ex.settings.ModuleSettings.note": "Seiten, dann eine Gruppe Overlays. In der App 960 × 680.",
   "ex.settings.ModuleSettings.rule": "Die Einstellungsseite eines Moduls nutzt ModuleSettings und seine Teile, kein eigenes Layout.",
 };

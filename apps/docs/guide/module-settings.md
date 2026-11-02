@@ -19,10 +19,13 @@ While the dialog is open your page is the dialog: show the settings instead of t
 - **Page top.** A title and one sentence on what the page changes. An overlay's on/off switch or main action goes right under it, in a bar of its own, so it's the first thing users see.
 - **Preview.** Pages that change how something looks show it in a preview under the top, over a backdrop users can switch between a game-like scene, light and dark. It stays in place while the settings below scroll.
 - **Rows.** Each setting is a row: its name (and a short hint if needed) on the left, the control on the right in a column 224 px wide, the same on every page, so controls line up. A control too wide for the column goes under the name instead. Related rows share a section with a small heading.
+- **One page only.** A module with a single page has no menu: the rows sit straight on the dialog, and the dialog is narrower by the menu's width (760 px instead of 960) and at least six rows tall. `settingsDialogSize({ pages: 1, rows })` from `@tavora/official-ui/components/ui/module-settings` returns that size for `panel.openDialog`; with several pages it returns 960 × 680. A shorter dialog keeps the top edge of a taller one.
 - **Footer.** "Reset this page" puts only the open page back to its defaults and offers Undo. Next to it, a note that changes save as you make them.
 
 ## Behaviour
 
 - Every change applies and saves at once. There is no Save or Cancel button.
 - Pick the control that shows the choice best: a switch for on and off, segments for two to five short options (XS to XL for a size), a list for more or longer ones, swatches for colours, a slider with its value for numbers (in steps that matter: 5 % for opacity is plenty).
+- Inside a section either every row has a description or none does. Units go in the row's description ("In minutes."), never next to the last option.
+- There is no Done button: the dialog's own close button is enough.
 - Keep labels short; they share the row with the control. Check them in every language you ship.

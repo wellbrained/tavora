@@ -145,6 +145,21 @@ each pattern.
 - **Forms**: make the `form` `class="contents"` and put the `DialogFooter` inside it, so the Save button submits.
 - **Texts**: a title of a few words, one short sentence under it, in English and German like everything else.
 
+### Settings
+
+A module's settings are one dialog built from `ModuleSettings` and its parts (guide: [module-settings.md](../apps/docs/guide/module-settings.md)).
+The UI Playground (Tavora features > Settings) shows one page, several pages and pages with overlays.
+
+- **One page has no menu.** `ModuleSettings` with a single page leaves the menu out: the rows sit straight on the dialog
+  with thin lines between them, and the footer stays (Reset left, "Saved automatically" right). Ask the dialog for its
+  size with `settingsDialogSize({ pages, rows })` (from `ui/module-settings`) and pass it to `panel.openDialog`, never
+  numbers of your own: several pages get 960 × 680; one page is narrower by the menu (760) and at least six rows tall,
+  then grows with its rows up to 680 and scrolls. A shorter dialog hangs from the same top edge as a 680 one.
+- **No Done button.** Changes save at once and the frame has a close button; nothing in the settings closes the dialog.
+- **Descriptions**: inside one section either every row has a description or none does. Never one row with and one
+  without.
+- **Units go in the description** ("In minutes.", "In percent."), never next to the last option or inside the options.
+
 ## 4. Behaviour
 
 - **Connect** with `connectModule({ texts: { en, de } })`. It applies the theme now and on every change, the language,
@@ -227,6 +242,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Menus and tooltips anchor to their element; no hover-only actions.
 - [ ] Motion uses the kit's tokens, animates only `transform` and `opacity`, and leaves out anything a key starts.
 - [ ] Dialogs use the header, footer and `DialogButton` as in [Dialogs](#dialogs); a close-only button has no icon.
+- [ ] Settings use `ModuleSettings`, ask for their size with `settingsDialogSize`, have no Done button, and follow the [Settings](#settings) rules for descriptions and units.
 - [ ] Keyboard: Tab reaches everything, Escape closes, focus ring visible.
 - [ ] `pnpm typecheck`, `pnpm test` and `pnpm build` pass.
 - [ ] The module's `DESIGN.md` (if any) does not contradict this file.

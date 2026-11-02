@@ -48,7 +48,7 @@ export const PAGES = [
   { id: "zoom", group: "canvas", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport double-click percent 100 whole extras view-only remember persist glide tooltip", examples: ["WideContent", "AutoFitOff", "RememberView", "HundredExtras", "PersistView", "ViewOnly", "BoxTooltip", "FitWidth"] },
   { id: "map", group: "canvas", keywords: "map tiles pins markers cluster group dots spawns highlight world game zoom fog layer", examples: ["TileMap"] },
   // Tavora features
-  { id: "settings", group: "features", keywords: "module settings dialog overlay preview page reset saved control column row", examples: ["ModuleSettings"] },
+  { id: "settings", group: "features", keywords: "module settings dialog overlay preview page reset saved control column row one single narrow menu description unit size", examples: ["OnePage", "SeveralPages", "ModuleSettings"] },
 ] as const satisfies readonly PageDef[];
 
 export type PageId = (typeof PAGES)[number]["id"];
