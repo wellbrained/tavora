@@ -2,10 +2,8 @@
 export const en = {
   loading: "Loading to-dos…",
   connectError: "Could not connect: {error}",
-  cancel: "Cancel",
   moreFor: "More for {name}",
   more: "More",
-  undo: "Undo",
 
   "app.toolbar": "To-do controls",
   "app.open.one": "{count} open",
@@ -21,12 +19,9 @@ export const en = {
   "app.objectives": "Current objectives",
   "app.newGroup": "Add new group",
   "app.newGroupLabel": "New group name",
-  "app.deleteGroupTitle": "Delete “{name}”?",
-  "app.deleteGroupMessage.one": "Its {count} to-do is removed for good. This cannot be undone.",
-  "app.deleteGroupMessage.other": "Its {count} to-dos are removed for good. This cannot be undone.",
-  "app.deleteGroupConfirm": "Delete group",
   "app.undoFinished": "Finished “{title}”",
   "app.undoDeleted": "Deleted “{title}”",
+  "app.undoGroupDeleted": "Deleted “{name}”",
   "store.saveError": "Could not save: {error}",
 
   "settings.title": "Settings",
@@ -117,10 +112,8 @@ export const en = {
 export const de: Record<keyof typeof en, string> = {
   loading: "Lade To-Dos…",
   connectError: "Verbindung nicht möglich: {error}",
-  cancel: "Abbrechen",
   moreFor: "Mehr zu {name}",
   more: "Mehr",
-  undo: "Rückgängig",
 
   "app.toolbar": "To-Do-Steuerung",
   "app.open.one": "{count} offen",
@@ -136,12 +129,9 @@ export const de: Record<keyof typeof en, string> = {
   "app.objectives": "Aktuelle Ziele",
   "app.newGroup": "Neue Gruppe hinzufügen",
   "app.newGroupLabel": "Name der neuen Gruppe",
-  "app.deleteGroupTitle": "„{name}“ löschen?",
-  "app.deleteGroupMessage.one": "Das {count} To-Do darin wird endgültig entfernt. Das lässt sich nicht rückgängig machen.",
-  "app.deleteGroupMessage.other": "Die {count} To-Dos darin werden endgültig entfernt. Das lässt sich nicht rückgängig machen.",
-  "app.deleteGroupConfirm": "Gruppe löschen",
   "app.undoFinished": "„{title}“ erledigt",
   "app.undoDeleted": "„{title}“ gelöscht",
+  "app.undoGroupDeleted": "„{name}“ gelöscht",
   "store.saveError": "Konnte nicht gespeichert werden: {error}",
 
   "settings.title": "Einstellungen",

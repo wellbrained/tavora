@@ -8,6 +8,7 @@ export type PanelStyle = (typeof PANEL_STYLES)[number];
 export const TAB_OVERFLOWS = ["list", "arrows"] as const;
 export type TabOverflow = (typeof TAB_OVERFLOWS)[number];
 import { isWorkspaceId } from "./workspace-id";
+import { placeOf, reinsert, type ListPlace } from "@tavora/official-ui/reinsert";
 import type { GameStart, RootItem, RootSort, Startup } from "../shared/host-api";
 import { isProfileBanner, type ProfileBanner } from "../shared/profile-banner";
 import { isSite } from "./browser-url";
@@ -662,6 +663,82 @@ export function deleteFolder(library: Library, id: string): void {
   const index = library.root.findIndex((item) => item.kind === "folder" && item.id === id);
   library.root.splice(index, 1, ...removed.workspaces.map((workspace): RootItem => ({ kind: "workspace", id: workspace })));
   delete library.folders[id];
+}
+
+// ── Undo of a delete (main/undo-shelf.ts) ─────────────────────────────────
+// Each answers with what Undo needs to put the thing back where it was; the put-back functions take that. A put-back
+// throws error.undo.gone when it can't any more, and never writes over something that came back or was made since.
+
+const rootKey = (item: RootItem): string => `${item.kind}:${item.id}`;
+const sameKey = (id: string): string => id;
+
+/** Where a workspace sits in the rail: its list (the top level or a folder), its place there, and as a favorite. */
+export interface WorkspacePlace {
+  folderId: string | null;
+  place: ListPlace<string>;
+  favorite: ListPlace<string> | null;
+  wasLast: boolean;
+}
+
+/** Notes where a live workspace sits, before it goes to Trash. */
+export function workspacePlace(library: Library, id: string): WorkspacePlace {
+  liveWorkspace(library, id);
+  const inFolder = Object.values(library.folders).find((folder) => folder.workspaces.includes(id));
+  const place = inFolder ? placeOf(inFolder.workspaces, id, sameKey) : placeOf(library.root, `workspace:${id}`, rootKey);
+  return {
+    folderId: inFolder?.id ?? null,
+    place: place ?? { index: library.root.length, after: null },
+    favorite: placeOf(library.favorites, id, sameKey),
+    wasLast: library.lastWorkspaceId === id,
+  };
+}
+
+/**
+ * Takes a workspace out of Trash into the place it had: its folder (the top level if that folder is gone), next to the
+ * same neighbour, its favorite slot, and the last open workspace. One that is out of Trash already stays as it is.
+ */
+export function untrashWorkspace(library: Library, id: string, where: WorkspacePlace): void {
+  const workspace = library.workspaces[id];
+  if (!workspace) throw new LibraryError("error.undo.gone");
+  if (workspace.trashedAt === null) return;
+  workspace.trashedAt = null;
+  const inFolder = where.folderId === null ? undefined : library.folders[where.folderId];
+  if (inFolder) inFolder.workspaces = reinsert(inFolder.workspaces, id, where.place, sameKey);
+  else if (where.folderId === null) library.root = reinsert(library.root, { kind: "workspace", id }, where.place, rootKey);
+  // Its folder went meanwhile: where that folder was, or the end.
+  else library.root.push({ kind: "workspace", id });
+  if (where.favorite) library.favorites = reinsert(library.favorites, id, where.favorite, sameKey);
+  if (where.wasLast && library.lastWorkspaceId === null) library.lastWorkspaceId = id;
+}
+
+/** A deleted folder, with its place at the top level of the rail. */
+export interface DeletedFolder {
+  folder: Folder;
+  place: ListPlace<string>;
+}
+
+/** Deletes a folder like deleteFolder and answers with what puts it back. */
+export function deleteFolderUndoably(library: Library, id: string): DeletedFolder {
+  const removed = structuredClone(folder(library, id));
+  const place = placeOf(library.root, `folder:${id}`, rootKey)!;
+  deleteFolder(library, id);
+  return { folder: removed, place };
+}
+
+/**
+ * Puts a deleted folder back with the same id, name and label, where it was, and moves its workspaces back into it in
+ * their order: those still at the top level. One that went to Trash or into another folder since stays where it is now.
+ */
+export function restoreFolder(library: Library, deleted: DeletedFolder): void {
+  const { folder: saved } = deleted;
+  if (library.folders[saved.id]) throw new LibraryError("error.undo.gone");
+  const free = new Set(library.root.filter((item) => item.kind === "workspace" && isLive(library, item.id)).map((item) => item.id));
+  const members = saved.workspaces.filter((workspace) => free.has(workspace));
+  const taken = new Set(members);
+  const root = library.root.filter((item) => !(item.kind === "workspace" && taken.has(item.id)));
+  // Its first workspace now sits where the folder was: the folder goes after the one before that.
+  library.root = reinsert(root, { kind: "folder", id: saved.id }, deleted.place, rootKey);
+  library.folders[saved.id] = { ...saved, workspaces: members };
 }
 
 // ── Preferences ──────────────────────────────────────────────────────────

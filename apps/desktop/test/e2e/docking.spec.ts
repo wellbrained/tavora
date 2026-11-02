@@ -390,7 +390,6 @@ test("named layouts are saved, applied, renamed and deleted", async () => {
 
   const again = await launch(userData);
   await layoutMenu(again.page, "Mapping", "layout-delete");
-  await again.page.getByTestId("confirm-submit").click();
   await again.page.getByTestId("layouts").click();
   await expect(again.page.locator('[role="menu"][data-state="open"]').getByText("Mapping")).toHaveCount(0);
   await again.page.keyboard.press("Escape");

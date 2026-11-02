@@ -216,6 +216,10 @@ export function hostActionTable(c: HostChecks) {
     "rename-folder": { folderId: c.uuid, name: text() },
     "set-folder-label": { folderId: c.uuid, label },
     "delete-folder": { folderId: c.uuid },
+    /** Undo on the toast of a delete that answered with a token (a layout, a folder, workspaces moved to Trash). */
+    "undo-delete": { token: c.uuid },
+    /** That toast is gone: the delete is final. */
+    "forget-undo": { token: c.uuid },
     "move-folder": { folderId: c.uuid, index: position },
 
     // Settings

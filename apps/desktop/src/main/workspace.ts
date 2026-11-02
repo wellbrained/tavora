@@ -7,6 +7,7 @@ import { UserError } from "./messages";
 import { gridTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { LAYOUT_LIMITS, layoutPanels, parseLayout, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
 import { checkPanelContent, type PanelContent } from "./panel-content";
+import { placeOf, reinsert, type ListPlace } from "@tavora/official-ui/reinsert";
 
 export { INSTANCE_ID } from "./ids";
 
@@ -49,6 +50,13 @@ export interface WorkspaceState {
 
 /** A problem with the workspace that the user can fix; its message is shown as-is. */
 export class WorkspaceError extends UserError {}
+
+/** A deleted snapshot, kept while its delete can be undone: the workspace it was in and its place in that list. */
+export interface DeletedSnapshot {
+  workspaceId: string;
+  snapshot: Snapshot;
+  place: ListPlace<string>;
+}
 
 export const MAX_SNAPSHOTS = 50;
 export const MAX_SNAPSHOT_NAME = 80;
@@ -396,9 +404,31 @@ export class Workspaces {
   }
 
   deleteSnapshot(workspaceId: string, snapshotId: string): void {
+    this.deleteSnapshotUndoably(workspaceId, snapshotId);
+  }
+
+  /** Deletes a snapshot and answers with what puts it back (restoreSnapshot). */
+  deleteSnapshotUndoably(workspaceId: string, snapshotId: string): DeletedSnapshot {
     const workspace = this.workspace(workspaceId);
-    const { id } = this.snapshot(workspace, snapshotId);
-    workspace.snapshots = workspace.snapshots.filter((snapshot) => snapshot.id !== id);
+    const snapshot = structuredClone(this.snapshot(workspace, snapshotId));
+    const place = placeOf(workspace.snapshots, snapshot.id, (item) => item.id)!;
+    workspace.snapshots = workspace.snapshots.filter((item) => item.id !== snapshot.id);
+    this.save();
+    return { workspaceId, snapshot, place };
+  }
+
+  /**
+   * Puts a deleted snapshot back into the workspace it came from (not the open one), with its id and contents, where it
+   * was in the list. A layout saved under its name since keeps that name; this one then gets a number after it.
+   */
+  restoreSnapshot(deleted: DeletedSnapshot): void {
+    const workspace = this.state.workspaces[deleted.workspaceId];
+    if (!workspace || workspace.snapshots.some((item) => item.id === deleted.snapshot.id)) throw new WorkspaceError("error.undo.gone");
+    if (workspace.snapshots.length >= MAX_SNAPSHOTS) throw new WorkspaceError("error.layoutLimit", { max: MAX_SNAPSHOTS });
+    const taken = (name: string) => workspace.snapshots.some((item) => item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+    let name = deleted.snapshot.name;
+    for (let count = 2; taken(name); count++) name = `${deleted.snapshot.name} (${count})`;
+    workspace.snapshots = reinsert(workspace.snapshots, { ...structuredClone(deleted.snapshot), name }, deleted.place, (item) => item.id);
     this.save();
   }
 

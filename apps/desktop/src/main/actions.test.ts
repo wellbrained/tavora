@@ -221,6 +221,8 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "rename-folder", folderId: FOLDER, name: "Souls" }],
   [{ type: "set-folder-label", folderId: FOLDER, label: null }],
   [{ type: "delete-folder", folderId: FOLDER }],
+  [{ type: "undo-delete", token: FOLDER }],
+  [{ type: "forget-undo", token: FOLDER }],
   [{ type: "set-language", language: "de" }],
   [{ type: "set-profile-ranks", hidden: true }],
   [{ type: "set-profile-ranks", period: "week" }],

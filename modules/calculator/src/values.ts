@@ -2,6 +2,7 @@
 // A sum holds a value by its name and looks up its number when it is worked out.
 import type { JsonValue } from "@tavora/sdk";
 import type { Lookup } from "./calc";
+import { placeOf, reinsert, type ListPlace } from "@tavora/official-ui/reinsert";
 
 export type Value = {
   /** Letters and digits only, so it can sit in a sum. */
@@ -57,4 +58,17 @@ export function lookup(values: Value[]): Lookup {
     const found = values.find((item) => sameName(item.name, name));
     return found ? Number(found.value) : undefined;
   };
+}
+
+/** Where a value sat before it was deleted, so Undo puts it back there (restoreValue). Null when it isn't there. */
+export function valuePlace(values: Value[], name: string): { value: Value; place: ListPlace<string> } | null {
+  const found = values.find((item) => sameName(item.name, name));
+  if (!found) return null;
+  return { value: { ...found }, place: placeOf(values, found.name.toLocaleLowerCase(), (item) => item.name.toLocaleLowerCase())! };
+}
+
+/** Puts a deleted value back in its place. Null when one of that name was saved since, or the list is full now. */
+export function restoreValue(values: Value[], value: Value, place: ListPlace<string>): Value[] | null {
+  if (values.some((item) => sameName(item.name, value.name)) || values.length >= MAX_VALUES) return null;
+  return reinsert(values, { ...value }, place, (item) => item.name.toLocaleLowerCase());
 }

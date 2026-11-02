@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.16",
+    "date": "2026-11-02",
+    "notes": [
+      "The Undo toast example shows the kit's undoable()."
+    ]
+  },
+  {
     "version": "0.1.15",
     "date": "2026-11-02",
     "notes": [

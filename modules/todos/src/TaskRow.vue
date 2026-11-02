@@ -35,6 +35,7 @@ import {
   MAX_DEPTH,
   moveTask,
   outdentTask,
+  canRestoreBlock,
   removedBlock,
   restoreBlock,
   restoreDone,
@@ -94,8 +95,9 @@ function setTaskDone(done: boolean) {
 function remove() {
   const removed = removedBlock(props.store.list.value, id.value);
   const taskId = id.value;
+  const store = props.store;
   change((data) => deleteTask(data, taskId));
-  if (removed) panel.offerUndo(t("app.undoDeleted", { title: props.task.title }), () => change((data) => restoreBlock(data, removed)));
+  if (removed) panel.offerUndo(t("app.undoDeleted", { title: props.task.title }), () => canRestoreBlock(store.list.value, removed) && store.apply((data) => restoreBlock(data, removed)));
 }
 
 function setPinned(pinned: boolean) {

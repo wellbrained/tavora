@@ -2,11 +2,11 @@
 // Mount once per panel. Shows the toasts from useToast() as a stack of pills where the user wants
 // them (Settings > Appearance): the newest in front, older ones peeking out behind. Pointing at
 // or focusing the stack spreads it out and stops every timer. Two hidden live regions read each
-// new toast out, errors as alerts.
-import { computed, reactive, ref } from "vue";
+// new toast out once, errors as alerts; one leaving never makes an older one be read again.
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import "./toast.css";
 import ToastItem from "./ToastItem.vue";
-import { toastPosition, toasts, type ToastPosition } from "./toast";
+import { toAnnounce, toastPosition, toasts, type ToastPosition } from "./toast";
 
 /** A fixed place, for a page that must not follow the setting (the host window). */
 const props = defineProps<{ position?: ToastPosition }>();
@@ -48,9 +48,22 @@ const placed = computed(() => {
   return newestFirst.reverse();
 });
 
-const newestNormal = computed(() => toasts.value.findLast((item) => item.variant !== "error"));
-const newestError = computed(() => toasts.value.findLast((item) => item.variant === "error"));
-const spoken = (item: { title: string; description?: string } | undefined) => (item ? [item.title, item.description].filter(Boolean).join(". ") : "");
+// What the live regions say. Emptied first, so the same words twice in a row are still read twice.
+const said = reactive({ status: "", alert: "" });
+const heard = new Map<number, number>();
+watch(
+  toasts,
+  (list) => {
+    const next = toAnnounce(list, heard);
+    for (const region of ["status", "alert"] as const) {
+      const text = next[region];
+      if (text === undefined) continue;
+      said[region] = "";
+      void nextTick(() => (said[region] = text));
+    }
+  },
+  { immediate: true },
+);
 
 function forget(id: number) {
   sizes.delete(id);
@@ -69,7 +82,7 @@ function forget(id: number) {
         </div>
       </div>
     </TransitionGroup>
-    <div class="sr-only" role="status" aria-live="polite">{{ spoken(newestNormal) }}</div>
-    <div class="sr-only" role="alert">{{ spoken(newestError) }}</div>
+    <div class="sr-only" role="status" aria-live="polite">{{ said.status }}</div>
+    <div class="sr-only" role="alert">{{ said.alert }}</div>
   </div>
 </template>

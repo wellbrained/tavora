@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deleteValue, isValidName, lookup, MAX_VALUES, parseValues, renameValue, saveValue, type Value } from "./values";
+import { deleteValue, isValidName, lookup, MAX_VALUES, parseValues, renameValue, restoreValue, saveValue, valuePlace, type Value } from "./values";
 
 const iron: Value = { name: "Iron", value: "100" };
 
@@ -40,5 +40,33 @@ describe("values", () => {
   it("delete and look up by name, whatever the case", () => {
     expect(lookup([iron])("iron")).toBe(100);
     expect(lookup(deleteValue([iron], "IRON"))("iron")).toBeUndefined();
+  });
+});
+
+describe("undoing a delete", () => {
+  const list: Value[] = [
+    { name: "Iron", value: "5" },
+    { name: "Copper", value: "3" },
+    { name: "Coal", value: "2" },
+  ];
+
+  it("puts a value back in its place, even after another was deleted", () => {
+    const first = valuePlace(list, "copper")!;
+    let values = deleteValue(list, "Copper");
+    const second = valuePlace(values, "Iron")!;
+    values = deleteValue(values, "Iron");
+    values = restoreValue(values, first.value, first.place)!;
+    expect(values.map((item) => item.name)).toEqual(["Copper", "Coal"]);
+    values = restoreValue(values, second.value, second.place)!;
+    expect(values).toEqual(list);
+  });
+
+  it("leaves a value saved under the same name since, and a full list, as they are", () => {
+    const deleted = valuePlace(list, "Coal")!;
+    const values = saveValue(deleteValue(list, "Coal"), { name: "coal", value: "9" })!;
+    expect(restoreValue(values, deleted.value, deleted.place)).toBeNull();
+    const full = Array.from({ length: MAX_VALUES }, (_, index) => ({ name: `v${index}`, value: "1" }));
+    expect(restoreValue(full, deleted.value, deleted.place)).toBeNull();
+    expect(valuePlace(list, "Gold")).toBeNull();
   });
 });

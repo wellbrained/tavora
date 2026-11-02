@@ -12,6 +12,8 @@ export { SegmentedControl } from "./components/ui/segmented-control";
 export { useDocument, type UseDocument } from "./use-document";
 export { useItemSession, type UseItemSession } from "./use-item-session";
 export { errorMessage } from "./documents";
+export { placeOf, reinsert, type ListPlace } from "./reinsert";
+export { isUndoKey, openUndos, settleUndos, undoable, undoLatest, type UndoableOptions, type UndoOffer, type UndoState } from "./undoable";
 export { createOptimistic, useOptimistic, useOptimisticKeyed, type Optimistic, type OptimisticOptions, type UseOptimistic, type UseOptimisticKeyed } from "./optimistic";
 
 export{Tooltip,TooltipRows,type TooltipRow}from"./components/tooltip";

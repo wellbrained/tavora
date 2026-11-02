@@ -9,6 +9,7 @@
 // that moves as one.
 
 import type { JsonValue } from "@tavora/sdk";
+import { placeOf, reinsert, type ListPlace } from "@tavora/official-ui/reinsert";
 
 /** The document every To-Dos panel of a workspace shares. */
 export const LIST_ID = "todos";
@@ -427,21 +428,62 @@ export function deleteTask(data: TodoList, taskId: string): void {
 export interface Removed {
   groupId: string;
   index: number;
+  /** The task just above it then (null: it was first), so it goes back below that one even when others went meanwhile. */
+  after?: string | null;
+  /** The task just below it then (null: it was last), for when the one above went too. */
+  before?: string | null;
   tasks: Task[];
 }
 
 export function removedBlock(data: TodoList, taskId: string): Removed | null {
   const found = findTask(data, taskId);
   if (!found) return null;
-  return { groupId: found.group.id, index: found.index, tasks: structuredClone(found.group.tasks.slice(found.index, blockEnd(found.group.tasks, found.index))) };
+  const { group, index } = found;
+  const end = blockEnd(group.tasks, index);
+  return { groupId: group.id, index, after: index > 0 ? group.tasks[index - 1]!.id : null, before: group.tasks[end]?.id ?? null, tasks: structuredClone(group.tasks.slice(index, end)) };
+}
+
+/** Whether a deleted block can go back: its group is still there and none of its tasks came back some other way. */
+export function canRestoreBlock(data: TodoList, removed: Removed): boolean {
+  return data.groups.some((item) => item.id === removed.groupId) && !removed.tasks.some((task) => findTask(data, task.id));
 }
 
 /** Puts a deleted block back where it was, unless its group is gone or its tasks came back some other way. */
 export function restoreBlock(data: TodoList, removed: Removed): void {
   const group = data.groups.find((item) => item.id === removed.groupId);
-  if (!group || removed.tasks.some((task) => findTask(data, task.id))) return;
-  group.tasks.splice(clamp(removed.index, 0, group.tasks.length), 0, ...structuredClone(removed.tasks));
+  if (!group || !canRestoreBlock(data, removed)) return;
+  const indexOf = (taskId: string | null | undefined) => (taskId ? group.tasks.findIndex((task) => task.id === taskId) : -1);
+  const above = indexOf(removed.after);
+  const below = indexOf(removed.before);
+  const at = removed.after === null ? 0 : above >= 0 ? above + 1 : below >= 0 ? below : removed.before === null ? group.tasks.length : clamp(removed.index, 0, group.tasks.length);
+  group.tasks.splice(at, 0, ...structuredClone(removed.tasks));
   tidy(group.tasks);
+}
+
+/** A deleted group with its to-dos, and where it was. */
+export interface RemovedGroup {
+  group: Group;
+  place: ListPlace<string>;
+}
+
+/** Deletes a group with its to-dos and answers with what puts it back (restoreGroup); null when it is gone already. */
+export function removeGroupUndoably(data: TodoList, groupId: string): RemovedGroup | null {
+  const place = placeOf(data.groups, groupId, (group) => group.id);
+  if (!place) return null;
+  const removed = { group: structuredClone(data.groups[place.index]!), place };
+  deleteGroup(data, groupId);
+  return removed;
+}
+
+/** Whether a deleted group can go back: no group with its id, and none of its to-dos, came back some other way. */
+export function canRestoreGroup(data: TodoList, removed: RemovedGroup): boolean {
+  return !data.groups.some((group) => group.id === removed.group.id) && !removed.group.tasks.some((task) => findTask(data, task.id));
+}
+
+/** Puts a deleted group back with the same id, name, colour and to-dos, where it was among the groups. */
+export function restoreGroup(data: TodoList, removed: RemovedGroup): void {
+  if (!canRestoreGroup(data, removed)) return;
+  data.groups = reinsert(data.groups, structuredClone(removed.group), removed.place, (group) => group.id);
 }
 
 /** Removes the finished tasks of one group, with their sub-to-dos. */

@@ -5,7 +5,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
-import { confirmAction, showToast, state, submitAction } from "../../host";
+import { deleteWithUndo, state } from "../../host";
 import { t } from "../../i18n";
 import WorkspaceIcon from "../WorkspaceIcon.vue";
 import SettingGroup from "./SettingGroup.vue";
@@ -63,22 +63,11 @@ function tickShown(on: boolean) {
   ticked.value = next;
 }
 
-function removeSelected() {
+async function removeSelected() {
   const workspaceIds = selected.value.map((workspace) => workspace.id);
   if (!workspaceIds.length) return;
-  confirmAction({
-    title: t("settings.workspaces.removeTitle", { count: workspaceIds.length }),
-    message: t("settings.workspaces.removeMessage"),
-    confirm: t("settings.workspaces.remove"),
-    danger: true,
-    run: async () => {
-      const error = await submitAction({ type: "trash-workspaces", workspaceIds });
-      if (error) return error;
-      ticked.value = new Set();
-      showToast(t("settings.workspaces.removed", { count: workspaceIds.length }));
-      return null;
-    },
-  });
+  // They go to Trash at once; Undo on the toast puts them all back where they were.
+  if (await deleteWithUndo({ type: "trash-workspaces", workspaceIds }, t("settings.workspaces.removed", { count: workspaceIds.length }))) ticked.value = new Set();
 }
 </script>
 

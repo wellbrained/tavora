@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.20",
+    "date": "2026-11-02",
+    "notes": [
+      "Deleting a value or clearing your history no longer asks first; you can undo it for a few seconds."
+    ]
+  },
+  {
     "version": "0.1.19",
     "date": "2026-11-02",
     "notes": [

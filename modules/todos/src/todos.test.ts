@@ -23,7 +23,11 @@ import {
   parentAtEnd,
   parseList,
   pinnedTasks,
+  canRestoreBlock,
+  canRestoreGroup,
   removedBlock,
+  removeGroupUndoably,
+  restoreGroup,
   renameGroup,
   restoreBlock,
   restoreDone,
@@ -396,5 +400,68 @@ describe("sub-to-dos", () => {
     insertTask(data, "gone", "a", 0, { id: "n", title: "N", createdAt: AT });
     insertTask(data, "g1", "a", 0, { id: "m", title: "  ", createdAt: AT });
     expect(tree(data)).toBe("a b(a) c(a) d(c) e");
+  });
+});
+
+describe("undoing a delete", () => {
+  it("two deletes in quick succession: each comes back in its own place, in either order", () => {
+    const data = nested();
+    const first = removedBlock(data, "b")!;
+    deleteTask(data, "b");
+    const second = removedBlock(data, "e")!;
+    deleteTask(data, "e");
+    restoreBlock(data, first);
+    expect(tree(data)).toBe("a b(a) c(a) d(c)");
+    expect(canRestoreBlock(data, second)).toBe(true);
+    restoreBlock(data, second);
+    expect(tree(data)).toBe("a b(a) c(a) d(c) e");
+
+    const again = nested();
+    const one = removedBlock(again, "a")!;
+    deleteTask(again, "a");
+    const two = removedBlock(again, "e")!;
+    deleteTask(again, "e");
+    restoreBlock(again, two);
+    restoreBlock(again, one);
+    expect(tree(again)).toBe("a b(a) c(a) d(c) e");
+  });
+
+  it("a to-do whose group was deleted too can't come back on its own; the group's undo brings what it had", () => {
+    const data = nested();
+    const task = removedBlock(data, "e")!;
+    deleteTask(data, "e");
+    const group = removeGroupUndoably(data, "g1")!;
+    expect(data.groups).toEqual([]);
+    expect(canRestoreBlock(data, task)).toBe(false);
+    restoreBlock(data, task);
+    expect(data.groups).toEqual([]);
+    restoreGroup(data, group);
+    expect(tree(data)).toBe("a b(a) c(a) d(c)");
+    // Now its group is back, so the to-do can follow.
+    expect(canRestoreBlock(data, task)).toBe(true);
+    restoreBlock(data, task);
+    expect(tree(data)).toBe("a b(a) c(a) d(c) e");
+  });
+
+  it("a group comes back with its id, name, colour and to-dos, where it was", () => {
+    const data = nested();
+    addGroup(data, "g2", "Loot");
+    addGroup(data, "g3", "Quests");
+    setGroupColor(data, "g2", data.groups[0]!.color || "");
+    const before = structuredClone(data);
+    const removed = removeGroupUndoably(data, "g2")!;
+    expect(data.groups.map((item) => item.id)).toEqual(["g1", "g3"]);
+    restoreGroup(data, removed);
+    expect(data).toEqual(before);
+  });
+
+  it("a group made again with the same id, or put back already, is left as it is", () => {
+    const data = nested();
+    const removed = removeGroupUndoably(data, "g1")!;
+    addGroup(data, "g1", "New");
+    expect(canRestoreGroup(data, removed)).toBe(false);
+    restoreGroup(data, removed);
+    expect(data.groups.map((item) => item.name)).toEqual(["New"]);
+    expect(removeGroupUndoably(data, "nope")).toBeNull();
   });
 });

@@ -21,7 +21,14 @@ export interface ToastOptions {
   testid?: string;
   /** Test id on the action button. */
   actionTestid?: string;
+  /** Keys that press the action, for screen readers (`aria-keyshortcuts`), such as "Control+Z" for Undo. */
+  actionKeys?: string;
+  /** Runs once when the toast goes, with why: its button was pressed, it was closed, its time ran out, or newer ones pushed it out. */
+  onDismiss?: (reason: ToastDismissReason) => void;
 }
+
+/** Why a toast went away. */
+export type ToastDismissReason = "action" | "closed" | "timeout" | "pushed";
 
 export interface ToastItem extends ToastOptions {
   id: number;
@@ -56,8 +63,11 @@ export function toastDuration(item: ToastOptions): number {
   return item.variant === "error" || item.variant === "warning" || item.variant === "loading" ? Infinity : TOAST_DURATION;
 }
 
-export function dismissToast(id: number): void {
+export function dismissToast(id: number, reason: ToastDismissReason = "closed"): void {
+  const gone = toasts.value.find((item) => item.id === id);
+  if (!gone) return;
   toasts.value = toasts.value.filter((item) => item.id !== id);
+  gone.onDismiss?.(reason);
 }
 
 function updateToast(id: number, options: Partial<ToastOptions>): boolean {
@@ -68,7 +78,9 @@ function updateToast(id: number, options: Partial<ToastOptions>): boolean {
 
 function show(options: ToastOptions): ToastHandle {
   const id = nextId++;
-  toasts.value = [...toasts.value, { ...options, id, revision: 0 }].slice(-MAX_TOASTS);
+  const all = [...toasts.value, { ...options, id, revision: 0 }];
+  toasts.value = all.slice(-MAX_TOASTS);
+  for (const item of all.slice(0, -MAX_TOASTS)) item.onDismiss?.("pushed");
   return { id, dismiss: () => dismissToast(id), update: (next) => updateToast(id, next) };
 }
 
@@ -88,7 +100,7 @@ export const toast = Object.assign(show, {
   warning: kind("warning"),
   info: kind("info"),
   loading: kind("loading"),
-  dismiss: dismissToast,
+  dismiss: (id: number) => dismissToast(id),
   promise<T>(
     promise: Promise<T>,
     texts: { loading: string; success: string | ((value: T) => string); error: string | ((reason: unknown) => string) },
@@ -101,6 +113,22 @@ export const toast = Object.assign(show, {
     return promise;
   },
 });
+
+/**
+ * What the Toaster's live regions should say now: the newest toast that is new or changed since `heard` (the revision
+ * each toast was read out at, kept up to date here), errors in the alert region. Undefined: nothing new to say there.
+ * A toast that leaves is forgotten, but never makes an older one be read again.
+ */
+export function toAnnounce(list: readonly ToastItem[], heard: Map<number, number>): { status?: string; alert?: string } {
+  const out: { status?: string; alert?: string } = {};
+  for (const item of list) {
+    if (heard.get(item.id) === item.revision) continue;
+    heard.set(item.id, item.revision);
+    out[item.variant === "error" ? "alert" : "status"] = [item.title, item.description].filter(Boolean).join(". ");
+  }
+  for (const id of [...heard.keys()]) if (!list.some((item) => item.id === id)) heard.delete(id);
+  return out;
+}
 
 export function useToast() {
   return { toast, dismiss: dismissToast };

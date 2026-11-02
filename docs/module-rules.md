@@ -55,13 +55,14 @@ classes where you use a control; never copy it.
 | Menu | `ContextMenu`, `DropdownMenu`, or `sdk.ui.showMenu({ anchor: element })` | menu at the pointer, own popup |
 | Tooltip | `Tooltip` / `TooltipRows`, or a `title` (connectModule turns it into the kit tooltip). A disabled `Button` with a `title` (or `hinted`, when you show the tooltip yourself) stays hoverable and focusable, so say why it is off there | own hover box, a wrapper `span` around a disabled button |
 | Floating panel | `Popover` | absolutely positioned `div` |
-| Dialog | `ConfirmDialog` (asks), `NameDialog` (asks for a name), else `Dialog` with `DialogHeader`, `DialogFooter`, `DialogButton` (see [Dialogs](#dialogs)) | own overlay |
+| Dialog | `ConfirmDialog` (asks, only for what can't be put back: files, data loss, anything outside Tavora), `NameDialog` (asks for a name), else `Dialog` with `DialogHeader`, `DialogFooter`, `DialogButton` (see [Dialogs](#dialogs)) | own overlay |
 | Nothing here yet | `EmptyState` (one sentence, one action) | a bare `<p>` |
 | Loading with a known amount | `Progress` | "Loading…" in a `<p>` |
 | A list, card or page that loads | `Skeleton` around the real template with placeholder data (see [Loading](#loading)) | generic grey bars, a spinner, "Loading…" |
 | A picture that may arrive late | `FadeImage` (reserved box, fades in, keeps a fallback icon if it fails) | a bare `<img>` that pops in and shifts the layout |
 | Error or warning in place | `Notice` | red text in a `<p>` |
-| Short message, Undo | `toast()` from `ui/toast` (the `Toaster` follows the user's toast position) | own status line |
+| Short message | `toast()` from `ui/toast` (the `Toaster` follows the user's toast position) | own status line |
+| Deleting something you can put back (a group, a value, a saved layout) | delete at once, then `undoable({ title, undo })` from `@tavora/official-ui`: a toast with Undo for 5 s, each delete its own; `reinsert` puts it back in its place; bind Ctrl+Z with `isUndoKey` and `undoLatest` | `ConfirmDialog` ("Are you sure?"), one Undo that replaces the last |
 | Key hint | `Kbd` | |
 | Zoomable picture or canvas | `ZoomPane` | own wheel and drag handling |
 | Small chart | `Sparkline` | |

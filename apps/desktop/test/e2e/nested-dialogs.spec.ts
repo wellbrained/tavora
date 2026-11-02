@@ -50,8 +50,13 @@ test("a confirmation opened from Settings stays inside Settings", async ({}, tes
     await expect(page.locator(".dv-groupview")).toHaveCount(3);
     await page.getByTestId("rail-workspace-poe2").click({ button: "right" });
     await page.locator('[role="menu"][data-state="open"] [data-testid="menu-manage-workspaces"]').click();
+    // Moving a workspace to Trash no longer asks (it can be undone); deleting it for good from Trash still does.
+    await page.getByTestId("workspaces-filter").fill("satis");
     await page.getByTestId("workspaces-select-all").check();
     await page.getByTestId("workspaces-remove").click();
+    await page.getByTestId("settings-nav-games").click();
+    await page.getByTestId("games-open-trash").click();
+    await page.getByTestId("delete-satisfactory").click();
     await expect(page.getByTestId("confirm")).toBeVisible();
 
     for (const [name, width, height] of [

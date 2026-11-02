@@ -7,6 +7,11 @@ import { expectModuleText, inModule, launch, NOTES, openWorkspace, openModule, p
 
 const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
 
+/** Presses Undo on the newest toast: each delete or finish has its own, newest last. */
+async function undoNewest(app: ElectronApplication, moduleId: string, index = 0) {
+  await inModule(app, moduleId, `[...document.querySelectorAll('[data-testid="undo"]')].at(-1).click()`, index);
+}
+
 async function click(app: ElectronApplication, moduleId: string, selector: string, index = 0) {
   await inModule(app, moduleId, `document.querySelector(${JSON.stringify(selector)}).click()`, index);
 }
@@ -388,7 +393,7 @@ test("to-dos: groups, sub-to-dos, editing in place, objectives and finished task
   // Finishing a task un-pins it and offers to undo that.
   await inModule(app, TODOS, `${taskTitled("Defeat Count Geonor")}.querySelector('[data-testid="task-done"]').click()`);
   await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
-  await click(app, TODOS, `[data-testid="undo"]`);
+  await undoNewest(app, TODOS);
   await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor"]);
   await inModule(app, TODOS, `${taskTitled("Defeat Count Geonor")}.querySelector('[data-testid="task-done"]').click()`);
   await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
@@ -446,8 +451,47 @@ test("to-dos: Enter in a to-do starts a new one right below it", async () => {
   // The trash button deletes in one click, with its sub-to-dos, and Undo puts them back.
   await inModule(app, TODOS, `${taskTitled("Tame a wolf")}.querySelector('[data-testid="task-delete"]').click()`);
   await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Build a hut"]);
-  await click(app, TODOS, `[data-testid="undo"]`);
+  await undoNewest(app, TODOS);
   await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Tame a wolf", "Bring meat", "Build a hut"]);
+  await app.close();
+});
+
+test("to-dos: deleting a group doesn't ask; each of two quick deletes has its own Undo, by button or Ctrl+Z", async () => {
+  const { app, page } = await launch();
+  await openModule(page, TODOS);
+  await ready(app, TODOS, "empty");
+  await addInto(app, TODOS, $(`[data-testid="first-task"]`), "Craft a bow");
+  for (const name of ["Loot", "Quests"]) await addInto(app, TODOS, $(`[data-testid="group-name-new"]`), name);
+  const names = () => inModule<string[]>(app, TODOS, `[...document.querySelectorAll('[data-testid="group-name"]')].map((name) => name.textContent.trim())`);
+  await expect.poll(names).toHaveLength(3);
+  const before = await names();
+  const toasts = () => inModule<string[]>(app, TODOS, `[...document.querySelectorAll('[data-testid="undo-toast"]')].map((toast) => toast.textContent)`);
+
+  // The group's menu is Tavora's, drawn above the panels: open it with a key press on its ⋯ button.
+  await waitForShown(app, TODOS);
+  const removeGroup = async (name: string) => {
+    const menu = `[...document.querySelectorAll('[data-testid="group-name"]')].find((item) => item.textContent.trim() === ${JSON.stringify(name)}).closest('[data-testid="group-header"]').querySelector('[data-testid="group-menu"]')`;
+    await inModule(app, TODOS, `${menu}.focus()`);
+    await typeInModule(app, TODOS, "\n");
+    await page.getByTestId("module-menu-item-delete").click();
+    await expect(page.getByTestId("module-menu")).toHaveCount(0);
+  };
+  await removeGroup(before[0]!);
+  await expect.poll(names).toEqual([before[1], before[2]]);
+  expect(await inModule(app, TODOS, `!!${q("confirm")}`)).toBe(false);
+  await removeGroup("Quests");
+  await expect.poll(names).toEqual([before[1]]);
+  await expect.poll(toasts).toEqual([`Deleted “${before[0]}”`, "Deleted “Quests”"].map((title) => expect.stringContaining(title)));
+
+  // Ctrl+Z takes back the newest one only.
+  await inModule(app, TODOS, `document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }))`);
+  await expect.poll(names).toEqual([before[1], "Quests"]);
+  await expect.poll(toasts).toHaveLength(1);
+  // Undo on the other one puts that group back in its place, with its to-do.
+  await undoNewest(app, TODOS);
+  await expect.poll(names).toEqual(before);
+  await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow"]);
+  await expect.poll(toasts).toEqual([]);
   await app.close();
 });
 
@@ -952,8 +996,12 @@ test("calculator: works out sums from keys and the keyboard, and keeps the last 
   await ready(again.app, CALCULATOR, "history-item");
   await expect.poll(() => results(again.app)).toEqual(["7,056", "84"]);
   await click(again.app, CALCULATOR, `[data-testid="clear-history"]`);
-  // Clearing asks first.
-  await click(again.app, CALCULATOR, `[data-testid="confirm-submit"]`);
+  // Clearing happens at once, with Undo on a toast for a few seconds.
+  await expect.poll(() => results(again.app)).toEqual([]);
+  await expect.poll(() => inModule(again.app, CALCULATOR, `${q("undo-toast")}?.textContent ?? ""`)).toContain("History cleared");
+  await undoNewest(again.app, CALCULATOR);
+  await expect.poll(() => results(again.app)).toEqual(["7,056", "84"]);
+  await click(again.app, CALCULATOR, `[data-testid="clear-history"]`);
   await expect.poll(() => results(again.app)).toEqual([]);
 
   // The toolbar switches to the Basic keypad and hides the history.

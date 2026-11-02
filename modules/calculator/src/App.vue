@@ -8,15 +8,16 @@
 // Save as… keeps the result under a name; the Values tab taps it into a sum, where it counts with its number now.
 // The history and the values are one document of the workspace, so every panel of the workspace shares them and sees
 // another panel's change at once.
-import { BookmarkPlus, Check, Copy, Delete, Ellipsis, Eraser, History, Pencil, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
-import { ConfirmDialog, connectModule, errorMessage, SegmentedControl } from "@tavora/official-ui";
+import { BookmarkPlus, Check, Copy, Delete, Ellipsis, History, Pencil, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
+import { connectModule, errorMessage, isUndoKey, openUndos, SegmentedControl, settleUndos, undoable, undoLatest } from "@tavora/official-ui";
+import { Toaster } from "@tavora/official-ui/components/ui/toast";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { copyText, decimalComma, EMPTY, evaluate, format, insert, press, pretty, reference, rounded, segments, type Entry } from "./calc";
-import { remember, type Calculation } from "./history";
+import { remember, restoreHistory, type Calculation } from "./history";
 import { BASIC, keyAction, pasteKeys, PLUS, type Key } from "./keys";
 import { createListsStore, type ListsStore } from "./lists";
 import { locale, setLanguage, t } from "./i18n";
@@ -24,7 +25,7 @@ import { de, en } from "./locales";
 import { DECIMALS, DEFAULT_SETTINGS, HISTORY_LENGTHS, parseSettings, SETTINGS_KEY, type Mode, type Settings } from "./settings";
 import SettingsDialog from "./SettingsDialog.vue";
 import ValueDialog from "./ValueDialog.vue";
-import { deleteValue, lookup, renameValue, saveValue, type Value } from "./values";
+import { deleteValue, lookup, renameValue, restoreValue, saveValue, valuePlace, type Value } from "./values";
 
 const VARIANT = { digit: "secondary", op: "outline", clear: "outline", equals: "default" } as const;
 /** The keypad's rows by number of keys; written out so Tailwind finds the classes. */
@@ -36,8 +37,6 @@ const ROWS: Record<number, string> = {
 const sdk = shallowRef<TavoraSDK | null>(null);
 const error = ref<string | null>(null);
 const saveError = ref<string | null>(null);
-/** Clear history asked, waiting for the player to confirm. */
-const clearing = ref(false);
 const entry = ref<Entry>(EMPTY);
 /** Why the last Equals did not work, until the next key. */
 const problem = ref<string | null>(null);
@@ -53,8 +52,6 @@ const shownTab = computed({
 });
 /** The value dialog that is open: Save as…, or Rename for a value's name. */
 const valueDialog = ref<{ renaming?: string } | null>(null);
-/** Delete asked for this value, waiting for the player to confirm. */
-const deleting = ref<string | null>(null);
 /** Copy just worked: its button shows a tick for a moment. */
 const copied = ref(false);
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -196,10 +193,18 @@ function submitValue(name: string): void {
   tab.value = "values";
 }
 
-function confirmDelete(): void {
-  const name = deleting.value;
-  deleting.value = null;
-  if (name !== null) saveValues((items) => deleteValue(items, name));
+/** Deletes a value at once; Undo on the toast puts it back in its place, unless one of that name was saved since. */
+function removeValue(name: string): void {
+  const deleted = valuePlace(values.value, name);
+  if (!deleted) return;
+  saveValues((items) => deleteValue(items, name));
+  undoable({
+    title: t("values.deleted", { name: deleted.value.name }),
+    undo: () => {
+      if (!restoreValue(values.value, deleted.value, deleted.place)) return false;
+      saveValues((items) => restoreValue(items, deleted.value, deleted.place) ?? items);
+    },
+  });
 }
 
 /** Opens a dialog from the item menu once the menu has closed, so the dialog keeps the focus. */
@@ -210,9 +215,12 @@ function tap(value: Value): void {
   entry.value = reference(entry.value, value.name);
 }
 
-function confirmClear(): void {
-  clearing.value = false;
+/** Clears the history at once; Undo on the toast brings the results back, under any worked out since. */
+function clearHistory(): void {
+  const cleared = [...history.value];
+  if (!cleared.length) return;
   save(() => []);
+  undoable({ title: t("history.cleared"), undo: () => save((items) => restoreHistory(items, cleared, settings.value.historyLength)) });
 }
 
 // ── Keyboard and paste ───────────────────────────────────────────────
@@ -228,6 +236,12 @@ function onKeydown(event: KeyboardEvent): void {
     return;
   }
   if (elsewhere(event.target)) return;
+  // Ctrl+Z takes back the newest delete or clear still offered.
+  if (openUndos() > 0 && isUndoKey(event)) {
+    event.preventDefault();
+    void undoLatest();
+    return;
+  }
   const action = keyAction(event, {
     selection: !!window.getSelection()?.toString(),
     focusedControl: event.target instanceof HTMLElement && !!event.target.closest("button, [role='radio'], [role='tab']"),
@@ -275,6 +289,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  settleUndos();
   cleanup.forEach((fn) => fn());
   clearTimeout(copiedTimer);
 });
@@ -423,7 +438,7 @@ onBeforeUnmount(() => {
               :aria-label="t('history.clear')"
               :title="t('history.clear')"
               data-testid="clear-history"
-              @click="clearing = true"
+              @click="clearHistory"
             >
               <Trash2 :stroke-width="1.5" />
             </Button>
@@ -477,7 +492,7 @@ onBeforeUnmount(() => {
                       <Pencil :stroke-width="1.5" />
                       {{ t("values.rename") }}
                     </DropdownMenuItem>
-                    <DropdownMenuItem variant="destructive" data-testid="value-delete" @select="later(() => (deleting = item.name))">
+                    <DropdownMenuItem variant="destructive" data-testid="value-delete" @select="removeValue(item.name)">
                       <Trash2 :stroke-width="1.5" />
                       {{ t("values.delete") }}
                     </DropdownMenuItem>
@@ -489,28 +504,6 @@ onBeforeUnmount(() => {
         </Tabs>
       </section>
     </div>
-    <ConfirmDialog
-      v-if="clearing"
-      :title="t('history.clearTitle')"
-      :description="t('history.clearText')"
-      :confirm="t('history.clear')"
-      :icon="Eraser"
-      :confirm-icon="Eraser"
-      :cancel="t('cancel')"
-      @confirm="confirmClear"
-      @cancel="clearing = false"
-    />
-    <ConfirmDialog
-      v-if="deleting !== null"
-      :title="t('values.deleteTitle', { name: deleting })"
-      :description="t('values.deleteText')"
-      :confirm="t('values.delete')"
-      :icon="Trash2"
-      :confirm-icon="Trash2"
-      :cancel="t('cancel')"
-      @confirm="confirmDelete"
-      @cancel="deleting = null"
-    />
     <ValueDialog
       v-if="valueDialog && (valueDialog.renaming !== undefined || savable !== null)"
       :values="values"
@@ -519,5 +512,7 @@ onBeforeUnmount(() => {
       @submit="submitValue"
       @cancel="valueDialog = null"
     />
+    <!-- Deleting a value or clearing the history says so here, with Undo. -->
+    <Toaster />
   </div>
 </template>

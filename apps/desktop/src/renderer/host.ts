@@ -2,6 +2,7 @@
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
 import { toast } from "@tavora/official-ui/components/ui/toast";
+import { isUndoKey, openUndos, undoable, undoLatest } from "@tavora/official-ui/undoable";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
@@ -533,6 +534,36 @@ addEventListener("keydown", (event) => {
   event.preventDefault();
   runShortcut(shortcut);
 });
+
+// Ctrl+Z takes back the newest delete whose Undo toast is still up. Not on the Overlay page: it has its own undo for
+// frames (layout-state.ts), and one key press never undoes twice. Text fields keep their own undo too.
+addEventListener("keydown", (event) => {
+  if (state.value?.screen === "overlay" || openUndos() === 0 || !isUndoKey(event)) return;
+  event.preventDefault();
+  void undoLatest();
+});
+
+/**
+ * Runs a delete that the host does at once and answers with an undo token, then shows "<title>" with Undo for a few
+ * seconds (modules/shared/src/undoable.ts). After that the delete is final. False when the delete failed (its error
+ * was toasted).
+ */
+export async function deleteWithUndo(action: HostAction, title: string): Promise<boolean> {
+  const result = await act(action);
+  if (!result.ok) return false;
+  const token = result.id;
+  if (!token) return true;
+  undoable({
+    title,
+    undo: async () => {
+      const back = await api.act({ type: "undo-delete", token });
+      if (!back.ok) throw new Error(back.error);
+    },
+    failed: (reason) => (reason instanceof Error ? reason.message : undefined),
+    commit: () => void api.act({ type: "forget-undo", token }),
+  });
+  return true;
+}
 
 export function prompt(request: Omit<PromptRequest, "kind" | "value" | "maxLength"> & { value?: string; maxLength?: number }) {
   dialog.value = { kind: "prompt", value: "", maxLength: 80, ...request };

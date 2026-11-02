@@ -30,7 +30,7 @@ function stop() {
 function start() {
   if (timer !== undefined || props.paused || !Number.isFinite(remaining) || remaining <= 0) return;
   startedAt = Date.now();
-  timer = setTimeout(() => dismissToast(props.item.id), remaining);
+  timer = setTimeout(() => dismissToast(props.item.id, "timeout"), remaining);
 }
 function pause() {
   if (timer === undefined) return;
@@ -69,8 +69,10 @@ onBeforeUnmount(() => {
 });
 
 function runAction() {
-  props.item.action?.onClick();
-  dismissToast(props.item.id);
+  // Gone first, then the action: an offer the button settles is not settled again by the toast leaving.
+  const action = props.item.action;
+  dismissToast(props.item.id, "action");
+  action?.onClick();
 }
 </script>
 
@@ -114,7 +116,7 @@ function runAction() {
         <p v-if="item.description" class="tavora-toast-description">{{ item.description }}</p>
       </div>
       <Transition name="tavora-toast-action">
-        <Button v-if="item.action" type="button" size="xs" variant="ghost" class="tavora-toast-button" :data-testid="item.actionTestid" @click="runAction">
+        <Button v-if="item.action" type="button" size="xs" variant="ghost" class="tavora-toast-button" :data-testid="item.actionTestid" :aria-keyshortcuts="item.actionKeys" @click="runAction">
           {{ item.action.label }}
         </Button>
       </Transition>
