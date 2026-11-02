@@ -106,6 +106,18 @@ describe("dialog queue", () => {
     expect(shown()).toEqual({ kind: "game", id: "one" });
   });
 
+  it("does not put a more urgent request in place of the one shown while another dialog is open, and does after", () => {
+    const { queue, shown, block } = setup();
+    queue.request({ kind: "link", url: "https://a.test" });
+    block(true);
+    queue.request({ kind: "grant", onRequest: 1 });
+    expect(shown()).toEqual({ kind: "link", url: "https://a.test" });
+    expect(queue.waiting()).toEqual([{ kind: "grant", onRequest: 1 }]);
+    block(false);
+    expect(shown()).toEqual({ kind: "grant", onRequest: 1 });
+    expect(queue.waiting()).toEqual([{ kind: "link", url: "https://a.test" }]);
+  });
+
   it("lets an equal or less urgent request wait behind the one shown", () => {
     const { queue, shown } = setup();
     queue.request({ kind: "link", url: "https://a.test" });
