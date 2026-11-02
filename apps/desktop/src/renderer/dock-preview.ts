@@ -163,7 +163,13 @@ export class DockPreview {
       this.slots[group.id] = slots;
       const row = group.element.querySelector<HTMLElement>(".dv-tabs-container");
       this.stripStart[group.id] = row ? row.getBoundingClientRect().left - this.box.left : r.left - this.box.left;
-      this.stripEnd[group.id] = row ? row.getBoundingClientRect().right - this.box.left : r.right - this.box.left;
+      // The tabs may use all the room up to the group's header buttons: the row's own box is only part of it (the empty
+      // space after the tabs is a separate, growing element), and tabs that slide into that space are still in sight.
+      const header = group.element.querySelector<HTMLElement>(".dv-tabs-and-actions-container");
+      const actions = group.element.querySelector<HTMLElement>(".dv-right-actions-container");
+      const actionsBox = actions?.getBoundingClientRect();
+      const end = actionsBox && actionsBox.width > 0 ? actionsBox.left : (header?.getBoundingClientRect().right ?? r.right);
+      this.stripEnd[group.id] = end - this.box.left;
     }
     const source = dock.getGroup(dragged.groupId) as DockviewGroupPanel | undefined;
     const own = this.tabs.get(dragged.groupId)?.find((tab) => tab.dragged);

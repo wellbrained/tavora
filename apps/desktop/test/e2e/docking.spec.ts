@@ -413,6 +413,84 @@ for (const width of [1400, 820]) {
   });
 }
 
+test("a tab row with empty space shows the dashed ghost tab, not the bar, also within its own group", async () => {
+  const { app, page } = await launch();
+  await page.getByTestId("layouts").click();
+  await page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-2x1"]').click();
+  for (const id of [NOTES, TODOS, REACT]) await openModule(page, id);
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  const group = (id: string) => page.locator(".dv-groupview", { has: page.locator(`[data-module-id="${id}"]`) }).first();
+  const target = group(TODOS);
+  const tabs = target.locator(".dv-tab");
+  const empty = async () => {
+    const box = (await target.boundingBox())!;
+    const last = (await tabs.last().boundingBox())!;
+    const actions = (await target.locator(".dv-right-actions-container").boundingBox())!;
+    return { room: actions.x - (last.x + last.width), y: last.y + 16, x: last.x + last.width + 4, group: box };
+  };
+  // From another group: the ghost tab is at the end, the same width as the dragged tab or a little narrower.
+  expect((await empty()).room).toBeGreaterThan(130);
+  const source = page.locator(`[data-panel-tab][data-module-id="${NOTES}"]`).first();
+  await source.dispatchEvent("dragstart", { dataTransfer });
+  await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
+  const content = target.locator(".dv-content-container");
+  let at = await empty();
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: at.x, clientY: at.y });
+  await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "tab");
+  const ghost = page.getByTestId("dock-ghost-tab");
+  await expect(ghost).toHaveCount(1);
+  expect((await ghost.boundingBox())!.width).toBeGreaterThan(60);
+  await expect(ghost).toContainText(/\S/);
+  // The first slot opens a gap too, and no tab leaves the row.
+  const first = (await tabs.first().boundingBox())!;
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: first.x + 3, clientY: first.y + 16 });
+  await expect(ghost).toContainText(/\S/);
+  await source.dispatchEvent("dragend", { dataTransfer });
+  await expect(page.getByTestId("dock-preview")).toHaveCount(0);
+
+  // Within its own group: the last tab of two dragged to the first slot, with room to spare.
+  const own = tabs.last();
+  await own.dispatchEvent("dragstart", { dataTransfer });
+  await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
+  const row = (await tabs.first().boundingBox())!;
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: row.x + 3, clientY: row.y + 16 });
+  await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "tab");
+  await expect(ghost).toHaveCount(1);
+  await expect(ghost).toContainText(/\S/);
+  await own.dispatchEvent("dragend", { dataTransfer });
+  await app.close();
+});
+
+test("a group with one tab and a long empty header shows the dashed ghost tab after it", async () => {
+  const { app, page } = await launch();
+  await page.getByTestId("layouts").click();
+  await page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-2x1"]').click();
+  for (const id of [NOTES, TODOS]) await openModule(page, id);
+  const target = page.locator(".dv-groupview", { has: page.locator(`[data-module-id="${TODOS}"]`) }).first();
+  await expect(target.locator(".dv-tab")).toHaveCount(1);
+  const tab = (await target.locator(".dv-tab").boundingBox())!;
+  const actions = (await target.locator(".dv-right-actions-container").boundingBox())!;
+  expect(actions.x - (tab.x + tab.width)).toBeGreaterThan(200);
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  const source = page.locator(`[data-panel-tab][data-module-id="${NOTES}"]`).first();
+  await source.dispatchEvent("dragstart", { dataTransfer });
+  await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
+  const content = target.locator(".dv-content-container");
+  // Over the empty header, and over the tab's right half: both end up as the last slot.
+  for (const x of [tab.x + tab.width + 60, tab.x + tab.width - 10]) {
+    await content.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: tab.y + 16 });
+    await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "tab");
+    const ghost = page.getByTestId("dock-ghost-tab");
+    await expect(ghost).toContainText(/\S/);
+    const box = (await ghost.boundingBox())!;
+    expect(box.width).toBeGreaterThan(80);
+    expect(box.x).toBeGreaterThanOrEqual(tab.x + tab.width - 1);
+    expect(box.x + box.width).toBeLessThanOrEqual(actions.x + 1);
+  }
+  await source.dispatchEvent("dragend", { dataTransfer });
+  await app.close();
+});
+
 test("module views are replaced by still images while a menu is open", async () => {
   const { app, page } = await launch();
   await openModule(page, VANILLA);
