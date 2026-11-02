@@ -6,6 +6,8 @@ const installed = new WeakMap<Document, () => void>();
 export interface TitleTooltipOptions {
   /** Called when a hint appears or goes away, so a host can draw it above views that would cover it. */
   onOpenChange?: (open: boolean) => void;
+  /** Called when the pointer or focus rests on an element with a hint and it will show soon, so a host can get ready for drawing it. */
+  onPending?: () => void;
 }
 
 /** One readable hover layer for title hints, in official modules and in the host: the compact card below the element, as the rail's.
@@ -60,6 +62,7 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     if (element.getAttribute("title")) remember(element, title);
     state.title = title;
     state.shortcut = element.getAttribute("aria-keyshortcuts") || undefined;
+    options.onPending?.();
     timer = setTimeout(() => {
       if (current !== element || !element.isConnected) return;
       const { left, top, right, bottom } = element.getBoundingClientRect();

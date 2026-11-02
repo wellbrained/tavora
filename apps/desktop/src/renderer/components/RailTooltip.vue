@@ -6,7 +6,7 @@
 import { Tooltip, tooltipDelay } from "@tavora/official-ui/components/tooltip";
 import { onBeforeUnmount, ref, watch } from "vue";
 import { t } from "../i18n";
-import { useFloating } from "../host";
+import { api, useFloating } from "../host";
 
 const props = defineProps<{
   text: string;
@@ -29,6 +29,8 @@ let release: ReturnType<typeof setTimeout> | undefined;
 function show(trigger: Element | null) {
   if (props.disabled || !trigger || open.value) return;
   clearTimeout(delay);
+  // The panels' pictures take a while: start them now, not when the tip is up.
+  api.prepareOverlay();
   delay = setTimeout(() => {
     // Beside the icon, its arrow on the icon's middle.
     const { left, top, right, bottom } = trigger.getBoundingClientRect();

@@ -21,6 +21,8 @@ export interface OpenedFrom {
 export const FREEZE_TIMEOUT_MS = 250;
 /** How long after the panels said they drew the still images stay under them. */
 export const FROZEN_GONE_MS = 250;
+/** How long a picture taken ahead (prepareFreeze) stays good: a menu opened within this time uses it instead of taking new ones. */
+export const PREPARED_FRESH_MS = 1500;
 
 function isRectLike(raw: unknown): raw is Record<keyof PanelRect, number> {
   const item = (typeof raw === "object" && raw !== null ? raw : {}) as Partial<Record<keyof PanelRect, unknown>>;
@@ -111,6 +113,8 @@ export interface PanelViewsDeps {
   frozen(images: Record<string, string>): void;
   /** Resolves once the host UI shows those images. */
   frozenOnScreen(): Promise<void>;
+  /** The panels are hidden and the pictures stand in for them: a host menu or dialog can be drawn without a view covering half of it. */
+  overlayReady?(): void;
   windowGone(): boolean;
   /** The panels were shown again after a host menu or dialog (for timing logs). */
   shownAgain?(views: PanelViewAdapter[]): void;
@@ -172,6 +176,8 @@ export class PanelViews {
   private openingState: { startedAt: number; timer: ReturnType<typeof setTimeout>; tag: string } | null = null;
   private overlayOpen = false;
   private overlayChanges = 0;
+  /** Pictures taken ahead of a menu (prepareFreeze), by panel; they count while they are fresh. */
+  private prepared: { at: number; pictures: Map<string, Promise<string | null>> } | null = null;
   private dialogState: { instanceId: string; width: number; height: number; bounds: PanelRect | null; still: Promise<string | null> } | null = null;
 
   constructor(private readonly deps: PanelViewsDeps) {}
@@ -524,11 +530,12 @@ export class PanelViews {
     if (!open) return this.thaw(change);
     const images: Record<string, string> = {};
     const started = (this.deps.now ?? performance.now.bind(performance))();
+    const prepared = this.takePrepared();
     await Promise.all(
       [...this.entries].map(async ([instanceId, { adapter }]) => {
         if (!this.canBePictured(instanceId, adapter)) return;
         // A panel going into its dialog has already told its module, which may have changed the page: its picture is the one taken before.
-        const image = this.dialogState?.instanceId === instanceId ? await this.dialogState.still : await this.pictureOf(adapter);
+        const image = this.dialogState?.instanceId === instanceId ? await this.dialogState.still : await (prepared?.get(instanceId) ?? this.pictureOf(adapter));
         if (image) images[instanceId] = image;
       }),
     );
@@ -540,6 +547,29 @@ export class PanelViews {
     this.deps.log?.(`overlay: ${Object.keys(images).length} of ${this.inSlots().length} pictures taken in ${Math.round(taken - started)} ms`);
     if (change !== this.overlayChanges || this.deps.windowGone()) return;
     for (const [instanceId, { adapter }] of this.entries) if (!this.lent.has(instanceId) && !this.inDialog(instanceId)) adapter.setVisible(false);
+    this.deps.overlayReady?.();
+  }
+
+  /**
+   * Starts taking the panels' pictures before a menu opens (the host UI calls it on a right-click, a press on a menu
+   * button, a hover that will show a hint), so the menu finds them ready and the panels step aside at once. Nothing
+   * happens while an overlay is open or the pictures taken a moment ago are still good.
+   */
+  prepareFreeze(): void {
+    if (this.overlayOpen || this.deps.windowGone()) return;
+    const now = (this.deps.now ?? performance.now.bind(performance))();
+    if (this.prepared && now - this.prepared.at < PREPARED_FRESH_MS) return;
+    const pictures = new Map<string, Promise<string | null>>();
+    for (const [instanceId, { adapter }] of this.entries) if (this.canBePictured(instanceId, adapter)) pictures.set(instanceId, this.pictureOf(adapter));
+    this.prepared = { at: now, pictures };
+  }
+
+  /** The pictures taken ahead, if they are still good; a menu uses them once. */
+  private takePrepared(): Map<string, Promise<string | null>> | undefined {
+    const prepared = this.prepared;
+    this.prepared = null;
+    if (!prepared) return undefined;
+    return (this.deps.now ?? performance.now.bind(performance))() - prepared.at < PREPARED_FRESH_MS ? prepared.pictures : undefined;
   }
 
   /** A panel in its slot, ready and drawn: a still image can stand in for it. */
