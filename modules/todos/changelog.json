@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.2.7",
+    "version": "0.2.8",
     "date": "2026-11-02",
     "notes": [
       "Small update to the shared look; nothing changes for you here."
+    ]
+  },
+  {
+    "version": "0.2.7",
+    "date": "2026-11-02",
+    "notes": [
+      "The number of to-dos left counts to its new value, and a to-do you drag settles into its place."
     ]
   },
   {

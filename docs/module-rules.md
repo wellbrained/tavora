@@ -34,6 +34,7 @@ classes where you use a control; never copy it.
 | You need | Use | Not |
 | --- | --- | --- |
 | Button, icon button, text link | `Button` (`default`, `secondary`, `outline`, `ghost`, `link`, `destructive`; sizes `xs` to `lg`, `icon*`) | raw `<button>` with own hover, focus or underline |
+| A button that starts work that takes a while (install, update, import) | `ProgressButton`: the button fills as the percent, or a stripe moves, then shows a tick | a disabled `Button` with a spinner or "Working…" next to it |
 | Group of buttons, toolbar | `ButtonGroup`, `Separator` between groups | a `div` with a 1 px `span` as divider |
 | On/off button (bold, show outline) | `Toggle`, `ToggleGroup` | `Button` with `aria-pressed` |
 | 2 to 4 views or choices | `SegmentedControl` | a row of buttons acting as tabs |
@@ -47,6 +48,8 @@ classes where you use a control; never copy it.
 | List of items to choose or open | `NavList`, `ActionList`, `ActionRow` | a hand-built `ul` of buttons |
 | Table of data | `Table` and its parts (`TableHeader`, `TableRow`, `TableCell`, `TableCaption`) | raw `<table>` with own CSS |
 | Tag, count, status word | `Badge` | muted `span` |
+| A number that changes while it is on screen (a count, a total) | `CountTo` / `useCountTo` (counts to the new value; not for a number that ticks every second or one being typed) | a plain `{{ n }}` that jumps |
+| A list the user reorders by dragging | `useReorderMotion` and `liftedDragImage` from `ui/reorder`: the others slide aside, the dropped item settles; keys reorder at once | a hand-made drop line only |
 | Menu | `ContextMenu`, `DropdownMenu`, or `sdk.ui.showMenu({ anchor: element })` | menu at the pointer, own popup |
 | Tooltip | `Tooltip` / `TooltipRows`, or a `title` (connectModule turns it into the kit tooltip). A disabled `Button` with a `title` (or `hinted`, when you show the tooltip yourself) stays hoverable and focusable, so say why it is off there | own hover box, a wrapper `span` around a disabled button |
 | Floating panel | `Popover` | absolutely positioned `div` |
@@ -94,7 +97,7 @@ themes; anything hard-coded breaks in one of them.
 - **Icons**: Lucide (`@lucide/vue`), 16 px in controls, outline only.
 - **Dropdown arrows**: a control where you pick a value shown in the field (`Select`, `Picker`) has the up/down arrow (`ChevronsUpDown`); the kit adds it. A button that opens a menu of actions has the single down arrow (`ChevronDown`). Never put a down arrow on a picker.
 - **Motion**: durations and curves come from the kit's tokens (`modules/shared/src/motion.css`: `--ease-out-strong`,
-  `--ease-in-out-strong`, `--duration-press|tooltip|menu|panel|move`), never a hand-typed `cubic-bezier` or `ease-in`.
+  `--ease-in-out-strong`, `--duration-press|tooltip|menu|panel|move|reorder`), never a hand-typed `cubic-bezier` or `ease-in`.
   Animate `transform` and `opacity` only (in Tailwind v4, `translate-*` and `scale-*` set the `translate` and `scale`
   properties, so name those in the transition), never `transition-all`, and nothing in the interface runs longer than
   `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed button dips to

@@ -32,6 +32,8 @@
   --duration-move: 300ms;
   /* One breath of a placeholder that waits (Skeleton). The only motion that repeats; it is off for reduced motion. */
   --duration-pulse: 1600ms;
+  /* Items of a list sliding out of the way of one that is dragged, and settling into their place. */
+  --duration-reorder: 200ms;
 }
 
 /* Menus, dropdowns, selects and popovers grow out of the thing that opened them, never from their own middle
