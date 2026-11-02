@@ -99,7 +99,7 @@ function setPanel(patch: Partial<PanelState>) {
     </header>
 
     <Tabs v-if="!query" :model-value="panel.group" class="flex-none border-b px-2" @update:model-value="setPanel({ group: $event as GroupId })">
-      <TabsList class="h-9 w-full overflow-x-auto border-b-0" aria-label="Element groups">
+      <TabsList class="h-9 w-full overflow-x-auto overflow-y-hidden border-b-0" aria-label="Element groups">
         <TabsTrigger v-for="group in GROUPS" :key="group.id" :value="group.id" :data-testid="`tab-${group.id}`">{{ group.title }}</TabsTrigger>
       </TabsList>
     </Tabs>
