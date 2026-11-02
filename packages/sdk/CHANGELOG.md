@@ -1,6 +1,6 @@
 ## 0.3.6
 
-The shared tooltip gets a look. The new field needs the Tavora that comes with it (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+The shared tooltip gets a look. The new field needs Tavora 0.23.53 (`later`), so `MIN_TAVORA` stays (Tavora 0.19.32).
 
 - `TooltipContent.look` is `"neutral"` or `"poe"`. **Neutral is now the default**: the tooltip uses Tavora's own colours and follows the user's theme, with no rarity colours. The gold, brown and purple look it always had is now `look: "poe"` (with the `tone` colours and the affix lines): ask for it only for items that look like that in the game, as PoE 2 Builds does. A module that sets neither still gets a tooltip, in the neutral look.
 - A Tavora that doesn't know `look` rejects the whole tooltip (`INVALID_PARAMS`), so a module that sends it should be ready for `ui.tooltip.show` to fail, as PoE 2 Builds is (it falls back to its own tooltip).
