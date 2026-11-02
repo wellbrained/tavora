@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.80",
+    date: "2026-11-02",
+    title: "Dialogs stay put",
+    notes: [
+      "Dialogs no longer replace each other, and panels stay behind every dialog.",
+    ],
+    prs: [
+      { number: 641, title: "Dialogs no longer replace each other, and panels stay behind every dialog" },
+    ],
+    tags: ["workspace"],
+  },
+  {
     version: "0.23.79",
     date: "2026-11-02",
     title: "Calculator settings follow Tavora's layout",
