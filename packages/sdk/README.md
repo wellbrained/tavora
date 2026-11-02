@@ -82,7 +82,7 @@ the source data, and use `onClose` to clear your local pin state. Escape and the
 host close button dismiss the current tooltip from anywhere in Tavora.
 
 Tooltips are neutral (Tavora's own colours) unless `content.look` is `'poe'`, the Path of Exile 2 item look
-(a Tavora older than SDK 0.3.6's changelog says rejects a tooltip with `look`, so catch the failure).
+(Tavora 0.23.53 and newer; an older Tavora rejects a tooltip with `look`, so catch the failure).
 
 ```ts
 await tavora.ui.tooltip.show({
