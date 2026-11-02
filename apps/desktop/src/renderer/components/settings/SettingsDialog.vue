@@ -262,8 +262,11 @@ function onSearchKey(event: KeyboardEvent) {
           @click="show('about')"
         >
           <Info class="size-4 flex-none" :stroke-width="2" aria-hidden="true" />
-          <span class="min-w-0 flex-1 truncate">{{ t("settings.section.about") }}</span>
-          <span class="text-xs tabular-nums" data-testid="settings-version">{{ version }}</span>
+          <!-- The name and the smaller version share one baseline, so they read as one line. -->
+          <span class="flex min-w-0 flex-1 items-baseline gap-3">
+            <span class="min-w-0 flex-1 truncate">{{ t("settings.section.about") }}</span>
+            <span class="text-xs tabular-nums" data-testid="settings-version">{{ version }}</span>
+          </span>
         </button>
       </div>
 
