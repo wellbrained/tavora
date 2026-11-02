@@ -621,6 +621,23 @@ export async function submitAction(action: HostAction): Promise<string | null> {
   return result.ok ? null : result.error;
 }
 
+/**
+ * The save for a change that shows at once (`useOptimistic`, modules/shared/src/optimistic.ts): runs the action and
+ * rejects with the reason when it fails. The reason is not toasted here; `notSaved` does that once, after the
+ * change was put back.
+ */
+export function savedBy<T>(build: (value: T) => HostAction): (value: T) => Promise<void> {
+  return async (value) => {
+    const result = await act(build(value), { quiet: true });
+    if (!result.ok) throw new Error(result.error);
+  };
+}
+
+/** The message after a change that showed at once could not be saved and was put back. `text` replaces the usual line. */
+export function notSaved(error: unknown, text: string = t("common.notSaved")): void {
+  toast({ title: text, description: error instanceof Error ? error.message : undefined, variant: "error", duration: 6000, testid: "toast-not-saved" });
+}
+
 // Module panels are separate native views drawn above this page, so they
 // are hidden while a menu, dialog or drag floats over the workspace. Still
 // images of them stand in meanwhile.
