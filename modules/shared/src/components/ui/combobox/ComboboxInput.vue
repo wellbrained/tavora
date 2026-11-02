@@ -1,29 +1,56 @@
 <script setup lang="ts">
 import type { ComboboxInputEmits, ComboboxInputProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
-import { Search } from "@lucide/vue"
+import { Search, X } from "@lucide/vue"
 import { reactiveOmit } from "@vueuse/core"
 import { ComboboxInput, useForwardPropsEmits } from "reka-ui"
+import { onMounted, ref } from "vue"
 import { cn } from "../../../lib/utils"
+import { Button } from "../button"
 
 defineOptions({
   inheritAttrs: false,
 })
 
-// Looks like the kit's Input, with a search icon in front unless `icon` is false.
+// Looks like the kit's Input, with a search icon in front unless `icon` is false. Once there is text, a button at the
+// end clears it and keeps the focus in the field, like the kit's SearchInput.
 const props = withDefaults(
-  defineProps<ComboboxInputProps & { class?: HTMLAttributes["class"], icon?: boolean }>(),
-  { icon: true },
+  defineProps<ComboboxInputProps & { class?: HTMLAttributes["class"], icon?: boolean, clearLabel?: string }>(),
+  { icon: true, clearLabel: "Clear search" },
 )
 const emits = defineEmits<ComboboxInputEmits>()
 
-const delegatedProps = reactiveOmit(props, "class", "icon")
+const delegatedProps = reactiveOmit(props, "class", "icon", "clearLabel")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+
+const box = ref<HTMLElement | null>(null)
+const text = ref("")
+const input = () => box.value?.querySelector<HTMLInputElement>("input") ?? null
+
+onMounted(() => {
+  text.value = input()?.value ?? ""
+})
+
+// reka keeps the text in the field (typing, or the picked item shown after a choice) and reports every change.
+function onText(value: string | undefined) {
+  text.value = value ?? ""
+}
+
+// The search text belongs to reka's Combobox, so the clear goes through the field itself: empty it and send the same
+// input event typing would, so the list filter (and any v-model) follow.
+function clear() {
+  const field = input()
+  if (!field) return
+  field.value = ""
+  field.dispatchEvent(new Event("input", { bubbles: true }))
+  text.value = ""
+  field.focus()
+}
 </script>
 
 <template>
-  <div class="relative w-full">
+  <div ref="box" class="relative w-full">
     <Search
       v-if="icon"
       class="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
@@ -38,8 +65,26 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
         'placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/10 border-input h-8 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
         'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3',
         icon && 'pl-8',
+        'pr-9',
         props.class,
       )"
+      @update:model-value="onText"
     />
+    <!-- The × turns in with a little spring and leaves quick (motion.css, .tavora-clear-in / -out). -->
+    <Transition enter-active-class="tavora-clear-in" leave-active-class="tavora-clear-out">
+      <Button
+        v-if="text && !props.disabled"
+        size="icon-xs"
+        variant="ghost"
+        class="absolute top-1/2 right-1.5 -translate-y-1/2"
+        :aria-label="clearLabel"
+        :title="clearLabel"
+        data-slot="combobox-input-clear"
+        @mousedown.prevent
+        @click="clear"
+      >
+        <X :stroke-width="1.5" aria-hidden="true" />
+      </Button>
+    </Transition>
   </div>
 </template>

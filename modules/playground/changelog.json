@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.14",
+    "date": "2026-11-02",
+    "notes": [
+      "The combobox example has a clear button once you type."
+    ]
+  },
+  {
     "version": "0.1.13",
     "date": "2026-11-02",
     "notes": [
