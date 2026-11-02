@@ -63,7 +63,8 @@ export function onLayoutKey(event: KeyboardEvent): void {
     return;
   }
   const direction = ({ arrowleft: "left", arrowright: "right", arrowup: "up", arrowdown: "down" } as const)[key as "arrowleft"];
-  const shown = selected.filter((item) => !item.hiddenOnCanvas);
+  // A locked frame stays where it is.
+  const shown = selected.filter((item) => !item.hiddenOnCanvas && !item.locked);
   if (!direction || !shown.length) return;
   event.preventDefault();
   if (shown.length === 1) {

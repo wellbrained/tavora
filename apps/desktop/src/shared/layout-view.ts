@@ -1,7 +1,9 @@
 // What the Overlay page shows and what it may ask the main process to do. The page is two pieces of Tavora's own (the
 // page in the main window with the sidebar and the toolbar, and the layer on the canvas that takes the mouse); both get
 // the same LayoutView and answer with LayoutMessages, which the main process checks (parseLayoutMessage) before it acts.
-import { GRID_SETTINGS, isGridSetting, type Canvas, type GridSetting } from "./layout-math";
+import { GRID_SETTINGS, isAlignEdge, isGridSetting, type AlignEdge, type Canvas, type GridSetting } from "./layout-math";
+import { isArrangeTo, type ArrangeTo } from "./layout-stack";
+import { normalizePins, type ToolbarSetting } from "./layout-toolbar";
 import type { AnchoredRect, Rect } from "./overlay-anchor";
 
 /** The picker entries of the All games and Everywhere setups (the others are games, by their workspace id). */
@@ -43,6 +45,10 @@ export interface LayoutItemView {
   off: boolean;
   /** The eye in the list: hidden on the canvas only, kept over the game. */
   hiddenOnCanvas: boolean;
+  /** Lock position: it can't be moved or resized (it can still be selected, opened and removed). */
+  locked: boolean;
+  /** Where it is in the stacking order of the setup: 0 is the back, the highest is the front. */
+  z: number;
 }
 
 /**
@@ -116,6 +122,8 @@ export interface LayoutView {
   /** Every selected item, in the order they were picked (several: Ctrl or Shift and a click, or a box drawn on the canvas). */
   selected: string[];
   items: LayoutItemView[];
+  /** The toolbar next to a selected frame: whether it shows and which actions are in it (one setting, the same for every frame). */
+  toolbar: ToolbarSetting;
   /** The setup's picture (a Tavora-internal address), or null. Any setup can have one: a game's, or Everywhere's and All games'. */
   picture: string | null;
   /** The game is running and Tavora has seen its window, so a picture can be taken. */
@@ -194,6 +202,14 @@ export type LayoutMessage =
   | OneOrMany<"reset-size">
   /** Del on the canvas and the toolbar's Remove: the items leave the setup shown, as Remove in their settings does. */
   | OneOrMany<"remove">
+  /** Arrange in a frame's menu: the frames move in the stacking order (together they keep their order to each other). */
+  | ({ to: ArrangeTo } & OneOrMany<"arrange">)
+  /** Align on screen: each frame is set against that side (or the middle) of the canvas. */
+  | ({ edge: AlignEdge } & OneOrMany<"align">)
+  /** Lock position on or off. */
+  | ({ locked: boolean } & OneOrMany<"lock">)
+  /** The toolbar setting: show or hide it, and/or which actions it holds (a preference, not an undo step). */
+  | { type: "toolbar"; show?: boolean; pins?: string[] }
   /** The Settings box: Show, Opacity and Hide from capture for the selected items, as one undo step. */
   | { type: "set"; ids: string[]; change: LayoutItemChange }
   /** The toolbar's Settings: the settings of what the item shows (its panel, until a module can be asked for more). */
@@ -320,6 +336,31 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
     case "canvas-hidden": {
       const target = oneOrMany(raw);
       return target && typeof raw.hidden === "boolean" ? { type: "canvas-hidden", hidden: raw.hidden, ...target } : null;
+    }
+    case "arrange": {
+      const target = oneOrMany(raw);
+      return target && isArrangeTo(raw.to) ? { type: "arrange", to: raw.to, ...target } : null;
+    }
+    case "align": {
+      const target = oneOrMany(raw);
+      return target && isAlignEdge(raw.edge) ? { type: "align", edge: raw.edge, ...target } : null;
+    }
+    case "lock": {
+      const target = oneOrMany(raw);
+      return target && typeof raw.locked === "boolean" ? { type: "lock", locked: raw.locked, ...target } : null;
+    }
+    case "toolbar": {
+      const message: { type: "toolbar"; show?: boolean; pins?: string[] } = { type: "toolbar" };
+      if (raw.show !== undefined) {
+        if (typeof raw.show !== "boolean") return null;
+        message.show = raw.show;
+      }
+      if (raw.pins !== undefined) {
+        const pins = normalizePins(raw.pins);
+        if (!pins) return null;
+        message.pins = pins;
+      }
+      return message.show === undefined && message.pins === undefined ? null : message;
     }
     case "reset":
     case "reset-size":

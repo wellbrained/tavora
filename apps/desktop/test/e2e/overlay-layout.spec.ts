@@ -837,3 +837,179 @@ test("Copy to… is off with a reason while the setup is empty", async () => {
     await app.close();
   }
 });
+
+test("A frame has a right-click menu next to it: arrange, align, lock, a customizable toolbar, and several frames share what works on all", async () => {
+  const userData = await newUserData();
+  await mkdir(userData, { recursive: true });
+  await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), gameOverlays: true }));
+  const anchor = { h: "left", v: "top", x: 0.036, y: 0.03, width: 0.2, height: 0.16 };
+  const overlay = (key: string, x: number) => ({ owner: "official", moduleId: "tavora.clock-counter", workspaceId: GAME, key, scope: "game", mode: "always", opacity: 100, hideFromCapture: false, rect: { x, y: 0.5, width: 0.5, height: 0.16 }, anchor: { ...anchor, x, y: 0.5, width: 0.5 } });
+  await writeFile(path.join(userData, "game-overlays.json"), JSON.stringify({ version: 4, overlays: [overlay("a", 0.05), overlay("b", 0.7)], panels: [], layout: { seen: { [GAME]: { width: 1920, height: 1080 } }, games: {} } }));
+  const { app, page } = await launch(userData, [MODULES], { seed: false });
+  try {
+    await overlayPage(app, page, GAME);
+    await expect.poll(async () => (await state(page))?.items.length).toBe(2);
+    const send = (message: unknown) => page.evaluate((message) => (window as unknown as Host).tavoraHost.layout.send(message), message);
+    const layer = layerOf(app);
+    const [first, second] = (await state(page)).items;
+    const frame = (id: string) => layer.getByTestId(`layout-item-${id}`);
+    const menu = layer.getByTestId("layout-frame-menu");
+    const bar = layer.getByTestId("layout-frame-toolbar");
+    const byId = async (id: string) => (await state(page)).items.find((item) => item.id === id)!;
+    /** Ctrl+Z once the menu has closed and the layer has the keys again. */
+    const undo = async () => {
+      await expect(menu).toHaveCount(0);
+      await layer.keyboard.press("ControlOrMeta+z");
+    };
+    /** The menu opens next to the frame (right of it, with a small gap) and not on the pointer. */
+    const expectNextTo = async (id: string, pointer?: { x: number; y: number }) => {
+      await expect(menu).toBeVisible();
+      const frameBox = (await frame(id).boundingBox())!;
+      const menuBox = (await menu.boundingBox())!;
+      expect(menuBox.x).toBeGreaterThanOrEqual(frameBox.x + frameBox.width - 1);
+      expect(menuBox.x - (frameBox.x + frameBox.width)).toBeLessThan(40);
+      if (pointer) expect(pointer.x < menuBox.x || pointer.x > menuBox.x + menuBox.width || pointer.y < menuBox.y || pointer.y > menuBox.y + menuBox.height).toBe(true);
+    };
+
+    // A right-click selects the frame and opens the menu next to it.
+    const box = (await frame(first!.id).boundingBox())!;
+    const pointer = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    await layer.mouse.click(pointer.x, pointer.y, { button: "right" });
+    await expectNextTo(first!.id, pointer);
+    await expect.poll(async () => (await state(page)).selection).toBe(first!.id);
+    for (const row of ["settings", "copy", "arrange", "align", "lock", "hide", "reset", "reset-size", "toolbar", "customize", "remove"]) await expect(layer.getByTestId(`layout-menu-${row}`)).toHaveCount(1);
+    await expect(layer.getByTestId("layout-menu-toolbar")).toHaveAttribute("aria-checked", "true");
+    await expect(layer.getByTestId("layout-menu-pin")).toHaveCount(0);
+    await layer.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+
+    // The menu key and Shift+F10 open it for the selected frame too.
+    await layer.keyboard.press("Shift+F10");
+    await expectNextTo(first!.id);
+    await layer.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+    await layer.keyboard.press("ContextMenu");
+    await expectNextTo(first!.id);
+    await layer.keyboard.press("Escape");
+
+    // The toolbar is at the frame's top right (above it, there is room), with its right edge on the frame's.
+    const frameBox = (await frame(first!.id).boundingBox())!;
+    const barBox = (await bar.boundingBox())!;
+    expect(Math.abs(barBox.x + barBox.width - (frameBox.x + frameBox.width))).toBeLessThanOrEqual(2);
+
+    // Arrange: one undo step each, no double undo.
+    await layer.mouse.click(pointer.x, pointer.y, { button: "right" });
+    await layer.getByTestId("layout-menu-arrange").click();
+    await layer.getByTestId("layout-menu-front").click();
+    await expect.poll(async () => (await byId(first!.id)).z).toBe(1);
+    await undo();
+    await expect.poll(async () => (await byId(first!.id)).z).toBe(0);
+    expect((await state(page)).canUndo).toBe(false);
+
+    // Align on screen: the frame goes against the canvas's right, then undo brings it back in one press. (Undo selected what the step touched.)
+    await send({ type: "select", id: second!.id });
+    const placed = (await byId(second!.id)).placed;
+    await layer.mouse.click(...(await centre(frame(second!.id))), { button: "right" });
+    await layer.getByTestId("layout-menu-align").click();
+    await layer.getByTestId("layout-menu-align-right").click();
+    await expect.poll(async () => (await byId(second!.id)).placed.x + (await byId(second!.id)).placed.width).toBe((await state(page)).canvas.width);
+    await undo();
+    await expect.poll(async () => (await byId(second!.id)).placed).toEqual(placed);
+
+    await send({ type: "select", id: first!.id });
+    // Lock position: a badge shows, a drag moves nothing, the frame can still be selected, and undo unlocks it.
+    await layer.mouse.click(...(await centre(frame(first!.id))), { button: "right" });
+    await layer.getByTestId("layout-menu-lock").click();
+    await expect.poll(async () => (await byId(first!.id)).locked).toBe(true);
+    await expect(frame(first!.id).getByTestId("layout-frame-lock-badge")).toBeVisible();
+    await expect(layer.getByTestId("layout-handle-r")).toHaveCount(0);
+    const [cx, cy] = await centre(frame(first!.id));
+    const before = (await byId(first!.id)).placed;
+    await layer.mouse.move(cx, cy);
+    await layer.mouse.down();
+    await layer.mouse.move(cx + 120, cy + 80, { steps: 6 });
+    await layer.mouse.up();
+    expect((await byId(first!.id)).placed).toEqual(before);
+    expect((await state(page)).selection).toBe(first!.id);
+    // The arrow keys and Reset position leave it too; Remove still works from the menu's toolbar button.
+    await layer.keyboard.press("ArrowRight");
+    await expect(bar.getByTestId("layout-frame-reset")).toBeDisabled();
+    expect((await byId(first!.id)).placed).toEqual(before);
+    await undo();
+    await expect.poll(async () => (await byId(first!.id)).locked).toBe(false);
+    await expect(frame(first!.id).getByTestId("layout-frame-lock-badge")).toHaveCount(0);
+
+    // The toolbar: Customize toolbar… lists the buttons; ticking one puts it in at once, one setting for every frame.
+    await expect(bar.getByRole("button")).toHaveCount(5);
+    await layer.mouse.click(...(await centre(frame(first!.id))), { button: "right" });
+    await layer.getByTestId("layout-menu-customize").click();
+    const customize = layer.getByTestId("layout-customize");
+    await expect(customize).toBeVisible();
+    await layer.getByTestId("layout-customize-lock").click();
+    await expect.poll(async () => (await state(page)).toolbar.pins).toContain("lock");
+    await expect(bar.getByTestId("layout-frame-lock")).toBeVisible();
+    await layer.getByTestId("layout-customize-arrange").click();
+    await expect(bar.getByTestId("layout-frame-arrange")).toBeVisible();
+    await layer.getByTestId("layout-customize-hide").click();
+    await expect(bar.getByTestId("layout-frame-hide")).toHaveCount(0);
+    // Another frame has the same toolbar.
+    await send({ type: "select", id: second!.id });
+    await expect(bar.getByTestId("layout-frame-lock")).toBeVisible();
+    await send({ type: "select", id: first!.id });
+    // A pinned submenu opens from its button.
+    await bar.getByTestId("layout-frame-arrange").click();
+    await layer.getByTestId("layout-frame-front").click();
+    await expect.poll(async () => (await byId(first!.id)).z).toBe(1);
+    await expect(layer.getByRole("menu")).toHaveCount(0);
+    await layer.keyboard.press("ControlOrMeta+z");
+    await expect.poll(async () => (await byId(first!.id)).z).toBe(0);
+    // (Undo selected what the step touched, both frames.)
+    await send({ type: "select", id: first!.id });
+    // Reset to default (the popover closed with the click on the toolbar; the menu opens it again).
+    await layer.mouse.click(...(await centre(frame(first!.id))), { button: "right" });
+    await layer.getByTestId("layout-menu-customize").click();
+    await expect(customize).toBeVisible();
+    await expect(layer.getByTestId("layout-customize-lock")).toHaveAttribute("aria-checked", "true");
+    await layer.getByTestId("layout-customize-default").click();
+    await expect.poll(async () => (await state(page)).toolbar.pins).toEqual(["settings", "hide", "reset", "reset-size", "remove"]);
+    await expect(bar.getByRole("button")).toHaveCount(5);
+    await layer.keyboard.press("Escape");
+    await expect(customize).toHaveCount(0);
+
+    // Show toolbar turns it off for good; the menu's check follows.
+    await layer.mouse.click(...(await centre(frame(first!.id))), { button: "right" });
+    await layer.getByTestId("layout-menu-toolbar").click();
+    await expect.poll(async () => (await state(page)).toolbar.show).toBe(false);
+    await expect(bar).toHaveCount(0);
+    await layer.mouse.click(...(await centre(frame(first!.id))), { button: "right" });
+    await expect(layer.getByTestId("layout-menu-toolbar")).toHaveAttribute("aria-checked", "false");
+    // Customize still works with the toolbar off: it points at the frame.
+    await layer.getByTestId("layout-menu-customize").click();
+    await expect(customize).toBeVisible();
+    await layer.keyboard.press("Escape");
+    await layer.mouse.click(...(await centre(frame(first!.id))), { button: "right" });
+    await layer.getByTestId("layout-menu-toolbar").click();
+    await expect.poll(async () => (await state(page)).toolbar.show).toBe(true);
+
+    // Several frames: the menu holds what works on all of them, with one undo step for an action.
+    await send({ type: "select", ids: [first!.id, second!.id] });
+    await layer.mouse.click(...(await centre(frame(second!.id))), { button: "right" });
+    await expectNextTo(second!.id);
+    await expect(layer.getByTestId("layout-menu-settings")).toHaveCount(0);
+    for (const row of ["arrange", "align", "lock", "hide", "reset", "reset-size", "remove"]) await expect(layer.getByTestId(`layout-menu-${row}`)).toHaveCount(1);
+    await layer.getByTestId("layout-menu-lock").click();
+    await expect.poll(async () => (await state(page)).items.map((item) => item.locked)).toEqual([true, true]);
+    expect((await state(page)).selected).toEqual([first!.id, second!.id]);
+    await undo();
+    await expect.poll(async () => (await state(page)).items.map((item) => item.locked)).toEqual([false, false]);
+    expect((await state(page)).canUndo).toBe(false);
+  } finally {
+    await app.close();
+  }
+});
+
+/** The middle of an element on the layer. */
+async function centre(locator: ReturnType<Page["locator"]>): Promise<[number, number]> {
+  const box = (await locator.boundingBox())!;
+  return [box.x + box.width / 2, box.y + box.height / 2];
+}

@@ -17,6 +17,7 @@ import type { GameOverlaysView } from "../shared/host-api";
 import { translate, type Language } from "../shared/i18n";
 import { DEFAULT_RECT, anchorOf, contentScale, type AnchoredRect, type LegacyRect } from "../shared/overlay-anchor";
 import type { GridSetting } from "../shared/layout-math";
+import type { ToolbarSetting } from "../shared/layout-toolbar";
 import { HostError } from "./errors";
 import type { Foreground, ForegroundProbe } from "./foreground";
 import type { GameOverlayWindow, OverlayPanel } from "./game-overlay-window";
@@ -89,6 +90,9 @@ export interface LayoutItemInfo {
   opacity: Opacity;
   hideFromCapture: boolean;
   rect: AnchoredRect;
+  /** Lock position, and the place in the setup's stacking order (null: never arranged). */
+  locked: boolean;
+  z: number | null;
   /** Set while the position is not converted yet (the fractions of the window): the layout places it on its canvas the old way. */
   legacy?: LegacyRect;
   hotkey: { accelerator: string; taken: boolean } | null;
@@ -116,6 +120,11 @@ export interface LayoutSource {
   running(): string[];
   grid(): GridSetting;
   setGrid(grid: GridSetting): void;
+  /** The frame toolbar's setting (shown or not, the pinned actions), kept with the grid. */
+  toolbar(): ToolbarSetting;
+  setToolbar(change: Partial<ToolbarSetting>): void;
+  /** Lock position or stacking place of an item in a setup. */
+  setFlags(setupId: string, ref: LayoutItemRef, change: { locked?: boolean; z?: number }): boolean;
   /** A panel goes into a setup, at the size its module prefers; "refused" when it may not go there. */
   addPanel(setupId: string, panel: { owner: string; moduleId: string; workspaceId: string; instanceId: string }): AddResult;
   /** A source of a panel (an overlay for one key of its module) goes into a setup; "exists" when that setup has it. */
@@ -281,6 +290,8 @@ export class GameOverlays {
   private layoutPort: LayoutPort | undefined;
   private readonly open = new Map<string, Open>();
   private readonly toggled = new Set<string>();
+  /** The windows shown and their stacking places at the last look; they are raised again when it changes. */
+  private stackKey = "";
   private timer: ReturnType<typeof setInterval> | undefined;
   private probe: ForegroundProbe | null = null;
   /** The game in front that has something to show, and where its window is (DIPs). */
@@ -1039,9 +1050,15 @@ export class GameOverlays {
       this.closeWindow(entry);
     }
     // A fresh veil would otherwise sit above overlays that were shown before it.
-    if (veilNew) {
-      for (const kind of ["overlay", "panel"] as const) for (const entry of this.open.values()) if (entry.kind === kind && entry.shown) entry.window.raise?.();
-    }
+    // The windows are stacked as the setup's order says (Arrange on the Overlay page); where none was arranged, overlays below panels, as shown.
+    const stack = [...this.open]
+      .filter(([, entry]) => entry.shown)
+      .map(([id, entry]) => ({ id, entry, z: (entry.kind === "overlay" ? overlays.get(id)?.item.z : panels.get(entry.instanceId ?? "")?.item.z) ?? Number.MAX_SAFE_INTEGER }))
+      .sort((x, y) => x.z - y.z || Number(x.entry.kind !== "overlay") - Number(y.entry.kind !== "overlay") || x.entry.shownOrder - y.entry.shownOrder);
+    // Only an arranged order counts: windows coming and going don't raise the others.
+    const stackKey = stack.filter((one) => one.z !== Number.MAX_SAFE_INTEGER).map((one) => `${one.id}:${one.z}`).join("|");
+    if (veilNew || stackKey !== this.stackKey) for (const one of stack) one.entry.window.raise?.();
+    this.stackKey = stackKey;
     // One window takes the keyboard, the panel used last; not each in turn.
     if (started.length > 0) {
       const used = (entry: Open) => this.options.panels?.info(entry.instanceId!)?.usedAt ?? 0;
@@ -1258,6 +1275,17 @@ export class GameOverlays {
         this.store.setGrid(grid);
         this.options.changed();
       },
+      toolbar: () => this.store.toolbar,
+      setToolbar: (change) => {
+        this.store.setToolbar(change);
+        this.options.changed();
+      },
+      setFlags: (setupId, ref, change) => {
+        const done = this.store.setFlags(setupId, ref, change);
+        // The windows follow the new stacking order on this look.
+        if (done) this.tick();
+        return done;
+      },
       running: () => [...this.running].sort((a, b) => Number(b === this.front) - Number(a === this.front)),
       addPanel: (setupId, panel) => this.addPanelTo(setupId, panel),
       addOverlay: (setupId, overlay) => {
@@ -1468,6 +1496,8 @@ export class GameOverlays {
         opacity: overlay.opacity,
         hideFromCapture: overlay.hideFromCapture,
         rect: overlay.rect,
+        locked: overlay.locked === true,
+        z: overlay.z ?? null,
         ...(overlay.legacy ? { legacy: overlay.legacy } : {}),
         hotkey: this.options.streaming.keyOf(toggleBinding(overlay)),
         toggledOn: this.toggled.has(id),
@@ -1488,6 +1518,8 @@ export class GameOverlays {
         opacity: panel.opacity,
         hideFromCapture: panel.hideFromCapture,
         rect: panel.rect,
+        locked: panel.locked === true,
+        z: panel.z ?? null,
         ...(panel.legacy ? { legacy: panel.legacy } : {}),
         hotkey: this.options.streaming.keyOf(toggleBinding(keyTarget)),
         toggledOn: this.toggled.has(liveWindowId(panel.instanceId)),
