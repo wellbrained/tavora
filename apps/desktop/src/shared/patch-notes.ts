@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.63",
+    date: "2026-11-02",
+    title: "Deeper main buttons in Ashen Keep",
+    notes: [
+      "Ashen Keep's main buttons are a deeper orange with light text.",
+      "Themes can now set their own colour for main buttons and badges, apart from the bright accent colour.",
+    ],
+    prs: [
+      { number: 622, title: "Themes can set a button fill: primary-fill, primary-fill-hover, primary-fill-foreground" },
+    ],
+    tags: ["accounts", "calculator", "clock-counter", "games", "notes", "overlays", "pdf-viewer", "publishing", "rail", "sdk", "settings", "system-monitor", "todos", "ui-kit", "website", "whiteboard", "workspace"],
+  },
+  {
     version: "0.23.62",
     date: "2026-11-02",
     title: "Panels and the catalog load smoothly, without jumping.",
