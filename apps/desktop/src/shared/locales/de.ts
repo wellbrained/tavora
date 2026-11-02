@@ -1576,6 +1576,7 @@ export const de: Record<keyof typeof en, string> = {
   "dock.newColumn": "Neue Spalte",
   "dock.newRow": "Neue Zeile",
   "dock.addAsTab": "Als Tab hinzufügen",
+  "dock.samePlace": "Gleiche Stelle",
   "dock.noRoom": "Hier ist nicht genug Platz",
   "dock.showLeftColumn": "Linke Spalte aufklappen",
   "dock.showRightColumn": "Rechte Spalte aufklappen",
