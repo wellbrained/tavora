@@ -2,7 +2,8 @@
 // Calculator: the sum and its result as you type, a keypad (the keyboard works too, with the Windows shortcuts @ for √,
 // q for x² and F9 for ±), Copy, and the workspace's last results. The toolbar switches between the Basic keypad and Plus,
 // which is laid out like the Windows one, and shows or hides the history; its Settings dialog picks the history length, the
-// decimal places and the short form (1.5M) results show with. All of these hold in every workspace.
+// decimal places and the short form (1.5M) results show with, on one page without a menu or a Done button. All of these hold
+// in every workspace.
 // The keypad keeps a calculator size: its keys never shrink below a button nor grow past a big one. The history sits
 // beside it once the panel is wide enough for both, else below; a panel too short for both scrolls.
 // Save as… keeps the result under a name; the Values tab taps it into a sum, where it counts with its number now.
@@ -10,6 +11,7 @@
 // another panel's change at once.
 import { BookmarkPlus, Check, Copy, Delete, Ellipsis, Eraser, History, Pencil, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
 import { connectModule, errorMessage, SegmentedControl } from "@tavora/official-ui";
+import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import { handleUndoKey, Toaster, undoable, type Undoable } from "@tavora/official-ui/components/ui/toast";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
@@ -66,6 +68,10 @@ const mode = computed({ get: () => settings.value.mode, set: (value: Mode) => ch
 
 const keys = computed(() => (settings.value.mode === "basic" ? BASIC : PLUS));
 
+const SETTINGS_SIZE = settingsDialogSize({ pages: 1, rows: 3 });
+/** When a setting was last saved, for "Saved" in the settings footer. */
+const savedAt = ref<number>();
+
 /** Settings is open in a dialog in the middle of the panel (an older Tavora has no dialog over the workspace). */
 const settingsOpen = ref(false);
 /** This panel is shown as a dialog over the workspace; its page is then the settings. */
@@ -78,7 +84,8 @@ function openSettings(): void {
     settingsOpen.value = true;
     return;
   }
-  void connected.panel.openDialog({ width: 440, height: 380 }).catch(() => (settingsOpen.value = true));
+  // One page of three rows: no menu, so the narrow settings dialog (the host's usual top edge, a Tavora before 0.23.78 centres it).
+  void connected.panel.openDialog(SETTINGS_SIZE).catch(() => (settingsOpen.value = true));
 }
 
 function closeSettings(): void {
@@ -92,10 +99,28 @@ const historyLength = computed({
   set: (value: string) => {
     const length = HISTORY_LENGTHS.find((option) => String(option) === value);
     if (!length) return;
-    choose({ historyLength: length });
-    if (history.value.length > length) save((items) => items.slice(0, length));
+    keepHistory(length);
   },
 });
+
+/** The history keeps `length` results from now on; anything older goes. */
+function keepHistory(length: Settings["historyLength"]): void {
+  choose({ historyLength: length });
+  if (history.value.length > length) save((items) => items.slice(0, length));
+}
+
+/** Reset this page: the three settings go back to their defaults, and Undo brings them back with the results that dropped off. */
+function resetSettings(): () => void {
+  const before = settings.value;
+  const kept = history.value;
+  choose({ decimals: DEFAULT_SETTINGS.decimals, short: DEFAULT_SETTINGS.short });
+  keepHistory(DEFAULT_SETTINGS.historyLength);
+  return () => {
+    choose({ decimals: before.decimals, short: before.short, historyLength: before.historyLength });
+    save((items) => restoreHistory(items, kept, before.historyLength));
+  };
+}
+
 const decimals = computed({
   get: () => String(settings.value.decimals),
   set: (value: string) => {
@@ -109,6 +134,7 @@ const recent = computed(() => history.value.slice(0, settings.value.historyLengt
 /** Changes a toolbar choice and keeps it for every workspace. */
 function choose(change: Partial<Settings>): void {
   settings.value = { ...settings.value, ...change };
+  savedAt.value = Date.now();
   void sdk.value?.storage.app
     .set(SETTINGS_KEY, { ...settings.value })
     .then(() => void (saveError.value = null))
@@ -306,6 +332,8 @@ onBeforeUnmount(() => {
     v-model:decimals="decimals"
     v-model:history-length="historyLength"
     :short="settings.short"
+    :saved-at="savedAt"
+    :reset="resetSettings"
     @update:short="(on: boolean) => choose({ short: on })"
     @close="closeSettings"
   />
@@ -333,6 +361,8 @@ onBeforeUnmount(() => {
         v-model:decimals="decimals"
         v-model:history-length="historyLength"
         :short="settings.short"
+        :saved-at="savedAt"
+        :reset="resetSettings"
         @update:short="(on: boolean) => choose({ short: on })"
         @close="closeSettings"
       />
