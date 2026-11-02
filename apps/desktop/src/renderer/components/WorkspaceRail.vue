@@ -557,7 +557,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 </template>
                 <span
                   v-else
-                  class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
+                  class="rail-icon bg-card text-primary group-hover:bg-primary-fill group-hover:text-primary-fill-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
                 >
                   <!-- The game's icon carries a small plus, as the person's does, so the two tiles read as a pair. -->
                   <span class="relative flex">

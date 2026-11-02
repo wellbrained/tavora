@@ -26,7 +26,7 @@ const active = computed(() => state.value!.screen === "overlay");
       :aria-pressed="active ? 'true' : undefined"
       @click="act({ type: active ? 'leave-overlay-page' : 'open-overlay-page' })"
     >
-      <RailFooterTile :class="active && (expanded ? 'text-primary' : 'bg-primary text-primary-foreground')">
+      <RailFooterTile :class="active && (expanded ? 'text-primary' : 'bg-primary-fill text-primary-fill-foreground')">
         <Layers class="size-5" :stroke-width="1.5" />
       </RailFooterTile>
       <span v-if="expanded" class="text-sm font-medium">{{ t("overlays.button.open") }}</span>

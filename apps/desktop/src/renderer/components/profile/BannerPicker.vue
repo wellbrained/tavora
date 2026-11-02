@@ -52,7 +52,7 @@ function pick(id: BannerId) {
         >
           <span :class="cn('relative block h-11 overflow-hidden rounded-md border', id === banner && 'border-primary')">
             <ProfileBanner :banner="id" :picture-url="pictureUrl" />
-            <Check v-if="id === banner" class="bg-primary text-primary-foreground absolute top-1 right-1 size-4 rounded-full p-0.5" :stroke-width="3" aria-hidden="true" />
+            <Check v-if="id === banner" class="bg-primary-fill text-primary-fill-foreground absolute top-1 right-1 size-4 rounded-full p-0.5" :stroke-width="3" aria-hidden="true" />
           </span>
           <span :class="cn('truncate px-0.5 text-xs', id === banner ? 'text-foreground font-medium' : 'text-muted-foreground')">{{ t(`profile.banner.${id}` as MessageKey) }}</span>
         </button>

@@ -72,7 +72,7 @@ function onKey(event: KeyboardEvent) {
           :data-status="item.status"
           :class="cn('size-[7px] flex-none rounded-full', item.status === 'on' ? 'bg-success' : 'shadow-[inset_0_0_0_1.5px_var(--input)]')"
         />
-        <span v-if="item.badge !== undefined" :data-testid="item.badgeTestid" :class="cn('text-xs tabular-nums', item.badgeAccent ? 'bg-primary text-primary-foreground rounded-sm px-1.5' : item.id === modelValue ? 'text-primary' : 'text-muted-foreground')">{{ item.badge }}</span>
+        <span v-if="item.badge !== undefined" :data-testid="item.badgeTestid" :class="cn('text-xs tabular-nums', item.badgeAccent ? 'bg-primary-fill text-primary-fill-foreground rounded-sm px-1.5' : item.id === modelValue ? 'text-primary' : 'text-muted-foreground')">{{ item.badge }}</span>
       </button>
     </div>
   </nav>

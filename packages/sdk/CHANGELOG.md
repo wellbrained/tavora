@@ -1,3 +1,11 @@
+## 0.3.7
+
+Themes get a button fill. The new tokens come with the Tavora that ships them (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `THEME_TOKENS` has three more colours: `primary-fill`, `primary-fill-hover` and `primary-fill-foreground`. They colour solid surfaces that carry text, such as the Primary button, so a theme can have a deep button with light text while `primary` stays bright for links, highlights and lines. A theme that sets none of them gets `primary`, `primary-hover` and `primary-foreground`, so `theme.tokens` always has all three and `applyHostTheme` writes them as `--primary-fill`, `--primary-fill-hover` and `--primary-fill-foreground`.
+- `OPTIONAL_THEME_TOKENS` lists them next to the toast colours, with the token each one copies.
+- A Tavora that doesn't know them leaves them out of `theme.tokens`. Read them with a fallback (`var(--primary-fill, var(--primary))`, as the shared kit does), or the button has no colour there.
+
 ## 0.3.6
 
 The shared tooltip gets a look. The new field needs Tavora 0.23.53 (`later`), so `MIN_TAVORA` stays (Tavora 0.19.32).

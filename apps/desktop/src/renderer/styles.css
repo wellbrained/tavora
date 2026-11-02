@@ -66,6 +66,10 @@
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
+  /* The button fill: a theme may set it apart from primary; without it (and on a Tavora that does not know it) it is primary. */
+  --color-primary-fill: var(--primary-fill, var(--primary));
+  --color-primary-fill-hover: var(--primary-fill-hover, var(--primary-hover));
+  --color-primary-fill-foreground: var(--primary-fill-foreground, var(--primary-foreground));
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);

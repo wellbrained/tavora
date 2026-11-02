@@ -41,7 +41,7 @@ const step = GUIDE.cell + GUIDE.gap;
       :class="
         cn(
           'bg-card/95 text-muted-foreground absolute flex items-center justify-center rounded-lg border shadow-sm',
-          guide.position === cell.position && guide.allowed[cell.position] && 'bg-primary text-primary-foreground border-primary',
+          guide.position === cell.position && guide.allowed[cell.position] && 'bg-primary-fill text-primary-fill-foreground border-primary',
           !guide.allowed[cell.position] && 'opacity-35',
         )
       "

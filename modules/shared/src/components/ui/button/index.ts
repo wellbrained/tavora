@@ -11,7 +11,7 @@ export const buttonVariants = cva(
         // Hovers mix some of the text colour into the surface, so they show on dark and light themes alike.
         // A variant with a dark: background needs its own dark:hover: one, or the dark: one wins over the hover.
         default:
-          "bg-primary text-primary-foreground hover:bg-primary-hover",
+          "bg-primary-fill text-primary-fill-foreground hover:bg-primary-fill-hover",
         destructive:
           "bg-destructive text-white hover:bg-[color-mix(in_srgb,black_15%,var(--destructive))] focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 dark:hover:bg-destructive/85",
         // Remove, delete and take-back buttons: always red, quieter than a confirm dialog's destructive one.
@@ -43,7 +43,7 @@ export const buttonVariants = cva(
     // A button that is off but still hoverable and focusable (so its tooltip can show) is `soft`: the hover look goes
     // back to the resting one. Restated here, before the caller's classes, so a caller's own hover still wins.
     compoundVariants: [
-      { variant: "default", soft: true, class: "hover:bg-primary" },
+      { variant: "default", soft: true, class: "hover:bg-primary-fill" },
       { variant: "destructive", soft: true, class: "hover:bg-destructive dark:hover:bg-destructive/60" },
       { variant: "danger", soft: true, class: "hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15" },
       { variant: "outline", soft: true, class: "hover:bg-background hover:text-inherit hover:border-border dark:hover:bg-input/10 dark:hover:border-input" },
