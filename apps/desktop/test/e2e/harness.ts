@@ -1,8 +1,9 @@
-import { access, mkdtemp, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron as electron, expect, type ElectronApplication, type Page } from "@playwright/test";
+import type { LayoutGroup, LayoutNode, LayoutSplit, SavedLayout } from "../../src/shared/host-api";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const desktopDir = path.resolve(here, "../..");
@@ -159,19 +160,19 @@ export async function expectModuleText(
   app: ElectronApplication,
   moduleId: string,
   testId: string,
-  expected: string,
+  expected: string | RegExp,
   index = 0,
 ): Promise<void> {
-  await expect
-    .poll(() =>
-      inModule<string | null>(
-        app,
-        moduleId,
-        `document.querySelector('[data-testid="${testId}"]')?.textContent ?? null`,
-        index,
-      ).catch(() => null),
-    )
-    .toBe(expected);
+  const shown = () =>
+    inModule<string | null>(
+      app,
+      moduleId,
+      `document.querySelector('[data-testid="${testId}"]')?.textContent ?? null`,
+      index,
+    ).catch(() => null);
+  // A text that only has to contain something (a RegExp) tolerates a panel that loads more than once.
+  if (typeof expected === "string") await expect.poll(shown).toBe(expected);
+  else await expect.poll(async () => (await shown()) ?? "").toMatch(expected);
 }
 
 /** Opens a workspace from the rail and waits for it. */
@@ -179,6 +180,31 @@ export async function openWorkspace(page: Page, workspaceId: string): Promise<vo
   await page.getByTestId(`rail-workspace-${workspaceId}`).click();
   await expect(page.getByTestId(`rail-workspace-${workspaceId}`)).toHaveAttribute("aria-current", "page");
 }
+
+/**
+ * Waits until the layout saved on disk for a workspace is the one the test is about to restart on. The dock saves a
+ * moment after its last change (300 ms), and closing the app does not flush it, so a test that restarts waits for the
+ * file, not for a fixed time. `check` gets every group and split of the saved layout.
+ */
+export async function expectLayoutSaved(userData: string, check: (nodes: LayoutNode[]) => boolean, workspaceId = "poe2"): Promise<void> {
+  const nodes = (node: LayoutNode): LayoutNode[] => (node.kind === "group" ? [node] : [node, ...node.children.flatMap(nodes)]);
+  await expect
+    .poll(async () => {
+      try {
+        const saved = JSON.parse(await readFile(path.join(userData, "workspace.json"), "utf8")) as { workspaces: Record<string, { layout: SavedLayout | null }> };
+        const layout = saved.workspaces[workspaceId]?.layout;
+        return !!layout && check(nodes(layout.root));
+      } catch {
+        // The file is replaced as it is written; try again.
+        return false;
+      }
+    })
+    .toBe(true);
+}
+
+/** The groups among saved layout nodes. */
+export const groupsIn = (nodes: LayoutNode[]): LayoutGroup[] => nodes.filter((node): node is LayoutGroup => node.kind === "group");
+export type { LayoutGroup, LayoutNode, LayoutSplit };
 
 /** Sets the window's content size. */
 export async function setContentSize(app: ElectronApplication, width: number, height: number): Promise<void> {
@@ -210,8 +236,115 @@ export function panels(page: Page, moduleId?: string) {
   return page.locator(moduleId ? `[data-panel-tab][data-module-id="${moduleId}"]` : "[data-panel-tab]");
 }
 
+/** The JavaScript expression that finds a module page's element by its data-testid. */
+export const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
+
+/** Clicks the element a CSS selector finds in the nth panel of a module (a script click, not a real one). */
+export async function clickSelector(app: ElectronApplication, moduleId: string, selector: string, index = 0) {
+  await inModule(app, moduleId, `document.querySelector(${JSON.stringify(selector)}).click()`, index);
+}
+
 export async function clickInModule(app: ElectronApplication, moduleId: string, testId: string, index = 0) {
-  await inModule(app, moduleId, `document.querySelector('[data-testid="${testId}"]').click()`, index);
+  await clickSelector(app, moduleId, `[data-testid="${testId}"]`, index);
+}
+
+/**
+ * A real click (Electron input events) in the middle of the element `selector` finds in a module's page, so the host
+ * counts it as the user's. It waits until the element stands still first: a panel that just opened, or a menu that is
+ * still being positioned, moves for a moment. `scroll` brings the element into view first.
+ */
+export async function realClick(app: ElectronApplication, moduleId: string, selector: string, { scroll = false }: { scroll?: boolean } = {}) {
+  const where = () =>
+    inModule<string>(
+      app,
+      moduleId,
+      `(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element) return ""; ${scroll ? 'element.scrollIntoView({ block: "center" });' : ""} const r = element.getBoundingClientRect(); return r.width && r.height ? JSON.stringify({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }) : ""; })()`,
+    ).catch(() => "");
+  let box = "";
+  await expect
+    .poll(async () => {
+      const last = box;
+      box = await where();
+      return box !== "" && box === last;
+    })
+    .toBe(true);
+  const at = JSON.parse(box) as { x: number; y: number };
+  await app.evaluate(
+    ({ webContents }, { moduleId, x, y }) => {
+      const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
+      if (!target) throw new Error("no panel");
+      const point = { x, y, button: "left" as const, clickCount: 1 };
+      target.sendInputEvent({ type: "mouseMove", ...point });
+      target.sendInputEvent({ type: "mouseDown", ...point });
+      target.sendInputEvent({ type: "mouseUp", ...point });
+    },
+    { moduleId, ...at },
+  );
+}
+
+/** A real key press in a module's page, so what follows counts as the user's own click. */
+export async function gesture(app: ElectronApplication, moduleId: string): Promise<void> {
+  await app.evaluate(({ webContents }, moduleId) => {
+    const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
+    if (!target) throw new Error("no panel");
+    target.sendInputEvent({ type: "keyDown", keyCode: "Shift" });
+    target.sendInputEvent({ type: "keyUp", keyCode: "Shift" });
+  }, moduleId);
+}
+
+/** Types into the prompt dialog and confirms it. */
+export async function answerPrompt(page: Page, value: string): Promise<void> {
+  await page.getByTestId("prompt-input").fill(value);
+  await page.getByTestId("prompt-submit").click();
+  await expect(page.getByTestId("prompt")).toHaveCount(0);
+}
+
+/** Right-clicks a workspace in the rail and picks items down the menu. */
+export async function fromMenu(page: Page, workspaceId: string, ...items: string[]): Promise<void> {
+  await page.getByTestId(`rail-workspace-${workspaceId}`).click({ button: "right" });
+  // Closed menus can linger while they animate out, so only look in open ones.
+  for (const item of items) await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
+}
+
+/** Picks an item from a saved layout's submenu in the Layouts menu. */
+export async function layoutMenu(page: Page, name: string, item: string): Promise<void> {
+  await page.getByTestId("layouts").click();
+  await page.locator('[role="menu"][data-state="open"]').getByText(name, { exact: true }).click();
+  await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
+}
+
+/** A 1x1 PNG. */
+export const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+
+/**
+ * Puts a small module in a folder of the profile's modules folder (the dev folders Tavora scans) and returns that folder.
+ * An `icon` is a file name; the file gets a 1x1 picture.
+ */
+export async function addModule(
+  userData: string,
+  folder: string,
+  id: string,
+  { name = "Mini", version = "1.2.3", icon }: { name?: string; version?: string; icon?: string } = {},
+): Promise<string> {
+  const dir = path.join(userData, "modules", folder);
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, "tavora.module.json"),
+    JSON.stringify({
+      id,
+      name,
+      version,
+      apiVersion: "1",
+      entry: "index.html",
+      games: [],
+      viewport: { minWidth: 100, minHeight: 100 },
+      permissions: { network: [] },
+      ...(icon ? { icon } : {}),
+    }),
+  );
+  await writeFile(path.join(dir, "index.html"), `<!doctype html><title>${name}</title><p>${name}</p>`);
+  if (icon) await writeFile(path.join(dir, icon), PNG);
+  return dir;
 }
 
 /** Types into a module's shared-note textarea and saves it. */

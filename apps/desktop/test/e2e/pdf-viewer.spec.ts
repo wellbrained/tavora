@@ -4,9 +4,8 @@ import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { inModule, launch, openModule, openWorkspace, panels, PDF_VIEWER } from "./harness";
+import { inModule, launch, openModule, openWorkspace, panels, PDF_VIEWER, q, realClick } from "./harness";
 
-const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
 
 /** A one-page PDF with a line of text (the xref is left for the reader to rebuild). */
 function samplePdf(): string {
@@ -257,16 +256,7 @@ test("pdf viewer: a locked PDF asks for its password, again after a wrong one, a
 });
 
 /** A real click in the module's page on the element `selector` finds, so the host counts it as the user's. */
-async function press(app: ElectronApplication, selector: string) {
-  const where = () => inModule<string>(app, PDF_VIEWER, `(() => { const element = document.querySelector(${JSON.stringify(selector)}); element.scrollIntoView({ block: "center" }); const r = element.getBoundingClientRect(); return r.width ? JSON.stringify({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }) : ""; })()`);
-  // Wait until it stands still: a panel that just opened is still laying itself out.
-  let box = "";
-  await expect.poll(async () => { const last = box; box = await where(); return box !== "" && box === last; }).toBe(true);
-  await app.evaluate(({ webContents }, { moduleId, x, y }) => {
-    const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`))!;
-    for (const type of ["mouseDown", "mouseUp"] as const) target.sendInputEvent({ type, x, y, button: "left", clickCount: 1 });
-  }, { moduleId: PDF_VIEWER, ...(JSON.parse(box) as { x: number; y: number }) });
-}
+const press = (app: ElectronApplication, selector: string) => realClick(app, PDF_VIEWER, selector, { scroll: true });
 
 test("pdf viewer: files picked in Tavora's dialog stay linked to their original", async () => {
   const folder = await mkdtemp(path.join(tmpdir(), "tavora-pdf-originals-"));

@@ -20,15 +20,35 @@ export interface OriginTarget {
 let clock: () => number = () => (typeof performance === "undefined" ? Date.now() : performance.now());
 let lastPointer = Number.NEGATIVE_INFINITY;
 let lastKey = Number.NEGATIVE_INFINITY;
+let lastKeyName: string | undefined;
 let users = 0;
 let attached: OriginTarget | null = null;
 
 const onPointer = () => {
   lastPointer = clock();
 };
-const onKey = () => {
+const onKey = (event: { key?: string }) => {
   lastKey = clock();
+  lastKeyName = event.key;
 };
+
+/** The key press that is the latest input (no pointer came after it), and how long ago it was. */
+export interface KeyPress {
+  key: string | undefined;
+  ago: number;
+}
+
+/** The latest input if it was a key press, else nothing. The caller decides how recent is recent enough. */
+export function keyPress(): KeyPress | undefined {
+  if (lastKey === Number.NEGATIVE_INFINITY || lastKey < lastPointer) return undefined;
+  return { key: lastKeyName, ago: clock() - lastKey };
+}
+
+/** A key press the page never sees as a key event (the host catches its shortcuts before the page does). */
+export function noteKeyPress(key?: string) {
+  lastKey = clock();
+  lastKeyName = key;
+}
 // The click that follows a press marks it again, so a long press still counts. A click made with the keyboard
 // (Enter or Space on a button) has detail 0 and doesn't.
 const onClick = (event: { detail?: number }) => {
@@ -72,4 +92,5 @@ export function trackInputOrigin(target: OriginTarget | undefined = typeof docum
 export function resetInputOrigin() {
   lastPointer = Number.NEGATIVE_INFINITY;
   lastKey = Number.NEGATIVE_INFINITY;
+  lastKeyName = undefined;
 }

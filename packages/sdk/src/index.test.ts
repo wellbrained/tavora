@@ -85,6 +85,31 @@ describe("connect", () => {
     expect(late).not.toHaveBeenCalled();
   });
 
+  it("tells onBehindChange about the window going behind the game and back, and a late listener about a window that is behind", async () => {
+    const host = fakeHost(standard);
+    hosts.push(host);
+    const tavora = await sdk.connect();
+    const seen: boolean[] = [];
+    tavora.lifecycle.onBehindChange((behind) => seen.push(behind));
+    host.emit("lifecycle.behind", { behind: true });
+    await tavora.storage.get("count"); // ordered port barrier
+    host.emit("lifecycle.behind", { behind: false });
+    await tavora.storage.get("count");
+    expect(seen).toEqual([true, false]);
+
+    host.emit("lifecycle.behind", { behind: true });
+    await tavora.storage.get("count");
+    const late = vi.fn();
+    tavora.lifecycle.onBehindChange(late);
+    expect(late).toHaveBeenCalledOnce();
+    expect(late).toHaveBeenCalledWith(true);
+    host.emit("lifecycle.behind", { behind: false });
+    await tavora.storage.get("count");
+    const after = vi.fn();
+    tavora.lifecycle.onBehindChange(after);
+    expect(after).not.toHaveBeenCalled();
+  });
+
   it("performs the handshake first and reports what the host sent", async () => {
     const host = fakeHost(standard);
     hosts.push(host);

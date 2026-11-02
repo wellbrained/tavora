@@ -111,6 +111,8 @@ themes; anything hard-coded breaks in one of them.
   `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed button dips to
   0.97 and 1 px down on a fine pointer (Primary, Secondary and Destructive also turn their shadow softly inward). Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
   anything shown all day. Reduced motion keeps a short fade and drops the movement.
+  How often decides how much: what people use many times a day stays instant or gets at most a quick fade (150 ms or
+  less); playful motion (springs, drawing) is only for rare moments or as direct feedback to a click.
   `--ease-spring` (a little overshoot) is only for small things popping in (a dot, a tick, a small icon), never for a
   panel or a menu; the kit's checkbox, radio dot and search clear button use it with `--duration-pop` (in) and
   `--duration-pop-out` (out). Choosing with the arrow keys in a radio group or style tiles does not animate; Space on
@@ -126,6 +128,11 @@ themes; anything hard-coded breaks in one of them.
   in a tooltip's span); with none to measure, the active tab draws its own line. It slides only right after a click, never
   for keys or a value that arrives on its own.
   Dialogs rise 8 px and scale from 0.96 as they fade in (the kit's dialogs do it; centred, never from the trigger).
+  A dialog a key opens (Ctrl+K, a hotkey, Enter on a button) appears at once, and Escape closes any dialog at once; the
+  kit decides this itself, so use the kit's dialogs and don't add motion of your own. A dialog that must never animate
+  takes the `instant` prop on `DialogContent`.
+  Toasts slide 12 px in from the screen edge the stack sits on (up from the bottom, down from the top) and leave the
+  same way, with no blur; their timers wait while the panel is hidden (the kit follows the page and `lifecycle`).
   Rows the user adds or removes in a vertical list use `AnimatedList`, and a page that replaces another in the same
   frame uses `usePageMotion`; don't hand-roll either. Neither moves for a key press or when a whole list is replaced.
   Waiting is the one thing that may repeat: a skeleton's slow pulse (`--duration-pulse`), off for reduced motion.
@@ -192,7 +199,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Panel state**: what one panel remembers (open item, view, tab, filters, folded parts, scroll or zoom) is saved with
   panel state and **read back on start**. Writing it without reading it is the common bug. The view of a `ZoomPane` or `TileMap` is the exception: give it a `persist-key` and the kit saves and restores it in the module's storage (nothing saved: the whole map), so don't copy it into panel state.
 - **Lifecycle**: `onSuspend` flushes pending saves and panel state and pauses timers and animations; `onResume` starts
-  them again; `onDispose` flushes. Call `flushViewMemory()` (from `@tavora/official-ui`) in `onSuspend` and `onDispose` too, so a view still waiting to be saved is written. Every module registers them, even without timers, if anything saves after a delay.
+  them again; `onBehindChange(true)` says the window is behind the game (the panel still runs): the kit's toasts wait on it by themselves; `onDispose` flushes. Call `flushViewMemory()` (from `@tavora/official-ui`) in `onSuspend` and `onDispose` too, so a view still waiting to be saved is written. Every module registers them, even without timers, if anything saves after a delay.
 - **One pane, many copies**: a component may be shown twice. Reach your own elements through refs, never
   `document.querySelector`. Keyboard shortcuts act on the focused pane only, not through a window-wide listener. Ctrl+K
   belongs to Tavora.

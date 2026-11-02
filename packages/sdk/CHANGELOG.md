@@ -1,3 +1,10 @@
+## 0.3.10
+
+A signal for "the user is in the game". The new event comes with Tavora 0.23.82 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `lifecycle.onBehindChange(fn)` calls `fn(true)` when Tavora's window goes behind another program, usually the game, and `fn(false)` when it is back in front (at once with `true` if it is behind already). The panel is not hidden and keeps running, so `onSuspend` does not fire; use it for what the user must be there to see, such as a toast with Undo. A panel shown over the game is never behind. An older Tavora never calls it.
+- The memory host (`@tavora/sdk/testing`) has `host.behind(behind = true)` and defaults to Tavora 0.23.82.
+
 ## 0.3.9
 
 A way to Tavora's Overlay page. The new call needs Tavora 0.23.77 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).

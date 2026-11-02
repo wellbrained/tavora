@@ -182,6 +182,8 @@ export interface BridgeContext {
   getLanguage(): string;
   /** Whether the panel is hidden right now. */
   isSuspended(): boolean;
+  /** Whether Tavora's window is behind another program (the game) and this panel is not over the game. Optional: a context without it is never behind. */
+  isBehind?(): boolean;
   /** Opens a web address in a Browser panel. Throws a HostError when the panel did not just get a click or key press, or the address is not a web address. */
   openLink(url: string): void | Promise<void>;
   /** ui.showMenu: Tavora draws the checked menu above every panel; the chosen id, or null. Throws PERMISSION_DENIED without a click or key press first. */
@@ -835,6 +837,7 @@ export class BridgeSession {
       if (!this.closed) this.port.postMessage({ v: PROTOCOL_VERSION, id: requestId, ok: true, result });
       // A panel that connects while hidden learns so right after connecting.
       if (method === "bridge.handshake" && this.context.isSuspended()) this.emit("lifecycle.suspend", null);
+      if (method === "bridge.handshake" && this.context.isBehind?.()) this.emit("lifecycle.behind", { behind: true });
     } catch (error) {
       if (error instanceof HostError) {
         this.fail(requestId, error);

@@ -175,7 +175,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.9";
+export const SDK_VERSION = "0.3.10";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -677,6 +677,12 @@ export interface TavoraSDK {
     /** The panel is hidden; pause timers and animations. Called immediately if already suspended. */
     onSuspend(fn: () => void): Unsubscribe;
     onResume(fn: () => void): Unsubscribe;
+    /**
+     * Tavora's window went behind another program, usually the game (`true`), or came back in front (`false`). The panel is
+     * not hidden and keeps running; only what the user must be there to see, such as a toast with Undo, should wait.
+     * Called with `true` at once if the window is behind already. Tavora 0.23.82 and newer; an older Tavora never calls it.
+     */
+    onBehindChange(fn: (behind: boolean) => void): Unsubscribe;
     /** Best effort only: autosave must not depend on this firing. */
     onDispose(fn: () => void): Unsubscribe;
   };
@@ -761,6 +767,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
   >();
   const listeners = new Map<EventName, Set<(data: unknown) => void>>();
   let suspended = false;
+  let behind = false;
   /** A Settings press that arrived before the page registered `panel.onOpenSettings` (the page was still starting): given to the first handler. */
   let earlySettings: Events["panel.openSettings"] | null = null;
 
@@ -771,6 +778,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     if ("event" in message) {
       if (message.event === "lifecycle.suspend") suspended = true;
       if (message.event === "lifecycle.resume") suspended = false;
+      if (message.event === "lifecycle.behind") behind = (message.data as Events["lifecycle.behind"] | null)?.behind === true;
       if (message.event === "panel.openSettings" && !listeners.get(message.event)?.size) earlySettings = message.data as Events["panel.openSettings"];
       for (const fn of listeners.get(message.event) ?? []) {
         try {
@@ -812,6 +820,14 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     if (event === "lifecycle.suspend" && suspended) {
       try {
         listener(null);
+      } catch (error) {
+        console.error(`[tavora] ${event} listener failed`, error);
+      }
+    }
+    // The same for a window that was behind before the page asked.
+    if (event === "lifecycle.behind" && behind) {
+      try {
+        listener({ behind: true });
       } catch (error) {
         console.error(`[tavora] ${event} listener failed`, error);
       }
@@ -1168,6 +1184,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     lifecycle: {
       onSuspend: (fn) => on("lifecycle.suspend", fn),
       onResume: (fn) => on("lifecycle.resume", fn),
+      onBehindChange: (fn) => on("lifecycle.behind", ({ behind }) => fn(behind)),
       onDispose: (fn) => on("lifecycle.dispose", fn),
     },
   };
