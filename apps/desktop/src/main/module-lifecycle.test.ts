@@ -66,6 +66,7 @@ async function setup() {
   const catalog = { index: [] as CatalogEntry[], zips: new Map<string, Buffer>() };
   const counted: string[] = [];
   // movedByReload: modules whose folder the next look moves (a built-in module's first update), so it restarts their panels itself.
+  const progress: Array<number | null> = [];
   const state = { online: true, binFails: false, onClose: (_moduleId: string) => {}, grantChanges: 0, movedByReload: new Set<string>(), autoUpdate: true };
   const publish = (entry: CatalogEntry, zip: Buffer) => {
     catalog.index = [entry];
@@ -88,7 +89,13 @@ async function setup() {
         if (!entry) throw new Error("not listed");
         return entry;
       },
-      download: async (zip) => catalog.zips.get(zip.sha256)!,
+      download: async (zip, onProgress) => {
+        const data = catalog.zips.get(zip.sha256)!;
+        onProgress?.(0, data.length);
+        onProgress?.(Math.floor(data.length / 2), data.length);
+        onProgress?.(data.length, data.length);
+        return data;
+      },
       installed: async (id) => void counted.push(`install ${id}`),
       updated: async (id) => void counted.push(`update ${id}`),
     },
@@ -96,6 +103,7 @@ async function setup() {
     grantsChanged: () => void state.grantChanges++,
     autoUpdateModules: () => state.autoUpdate,
     firstKey: (key) => key,
+    installProgress: (_moduleId, percent) => void progress.push(percent),
     panels: {
       reload: (moduleId) => steps.push(`reload panels ${moduleId}`),
       close: (moduleId) => {
@@ -126,7 +134,7 @@ async function setup() {
     await writeFile(file, zip);
     return file;
   };
-  return { counted, userData, userModules, grants, steps, lifecycle, publish, state, zipFile, modules: () => modules };
+  return { progress, counted, userData, userModules, grants, steps, lifecycle, publish, state, zipFile, modules: () => modules };
 }
 
 describe("ModuleLifecycle", () => {
@@ -223,6 +231,23 @@ describe("ModuleLifecycle", () => {
     expect(state.grantChanges).toBe(1);
     await lifecycle.revoke(ID);
     expect(state.grantChanges).toBe(2);
+  });
+
+  it("tells how far a catalog download is in whole percent, and that it ended, also when the install is refused", async () => {
+    const { lifecycle, publish, progress } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const zip = zipOf("1.0.0", key);
+    publish(listing("1.0.0", zip, fingerprint(key)), zip);
+    await lifecycle.installFromCatalog(ID);
+    expect(progress[0]).toBe(0);
+    expect(progress.slice(0, -1)).toEqual([...progress.slice(0, -1)].sort((a, b) => a! - b!));
+    expect(progress.at(-2)).toBe(100);
+    expect(progress.at(-1)).toBeNull();
+    progress.length = 0;
+    const other = zipOf("1.0.0", generateKeyPairSync("ed25519").privateKey);
+    publish(listing("1.0.0", other, fingerprint(key)), other);
+    await expect(lifecycle.installFromCatalog(ID)).rejects.toThrow();
+    expect(progress.at(-1)).toBeNull();
   });
 
   it("installs from the catalog only while online, and only the listed publisher's zip", async () => {

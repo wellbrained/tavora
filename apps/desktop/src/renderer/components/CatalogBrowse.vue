@@ -8,9 +8,11 @@
 // Each card shows its rating (CatalogRating.vue); the list sorts by name, rating or newest.
 import { computed, onMounted, ref, watch } from "vue";
 import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api";
-import { act, addModule, api, dialog, openSettings, state, type AddModuleRequest } from "../host";
+import { act, addModule, api, dialog, installProgress, openSettings, state, type AddModuleRequest } from "../host";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
+import { useActionStatus } from "../action-status";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@tavora/official-ui/components/ui/select";
 import { t } from "../i18n";
@@ -28,7 +30,8 @@ const props = defineProps<{ query: string; open?: string | undefined }>();
 const emit = defineEmits<{ count: [number | null] }>();
 
 const result = ref<CatalogListResult | null>(null);
-const installing = ref<string | null>(null);
+/** The installs working or just done, by module id; the host tells how far a download is (`installProgress`). */
+const { statusOf, run, working } = useActionStatus();
 const errors = ref<Record<string, string>>({});
 /** The module whose info is open, and whether it opened at its reviews. */
 const info = ref<CatalogModuleView | null>(null);
@@ -92,12 +95,13 @@ const MIN_INSTALLS_SHOWN = 10;
 const isPreview = (module: CatalogModuleView) => module.version.includes("-");
 
 async function install(module: CatalogModuleView) {
-  installing.value = module.id;
   const { [module.id]: _, ...rest } = errors.value;
   errors.value = rest;
-  const outcome = await act({ type: "install-catalog-module", moduleId: module.id }, { quiet: true });
-  installing.value = null;
-  if (!outcome.ok) errors.value = { ...errors.value, [module.id]: outcome.error };
+  await run(module.id, async () => {
+    const outcome = await act({ type: "install-catalog-module", moduleId: module.id }, { quiet: true });
+    if (!outcome.ok) errors.value = { ...errors.value, [module.id]: outcome.error };
+    return outcome.ok;
+  });
 }
 
 function add(moduleId: string) {
@@ -170,12 +174,13 @@ function settings() {
               </span>
               <!-- A disabled button gets no hover, so the reason sits on a wrapper. -->
               <span class="shrink-0" :title="whereFits(module) ?? undefined">
-                <Button v-if="installed.has(module.id)" size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!module.fits"
+                <Button v-if="installed.has(module.id) && statusOf(module.id) === 'idle'" size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!module.fits"
                   :data-testid="`catalog-add-${module.id}`" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
                 >{{ t("common.add") }}</Button>
-                <Button v-else size="sm" :disabled="installing !== null || !module.fits"
+                <ProgressButton v-else size="sm" :disabled="(working && statusOf(module.id) === 'idle') || !module.fits"
+                  :status="statusOf(module.id)" :progress="installProgress[module.id] ?? null" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')"
                   :data-testid="`catalog-install-${module.id}`" :aria-label="t('catalog.installLabel', { name: module.name })" @click="install(module)"
-                >{{ installing === module.id ? t("catalog.installing") : t("catalog.install") }}</Button>
+                >{{ t("catalog.install") }}</ProgressButton>
               </span>
           </div>
           </div>
@@ -185,7 +190,7 @@ function settings() {
         {{ query.trim() ? t("addModule.none", { query: query.trim() }) : t("catalog.empty") }}
       </p>
     </template>
-    <CatalogModuleDialog v-if="info" :module="info" :at-reviews="infoAtReviews" :installed="installed.has(info.id)" :installing="installing === info.id" :size="formatSize(info.size)"
+    <CatalogModuleDialog v-if="info" :module="info" :at-reviews="infoAtReviews" :installed="installed.has(info.id)" :status="statusOf(info.id)" :progress="installProgress[info.id] ?? null" :size="formatSize(info.size)"
       :error="errors[info.id]"
       @close="info = null" @install="install(info)" @add="add(info.id)"
     />

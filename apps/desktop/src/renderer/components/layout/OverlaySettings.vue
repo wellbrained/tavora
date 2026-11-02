@@ -8,6 +8,7 @@
 import { computed } from "vue";
 import { ChevronDown } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
@@ -65,7 +66,7 @@ const opacity = computed({
     <div class="flex items-baseline justify-between gap-3 px-3 pt-3">
       <h2 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">{{ t("overlays.layout.settings") }}</h2>
       <p v-if="item" class="min-w-0 truncate text-sm font-medium" data-testid="layout-selected">{{ item.name }}</p>
-      <p v-else-if="many" class="min-w-0 truncate text-sm font-medium" data-testid="layout-selected-count">{{ t("overlays.layout.selectedCount", { count: items.length }) }}</p>
+      <p v-else-if="many" class="min-w-0 truncate text-sm font-medium" data-testid="layout-selected-count"><CountTo :value="items.length" :format="(shown) => t('overlays.layout.selectedCount', { count: shown })" /></p>
     </div>
     <p v-if="!items.length" class="text-muted-foreground px-3 py-3 text-sm" data-testid="layout-pick">{{ t("overlays.layout.pick") }}</p>
     <div v-else class="flex flex-col gap-3 px-3 py-3" :data-testid="item ? `layout-row-${item.id}` : 'layout-row-many'">

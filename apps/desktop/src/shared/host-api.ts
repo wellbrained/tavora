@@ -1191,6 +1191,8 @@ export interface TavoraHostApi {
   /** The user's ranks for the profile card; null from anything but the host UI. Never rejects. */
   profileRanks(): Promise<ProfileRanksView | null>;
   onAccount(listener: (view: AccountView) => void): void;
+  /** A catalog install's download, in whole percent so far; `percent` is null once it ended. */
+  onInstallProgress(listener: (progress: { moduleId: string; percent: number | null }) => void): void;
   getCloudCopy(): Promise<CloudCopyView | null>;
   onCloudCopy(listener: (view: CloudCopyView) => void): void;
   getDeveloperKeys(): Promise<DeveloperKeysView | null>;

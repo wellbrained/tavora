@@ -3,6 +3,7 @@
 // opens its settings in a dialog over the workspace; what is open is this panel's own. On a very narrow panel the row wraps to two lines.
 import { Flag, Hash, Hourglass, Minus, Pause, Play, Plus, RotateCcw, Settings, Timer } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Dialog, DialogContent, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 import { computed, inject } from "vue";
 import { t } from "./i18n";
@@ -65,7 +66,7 @@ const startLabel = computed(() => {
           <h2 class="truncate text-sm font-medium" :title="name">{{ name }}</h2>
           <p v-if="hasSubline" class="text-muted-foreground flex gap-2 text-xs tabular-nums" data-testid="subline">
             <span v-if="item.kind === 'counter' && item.goal !== null" class="flex-none" :class="goalReached(item) && 'text-success'">
-              <template v-if="goalReached(item)">{{ t("item.goalDone") }}&nbsp;</template>{{ item.value }} / {{ item.goal }}
+              <template v-if="goalReached(item)">{{ t("item.goalDone") }}&nbsp;</template><CountTo :value="item.value" :format="String" /> / {{ item.goal }}
             </span>
             <span v-if="adds" class="min-w-0 truncate" :title="adds" data-testid="adds">{{ adds }}</span>
             <span v-if="from" class="min-w-0 truncate" :title="from" data-testid="from">{{ from }}</span>
@@ -73,7 +74,7 @@ const startLabel = computed(() => {
         </div>
       </div>
 
-      <span class="ml-auto min-w-0 flex-[0_1_auto] truncate text-right text-xl font-semibold tabular-nums" :class="flashing && 'clock-done'" data-testid="value">{{ display }}</span>
+      <span class="ml-auto min-w-0 flex-[0_1_auto] truncate text-right text-xl font-semibold tabular-nums" :class="flashing && 'clock-done'" data-testid="value"><CountTo v-if="item.kind === 'counter'" :value="item.value" :format="String" /><template v-else>{{ display }}</template></span>
 
       <div class="flex flex-none items-center gap-1">
         <template v-if="item.kind === 'counter'">

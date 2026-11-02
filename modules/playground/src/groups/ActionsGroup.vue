@@ -31,6 +31,7 @@ import {
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { ProgressButton, type ProgressButtonStatus } from "@tavora/official-ui/components/ui/progress-button";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
 import { toast } from "@tavora/official-ui/components/ui/toast";
 import { ref } from "vue";
@@ -66,6 +67,26 @@ const pickSave = () => (pickedSave.value = "Waystone Camp");
 const sharing = ref(false);
 const savingConfirm = ref(false);
 const working = ref(false);
+/** The progress buttons: one that knows how far it is, one that doesn't. Each runs a pretend install when pressed. */
+const known = ref<{ status: ProgressButtonStatus; progress: number }>({ status: "idle", progress: 0 });
+const unknown = ref<ProgressButtonStatus>("idle");
+function installKnown() {
+  known.value = { status: "busy", progress: 0 };
+  const timer = setInterval(() => {
+    if (known.value.progress >= 100) {
+      clearInterval(timer);
+      known.value = { status: "done", progress: 100 };
+      setTimeout(() => (known.value = { status: "idle", progress: 0 }), 1800);
+    } else known.value = { status: "busy", progress: Math.min(100, known.value.progress + 7 + Math.round(Math.random() * 12)) };
+  }, 250);
+}
+function installUnknown() {
+  unknown.value = "busy";
+  setTimeout(() => {
+    unknown.value = "done";
+    setTimeout(() => (unknown.value = "idle"), 1800);
+  }, 2200);
+}
 /** The three footer patterns: an action and Close, Cancel and an action, only Done. */
 const exporting = ref(false);
 const importing = ref(false);
@@ -99,6 +120,10 @@ function slow(done: () => void) {
           <Button variant="secondary" :disabled="off"><Copy :stroke-width="1.5" /> Copy link</Button>
           <Button variant="ghost" size="sm" :disabled="off">More <ChevronRight :stroke-width="1.5" /></Button>
           <Button variant="secondary" disabled><Loader2 class="animate-spin" :stroke-width="1.5" /> Saving…</Button>
+        </Specimen>
+        <Specimen label="Progress button (the button is the progress; press one)">
+          <ProgressButton :status="known.status" :progress="known.progress" busy-label="Installing…" done-label="Installed" :disabled="off" @click="installKnown"><Download :stroke-width="1.5" /> Install</ProgressButton>
+          <ProgressButton variant="secondary" :status="unknown" busy-label="Updating…" done-label="Updated" :disabled="off" @click="installUnknown">Update</ProgressButton>
         </Specimen>
         <Specimen label="Icon only (each has a label and a shared tooltip)">
           <Button size="icon-xs" variant="ghost" aria-label="Pin" title="Pin" :disabled="off"><Pin :stroke-width="1.5" /></Button>
