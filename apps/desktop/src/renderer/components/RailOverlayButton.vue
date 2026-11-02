@@ -3,7 +3,7 @@
 // it is lit and takes you back. Start / Stop is in the workspace header (OverlayButton.vue).
 import { Layers } from "@lucide/vue";
 import { computed } from "vue";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { act, state } from "../host";
 import { t } from "../i18n";
 import RailFooterTile from "./RailFooterTile.vue";

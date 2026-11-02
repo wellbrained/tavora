@@ -4,7 +4,7 @@ import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { deleteWithUndo, state } from "../../host";
 import { t } from "../../i18n";
 import WorkspaceIcon from "../WorkspaceIcon.vue";

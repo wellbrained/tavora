@@ -4,7 +4,7 @@
 // too small, a note that says so. The lifted group fades and the tabs make room in dock.css. The numbers come from the
 // layout model (dock-model.ts) through dock-preview.ts.
 import { computed } from "vue";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { t } from "../../i18n";
 import type { PreviewView } from "../../dock-preview";
 import type { Rect, Side } from "../../dock-model";

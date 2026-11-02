@@ -26,7 +26,14 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
   let readyTimer: ReturnType<typeof setTimeout> | undefined;
   let keyboard = false;
 
+  // The page is watched for added and removed elements only while a hint is on the way or showing, to close it
+  // when its element goes: otherwise every change anywhere in the page would be looked at for nothing.
+  const gone = new MutationObserver(() => {
+    if (current && !current.isConnected) hide();
+  });
+
   function hide() {
+    gone.disconnect();
     clearTimeout(timer);
     clearTimeout(readyTimer);
     if (state.open) options.onOpenChange?.(false);
@@ -61,6 +68,7 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     if (!title?.trim()) return;
     hide();
     current = element;
+    gone.observe(doc.body, { childList: true, subtree: true });
     if (element.getAttribute("title")) remember(element, title);
     state.title = title;
     state.shortcut = element.getAttribute("aria-keyshortcuts") || undefined;
@@ -101,8 +109,8 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
   doc.addEventListener("focusout", hide, true);
   doc.addEventListener("pointerdown", down, true);
   doc.addEventListener("keydown", key, true);
+  // A title that changes, appears or goes away; nothing else in the page matters here.
   const observer = new MutationObserver(records => {
-    if (current && !current.isConnected) hide();
     for (const record of records) {
       if (record.type !== "attributes" || !(record.target instanceof Element)) continue;
       const element = record.target;
@@ -118,10 +126,11 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
       }
     }
   });
-  observer.observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["title"] });
+  observer.observe(doc.body, { subtree: true, attributes: true, attributeFilter: ["title"] });
   const dispose = () => {
     hide();
     observer.disconnect();
+    gone.disconnect();
     for (const element of Array.from(doc.querySelectorAll("[data-tavora-tooltip]"))) {
       if (!element.getAttribute("title")) element.setAttribute("title", element.getAttribute("data-tavora-tooltip")!);
       element.removeAttribute("data-tavora-tooltip");

@@ -18,7 +18,7 @@ import type {
   SteamImportGame,
 } from "./host-api";
 import { CONTACT_KINDS, CONVERSATION_REPORT_REASONS, MODULE_REPORT_REASONS, OUTCOMES, REQUEST_TYPES } from "./conversations";
-import { isLanguageSetting, type LanguageSetting } from "./i18n";
+import { isLanguageSetting, type LanguageSetting } from "./i18n-core";
 import { isProfileBanner, type ProfileBanner } from "./profile-banner";
 import { GRID_LIMITS, layoutTemplate, type LayoutTemplateId } from "./layout-templates";
 

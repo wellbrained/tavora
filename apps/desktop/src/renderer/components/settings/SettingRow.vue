@@ -12,7 +12,7 @@ import { ChevronRight } from "@lucide/vue";
 import { computed, ref, type Component } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Tooltip } from "@tavora/official-ui/components/tooltip";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { t } from "../../i18n";
 import { isNewSetting } from "./new-settings";
 import { useDetails } from "./use-details";

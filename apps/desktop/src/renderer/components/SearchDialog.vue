@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/o
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { useListNav } from "@/lib/list-nav";
 import { rank, rankByName, startsOrIsWord } from "@/lib/search";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import type { CatalogMatch, OnlineGame, WorkspaceView } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { act, addModule, api, dialog, hiddenSettingIds, hiddenSettings, openSettings, searchOpen, searchStart, showOrAddPanel, state } from "../host";

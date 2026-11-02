@@ -2,7 +2,7 @@
 // A drawn picture of the app window for the first-run welcome: the rail with workspaces on the left, a header
 // with the Add module button, and two panels. Pure CSS from the theme's colours, no screenshots. `lit` brings one
 // part forward in place; `numbers` puts the callout numbers on the parts.
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 
 export type SkeletonPart = "workspace" | "panel" | "module";
 

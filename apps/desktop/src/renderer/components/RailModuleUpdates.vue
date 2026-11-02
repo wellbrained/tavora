@@ -3,7 +3,7 @@
 // The app's own update has its marker (UpdateMarker.vue).
 import { CloudDownload } from "@lucide/vue";
 import { computed } from "vue";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { dialog, state } from "../host";
 import { t } from "../i18n";
 import RailFooterTile from "./RailFooterTile.vue";

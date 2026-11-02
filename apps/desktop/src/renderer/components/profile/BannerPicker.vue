@@ -4,7 +4,7 @@
 import { Check, Pencil } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Popover, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import type { MessageKey } from "../../../shared/i18n";
 import { PROFILE_BANNERS, type ProfileBanner as BannerId } from "../../../shared/profile-banner";
 import { act } from "../../host";

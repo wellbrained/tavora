@@ -11,7 +11,7 @@ import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@tavora/official-ui/components/ui/select";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import type { HostViewState, ThemeVariationView, ThemeView } from "../../../shared/host-api";
 import { act, state, tryToasts } from "../../host";
 import { t } from "../../i18n";

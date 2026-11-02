@@ -9,7 +9,7 @@ import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
 import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import type { DevelopmentProblemKind } from "../../../shared/host-api";
 import { problemText, type ModuleProblemValues } from "../../../shared/module-problem";
 import { act, confirmAction, showToast, state, submitAction } from "../../host";
