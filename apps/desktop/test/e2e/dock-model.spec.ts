@@ -6,9 +6,20 @@ import { cp, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Case, Spec } from "../fixtures/dock-compare/entry";
 import type { LayoutNode, SavedLayout } from "../../src/shared/host-api";
-import type { DropTarget } from "../../src/renderer/dock-model";
+
+// The shapes the bare window's script (test/fixtures/dock-compare/entry.ts, checked with the renderer) takes.
+type Side = "left" | "right" | "top" | "bottom";
+type DropTarget = { kind: "split"; group: string; side: Side } | { kind: "tab"; group: string; index?: number } | { kind: "edge"; side: Side };
+interface Case {
+  dragged: { groupId: string; panelId: string | null };
+  target: DropTarget;
+}
+interface Spec {
+  layout: SavedLayout;
+  infos: Record<string, { title: string; minWidth: number; minHeight: number }>;
+  cases: Case[];
+}
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.resolve(here, "../fixtures/dock-compare");

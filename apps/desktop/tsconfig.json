@@ -17,6 +17,7 @@
     "playwright.config.ts"
   ],
   "exclude": [
-    "src/renderer"
+    "src/renderer",
+    "test/fixtures/dock-compare"
   ]
 }
