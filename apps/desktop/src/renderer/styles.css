@@ -452,6 +452,11 @@ nav[data-expanded="true"] .footer-slot > [aria-hidden="true"] {
   background: color-mix(in srgb, var(--tone) 22%, transparent);
   box-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
 }
+/* The open page's icon and counter take the plate's colour, not the kit's primary, so they match their group. */
+.nav-plates [data-slot="nav-group"] [aria-current="page"] > svg,
+.nav-plates [data-slot="nav-group"] [aria-current="page"] > span.text-primary {
+  color: color-mix(in srgb, var(--tone) 85%, var(--foreground));
+}
 /* Hover tints in the plate's own colour instead of the kit's grey. */
 .nav-plates [data-slot="nav-group"] [data-nav-item]:hover {
   background: color-mix(in srgb, var(--tone) 12%, transparent);
