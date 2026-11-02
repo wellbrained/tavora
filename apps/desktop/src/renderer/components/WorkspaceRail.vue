@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Gamepad2, Plus, Settings, UserRoundPlus } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
 import { liftedDragImage, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import { cn } from "@/lib/utils";
@@ -73,6 +74,15 @@ const favorites = computed(() => library.value.favorites.map((id) => library.val
 // A workspace lives in one place: favorited workspaces leave the main list (and its folders) until unfavorited.
 const favoriteIds = computed(() => new Set<string>(library.value.favorites));
 const rootEntries = computed(() => library.value.root.filter((entry) => entry.kind === "folder" || !favoriteIds.value.has(entry.id)));
+// A game moved into a folder or to the favorites leaves the main list while the other list shows it at once: it did not
+// leave the rail, so the main list keeps still for it (and for a game coming back from there).
+const elsewhere = computed(() => new Set<string>([...library.value.favorites, ...Object.values(library.value.folders).flatMap((item) => item.workspaces)]));
+let elsewhereBefore = elsewhere.value;
+watch(elsewhere, (now) => (elsewhereBefore = now), { flush: "post" });
+const movedBetweenLists = (element: Element, change: "enter" | "leave") => {
+  const id = (element as HTMLElement).dataset.railEntry;
+  return id !== undefined && (change === "leave" ? elsewhere.value : elsewhereBefore).has(id);
+};
 /** How many workspace names the tooltip of a folder lists. */
 const FOLDER_TIP_NAMES = 8;
 const folderWorkspaces = (id: string) => folder(id).workspaces.filter((workspaceId) => !favoriteIds.value.has(workspaceId));
@@ -179,7 +189,8 @@ function scrollMore() {
 
 function onNavKey(event: KeyboardEvent) {
   if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-  const items = [...(nav.value?.querySelectorAll<HTMLElement>("[data-rail-item]") ?? [])];
+  // A row on its way out (inert) is already gone for the keyboard.
+  const items = [...(nav.value?.querySelectorAll<HTMLElement>("[data-rail-item]") ?? [])].filter((item) => !item.closest("[inert]"));
   const index = items.indexOf(document.activeElement as HTMLElement);
   if (index < 0) return;
   event.preventDefault();
@@ -453,7 +464,10 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     <div class="relative mt-1 min-h-0 flex-1">
     <div ref="scroller" class="size-full overflow-x-hidden overflow-y-auto pb-2 [scrollbar-width:none]" @scroll.passive="updateScrollHints">
     <div ref="listContent" class="flex flex-col gap-1">
-        <template v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`">
+      <!-- A game or folder added or removed grows in or folds away, and the rows below follow; a drag only moves it. -->
+      <AnimatedList class="flex flex-col gap-1 empty:hidden" :skip="movedBetweenLists">
+        <!-- Each entry sits in a plain box of its own, which is what folds away or grows in. -->
+        <div v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`" :data-rail-entry="entry.id">
           <RailWorkspace
             v-if="entry.kind === 'workspace'"
             :data-reorder-id="entry.id"
@@ -546,7 +560,8 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               <p v-if="!folder(entry.id).workspaces.length" class="text-muted-foreground p-2 text-center text-xs">{{ t("rail.emptyFolder") }}</p>
             </div>
           </div>
-        </template>
+        </div>
+      </AnimatedList>
         <!-- Add game and Personal are one more entry under the last workspace: two quiet buttons side by side when
              expanded (an even split), two tiles stacked when compact. -->
         <div :class="cn('mt-1 flex px-2', expanded ? 'gap-1' : 'flex-col gap-1')" data-testid="rail-add">

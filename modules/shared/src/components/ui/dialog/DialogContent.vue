@@ -64,6 +64,11 @@ watch(root.open, async (open) => {
   if (!element) return
   parents.value = [...document.querySelectorAll<HTMLElement>("[data-slot=\"dialog-content\"][data-state=\"open\"]")].filter(other => other !== element)
   place()
+  // A parent still rising into place is measured a few pixels off: place again once it has settled.
+  const settling = parents.value.flatMap(parent => parent.getAnimations().map(animation => animation.finished))
+  if (!settling.length) return
+  await Promise.allSettled(settling)
+  if (content() === element) place()
 }, { immediate: true, flush: "post" })
 
 function place() {
@@ -98,7 +103,7 @@ useEventListener(window, "resize", place)
       @open-auto-focus="focusFirst"
       :class="
         cn(
-          'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[min(420px,calc(100%-2rem))] translate-x-[-50%] translate-y-[-50%] gap-6 rounded-lg border p-6 shadow-lg duration-200',
+          'tavora-dialog bg-background fixed top-[50%] left-[50%] z-50 grid w-full max-w-[min(420px,calc(100%-2rem))] translate-x-[-50%] translate-y-[-50%] gap-6 rounded-lg border p-6 shadow-lg',
           props.class,
         )"
     >

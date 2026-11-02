@@ -2,6 +2,7 @@
 // Profile dialog > Messages: the email copy switch, and the conversations that are closed (they leave the inbox
 // icon but stay readable here).
 import { computed } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
@@ -37,7 +38,7 @@ function title(item: ConversationItem): string {
     <div class="-mx-5 border-b px-5 py-4 last:border-b-0">
       <h4 class="text-sm font-medium">{{ t("messagesSettings.closed") }}</h4>
       <p v-if="!closed.length" class="text-muted-foreground mt-1 text-sm" data-testid="messages-closed-none">{{ t("messagesSettings.closedNone") }}</p>
-      <ul v-else class="mt-2" data-testid="messages-closed">
+      <AnimatedList tag="ul" v-else class="mt-2" data-testid="messages-closed">
         <li v-for="item in closed" :key="item.id" class="flex min-h-12 items-center gap-3 py-1" :data-testid="`messages-closed-${item.id}`">
           <span class="flex min-w-0 flex-1 flex-col">
             <span class="truncate">{{ title(item) }}</span>
@@ -48,7 +49,7 @@ function title(item: ConversationItem): string {
           </span>
           <Button variant="ghost" size="sm" @click="openInbox(item.id)">{{ t("messagesSettings.open") }}</Button>
         </li>
-      </ul>
+      </AnimatedList>
     </div>
   </SettingGroup>
 </template>

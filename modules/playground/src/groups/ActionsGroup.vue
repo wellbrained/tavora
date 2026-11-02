@@ -29,7 +29,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
+import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader, DialogScrollContent } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { ProgressButton, type ProgressButtonStatus } from "@tavora/official-ui/components/ui/progress-button";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
@@ -91,6 +91,7 @@ function installUnknown() {
 const exporting = ref(false);
 const importing = ref(false);
 const tidying = ref(false);
+const reading = ref(false);
 /** A pretend save: locks the dialog for a moment, then runs `done`. */
 function slow(done: () => void) {
   working.value = true;
@@ -322,7 +323,7 @@ function slow(done: () => void) {
         </Specimen>
       </DemoSection>
 
-<DemoSection v-if="visible.has('dialogs')" id="dialogs" :title="title('dialogs')" description="420 px wide: an icon, a title and one short line, then the buttons bottom right with the action last. A button that does something may have an icon; Cancel, Close and Done never do.">
+<DemoSection v-if="visible.has('dialogs')" id="dialogs" :title="title('dialogs')" description="420 px wide: an icon, a title and one short line, then the buttons bottom right with the action last. A button that does something may have an icon; Cancel, Close and Done never do. A dialog rises a little as it fades in over a dimmed page and leaves quicker; with reduced motion it only fades.">
         <Specimen label="Dialogs">
           <Button variant="secondary" :disabled="off" @click="renaming = true">Rename…</Button>
           <Button variant="secondary" :disabled="off" @click="renamingBusy = true">Rename with a slow save…</Button>
@@ -336,6 +337,18 @@ function slow(done: () => void) {
           <Button variant="secondary" :disabled="off" @click="importing = true">Cancel + action…</Button>
           <Button variant="secondary" :disabled="off" @click="tidying = true">Only Done…</Button>
         </Specimen>
+        <Specimen label="A long dialog scrolls inside the page (DialogScrollContent)">
+          <Button variant="secondary" :disabled="off" data-testid="long-dialog" @click="reading = true">Long dialog…</Button>
+        </Specimen>
+        <Dialog v-model:open="reading">
+          <DialogScrollContent class="sm:max-w-[420px]">
+            <DialogHeader title="Patch notes" description="A long text pushes the dialog past the window; the page scrolls." />
+            <p v-for="n in 14" :key="n" class="text-muted-foreground text-sm">Line {{ n }}: a few friendly words about what changed, so there is something to scroll past.</p>
+            <DialogFooter>
+              <DialogButton close @click="reading = false">Done</DialogButton>
+            </DialogFooter>
+          </DialogScrollContent>
+        </Dialog>
         <Dialog v-model:open="exporting">
           <DialogContent class="top-[12vh] translate-y-0 sm:max-w-[420px]">
             <DialogHeader :icon="Share2" title="Share this note" description="Pick how it leaves Tavora." />

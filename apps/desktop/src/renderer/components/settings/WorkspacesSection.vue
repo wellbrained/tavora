@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
@@ -106,7 +107,7 @@ function removeSelected() {
           {{ t("settings.workspaces.remove") }}
         </Button>
       </div>
-      <ul class="-mx-5" :aria-label="t('settings.workspaces.list')" data-testid="workspaces-list">
+      <AnimatedList tag="ul" :animate="!filter.trim()" class="-mx-5" :aria-label="t('settings.workspaces.list')" data-testid="workspaces-list">
         <li v-for="workspace in shown" :key="workspace.id">
           <!-- The whole row ticks; the click of the box itself lands here too, so it counts once. -->
           <div class="hover:bg-accent flex min-h-14 cursor-pointer items-center gap-4 px-5 py-2 select-none" @click="toggle(workspace.id, $event.shiftKey)">
@@ -115,8 +116,8 @@ function removeSelected() {
             <span class="min-w-0 flex-1 truncate">{{ workspace.name }}</span>
           </div>
         </li>
-        <li v-if="!shown.length" class="text-muted-foreground px-5 py-4 text-sm">{{ t("steamImport.noMatch") }}</li>
-      </ul>
+        <li v-if="!shown.length" key="none" class="text-muted-foreground px-5 py-4 text-sm">{{ t("steamImport.noMatch") }}</li>
+      </AnimatedList>
     </template>
   </SettingGroup>
 </template>
