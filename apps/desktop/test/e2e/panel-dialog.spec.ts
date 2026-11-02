@@ -152,8 +152,21 @@ test("the picture behind a dialog shows the panel as it was, not the page the di
     // The page is green until its module is told a dialog is open, then red, and green again once it closes (probe.js).
     await expectModuleText(app, PROBE, "probe-status", "ready");
     await expect.poll(() => inModule<string>(app, PROBE, "document.body.style.background")).toBe("rgb(0, 200, 0)");
-    // The picture is taken from what is drawn, so let the green page paint a frame first.
-    await inModule(app, PROBE, "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+    // The picture behind the dialog is taken from what is drawn, so wait until a capture of the panel shows the green page.
+    await expect
+      .poll(() =>
+        app.evaluate(async ({ webContents }, moduleId) => {
+          const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
+          if (!target) return false;
+          const shot = await target.capturePage();
+          const bitmap = shot.toBitmap();
+          // BGRA: count the pixels of the page's green (the red page has none).
+          let green = 0;
+          for (let i = 0; i < bitmap.length; i += 4) if (bitmap[i + 1]! > 150 && bitmap[i + 2]! < 60) green++;
+          return green > 1000;
+        }, PROBE),
+      )
+      .toBe(true);
 
     await gesture(app, PROBE);
     expect((await openDialog(app)).ok).toBe(true);
