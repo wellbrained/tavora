@@ -304,7 +304,14 @@ const name = ref("Waystone");
             <SelectTrigger class="w-56" aria-label="Style"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="option in STYLES" :key="option.value" :value="option.value">
-                <template #thumb><span class="bg-muted relative h-5 w-8 flex-none rounded-sm border" aria-hidden="true"><span class="bg-muted-foreground/70 absolute inset-x-1 top-1.5 h-1 rounded-full" /></span>
+                <template #thumb><span class="bg-muted relative h-5 w-8 flex-none rounded-sm border" aria-hidden="true"><span class="bg-muted-foreground/70 absolute inset-x-1 top-1.5 h-1 rounded-full" /></span></template>
+                {{ option.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </Specimen>
+      </DemoSection>
+
 <DemoSection v-if="visible.has('toggles')" id="toggles" :title="title('toggles')" description="Buttons that stay pressed, such as Bold next to a text size. Tiles pick one look out of a few by its picture. Both dip when you press them with the mouse.">
         <Specimen label="Toggles (separate buttons)">
           <Toggle v-model="bold" label="Bold" class="font-bold" :disabled="off">B</Toggle>
@@ -328,13 +335,6 @@ const name = ref("Waystone");
               <span :class="['absolute inset-x-2 rounded-sm bg-black/70', option.value === 'card' ? 'top-2 bottom-2' : option.value === 'bar' ? 'bottom-2 h-2' : 'top-1/2 h-1 -translate-y-1/2 bg-black/40']" />
             </template>
           </StyleTiles>
-        </Specimen>
-      </DemoSection>
-</template>
-                {{ option.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
         </Specimen>
       </DemoSection>
 

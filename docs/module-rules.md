@@ -97,6 +97,7 @@ themes; anything hard-coded breaks in one of them.
 - **Focus**: the kit controls bring the focus ring. Never remove it and never draw your own.
 - **Icons**: Lucide (`@lucide/vue`), 16 px in controls, outline only.
 - **Dropdown arrows**: a control where you pick a value shown in the field (`Select`, `Picker`) has the up/down arrow (`ChevronsUpDown`); the kit adds it. A button that opens a menu of actions has the single down arrow (`ChevronDown`). Never put a down arrow on a picker.
+- **Dropdown lists**: a list opened from a field or a text button starts at its left edge, opens to the right (the kit flips it when there is no room) and is at least as wide as the field. A field whose choices are known is as wide as its longest choice and keeps that width whatever is picked (the kit's `Picker` does this); size a `Select` the same way.
 - **Motion**: durations and curves come from the kit's tokens (`modules/shared/src/motion.css`: `--ease-out-strong`,
   `--ease-in-out-strong`, `--duration-press|tooltip|menu|panel|move|reorder`), never a hand-typed `cubic-bezier` or `ease-in`.
   Animate `transform` and `opacity` only (in Tailwind v4, `translate-*` and `scale-*` set the `translate` and `scale`
