@@ -1946,6 +1946,9 @@ export class Host {
     ipcMain.on("host:frozen-shown", (event) => {
       if (fromHost(event)) this.frozenShown?.();
     });
+    ipcMain.on("host:dialog-covered", (event, covered: unknown) => {
+      if (fromHost(event) && typeof covered === "boolean") this.panels.coverDialog(covered);
+    });
     ipcMain.on("host:dimmed", (event, dimmed: unknown) => {
       if (fromHost(event) && typeof dimmed === "boolean" && dimmed !== this.dimmed) {
         this.dimmed = dimmed;

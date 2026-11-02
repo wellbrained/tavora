@@ -504,6 +504,28 @@ describe("panel dialog", () => {
     expect(rig.views.snapshot().dialog?.placed).toBe(true);
   });
 
+  it("hides the panel's view while a page dialog is above its dialog, and shows it again after", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    await vi.advanceTimersByTimeAsync(0);
+    await rig.views.freeze(true);
+    rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    expect(a.visible).toBe(true);
+    rig.views.coverDialog(true);
+    expect(a.visible).toBe(false);
+    rig.views.coverDialog(false);
+    expect(a.visible).toBe(true);
+    // Closing the dialog while covered leaves nothing covered for the next one.
+    rig.views.coverDialog(true);
+    rig.views.closeDialog(A);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    await vi.advanceTimersByTimeAsync(0);
+    rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    expect(a.visible).toBe(true);
+  });
+
   it("ignores a bad frame, and closing puts the panel back in its slot", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);

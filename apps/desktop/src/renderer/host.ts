@@ -11,6 +11,7 @@ import { numberedWorkspaces } from "./shortcuts";
 import { setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 import { developerSetup } from "./developer-setup";
+import { createDialogQueue } from "./dialog-queue";
 
 export const api = window.tavoraHost;
 export const state = shallowRef<HostViewState | null>(null);
@@ -363,7 +364,45 @@ export type DialogRequest =
   /** Report a catalog module to Tavora (Settings > Modules). */
   | { kind: "report-module"; moduleId: string; name: string };
 
-export const dialog = shallowRef<DialogRequest | null>(null);
+// Dialogs open on the page, counted from the page itself: every dialog is built on the kit's Dialog, so a new one is
+// covered without being listed anywhere. The module panels (native views above this page) step aside for them, and the
+// queue of dialogs (below) looks at them.
+const DIALOG_OPEN = '[data-slot="dialog-content"][data-state="open"]';
+/** The panel shown big in a dialog. It is open on purpose and its view stays in sight, so it is not one that covers it. */
+const PANEL_DIALOG = '[data-testid="panel-dialog"]';
+/** Settings and the profile are places to work in: a question the host asks may open on top of them, as a confirmation does. */
+const STACKABLE = `${PANEL_DIALOG}, [data-testid="settings"], [data-testid="profile-dialog"]`;
+/** How many dialogs are open (the panel dialog too), and how many of those are not the panel dialog. */
+const openDialogs = ref(0);
+const pageDialogs = ref(0);
+let dimmed = false;
+new MutationObserver(() => {
+  const open = [...document.querySelectorAll(DIALOG_OPEN)];
+  openDialogs.value = open.length;
+  pageDialogs.value = open.filter((element) => !element.matches(PANEL_DIALOG)).length;
+  // The system draws the window buttons above the page, so a dialog backdrop can't dim them: while one is open,
+  // the host dims them instead.
+  const now = document.querySelector('[data-slot="dialog-overlay"][data-state="open"]') !== null;
+  if (now === dimmed) return;
+  dimmed = now;
+  api.setDimmed(now);
+}).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state"] });
+
+/** Dialogs open that a question the host asks on its own must not stack on: all but its own slot, Settings, the profile and the panel dialog. */
+function blockingDialogs(): number {
+  const open = [...document.querySelectorAll(DIALOG_OPEN)].filter((element) => !element.matches(STACKABLE)).length;
+  return open - (dialog.value ? 1 : 0);
+}
+
+const dialogSlot = shallowRef<DialogRequest | null>(null);
+/**
+ * The dialog shown in the slot. Writing a dialog opens it now, and a question the host asked on its own that it pushes
+ * out is not lost: it goes back in the queue (dialog-queue.ts). Writing null closes it.
+ */
+export const dialog = computed<DialogRequest | null>({
+  get: () => dialogSlot.value,
+  set: (request) => (request ? dialogQueue.open(request) : (dialogSlot.value = null)),
+});
 
 // Just signed in, on a PC without the account's recovery key while the account has one: ask for it
 // now, once (the decision log: asked at sign-in, made only when the cloud copy or publishing needs it).
@@ -383,11 +422,45 @@ watch(
 );
 watch(() => developerKeys.value?.status, askForRecoveryKey);
 
+// What the host asks on its own (the four questions below) goes through a queue: it shows at once when no dialog is
+// open and otherwise waits, so it never takes the slot from a dialog the user is working in (dialog-queue.ts).
+const dialogQueue = createDialogQueue(
+  {
+    get: () => dialogSlot.value,
+    set: (request) => (dialogSlot.value = request),
+    blocked: () => blockingDialogs() > 0,
+  },
+  (request) => {
+    switch (request.kind) {
+      case "grant":
+        return request.onRequest ? 4 : undefined;
+      case "navigation-choice":
+        return 3;
+      case "link-choice":
+        return 2;
+      case "game-switch":
+        return 1;
+      default:
+        return undefined;
+    }
+  },
+);
+// Something closed: the next waiting question shows. The slot is free, or the last dialog besides the slot's own went.
+watch(dialogSlot, (open) => {
+  if (open === null) dialogQueue.next();
+});
+watch(openDialogs, () => dialogQueue.next());
+/** A question that ended (answered, or its panel or game went away) must not show later, nor stay on screen. */
+const dropRequest = (kind: DialogRequest["kind"]) => dialogQueue.cancel((request) => request.kind === kind);
+
 // A panel could not switch to what another panel of its module asked for: ask whether to open it in a new one.
+// (The view state hands out a new object on every update, so the watcher follows what the question says.)
 watch(
-  () => state.value?.pendingNavigation ?? null,
-  (pending) => {
-    if (pending && dialog.value?.kind !== "navigation-choice") dialog.value = { kind: "navigation-choice", ...pending };
+  () => JSON.stringify(state.value?.pendingNavigation ?? null),
+  () => {
+    const pending = state.value?.pendingNavigation;
+    if (pending) dialogQueue.request({ kind: "navigation-choice", ...pending });
+    else dropRequest("navigation-choice");
   },
 );
 
@@ -395,7 +468,8 @@ watch(
 watch(
   () => state.value?.pendingLink ?? null,
   (url) => {
-    if (url && dialog.value?.kind !== "link-choice") dialog.value = { kind: "link-choice", url };
+    if (url) dialogQueue.request({ kind: "link-choice", url });
+    else dropRequest("link-choice");
   },
 );
 
@@ -403,19 +477,23 @@ watch(
 watch(
   () => state.value?.pendingGameSwitch ?? null,
   (gameId) => {
-    if (gameId && (!dialog.value || dialog.value.kind === "game-switch")) dialog.value = { kind: "game-switch", gameId };
-    else if (!gameId && dialog.value?.kind === "game-switch") dialog.value = null;
+    if (gameId) dialogQueue.request({ kind: "game-switch", gameId });
+    else dropRequest("game-switch");
   },
 );
 
 // A module needs a connector it asks for on request (its first Copy OBS link): Tavora's consent dialog asks.
+// The panel that asks shows the question itself (PanelContent.vue); the window only when none of its panels is in view.
+const connectorAskedInPanel = (pending: { moduleId: string }) => state.value?.panels.some((panel) => panel.moduleId === pending.moduleId && panel.question === "ask") ?? false;
 watch(
-  () => state.value?.pendingConnector ?? null,
-  (pending) => {
-    // The panel that asks shows the question itself (PanelContent.vue); the window only when none of its panels is in view.
-    const inPanel = pending !== null && (state.value?.panels.some((panel) => panel.moduleId === pending.moduleId && panel.question === "ask") ?? false);
-    if (pending && !inPanel) dialog.value = { kind: "grant", moduleId: pending.moduleId, slot: null, review: true, onRequest: { id: pending.id, connectors: [...pending.connectors] } };
-    else if (dialog.value?.kind === "grant" && dialog.value.onRequest) dialog.value = null;
+  () => {
+    const pending = state.value?.pendingConnector;
+    return pending ? `${pending.id}:${connectorAskedInPanel(pending)}` : null;
+  },
+  () => {
+    const pending = state.value?.pendingConnector ?? null;
+    if (pending && !connectorAskedInPanel(pending)) dialogQueue.request({ kind: "grant", moduleId: pending.moduleId, slot: null, review: true, onRequest: { id: pending.id, connectors: [...pending.connectors] } });
+    else dialogQueue.cancel((request) => request.kind === "grant" && request.onRequest !== undefined);
   },
 );
 
@@ -765,20 +843,14 @@ export function setHintFloating(open: boolean): void {
 /** A note about the inbox (or the developer note) waits and nothing else is open, so InboxNotes.vue shows it. */
 export const noteShown = computed(() => (inbox.value.note !== null || inbox.value.developerNote) && dialog.value === null && !settingsOpen.value && !profileOpen.value && inboxOpen.value === null);
 
-export const overlayOpen = computed(
-  () =>
-    openMenus.value > 0 ||
-    inboxOpen.value !== null ||
-    noteShown.value ||
-    dialog.value !== null ||
-    copyQuestion.value !== null ||
-    state.value?.hotkeyRequest != null ||
-    publish.value !== null ||
-    settingsOpen.value ||
-    profileOpen.value ||
-    panelDialog.value !== null ||
-    searchOpen.value ||
-    dragging.value,
+// Module panels step aside for a menu, a drag and every dialog on the page (openDialogs: the slot, Settings, the profile,
+// the inbox, search, the panel dialog, Pairing, Publish ... whatever is built on the kit's Dialog).
+export const overlayOpen = computed(() => openMenus.value > 0 || openDialogs.value > 0 || dragging.value);
+
+// A page dialog above the panel dialog: the panel's view is native and would draw over it, so it steps aside meanwhile.
+watch(
+  () => panelDialog.value !== null && pageDialogs.value > 0,
+  (covered) => api.setDialogCovered(covered),
 );
 
 // A menu or hint opens in this page at once, but the panels (native views above it) step aside only after their pictures
@@ -793,11 +865,29 @@ api.onOverlayReady(() => {
 // The panels' pictures stay after a dialog closes, under the panels, until the host says every panel has drawn again.
 // Only a change the host is told of resets this: a menu that closes and opens again within one tick sends nothing, and
 // the panels stay out of the way, so nothing would ever say they are.
+// Closing waits one turn of the event loop. A dialog that hands over to the next one (the prompt closes, a question that
+// waited opens) is gone and replaced within that turn, and the panels must not show for a moment in between.
+let overlayRelease: ReturnType<typeof setTimeout> | undefined;
 watch(overlayOpen, (open) => {
-  api.setOverlay(open);
+  if (!open) {
+    overlayRelease = setTimeout(() => {
+      overlayRelease = undefined;
+      api.setOverlay(false);
+      clearTimeout(panelsOutCap);
+      panelsOut.value = false;
+    }, 0);
+    return;
+  }
+  // It never closed: the panels are still out of the way.
+  if (overlayRelease !== undefined) {
+    clearTimeout(overlayRelease);
+    overlayRelease = undefined;
+    return;
+  }
+  api.setOverlay(true);
   clearTimeout(panelsOutCap);
   panelsOut.value = false;
-  if (open) panelsOutCap = setTimeout(() => (panelsOut.value = true), PANELS_OUT_CAP_MS);
+  panelsOutCap = setTimeout(() => (panelsOut.value = true), PANELS_OUT_CAP_MS);
 });
 watch(
   () => overlayOpen.value && !panelsOut.value,
@@ -819,16 +909,6 @@ watch(
   (style) => (document.documentElement.dataset.panelStyle = style),
   { immediate: true },
 );
-
-// The system draws the window buttons above the page, so a dialog backdrop can't dim them: while one is open,
-// the host dims them instead.
-let dimmed = false;
-new MutationObserver(() => {
-  const now = document.querySelector('[data-slot="dialog-overlay"][data-state="open"]') !== null;
-  if (now === dimmed) return;
-  dimmed = now;
-  api.setDimmed(now);
-}).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state"] });
 
 // The window buttons get their own box in one colour, so it has to be the colour of the page behind them: the workspace
 // canvas is darker than the theme's background. The first solid background under the top right corner, dialogs left out

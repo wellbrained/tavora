@@ -1179,6 +1179,8 @@ export interface TavoraHostApi {
   };
   /** Dims the window buttons along with the page while a dialog backdrop covers it. */
   setDimmed(dimmed: boolean): void;
+  /** A page dialog is open above the panel dialog (the panel shown big): its view steps aside until that closes. */
+  setDialogCovered(covered: boolean): void;
   /** The page colour behind the window buttons (#rrggbb), so they sit on it without a box of their own. */
   setButtonsBackground(color: string): void;
   onState(listener: (state: HostViewState) => void): void;
