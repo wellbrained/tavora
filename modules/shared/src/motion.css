@@ -225,9 +225,55 @@
   }
 }
 
+/* One highlight that slides to the active item of a row (segmented control, tabs), instead of each item drawing its own.
+   useSlidingIndicator (components/ui/sliding-indicator) measures the active item into --indicator-x/-y/-w/-h on the
+   container, which must be position: relative, and sets data-indicator there:
+     off    no active item (nothing picked, disabled, hidden): the highlight is not shown
+     still  placed without moving: first paint, a resize, a font loading, a new list of options
+     slide  moving to the newly picked item (a click); from "off" it also fades in, out of where it last rested
+     jump   the picked item changed without moving the highlight (the keys, or a change nobody just clicked); the
+            labels should not fade either: a component turns its label transition off with group-data-[indicator=jump]
+   A component gives the element its colours and shape; for a different shape (an underline) it overrides top and
+   height with utility classes. Moves translate and size only. */
+@layer components {
+  .tavora-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    opacity: 0;
+  }
+  [data-indicator-axis="x"] > .tavora-indicator {
+    top: var(--indicator-y, 0px);
+    width: var(--indicator-w, 0px);
+    height: var(--indicator-h, 0px);
+    translate: var(--indicator-x, 0px) 0;
+  }
+  [data-indicator-axis="y"] > .tavora-indicator {
+    left: var(--indicator-x, 0px);
+    width: var(--indicator-w, 0px);
+    height: var(--indicator-h, 0px);
+    translate: 0 var(--indicator-y, 0px);
+  }
+  [data-indicator="still"] > .tavora-indicator,
+  [data-indicator="jump"] > .tavora-indicator,
+  [data-indicator="slide"] > .tavora-indicator {
+    opacity: 1;
+  }
+  [data-indicator="slide"] > .tavora-indicator {
+    transition-property: translate, width, height, opacity;
+    transition-duration: var(--duration-panel);
+    transition-timing-function: var(--ease-in-out-strong);
+  }
+}
+
 /* Reduced motion keeps the fade and drops the movement. The rule that follows (theme.css, styles.css) stops every
    other animation; these few are kept on purpose, so a menu still arrives gently instead of blinking in. */
 @media (prefers-reduced-motion: reduce) {
+  /* The highlight of a row of choices jumps. */
+  [data-indicator] > .tavora-indicator {
+    transition: none !important;
+  }
   /* Checkbox, radio, strike: no scale, draw or spring, only a short fade. */
   .tavora-check::before {
     scale: 1 !important;

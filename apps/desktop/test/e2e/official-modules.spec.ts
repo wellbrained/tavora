@@ -699,6 +699,64 @@ test("ui playground: tabs close with the X and a middle click, reorder by drag, 
   await app.close();
 });
 
+test("ui playground: the segmented control's pill and the tabs' line follow the pick, hide when nothing is picked or disabled, and the tab strip keeps its own line", async () => {
+  const { app, page } = await launch();
+  await openModule(page, PLAYGROUND);
+  await ready(app, PLAYGROUND, "section-colours");
+  await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
+  await page.waitForTimeout(500);
+  await inModule(app, PLAYGROUND, `${q("tab-inputs")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("segmented-many")}`)).toBe(true);
+
+  const group = `document.querySelector('[data-testid="segmented-many"]')`;
+  const pill = `${group}.querySelector('[data-testid="segmented-pill"]')`;
+  const picked = `${group}.querySelector('[role="radio"][data-state="checked"]')`;
+  const option = (label: string) => `[...${group}.querySelectorAll('[role="radio"]')].find((el) => el.textContent.trim() === ${JSON.stringify(label)})`;
+  const mode = () => inModule<string>(app, PLAYGROUND, `${group}.dataset.indicator`);
+  // The pill sits exactly on the picked option, to a hundredth of a pixel (Inter's widths are fractions).
+  const gap = () =>
+    inModule<number>(app, PLAYGROUND, `(() => { const a = ${pill}.getBoundingClientRect(); const b = ${picked}.getBoundingClientRect(); return Math.max(...["left", "top", "width", "height"].map((k) => Math.abs(a[k] - b[k]))); })()`);
+
+  // First paint: placed, not moving.
+  await expect.poll(mode).toBe("still");
+  expect(await gap()).toBeLessThan(0.05);
+
+  // A click slides (a press, then the click); the pill ends on the new option.
+  await inModule(app, PLAYGROUND, `(() => { const el = ${option("Done")}; el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 })); el.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })); })()`);
+  await expect.poll(mode).toBe("slide");
+  await expect.poll(gap).toBeLessThan(0.05);
+
+  // The arrow keys jump, and the labels don't fade either.
+  await inModule(app, PLAYGROUND, `(() => { const el = ${picked}; el.focus(); el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true })); })()`);
+  await expect.poll(mode).toBe("jump");
+  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${option("Done")}).transitionProperty`)).toBe("none");
+  await expect.poll(gap).toBeLessThan(0.05);
+
+  // The row changes size (a resize, a font arriving): the pill stays on its option.
+  await inModule(app, PLAYGROUND, `${group}.style.paddingLeft = "30px"`);
+  await expect.poll(gap).toBeLessThan(0.05);
+
+  // Nothing picked, and disabled: no pill.
+  const hidden = (label: string) => inModule<string[]>(app, PLAYGROUND, `(() => { const g = document.querySelector('[role="radiogroup"][aria-label=${JSON.stringify(label)}]'); return [g.dataset.indicator, getComputedStyle(g.querySelector('[data-testid="segmented-pill"]')).opacity]; })()`);
+  expect(await hidden("Mixed")).toEqual(["off", "0"]);
+  expect(await hidden("Locked")).toEqual(["off", "0"]);
+  // The first click on a control with nothing picked slides in like every later one (it fades in out of its resting place).
+  await inModule(app, PLAYGROUND, `(() => { const el = document.querySelector('[role="radiogroup"][aria-label="Mixed"] [role="radio"]:nth-of-type(2)'); el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 })); el.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })); })()`);
+  expect((await hidden("Mixed"))[0]).toBe("slide");
+  await expect.poll(async () => (await hidden("Mixed"))[1]).toBe("1");
+
+  // Display: the tabs' line is one piece in the list and the tab has no border of its own; the closable strip keeps
+  // its per-tab border and has no moving line.
+  await inModule(app, PLAYGROUND, `${q("tab-display")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("tab-strip")}`)).toBe(true);
+  const list = `[...document.querySelectorAll('[data-slot="tabs-list"]')].find((el) => el.querySelector('[data-testid="tabs-line"]') && el.textContent.includes("Overview"))`;
+  await expect.poll(() => inModule(app, PLAYGROUND, `${list}.dataset.indicator`)).toBe("still");
+  expect(await inModule(app, PLAYGROUND, `(() => { const l = ${list}; const line = l.querySelector('[data-testid="tabs-line"]'); const tab = l.querySelector('[role="tab"][data-state="active"]'); const a = line.getBoundingClientRect(); const b = tab.getBoundingClientRect(); return [Math.abs(a.left - b.left) < 0.05, Math.abs(a.width - b.width) < 0.05, Math.abs(a.bottom - b.bottom) < 0.05, getComputedStyle(tab).borderBottomColor]; })()`)).toEqual([true, true, true, "rgba(0, 0, 0, 0)"]);
+  const strip = `document.querySelector('[data-testid="tab-strip"]')`;
+  expect(await inModule(app, PLAYGROUND, `[!!${strip}.querySelector('.tavora-indicator'), getComputedStyle(${strip}.querySelector('[role="tab"][data-state="active"]')).borderBottomColor !== "rgba(0, 0, 0, 0)"]`)).toEqual([false, true]);
+  await app.close();
+});
+
 test("to-dos: an open menu stays open when a save comes back", async () => {
   const { app, page } = await launch();
   await openModule(page, TODOS);

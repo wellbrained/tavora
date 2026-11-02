@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.7",
+    "date": "2026-11-02",
+    "notes": [
+      "Small fades and menus follow the shared timing."
+    ]
+  },
+  {
     "version": "0.1.6",
     "date": "2026-11-02",
     "notes": [
