@@ -7,6 +7,7 @@ import type { ModuleProblemKind, ModuleProblemValues } from "./module-problem";
 import type { ContactDraft, ConversationDetailResult, InboxView } from "./conversations";
 import type { HostAction } from "./host-actions";
 import type { LayoutMessage, LayoutStills, LayoutView } from "./layout-view";
+import type { HostToast, ToastsEvent } from "./host-toasts";
 import type { Slots } from "./panel-layout";
 
 // The leaderboard words the profile card needs, as module-schema and the SDK's protocol have them. Written out here:
@@ -1153,6 +1154,13 @@ export interface TavoraHostApi {
   /** Of these release copies, which still need publishing, from one look at the catalog; null when it can't be reached. Never rejects. */
   releaseStatuses(copies: ReleaseCopy[]): Promise<Record<string, ReleaseStatus> | null>;
   /** Where the visible panels are. Panels not listed are hidden. */
+  /** Tavora's own toasts are drawn by a page above the panels (main/toast-view.ts); the host page keeps their list. */
+  toasts: {
+    /** The toasts now, without their functions. */
+    sync(items: HostToast[]): void;
+    /** A button or close button on a toast was pressed. */
+    onEvent(listener: (event: ToastsEvent) => void): void;
+  };
   setPanelBounds(bounds: PanelBounds[]): void;
   /** Where the workspace is (the card that covers it while a workspace opens), or null when it is not on screen. */
   setWorkspaceBounds(bounds: { x: number; y: number; width: number; height: number } | null): void;

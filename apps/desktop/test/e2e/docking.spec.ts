@@ -1,6 +1,6 @@
 // Docking: splits and tabs, the layout saved per game, and named layouts.
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { expectModuleText, inModule, launch, layOutColumns, openModule, panels, RAIL_WIDTH, REACT, NOTES, setContentSize, TODOS, typeInModule, VANILLA, VUE, waitForShown, answerPrompt, layoutMenu, expectLayoutSaved, groupsIn } from "./harness";
+import { expectModuleText, inModule, launch, layOutColumns, openModule, panels, RAIL_WIDTH, REACT, NOTES, setContentSize, TODOS, typeInModule, VANILLA, VUE, waitForShown, answerPrompt, layoutMenu, expectLayoutSaved, groupsIn, hostToast } from "./harness";
 
 const groups = (page: Page) => page.locator(".dv-groupview");
 
@@ -605,7 +605,7 @@ test("named layouts are saved, applied, renamed and deleted", async () => {
   const again = await launch(userData);
   // Deleted at once, with Undo on a toast instead of a question (undo.spec.ts covers the Undo).
   await layoutMenu(again.page, "Mapping", "layout-delete");
-  await expect(again.page.getByTestId("undo-toast")).toContainText("Layout deleted");
+  await expect(hostToast(again.page, "undo-toast")).toContainText("Layout deleted");
   await again.page.getByTestId("layouts").click();
   await expect(again.page.locator('[role="menu"][data-state="open"]').getByText("Mapping")).toHaveCount(0);
   await again.page.keyboard.press("Escape");

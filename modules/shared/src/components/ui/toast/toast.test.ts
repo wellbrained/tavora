@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { dismissToast, setToastPosition, toast, toastDuration, toastPosition, toasts, TOAST_DURATION } from "./toast";
+import { dismissToast, GAP, setToastPosition, stackExtent, toast, toastDuration, toastPosition, toasts, TOAST_DURATION } from "./toast";
 
 describe("toast", () => {
   beforeEach(() => {
@@ -71,5 +71,17 @@ describe("toast position", () => {
     expect(toastPosition.value).toBe("bottom-center");
     setToastPosition("left");
     expect(toastPosition.value).toBe("bottom-center");
+  });
+});
+
+describe("stackExtent", () => {
+  it("is as wide as the widest toast and as tall as all of them with the gaps", () => {
+    expect(stackExtent([])).toEqual({ width: 0, height: 0 });
+    expect(stackExtent([{ width: 200, height: 40 }])).toEqual({ width: 200, height: 40 });
+    expect(stackExtent([{ width: 200, height: 40 }, { width: 320, height: 56 }])).toEqual({ width: 320, height: 40 + 56 + GAP });
+  });
+
+  it("counts a toast that is not measured yet by its height only", () => {
+    expect(stackExtent([undefined])).toEqual({ width: 0, height: 44 });
   });
 });

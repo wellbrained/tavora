@@ -2,7 +2,7 @@
 // and a toast offers Undo for a few seconds (undoable in the kit). Undo puts the thing back exactly as it was; once the
 // toast goes, or the app closes, the delete stays.
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { inModule, launch, layOutColumns, openModule, openWorkspace, TODOS, typeInModule, VANILLA, waitForShown, answerPrompt, layoutMenu, fromMenu, q } from "./harness";
+import { inModule, launch, layOutColumns, openModule, openWorkspace, TODOS, typeInModule, VANILLA, waitForShown, answerPrompt, toastsPage, toastsSettled, layoutMenu, fromMenu, q, hostToast } from "./harness";
 
 async function saveLayout(page: Page, name: string) {
   await page.getByTestId("layouts").click();
@@ -25,7 +25,7 @@ async function layoutNames(page: Page): Promise<string[]> {
   return names;
 }
 
-const toast = (page: Page, title: string) => page.getByTestId("undo-toast").filter({ hasText: title });
+const toast = (page: Page, title: string) => hostToast(page, "undo-toast").filter({ hasText: title });
 
 test("a deleted layout comes back with Undo or Ctrl+Z, also after a switch to another workspace", async () => {
   const { app, page } = await launch();
@@ -39,13 +39,13 @@ test("a deleted layout comes back with Undo or Ctrl+Z, also after a switch to an
   await layoutMenu(page, "Mapping", "layout-delete");
   await expect(page.getByTestId("confirm")).toHaveCount(0);
   await expect(toast(page, "Layout deleted")).toBeVisible();
-  await expect(page.getByTestId("toast-status")).toHaveText("Layout deleted");
+  await expect(toastsPage(page).getByTestId("toast-status")).toHaveText("Layout deleted");
   expect(await layoutNames(page)).toEqual(["Bossing"]);
 
   // The user goes to another workspace; Undo still puts the layout back into the one it came from, in its place.
   await openWorkspace(page, "satisfactory");
   await toast(page, "Layout deleted").getByTestId("undo").click();
-  await expect(page.getByTestId("undo-toast")).toHaveCount(0);
+  await expect(hostToast(page, "undo-toast")).toHaveCount(0);
   await openWorkspace(page, "poe2");
   expect(await layoutNames(page)).toEqual(["Mapping", "Bossing"]);
 
@@ -53,7 +53,7 @@ test("a deleted layout comes back with Undo or Ctrl+Z, also after a switch to an
   await layoutMenu(page, "Bossing", "layout-delete");
   await expect(toast(page, "Layout deleted")).toBeVisible();
   await page.keyboard.press("Control+z");
-  await expect(page.getByTestId("undo-toast")).toHaveCount(0);
+  await expect(hostToast(page, "undo-toast")).toHaveCount(0);
   expect(await layoutNames(page)).toEqual(["Mapping", "Bossing"]);
   // Nothing left to undo: another Ctrl+Z does nothing.
   await page.keyboard.press("Control+z");
@@ -67,9 +67,10 @@ test("two quick deletes get an Undo each; undoing the first leaves the second de
   await fromMenu(page, "satisfactory", "menu-remove");
   await expect(page.getByTestId("rail-workspace-poe2")).toHaveCount(0);
   await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveCount(0);
-  await expect(page.getByTestId("undo-toast")).toHaveCount(2);
+  await expect(hostToast(page, "undo-toast")).toHaveCount(2);
 
   // Spread the stack (pointing at it), then Undo on the older one.
+  await toastsSettled(app);
   await toast(page, "Satisfactory moved to Trash").hover();
   await toast(page, "Path of Exile 2 moved to Trash").getByTestId("undo").click();
   await expect(page.getByTestId("rail-workspace-poe2")).toBeVisible();
@@ -94,7 +95,7 @@ test("a delete is final once the toast goes, and when the app closes during it",
   // Closed with the toast's X: no Undo any more.
   await layoutMenu(page, "Mapping", "layout-delete");
   await toast(page, "Layout deleted").getByRole("button", { name: "Dismiss" }).click();
-  await expect(page.getByTestId("undo-toast")).toHaveCount(0);
+  await expect(hostToast(page, "undo-toast")).toHaveCount(0);
   await page.keyboard.press("Control+z");
   expect(await layoutNames(page)).toEqual(["Bossing"]);
 
@@ -103,7 +104,7 @@ test("a delete is final once the toast goes, and when the app closes during it",
   await expect(toast(page, "Layout deleted")).toBeVisible();
   await running.app.close();
   const again = await launch(userData);
-  await expect(again.page.getByTestId("undo-toast")).toHaveCount(0);
+  await expect(hostToast(again.page, "undo-toast")).toHaveCount(0);
   await again.page.getByTestId("layouts").click();
   await expect(again.page.locator('[role="menu"][data-state="open"]').getByText("Bossing", { exact: true })).toHaveCount(0);
   await again.page.keyboard.press("Escape");
@@ -127,7 +128,7 @@ test("the Undo toast waits while Tavora is behind the game, and counts down agai
 
   // Back in front: it goes after its time, and not before the user had a second to see it.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.emit("focus")));
-  await expect(page.getByTestId("undo-toast")).toHaveCount(0, { timeout: 10_000 });
+  await expect(hostToast(page, "undo-toast")).toHaveCount(0, { timeout: 10_000 });
   await app.close();
 });
 
@@ -147,8 +148,25 @@ test("the Undo button reads as big as the message and is easy to hit, in a compa
       const box = target.getBoundingClientRect();
       return { width: box.width, height: box.height, fontSize: getComputedStyle(target).fontSize };
     };
-    return { pill: element.getBoundingClientRect().height, title: size(".tavora-toast-title"), undo: size('[data-testid="undo"]'), close: size(".tavora-toast-close") };
+    const edges = (selector: string) => {
+      const box = element.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+      return { left: box.left, right: box.right };
+    };
+    const text = edges(".tavora-toast-text");
+    const undo = edges('[data-testid="undo"]');
+    const close = edges(".tavora-toast-close");
+    return {
+      pill: element.getBoundingClientRect().height,
+      title: size(".tavora-toast-title"),
+      undo: size('[data-testid="undo"]'),
+      close: size(".tavora-toast-close"),
+      textToUndo: undo.left - text.right,
+      undoToClose: close.left - undo.right,
+    };
   });
+  // Room between the parts: 20 px from the message to Undo, 12 px from Undo to the close button.
+  expect(measured.textToUndo).toBeCloseTo(20, 0);
+  expect(measured.undoToClose).toBeCloseTo(12, 0);
   expect(measured.undo.fontSize).toBe(measured.title.fontSize);
   // At least the kit's small button (28 px), and room around the word; the X as high.
   expect(measured.undo.height).toBeGreaterThanOrEqual(28);

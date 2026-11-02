@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, launch, newUserData, openAddGame, openWorkspace, panels, seedLibrary } from "./harness";
+import { expectModuleText, hostToast, launch, newUserData, openAddGame, openWorkspace, panels, seedLibrary } from "./harness";
 
 interface Listed {
   entry: Record<string, unknown>;
@@ -567,7 +567,7 @@ test("catalog module updates wait for the user, install from the Updates view wi
   const checkForUpdates = async (toast: string) => {
     await settings();
     await page.getByTestId("check-module-updates").click();
-    await expect(page.getByTestId("toast")).toHaveText(toast);
+    await expect(hostToast(page)).toHaveText(toast);
   };
   try {
     await openWorkspace(page, "poe2");
@@ -725,7 +725,7 @@ test("a user reports a module from Browse and from Settings, and only its id, ke
     await expect(page.getByTestId("report-module-wellbrained.tracker")).toHaveText("Report to Tavora");
     await page.getByTestId("report-module-wellbrained.tracker").click();
     await page.getByTestId("report-send").click();
-    await expect(page.getByTestId("toast")).toHaveText("Reported Tracker. Thanks!");
+    await expect(hostToast(page)).toHaveText("Reported Tracker. Thanks!");
     expect(reports).toEqual([sent, sent]);
   } finally {
     await app.close();
@@ -764,7 +764,7 @@ test("offline, the catalog says what happened and how to go on, and an update ch
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-modules").click();
     await page.getByTestId("check-module-updates").click();
-    await expect(page.getByTestId("toast")).toHaveText("Can't check for updates. Check your connection and try again.");
+    await expect(hostToast(page)).toHaveText("Can't check for updates. Check your connection and try again.");
     await page.getByTestId("settings-close").click();
 
     // The list says what happened and offers Try again, which works once the service is back.

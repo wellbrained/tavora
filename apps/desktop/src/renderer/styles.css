@@ -156,12 +156,6 @@ html.floating-open .app-drag {
   -webkit-app-region: no-drag;
 }
 
-/* Toasts at the top sit over the title bar, which drags the window and would swallow every click on Undo or ×.
-   Only the pill itself opts out, so the rest of the title bar still moves the window. */
-.tavora-toast-layer {
-  -webkit-app-region: no-drag;
-}
-
 /* A menu or hint opens at once, but the module panels (native views above this page) step aside only a moment later:
    until then popups stay unseen, so they never show half-covered. Animations wait too, and start when they show. */
 html.overlay-pending :is(
