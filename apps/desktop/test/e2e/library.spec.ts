@@ -3,23 +3,7 @@
 import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import {
-  desktopDir,
-  openAddGame,
-  expectModuleText,
-  launch,
-  newUserData,
-  NOTES,
-  noteText,
-  openWorkspace,
-  openModule,
-  panels,
-  setContentSize,
-  saveNote,
-  seedLibrary,
-  TODOS,
-  VANILLA,
-} from "./harness";
+import { desktopDir, openAddGame, expectModuleText, launch, newUserData, NOTES, noteText, openWorkspace, openModule, panels, setContentSize, saveNote, seedLibrary, TODOS, VANILLA, answerPrompt, fromMenu, expectLayoutSaved, groupsIn } from "./harness";
 import { gameService } from "./fake-games";
 
 const exists = (file: string) =>
@@ -27,18 +11,6 @@ const exists = (file: string) =>
     () => true,
     () => false,
   );
-
-async function fromMenu(page: Page, gameId: string, ...items: string[]) {
-  await page.getByTestId(`rail-workspace-${gameId}`).click({ button: "right" });
-  // Closed menus can linger while they animate out, so only look in open ones.
-  for (const item of items) await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
-}
-
-async function answerPrompt(page: Page, value: string) {
-  await page.getByTestId("prompt-input").fill(value);
-  await page.getByTestId("prompt-submit").click();
-  await expect(page.getByTestId("prompt")).toHaveCount(0);
-}
 
 /** Opens a game, adds the vanilla module and saves a note in it. */
 async function noteIn(running: Awaited<ReturnType<typeof launch>>, gameId: string, text: string) {
@@ -258,8 +230,8 @@ test("users add games from the built-in list or by name", async () => {
   // A game added by name gets the same starter.
   await expect(panels(page, NOTES)).toHaveCount(1);
   await expect(panels(page, TODOS)).toHaveCount(1);
-  // Closing from the test skips the app's wait for pending saves: let the layout settle first.
-  await page.waitForTimeout(500);
+  // Closing from the test skips the app's wait for pending saves: wait for the layout to be on disk first.
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).flatMap((group) => group.panels).length === 2, "local-my-indie-game");
   await running.app.close();
 
   const again = await launch(userData);
@@ -325,8 +297,16 @@ test("dropping a workspace on a folder leaves the folder open or closed as it wa
     // The folder's draggable row takes the drops, not the button inside it.
     const row = folder.locator("xpath=ancestor::div[@draggable='true'][1]");
     await page.getByTestId(`rail-workspace-${gameId}`).dispatchEvent("dragstart", { dataTransfer });
-    // The rail shifts once a drag starts, so the folder is measured after that.
-    await page.waitForTimeout(100);
+    // The rail shifts once a drag starts, so the folder is measured once it stands still.
+    let last = "";
+    await expect
+      .poll(async () => {
+        const now = JSON.stringify(await row.boundingBox());
+        const same = now === last;
+        last = now;
+        return same;
+      })
+      .toBe(true);
     const box = (await row.boundingBox())!;
     const at = (fraction: number) => ({ dataTransfer, clientX: box.x + box.width / 2, clientY: box.y + box.height * fraction });
     // Pointing at the middle of the folder means "into": aim until the row shows that.
@@ -334,8 +314,11 @@ test("dropping a workspace on a folder leaves the folder open or closed as it wa
     for (const fraction of [0.5, 0.4, 0.6, 0.3, 0.7]) {
       into = at(fraction);
       await row.dispatchEvent("dragover", into);
-      await page.waitForTimeout(50);
-      if (await row.evaluate((element) => element.classList.contains("drop-into"))) break;
+      const shown = await expect(row).toHaveClass(/drop-into/, { timeout: 500 }).then(
+        () => true,
+        () => false,
+      );
+      if (shown) break;
     }
     await row.dispatchEvent("drop", into);
   };

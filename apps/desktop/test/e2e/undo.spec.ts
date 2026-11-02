@@ -2,25 +2,12 @@
 // and a toast offers Undo for a few seconds (undoable in the kit). Undo puts the thing back exactly as it was; once the
 // toast goes, or the app closes, the delete stays.
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { inModule, launch, layOutColumns, openModule, openWorkspace, TODOS, typeInModule, VANILLA, waitForShown } from "./harness";
-
-async function answerPrompt(page: Page, value: string) {
-  await page.getByTestId("prompt-input").fill(value);
-  await page.getByTestId("prompt-submit").click();
-  await expect(page.getByTestId("prompt")).toHaveCount(0);
-}
+import { inModule, launch, layOutColumns, openModule, openWorkspace, TODOS, typeInModule, VANILLA, waitForShown, answerPrompt, layoutMenu, fromMenu, q } from "./harness";
 
 async function saveLayout(page: Page, name: string) {
   await page.getByTestId("layouts").click();
   await page.locator('[role="menu"][data-state="open"] [data-testid="layout-save"]').click();
   await answerPrompt(page, name);
-}
-
-/** Picks an item from a saved layout's submenu. */
-async function layoutMenu(page: Page, name: string, item: string) {
-  await page.getByTestId("layouts").click();
-  await page.locator('[role="menu"][data-state="open"]').getByText(name, { exact: true }).click();
-  await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
 }
 
 /** The names of the saved layouts, as the Layouts menu lists them. */
@@ -36,11 +23,6 @@ async function layoutNames(page: Page): Promise<string[]> {
   await page.keyboard.press("Escape");
   await expect(page.locator('[role="menu"][data-state="open"]')).toHaveCount(0);
   return names;
-}
-
-async function fromMenu(page: Page, gameId: string, item: string) {
-  await page.getByTestId(`rail-workspace-${gameId}`).click({ button: "right" });
-  await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
 }
 
 const toast = (page: Page, title: string) => page.getByTestId("undo-toast").filter({ hasText: title });
@@ -129,8 +111,6 @@ test("a delete is final once the toast goes, and when the app closes during it",
 });
 
 // ── A module: To-Dos, in its own view ──────────────────────────────────
-
-const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
 
 async function addInto(app: ElectronApplication, formExpr: string, text: string) {
   await inModule(

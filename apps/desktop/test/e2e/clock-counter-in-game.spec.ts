@@ -43,6 +43,8 @@ const attribute = (app: ElectronApplication, testId: string, name: string) => in
 /** The panel's own page as a picture: the module is a view of its own, so a screenshot of the window leaves it out. */
 async function shotOfPanel(app: ElectronApplication, name: string): Promise<void> {
   if (!SHOTS) return;
+  // A picture only: let the panel finish drawing (a fade, a resize) before it is taken. Nothing is asserted here.
+  await new Promise((resolve) => setTimeout(resolve, 500));
   const png = await app.evaluate(async ({ webContents }, moduleId) => {
     const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
     if (!target) throw new Error("no panel");
@@ -121,7 +123,6 @@ test("the Overlay page lists a Clock & Counter's things under its panel, adds th
     await expect(page.getByTestId("panel-dialog").getByRole("heading").first()).toHaveText(second.name);
     // From a frame of the Overlay page the settings open on what the overlay says.
     await expect.poll(() => attribute(app, "page-text", "aria-current")).toBe("page");
-    await page.waitForTimeout(500);
     await shotOfPanel(app, "settings-from-overlay-page.png");
     await page.getByTestId("panel-dialog-close").click();
     await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
@@ -180,7 +181,6 @@ test("an item's settings use Tavora's settings layout: the panel, the overlay an
     const everything = () => inModule<string>(app, ID, `document.body.innerText`);
     await expect.poll(() => everything()).toContain("Delete");
     expect(await everything()).not.toContain("Done");
-    await page.waitForTimeout(500);
     await shotOfPanel(app, "settings-counter.png");
 
     for (const id of ["page-hotkeys", "page-text", "page-look", "page-game", "page-stream", "page-item"]) {
@@ -209,24 +209,20 @@ test("an item's settings use Tavora's settings layout: the panel, the overlay an
     await expect.poll(() => text(app, "overlay-preview")).toBe("Deaths: 0");
     await click(app, "idea-3");
     await expect.poll(() => text(app, "overlay-preview")).toBe("0 kills");
-    await page.waitForTimeout(500);
     await shotOfPanel(app, "settings-text.png");
 
     // Look: font, alignment and outline for everything, then Words and Number, one under the other.
     await click(app, "page-look");
     await expect.poll(() => texts('[data-slot="settings-section"] h3')).toEqual(["Everything", "Words", "Number"]);
     await click(app, "number-size-xl");
-    await page.waitForTimeout(500);
     await shotOfPanel(app, "settings-look.png");
 
     // Where it shows: over the game (set on the Overlay page) and on stream (the OBS link).
     await click(app, "page-game");
     await expect.poll(() => everything()).toContain("Not over your game");
-    await page.waitForTimeout(500);
     await shotOfPanel(app, "settings-in-game.png");
     await click(app, "page-stream");
     await expect.poll(() => everything()).toContain("Copy OBS link");
-    await page.waitForTimeout(500);
     await shotOfPanel(app, "settings-on-stream.png");
 
     // A new label shows in the frame as soon as it is saved (Enter saves a field, as leaving it does).

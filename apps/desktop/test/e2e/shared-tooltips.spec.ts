@@ -24,7 +24,7 @@ test('shared module hints support pointer, keyboard, dynamic labels and narrow p
     }, id);
     // Wait for the panel to read back its saved page, then open Tooltips from the side menu.
     await expect.poll(() => run('document.documentElement.style.getPropertyValue("--primary")')).not.toBe('');
-    await page.waitForTimeout(500);
+    await expect.poll(() => run('!!document.querySelector("[data-testid=nav-tooltips]")')).toBe(true);
     await run('document.querySelector("[data-testid=nav-tooltips]").click()');
     await expect.poll(() => run('!!document.querySelector("#tooltips")')).toBe(true);
     await run('[...document.querySelectorAll("#tooltips button")].find(b=>b.textContent.trim()==="Hover or focus me").id="hint-target"');

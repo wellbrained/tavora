@@ -82,6 +82,7 @@ test("a settings page picked with the pointer fades in; one picked with the keyb
   await page.getByTestId("settings-nav-games").focus();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("settings-heading")).toHaveText("Games");
+  // The keyboard pick must not play an animation: nothing starts, so give a wrong one time to show.
   await page.waitForTimeout(400);
   expect(await started(page, "tavora-page-in")).toBe(before);
   await app.close();
@@ -130,6 +131,7 @@ test("a workspace picked on the rail fades in; one picked with a hotkey does not
   await page.keyboard.press("ControlOrMeta+1");
   await expect(page.getByTestId("rail-workspace-poe2")).toHaveAttribute("aria-current", "page");
   expect(await workspace.evaluate((element) => element === (window as unknown as { __second: Element }).__second)).toBe(false);
+  // The hotkey must not fade: nothing starts, so give a wrong one time to show.
   await page.waitForTimeout(400);
   expect(await started(page, "tavora-fade-in", "workspace")).toBe(1);
   await app.close();
