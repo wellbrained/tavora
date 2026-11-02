@@ -680,7 +680,7 @@ export interface TavoraSDK {
     /**
      * Tavora's window went behind another program, usually the game (`true`), or came back in front (`false`). The panel is
      * not hidden and keeps running; only what the user must be there to see, such as a toast with Undo, should wait.
-     * Called with `true` at once if the window is behind already. Tavora 0.23.81 and newer; an older Tavora never calls it.
+     * Called with `true` at once if the window is behind already. Tavora 0.23.82 and newer; an older Tavora never calls it.
      */
     onBehindChange(fn: (behind: boolean) => void): Unsubscribe;
     /** Best effort only: autosave must not depend on this firing. */

@@ -1091,7 +1091,7 @@ export interface Events {
   /**
    * Tavora's window went behind another program, usually the game (`behind: true`), or came back in front. The panel is
    * not hidden and keeps running; only what the user must be there to see (a toast with Undo) should wait. Also sent
-   * right after the handshake if the panel connects while the window is behind. Tavora 0.23.81 and newer.
+   * right after the handshake if the panel connects while the window is behind. Tavora 0.23.82 and newer.
    */
   "lifecycle.behind": { behind: boolean };
   "lifecycle.dispose": null;

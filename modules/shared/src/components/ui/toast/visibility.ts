@@ -41,7 +41,7 @@ export function trackDocumentVisibility(target: VisibilityTarget | undefined = t
 }
 
 /**
- * Follows the panel's `lifecycle` (onSuspend, onResume and, from Tavora 0.23.81, onBehindChange); call the returned
+ * Follows the panel's `lifecycle` (onSuspend, onResume and, from Tavora 0.23.82, onBehindChange); call the returned
  * function to stop. A Tavora or SDK without `onBehindChange` just never says the window is behind.
  */
 export function trackPanelSuspension(lifecycle: {

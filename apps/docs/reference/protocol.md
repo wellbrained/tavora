@@ -478,7 +478,7 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `panel.maximized` | `{ maximized }` | the panel started or stopped filling the workspace, by the user or `panel.setMaximized`. The SDK hands it to `panel.onMaximizedChange` (Tavora 0.20.20 and newer) |
 | `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
-| `lifecycle.behind` | `{ behind }` | Tavora's window went behind another program, usually the game (`behind: true`), or came back in front. The panel is not hidden and keeps running; only what the user must be there to see, such as a toast with Undo, should wait. A panel shown over the game is never behind. Also sent right after the handshake if the panel connects while the window is behind. The SDK hands it to `lifecycle.onBehindChange` (Tavora 0.23.81 and newer) |
+| `lifecycle.behind` | `{ behind }` | Tavora's window went behind another program, usually the game (`behind: true`), or came back in front. The panel is not hidden and keeps running; only what the user must be there to see, such as a toast with Undo, should wait. A panel shown over the game is never behind. Also sent right after the handshake if the panel connects while the window is behind. The SDK hands it to `lifecycle.onBehindChange` (Tavora 0.23.82 and newer) |
 | `lifecycle.dispose` | `null` | the panel is closing. Best effort only: it may never arrive, so never rely on it to save |
 
 ## Default look
