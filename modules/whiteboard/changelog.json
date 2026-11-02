@@ -1,13 +1,16 @@
 [
   {
+    "version": "0.3.7",
+    "date": "2026-11-02",
+    "notes": [
+      "Lists, dialogs and settings pages move smoothly."
+    ]
+  },
+  {
     "version": "0.3.6",
     "date": "2026-11-02",
     "notes": [
-<<<<<<< HEAD
-      "Lists, dialogs and settings pages move smoothly."
-=======
       "Buttons have a little depth and feel pressed when you click them."
->>>>>>> origin/main
     ]
   },
   {
