@@ -24,6 +24,8 @@ test('shared module hints support pointer, keyboard, dynamic labels and narrow p
     }, id);
     // Wait for the panel to read back its saved page, then open Tooltips from the side menu.
     await expect.poll(() => run('document.documentElement.style.getPropertyValue("--primary")')).not.toBe('');
+    // The page shows nothing once it has read its saved page back (after the theme), and a page picked before that is
+    // not saved. There is no state to poll for, so this is a fixed wait.
     await page.waitForTimeout(500);
     await run('document.querySelector("[data-testid=nav-tooltips]").click()');
     await expect.poll(() => run('!!document.querySelector("#tooltips")')).toBe(true);

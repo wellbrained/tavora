@@ -28,6 +28,59 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.84",
+    date: "2026-11-02",
+    title: "Clock & Counter settings are easier to use",
+    notes: [
+      "Format has a list of formats to pick from, and you can still type your own.",
+      "Delete moves from the settings to each row: point at a row and press the trash can. Undo is a few seconds away.",
+      "Words and Number come in the same five sizes, XS to XL.",
+      "Settings opened from the Overlay page no longer show an empty window first.",
+    ],
+    prs: [
+      { number: 645, title: "Clock & Counter: Format on the kit Combobox, Delete on the row, one XS–XL size scale, no empty settings" },
+    ],
+    tags: ["clock-counter", "ui-kit"],
+  },
+  {
+    version: "0.23.83",
+    date: "2026-11-02",
+    title: "Tab drops",
+    notes: [
+      "Dropping a tab into a group with empty space in its header shows the dashed tab again, not just a thin bar.",
+      "Dragging a tab within its own group keeps the normal move cursor; where nothing would change it says \"Same place\".",
+    ],
+    prs: [
+      { number: 642, title: "Docking: show the dashed ghost tab whenever the header has room" },
+    ],
+    tags: ["workspace"],
+  },
+  {
+    version: "0.23.82",
+    date: "2026-11-02",
+    title: "Search and dialogs you open with the keyboard appear instantly",
+    notes: [
+      "Search and dialogs you open with the keyboard appear instantly, and Escape closes dialogs at once.",
+      "Dialogs you open with the mouse move as before.",
+      "Toasts wait while Tavora is hidden or the game is in front, and slide in and out from their edge.",
+    ],
+    prs: [
+      { number: 639, title: "Keyboard-opened dialogs appear instantly; toasts wait while hidden and slide from their edge" },
+    ],
+    tags: ["calculator", "clock-counter", "modules", "notes", "pdf-viewer", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
+  },
+  {
+    version: "0.23.81",
+    date: "2026-11-02",
+    title: "Undo in toasts",
+    notes: [
+      "The Undo and close buttons in Tavora's own toasts can be clicked again.",
+    ],
+    prs: [
+      { number: 644, title: "Host toasts: the pill opts out of the title bar's drag region, so Undo and × can be clicked" },
+    ],
+  },
+  {
     version: "0.23.80",
     date: "2026-11-02",
     title: "Dialogs stay put",

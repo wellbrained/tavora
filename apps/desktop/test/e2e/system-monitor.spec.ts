@@ -1,11 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { expectModuleText, inModule, launch, openWorkspace, openModule, shootPanels, typeInModule } from "./harness";
+import { expectModuleText, inModule, launch, openWorkspace, openModule, shootPanels, typeInModule, q } from "./harness";
 
 // The official System Monitor's apps dialog: the list Tavora reads for it alone (systemInfo.apps). That no other
 // module gets it is tested in system-apps.test.ts.
 
 const SYSTEM_MONITOR = "tavora.system-monitor";
-const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
 
 test.skip(process.platform !== "win32", "the apps list reads Windows");
 

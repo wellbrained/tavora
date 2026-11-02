@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   count,
+  defaultLook,
   defaultStored,
   elapsed,
   groupLine,
@@ -22,7 +23,12 @@ import {
   remove,
   resetClock,
   setStream,
+  oldStepOf,
+  readSizes,
+  SIZE_SCALE,
+  SIZES,
   sizeScales,
+  sizesOf,
   sourcesOf,
   startPause,
   visualOrder,
@@ -355,17 +361,17 @@ describe("the text of an overlay", () => {
   });
 
   it("keeps a text, even an empty one, and the new colours and sizes", () => {
-    const item = first(parseList(raw({ text: "", wordsColor: "#facc15", wordsSize: "xl", numberSize: "s" })));
-    expect(item.look).toMatchObject({ text: "", wordsColor: "#facc15", wordsSize: "xl", numberSize: "s" });
+    const item = first(parseList(raw({ text: "", wordsColor: "#facc15", wordsStep: "xl", numberStep: "xs", wordsSize: "xl", numberSize: "s" })));
+    expect(item.look).toMatchObject({ text: "", wordsColor: "#facc15", wordsStep: "xl", numberStep: "xs", wordsSize: "xl", numberSize: "s" });
     expect(itemText(item)).toBe("");
   });
 
   it("reads old looks with the old sizes, and drops what it can't read", () => {
     const old = first(parseList(raw({})));
-    expect(old.look).toMatchObject({ wordsSize: "m", numberSize: "m" });
+    expect(old.look).toMatchObject({ wordsStep: "xs", numberStep: "m", wordsSize: "l", numberSize: "m" });
     expect(old.look.wordsColor).toBeUndefined();
-    const bad = first(parseList(raw({ text: 5, wordsColor: "red", wordsSize: "huge", numberSize: 3 })));
-    expect(bad.look).toMatchObject({ wordsSize: "m", numberSize: "m" });
+    const bad = first(parseList(raw({ text: 5, wordsColor: "red", wordsStep: "huge", numberStep: 3, wordsSize: "huge", numberSize: 3 })));
+    expect(bad.look).toMatchObject({ wordsStep: "xs", numberStep: "m", wordsSize: "l", numberSize: "m" });
     expect(bad.look.text).toBeUndefined();
     expect(bad.look.wordsColor).toBeUndefined();
     expect(first(parseList(raw({ text: "x".repeat(MAX.text + 50) }))).look.text).toHaveLength(MAX.text);
@@ -377,17 +383,92 @@ describe("the text of an overlay", () => {
     item.look.showLabel = false;
     const saved = JSON.parse(JSON.stringify(parseList({ items: [item] }))) as { items: { look: Record<string, unknown> }[] };
     expect(Object.keys(saved.items[0]!.look)).toEqual(expect.arrayContaining(["showLabel", "color", "outline", "font", "align"]));
-    expect(saved.items[0]!.look).toMatchObject({ showLabel: false, color: "#ffffff", text: "{time} left", wordsSize: "m", numberSize: "m" });
+    expect(saved.items[0]!.look).toMatchObject({ showLabel: false, color: "#ffffff", text: "{time} left", wordsStep: "xs", numberStep: "m", wordsSize: "l", numberSize: "m" });
     // The previous version keeps only the old fields; this one then reads that as "Show the name off".
-    const { text: _text, wordsColor: _wordsColor, wordsSize: _wordsSize, numberSize: _numberSize, ...oldLook } = saved.items[0]!.look;
+    const { text: _text, wordsColor: _wordsColor, wordsStep: _wordsStep, numberStep: _numberStep, wordsSize: _wordsSize, numberSize: _numberSize, ...oldLook } = saved.items[0]!.look;
     expect(itemText(first(parseList(raw(oldLook))))).toBe("{time}");
   });
 });
 
-describe("sizeScales", () => {
-  it("is M for a look published before the sizes, and each size on its own", () => {
-    expect(sizeScales({})).toEqual({ words: 0.5, number: 1 });
-    expect(sizeScales({ wordsSize: "xl", numberSize: "s" })).toEqual({ words: 1, number: 0.6 });
-    expect(sizeScales({ wordsSize: "nope" as never })).toEqual({ words: 0.5, number: 1 });
+/** The look reader of the version before the one scale (0.1.19): its own steps, nothing else, and what it doesn't know is dropped. */
+const OLD_STEP_SHARE = { words: { s: 0.3, m: 0.5, l: 0.75, xl: 1 }, number: { s: 0.6, m: 1, l: 1.5, xl: 2 } } as const;
+const previousParse = (look: Record<string, unknown>) => {
+  const step = (value: unknown): "s" | "m" | "l" | "xl" => (["s", "m", "l", "xl"].includes(value as string) ? (value as "s") : "m");
+  return {
+    showLabel: look.showLabel !== false,
+    color: look.color,
+    outline: look.outline !== false,
+    font: look.font,
+    align: look.align,
+    wordsSize: step(look.wordsSize),
+    numberSize: step(look.numberSize),
+    ...(typeof look.text === "string" ? { text: look.text } : {}),
+    ...(typeof look.wordsColor === "string" ? { wordsColor: look.wordsColor } : {}),
+  };
+};
+/** The sizes the version before drew for a look (items.ts 0.1.19): its own words and number steps, M when there are none. */
+const previousSizeScales = (look: { wordsSize?: "s" | "m" | "l" | "xl"; numberSize?: "s" | "m" | "l" | "xl" }) => ({
+  words: OLD_STEP_SHARE.words[look.wordsSize ?? "m"] ?? OLD_STEP_SHARE.words.m,
+  number: OLD_STEP_SHARE.number[look.numberSize ?? "m"] ?? OLD_STEP_SHARE.number.m,
+});
+
+describe("the one size scale", () => {
+  it("has the kit's text sizes, XS to XL, for the words and the number alike", () => {
+    expect(SIZES).toEqual(["xs", "s", "m", "l", "xl"]);
+    // 12, 13, 14, 16 and 20 px, scaled so that M is the 48 px the number always had.
+    expect(SIZES.map((size) => Math.round(SIZE_SCALE[size] * 48 * 100) / 100)).toEqual([41.14, 44.57, 48, 54.86, 68.57]);
+    expect(sizeScales({ wordsStep: "xl", numberStep: "xs" })).toEqual({ words: SIZE_SCALE.xl, number: SIZE_SCALE.xs });
+  });
+
+  it("is XS for the words and M for the number when there are no sizes, and for ones it can't read", () => {
+    expect(sizeScales({})).toEqual({ words: SIZE_SCALE.xs, number: 1 });
+    expect(sizeScales({ wordsStep: "nope", wordsSize: "nope" })).toEqual({ words: SIZE_SCALE.xs, number: 1 });
+  });
+
+  it("reads the new step first, then the old step moved to the nearest new one", () => {
+    // Words had S 14, M 24, L 36 and XL 48 px; the number S 29, M 48, L 72 and XL 96 px.
+    expect(["s", "m", "l", "xl"].map((size) => readSizes({ wordsSize: size }).wordsStep)).toEqual(["xs", "xs", "xs", "m"]);
+    expect(["s", "m", "l", "xl"].map((size) => readSizes({ numberSize: size }).numberStep)).toEqual(["xs", "m", "xl", "xl"]);
+    expect(readSizes({ wordsStep: "s", numberStep: "s", wordsSize: "xl", numberSize: "xl" })).toEqual({ wordsStep: "s", numberStep: "s" });
+  });
+
+  it("keeps the old steps as they were saved, and writes the nearest old step for a new one", () => {
+    const data = parseList({ items: [{ id: "t", kind: "countdown", label: "T", look: { wordsSize: "s", numberSize: "l" } }] });
+    expect(data.items[0]!.look).toMatchObject({ wordsSize: "s", numberSize: "l", wordsStep: "xs", numberStep: "xl" });
+    expect(sizesOf("l", "xs")).toEqual({ wordsStep: "l", numberStep: "xs", wordsSize: "xl", numberSize: "m" });
+    expect(SIZES.map((size) => sizesOf(size, size).wordsSize)).toEqual(["l", "xl", "xl", "xl", "xl"]);
+    expect(SIZES.map((size) => sizesOf(size, size).numberSize)).toEqual(["m", "m", "m", "m", "l"]);
+  });
+
+  it("is read by the version before as its own steps: no gaps, never NaN", () => {
+    for (const step of SIZES) {
+      const look = JSON.parse(JSON.stringify({ ...defaultLook(), ...sizesOf(step, step) }));
+      const sizes = previousSizeScales(previousParse(look));
+      expect(Number.isFinite(sizes.words) && sizes.words > 0 && Number.isFinite(sizes.number) && sizes.number > 0).toBe(true);
+      // About what the new step draws (the old steps are coarser than the new ones, on a different base).
+      expect(sizes.number).toBeCloseTo(OLD_STEP_SHARE.number[oldStepOf("number", step)], 6);
+    }
+    // And a state with the new keys, as a panel publishes it, gives the version before its old step, not undefined.
+    const state = JSON.parse(JSON.stringify(overlayState({ ...clock("countdown"), look: { ...defaultLook(), ...sizesOf("l", "xl") } })));
+    expect(previousSizeScales(state.look)).toEqual({ words: 1, number: 1.5 });
+  });
+
+  it("does not drift when the version before saves it and this one reads it again", () => {
+    const start = { ...defaultLook(), ...sizesOf("l", "xl") };
+    const again = (look: Record<string, unknown>) => {
+      const saved = previousParse(JSON.parse(JSON.stringify(look)));
+      return parseList(JSON.parse(JSON.stringify({ items: [{ id: "t", kind: "countdown", label: "T", look: saved }] }))).items[0]!.look;
+    };
+    // The version before drops the new steps; this one then takes them from the old steps, once, and keeps them from then on.
+    const once = again(start);
+    const twice = again(once);
+    const thrice = again(twice);
+    expect([twice.wordsStep, twice.numberStep]).toEqual([once.wordsStep, once.numberStep]);
+    expect([thrice.wordsStep, thrice.numberStep, thrice.wordsSize, thrice.numberSize]).toEqual([once.wordsStep, once.numberStep, once.wordsSize, once.numberSize]);
+    // Data from before the one scale, kept by the version before as it was, reads the same every time.
+    const old = { showLabel: true, color: "#ffffff", outline: true, font: "inter", align: "center", wordsSize: "l", numberSize: "xl" };
+    const first1 = again(old);
+    expect([first1.wordsStep, first1.numberStep, first1.wordsSize, first1.numberSize]).toEqual(["xs", "xl", "l", "xl"]);
+    expect(again(first1)).toEqual(first1);
   });
 });

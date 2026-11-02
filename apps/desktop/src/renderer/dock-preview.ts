@@ -76,8 +76,10 @@ export class DockPreview {
     if (!inside) return void (this.active && this.setTarget(null));
     event.preventDefault();
     event.stopPropagation();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = this.plan?.ok ? "move" : "none";
     this.aim(event.clientX, event.clientY);
+    // A refused drop, or a place with no target at all (a gap, a sash), shows the not-allowed cursor; a drop on the same
+    // spot does nothing but is still a place to let go, so it keeps the move cursor (and says "Same place").
+    if (event.dataTransfer) event.dataTransfer.dropEffect = this.plan && (this.plan.ok || this.plan.reason === "same-spot") ? "move" : "none";
   };
   private readonly onEnter = (event: DragEvent) => {
     if (!this.take(event)) return;
@@ -163,7 +165,13 @@ export class DockPreview {
       this.slots[group.id] = slots;
       const row = group.element.querySelector<HTMLElement>(".dv-tabs-container");
       this.stripStart[group.id] = row ? row.getBoundingClientRect().left - this.box.left : r.left - this.box.left;
-      this.stripEnd[group.id] = row ? row.getBoundingClientRect().right - this.box.left : r.right - this.box.left;
+      // The tabs may use all the room up to the group's header buttons: the row's own box is only part of it (the empty
+      // space after the tabs is a separate, growing element), and the tab row grows over it while aiming (dock.css), so tabs that slide into that space stay in sight.
+      const header = group.element.querySelector<HTMLElement>(".dv-tabs-and-actions-container");
+      const actions = group.element.querySelector<HTMLElement>(".dv-right-actions-container");
+      const actionsBox = actions?.getBoundingClientRect();
+      const end = actionsBox && actionsBox.width > 0 ? actionsBox.left : (header?.getBoundingClientRect().right ?? r.right);
+      this.stripEnd[group.id] = end - this.box.left;
     }
     const source = dock.getGroup(dragged.groupId) as DockviewGroupPanel | undefined;
     const own = this.tabs.get(dragged.groupId)?.find((tab) => tab.dragged);

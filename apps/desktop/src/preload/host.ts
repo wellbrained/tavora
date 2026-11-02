@@ -53,6 +53,9 @@ const api: TavoraHostApi = {
   onShortcut: (listener) => {
     ipcRenderer.on("host:shortcut", (_event, shortcut: HostShortcut) => listener(shortcut));
   },
+  onWindowBehind: (listener) => {
+    ipcRenderer.on("host:window-behind", (_event, behind: boolean) => listener(behind === true));
+  },
   getDiscord: () => ipcRenderer.invoke("host:get-discord"),
   onDiscord: (listener) => {
     ipcRenderer.on("host:discord", (_event, view: DiscordView) => listener(view));

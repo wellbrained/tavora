@@ -114,11 +114,11 @@ function runAction() {
         <p v-if="item.description" class="tavora-toast-description">{{ item.description }}</p>
       </div>
       <Transition name="tavora-toast-action">
-        <Button v-if="item.action" type="button" size="xs" variant="ghost" class="tavora-toast-button" :data-testid="item.actionTestid" @click="runAction">
+        <Button v-if="item.action" type="button" size="sm" variant="ghost" class="tavora-toast-button" :data-testid="item.actionTestid" @click="runAction">
           {{ item.action.label }}
         </Button>
       </Transition>
-      <Button type="button" size="icon-xs" variant="ghost" class="tavora-toast-button tavora-toast-close" :aria-label="uiText.dismiss" aria-keyshortcuts="Escape" @click="dismissToast(item.id)">
+      <Button type="button" size="icon-sm" variant="ghost" class="tavora-toast-button tavora-toast-close" :aria-label="uiText.dismiss" aria-keyshortcuts="Escape" @click="dismissToast(item.id)">
         <X :stroke-width="1.75" />
       </Button>
     </div>

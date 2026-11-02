@@ -10,7 +10,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { fakeDiscord, type FakeDiscord } from "../../src/main/discord-fake.test-helper";
-import { clickInModule, desktopDir, expectModuleText, inModule, launch } from "./harness";
+import { clickInModule, desktopDir, expectModuleText, inModule, launch, gesture } from "./harness";
 
 const DISCORD = "local.test.discord-probe";
 /** Not in test/fixtures, which every launch loads: a module asking for Discord would show its settings in every spec. */
@@ -37,16 +37,6 @@ test.beforeAll(async () => {
   await new Promise<void>((resolve) => tokens.listen(0, "127.0.0.1", resolve));
   tokenUrl = `http://127.0.0.1:${(tokens.address() as AddressInfo).port}/api/oauth2/token`;
 });
-
-/** A real key press in the module's page, so what follows counts as the user's own click (D8). */
-async function gesture(app: ElectronApplication) {
-  await app.evaluate(({ webContents }, moduleId) => {
-    const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
-    if (!target) throw new Error("no panel");
-    target.sendInputEvent({ type: "keyDown", keyCode: "Shift" });
-    target.sendInputEvent({ type: "keyUp", keyCode: "Shift" });
-  }, DISCORD);
-}
 
 /** What the host answered the probe for one of its buttons so far. */
 const answers = (app: ElectronApplication, label: string) =>
@@ -76,7 +66,7 @@ test("a module with the discord connector asks first, connects once approved and
     await expect.poll(async () => (await answers(app, "connect")).length).toBe(1);
     expect(fake.commands.some((c) => c.cmd === "AUTHORIZE")).toBe(false);
     expect((await answers(app, "connect"))[0]!.ok).toBe(false);
-    await gesture(app);
+    await gesture(app, DISCORD);
     await clickInModule(app, DISCORD, "probe-connect");
     await expect.poll(async () => (await answers(app, "connect")).length).toBe(2);
     expect((await answers(app, "connect"))[1]!.ok).toBe(true);
@@ -104,7 +94,7 @@ test("a module with the discord connector asks first, connects once approved and
     await clickInModule(app, DISCORD, "probe-mute");
     await expect.poll(async () => (await answers(app, "mute")).length).toBe(1);
     expect(fake.commands.some((c) => c.cmd === "SET_VOICE_SETTINGS")).toBe(false);
-    await gesture(app);
+    await gesture(app, DISCORD);
     await clickInModule(app, DISCORD, "probe-mute");
     await expect.poll(() => fake.commands.find((c) => c.cmd === "SET_VOICE_SETTINGS")?.args).toEqual({ mute: true });
 
@@ -112,7 +102,7 @@ test("a module with the discord connector asks first, connects once approved and
     await clickInModule(app, DISCORD, "probe-join-11");
     await expect.poll(async () => (await answers(app, "join")).length).toBe(1);
     expect(fake.commands.some((c) => c.cmd === "SELECT_VOICE_CHANNEL")).toBe(false);
-    await gesture(app);
+    await gesture(app, DISCORD);
     await clickInModule(app, DISCORD, "probe-join-11");
     await expect.poll(() => fake.commands.find((c) => c.cmd === "SELECT_VOICE_CHANNEL")?.args).toEqual({ channel_id: "11", force: true });
 

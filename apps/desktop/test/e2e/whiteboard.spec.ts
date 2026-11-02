@@ -2,9 +2,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { inModule, launch, openModule, panels, setContentSize, shootPanels, waitForShown, WHITEBOARD } from "./harness";
+import { inModule, launch, openModule, panels, setContentSize, shootPanels, waitForShown, WHITEBOARD, q, realClick } from "./harness";
 
-const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
 /** Whether a button is off: natively disabled, or `aria-disabled` when it keeps a hint that says why. */
 const off = (element: string) => `(element => element.disabled || element.getAttribute('aria-disabled') === 'true')(${element})`;
 // The shared kit shows notices and the Undo offer as toasts, newest last; a dismissed one fades out for a moment.
@@ -239,23 +238,7 @@ test("whiteboard: a pasted picture can be dragged into place, is then locked, ke
 });
 
 /** A real click on an element of the module's page, so the host counts it as the user's. */
-async function click(app: ElectronApplication, testId: string) {
-  await expect.poll(() => inModule(app, WHITEBOARD, `(() => { const r=${q(testId)}?.getBoundingClientRect(); return !!r && r.width>0 && r.height>0; })()`)).toBe(true);
-  // Module views use Electron input, so allow Vue/Popper to finish positioning a newly opened menu first.
-  await inModule(app, WHITEBOARD, `new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
-  const box = await inModule<{ x: number; y: number }>(app, WHITEBOARD, `(() => { const r = ${q(testId)}.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
-  await app.evaluate(
-    async ({ webContents }, { moduleId, box }) => {
-      const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
-      if (!target) throw new Error("no panel");
-      const at = { x: Math.round(box.x), y: Math.round(box.y), button: "left" as const, clickCount: 1 };
-      target.sendInputEvent({ type: "mouseMove", ...at });
-      target.sendInputEvent({ type: "mouseDown", ...at });
-      target.sendInputEvent({ type: "mouseUp", ...at });
-    },
-    { moduleId: WHITEBOARD, box },
-  );
-}
+const click = (app: ElectronApplication, testId: string) => realClick(app, WHITEBOARD, `[data-testid="${testId}"]`);
 
 test("whiteboard: Copy and Save as picture, and Clear board with Undo", async () => {
   const { app, page, userData } = await launch();

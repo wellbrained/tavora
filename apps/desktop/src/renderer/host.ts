@@ -1,10 +1,11 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
-import { handleUndoKey, toast, undoable } from "@tavora/official-ui/components/ui/toast";
+import { handleUndoKey, setWindowBehind, toast, undoable } from "@tavora/official-ui/components/ui/toast";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
+import { noteShortcut } from "./shortcut-origin";
 import { SETTING_SECTIONS, type SettingsPlace, type SettingsSection } from "./components/settings/settings-index";
 import { numberedWorkspaces } from "./shortcuts";
 import { isLanguageReady, loadLanguage, setLanguage, t } from "./i18n";
@@ -625,7 +626,13 @@ function runShortcut(shortcut: HostShortcut): void {
   }
 }
 
-api.onShortcut(runShortcut);
+// The window went behind the game: toasts wait there, since nobody sees them count down.
+api.onWindowBehind(setWindowBehind);
+
+api.onShortcut((shortcut) => {
+  noteShortcut(shortcut);
+  runShortcut(shortcut);
+});
 
 // Main catches Tavora's shortcuts before any page sees the key (and stops it
 // there, so this never runs twice for one press). This covers key events that
@@ -647,15 +654,20 @@ addEventListener("keydown", (event) => {
  * Deletes at once (a layout, a folder, a workspace to Trash) and offers Undo for a few seconds (`undoable` in the kit).
  * The action answers with a token; Undo sends it back, and once the toast went without Undo the main process forgets
  * it, so the delete is final. A failed delete shows its reason as usual. Answers whether the delete went through.
+ * `onUndone` runs once the thing is back (to show it again, say).
  */
-export async function deleteWithUndo(action: HostAction, title: string): Promise<boolean> {
+export async function deleteWithUndo(action: HostAction, title: string, onUndone?: () => void): Promise<boolean> {
   const result = await act(action);
   if (!result.ok) return false;
   const token = result.id;
   if (!token) return true;
   undoable({
     title,
-    undo: async () => (await act({ type: "undo-delete", token }, { quiet: true })).ok,
+    undo: async () => {
+      const back = (await act({ type: "undo-delete", token }, { quiet: true })).ok;
+      if (back) onUndone?.();
+      return back;
+    },
     onFinal: () => void act({ type: "undo-forget", token }, { quiet: true }),
   });
   return true;

@@ -1,9 +1,17 @@
 [
   {
-    "version": "0.1.13",
+    "version": "0.1.14",
     "date": "2026-11-02",
     "notes": [
       "Loads a little lighter: the app keeps only the Latin letters of its fonts."
+    ]
+  },
+  {
+    "version": "0.1.13",
+    "date": "2026-11-02",
+    "notes": [
+      "Dialogs you open with the keyboard appear instantly.",
+      "Toasts wait while the panel is hidden or the game is in front, and slide in and out from their edge."
     ]
   },
   {

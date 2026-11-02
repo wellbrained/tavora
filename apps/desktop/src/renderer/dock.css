@@ -240,6 +240,18 @@
 [data-dock-aiming] .dockview-theme-tavora .dv-tab {
   box-shadow: none;
 }
+/* The tab row clips its tabs to its own box, which is only as wide as the tabs; the empty header after it is a separate
+   element. While a panel is aimed the row takes that space, so tabs that slide aside for the dashed tab stay in sight. */
+[data-dock-aiming] .dockview-theme-tavora .dv-tabs-and-actions-container > .dv-scrollable {
+  flex: 1 1 0;
+  min-width: 0;
+}
+[data-dock-aiming] .dockview-theme-tavora .dv-tabs-and-actions-container > .dv-scrollable > .dv-tabs-container {
+  width: 100%;
+}
+[data-dock-aiming] .dockview-theme-tavora .dv-tabs-and-actions-container > .dv-void-container {
+  flex-grow: 0;
+}
 .dock-fade {
   transition: opacity var(--duration-press) var(--ease-out-strong);
 }

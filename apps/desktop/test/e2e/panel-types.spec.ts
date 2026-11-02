@@ -162,6 +162,7 @@ test("a panel opens the module's other panels on its content, switching the one 
   // Without a real click or key press nothing happens.
   await pickBuild(app, "ice-shot", 0);
   await inModule(app, PANELS, `document.querySelector('[data-testid="open-planner"]').click()`, 0);
+  // Nothing may happen, so there is no state to wait for: give a wrong switch time to show.
   await page.waitForTimeout(500);
   await expect(planners.nth(0)).toHaveAttribute("data-content", "Lightning Arrow Invoker");
 

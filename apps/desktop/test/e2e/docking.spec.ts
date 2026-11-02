@@ -1,24 +1,35 @@
 // Docking: splits and tabs, the layout saved per game, and named layouts.
-import { expect, test, type Page } from "@playwright/test";
-import {
-  expectModuleText,
-  inModule,
-  launch,
-  layOutColumns,
-  openModule,
-  panels,
-  RAIL_WIDTH,
-  REACT,
-  NOTES,
-  setContentSize,
-  TODOS,
-  typeInModule,
-  VANILLA,
-  VUE,
-  waitForShown,
-} from "./harness";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expectModuleText, inModule, launch, layOutColumns, openModule, panels, RAIL_WIDTH, REACT, NOTES, setContentSize, TODOS, typeInModule, VANILLA, VUE, waitForShown, answerPrompt, layoutMenu, expectLayoutSaved, groupsIn } from "./harness";
 
 const groups = (page: Page) => page.locator(".dv-groupview");
+
+/** Waits until the tabs of a group stop sliding (their places are the same twice in a row). */
+async function tabsSettled(group: Locator): Promise<void> {
+  let last = "";
+  await expect
+    .poll(async () => {
+      const now = JSON.stringify(await group.locator(".dv-tab").evaluateAll((tabs) => tabs.map((tab) => Math.round(tab.getBoundingClientRect().x * 2))));
+      const same = now === last;
+      last = now;
+      return same;
+    })
+    .toBe(true);
+}
+
+/** The tabs of a group (by module id) that can be seen: the one at the middle of each tab's box is that tab itself, not clipped away or covered. */
+async function seenTabs(group: Locator): Promise<string[]> {
+  return group.locator(".dv-tab").evaluateAll((tabs) =>
+    tabs
+      .filter((tab) => {
+        const r = tab.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return !!hit && tab.contains(hit);
+      })
+      .map((tab) => tab.querySelector("[data-module-id]")?.getAttribute("data-module-id") ?? ""),
+  );
+}
+
 
 test("outer columns fold together, suspend their panels, and survive a restart", async ({}, testInfo) => {
   const { app, page, userData } = await launch();
@@ -35,7 +46,7 @@ test("outer columns fold together, suspend their panels, and survive a restart",
   await expectModuleText(app, REACT, "lifecycle", "suspended");
   await expectModuleText(app, VUE, "lifecycle", "suspended");
   await expect(page.getByTestId("hide-left-column")).toHaveCount(0);
-  await page.waitForTimeout(500);
+  await expectLayoutSaved(userData, (nodes) => nodes.some((node) => node.hidden));
   await app.close();
 
   const again = await launch(userData);
@@ -84,19 +95,6 @@ async function panelMenu(page: Page, moduleId: string, item: string) {
   await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
 }
 
-async function answerPrompt(page: Page, value: string) {
-  await page.getByTestId("prompt-input").fill(value);
-  await page.getByTestId("prompt-submit").click();
-  await expect(page.getByTestId("prompt")).toHaveCount(0);
-}
-
-/** Picks an item from a saved layout's submenu. */
-async function layoutMenu(page: Page, name: string, item: string) {
-  await page.getByTestId("layouts").click();
-  await page.locator('[role="menu"][data-state="open"]').getByText(name, { exact: true }).click();
-  await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
-}
-
 test("a module added goes in as a tab where you work, nothing else moves, and that is kept", async () => {
   const { app, page, userData } = await launch();
   await setContentSize(app, RAIL_WIDTH + 1000, 500);
@@ -123,7 +121,7 @@ test("a module added goes in as a tab where you work, nothing else moves, and th
 
   // The group last worked in is kept: after a restart a new module still goes there.
   await panels(page).nth(3).click();
-  await page.waitForTimeout(500); // the layout is saved once it has been still briefly
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).at(-1)?.focused === true);
   await app.close();
   const again = await launch(userData);
   await expect(groups(again.page)).toHaveCount(3);
@@ -166,7 +164,7 @@ test("panels are moved, split and maximized from their menu, and the layout is k
   await expectModuleText(app, VANILLA, "lifecycle", "suspended");
   await panelMenu(page, REACT, "panel-restore");
   await expectModuleText(app, VANILLA, "lifecycle", "active");
-  await page.waitForTimeout(500); // the layout is saved once it has been still briefly
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).length === 2 && !nodes.some((node) => node.kind === "group" && node.maximized));
   await app.close();
 
   // The arrangement comes back after a restart.
@@ -196,7 +194,7 @@ test("a module maximizes its own panel after a key press, and it stays maximized
   await typeInModule(app, VANILLA, "\n");
   await expectModuleText(app, VANILLA, "maximized", "yes");
   await expectModuleText(app, REACT, "lifecycle", "suspended");
-  await page.waitForTimeout(500); // the layout is saved once it has been still briefly
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).some((group) => group.maximized));
   await app.close();
 
   const again = await launch(userData);
@@ -380,6 +378,7 @@ for (const width of [1400, 820]) {
     const tabs = target.locator(".dv-tab");
     const boxes = async () => tabs.evaluateAll((all) => all.map((tab) => { const r = tab.getBoundingClientRect(); return { x: r.x, right: r.right, y: r.y }; }));
     const row = await boxes();
+    const seenBefore = await seenTabs(target);
     // A row that overflows scrolls: the slots to aim at are those of the tabs in sight.
     const group = (await target.boundingBox())!;
     const shown = row.filter((box) => box.x >= group.x - 1 && box.right <= group.x + group.width + 1);
@@ -396,10 +395,15 @@ for (const width of [1400, 820]) {
       await expect(page.getByTestId("dock-ghost-tab"), `${name}: one ghost`).toHaveCount(1);
       await expect(page.locator("[class*='dv-drop-target']:visible")).toHaveCount(0);
       // Every tab is still there, in order, and none is pushed past the end of the tab row.
-      await page.waitForTimeout(300);
+      // Nothing may happen here, so there is no state to wait for: give a wrong move time to show.
+      await tabsSettled(target);
       expect(await names(), name).toEqual(before);
-      const edge = await target.locator(".dv-tabs-container").evaluate((el) => el.getBoundingClientRect().right);
+      // The tabs may slide into the empty header, up to the group's buttons.
+      const edge = await target.locator(".dv-right-actions-container").evaluate((el) => el.getBoundingClientRect().left);
       for (const box of await boxes()) expect(box.right, `${name}: a tab is pushed out of the row`).toBeLessThanOrEqual(Math.max(edge, row.at(-1)!.right) + 1);
+      // Nothing that could be seen before is clipped away or covered now.
+      const seenNow = await seenTabs(target);
+      for (const id of seenBefore) expect(seenNow, `${name}: a tab is clipped or covered`).toContain(id);
       // The ghost is not drawn on top of a tab.
       const ghost = (await page.getByTestId("dock-ghost-tab").boundingBox())!;
       for (const box of await boxes()) {
@@ -412,6 +416,145 @@ for (const width of [1400, 820]) {
     await app.close();
   });
 }
+
+test("a tab row with empty space shows the dashed ghost tab, not the bar, also within its own group", async () => {
+  const { app, page } = await launch();
+  await page.getByTestId("layouts").click();
+  await page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-2x1"]').click();
+  for (const id of [NOTES, TODOS, REACT]) await openModule(page, id);
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  const group = (id: string) => page.locator(".dv-groupview", { has: page.locator(`[data-module-id="${id}"]`) }).first();
+  const target = group(TODOS);
+  const tabs = target.locator(".dv-tab");
+  const empty = async () => {
+    const box = (await target.boundingBox())!;
+    const last = (await tabs.last().boundingBox())!;
+    const actions = (await target.locator(".dv-right-actions-container").boundingBox())!;
+    return { room: actions.x - (last.x + last.width), y: last.y + 16, x: last.x + last.width + 4, group: box };
+  };
+  // From another group: the ghost tab is at the end, the same width as the dragged tab or a little narrower.
+  expect((await empty()).room).toBeGreaterThan(130);
+  const source = page.locator(`[data-panel-tab][data-module-id="${NOTES}"]`).first();
+  await source.dispatchEvent("dragstart", { dataTransfer });
+  await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
+  const content = target.locator(".dv-content-container");
+  let at = await empty();
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: at.x, clientY: at.y });
+  await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "tab");
+  const ghost = page.getByTestId("dock-ghost-tab");
+  await expect(ghost).toHaveCount(1);
+  expect((await ghost.boundingBox())!.width).toBeGreaterThan(60);
+  await expect(ghost).toContainText(/\S/);
+  // The first and the second slot open a gap too, and no tab is clipped away or covered.
+  const seenBefore = await seenTabs(target);
+  expect(seenBefore).toHaveLength(2);
+  const first = (await tabs.first().boundingBox())!;
+  const second = (await tabs.nth(1).boundingBox())!;
+  for (const x of [first.x + 3, second.x + 3]) {
+    await content.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: first.y + 16 });
+    await expect(ghost).toContainText(/\S/);
+    await tabsSettled(target);
+    expect(await seenTabs(target)).toEqual(seenBefore);
+  }
+  await source.dispatchEvent("dragend", { dataTransfer });
+  await expect(page.getByTestId("dock-preview")).toHaveCount(0);
+
+  // Within its own group: the last tab of two dragged to the first slot, with room to spare.
+  const own = tabs.last();
+  await own.dispatchEvent("dragstart", { dataTransfer });
+  await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
+  const row = (await tabs.first().boundingBox())!;
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: row.x + 3, clientY: row.y + 16 });
+  await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "tab");
+  await expect(ghost).toHaveCount(1);
+  await expect(ghost).toContainText(/\S/);
+  await own.dispatchEvent("dragend", { dataTransfer });
+  await app.close();
+});
+
+test("a group with one tab and a long empty header shows the dashed ghost tab after it", async () => {
+  const { app, page } = await launch();
+  await page.getByTestId("layouts").click();
+  await page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-2x1"]').click();
+  for (const id of [NOTES, TODOS]) await openModule(page, id);
+  const target = page.locator(".dv-groupview", { has: page.locator(`[data-module-id="${TODOS}"]`) }).first();
+  await expect(target.locator(".dv-tab")).toHaveCount(1);
+  // A tab is wider while its panel says "Loading": measure once it has settled.
+  let tab = (await target.locator(".dv-tab").boundingBox())!;
+  await expect
+    .poll(async () => {
+      const now = (await target.locator(".dv-tab").boundingBox())!;
+      const settled = now.width === tab.width;
+      tab = now;
+      return settled;
+    })
+    .toBe(true);
+  const actions = (await target.locator(".dv-right-actions-container").boundingBox())!;
+  expect(actions.x - (tab.x + tab.width)).toBeGreaterThan(200);
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  const source = page.locator(`[data-panel-tab][data-module-id="${NOTES}"]`).first();
+  await source.dispatchEvent("dragstart", { dataTransfer });
+  await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
+  const content = target.locator(".dv-content-container");
+  // Over the empty header, and over the tab's right half: both end up as the last slot.
+  for (const x of [tab.x + tab.width + 60, tab.x + tab.width - 10]) {
+    await content.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: tab.y + 16 });
+    await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "tab");
+    const ghost = page.getByTestId("dock-ghost-tab");
+    await expect(ghost).toContainText(/\S/);
+    const box = (await ghost.boundingBox())!;
+    expect(box.width).toBeGreaterThan(80);
+    expect(box.x).toBeGreaterThanOrEqual(tab.x + tab.width - 1);
+    expect(box.x + box.width).toBeLessThanOrEqual(actions.x + 1);
+  }
+  // The first slot: the one tab slides right into the empty header and stays in sight.
+  const seen = await seenTabs(target);
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: tab.x + 3, clientY: tab.y + 16 });
+  await expect(page.getByTestId("dock-ghost-tab")).toContainText(/\S/);
+  await tabsSettled(target);
+  expect(await seenTabs(target)).toEqual(seen);
+  expect((await target.locator(".dv-tab").boundingBox())!.x).toBeGreaterThan(tab.x + 60);
+  await source.dispatchEvent("dragend", { dataTransfer });
+  await app.close();
+});
+
+test("dragging a tab within its own group keeps the move cursor, and says Same place where nothing would change", async () => {
+  const { app, page } = await launch();
+  await page.getByTestId("layouts").click();
+  await page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-2x1"]').click();
+  for (const id of [NOTES, TODOS, REACT]) await openModule(page, id);
+  const target = page.locator(".dv-groupview", { has: page.locator(`[data-module-id="${TODOS}"]`) }).first();
+  const tabs = target.locator(".dv-tab");
+  await expect(tabs).toHaveCount(2);
+  const dataTransfer = await page.evaluateHandle(() => {
+    // A DataTransfer made by hand ignores dropEffect, so what the page sets is recorded instead.
+    const transfer = new DataTransfer();
+    let effect = "none";
+    Object.defineProperty(transfer, "dropEffect", { get: () => effect, set: (value: string) => (effect = value) });
+    return transfer;
+  });
+  const effect = () => dataTransfer.evaluate((transfer) => transfer.dropEffect);
+  const own = tabs.last();
+  await own.dispatchEvent("dragstart", { dataTransfer });
+  await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
+  const content = target.locator(".dv-content-container");
+  const row = (await tabs.first().boundingBox())!;
+  const group = (await target.boundingBox())!;
+  // Its own place (the end of its tab row): nothing would change, yet it is not a refused place.
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: group.x + group.width - 120, clientY: row.y + 16 });
+  await expect(page.getByTestId("dock-same-place")).toContainText("Same place");
+  await expect(page.getByTestId("dock-refused")).toHaveCount(0);
+  expect(await effect()).toBe("move");
+  // Another slot and a split of its own group are valid places.
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: row.x + 3, clientY: row.y + 16 });
+  await expect(page.getByTestId("dock-same-place")).toHaveCount(0);
+  expect(await effect()).toBe("move");
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: group.x + group.width * 0.9, clientY: group.y + group.height / 2 });
+  await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "split-right");
+  expect(await effect()).toBe("move");
+  await own.dispatchEvent("dragend", { dataTransfer });
+  await app.close();
+});
 
 test("module views are replaced by still images while a menu is open", async () => {
   const { app, page } = await launch();
@@ -494,7 +637,7 @@ test("a template lays out empty slots that modules fill, and is kept", async () 
   await slots.first().getByTestId("slot-remove").click();
   await expect(slots).toHaveCount(0);
   await expect(groups(page)).toHaveCount(2);
-  await page.waitForTimeout(500); // the layout is saved once it has been still briefly
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).length === 2);
   await app.close();
 
   // Applying a template to open panels fills its first slots with them, and empty slots are kept.
@@ -505,7 +648,7 @@ test("a template lays out empty slots that modules fill, and is kept", async () 
   await expect(groups(again.page)).toHaveCount(4);
   await expect(panels(again.page)).toHaveCount(2);
   await expect(again.page.locator("[data-testid^='empty-slot-']")).toHaveCount(2);
-  await again.page.waitForTimeout(500);
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).length === 4);
   await again.app.close();
 
   const third = await launch(userData);
@@ -533,6 +676,7 @@ test("the templates submenu opens level with its entry and stays open on the way
   await page.mouse.move(start.x, start.y);
   for (let step = 1; step <= 20; step++) {
     await page.mouse.move(start.x + ((end.x - start.x) * step) / 20, start.y + ((end.y - start.y) * step) / 20);
+    // The pace is what is tested: an unhurried move must not close the submenu on the way.
     await page.waitForTimeout(50);
   }
   await expect(target).toBeVisible();

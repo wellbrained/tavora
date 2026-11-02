@@ -541,6 +541,8 @@ export class Host {
   private windowClosed = false;
   /** True while the window is minimized or hidden. */
   private windowHidden = false;
+  /** Tavora's window is behind another program (the game): it lost the focus. */
+  private windowBehind = false;
   /** Covers the workspace while it opens, until every panel has drawn (panel-cover.ts). */
   private readonly cover: PanelCover;
   /** How long each workspace took to open here, so the cover knows whether to show the fire from the start. */
@@ -1970,6 +1972,14 @@ export class Host {
     });
   }
 
+  /** Tells the host page and every module panel (those not over the game) whether the window is behind another program now. */
+  private setWindowBehind(behind: boolean): void {
+    if (this.window.isDestroyed() || behind === this.windowBehind) return;
+    this.windowBehind = behind;
+    this.window.webContents.send("host:window-behind", behind);
+    for (const view of this.moduleViews()) view.setWindowBehind(behind);
+  }
+
   private registerWindowEvents(): void {
     this.window.on("resize", () => this.saveWindowSoon());
     this.window.on("move", () => this.saveWindowSoon());
@@ -1992,6 +2002,12 @@ export class Host {
       if (Date.now() - lastCrash < 60_000) page.searchParams.set("crashed", `${details.reason} (exit code ${details.exitCode})`);
       lastCrash = Date.now();
       void this.window.loadURL(page.href);
+    });
+    // Behind the game, the window is not hidden and its panels keep running; but nobody sees a toast counting down.
+    this.window.on("blur", () => this.setWindowBehind(true));
+    this.window.on("focus", () => this.setWindowBehind(false));
+    this.window.webContents.on("did-finish-load", () => {
+      if (this.windowBehind) this.window.webContents.send("host:window-behind", true);
     });
     this.window.on("minimize", hidden(true));
     this.window.on("hide", hidden(true));
@@ -2905,8 +2921,13 @@ export class Host {
     this.gameOverlays.addSetup(workspaceId);
   }
 
-  private removeGameSetup(workspaceId: string): void {
-    this.gameOverlays.removeSetup(workspaceId);
+  /** Delete overlay (the rail, the Overlay page): answers with the token that puts the setup back (undo-delete); none when the game has no setup. */
+  private removeGameSetup(workspaceId: string): string | undefined {
+    const restore = this.gameOverlays.takeSetup(workspaceId);
+    if (!restore) return undefined;
+    return this.undos.keep(() => {
+      if (!restore()) throw new UndoGoneError();
+    });
   }
 
   /** Every panel of every workspace, for the Overlay page's Sources. */
@@ -3862,6 +3883,7 @@ export class Host {
         this.pushStateSoon();
       },
     });
+    view.setWindowBehind(this.windowBehind);
     const adapter = new ModulePanelView(view);
     this.panels.open(record, () => ({
       adapter,

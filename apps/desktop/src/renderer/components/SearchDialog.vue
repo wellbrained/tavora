@@ -259,6 +259,7 @@ const activeId = computed(() => {
     <DialogContent
       class="bg-card top-[12vh] w-[min(560px,calc(100vw-48px))] max-w-none translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-none"
       data-testid="search"
+      instant
       :show-close-button="false"
     >
       <DialogTitle class="sr-only">{{ t("search.title") }}</DialogTitle>

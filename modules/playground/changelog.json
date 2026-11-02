@@ -1,9 +1,24 @@
 [
   {
-    "version": "0.1.21",
+    "version": "0.1.23",
     "date": "2026-11-02",
     "notes": [
       "Loads a little lighter: the app keeps only the Latin letters of its fonts."
+    ]
+  },
+  {
+    "version": "0.1.22",
+    "date": "2026-11-02",
+    "notes": [
+      "New specimen: a field with a list of suggestions where you can type your own text (Combobox with free text)."
+    ]
+  },
+  {
+    "version": "0.1.21",
+    "date": "2026-11-02",
+    "notes": [
+      "Dialogs you open with the keyboard appear instantly.",
+      "Toasts wait while the panel is hidden or the game is in front, and slide in and out from their edge."
     ]
   },
   {
