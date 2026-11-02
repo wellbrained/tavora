@@ -1,5 +1,5 @@
 // Docking: splits and tabs, the layout saved per game, and named layouts.
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   expectModuleText,
   inModule,
@@ -19,6 +19,20 @@ import {
 } from "./harness";
 
 const groups = (page: Page) => page.locator(".dv-groupview");
+
+/** The tabs of a group (by module id) that can be seen: the one at the middle of each tab's box is that tab itself, not clipped away or covered. */
+async function seenTabs(group: Locator): Promise<string[]> {
+  return group.locator(".dv-tab").evaluateAll((tabs) =>
+    tabs
+      .filter((tab) => {
+        const r = tab.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return !!hit && tab.contains(hit);
+      })
+      .map((tab) => tab.querySelector("[data-module-id]")?.getAttribute("data-module-id") ?? ""),
+  );
+}
+
 
 test("outer columns fold together, suspend their panels, and survive a restart", async ({}, testInfo) => {
   const { app, page, userData } = await launch();
@@ -380,6 +394,7 @@ for (const width of [1400, 820]) {
     const tabs = target.locator(".dv-tab");
     const boxes = async () => tabs.evaluateAll((all) => all.map((tab) => { const r = tab.getBoundingClientRect(); return { x: r.x, right: r.right, y: r.y }; }));
     const row = await boxes();
+    const seenBefore = await seenTabs(target);
     // A row that overflows scrolls: the slots to aim at are those of the tabs in sight.
     const group = (await target.boundingBox())!;
     const shown = row.filter((box) => box.x >= group.x - 1 && box.right <= group.x + group.width + 1);
@@ -401,6 +416,9 @@ for (const width of [1400, 820]) {
       // The tabs may slide into the empty header, up to the group's buttons.
       const edge = await target.locator(".dv-right-actions-container").evaluate((el) => el.getBoundingClientRect().left);
       for (const box of await boxes()) expect(box.right, `${name}: a tab is pushed out of the row`).toBeLessThanOrEqual(Math.max(edge, row.at(-1)!.right) + 1);
+      // Nothing that could be seen before is clipped away or covered now.
+      const seenNow = await seenTabs(target);
+      for (const id of seenBefore) expect(seenNow, `${name}: a tab is clipped or covered`).toContain(id);
       // The ghost is not drawn on top of a tab.
       const ghost = (await page.getByTestId("dock-ghost-tab").boundingBox())!;
       for (const box of await boxes()) {
@@ -442,10 +460,17 @@ test("a tab row with empty space shows the dashed ghost tab, not the bar, also w
   await expect(ghost).toHaveCount(1);
   expect((await ghost.boundingBox())!.width).toBeGreaterThan(60);
   await expect(ghost).toContainText(/\S/);
-  // The first slot opens a gap too, and no tab leaves the row.
+  // The first and the second slot open a gap too, and no tab is clipped away or covered.
+  const seenBefore = await seenTabs(target);
+  expect(seenBefore).toHaveLength(2);
   const first = (await tabs.first().boundingBox())!;
-  await content.dispatchEvent("dragover", { dataTransfer, clientX: first.x + 3, clientY: first.y + 16 });
-  await expect(ghost).toContainText(/\S/);
+  const second = (await tabs.nth(1).boundingBox())!;
+  for (const x of [first.x + 3, second.x + 3]) {
+    await content.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: first.y + 16 });
+    await expect(ghost).toContainText(/\S/);
+    await page.waitForTimeout(300);
+    expect(await seenTabs(target)).toEqual(seenBefore);
+  }
   await source.dispatchEvent("dragend", { dataTransfer });
   await expect(page.getByTestId("dock-preview")).toHaveCount(0);
 
@@ -497,6 +522,13 @@ test("a group with one tab and a long empty header shows the dashed ghost tab af
     expect(box.x).toBeGreaterThanOrEqual(tab.x + tab.width - 1);
     expect(box.x + box.width).toBeLessThanOrEqual(actions.x + 1);
   }
+  // The first slot: the one tab slides right into the empty header and stays in sight.
+  const seen = await seenTabs(target);
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: tab.x + 3, clientY: tab.y + 16 });
+  await expect(page.getByTestId("dock-ghost-tab")).toContainText(/\S/);
+  await page.waitForTimeout(300);
+  expect(await seenTabs(target)).toEqual(seen);
+  expect((await target.locator(".dv-tab").boundingBox())!.x).toBeGreaterThan(tab.x + 60);
   await source.dispatchEvent("dragend", { dataTransfer });
   await app.close();
 });

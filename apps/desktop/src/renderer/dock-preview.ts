@@ -77,9 +77,9 @@ export class DockPreview {
     event.preventDefault();
     event.stopPropagation();
     this.aim(event.clientX, event.clientY);
-    // Only a drop that is really refused (too little room) shows the not-allowed cursor; a drop on the same spot
-    // does nothing but is still a place to let go, so it keeps the move cursor (and says "Same place").
-    if (event.dataTransfer) event.dataTransfer.dropEffect = this.plan && !this.plan.ok && this.plan.reason !== "same-spot" ? "none" : "move";
+    // A refused drop, or a place with no target at all (a gap, a sash), shows the not-allowed cursor; a drop on the same
+    // spot does nothing but is still a place to let go, so it keeps the move cursor (and says "Same place").
+    if (event.dataTransfer) event.dataTransfer.dropEffect = this.plan && (this.plan.ok || this.plan.reason === "same-spot") ? "move" : "none";
   };
   private readonly onEnter = (event: DragEvent) => {
     if (!this.take(event)) return;
@@ -166,7 +166,7 @@ export class DockPreview {
       const row = group.element.querySelector<HTMLElement>(".dv-tabs-container");
       this.stripStart[group.id] = row ? row.getBoundingClientRect().left - this.box.left : r.left - this.box.left;
       // The tabs may use all the room up to the group's header buttons: the row's own box is only part of it (the empty
-      // space after the tabs is a separate, growing element), and tabs that slide into that space are still in sight.
+      // space after the tabs is a separate, growing element), and the tab row grows over it while aiming (dock.css), so tabs that slide into that space stay in sight.
       const header = group.element.querySelector<HTMLElement>(".dv-tabs-and-actions-container");
       const actions = group.element.querySelector<HTMLElement>(".dv-right-actions-container");
       const actionsBox = actions?.getBoundingClientRect();
