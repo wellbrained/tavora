@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.68",
+    date: "2026-11-02",
+    title: "A tidier UI Playground",
+    notes: [
+      "The UI Playground has a side menu with search, one page per control, and the code for every example.",
+    ],
+    prs: [
+      { number: 628, title: "Module Kit stage 1: UI Playground with side menu, pages and Show code" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.23.67",
     date: "2026-11-02",
     title: "See where a panel lands",
