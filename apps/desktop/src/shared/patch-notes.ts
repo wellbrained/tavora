@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.62",
+    date: "2026-11-02",
+    title: "Panels and the catalog load smoothly, without jumping.",
+    notes: [
+      "The catalog and a module's page show their layout in soft bars while they load, then fill in.",
+      "Icons and screenshots keep their place and fade in when they arrive.",
+      "Jumping to a setting from search glides there before it lights up.",
+    ],
+    prs: [
+      { number: 618, title: "Smooth loading: skeleton loaders, pictures that fade in, gliding jump to a setting" },
+    ],
+    tags: ["calculator", "catalog", "clock-counter", "games", "modules", "notes", "pdf-viewer", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.23.61",
     date: "2026-11-02",
     title: "Lists, dialogs and settings pages move smoothly",
