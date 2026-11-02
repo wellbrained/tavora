@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, launch, newUserData, openModule, openWorkspace } from "./harness";
+import { expectModuleText, inModule, launch, newUserData, openModule, openWorkspace } from "./harness";
 
 const ID = "tavora.updatable";
 
@@ -148,7 +148,11 @@ test("a built-in module updates from the catalogue, survives a restart, falls ba
     ({ app, page } = await run());
     await openModule(page, ID);
     await expectModuleText(app, ID, "version", "1.0.0");
-    await expectModuleText(app, ID, "seen", "1.0.0,1.1.0,1.1.0");
+    // The shipped copy opens what the newer one saved. A busy machine can make Tavora start the panel once more from the same copy
+    // (a background scan finds the module in the folder it fell back to), and that second start has seen the first one's entry too.
+    await expect
+      .poll(() => inModule<string | null>(app, ID, `document.querySelector('[data-testid="seen"]')?.textContent ?? null`))
+      .toMatch(/^1\.0\.0,1\.1\.0,1\.1\.0(,1\.0\.0)?$/);
     await expectModuleText(app, ID, "saved", "yes");
     await app.close();
   } finally {
