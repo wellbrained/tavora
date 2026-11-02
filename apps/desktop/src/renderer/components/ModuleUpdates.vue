@@ -4,8 +4,9 @@
 // An update that asks for new access goes through the consent dialog first (GrantDialog.vue).
 // Update all installs the ones that ask for nothing new at once, then asks for each other one in turn.
 import { CircleAlert, CloudDownload, ShieldQuestion } from "@lucide/vue";
-import { computed, reactive } from "vue";
-import { Button } from "@tavora/official-ui/components/ui/button";
+import { computed, reactive, shallowRef, watch } from "vue";
+import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
+import { useActionStatus } from "../action-status";
 import { act, askForUpdate, state, updateQueue } from "../host";
 import { formatDate, t } from "../i18n";
 import { asksMore, updateAllPlan, waitingUpdates } from "../../shared/module-updates";
@@ -19,21 +20,33 @@ const shown = computed(() => {
   return text ? waiting.value.filter((module) => [module.name, module.id].some((value) => value.toLocaleLowerCase().includes(text))) : waiting.value;
 });
 
-/** The modules being updated right now, and the error of one that failed. */
-const busy = reactive<Record<string, boolean>>({});
+/** The modules being updated right now (or just now: their button says so for a moment), and the error of one that failed. */
+const { statusOf, run, working, active } = useActionStatus();
 const errors = reactive<Record<string, string>>({});
-const working = computed(() => Object.values(busy).some(Boolean));
+/** An update that went through leaves the waiting list; the list stays as it was while the buttons say so. */
+const frozen = shallowRef<(typeof shown.value)[number][] | null>(null);
+const listed = computed(() => (frozen.value ? frozen.value.map((module) => waiting.value.find((item) => item.id === module.id) ?? module) : shown.value));
+watch(
+  active,
+  (now) => {
+    if (!now) frozen.value = null;
+  },
+  { flush: "sync" },
+);
+
+const ALL = "all";
 
 /** Installs one update that asks for nothing new; its panels reload. */
 async function install(id: string): Promise<boolean> {
   const update = state.value?.modules.find((item) => item.id === id)?.update;
   if (!update) return false;
-  busy[id] = true;
+  frozen.value ??= shown.value;
   delete errors[id];
-  const result = await act({ type: "apply-module-update", moduleId: id, version: update.version }, { quiet: true });
-  busy[id] = false;
-  if (!result.ok) errors[id] = result.error;
-  return result.ok;
+  return run(id, async () => {
+    const result = await act({ type: "apply-module-update", moduleId: id, version: update.version }, { quiet: true });
+    if (!result.ok) errors[id] = result.error;
+    return result.ok;
+  });
 }
 
 function updateOne(id: string) {
@@ -48,7 +61,14 @@ function updateOne(id: string) {
 
 async function updateAll() {
   const plan = updateAllPlan(waiting.value);
-  for (const id of plan.now) await install(id);
+  frozen.value ??= shown.value;
+  // Update all is a button of its own: it works while each module's does, and says it worked when they all did.
+  await run(ALL, async () => {
+    let every = true;
+    for (const id of plan.now) every = (await install(id)) && every;
+    // Not "Updated" while others still wait for a yes to new access.
+    return every && plan.now.length > 0 && plan.ask.length === 0;
+  });
   const [first, ...rest] = plan.ask;
   if (first === undefined) return;
   updateQueue.value = rest;
@@ -58,18 +78,18 @@ async function updateAll() {
 
 <template>
   <div class="min-h-0 flex-1 thin-scroll overflow-y-auto px-6 pb-8 [scrollbar-gutter:stable] lg:px-10" data-testid="module-updates">
-    <div v-if="!shown.length" class="text-muted-foreground py-16 text-center" data-testid="module-updates-empty">
+    <div v-if="!listed.length" class="text-muted-foreground py-16 text-center" data-testid="module-updates-empty">
       <p>{{ t("addModule.updates.empty") }}</p>
     </div>
     <template v-else>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pt-6">
-        <Button :disabled="working" data-testid="update-all-modules" @click="updateAll">
-          <CloudDownload :stroke-width="1.5" /> {{ working ? t("addModule.updates.working") : t("addModule.updates.all") }}
-        </Button>
+        <ProgressButton :disabled="working && statusOf(ALL) === 'idle'" :status="statusOf(ALL)" :busy-label="t('addModule.updates.working')" :done-label="t('addModule.updates.done')" :failed-label="t('addModule.updates.failed')" data-testid="update-all-modules" @click="updateAll">
+          <CloudDownload :stroke-width="1.5" /> {{ t("addModule.updates.all") }}
+        </ProgressButton>
         <p class="text-muted-foreground text-sm">{{ t("addModule.updates.reload") }}</p>
       </div>
       <ul class="flex flex-col gap-3 pt-4" :aria-label="t('addModule.updates.list')">
-        <li v-for="module in shown" :key="module.id" class="bg-background/40 flex flex-col gap-3 rounded-xl border p-4" :data-testid="`update-${module.id}`">
+        <li v-for="module in listed" :key="module.id" class="bg-background/40 flex flex-col gap-3 rounded-xl border p-4" :data-testid="`update-${module.id}`">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span class="module-tile size-10" aria-hidden="true">
               <ModuleIcon :module-id="module.id" size="size-[34px]" />
@@ -78,15 +98,17 @@ async function updateAll() {
               <p class="truncate font-medium" :title="module.name">{{ module.name }}</p>
               <p class="text-muted-foreground text-sm tabular-nums" :data-testid="`update-versions-${module.id}`">{{ module.version }} → {{ module.update!.version }}</p>
             </div>
-            <Button
+            <ProgressButton
               size="sm"
-              :disabled="busy[module.id]"
+              :status="statusOf(module.id)"
+              :busy-label="t('addModule.updates.working')"
+              :done-label="t('addModule.updates.done')" :failed-label="t('addModule.updates.failed')"
               :aria-label="t('addModule.updates.updateLabel', { name: module.name })"
               :data-testid="`update-module-${module.id}`"
               @click="updateOne(module.id)"
             >
-              {{ busy[module.id] ? t("addModule.updates.working") : t("addModule.updates.update") }}
-            </Button>
+              {{ t("addModule.updates.update") }}
+            </ProgressButton>
           </div>
           <p v-if="asksMore(module.update!)" class="text-muted-foreground flex items-center gap-2 text-sm">
             <ShieldQuestion class="size-4 flex-none" :stroke-width="1.5" aria-hidden="true" /> {{ t("addModule.updates.askFirst") }}

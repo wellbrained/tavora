@@ -1,0 +1,48 @@
+/* A button that is its own progress (ProgressButton.vue). Only transform and opacity move, for no longer than
+   --duration-move. A loop runs only while the button is busy: the user started that work. */
+@layer components {
+  /* No percent to show: a stripe crosses the button and starts over. */
+  .tavora-progress-stripe {
+    animation: tavora-progress-stripe 1.2s var(--ease-in-out-strong) infinite;
+  }
+  @keyframes tavora-progress-stripe {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
+
+  /* The tick pops in on the kit's small spring (--ease-spring, --duration-pop). */
+  .tavora-progress-pop {
+    animation: tavora-progress-pop var(--duration-pop) var(--ease-spring) both;
+  }
+  @keyframes tavora-progress-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+  }
+}
+
+/* Reduced motion keeps fades and drops the movement: the stripe becomes a full-width fill that fades in and out. */
+@media (prefers-reduced-motion: reduce) {
+  .tavora-progress-stripe {
+    width: 100% !important;
+    animation: tavora-progress-breathe 1s linear infinite !important;
+  }
+  .tavora-progress-pop {
+    animation: tavora-progress-fade 100ms linear both !important;
+  }
+  @keyframes tavora-progress-breathe {
+    50% {
+      opacity: 0.1;
+    }
+  }
+  @keyframes tavora-progress-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}

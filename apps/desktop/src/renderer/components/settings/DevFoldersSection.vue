@@ -7,6 +7,7 @@ import { CircleAlert, FolderCode, FolderOpen, GripVertical, Trash2 } from "@luci
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
+import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import { cn } from "@/lib/utils";
 import type { DevelopmentProblemKind } from "../../../shared/host-api";
 import { problemText, type ModuleProblemValues } from "../../../shared/module-problem";
@@ -57,17 +58,27 @@ const dragging = ref<string | null>(null);
 const dropAt = ref<{ folder: string; after: boolean } | null>(null);
 
 function moveTo(folder: string, index: number) {
-  if (index < 0 || index >= folders.value.length) return;
-  void act({ type: "move-development-folder", folder, index });
+  if (index < 0 || index >= folders.value.length) return Promise.resolve();
+  return act({ type: "move-development-folder", folder, index });
 }
+
+/** The folders slide aside for a dragged one and settle into place when it is dropped (the keys move them at once). */
+const list = ref<HTMLElement | null>(null);
+const reorder = useReorderMotion(list);
+/** While a folder is dragged, the gap that opens is the drop place, so the line is for reduced motion only. */
+const sliding = computed(() => dragging.value !== null && !reducedMotion());
 
 function onDragStart(event: DragEvent, folder: string) {
   if (!event.dataTransfer) return;
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", folder);
-  const head = (event.target as HTMLElement).closest('[data-testid="development-folder-head"]');
-  if (head) event.dataTransfer.setDragImage(head, 24, 20);
+  const head = (event.target as HTMLElement).closest<HTMLElement>('[data-testid="development-folder-head"]');
+  if (head) {
+    if (reducedMotion()) event.dataTransfer.setDragImage(head, 24, 20);
+    else liftedDragImage(event, head);
+  }
   dragging.value = folder;
+  reorder.begin(folder);
 }
 
 function onDragOver(event: DragEvent, folder: string) {
@@ -75,23 +86,30 @@ function onDragOver(event: DragEvent, folder: string) {
   event.preventDefault();
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
   dropAt.value = { folder, after: event.clientY > box.top + box.height / 2 };
+  reorder.preview(folder === dragging.value ? null : { id: folder, after: dropAt.value.after });
 }
 
 function onDrop(event: DragEvent, index: number) {
   const folder = dragging.value;
   const target = dropAt.value;
-  onDragEnd();
-  if (!folder || !target) return;
+  clearDrag();
+  if (!folder || !target) return reorder.cancel();
   event.preventDefault();
   const from = folders.value.findIndex((entry) => entry.folder === folder);
   // The index once the dragged folder is out of the list.
   const to = index + (target.after ? 1 : 0) - (from < index ? 1 : 0);
-  if (to !== from) moveTo(folder, to);
+  if (to === from) return reorder.cancel();
+  void reorder.drop(async () => void (await moveTo(folder, to)));
+}
+
+function clearDrag() {
+  dragging.value = null;
+  dropAt.value = null;
 }
 
 function onDragEnd() {
-  dragging.value = null;
-  dropAt.value = null;
+  clearDrag();
+  reorder.cancel();
 }
 
 const parts = (folder: string) => folder.split(/[\\/]/).filter(Boolean);
@@ -125,7 +143,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
         <FolderCode :stroke-width="1.5" /> {{ t("settings.devFolders.add") }}
       </Button>
     </SettingRow>
-    <ul v-if="folders.length" class="flex flex-col" :aria-label="t('settings.development-folders.label')" data-testid="development-folders">
+    <ul v-if="folders.length" ref="list" class="flex flex-col" :aria-label="t('settings.development-folders.label')" data-testid="development-folders">
       <Collapsible
         v-for="(entry, index) in folders"
         :key="entry.folder"
@@ -133,12 +151,13 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
         :open="!entry.collapsed"
         :class="cn('relative flex flex-col border-b last:border-b-0', dragging === entry.folder && 'opacity-50')"
         data-testid="development-folder"
+        :data-reorder-id="entry.folder"
         :data-collapsed="entry.collapsed || undefined"
         @update:open="(open: boolean) => act({ type: 'collapse-development-folder', folder: entry.folder, collapsed: !open })"
         @dragover="onDragOver($event, entry.folder)"
         @drop="onDrop($event, index)"
       >
-        <span v-if="dropAt?.folder === entry.folder" :class="cn('bg-primary absolute inset-x-0 z-10 h-0.5', dropAt.after ? '-bottom-px' : '-top-px')" aria-hidden="true" />
+        <span v-if="dropAt?.folder === entry.folder && !sliding" :class="cn('bg-primary absolute inset-x-0 z-10 h-0.5', dropAt.after ? '-bottom-px' : '-top-px')" aria-hidden="true" />
         <div
           :class="cn('-mx-5 flex items-center gap-2 py-2.5 pr-5 pl-2', folderKind(entry) && folderTint[folderKind(entry)!])"
           :data-kind="folderKind(entry) ?? undefined"
