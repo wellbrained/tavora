@@ -198,7 +198,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Panel state**: what one panel remembers (open item, view, tab, filters, folded parts, scroll or zoom) is saved with
   panel state and **read back on start**. Writing it without reading it is the common bug. The view of a `ZoomPane` or `TileMap` is the exception: give it a `persist-key` and the kit saves and restores it in the module's storage (nothing saved: the whole map), so don't copy it into panel state.
 - **Lifecycle**: `onSuspend` flushes pending saves and panel state and pauses timers and animations; `onResume` starts
-  them again; `onDispose` flushes. Call `flushViewMemory()` (from `@tavora/official-ui`) in `onSuspend` and `onDispose` too, so a view still waiting to be saved is written. Every module registers them, even without timers, if anything saves after a delay.
+  them again; `onBehindChange(true)` says the window is behind the game (the panel still runs): the kit's toasts wait on it by themselves; `onDispose` flushes. Call `flushViewMemory()` (from `@tavora/official-ui`) in `onSuspend` and `onDispose` too, so a view still waiting to be saved is written. Every module registers them, even without timers, if anything saves after a delay.
 - **One pane, many copies**: a component may be shown twice. Reach your own elements through refs, never
   `document.querySelector`. Keyboard shortcuts act on the focused pane only, not through a window-wide listener. Ctrl+K
   belongs to Tavora.

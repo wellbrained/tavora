@@ -162,6 +162,20 @@ describe("handshake", () => {
     expect(p.sent.some((m) => "event" in (m as object))).toBe(false);
   });
 
+  it("tells a panel that connects while the window is behind the game that it is", async () => {
+    const p = new FakePort();
+    new BridgeSession(p, { ...context, isBehind: () => true });
+    await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" });
+    expect(p.sent).toEqual([expect.objectContaining({ ok: true }), { v: 1, event: "lifecycle.behind", data: { behind: true } }]);
+  });
+
+  it("says nothing about the window to a panel that connects while it is in front", async () => {
+    const p = new FakePort();
+    new BridgeSession(p, { ...context, isBehind: () => false });
+    await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" });
+    expect(p.sent).toEqual([expect.objectContaining({ ok: true })]);
+  });
+
   it("tells a panel that connects while hidden that it is suspended", async () => {
     const p = new FakePort();
     new BridgeSession(p, { ...context, isSuspended: () => true });

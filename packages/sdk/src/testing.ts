@@ -124,6 +124,8 @@ export interface MemoryHost {
   navigate(content: PanelContent): Promise<{ handled: boolean; ok: boolean }>;
   suspend(): void;
   resume(): void;
+  /** Tavora's window went behind another program (the game), or came back in front: `lifecycle.onBehindChange` fires. */
+  behind(behind?: boolean): void;
   /** The page goes away: `lifecycle.onDispose` fires and this panel gets no more events from the others. */
   dispose(): void;
   /** The user made one click or key press (or `count`), which lets that many gated calls through when gestures are enforced. */
@@ -314,6 +316,7 @@ interface Panel {
   sources: OverlaySource[];
   navigate: ((content: PanelContent) => void | Promise<void>) | null;
   suspended: boolean;
+  behind: boolean;
   listeners: Map<EventName, Set<(data: unknown) => void>>;
   scripts: Map<CallName, (params: never) => unknown>;
   calls: Record<string, unknown[]>;
@@ -325,6 +328,7 @@ interface Panel {
 const shares = new WeakMap<MemoryHost, Shared>();
 
 function deliver(panel: Panel, event: EventName, data: unknown): void {
+  if (event === "lifecycle.behind") panel.behind = (data as { behind: boolean }).behind;
   if (event === "lifecycle.suspend") panel.suspended = true;
   if (event === "lifecycle.resume") panel.suspended = false;
   for (const fn of [...(panel.listeners.get(event) ?? [])]) {
@@ -791,6 +795,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     sources: [],
     navigate: null,
     suspended: false,
+    behind: false,
     listeners: new Map(),
     scripts: new Map(),
     calls: {},
@@ -809,6 +814,13 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     if (event === "lifecycle.suspend" && panel.suspended) {
       try {
         listener(null);
+      } catch (error) {
+        console.error(`[tavora] ${event} listener failed`, error);
+      }
+    }
+    if (event === "lifecycle.behind" && panel.behind) {
+      try {
+        listener({ behind: true });
       } catch (error) {
         console.error(`[tavora] ${event} listener failed`, error);
       }
@@ -984,6 +996,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     lifecycle: {
       onSuspend: (fn) => on("lifecycle.suspend", fn),
       onResume: (fn) => on("lifecycle.resume", fn),
+      onBehindChange: (fn) => on("lifecycle.behind", ({ behind }) => fn(behind)),
       onDispose: (fn) => on("lifecycle.dispose", fn),
     },
   };
@@ -1011,6 +1024,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     navigate: (content) => navigatePanel(panel, content),
     suspend: () => deliver(panel, "lifecycle.suspend", null),
     resume: () => deliver(panel, "lifecycle.resume", null),
+    behind: (behind = true) => deliver(panel, "lifecycle.behind", { behind }),
     dispose: () => {
       deliver(panel, "lifecycle.dispose", null);
       shared.panels.delete(panel);

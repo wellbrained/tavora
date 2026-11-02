@@ -1187,6 +1187,8 @@ export interface TavoraHostApi {
   frozenShown(): void;
   /** Tavora-wide keyboard shortcuts, also when a module panel has focus. */
   onShortcut(listener: (shortcut: HostShortcut) => void): void;
+  /** Tavora's window went behind another program (the game) or came back in front; also told once when the page loads while it is behind. Toasts wait while it is behind. */
+  onWindowBehind(listener: (behind: boolean) => void): void;
   getDiscord(): Promise<DiscordView | null>;
   onDiscord(listener: (view: DiscordView) => void): void;
   getAiUsage(): Promise<AiUsageView | null>;

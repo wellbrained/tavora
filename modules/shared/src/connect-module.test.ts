@@ -76,6 +76,18 @@ describe("connectModule({ texts })", () => {
     expect(toastsPaused.value).toBe(false);
   });
 
+  it("holds toast timers while the host says the window is behind the game, and lets go when disposed", async () => {
+    const { sdk, host } = createMemoryHost();
+    const handle = await connectModule({ sdk });
+    host.behind();
+    expect(toastsPaused.value).toBe(true);
+    host.behind(false);
+    expect(toastsPaused.value).toBe(false);
+    host.behind();
+    handle.dispose();
+    expect(toastsPaused.value).toBe(false);
+  });
+
   it("installs the title tooltips unless asked not to", async () => {
     await connectModule({ sdk: createMemoryHost().sdk });
     expect(installTitleTooltips).toHaveBeenCalledTimes(1);

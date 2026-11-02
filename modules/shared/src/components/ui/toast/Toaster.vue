@@ -88,7 +88,7 @@ function forget(id: number) {
            list transition never touches the layer's transform. -->
       <div v-for="{ item, depth, behind, style } in placed" :key="item.id" :data-id="item.id" class="tavora-toast-slot" :style="{ zIndex: style.zIndex }" :inert="!expanded && depth > 0">
         <div class="tavora-toast-layer" :style="{ transform: style.transform, opacity: style.opacity }" @pointerenter="open" @pointerleave="close" @focusin="open" @focusout="close">
-          <ToastItem :item="item" :paused="expanded || toastsPaused":behind="behind" @size="(value) => sizes.set(item.id, value)" />
+          <ToastItem :item="item" :paused="expanded || toastsPaused" :behind="behind" @size="(value) => sizes.set(item.id, value)" />
         </div>
       </div>
     </TransitionGroup>

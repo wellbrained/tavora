@@ -128,6 +128,27 @@ test("a delete is final once the toast goes, and when the app closes during it",
   await again.app.close();
 });
 
+test("the Undo toast waits while Tavora is behind the game, and counts down again when the user is back", async () => {
+  const { app, page } = await launch();
+  await layOutColumns(page, 2);
+  await openModule(page, VANILLA);
+  await saveLayout(page, "Mapping");
+  await saveLayout(page, "Bossing");
+
+  // The window loses the focus to the game (the page is not hidden, so only the window's blur tells).
+  await layoutMenu(page, "Mapping", "layout-delete");
+  await expect(toast(page, "Layout deleted")).toBeVisible();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.emit("blur")));
+  // Longer than the toast stays (5 s): it is still there, with its Undo.
+  await page.waitForTimeout(6500);
+  await expect(toast(page, "Layout deleted")).toBeVisible();
+
+  // Back in front: it goes after its time, and not before the user had a second to see it.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.emit("focus")));
+  await expect(page.getByTestId("undo-toast")).toHaveCount(0, { timeout: 10_000 });
+  await app.close();
+});
+
 // ── A module: To-Dos, in its own view ──────────────────────────────────
 
 const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;

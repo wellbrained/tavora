@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, h, nextTick, type App } from "vue";
 import { toast, toasts, TOAST_DURATION } from "./toast";
 import Toaster from "./Toaster.vue";
-import { documentHidden, panelSuspended, toastsPaused, trackDocumentVisibility, trackPanelSuspension, type VisibilityTarget } from "./visibility";
+import { documentHidden, panelSuspended, setWindowBehind, toastsPaused, trackDocumentVisibility, trackPanelSuspension, windowBehind, type VisibilityTarget } from "./visibility";
 
 // A toast that runs out while nobody can see the panel is a toast nobody read: its time stands still until it is seen.
 
@@ -28,6 +28,7 @@ class FakeDocument implements VisibilityTarget {
 afterEach(() => {
   documentHidden.value = false;
   panelSuspended.value = false;
+  windowBehind.value = false;
 });
 
 describe("following the page", () => {
@@ -65,6 +66,35 @@ describe("following the page", () => {
     handlers.suspend.forEach((fn) => fn());
     stop();
     expect(toastsPaused.value).toBe(false);
+  });
+
+  it("is paused while the window is behind the game (the page is not hidden then), for the host page and for a module panel", () => {
+    setWindowBehind(true);
+    expect(toastsPaused.value).toBe(true);
+    setWindowBehind(false);
+    expect(toastsPaused.value).toBe(false);
+
+    let behind: (value: boolean) => void = () => {};
+    const stopped = vi.fn();
+    const stop = trackPanelSuspension({
+      onSuspend: () => () => {},
+      onResume: () => () => {},
+      onBehindChange: (fn) => ((behind = fn), stopped),
+    });
+    behind(true);
+    expect(toastsPaused.value).toBe(true);
+    behind(false);
+    expect(toastsPaused.value).toBe(false);
+    behind(true);
+    stop();
+    expect(stopped).toHaveBeenCalled();
+    expect(toastsPaused.value).toBe(false);
+  });
+
+  it("a panel from a Tavora without onBehindChange just never says it is behind", () => {
+    const stop = trackPanelSuspension({ onSuspend: () => () => {}, onResume: () => () => {} });
+    expect(toastsPaused.value).toBe(false);
+    stop();
   });
 
   it("both sources count: it runs only when the page is shown and the panel is not suspended", () => {
@@ -132,6 +162,27 @@ describe("a Toaster while the page is hidden", () => {
     documentHidden.value = false;
     await nextTick();
     vi.advanceTimersByTime(TOAST_DURATION - 1);
+    expect(toasts.value).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(toasts.value).toHaveLength(0);
+  });
+
+  it("holds a toast while the window is behind the game, and gives it at least a second when the user is back", async () => {
+    await mount();
+    toast({ title: "Layout deleted" });
+    await nextTick();
+    vi.advanceTimersByTime(TOAST_DURATION - 200);
+    expect(toasts.value).toHaveLength(1);
+
+    setWindowBehind(true);
+    await nextTick();
+    vi.advanceTimersByTime(TOAST_DURATION * 5);
+    expect(toasts.value).toHaveLength(1);
+
+    setWindowBehind(false);
+    await nextTick();
+    // Only 200 ms were left; coming back it still has a second to be read and undone.
+    vi.advanceTimersByTime(999);
     expect(toasts.value).toHaveLength(1);
     vi.advanceTimersByTime(1);
     expect(toasts.value).toHaveLength(0);

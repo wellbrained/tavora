@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp, defineComponent, h, nextTick, ref, type App } from "vue";
 import { resetInputOrigin } from "../sliding-indicator/input-origin";
 import Dialog from "./Dialog.vue";
@@ -121,5 +121,85 @@ describe("the kit's dialog", () => {
     expect(dialog.overlay()?.hasAttribute("data-instant")).toBe(true);
     // The prop is the kit's own: it does not reach the element as an attribute of its own.
     expect(dialog.content()?.hasAttribute("instant")).toBe(false);
+  });
+});
+
+// The same through Reka's Presence, the way a real dialog is unmounted: it waits for its leaving animation to end,
+// unless it has none. jsdom has no animations, so a stylesheet like motion.css gives the dialog an animation name and
+// the test ends it with an animationend event.
+describe("the kit's dialog leaving through Presence", () => {
+  let app: App | undefined;
+  let style: HTMLStyleElement | undefined;
+  beforeEach(() => {
+    style = document.createElement("style");
+    style.textContent = [
+      '.tavora-dialog[data-state="closed"] { animation-name: tavora-dialog-out; animation-duration: 150ms; }',
+      '.tavora-dialog[data-instant][data-state] { animation-name: none; }',
+    ].join("\n");
+    document.head.append(style);
+  });
+  afterEach(() => {
+    app?.unmount();
+    app = undefined;
+    style?.remove();
+    document.body.innerHTML = "";
+    resetInputOrigin();
+  });
+
+  function mount() {
+    const open = ref(false);
+    const root = document.createElement("div");
+    document.body.append(root);
+    app = createApp(
+      defineComponent({
+        render: () => h(Dialog, { open: open.value, "onUpdate:open": (value: boolean) => (open.value = value) }, () => h(DialogContent, null, () => h("p", "Hi"))),
+      }),
+    );
+    app.mount(root);
+    return { open, content: () => document.body.querySelector<HTMLElement>('[data-slot="dialog-content"]') };
+  }
+  const press = (type: "keydown" | "pointerdown", key?: string) => document.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true }));
+  /** Lets Presence and the watchers behind it finish. */
+  const settle = async () => {
+    for (let i = 0; i < 3; i++) await nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  it("is gone at once when Escape closed it", async () => {
+    const dialog = mount();
+    press("keydown", "k");
+    dialog.open.value = true;
+    await nextTick();
+    expect(dialog.content()).not.toBeNull();
+    press("keydown", "Escape");
+    dialog.open.value = false;
+    await settle();
+    expect(dialog.content()).toBeNull();
+  });
+
+  it("stays until its leaving animation ends when the pointer closed it, and then goes", async () => {
+    const dialog = mount();
+    press("pointerdown");
+    dialog.open.value = true;
+    await nextTick();
+    expect(dialog.content()?.hasAttribute("data-instant")).toBe(false);
+    press("pointerdown");
+    dialog.open.value = false;
+    await settle();
+    const leaving = dialog.content();
+    expect(leaving?.getAttribute("data-state")).toBe("closed");
+    const ended = Object.assign(new Event("animationend", { bubbles: true }), { animationName: "tavora-dialog-out" });
+    leaving?.dispatchEvent(ended);
+    await settle();
+    expect(dialog.content()).toBeNull();
+  });
+
+  it("appears without an animation when a key opened it", async () => {
+    const dialog = mount();
+    press("keydown", "k");
+    dialog.open.value = true;
+    await nextTick();
+    expect(dialog.content()?.hasAttribute("data-instant")).toBe(true);
+    expect(getComputedStyle(dialog.content()!).animationName).toBe("none");
   });
 });
