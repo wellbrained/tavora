@@ -157,18 +157,18 @@ test("a new front toast morphs from the size of the one before it, with no jump"
   await expect(toasts.locator(".tavora-toast-title", { hasText: "Note deleted" })).toBeVisible();
   await page.waitForTimeout(900);
   const record = await toasts.evaluate(() => (window as unknown as { record: { at: number; widths: Record<string, number> }[] }).record);
-  const saving = record.map((frame) => frame.widths["Saving…"]).filter((width): width is number => width !== undefined);
+  const arrival = record.find((frame) => frame.widths["Note deleted"] !== undefined)!;
   const deleted = record.map((frame) => frame.widths["Note deleted"]).filter((width): width is number => width !== undefined);
+  const before = arrival.widths["Saving…"]!;
   const first = deleted[0]!;
   const last = deleted.at(-1)!;
-  // It comes in as wide as the one in front, and ends at its own, wider width.
-  expect(Math.abs(first - saving[0]!)).toBeLessThanOrEqual(2);
-  expect(last).toBeGreaterThan(first + 40);
+  // It comes in as wide as the one in front (a frame or two into the spring at most), and ends at its own, wider width.
+  expect(last).toBeGreaterThan(before + 40);
+  expect(first - before).toBeLessThan((last - before) * 0.25);
   // Between them it passes through several widths, frame by frame: no single frame jumps most of the way.
   const between = new Set(deleted.filter((width) => width > first + 1 && width < last - 1));
   expect(between.size).toBeGreaterThanOrEqual(3);
   const biggestStep = Math.max(...deleted.slice(1).map((width, index) => Math.abs(width - deleted[index]!)));
   expect(biggestStep).toBeLessThan((last - first) * 0.75);
-  // The one behind never snaps to a width the new toast did not have yet.
   await app.close();
 });
