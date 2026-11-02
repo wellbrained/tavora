@@ -398,7 +398,8 @@ for (const width of [1400, 820]) {
       // Every tab is still there, in order, and none is pushed past the end of the tab row.
       await page.waitForTimeout(300);
       expect(await names(), name).toEqual(before);
-      const edge = await target.locator(".dv-tabs-container").evaluate((el) => el.getBoundingClientRect().right);
+      // The tabs may slide into the empty header, up to the group's buttons.
+      const edge = await target.locator(".dv-right-actions-container").evaluate((el) => el.getBoundingClientRect().left);
       for (const box of await boxes()) expect(box.right, `${name}: a tab is pushed out of the row`).toBeLessThanOrEqual(Math.max(edge, row.at(-1)!.right) + 1);
       // The ghost is not drawn on top of a tab.
       const ghost = (await page.getByTestId("dock-ghost-tab").boundingBox())!;
@@ -468,7 +469,16 @@ test("a group with one tab and a long empty header shows the dashed ghost tab af
   for (const id of [NOTES, TODOS]) await openModule(page, id);
   const target = page.locator(".dv-groupview", { has: page.locator(`[data-module-id="${TODOS}"]`) }).first();
   await expect(target.locator(".dv-tab")).toHaveCount(1);
-  const tab = (await target.locator(".dv-tab").boundingBox())!;
+  // A tab is wider while its panel says "Loading": measure once it has settled.
+  let tab = (await target.locator(".dv-tab").boundingBox())!;
+  await expect
+    .poll(async () => {
+      const now = (await target.locator(".dv-tab").boundingBox())!;
+      const settled = now.width === tab.width;
+      tab = now;
+      return settled;
+    })
+    .toBe(true);
   const actions = (await target.locator(".dv-right-actions-container").boundingBox())!;
   expect(actions.x - (tab.x + tab.width)).toBeGreaterThan(200);
   const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
