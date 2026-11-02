@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { areaView, clampPan, containZoom, FIT_PADDING, fitView, zoomAt } from "./view"
+import { areaView, clampPan, containZoom, FIT_PADDING, fitView, percentOf, stepZoom, ZOOM_STEP, zoomAt } from "./view"
 
 const limits = { min: 0.25, max: 2 }
 const pane = { width: 400, height: 300 }
@@ -118,5 +118,30 @@ describe("bounds content", () => {
   it("knows the zoom that shows the whole content", () => {
     expect(containZoom(pane, content)).toBe(0.3)
     expect(containZoom({ width: 0, height: 0 }, content)).toBe(0)
+  })
+})
+
+describe("the 100 % of a pane", () => {
+  it("reads the zoom in percent of the zoom that counts as 100 %", () => {
+    expect(percentOf(1)).toBe(100)
+    expect(percentOf(0.5, 0.5)).toBe(100)
+    expect(percentOf(0.75, 0.5)).toBe(150)
+    expect(percentOf(0.02, 1)).toBe(2)
+  })
+
+  it("steps on a ladder that counts from it", () => {
+    expect(stepZoom(1, 1, 1)).toBeCloseTo(ZOOM_STEP)
+    expect(stepZoom(1, 1, -1)).toBeCloseTo(1 / ZOOM_STEP)
+    expect(stepZoom(0.5, 0.5, 1)).toBeCloseTo(0.5 * ZOOM_STEP)
+    expect(stepZoom(0.5 * ZOOM_STEP ** 2, 0.5, -1)).toBeCloseTo(0.5 * ZOOM_STEP)
+  })
+
+  it("lands on 100 % from between rungs, and from 100 % goes one rung", () => {
+    // 90 % is between 80 % and 100 %: in lands on 100 %, out on 80 %.
+    expect(percentOf(stepZoom(0.9, 1, 1))).toBe(100)
+    expect(percentOf(stepZoom(0.9, 1, -1))).toBe(80)
+    expect(percentOf(stepZoom(1, 1, 1))).toBe(125)
+    // Stepping in and out again comes back.
+    expect(stepZoom(stepZoom(0.4, 0.4, 1), 0.4, -1)).toBeCloseTo(0.4)
   })
 })

@@ -94,6 +94,7 @@ export const en = {
 
   "image.label": "Picture",
   "image.failed": "Can't show this picture.",
+  "image.whole": "Show the whole picture",
 } as const;
 
 export const de: Record<keyof typeof en, string> = {
@@ -191,4 +192,5 @@ export const de: Record<keyof typeof en, string> = {
 
   "image.label": "Bild",
   "image.failed": "Dieses Bild lässt sich nicht anzeigen.",
+  "image.whole": "Ganzes Bild zeigen",
 };

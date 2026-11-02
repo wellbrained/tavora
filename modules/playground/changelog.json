@@ -1,11 +1,18 @@
 [
   {
-    "version": "0.1.16",
+    "version": "0.1.17",
     "date": "2026-11-02",
     "notes": [
       "The Foundations pages are filled: colours, text, spacing and corners, motion and writing, each with live examples and their code.",
       "Show disabled sits in the page header for everyone; the Developer tools switch is gone.",
       "Show code is coloured and has line numbers; Copy still copies the plain code. Examples no longer carry any Show disabled code, so what you see is what you write."
+    ]
+  },
+  {
+    "version": "0.1.16",
+    "date": "2026-11-02",
+    "notes": [
+      "Pan and zoom and the tile map show the new shared controls: zoom, the % (back to 100 %), the whole map and your own buttons, double-click to zoom in, a canvas that draws itself, a tooltip next to a node, and a view that is remembered."
     ]
   },
   {

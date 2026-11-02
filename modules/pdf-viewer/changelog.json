@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.11",
+    "date": "2026-11-02",
+    "notes": [
+      "Pictures get the same zoom controls as maps: out, the %, in and show it all. Double-click still switches between fitting and 100 %."
+    ]
+  },
+  {
     "version": "0.1.10",
     "date": "2026-11-02",
     "notes": [

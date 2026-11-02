@@ -1,2 +1,6 @@
 export { default as ZoomPane } from "./ZoomPane.vue"
-export { clampPan, containZoom, fitView, zoomAt, type Size, type ZoomAlign, type ZoomArea, type ZoomBounds, type ZoomFit, type ZoomView } from "./view"
+export { default as ZoomTip } from "./ZoomTip.vue"
+export { useZoomTip, type UseZoomTip } from "./use-zoom-tip"
+export { clampPan, containZoom, fitView, percentOf, stepZoom, zoomAt, ZOOM_STEP, type Size, type ViewOptions, type ZoomAlign, type ZoomArea, type ZoomBounds, type ZoomFit, type ZoomView } from "./view"
+export { createViewMemory, flushViewMemory, setViewMemoryStore, type SavedView, type ViewStore } from "./view-memory"
+export { type ZoomTipRect } from "./use-zoom-tip"
