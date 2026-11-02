@@ -11,9 +11,12 @@ import { computed, nextTick, onMounted, ref } from "vue";
 import type { CatalogModuleView, CatalogPageResult } from "../../shared/host-api";
 import type { InstalledModule } from "../module-page";
 import { formatSize } from "../catalog-size";
+import { PLACEHOLDER_README, placeholderVersions } from "../catalog-placeholder";
 import { act, api, dialog, state } from "../host";
 import { compareModuleVersions } from "../../shared/module-version";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { FadeImage } from "@tavora/official-ui/components/ui/fade-image";
+import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { formatDate, t } from "../i18n";
 import { ExternalLink, X } from "@lucide/vue";
@@ -142,13 +145,13 @@ async function openHomepage() {
         <p v-if="error || homepageError" class="text-destructive mb-4 text-sm" role="alert">{{ error || homepageError }}</p>
 
         <section v-if="module.screenshots > 0" class="mb-6" :aria-label="t('catalog.screenshots', { name: module.name })" data-testid="catalog-info-screenshots">
-          <p v-if="!page" class="text-muted-foreground bg-muted/40 grid aspect-video max-w-[560px] place-items-center rounded-lg text-sm" role="status">{{ t("catalog.screenshotsLoading") }}</p>
+          <Skeleton v-if="!page" loading class="max-w-[560px]" role="status" :aria-label="t('catalog.screenshotsLoading')"><div class="bg-muted/60 aspect-video rounded-lg border" /></Skeleton>
           <p v-else-if="!loaded?.screenshots.length" class="text-muted-foreground bg-muted/40 grid aspect-video max-w-[560px] place-items-center rounded-lg text-sm" role="status" data-testid="catalog-info-screenshots-missing">
             {{ t("catalog.screenshotsMissing") }}
           </p>
           <div v-else class="flex items-start gap-3">
-            <img :src="loaded.screenshots[shown]" :alt="t('catalog.screenshot', { number: shown + 1, count: loaded.screenshots.length })"
-              class="bg-muted/40 aspect-video min-w-0 max-w-[560px] flex-1 rounded-lg border object-contain" draggable="false" data-testid="catalog-info-screenshot"
+            <FadeImage :src="loaded.screenshots[shown]" fit="contain" :alt="t('catalog.screenshot', { number: shown + 1, count: loaded.screenshots.length })"
+              class="aspect-video min-w-0 max-w-[560px] flex-1 rounded-lg border" draggable="false" data-testid="catalog-info-screenshot"
             />
             <div v-if="loaded.screenshots.length > 1" class="flex flex-none flex-col gap-2">
               <button v-for="(shot, index) in loaded.screenshots" :key="index" type="button"
@@ -156,21 +159,26 @@ async function openHomepage() {
                 :class="index === shown ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100'"
                 :aria-label="t('catalog.screenshot', { number: index + 1, count: loaded.screenshots.length })" :aria-pressed="index === shown"
                 @click="shown = index"
-              ><img :src="shot" alt="" class="size-full object-cover" draggable="false" /></button>
+              ><FadeImage :src="shot" alt="" class="size-full" draggable="false" /></button>
             </div>
           </div>
         </section>
 
         <div class="grid gap-8 md:grid-cols-[minmax(0,1fr)_240px]">
           <div class="min-w-0 space-y-6">
-            <ModuleDescription :blocks="loaded?.readme ?? []" :fallback="module.description" :module-id="catalogParts ? module.id : undefined">
-              <div v-if="page && page.status !== 'ok'" class="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" role="status" data-testid="catalog-info-missing">
-                <p>{{ page.status === "gone" ? t("catalog.pageGone") : t("catalog.pageMissing") }}</p>
-                <Button v-if="page.status !== 'gone' && !fromFiles" size="sm" variant="secondary" data-testid="catalog-info-retry" @click="retryPage">{{ t("catalog.retry") }}</Button>
-              </div>
-            </ModuleDescription>
+            <!-- Until the page is in, the real description and patch notes are drawn with made-up text as muted bars (Skeleton). -->
+            <Skeleton :loading="!page">
+              <ModuleDescription :blocks="page ? (loaded?.readme ?? []) : PLACEHOLDER_README" :fallback="module.description" :module-id="catalogParts ? module.id : undefined">
+                <div v-if="page && page.status !== 'ok'" class="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" role="status" data-testid="catalog-info-missing">
+                  <p>{{ page.status === "gone" ? t("catalog.pageGone") : t("catalog.pageMissing") }}</p>
+                  <Button v-if="page.status !== 'gone' && !fromFiles" size="sm" variant="secondary" data-testid="catalog-info-retry" @click="retryPage">{{ t("catalog.retry") }}</Button>
+                </div>
+              </ModuleDescription>
+            </Skeleton>
 
-            <ModuleVersions :module-id="module.id" :versions="loaded?.versions ?? []" :version="module.version" />
+            <Skeleton :loading="!page">
+              <ModuleVersions :module-id="module.id" :versions="page ? (loaded?.versions ?? []) : placeholderVersions(module.version)" :version="module.version" />
+            </Skeleton>
 
             <div v-if="catalogParts" ref="reviews" class="scroll-mt-6">
               <CatalogReviews :module-id="module.id" :module-name="module.name" :publisher="module.publisher" />

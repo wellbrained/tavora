@@ -2,9 +2,11 @@
 // The small icon in front of a module's name. A panel type's icon (its own,
 // else the module's) or the module's own icon (its manifest `icon`) comes first; then, for the modules that stand for a
 // product (Discord, React, Vue, ...), its real logo, or a plain line icon
-// for the built-in ones; any other module gets a puzzle piece.
+// for the built-in ones; any other module gets a puzzle piece. A picture that loads late fades in over its box; one
+// that fails shows the logo or line icon instead.
 import { Activity, Calculator, FileText, Gauge, Globe, ListTodo, NotebookPen, PenTool, Puzzle, Timer } from "@lucide/vue";
 import { computed } from "vue";
+import { FadeImage } from "@tavora/official-ui/components/ui/fade-image";
 import { state } from "../host";
 import { BRAND_LOGOS } from "../module-icons";
 
@@ -21,7 +23,12 @@ const line = computed(() => LINE_ICONS[props.moduleId as keyof typeof LINE_ICONS
 </script>
 
 <template>
-  <img v-if="picture" :src="picture" :class="`${size} flex-none rounded-[3px] object-contain`" alt="" aria-hidden="true" data-testid="module-icon" />
+  <FadeImage v-if="picture" :src="picture" fit="contain" :tile="false" :class="`${size} flex-none rounded-[3px]`" alt="" aria-hidden="true" data-testid="module-icon">
+    <template #fallback>
+      <svg v-if="logo" class="size-full" :style="logo.color ? { color: logo.color } : undefined" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path :d="logo.path" /></svg>
+      <component :is="line" v-else class="text-muted-foreground size-full" :stroke-width="1.5" aria-hidden="true" />
+    </template>
+  </FadeImage>
   <svg
     v-else-if="logo"
     :class="`${size} flex-none`"

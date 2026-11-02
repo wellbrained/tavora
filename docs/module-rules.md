@@ -52,7 +52,9 @@ classes where you use a control; never copy it.
 | Floating panel | `Popover` | absolutely positioned `div` |
 | Dialog | `ConfirmDialog` (asks), `NameDialog` (asks for a name), else `Dialog` with `DialogHeader`, `DialogFooter`, `DialogButton` (see [Dialogs](#dialogs)) | own overlay |
 | Nothing here yet | `EmptyState` (one sentence, one action) | a bare `<p>` |
-| Loading | `Progress` | "Loading…" in a `<p>` |
+| Loading with a known amount | `Progress` | "Loading…" in a `<p>` |
+| A list, card or page that loads | `Skeleton` around the real template with placeholder data (see [Loading](#loading)) | generic grey bars, a spinner, "Loading…" |
+| A picture that may arrive late | `FadeImage` (reserved box, fades in, keeps a fallback icon if it fails) | a bare `<img>` that pops in and shifts the layout |
 | Error or warning in place | `Notice` | red text in a `<p>` |
 | Short message, Undo | `toast()` from `ui/toast` (the `Toaster` follows the user's toast position) | own status line |
 | Key hint | `Kbd` | |
@@ -97,7 +99,8 @@ themes; anything hard-coded breaks in one of them.
   properties, so name those in the transition), never `transition-all`, and nothing in the interface runs longer than
   `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed button dips to
   0.97 on a fine pointer. Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
-  anything shown all day. Reduced motion keeps a short fade and drops the movement.
+  anything shown all day. Reduced motion keeps a short fade and drops the movement. Waiting is the one thing that
+  may repeat: a skeleton's slow pulse (`--duration-pulse`), off for reduced motion.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
 
@@ -140,6 +143,7 @@ each pattern.
 - **Menus and tooltips** open next to their element with a small gap, never at the pointer (see `CLAUDE.md`).
 - **Actions are visible**: nothing is hover-only or right-click-only. A row's actions sit behind a visible ⋯ button too.
 - **States**: every view has its empty, loading and error state from the kit (table above). Long work shows progress.
+  Content that loads shows [a skeleton](#loading), not a text.
 - **Size**: `viewport.minWidth` / `minHeight` in the manifest are the real minimum, and the panel works at exactly that
   size: fixed side columns fold away or become a view switch below it. A separate wide layout uses `viewport.wide` and
   `@media (orientation: landscape)` (each panel is its own page, so media queries measure the panel).
@@ -147,6 +151,31 @@ each pattern.
 - **Data**: bundled with the module, loaded once and shared between panels. Modules have no network.
 - **Accessibility**: icon-only buttons have a label, everything works by keyboard, a tree or list with a role also has
   its arrow keys, state is never shown by colour alone.
+
+### Loading
+
+Tavora shows its own loader (the campfire) while a module's page starts, because the page is a separate view the
+host can't draw into. From the first frame of the module's own page on, loading is the module's job. When a view waits
+for data (the document store, a file, a list), draw the **real template** with placeholder data inside `Skeleton`:
+
+```vue
+<Skeleton :loading="!loaded">
+  <TaskList :tasks="loaded ? tasks : PLACEHOLDER_TASKS" />
+</Skeleton>
+```
+
+- **Same boxes**: while `loading` is true every text, icon, picture and button inside turns into a muted bar of its own
+  box. So the placeholder data has the shape of real data: the same number of rows, and text about as long as real text
+  (`placeholderText(40)` makes a made-up text of that length; it is never seen). Don't build a separate "loading" layout.
+- **Text next to an icon in the same element** gets no bar of its own: put the text in a `<span>`.
+- **Only the part that loads**: the wrapper pulses, so keep it off things that are already there (a toolbar, a title).
+- **No flash**: a load shorter than 150 ms shows nothing at all. Longer, the bars appear with a slow pulse (none with
+  reduced motion), and when the data arrives the content fades in over them in 200 ms. `loading` can go back to true
+  (a retry) and it starts over.
+- **Pictures** that arrive late use `FadeImage`, with its box sized by `class` (`size-12`, `aspect-video`), so nothing
+  moves when they load. A picture that fails keeps its `#fallback` (an icon).
+- **A known amount** (an import at 40 %) is a `Progress`, not a skeleton. An error is a `Notice` or `EmptyState`.
+- Controls inside a skeleton can't be used; the wrapper takes the pointer while it waits.
 
 ## 5. Done checklist
 
@@ -160,7 +189,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Every visible text is in `en` and `de`; `checkCatalogs` passes; no glued sentences.
 - [ ] Saves through the SDK store; panel state is read back after a reload.
 - [ ] `onSuspend` / `onDispose` flush; nothing is lost when the panel is hidden or closed mid-edit.
-- [ ] Empty, loading and error states exist and use the kit.
+- [ ] Empty, loading and error states exist and use the kit; what loads is a `Skeleton` over the real template, a late picture a `FadeImage`.
 - [ ] Menus and tooltips anchor to their element; no hover-only actions.
 - [ ] Motion uses the kit's tokens, animates only `transform` and `opacity`, and leaves out anything a key starts.
 - [ ] Dialogs use the header, footer and `DialogButton` as in [Dialogs](#dialogs); a close-only button has no icon.

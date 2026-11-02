@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.5",
+    "date": "2026-11-02",
+    "notes": [
+      "Small update to the shared look; nothing changes for you here."
+    ]
+  },
+  {
     "version": "0.2.4",
     "date": "2026-11-01",
     "notes": [

@@ -46,6 +46,7 @@ import {
   type SettingsSection,
 } from "./settings-index";
 import { SETTINGS_PAGE_TITLE } from "./settings-page";
+import { scrollToCentered } from "../../lib/smooth-scroll";
 
 const section = ref<SettingsSection>("general");
 const query = ref("");
@@ -64,6 +65,8 @@ provide(SETTINGS_PAGE_TITLE, pageTitle);
 /** The setting a search result led to, tinted for a moment. */
 const highlight = ref<string | null>(null);
 let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+/** Counts the jumps to a setting, so a slow scroll that was overtaken doesn't flash a row. */
+let jumps = 0;
 /** The page's scrolling area, back at the top for every new page. */
 const scroller = ref<HTMLElement | null>(null);
 
@@ -87,17 +90,25 @@ async function show(target: SettingsSection, setting?: string) {
   // A search led someone who doesn't make modules yet to a developer page: that is a start, so the tabs show.
   if (!makesModules.value && (DEVELOPER_SECTIONS as readonly string[]).includes(target)) void act({ type: "set-makes-modules", on: true }, { quiet: true });
   // New marks of the page left go now; they stayed while the user was on it.
-  if (target !== section.value) markSeen(section.value);
+  const left = target !== section.value;
+  if (left) markSeen(section.value);
+  // A new page, or the page in place of search results: the scrolling starts again from its top.
+  const switched = left || query.value.trim() !== "";
   section.value = target;
   query.value = "";
   clearTimeout(highlightTimer);
-  highlight.value = setting ?? null;
+  highlight.value = null;
+  // Another jump started meanwhile: this one has nothing left to do.
+  const jump = ++jumps;
   await nextTick();
-  if (!setting) {
-    scroller.value?.scrollTo({ top: 0 });
-    return;
-  }
-  document.querySelector(`[data-setting="${CSS.escape(setting)}"]`)?.scrollIntoView({ block: "center" });
+  if (!setting || switched) scroller.value?.scrollTo({ top: 0 });
+  if (!setting) return;
+  // The page is switched by now (and at its top), so the setting can be found; glide to it, then flash it.
+  const row = document.querySelector(`[data-setting="${CSS.escape(setting)}"]`);
+  if (row && scroller.value?.contains(row)) await scrollToCentered(scroller.value, row);
+  else row?.scrollIntoView({ block: "center" });
+  if (jump !== jumps) return;
+  highlight.value = setting;
   highlightTimer = setTimeout(() => (highlight.value = null), 2000);
 }
 
