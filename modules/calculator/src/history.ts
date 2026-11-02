@@ -28,3 +28,10 @@ export function remember(history: Calculation[], calculation: Calculation, lengt
   const others = history.filter((item) => item.expression !== calculation.expression || item.result !== calculation.result);
   return [calculation, ...others].slice(0, length);
 }
+
+/** Undo of clearing the history: what was cleared comes back below anything worked out since, up to `length`. */
+export function restoreHistory(history: Calculation[], cleared: readonly Calculation[], length = MAX_HISTORY): Calculation[] {
+  const next = [...history];
+  for (const item of cleared) if (!next.some((other) => other.expression === item.expression && other.result === item.result)) next.push({ ...item });
+  return next.slice(0, length);
+}

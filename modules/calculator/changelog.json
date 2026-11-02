@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.20",
+    "date": "2026-11-02",
+    "notes": [
+      "Deleting a value or clearing the history no longer asks first; you can undo it for a few seconds.",
+      "Screen readers read each message once."
+    ]
+  },
+  {
     "version": "0.1.19",
     "date": "2026-11-02",
     "notes": [

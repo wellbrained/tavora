@@ -102,7 +102,7 @@ test("Settings search finds settings and workspaces in Trash", async () => {
   const { app, page } = await launch();
   await page.getByTestId("rail-workspace-satisfactory").click({ button: "right" });
   await page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove"]').click();
-  await page.getByTestId("confirm-submit").click();
+  await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveCount(0);
 
   await page.getByTestId("rail-settings").click();
   const box = page.getByTestId("settings-search");

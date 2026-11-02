@@ -221,6 +221,8 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "rename-folder", folderId: FOLDER, name: "Souls" }],
   [{ type: "set-folder-label", folderId: FOLDER, label: null }],
   [{ type: "delete-folder", folderId: FOLDER }],
+  [{ type: "undo-delete", token: FOLDER }],
+  [{ type: "undo-forget", token: FOLDER }],
   [{ type: "set-language", language: "de" }],
   [{ type: "set-profile-ranks", hidden: true }],
   [{ type: "set-profile-ranks", period: "week" }],
@@ -574,6 +576,9 @@ describe("parseAction", () => {
     [{ type: "publish-review", moduleId: "../x" }],
     [{ type: "account-prefix-check", prefix: "" }],
     [{ type: "publish-upload", zip: "x" }],
+    // An undo token is one the main process made (a random UUID).
+    [{ type: "undo-delete", token: "../x" }],
+    [{ type: "undo-forget" }],
   ])("rejects %j", (action) => {
     expect(parseAction(action)).toBeNull();
   });

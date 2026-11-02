@@ -605,10 +605,14 @@ test("Ctrl+click and a box select several frames, Del removes them all, and one 
     await layer.locator("body").press("Delete");
     await expect.poll(async () => (await state(page)).items.length).toBe(0);
     await expect(layer.getByTestId("layout-canvas-empty")).toHaveText("Add something from the list on the right");
+    // The remove says so with Undo, as deleting does everywhere.
+    await expect(page.getByTestId("undo-toast")).toContainText("3 frames removed");
 
-    // One undo brings all three back, in their places with their own opacity, and selected.
+    // One undo brings all three back, in their places with their own opacity, and selected. Ctrl+Z is the page's own
+    // undo; it took back the remove, so the toast goes with it.
     await layer.locator("body").press("ControlOrMeta+z");
     await expect.poll(async () => (await state(page)).items.length).toBe(3);
+    await expect(page.getByTestId("undo-toast")).toHaveCount(0);
     const back = (await state(page)).items;
     expect(back.map((item) => [item.id, item.placed, item.opacity])).toEqual(moved.map((item) => [item.id, item.placed, item.opacity]));
     expect([...(await state(page)).selected].sort()).toEqual([a, b, c].sort());
@@ -618,6 +622,13 @@ test("Ctrl+click and a box select several frames, Del removes them all, and one 
     await expect.poll(async () => (await state(page)).items.length).toBe(0);
     await layer.locator("body").press("ControlOrMeta+z");
     await expect.poll(async () => (await state(page)).items.length).toBe(3);
+
+    // Undo on the toast takes back that same step, once: the frames come back and nothing before them is undone.
+    await layer.locator("body").press("Delete");
+    await expect.poll(async () => (await state(page)).items.length).toBe(0);
+    await page.getByTestId("undo-toast").getByTestId("undo").click();
+    await expect.poll(async () => (await state(page)).items.map((item) => item.placed)).toEqual(moved.map((item) => item.placed));
+    await expect(page.getByTestId("undo-toast")).toHaveCount(0);
   } finally {
     await app.close();
   }

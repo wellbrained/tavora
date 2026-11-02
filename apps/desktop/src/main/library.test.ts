@@ -4,6 +4,9 @@ import {
   iconFileShared,
   createFolder,
   deleteFolder,
+  placeOf,
+  undeleteFolder,
+  untrashWorkspaces,
   deleteTrashedWorkspace,
   emptyLibrary,
   markIconOffered,
@@ -719,5 +722,74 @@ describe("development folders", () => {
     expect(library.collapsedDevelopmentFolders).toEqual([b]);
     setDevelopmentFolderCollapsed(library, b, false);
     expect(library.collapsedDevelopmentFolders).toEqual([]);
+  });
+});
+
+// Undo instead of "Are you sure?" (main/undo-shelf.ts): a workspace taken to Trash and a deleted folder come back exactly
+// where they were, and each Undo only brings back its own thing.
+describe("undo of trash and folder deletes", () => {
+  it("puts a trashed workspace back in its folder, at its place, as a favorite and as the start workspace", () => {
+    const library = libraryWith("A", "B", "C", "D");
+    const folder = createFolder(library, "F", ["local-b", "local-c", "local-d"]);
+    placeFavorite(library, "local-a");
+    placeFavorite(library, "local-c");
+    library.lastWorkspaceId = "local-c";
+    const place = placeOf(library, "local-c");
+    expect(place).toEqual({ id: "local-c", folderId: folder, index: 1, favorite: 1, last: true });
+    trashWorkspace(library, "local-c", day(9));
+    expect(untrashWorkspaces(library, [place])).toEqual(["local-c"]);
+    expect(library.folders[folder]!.workspaces).toEqual(["local-b", "local-c", "local-d"]);
+    expect(library.favorites).toEqual(["local-a", "local-c"]);
+    expect(library.lastWorkspaceId).toBe("local-c");
+    expect(library.workspaces["local-c"]!.trashedAt).toBeNull();
+  });
+
+  it("puts several back as they were, and only those that are still in Trash", () => {
+    const library = libraryWith("A", "B", "C", "D");
+    const places = ["local-a", "local-c", "local-d"].map((id) => placeOf(library, id));
+    for (const place of places) trashWorkspace(library, place.id, day(9));
+    expect(rootIds(library)).toEqual(["workspace:local-b"]);
+    // Restored by hand from Trash meanwhile (it stays where that put it), and one deleted for good.
+    restoreWorkspace(library, "local-d");
+    deleteTrashedWorkspace(library, "local-c");
+    expect(untrashWorkspaces(library, places)).toEqual(["local-a"]);
+    expect(rootIds(library)).toEqual(["workspace:local-a", "workspace:local-b", "workspace:local-d"]);
+    expect(untrashWorkspaces(library, places)).toEqual([]);
+  });
+
+  it("brings a workspace back to the top level when its folder was deleted after it", () => {
+    const library = libraryWith("A", "B");
+    const folder = createFolder(library, "F", ["local-a", "local-b"]);
+    const place = placeOf(library, "local-a");
+    trashWorkspace(library, "local-a", day(9));
+    deleteFolder(library, folder);
+    expect(untrashWorkspaces(library, [place])).toEqual(["local-a"]);
+    expect(rootIds(library)).toEqual(["workspace:local-b", "workspace:local-a"]);
+  });
+
+  it("puts a deleted folder back with its id, name, letters and workspaces, where it was", () => {
+    const library = libraryWith("A", "B", "C", "D");
+    const folder = createFolder(library, "Souls", ["local-b", "local-c"]);
+    library.folders[folder]!.label = "SO";
+    const removed = deleteFolder(library, folder);
+    expect(rootIds(library)).toEqual(["workspace:local-a", "workspace:local-b", "workspace:local-c", "workspace:local-d"]);
+    expect(undeleteFolder(library, removed)).toBe(true);
+    expect(rootIds(library)).toEqual(["workspace:local-a", `folder:${folder}`, "workspace:local-d"]);
+    expect(library.folders[folder]).toEqual({ id: folder, name: "Souls", label: "SO", workspaces: ["local-b", "local-c"] });
+    // A second Undo (the toast pressed twice) finds it back already.
+    expect(undeleteFolder(library, removed)).toBe(false);
+  });
+
+  it("leaves a workspace where the user moved it since, and comes back even when all of them left", () => {
+    const library = libraryWith("A", "B", "C");
+    const folder = createFolder(library, "F", ["local-b", "local-c"]);
+    const other = createFolder(library, "G");
+    const removed = deleteFolder(library, folder);
+    moveWorkspace(library, "local-b", { folderId: other });
+    trashWorkspace(library, "local-c", day(9));
+    expect(undeleteFolder(library, removed)).toBe(true);
+    expect(library.folders[folder]!.workspaces).toEqual([]);
+    expect(library.folders[other]!.workspaces).toEqual(["local-b"]);
+    expect(rootIds(library)).toContain(`folder:${folder}`);
   });
 });

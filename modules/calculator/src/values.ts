@@ -58,3 +58,14 @@ export function lookup(values: Value[]): Lookup {
     return found ? Number(found.value) : undefined;
   };
 }
+
+/**
+ * Undo of deleteValue: the value back in its place with its number. Null when it can't come back: a value has its name
+ * by now (saved again meanwhile, so the newer one stays), or the list is full.
+ */
+export function restoreValue(values: Value[], value: Value, index: number): Value[] | null {
+  if (values.some((item) => sameName(item.name, value.name)) || values.length >= MAX_VALUES) return null;
+  const next = [...values];
+  next.splice(Math.max(0, Math.min(index, next.length)), 0, { ...value });
+  return next;
+}

@@ -6,6 +6,7 @@ import { gridTemplate } from "../shared/layout-templates";
 import { LAYOUT_LIMITS, layoutPanels, type SavedLayout } from "./layout";
 import {
   emptyWorkspaces,
+  freeName,
   Workspaces,
   loadWorkspace,
   MAX_SNAPSHOTS,
@@ -282,6 +283,42 @@ describe("Workspaces", () => {
     workspaces.renameSnapshot("poe2", id, "MAPPING");
     expect(() => workspaces.applySnapshot("poe2", S)).toThrow(WorkspaceError);
     expect(() => workspaces.saveSnapshot("satisfactory", "Empty")).toThrow(WorkspaceError);
+  });
+
+  it("puts a deleted snapshot back as it was, into its own workspace, whichever is open", () => {
+    const { state, workspaces } = setup();
+    const first = workspaces.saveSnapshot("poe2", "Mapping");
+    const second = workspaces.saveSnapshot("poe2", "Bossing");
+    const before = structuredClone(state.workspaces.poe2!.snapshots);
+    const removed = workspaces.deleteSnapshot("poe2", first);
+    expect(removed).toMatchObject({ workspaceId: "poe2", index: 0, snapshot: { id: first, name: "Mapping" } });
+    expect(workspaces.restoreSnapshot(removed)).toBe(true);
+    expect(state.workspaces.poe2!.snapshots).toEqual(before);
+    expect(state.workspaces.poe2!.snapshots.map((snapshot) => snapshot.id)).toEqual([first, second]);
+    // Pressed twice: it is back already.
+    expect(workspaces.restoreSnapshot(removed)).toBe(false);
+  });
+
+  it("keeps a new snapshot's name and numbers the one that comes back, and can't bring one back into a deleted workspace", () => {
+    const { state, workspaces } = setup();
+    const id = workspaces.saveSnapshot("poe2", "Mapping");
+    const removed = workspaces.deleteSnapshot("poe2", id);
+    const fresh = workspaces.saveSnapshot("poe2", "mapping");
+    expect(workspaces.restoreSnapshot(removed)).toBe(true);
+    expect(state.workspaces.poe2!.snapshots.map((snapshot) => [snapshot.id, snapshot.name])).toEqual([
+      [id, "Mapping (2)"],
+      [fresh, "mapping"],
+    ]);
+    const again = workspaces.deleteSnapshot("poe2", fresh);
+    workspaces.forgetWorkspace("poe2");
+    expect(workspaces.restoreSnapshot(again)).toBe(false);
+  });
+
+  it("finds a free name, numbered and still within the name limit", () => {
+    const named = (...names: string[]) => names.map((name) => ({ name }) as Snapshot);
+    expect(freeName(named("A"), "B")).toBe("B");
+    expect(freeName(named("a", "A (2)"), "A")).toBe("A (3)");
+    expect(freeName(named("x".repeat(80)), "x".repeat(80))).toBe(`${"x".repeat(76)} (2)`);
   });
 
   it("holds at most MAX_SNAPSHOTS snapshots a workspace", () => {

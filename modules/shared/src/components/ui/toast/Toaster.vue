@@ -3,7 +3,7 @@
 // them (Settings > Appearance): the newest in front, older ones peeking out behind. Pointing at
 // or focusing the stack spreads it out and stops every timer. Two hidden live regions read each
 // new toast out, errors as alerts.
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import "./toast.css";
 import ToastItem from "./ToastItem.vue";
 import { toastPosition, toasts, type ToastPosition } from "./toast";
@@ -48,9 +48,26 @@ const placed = computed(() => {
   return newestFirst.reverse();
 });
 
-const newestNormal = computed(() => toasts.value.findLast((item) => item.variant !== "error"));
-const newestError = computed(() => toasts.value.findLast((item) => item.variant === "error"));
-const spoken = (item: { title: string; description?: string } | undefined) => (item ? [item.title, item.description].filter(Boolean).join(". ") : "");
+// What the two live regions say. Each toast is read once when it arrives and once more only when its content changes
+// (loading turning into done). When a toast leaves, the one behind it is not read again, and the same words twice in a
+// row (two to-dos deleted) are still read twice: the region gets a hidden space added or taken away.
+const said = reactive({ normal: "", error: "" });
+const heard = { normal: { id: 0, revision: -1 }, error: { id: 0, revision: -1 } };
+const words = (item: { title: string; description?: string }) => [item.title, item.description].filter(Boolean).join(". ");
+watch(
+  toasts,
+  (list) => {
+    for (const kind of ["normal", "error"] as const) {
+      const item = list.findLast((candidate) => (candidate.variant === "error") === (kind === "error"));
+      const last = heard[kind];
+      if (!item || item.id < last.id || (item.id === last.id && item.revision <= last.revision)) continue;
+      heard[kind] = { id: item.id, revision: item.revision };
+      const text = words(item);
+      said[kind] = said[kind] === text ? `${text} ` : text;
+    }
+  },
+  { immediate: true },
+);
 
 function forget(id: number) {
   sizes.delete(id);
@@ -69,7 +86,7 @@ function forget(id: number) {
         </div>
       </div>
     </TransitionGroup>
-    <div class="sr-only" role="status" aria-live="polite">{{ spoken(newestNormal) }}</div>
-    <div class="sr-only" role="alert">{{ spoken(newestError) }}</div>
+    <div class="sr-only" role="status" aria-live="polite" data-testid="toast-status">{{ said.normal }}</div>
+    <div class="sr-only" role="alert">{{ said.error }}</div>
   </div>
 </template>
