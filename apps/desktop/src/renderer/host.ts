@@ -10,6 +10,7 @@ import { numberedWorkspaces } from "./shortcuts";
 import { setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 import { developerSetup } from "./developer-setup";
+import { createDialogQueue } from "./dialog-queue";
 
 export const api = window.tavoraHost;
 export const state = shallowRef<HostViewState | null>(null);
@@ -382,11 +383,43 @@ watch(
 );
 watch(() => developerKeys.value?.status, askForRecoveryKey);
 
+// What the host asks on its own (the four questions below) goes through a queue: it shows at once when no dialog is
+// open and otherwise waits, so it never takes the slot from a dialog the user is working in (dialog-queue.ts).
+const dialogQueue = createDialogQueue(
+  {
+    get: () => dialog.value,
+    set: (request) => (dialog.value = request),
+  },
+  (request) => {
+    switch (request.kind) {
+      case "grant":
+        return request.onRequest ? 4 : undefined;
+      case "navigation-choice":
+        return 3;
+      case "link-choice":
+        return 2;
+      case "game-switch":
+        return 1;
+      default:
+        return undefined;
+    }
+  },
+);
+// The slot just freed: the next waiting question shows.
+watch(dialog, (open) => {
+  if (open === null) dialogQueue.next();
+});
+/** A question that ended (answered, or its panel or game went away) must not show later. */
+const dropWaiting = (kind: DialogRequest["kind"]) => dialogQueue.cancel((request) => request.kind === kind);
+
 // A panel could not switch to what another panel of its module asked for: ask whether to open it in a new one.
+// (The view state hands out a new object on every update, so the watcher follows what the question says.)
 watch(
-  () => state.value?.pendingNavigation ?? null,
-  (pending) => {
-    if (pending && dialog.value?.kind !== "navigation-choice") dialog.value = { kind: "navigation-choice", ...pending };
+  () => JSON.stringify(state.value?.pendingNavigation ?? null),
+  () => {
+    const pending = state.value?.pendingNavigation;
+    if (pending) dialogQueue.request({ kind: "navigation-choice", ...pending });
+    else dropWaiting("navigation-choice");
   },
 );
 
@@ -394,7 +427,8 @@ watch(
 watch(
   () => state.value?.pendingLink ?? null,
   (url) => {
-    if (url && dialog.value?.kind !== "link-choice") dialog.value = { kind: "link-choice", url };
+    if (url) dialogQueue.request({ kind: "link-choice", url });
+    else dropWaiting("link-choice");
   },
 );
 
@@ -402,19 +436,29 @@ watch(
 watch(
   () => state.value?.pendingGameSwitch ?? null,
   (gameId) => {
-    if (gameId && (!dialog.value || dialog.value.kind === "game-switch")) dialog.value = { kind: "game-switch", gameId };
-    else if (!gameId && dialog.value?.kind === "game-switch") dialog.value = null;
+    if (gameId) dialogQueue.request({ kind: "game-switch", gameId });
+    else {
+      dropWaiting("game-switch");
+      if (dialog.value?.kind === "game-switch") dialog.value = null;
+    }
   },
 );
 
 // A module needs a connector it asks for on request (its first Copy OBS link): Tavora's consent dialog asks.
+// The panel that asks shows the question itself (PanelContent.vue); the window only when none of its panels is in view.
+const connectorAskedInPanel = (pending: { moduleId: string }) => state.value?.panels.some((panel) => panel.moduleId === pending.moduleId && panel.question === "ask") ?? false;
 watch(
-  () => state.value?.pendingConnector ?? null,
-  (pending) => {
-    // The panel that asks shows the question itself (PanelContent.vue); the window only when none of its panels is in view.
-    const inPanel = pending !== null && (state.value?.panels.some((panel) => panel.moduleId === pending.moduleId && panel.question === "ask") ?? false);
-    if (pending && !inPanel) dialog.value = { kind: "grant", moduleId: pending.moduleId, slot: null, review: true, onRequest: { id: pending.id, connectors: [...pending.connectors] } };
-    else if (dialog.value?.kind === "grant" && dialog.value.onRequest) dialog.value = null;
+  () => {
+    const pending = state.value?.pendingConnector;
+    return pending ? `${pending.id}:${connectorAskedInPanel(pending)}` : null;
+  },
+  () => {
+    const pending = state.value?.pendingConnector ?? null;
+    if (pending && !connectorAskedInPanel(pending)) dialogQueue.request({ kind: "grant", moduleId: pending.moduleId, slot: null, review: true, onRequest: { id: pending.id, connectors: [...pending.connectors] } });
+    else {
+      dialogQueue.cancel((request) => request.kind === "grant" && request.onRequest !== undefined);
+      if (dialog.value?.kind === "grant" && dialog.value.onRequest) dialog.value = null;
+    }
   },
 );
 
@@ -758,15 +802,14 @@ export function setHintFloating(open: boolean): void {
 /** A note about the inbox (or the developer note) waits and nothing else is open, so InboxNotes.vue shows it. */
 export const noteShown = computed(() => (inbox.value.note !== null || inbox.value.developerNote) && dialog.value === null && !settingsOpen.value && !profileOpen.value && inboxOpen.value === null);
 
+// A dialog built on ModalDialog.vue (the inbox notes, the cloud copy question, the hotkey and Publish dialogs, Pairing, ...) counts itself
+// in `openMenus`, so it is not listed here. Listed are the sources that do not use it: the dialog slot (several of its
+// dialogs are their own shells), Settings, the profile, the inbox, search and a panel's dialog.
 export const overlayOpen = computed(
   () =>
     openMenus.value > 0 ||
     inboxOpen.value !== null ||
-    noteShown.value ||
     dialog.value !== null ||
-    copyQuestion.value !== null ||
-    state.value?.hotkeyRequest != null ||
-    publish.value !== null ||
     settingsOpen.value ||
     profileOpen.value ||
     panelDialog.value !== null ||
