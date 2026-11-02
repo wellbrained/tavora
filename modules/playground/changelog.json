@@ -1,9 +1,17 @@
 [
   {
-    "version": "0.1.17",
+    "version": "0.1.18",
     "date": "2026-11-02",
     "notes": [
       "Settings shows a dialog with one page and one with several pages, with the rules for descriptions and units."
+    ]
+  },
+  {
+    "version": "0.1.17",
+    "date": "2026-11-02",
+    "notes": [
+      "New specimen: Delete with Undo, gone at once and back with Undo.",
+      "Screen readers read each message once."
     ]
   },
   {

@@ -378,7 +378,6 @@ test("a removed workspace keeps its data in Trash and comes back when restored",
   await noteIn(running, "satisfactory", "factory plans");
 
   await fromMenu(page, "satisfactory", "menu-remove");
-  await page.getByTestId("confirm-submit").click();
   await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveCount(0);
   await expect(page.getByTestId("welcome")).toBeVisible();
   await expect(panels(page)).toHaveCount(0);
@@ -413,7 +412,7 @@ test("many workspaces are moved to Trash, restored and deleted together from Set
   await page.getByTestId("workspaces-select-all").check();
   await expect(page.getByTestId("workspaces-selected")).toHaveText("2 selected");
   await page.getByTestId("workspaces-remove").click();
-  await page.getByTestId("confirm-submit").click();
+  await expect(page.getByTestId("undo-toast")).toContainText("Moved 2 workspaces to Trash.");
   await expect(page.getByTestId("workspaces-empty")).toBeVisible();
   await expect(page.getByTestId("rail-workspace-poe2")).toHaveCount(0);
   await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveCount(0);
@@ -439,9 +438,7 @@ test("a workspace in Trash is deleted for good after 30 days or when the user sa
   const { page } = running;
   await noteIn(running, "satisfactory", "factory plans");
   await fromMenu(page, "satisfactory", "menu-remove");
-  await page.getByTestId("confirm-submit").click();
   await fromMenu(page, "poe2", "menu-remove");
-  await page.getByTestId("confirm-submit").click();
 
   // Delete now, from Settings.
   await page.getByTestId("rail-settings").click();

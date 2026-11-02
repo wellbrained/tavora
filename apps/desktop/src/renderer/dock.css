@@ -235,6 +235,11 @@
 [data-dock-aiming] .dockview-theme-tavora .dv-tab {
   transition: transform var(--duration-menu) var(--ease-in-out-strong);
 }
+/* While a panel is aimed, the tabs show no underline or divider of their own: a tab that slides carries them along,
+   and they would be left behind as stray marks next to the dashed tab. */
+[data-dock-aiming] .dockview-theme-tavora .dv-tab {
+  box-shadow: none;
+}
 .dock-fade {
   transition: opacity var(--duration-press) var(--ease-out-strong);
 }

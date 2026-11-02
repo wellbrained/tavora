@@ -48,10 +48,10 @@ test("a confirmation opened from Settings stays inside Settings", async ({}, tes
     await page.getByTestId("empty-template-main-stacked").click();
     for (const moduleId of [NOTES, TODOS, "tavora.calculator"]) await openModule(page, moduleId);
     await expect(page.locator(".dv-groupview")).toHaveCount(3);
-    await page.getByTestId("rail-workspace-poe2").click({ button: "right" });
-    await page.locator('[role="menu"][data-state="open"] [data-testid="menu-manage-workspaces"]').click();
-    await page.getByTestId("workspaces-select-all").check();
-    await page.getByTestId("workspaces-remove").click();
+    // Clearing browser data still asks first (it can't be undone); moving workspaces to Trash no longer does.
+    await page.getByTestId("rail-settings").click();
+    await page.getByTestId("settings-nav-browser").click();
+    await page.getByTestId("browser-clear-shared").click();
     await expect(page.getByTestId("confirm")).toBeVisible();
 
     for (const [name, width, height] of [

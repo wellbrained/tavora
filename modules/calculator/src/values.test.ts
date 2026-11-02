@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deleteValue, isValidName, lookup, MAX_VALUES, parseValues, renameValue, saveValue, type Value } from "./values";
+import { deleteValue, isValidName, lookup, MAX_VALUES, parseValues, renameValue, restoreValue, saveValue, type Value } from "./values";
 
 const iron: Value = { name: "Iron", value: "100" };
 
@@ -40,5 +40,21 @@ describe("values", () => {
   it("delete and look up by name, whatever the case", () => {
     expect(lookup([iron])("iron")).toBe(100);
     expect(lookup(deleteValue([iron], "IRON"))("iron")).toBeUndefined();
+  });
+});
+
+describe("undoing a delete", () => {
+  const copper: Value = { name: "Copper", value: "40" };
+
+  it("puts a value back in its place", () => {
+    const values = [copper, iron];
+    expect(restoreValue(deleteValue(values, "iron"), iron, 1)).toEqual(values);
+    expect(restoreValue(deleteValue(values, "copper"), copper, 0)).toEqual(values);
+  });
+
+  it("keeps a value saved under its name meanwhile, and a full list", () => {
+    expect(restoreValue([{ name: "IRON", value: "5" }], iron, 0)).toBeNull();
+    const full = Array.from({ length: MAX_VALUES }, (_, index) => ({ name: `v${index}`, value: "1" }));
+    expect(restoreValue(full, iron, 0)).toBeNull();
   });
 });
