@@ -1,1 +1,29 @@
 @import "@tavora/official-ui/theme.css";
+
+/* Show disabled switches the examples off from outside (shell/ExampleBox.vue): a disabled fieldset turns every native
+   control off, and inert stops the rest. This makes everything look off as well, in three steps. */
+
+/* 1. A native control the kit gives no disabled look of its own (nav items, folding triggers, tiles, map pins) gets a
+      plain fade. It sits in the base layer, so a control with a disabled look of its own (buttons, selects, switches)
+      keeps that one. */
+@layer base {
+  [data-off] :is(button, input, textarea, select):disabled {
+    opacity: 0.5;
+  }
+}
+
+/* 2. What is not a native control fades as a whole: sliders and list options, number fields and tab strips (the kit
+      fades them only through a disabled prop), and the zoomable views and maps. */
+[data-off] [data-slot="slider"],
+[data-off] :is([data-slot="number-field"], [data-slot="tab-strip"]) {
+  opacity: 0.5;
+}
+[data-off] [role="option"],
+[data-off] :is([data-slot="zoom-pane"], [data-slot="tile-map"]) {
+  opacity: var(--disabled-opacity);
+}
+
+/* 3. The parts of those do not fade a second time. */
+[data-off] :is([data-slot="number-field"], [data-slot="tab-strip"], [data-slot="zoom-pane"], [data-slot="tile-map"]) :is(button, input):disabled {
+  opacity: 1;
+}

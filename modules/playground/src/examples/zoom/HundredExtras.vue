@@ -7,8 +7,6 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { ZoomPane } from "@tavora/official-ui/components/ui/zoom-pane";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const STEPS = ["Iron Ore", "Iron Ingot", "Iron Rod", "Screw", "Reinforced Plate", "Modular Frame"];
 const pane = ref<InstanceType<typeof ZoomPane> | null>(null);
 </script>
@@ -22,7 +20,7 @@ const pane = ref<InstanceType<typeof ZoomPane> | null>(null);
       </div>
     </div>
     <template #extras>
-      <Button variant="ghost" size="icon-sm" title="Show the first step" aria-label="Show the first step" :disabled="disabled" @click="pane?.showArea({ x: 0, y: 0, width: 480, height: 240 })">
+      <Button variant="ghost" size="icon-sm" title="Show the first step" aria-label="Show the first step" @click="pane?.showArea({ x: 0, y: 0, width: 480, height: 240 })">
         <Focus />
       </Button>
     </template>

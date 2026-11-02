@@ -18,8 +18,6 @@ import {
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const showRead = ref(true);
 const sort = ref("recent");
 </script>
@@ -28,7 +26,7 @@ const sort = ref("recent");
   <div class="flex flex-wrap items-center gap-2">
     <DropdownMenu>
       <DropdownMenuTrigger as-child>
-        <Button variant="secondary" :disabled="disabled"><MoreHorizontal :stroke-width="1.5" /> Actions</Button>
+        <Button variant="secondary"><MoreHorizontal :stroke-width="1.5" /> Actions</Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" class="w-56">
         <DropdownMenuLabel>Note</DropdownMenuLabel>
@@ -57,7 +55,7 @@ const sort = ref("recent");
     </DropdownMenu>
     <DropdownMenu>
       <DropdownMenuTrigger as-child>
-        <Button size="icon-sm" variant="ghost" aria-label="More" title="More" :disabled="disabled"><MoreHorizontal :stroke-width="1.5" /></Button>
+        <Button size="icon-sm" variant="ghost" aria-label="More" title="More"><MoreHorizontal :stroke-width="1.5" /></Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         <DropdownMenuItem>Open</DropdownMenuItem>
