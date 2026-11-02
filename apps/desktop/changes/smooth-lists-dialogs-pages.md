@@ -4,4 +4,4 @@
 - Dialogs rise a little as they fade in, and leave a bit quicker.
 - A settings page you pick from the side menu fades in.
 - A game you pick on the rail fades in.
-- With reduced motion on, rows and dialogs only fade, and pages don't move.
+- With reduced motion on, all of these only fade.
