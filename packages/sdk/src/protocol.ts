@@ -856,7 +856,7 @@ export interface Methods {
    * Changes the title in the frame of the panel's dialog (the module's name by default) while it is open, for example to name
    * the thing its settings are about; `null` goes back to the module's name. A title of 1 to LIMITS.maxTitleLength characters,
    * shown as plain text on one line. Nothing happens while the panel has no dialog open (the next one starts with the module's
-   * name again). Needs no click and no permission. Tavora 0.23.67 and newer.
+   * name again). Needs no click and no permission. Tavora 0.23.69 and newer.
    */
   "panel.setDialogTitle": { params: { title: string | null }; result: null };
   /** What this panel's live view (the overlay page shown in its spot over the game) shows; null shows nothing. At most LIMITS.maxOverlayStateBytes. Tavora 0.21.11 and newer. */
@@ -1412,7 +1412,7 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "panel.isMaximized": later("0.20.20"),
   "panel.setMaximized": later("0.20.20", null, flag("maximized", "making it fill the workspace")),
   "panel.setDialog": later("0.21.95", null, flag("open", "opening")),
-  "panel.setDialogTitle": later("0.23.67"),
+  "panel.setDialogTitle": later("0.23.69"),
   "panel.setLive": later("0.21.11"),
   "panels.open": call("0.17.18", null, true),
   "panels.openMany": later("0.23.29", null, true),

@@ -11,7 +11,7 @@ settingsButton.addEventListener("click", () => tavora.panel.openDialog({ width: 
 tavora.panel.onDialogChange((open) => showSettings(open));
 ```
 
-While the dialog is open your page is the dialog: show the settings instead of the panel's usual content. Tavora draws the frame with your module's name and a close button, so don't add a title bar or a close button of your own. When the settings are about one thing (a clock, a list), call `panel.setDialogTitle("Countdown")` once `onDialogChange` says the dialog is open, so the frame names it instead of the module (`null` goes back to the module's name; the next dialog starts with the name again). It needs Tavora 0.23.67: check `sdk.supports("panel.setDialogTitle")`, and show the name as a heading in the page on an older Tavora. Esc closes it as long as nothing inside (an open list, say) uses the key.
+While the dialog is open your page is the dialog: show the settings instead of the panel's usual content. Tavora draws the frame with your module's name and a close button, so don't add a title bar or a close button of your own. When the settings are about one thing (a clock, a list), call `panel.setDialogTitle("Countdown")` once `onDialogChange` says the dialog is open, so the frame names it instead of the module (`null` goes back to the module's name; the next dialog starts with the name again). It needs Tavora 0.23.69: check `sdk.supports("panel.setDialogTitle")`, and show the name as a heading in the page on an older Tavora. Esc closes it as long as nothing inside (an open list, say) uses the key.
 
 ## Layout
 

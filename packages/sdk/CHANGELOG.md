@@ -1,9 +1,9 @@
 ## 0.3.8
 
-A title for the panel's dialog. The new call needs Tavora 0.23.67 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+A title for the panel's dialog. The new call needs Tavora 0.23.69 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
 
 - `panel.setDialogTitle(title)` changes the title in the frame of the panel's dialog while it is open (the module's name by default), for example to name the thing its settings are about; `null` goes back to the module's name. Plain text of 1 to `LIMITS.maxTitleLength` characters, no click and no permission. Nothing happens while no dialog is open, and the next dialog starts with the module's name, so call it when `onDialogChange` says the dialog opened. Check `sdk.supports("panel.setDialogTitle")` and keep a heading in the page for an older Tavora.
-- The memory host (`@tavora/sdk/testing`) answers it (`host.dialogTitle`, `null` while no dialog is open) and defaults to Tavora 0.23.67.
+- The memory host (`@tavora/sdk/testing`) answers it (`host.dialogTitle`, `null` while no dialog is open) and defaults to Tavora 0.23.69.
 
 ## 0.3.7
 
