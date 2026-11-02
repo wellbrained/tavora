@@ -303,7 +303,7 @@ export interface TavoraSDK {
      * Changes the title in the frame of this panel's dialog (the module's name by default) while it is open, for example to
      * name what its settings are about; `null` goes back to the module's name. Plain text of 1 to `LIMITS.maxTitleLength`
      * characters, on one line. Nothing happens while no dialog is open, and the next one starts with the module's name, so call
-     * it when `onDialogChange` says the dialog opened. Needs no click. Needs Tavora 0.23.69 or newer: check
+     * it when `onDialogChange` says the dialog opened. Needs no click. Needs Tavora 0.23.71 or newer: check
      * `sdk.supports("panel.setDialogTitle")` and keep a title of your own in the page for an older one.
      */
     setDialogTitle(title: string | null): Promise<void>;
