@@ -118,6 +118,7 @@ function settings() {
 
 <template>
   <div class="min-h-0 flex-1 thin-scroll overflow-y-auto px-6 pb-8 [scrollbar-gutter:stable] lg:px-10" data-testid="catalog-results">
+    <p v-if="!result" class="sr-only" role="status" data-testid="catalog-loading">{{ t("catalog.loading") }}</p>
     <EmptyState v-if="result && result.status !== 'ok'" class="mt-8" role="status" :title="t(`catalog.problem.${result.status}.title`)" :description="t(`catalog.problem.${result.status}.text`)" :data-testid="`catalog-${result.status}`">
       <template #icon><WifiOff /></template>
       <template #action>
@@ -125,10 +126,9 @@ function settings() {
         <Button v-else variant="secondary" data-testid="catalog-retry" @click="load">{{ t("catalog.retry") }}</Button>
       </template>
     </EmptyState>
-    <Skeleton v-else :loading="!result">
-      <p v-if="!result" class="sr-only" role="status" data-testid="catalog-loading">{{ t("catalog.loading") }}</p>
+    <template v-else>
       <div class="flex flex-wrap items-center gap-3 pt-6 pb-3">
-        <p class="text-muted-foreground flex min-w-0 flex-1 items-center gap-2 text-sm"><ShieldCheck class="size-4 flex-none" :stroke-width="1.5" /> <span>{{ t("catalog.hint") }}</span></p>
+        <p class="text-muted-foreground flex min-w-0 flex-1 items-center gap-2 text-sm"><ShieldCheck class="size-4 flex-none" :stroke-width="1.5" /> {{ t("catalog.hint") }}</p>
         <Select v-model="sort">
           <SelectTrigger size="sm" class="w-44" :aria-label="t('catalog.sort.label')" data-testid="catalog-sort">
             <span class="truncate">{{ t("catalog.sort.current", { by: t(`catalog.sort.${sort}`) }) }}</span>
@@ -140,6 +140,7 @@ function settings() {
           </SelectContent>
         </Select>
       </div>
+      <Skeleton :loading="!result">
       <ul class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
         <li v-for="module in cards" :key="module.id" class="bg-background/40 hover:border-primary/40 flex flex-col gap-3 rounded-xl border p-4 transition-colors" :data-testid="`catalog-${module.id}`">
           <div class="flex min-w-0 gap-3">
@@ -190,7 +191,8 @@ function settings() {
       <p v-if="result && !shown.length" class="text-muted-foreground py-16 text-center" data-testid="catalog-empty">
         {{ query.trim() ? t("addModule.none", { query: query.trim() }) : t("catalog.empty") }}
       </p>
-    </Skeleton>
+      </Skeleton>
+    </template>
     <CatalogModuleDialog v-if="info" :module="info" :at-reviews="infoAtReviews" :installed="installed.has(info.id)" :installing="installing === info.id" :size="formatSize(info.size)"
       :error="errors[info.id]"
       @close="info = null" @install="install(info)" @add="add(info.id)"

@@ -1,7 +1,7 @@
 // Placeholder data for the catalog's skeletons (Skeleton in the kit): the real cards and the real page, filled with
 // made-up modules whose texts are about as long as real ones, so the bars have the real boxes. Never shown as text.
 import { placeholderText } from "@tavora/official-ui/components/ui/skeleton";
-import type { CatalogModuleView, CatalogPage, ReadmeBlock } from "../shared/host-api";
+import type { CatalogModuleView, ReadmeBlock } from "../shared/host-api";
 
 /** A made-up module for a card or a page; `index` makes ids and lengths differ a little, like real ones. */
 export function placeholderModule(index: number): CatalogModuleView {
@@ -38,14 +38,7 @@ const words = (length: number) => [{ text: placeholderText(length) }];
 export const PLACEHOLDER_README: ReadmeBlock[] = [
   { kind: "paragraph", spans: words(150) },
   { kind: "paragraph", spans: words(110) },
+  // Only the key that sorts the list into the page's Features section; the page shows its own translated title, never this.
   { kind: "heading", level: 2, text: "Features" },
   { kind: "list", ordered: false, items: [60, 80, 50, 70, 40].map((length) => ({ spans: words(length) })) },
 ];
-
-/** The patch notes of a module page while they load (the version has to be the module's own). */
-export function placeholderVersions(version: string): CatalogPage["versions"] {
-  return [
-    { version, publishedAt: "2000-01-01", notes: [placeholderText(70), placeholderText(50)] },
-    { version: "0.0.0", publishedAt: "2000-01-01", notes: [placeholderText(60)] },
-  ];
-}

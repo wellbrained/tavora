@@ -46,6 +46,11 @@ const TAKEOVER = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 
 let stopRunning: (() => void) | null = null;
 
+/** Stops a glide that is running, where it is (a page switch, say, must not be dragged on to the old offset). */
+export function stopScroll(): void {
+  stopRunning?.();
+}
+
 /** Scrolls `scroller` until `target` is in its middle; resolves when it has got there (or the user took over). */
 export function scrollToCentered(scroller: HTMLElement, target: Element): Promise<void> {
   stopRunning?.();

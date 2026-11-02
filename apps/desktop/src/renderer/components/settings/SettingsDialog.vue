@@ -46,7 +46,7 @@ import {
   type SettingsSection,
 } from "./settings-index";
 import { SETTINGS_PAGE_TITLE } from "./settings-page";
-import { scrollToCentered } from "../../lib/smooth-scroll";
+import { scrollToCentered, stopScroll } from "../../lib/smooth-scroll";
 
 const section = ref<SettingsSection>("general");
 const query = ref("");
@@ -87,6 +87,8 @@ watch(settingsTarget, (target) => {
 });
 
 async function show(target: SettingsSection, setting?: string) {
+  // A glide to an earlier setting ends here, so it can't drag the page we are about to show to its old offset.
+  stopScroll();
   // A search led someone who doesn't make modules yet to a developer page: that is a start, so the tabs show.
   if (!makesModules.value && (DEVELOPER_SECTIONS as readonly string[]).includes(target)) void act({ type: "set-makes-modules", on: true }, { quiet: true });
   // New marks of the page left go now; they stayed while the user was on it.

@@ -255,8 +255,8 @@ function onPanelKey(event: KeyboardEvent) {
               <template v-else>
                 <p class="text-muted-foreground truncate text-sm font-medium" :title="heading" data-testid="panel-heading">{{ heading }}</p>
                 <!-- While the catalog answers, the real rows are drawn with made-up modules as muted bars (Skeleton). -->
+                <p v-if="activeRow && catalogModules === null" class="sr-only" role="status">{{ t("addGame.loadingModules") }}</p>
                 <Skeleton v-if="activeRow" :loading="catalogModules === null" class="flex flex-col gap-1.5">
-                  <p v-if="catalogModules === null" class="sr-only" role="status">{{ t("addGame.loadingModules") }}</p>
                   <template v-if="catalogModules === null || panelModules.length">
                     <label
                       v-for="module in catalogModules === null ? PLACEHOLDER_MODULES.slice(0, 2) : panelModules"

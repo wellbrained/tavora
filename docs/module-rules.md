@@ -176,7 +176,7 @@ for data (the document store, a file, a list), draw the **real template** with p
 - **Same boxes**: while `loading` is true every text, icon, picture and button inside turns into a muted bar of its own
   box. So the placeholder data has the shape of real data: the same number of rows, and text about as long as real text
   (`placeholderText(40)` makes a made-up text of that length; it is never seen). Don't build a separate "loading" layout.
-- **Text next to an icon in the same element** gets no bar of its own: put the text in a `<span>`.
+- **Text next to an icon in the same element** (a heading with an icon in front) gets no bar of its own: put the text in a `<span>`.
 - **Only the part that loads**: the wrapper pulses, so keep it off things that are already there (a toolbar, a title).
 - **No flash**: a load shorter than 150 ms shows nothing at all. Longer, the bars appear with a slow pulse (none with
   reduced motion), and when the data arrives the content fades in over them in 200 ms. `loading` can go back to true
@@ -184,7 +184,11 @@ for data (the document store, a file, a list), draw the **real template** with p
 - **Pictures** that arrive late use `FadeImage`, with its box sized by `class` (`size-12`, `aspect-video`), so nothing
   moves when they load. A picture that fails keeps its `#fallback` (an icon).
 - **A known amount** (an import at 40 %) is a `Progress`, not a skeleton. An error is a `Notice` or `EmptyState`.
-- Controls inside a skeleton can't be used; the wrapper takes the pointer while it waits.
+- **Not real until it arrives**: while it waits the wrapper is `inert` and `aria-hidden`, so a placeholder button can't
+  be focused, clicked or read out. Keep a status text for screen readers (`sr-only`, `role="status"`) outside the
+  wrapper, and put what is already known (a toolbar, a title) outside too: it must not turn into bars.
+- **Same shape**: show only the parts every real page has. A part that appears only for some data (patch notes of a
+  module with several versions, say) stays out of the skeleton and arrives with the data.
 
 ## 5. Done checklist
 
