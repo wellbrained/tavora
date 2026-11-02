@@ -46,4 +46,20 @@ describe("the overlay view", () => {
     expect(root.dataset.done).toBeUndefined();
     expect(root.textContent).toBe("Boss Go!");
   });
+
+  it("draws the state of a panel from before the sizes and the words' colour at the size it always had, not NaN", () => {
+    const { root, view } = mount();
+    const deaths = newItem("counter", "d", "Deaths") as Counter;
+    const state = JSON.parse(JSON.stringify(overlayState(deaths)));
+    // What 0.1.16 published: no text, no sizes, no words colour.
+    delete state.text;
+    delete state.look.wordsSize;
+    delete state.look.numberSize;
+    delete state.look.wordsColor;
+    view.draw(state, 0);
+    const sizes = [...root.querySelectorAll<HTMLElement>(".cc-line > span")].map((run) => run.style.fontSize);
+    expect(sizes).toEqual(["24px", "48px"]);
+    expect(root.querySelector<HTMLElement>(".cc-line")!.style.fontSize).toBe("48px");
+    expect(root.textContent).toBe("Deaths 0");
+  });
 });

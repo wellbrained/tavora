@@ -457,12 +457,12 @@ onBeforeUnmount(saveFields);
         <!-- How it counts -->
         <SettingsPage v-if="current === 'item'" :title="itemPage" :description="t(item.kind === 'counter' ? 'edit.about.counter' : 'edit.about.clock')">
           <SettingsSection>
-            <SettingsRow :label="t('edit.name')">
+            <SettingsRow :label="t('edit.name')" :hint="t('edit.nameHint')">
               <Input :id="`${prefix}-label`" v-model="label" class="w-full" :maxlength="MAX.label" :placeholder="t(`kind.${item.kind}`)" :aria-label="t('edit.name')" @blur="saveLabel" @keydown.enter="saveLabel" />
             </SettingsRow>
 
             <template v-if="item.kind !== 'counter'">
-              <SettingsRow :label="t('edit.format')" :hint="formatValid ? t('edit.formatHint', { text: formatSeconds(sample, format) }) : undefined">
+              <SettingsRow :label="t('edit.format')" :hint="formatValid ? t('edit.formatHint', { text: formatSeconds(sample, format) }) : t('edit.formatUnits')">
                 <div class="flex w-full gap-1">
                   <Input :id="`${prefix}-format`" v-model="format" class="min-w-0 flex-1 font-mono" :maxlength="MAX_FORMAT" :aria-label="t('edit.format')" :aria-invalid="!formatValid" :title="t('edit.formatHelp')" @blur="saveFormat()" @keydown.enter="saveFormat()" />
                   <!-- Kit menus, not ui.showMenu: Tavora draws no module menu while the panel is a dialog over the workspace. -->
@@ -481,7 +481,7 @@ onBeforeUnmount(saveFields);
               </SettingsRow>
 
               <template v-if="item.kind === 'countdown'">
-                <SettingsRow :label="t('edit.duration')">
+                <SettingsRow :label="t('edit.duration')" :hint="t('edit.durationHint')">
                   <div class="flex items-center gap-1">
                     <Input :id="`${prefix}-h`" v-model="duration.h" class="w-14 text-center tabular-nums" inputmode="numeric" maxlength="2" :aria-label="t('edit.hours')" @blur="saveDuration" @keydown.enter="saveDuration" />
                     <span aria-hidden="true">:</span>
@@ -490,7 +490,7 @@ onBeforeUnmount(saveFields);
                     <Input :id="`${prefix}-s`" v-model="duration.s" class="w-14 text-center tabular-nums" inputmode="numeric" maxlength="4" :aria-label="t('edit.seconds')" @blur="saveDuration" @keydown.enter="saveDuration" />
                   </div>
                 </SettingsRow>
-                <SettingsRow :label="t('edit.repeat')">
+                <SettingsRow :label="t('edit.repeat')" :hint="t('edit.repeatHint')">
                   <Switch :model-value="item.repeat" :aria-label="t('edit.repeat')" @update:model-value="(on: boolean) => updateClock((clock) => (clock.repeat = on))" />
                 </SettingsRow>
                 <SettingsRow v-if="!item.repeat" :label="t('edit.doneText')" :hint="t('edit.doneTextHint')">
@@ -499,23 +499,23 @@ onBeforeUnmount(saveFields);
               </template>
 
               <template v-else>
-                <SettingsRow :label="t('edit.laps')">
+                <SettingsRow :label="t('edit.laps')" :hint="t('edit.lapsHint')">
                   <Switch :model-value="item.laps" :aria-label="t('edit.laps')" @update:model-value="(on: boolean) => updateClock((clock) => (clock.laps = on))" />
                 </SettingsRow>
-                <SettingsRow v-if="item.laps" :label="t('edit.lastLap')">
+                <SettingsRow v-if="item.laps" :label="t('edit.lastLap')" :hint="t('edit.lastLapHint')">
                   <Switch :model-value="item.showLastLap" :aria-label="t('edit.lastLap')" @update:model-value="(on: boolean) => updateClock((clock) => (clock.showLastLap = on))" />
                 </SettingsRow>
               </template>
             </template>
 
             <template v-else>
-              <SettingsRow :label="t('edit.step')">
+              <SettingsRow :label="t('edit.step')" :hint="t('edit.stepHint')">
                 <Input :id="`${prefix}-step`" v-model="step" class="w-24 tabular-nums" inputmode="numeric" :aria-label="t('edit.step')" @blur="saveStep" @keydown.enter="saveStep" />
               </SettingsRow>
               <SettingsRow :label="t('edit.goal')" :hint="t('edit.goalHint')">
                 <Input :id="`${prefix}-goal`" v-model="goal" class="w-24 tabular-nums" inputmode="numeric" :aria-label="t('edit.goal')" @blur="saveGoal" @keydown.enter="saveGoal" />
               </SettingsRow>
-              <SettingsRow :label="t('edit.negative')">
+              <SettingsRow :label="t('edit.negative')" :hint="t('edit.negativeHint')">
                 <Switch :model-value="item.negative" :aria-label="t('edit.negative')" @update:model-value="(on: boolean) => updateCounter((counter) => (counter.negative = on))" />
               </SettingsRow>
               <SettingsRow :label="t('edit.links')" :hint="t('edit.linksHint')">
@@ -529,7 +529,7 @@ onBeforeUnmount(saveFields);
                   </DropdownMenuContent>
                 </DropdownMenu>
               </SettingsRow>
-              <SettingsRow v-for="link in links" :key="link.target" :label="link.label">
+              <SettingsRow v-for="link in links" :key="link.target" :label="link.label" :hint="t('edit.linkRowHint')">
                 <Input
                   :model-value="amountDrafts[link.target] ?? String(link.amount)"
                   class="w-20 tabular-nums"

@@ -3,7 +3,7 @@
 // sizes a new frame from `size`. A group's counters are not listed again: the group is their one overlay. A linked group
 // that is not shown as a whole has no line of its own, so its counters are listed one by one.
 import type { OverlaySource } from "@tavora/sdk";
-import { counterShown, groupSegments, itemSegments, linkedGroups, NUMBER_SCALE, readClock, visualOrder, WORDS_SCALE, type Font, type Item, type ItemList, type OverlayLook } from "./items";
+import { counterShown, groupSegments, itemSegments, linkedGroups, readClock, sizeScales, visualOrder, type Font, type Item, type ItemList, type OverlayLook } from "./items";
 import type { Segment } from "./template";
 import { formatSeconds } from "./time";
 
@@ -57,8 +57,9 @@ function valueText(item: Extract<Item, { kind: "countdown" | "stopwatch" }>, now
 
 /** How big a line of words and values needs to be: the runs side by side, each at the size its style gives it. */
 function lineSize(line: Segment[], look: OverlayLook, measure: Measure, lap: { text: string } | null): { width: number; height: number } {
-  const number = VALUE_PX * NUMBER_SCALE[look.numberSize];
-  const words = VALUE_PX * WORDS_SCALE[look.wordsSize];
+  const scales = sizeScales(look);
+  const number = VALUE_PX * scales.number;
+  const words = VALUE_PX * scales.words;
   const width = line.reduce((total, part) => total + measure(part.text, part.value ? number : words, part.value ? 700 : 600, look.font), 0);
   const tallest = Math.max(line.some((part) => part.value) ? number : 0, line.some((part) => !part.value) ? words : 0);
   const lapWidth = lap ? measure(lap.text, number * LAP_SHARE, 500, look.font) : 0;

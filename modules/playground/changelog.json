@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.18",
+    "date": "2026-11-02",
+    "notes": [
+      "New specimens: a settings menu with Overlays, and text with placeholders.",
+      "The settings dialog example uses the same menu and has a Delete row."
+    ]
+  },
+  {
     "version": "0.1.17",
     "date": "2026-11-02",
     "notes": [

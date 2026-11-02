@@ -1,9 +1,9 @@
 ## 0.3.9
 
-A way to Tavora's Overlay page. The new call needs Tavora 0.23.73 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+A way to Tavora's Overlay page. The new call needs Tavora 0.23.75 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
 
 - `overlay.openPage()` shows Tavora's Overlay page, where the user adds the module's overlays to their game and arranges them, and closes the panel's dialog if it is open. Only right after a click or key press in the panel, no permission, nothing comes back. Check `sdk.supports("overlay.openPage")` and leave the link out for an older Tavora.
-- The memory host (`@tavora/sdk/testing`) answers it and defaults to Tavora 0.23.73.
+- The memory host (`@tavora/sdk/testing`) answers it and defaults to Tavora 0.23.75.
 
 ## 0.3.8
 

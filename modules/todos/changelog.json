@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.13",
+    "date": "2026-11-02",
+    "notes": [
+      "The Overlays group in the settings sits under a divider line."
+    ]
+  },
+  {
     "version": "0.2.12",
     "date": "2026-11-02",
     "notes": [

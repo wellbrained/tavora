@@ -6,6 +6,7 @@
       "Settings use Tavora's settings layout: what the panel shows, what the overlay shows and the stream link, each in its own place.",
       "Write what the overlay says yourself, with {time} or {count}, and see it change as you type.",
       "The words and the number of the overlay get their own colour and size.",
+      "In game and On stream say where it shows; Arrange in Overlays opens Tavora's Overlay page.",
       "There is no Done button any more: changes save as you make them, and Delete is the last row of the first page."
     ]
   },

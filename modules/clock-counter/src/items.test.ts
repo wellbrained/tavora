@@ -22,6 +22,7 @@ import {
   remove,
   resetClock,
   setStream,
+  sizeScales,
   sourcesOf,
   startPause,
   visualOrder,
@@ -380,5 +381,13 @@ describe("the text of an overlay", () => {
     // The previous version keeps only the old fields; this one then reads that as "Show the name off".
     const { text: _text, wordsColor: _wordsColor, wordsSize: _wordsSize, numberSize: _numberSize, ...oldLook } = saved.items[0]!.look;
     expect(itemText(first(parseList(raw(oldLook))))).toBe("{time}");
+  });
+});
+
+describe("sizeScales", () => {
+  it("is M for a look published before the sizes, and each size on its own", () => {
+    expect(sizeScales({})).toEqual({ words: 0.5, number: 1 });
+    expect(sizeScales({ wordsSize: "xl", numberSize: "s" })).toEqual({ words: 1, number: 0.6 });
+    expect(sizeScales({ wordsSize: "nope" as never })).toEqual({ words: 0.5, number: 1 });
   });
 });

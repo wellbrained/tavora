@@ -1,7 +1,7 @@
 // Draws one item's overlay text into an element: the page OBS shows uses it with the whole window as its box, and the settings
 // use it for their live preview, so what is previewed is what is drawn. The line is runs of words and values (template.ts); each
 // has its own colour and size, the number keeps its tabular digits, and the whole line is scaled to fill the box.
-import { NUMBER_SCALE, WORDS_SCALE, type OverlayState } from "./items";
+import { sizeScales, type OverlayState } from "./items";
 import { lineOf } from "./line";
 import { LAP_SHARE, VALUE_PX } from "./sources";
 import "./overlay-view.css";
@@ -67,7 +67,7 @@ export function mountOverlayView(root: HTMLElement, options: OverlayViewOptions)
     root.dataset.outline = String(look.outline);
     if (shown.flashing) root.dataset.done = "flash";
     else delete root.dataset.done;
-    sizes = { words: WORDS_SCALE[look.wordsSize], number: NUMBER_SCALE[look.numberSize] };
+    sizes = sizeScales(look);
     line.replaceChildren(
       ...shown.segments.map((part) => {
         const run = element("span", part.value ? "cc-n" : "cc-w");

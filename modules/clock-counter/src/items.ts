@@ -26,6 +26,14 @@ export const NUMBER_SCALE: Record<Size, number> = { s: 0.6, m: 1, l: 1.5, xl: 2 
 export const WORDS_SCALE: Record<Size, number> = { s: 0.3, m: 0.5, l: 0.75, xl: 1 };
 
 /**
+ * The scales of a look's words and number. A state published by a panel before the sizes (0.1.16) has none: M, what it always drew.
+ * Read the sizes through this wherever a published look is drawn.
+ */
+export function sizeScales(look: Partial<Pick<OverlayLook, "wordsSize" | "numberSize">>): { words: number; number: number } {
+  return { words: WORDS_SCALE[look.wordsSize ?? "m"] ?? WORDS_SCALE.m, number: NUMBER_SCALE[look.numberSize ?? "m"] ?? NUMBER_SCALE.m };
+}
+
+/**
  * How an item looks on stream. `color` is the number's colour (and, before the words had one, everything's); a version
  * before the text field reads `showLabel` and `color` and ignores the rest, so they stay in step with what is set here.
  */
