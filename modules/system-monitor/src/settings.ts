@@ -92,6 +92,12 @@ export function toggleSection(panel: PanelSettings, id: SectionId): PanelSetting
   return SECTIONS.some((section) => sections[section]) ? { ...panel, sections } : panel;
 }
 
+/** Whether `id` is the only one switched on in `flags`, so its switch stays on. */
+export function isLastOn<K extends string>(flags: Record<K, boolean>, id: K): boolean {
+  const on = Object.keys(flags).filter((key) => flags[key as K]);
+  return on.length === 1 && on[0] === id;
+}
+
 /** The internal drives, which are watched until the user chooses. */
 export function defaultDrives(info: SystemInfo): string[] {
   return info.drives.filter((drive) => drive.kind === "internal").map((drive) => drive.id);

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.15",
+    "date": "2026-11-02",
+    "notes": [
+      "Everything you can set is in one place now: what it shows, which drives and your connection. Open it with the gear at the bottom."
+    ]
+  },
+  {
     "version": "0.1.14",
     "date": "2026-11-02",
     "notes": [

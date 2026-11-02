@@ -1,30 +1,27 @@
 <script setup lang="ts">
 // System Monitor: how busy this PC is and how its connection is doing. The panel has two sections, System and
 // Connection; either can be hidden. Tavora's system-info connector reads the PC and pauses while the panel is hidden,
-// so the module has no timers. One ⋯ menu holds every choice: which sections and blocks show, how often it updates,
-// the graphics card, the drives, and whether and where to ping for the connection.
-import { Ellipsis } from "@lucide/vue";
+// so the module has no timers. The settings (what shows, which drives, the connection) open from the gear in the
+// footer as a dialog (panel.openDialog): the same page, big, showing Settings instead of the panel.
+import { Settings as SettingsIcon } from "@lucide/vue";
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import ConnectionSection from "./ConnectionSection.vue";
 import AppsDialog from "./AppsDialog.vue";
-import DrivesDialog from "./DrivesDialog.vue";
 import { memory, num } from "./format";
 import { language, setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
-import { buildMenu, parsePick } from "./menu";
 import { createMonitor, type Monitor } from "./monitor";
-import { watchedDrives } from "./settings";
+import Settings from "./Settings.vue";
 import SystemSection from "./SystemSection.vue";
-import ConnectionDialog from "./ConnectionDialog.vue";
 
 const sdk = shallowRef<TavoraSDK | null>(null);
 const monitor = shallowRef<Monitor | null>(null);
 const connectError = ref<string | null>(null);
-const picking = ref(false);
-const connecting = ref(false);
+/** The panel is shown big as a dialog, with its settings. */
+const dialogOpen = ref(false);
 const showingApps = ref(false);
 const stopFollowing: (() => void)[] = [];
 
@@ -40,6 +37,9 @@ onMounted(async () => {
     sdk.value = connected;
     monitor.value = started;
     connected.lifecycle.onResume(() => void started.retry());
+    stopFollowing.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
+    addEventListener("keydown", onKey);
+    stopFollowing.push(() => removeEventListener("keydown", onKey));
     await started.start();
   } catch (reason) {
     connectError.value = errorMessage(reason);
@@ -58,38 +58,24 @@ const tavora = computed(() => {
   return now ? t("tavora", { cpu: num(now.cpu, 1, language.value), memory: memory(now.memoryBytes, language.value) }) : "";
 });
 
-async function openMenu(event: MouseEvent): Promise<void> {
-  const started = monitor.value;
-  if (!started || !sdk.value) return;
-  const picked = await sdk.value.ui.showMenu({
-    items: buildMenu(t, started.info.value, started.app.value, started.panel.value, started.connectionMissing.value ? null : started.connectionSettings.value),
-    anchor: event.currentTarget as HTMLElement,
-    align: "end",
-  });
-  const pick = picked ? parsePick(picked) : null;
-  if (!pick) return;
-  if (pick.kind === "section") started.toggleSection(pick.id);
-  else if (pick.kind === "block") started.toggleBlock(pick.id);
-  else if (pick.kind === "interval") started.setInterval(pick.ms);
-  else if (pick.kind === "gpu") started.setGpu(pick.id);
-  else if (pick.kind === "connection") connecting.value = true;
-  else if (pick.kind === "traffic") started.toggleTraffic();
-  else picking.value = true;
+/** Opens the settings: the panel shows them big, in a dialog over the app, as every module's settings. */
+function openSettings(): void {
+  void sdk.value?.panel.openDialog({ width: 880, height: 700 }).catch(() => undefined);
 }
 
-function saveDrives(drives: string[]): void {
-  picking.value = false;
-  monitor.value?.setDrives(drives);
+function onKey(event: KeyboardEvent): void {
+  // Esc in an open list (a Select, say) closes only that.
+  const inPopup = (event.target as Element | null)?.closest?.("[role=listbox], [role=menu], [role=dialog]");
+  if (event.key === "Escape" && dialogOpen.value && !event.defaultPrevented && !inPopup) void sdk.value?.panel.closeDialog();
 }
 
 const sections = computed(() => monitor.value?.panel.value.sections ?? { system: true, connection: true });
 const bothSections = computed(() => sections.value.system && sections.value.connection);
-
-const checkedDrives = computed(() => (monitor.value?.info.value ? watchedDrives(monitor.value.info.value, monitor.value.app.value) : []));
 </script>
 
 <template>
-  <p v-if="!monitor || status === 'loading'" class="text-muted-foreground p-4 text-sm" :role="connectError ? 'alert' : 'status'" data-testid="status">
+  <Settings v-if="monitor && dialogOpen && status === 'ready'" :monitor="monitor" />
+  <p v-else-if="!monitor || status === 'loading'" class="text-muted-foreground p-4 text-sm" :role="connectError ? 'alert' : 'status'" data-testid="status">
     {{ connectError ? t("connectError", { error: connectError }) : t("loading") }}
   </p>
   <div v-else class="bg-background flex size-full flex-col overflow-hidden text-sm" data-testid="system-monitor-panel">
@@ -108,13 +94,11 @@ const checkedDrives = computed(() => (monitor.value?.info.value ? watchedDrives(
 
     <footer v-if="status === 'ready'" class="flex flex-none items-center gap-2 border-t py-1 pr-1 pl-3">
       <span class="text-muted-foreground min-w-0 flex-1 truncate text-xs tabular-nums" data-testid="tavora-use">{{ tavora }}</span>
-      <Button variant="ghost" size="icon-xs" :title="t('menu.options')" :aria-label="t('menu.options')" data-testid="menu" @click="openMenu">
-        <Ellipsis :stroke-width="1.75" />
+      <Button variant="ghost" size="icon-xs" :title="t('settings.title')" :aria-label="t('settings.title')" data-testid="settings" @click="openSettings">
+        <SettingsIcon :stroke-width="1.75" />
       </Button>
     </footer>
 
-    <ConnectionDialog v-if="connecting && monitor.connectionSettings.value" :current="monitor.connectionSettings.value" :save="monitor.setConnection" @done="connecting = false" @cancel="connecting = false" />
-    <DrivesDialog v-if="picking && monitor.info.value" :info="monitor.info.value" :checked="checkedDrives" @save="saveDrives" @cancel="picking = false" />
     <AppsDialog v-if="showingApps && sdk" :sdk="sdk" :total-bytes="monitor.info.value?.ramBytes ?? 0" @close="showingApps = false" />
   </div>
 </template>

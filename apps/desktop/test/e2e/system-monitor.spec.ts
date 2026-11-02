@@ -41,7 +41,7 @@ test("the Memory card lists the apps", async () => {
   }
 });
 
-test("Traffic in the menu shows this week and the last months, as Windows counts them", async () => {
+test("Traffic in the settings shows this week and the last months, as Windows counts them", async () => {
   // GitHub's Windows Server runners keep no Data usage record, so Windows never answers there; it runs on a real PC.
   test.skip(!!process.env.GITHUB_ACTIONS, "no Data usage record on GitHub's runners");
   const { app, page } = await launch();
@@ -52,11 +52,19 @@ test("Traffic in the menu shows this week and the last months, as Windows counts
     await expect.poll(() => inModule(app, SYSTEM_MONITOR, `!!${q("connection-section")}`).catch(() => false)).toBe(true);
     // Off until the user turns it on.
     expect(await inModule(app, SYSTEM_MONITOR, `!!${q("connection-traffic")}`)).toBe(false);
-    // The menu opens from a real key press, as Tavora wants for ui.showMenu.
-    await inModule(app, SYSTEM_MONITOR, `${q("menu")}.focus()`);
+    // The settings open from a real key press, as Tavora wants for panel.openDialog; every change saves at once.
+    await inModule(app, SYSTEM_MONITOR, `${q("settings")}.focus()`);
     await typeInModule(app, SYSTEM_MONITOR, "\n");
-    await page.getByTestId("module-menu-item-traffic").click();
-    await expect(page.getByTestId("module-menu")).toHaveCount(0);
+    await expect.poll(() => inModule(app, SYSTEM_MONITOR, `!!${q("system-monitor-settings")}`)).toBe(true);
+    await shootPanels(app, SYSTEM_MONITOR, test.info().outputPath("system-monitor-settings-show.png"));
+    await inModule(app, SYSTEM_MONITOR, `${q("settings-page-connection")}.click()`);
+    await expect.poll(() => inModule(app, SYSTEM_MONITOR, `!!${q("settings-traffic")}`)).toBe(true);
+    expect(await inModule(app, SYSTEM_MONITOR, `${q("settings-traffic")}.getAttribute("aria-checked")`)).toBe("false");
+    await inModule(app, SYSTEM_MONITOR, `${q("settings-traffic")}.click()`);
+    await expect.poll(() => inModule(app, SYSTEM_MONITOR, `${q("settings-traffic")}.getAttribute("aria-checked")`)).toBe("true");
+    await shootPanels(app, SYSTEM_MONITOR, test.info().outputPath("system-monitor-settings-connection.png"));
+    await page.getByTestId("panel-dialog-close").click();
+    await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
 
     // Five periods: this week, this month and the 3 months before, each with a total or a dash.
     const cells = () => inModule<string[]>(app, SYSTEM_MONITOR, `[...document.querySelectorAll('[data-testid="traffic-total"]')].map((cell) => cell.textContent.trim())`);
