@@ -178,6 +178,8 @@ export class PanelViews {
   private overlayChanges = 0;
   /** Pictures taken ahead of a menu (prepareFreeze), by panel; they count while they are fresh. */
   private prepared: { at: number; layout: string; pictures: Map<string, Promise<string | null>> } | null = null;
+  /** A page dialog is open above the panel dialog (the host UI says so), so the panel's view stays out of sight. */
+  private dialogCovered = false;
   private dialogState: { instanceId: string; width: number; height: number; bounds: PanelRect | null; still: Promise<string | null> } | null = null;
 
   constructor(private readonly deps: PanelViewsDeps) {}
@@ -422,7 +424,8 @@ export class PanelViews {
     }
     // A module page stays hidden until it has its data, so switching workspaces does not show it building itself;
     // while a workspace opens, every panel waits for the others.
-    adapter.setVisible(rect !== undefined && (dialog !== undefined || (!this.overlayOpen && !this.openingState)) && adapter.revealed);
+    // (A page dialog above the panel's dialog hides the panel's view: it is a native view and would draw over it.)
+    adapter.setVisible(rect !== undefined && ((dialog !== undefined && !this.dialogCovered) || (dialog === undefined && !this.overlayOpen && !this.openingState)) && adapter.revealed);
     // A panel kept running for the overlays isn't paused for being out of sight: its overlay goes on being fed.
     if ((rect || this.keep.has(instanceId)) && !this.deps.windowHidden()) adapter.resume();
     else adapter.suspend();
@@ -663,11 +666,20 @@ export class PanelViews {
     this.layOut(open.instanceId, adapter);
   }
 
+  /** A page dialog opened above the panel dialog, or the last one closed: the panel's view steps aside or comes back. */
+  coverDialog(covered: boolean): void {
+    if (covered === this.dialogCovered) return;
+    this.dialogCovered = covered;
+    const open = this.dialogState;
+    if (open?.bounds) this.layOut(open.instanceId);
+  }
+
   /** Puts the panel in its dialog back in its slot (only `instanceId`'s, when given). */
   closeDialog(instanceId?: string): void {
     const open = this.dialogState;
     if (!open || (instanceId !== undefined && open.instanceId !== instanceId)) return;
     this.dialogState = null;
+    this.dialogCovered = false;
     this.deps.dialogClosed();
     const adapter = this.get(open.instanceId);
     adapter?.setInDialog(false);
