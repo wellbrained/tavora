@@ -302,6 +302,9 @@ const toolbar = computed(() => {
 /** The empty canvas names the side the Sources list is on (Settings > Overlays puts it left or right). */
 const emptyHint = computed(() => t(state.value?.gameOverlays.sidebar === "left" ? "overlays.layout.addHint.left" : "overlays.layout.addHint.right"));
 
+/** The frames being moved lift a little (scale only: they sit over a running game, so no shadow or blur) and settle when let go. */
+const lifted = computed(() => new Set(drag.value?.moved && !drag.value.edges ? drag.value.ids : []));
+
 const keyOf = (item: LayoutItemView) => (item.mode === "toggle" && item.hotkey ? hotkeyKeys(item.hotkey.accelerator, mac) : []);
 </script>
 
@@ -331,7 +334,8 @@ const keyOf = (item: LayoutItemView) => (item.mode === "toggle" && item.hotkey ?
       :style="styleOf(item)"
       :class="
         cn(
-          'absolute box-border cursor-move',
+          'absolute box-border cursor-move transition-[scale] duration-(--duration-reorder) ease-(--ease-out-strong)',
+          lifted.has(item.id) && 'motion-safe:scale-[1.03]',
           item.live ? 'border border-dashed border-white/40' : 'bg-card/85 border-border border',
           item.off && !item.live && 'opacity-50',
           chosen.has(item.id) && 'border-primary border-2 border-solid',

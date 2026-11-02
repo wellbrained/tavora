@@ -65,6 +65,9 @@ const api: TavoraHostApi = {
   onAccount: (listener) => {
     ipcRenderer.on("host:account", (_event, view: AccountView) => listener(view));
   },
+  onInstallProgress: (listener) => {
+    ipcRenderer.on("host:install-progress", (_event, progress: { moduleId: string; percent: number | null }) => listener(progress));
+  },
   getCloudCopy: () => ipcRenderer.invoke("host:get-cloud-copy"),
   onCloudCopy: (listener) => {
     ipcRenderer.on("host:cloud-copy", (_event, view: CloudCopyView) => listener(view));

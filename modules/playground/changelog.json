@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.9",
+    "version": "0.1.10",
     "date": "2026-11-02",
     "notes": [
       "Main buttons and badges can follow a theme's deeper button colour."
+    ]
+  },
+  {
+    "version": "0.1.9",
+    "date": "2026-11-02",
+    "notes": [
+      "New specimens: a button that shows its own progress, and numbers that count to their new value."
     ]
   },
   {

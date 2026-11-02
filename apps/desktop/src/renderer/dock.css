@@ -327,3 +327,14 @@
 .dockview-theme-tavora .dv-tab.dv-inactive-tab:not(:hover):not(:focus-within) [data-testid="close"] {
   opacity: 0;
 }
+
+/* A tab or a panel picked up to be moved: dockview marks the element for the moment its drag picture is taken (and the
+   ghost it draws), so the picture shows it lifted. The drop places and the moving of tabs are dockview's own and cannot
+   slide the others aside; it takes no other styling. */
+@media (prefers-reduced-motion: no-preference) {
+  .dockview-theme-tavora .dv-tab.dv-dragged,
+  .dockview-theme-tavora .dv-dragged {
+    scale: 1.03;
+    box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--foreground) 30%, transparent);
+  }
+}
