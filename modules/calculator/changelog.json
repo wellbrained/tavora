@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.21",
+    "date": "2026-11-02",
+    "notes": [
+      "Settings are one compact page: Decimal places, Short numbers and History keeps, each with a short line under it.",
+      "There is no Done button any more: changes save as you make them, and Reset this page (with Undo) is at the bottom."
+    ]
+  },
+  {
     "version": "0.1.20",
     "date": "2026-11-02",
     "notes": [
