@@ -1,6 +1,7 @@
 import type { TavoraSDK, TavoraTheme } from "@tavora/sdk";
 import { bootstrapModule, type BootstrapStatus } from "@tavora/sdk/bootstrap";
 import { createTranslator, type Translator } from "./i18n";
+import { trackPanelSuspension } from "./components/ui/toast/visibility";
 import { setViewMemoryStore } from "./components/ui/zoom-pane/view-memory";
 import { installTitleTooltips } from "./title-tooltips";
 import { applyKitTheme } from "./theme";
@@ -41,7 +42,10 @@ export async function connectModule<K extends string = string>(options: ConnectM
   const boot = await bootstrapModule(options.sdk ? { sdk: options.sdk } : {});
   const translator = createTranslator<K>(options.texts?.en ?? ({} as Record<K, string>), options.texts?.de ?? ({} as Record<K, string>));
 
+  let stopSuspension: (() => void) | undefined;
   if (boot.status === "ready") {
+    // Toasts wait while Tavora says this panel is hidden (the page itself may not know).
+    if (boot.sdk?.lifecycle) stopSuspension = trackPanelSuspension(boot.sdk.lifecycle);
     if (boot.theme) applyKitTheme(boot.theme);
     if (options.titleTooltips !== false && typeof document !== "undefined" && document.body) installTitleTooltips(document);
     translator.setLanguage(boot.language);
@@ -70,6 +74,9 @@ export async function connectModule<K extends string = string>(options: ConnectM
     },
     onLanguage: boot.onLanguage,
     onTheme: boot.onTheme,
-    dispose: boot.dispose,
+    dispose() {
+      stopSuspension?.();
+      boot.dispose();
+    },
   };
 }

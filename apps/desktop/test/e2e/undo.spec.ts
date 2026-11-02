@@ -128,6 +128,55 @@ test("a delete is final once the toast goes, and when the app closes during it",
   await again.app.close();
 });
 
+test("the Undo toast waits while Tavora is behind the game, and counts down again when the user is back", async () => {
+  const { app, page } = await launch();
+  await layOutColumns(page, 2);
+  await openModule(page, VANILLA);
+  await saveLayout(page, "Mapping");
+  await saveLayout(page, "Bossing");
+
+  // The window loses the focus to the game (the page is not hidden, so only the window's blur tells).
+  await layoutMenu(page, "Mapping", "layout-delete");
+  await expect(toast(page, "Layout deleted")).toBeVisible();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.emit("blur")));
+  // Longer than the toast stays (5 s): it is still there, with its Undo.
+  await page.waitForTimeout(6500);
+  await expect(toast(page, "Layout deleted")).toBeVisible();
+
+  // Back in front: it goes after its time, and not before the user had a second to see it.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.emit("focus")));
+  await expect(page.getByTestId("undo-toast")).toHaveCount(0, { timeout: 10_000 });
+  await app.close();
+});
+
+test("the Undo button reads as big as the message and is easy to hit, in a compact toast", async () => {
+  const { app, page } = await launch();
+  await layOutColumns(page, 2);
+  await openModule(page, VANILLA);
+  await saveLayout(page, "Mapping");
+  await layoutMenu(page, "Mapping", "layout-delete");
+  const pill = toast(page, "Layout deleted");
+  await expect(pill).toBeVisible();
+  // Let the toast settle before measuring (it slides in).
+  await page.waitForTimeout(500);
+  const measured = await pill.evaluate((element) => {
+    const size = (selector: string) => {
+      const target = element.querySelector<HTMLElement>(selector)!;
+      const box = target.getBoundingClientRect();
+      return { width: box.width, height: box.height, fontSize: getComputedStyle(target).fontSize };
+    };
+    return { pill: element.getBoundingClientRect().height, title: size(".tavora-toast-title"), undo: size('[data-testid="undo"]'), close: size(".tavora-toast-close") };
+  });
+  expect(measured.undo.fontSize).toBe(measured.title.fontSize);
+  // At least the kit's small button (28 px), and room around the word; the X as high.
+  expect(measured.undo.height).toBeGreaterThanOrEqual(28);
+  expect(measured.undo.width).toBeGreaterThanOrEqual(56);
+  expect(measured.close.height).toBeGreaterThanOrEqual(28);
+  expect(measured.close.width).toBeGreaterThanOrEqual(28);
+  expect(measured.pill).toBeLessThanOrEqual(48);
+  await app.close();
+});
+
 // ── A module: To-Dos, in its own view ──────────────────────────────────
 
 const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
