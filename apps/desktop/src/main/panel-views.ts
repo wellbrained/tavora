@@ -178,7 +178,11 @@ export class PanelViews {
   private overlayChanges = 0;
   /** Pictures taken ahead of a menu (prepareFreeze), by panel; they count while they are fresh. */
   private prepared: { at: number; layout: string; pictures: Map<string, Promise<string | null>> } | null = null;
-  /** A page dialog is open above the panel dialog (the host UI says so), so the panel's view stays out of sight. */
+  /**
+   * A page dialog is open above the panel dialog (the host UI says so), so the panel's view stays out of sight. It follows
+   * the host UI alone and is not reset when a dialog closes: one panel's dialog can give way to another's with a page
+   * dialog still on top, and the host UI only reports a change.
+   */
   private dialogCovered = false;
   private dialogState: { instanceId: string; width: number; height: number; bounds: PanelRect | null; still: Promise<string | null> } | null = null;
 
@@ -679,7 +683,6 @@ export class PanelViews {
     const open = this.dialogState;
     if (!open || (instanceId !== undefined && open.instanceId !== instanceId)) return;
     this.dialogState = null;
-    this.dialogCovered = false;
     this.deps.dialogClosed();
     const adapter = this.get(open.instanceId);
     adapter?.setInDialog(false);
