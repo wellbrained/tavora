@@ -98,6 +98,12 @@ themes; anything hard-coded breaks in one of them.
   `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed button dips to
   0.97 on a fine pointer. Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
   anything shown all day. Reduced motion keeps a short fade and drops the movement.
+  `--ease-spring` (a little overshoot) is only for small things popping in (a dot, a tick, a small icon), never for a
+  panel or a menu; the kit's checkbox, radio dot and search clear button use it with `--duration-pop` (in) and
+  `--duration-pop-out` (out). Choosing with the arrow keys in a radio group or style tiles does not animate; Space on
+  a checkbox does, like a click. A folding section may animate its height (the kit's `Collapsible` does; nothing
+  else), since what is below has to move along; give it padding and dividers on its own element, not margins. For a
+  done item, the kit's `tavora-strike` class (with `data-struck` while done) draws the line across the text.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
 

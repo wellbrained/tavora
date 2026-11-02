@@ -45,17 +45,20 @@ function onKeydown(event: KeyboardEvent) {
       class="pr-9 pl-9 [&::-webkit-search-cancel-button]:appearance-none"
       @keydown="onKeydown"
     />
-    <Button
-      v-if="model && !disabled"
-      size="icon-xs"
-      variant="ghost"
-      class="absolute right-2"
-      :aria-label="clearLabel"
-      :title="clearLabel"
-      data-slot="search-input-clear"
-      @click="clear"
-    >
-      <X :stroke-width="1.5" aria-hidden="true" />
-    </Button>
+    <!-- The × turns in with a little spring and leaves quick (motion.css, .tavora-clear-in / -out). -->
+    <Transition enter-active-class="tavora-clear-in" leave-active-class="tavora-clear-out">
+      <Button
+        v-if="model && !disabled"
+        size="icon-xs"
+        variant="ghost"
+        class="absolute right-2"
+        :aria-label="clearLabel"
+        :title="clearLabel"
+        data-slot="search-input-clear"
+        @click="clear"
+      >
+        <X :stroke-width="1.5" aria-hidden="true" />
+      </Button>
+    </Transition>
   </div>
 </template>
