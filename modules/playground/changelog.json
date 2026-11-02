@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.15",
+    "date": "2026-11-02",
+    "notes": [
+      "A side menu with a search takes you to a page for each kind of control. Every example has its own box with Show code, and a narrow panel gets a page picker instead of the menu."
+    ]
+  },
+  {
     "version": "0.1.14",
     "date": "2026-11-02",
     "notes": [

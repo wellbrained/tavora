@@ -22,9 +22,9 @@ test('shared module hints support pointer, keyboard, dynamic labels and narrow p
       if (!wc.debugger.isAttached()) wc.debugger.attach('1.3');
       await wc.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
     }, id);
-    await run('const filter=document.querySelector("[data-testid=filter]");filter.value="tooltips";filter.dispatchEvent(new Event("input",{bubbles:true}));');
+    await run('document.querySelector("[data-testid=nav-tooltips]").click()');
     await expect.poll(() => run('!!document.querySelector("#tooltips")')).toBe(true);
-    await run('document.querySelector("#tooltips button").id="hint-target"');
+    await run('document.querySelector("#tooltips [data-testid=example-live] button").id="hint-target"');
     const point = await run<{x:number;y:number}>('(()=>{const r=document.querySelector("#hint-target").getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()');
     await input({type:'mouseMove', ...point});
     await expect.poll(() => run('document.querySelector("[role=tooltip] p")?.textContent')).toBe('Readable help from the shared kit.');

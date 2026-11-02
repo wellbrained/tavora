@@ -17,8 +17,9 @@ in full; this file adds the how. Background: the style guide (vault `Github/Tavo
 
 1. **List what the feature shows and does**, then map every control to the kit with the [table](#2-kit-map) below.
 2. **Anything without a match is a kit gap.** Ask the maintainer before building it. Once agreed it goes into
-   `modules/shared/src/components` with a specimen in the UI Playground (`modules/playground`), and only then into the
-   module. Never build a local version "for now".
+   `modules/shared/src/components` with an example in the UI Playground (`modules/playground`: one file in
+   `src/examples/<page>/`, listed in `src/pages.ts`), and only then into the module. Never build a local version "for
+   now".
 3. **Start from a module that does it right**, not from the panel next door. Copying another panel's CSS copies its
    mistakes: hard-coded fallbacks, pixel values, private icon rules. References: `modules/notes` and `modules/todos`
    (document store, suspend flush, panel state), `modules/playground` (every kit control in use).
