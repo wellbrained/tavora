@@ -13,6 +13,7 @@ import {
   MAX,
   memberNames,
   move,
+  moveTo,
   newItem,
   overlayState,
   parseList,
@@ -200,6 +201,24 @@ describe("linked groups", () => {
     expect(ids(visualOrder(data))).toEqual(["run", "solo", "deaths", "squats", "situps"]);
     move(data, "situps", 1);
     expect(ids(visualOrder(data))).toEqual(["run", "solo", "deaths", "squats", "situps"]);
+  });
+
+  it("can be dropped before or after another row, a group going as one block", () => {
+    const data = list();
+    moveTo(data, "run", "deaths", false);
+    expect(ids(visualOrder(data))).toEqual(["run", "deaths", "situps", "squats", "solo"]);
+    // Any counter of the group takes the whole group along.
+    moveTo(data, "squats", "solo", true);
+    expect(ids(visualOrder(data))).toEqual(["run", "solo", "deaths", "situps", "squats"]);
+    // Dropped on a group, the item lands before or after all of it.
+    moveTo(data, "solo", "situps", true);
+    expect(ids(visualOrder(data))).toEqual(["run", "deaths", "situps", "squats", "solo"]);
+    // Inside a group two counters change places.
+    moveTo(data, "squats", "deaths", false);
+    expect(ids(visualOrder(data))).toEqual(["run", "squats", "deaths", "situps", "solo"]);
+    moveTo(data, "run", "run", true);
+    moveTo(data, "run", "nobody", true);
+    expect(ids(visualOrder(data))).toEqual(["run", "squats", "deaths", "situps", "solo"]);
   });
 
   it("know who counts from whom", () => {

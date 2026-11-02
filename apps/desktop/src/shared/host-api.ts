@@ -1218,6 +1218,8 @@ export interface TavoraHostApi {
   answerModuleMenu(requestId: number, id: string | null): void;
   /** A panel asked to be shown big in a dialog over the workspace (panel.setDialog), or null: its dialog closed. */
   onPanelDialog(listener: (dialog: PanelDialog | null) => void): void;
+  /** The panel changed the title of its open dialog (panel.setDialogTitle); null goes back to the module's name. */
+  onPanelDialogTitle(listener: (instanceId: string, title: string | null) => void): void;
   /** Where the dialog's frame leaves room for the panel's page, in window pixels; the host moves the page there. */
   placePanelDialog(bounds: { x: number; y: number; width: number; height: number }): void;
   /** The user closed the panel's dialog (its close button or a click beside it). */

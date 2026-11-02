@@ -90,6 +90,35 @@ test("a panel just added opens its welcome over the workspace, and a click besid
   }
 });
 
+test("a panel can name its dialog, and the next dialog starts with the module's name again", async () => {
+  const { app, page } = await launch(undefined, [PROBES]);
+  try {
+    await addProbe(page);
+    await expectModuleText(app, PROBE, "probe-auto", "opened");
+    const title = page.getByTestId("panel-dialog").getByRole("heading");
+    const moduleName = (await title.textContent())!;
+    const setTitle = (value: string) => inModule<Answer>(app, PROBE, `window.probe.call("panel.setDialogTitle", { title: ${value} })`);
+
+    expect((await setTitle('"Countdown"')).ok).toBe(true);
+    await expect(title).toHaveText("Countdown");
+    expect((await setTitle("null")).ok).toBe(true);
+    await expect(title).toHaveText(moduleName);
+    expect((await setTitle('""')).error?.code).toBe("INVALID_PARAMS");
+
+    await setTitle('"Boss"');
+    await expect(title).toHaveText("Boss");
+    await page.getByTestId("panel-dialog-close").click();
+    await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
+    // Nothing happens while there is no dialog, and the next one starts with the module's name.
+    expect((await setTitle('"Late"')).ok).toBe(true);
+    await gesture(app);
+    expect((await openDialog(app)).ok).toBe(true);
+    await expect(page.getByTestId("panel-dialog").getByRole("heading")).toHaveText(moduleName);
+  } finally {
+    await app.close();
+  }
+});
+
 test("opening several panels from the dialog puts the panel back in its slot first", async () => {
   const { app, page } = await launch(undefined, [PROBES]);
   try {

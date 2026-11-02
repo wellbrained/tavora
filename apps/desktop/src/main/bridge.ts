@@ -113,6 +113,8 @@ export interface BridgeContext {
   setMaximized(maximized: boolean): Promise<void>;
   /** panel.setDialog: opening throws PERMISSION_DENIED unless the panel just got a click or key press. */
   setDialog(open: boolean, size: PanelDialogSize): Promise<void>;
+  /** panel.setDialogTitle (already checked): the title in the frame of the panel's open dialog; null is the module's name. Needs no click. */
+  setDialogTitle(title: string | null): void;
   /** panel.setLive: what the panel's live view shows over the game (already size-checked); null shows nothing. Needs no click. */
   setLive(state: JsonValue | null): void;
   /** The workspace the panel is in. */
@@ -636,6 +638,19 @@ const handlers = new Map<string, Handler>([
         return value as number;
       };
       await s.context.setDialog(open, { width: side("width"), height: side("height") });
+      return null;
+    },
+  ],
+
+  [
+    "panel.setDialogTitle",
+    (s, params) => {
+      const title = required(object(params), "title");
+      const text = typeof title === "string" ? title.trim() : title;
+      if (text !== null && (typeof text !== "string" || text.length < 1 || text.length > LIMITS.maxTitleLength)) {
+        throw new HostError("INVALID_PARAMS", `params.title must be null or a string of 1 to ${LIMITS.maxTitleLength} characters`);
+      }
+      s.context.setDialogTitle(text);
       return null;
     },
   ],

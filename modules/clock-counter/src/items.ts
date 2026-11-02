@@ -307,6 +307,27 @@ export function move(list: ItemList, id: string, by: -1 | 1): void {
   list.items = blocks.flat();
 }
 
+/**
+ * Puts an item before or after another one, as a drop in the list does. A linked group stands as one block, so a drop between
+ * different blocks moves the whole block of `id`; two counters of the same group change places inside it.
+ */
+export function moveTo(list: ItemList, id: string, targetId: string, after: boolean): void {
+  if (id === targetId) return;
+  const blocks = blocksOf(list);
+  const from = blocks.findIndex((block) => block.some((item) => item.id === id));
+  const to = blocks.findIndex((block) => block.some((item) => item.id === targetId));
+  if (from < 0 || to < 0) return;
+  if (from === to) {
+    const block = blocks[from]!;
+    const [item] = block.splice(block.findIndex((one) => one.id === id), 1);
+    block.splice(block.findIndex((one) => one.id === targetId) + (after ? 1 : 0), 0, item!);
+  } else {
+    const [block] = blocks.splice(from, 1);
+    blocks.splice(blocks.findIndex((one) => one.some((item) => item.id === targetId)) + (after ? 1 : 0), 0, block!);
+  }
+  list.items = blocks.flat();
+}
+
 // ── Linked groups ──────────────────────────────────────────────────────
 
 export type Group = {

@@ -70,6 +70,7 @@ Methods without params must be sent with `params` left out.
 | `panel.setContent` | `{ content }` | `null`; `content` is `{ id, title }` or `null`: what the panel shows now. `id` is your own, 1 to 200 characters; `title` is its full name, 1 to 200 characters, kept on one line. `INVALID_PARAMS` otherwise (Tavora 0.17.17 and newer) |
 | `panel.isMaximized` | none | `true` while the panel fills the workspace (Maximize in its menu, or `panel.setMaximized`) (Tavora 0.20.20 and newer) |
 | `panel.setDialog` | `{ open, width?, height? }` | `null`; `true` shows the panel big in a dialog centred over the workspace, with the module's name and a close button over the dimmed app, `false` puts it back in its slot. `width` and `height` are the page's size in it (240 to 2000, default 560 x 640); Tavora makes it fit the workspace. `true` only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise), or once within 10 seconds of the page starting for a panel whose launch reason is `add` (a welcome; that dialog doesn't close on a click beside it); over the game it closes the in-game layer and opens the dialog in Tavora, which comes to the front (Tavora 0.21.95 and newer; versions before this one did nothing over the game) |
+| `panel.setDialogTitle` | `{ title }` | `null`; `title` is a string of 1 to 200 characters, or `null`. Changes the title in the frame of the panel's dialog (the module's name by default) while the dialog is open, for example to name the thing its settings are about; shown as plain text on one line. `null` goes back to the module's name. Nothing happens while no dialog is open, and the next one starts with the module's name again. Needs no click and no permission; `INVALID_PARAMS` for an empty or too long title (Tavora 0.23.71 and newer) |
 | `panel.setMaximized` | `{ maximized }` | `null`; `true` makes the panel fill the workspace, as Maximize in its menu does, `false` puts it back. Nothing happens while the panel is the only one, as it fills the workspace already. `true` only right after a real click or key press in the panel (`PERMISSION_DENIED` otherwise) (Tavora 0.20.20 and newer) |
 | `panel.setLive` | `{ state }` | `null`; `state` is any JSON up to 16 KB, or `null`. What this panel's [live view](#live-views) shows; `null` shows nothing. `QUOTA_EXCEEDED` when too big. Needs no click and no permission (Tavora 0.21.11 and newer) |
 | `workspace.getViewport` | none | `{ width, height }` of the panel in CSS pixels |
@@ -383,6 +384,7 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `panel.isMaximized` | 0.20.20 |  |  |
 | `panel.setMaximized` | 0.20.20 |  | making it fill the workspace |
 | `panel.setDialog` | 0.21.95 |  | opening |
+| `panel.setDialogTitle` | 0.23.71 |  |  |
 | `panel.setLive` | 0.21.11 |  |  |
 | `panels.open` | 0.17.18 |  | always |
 | `panels.openMany` | 0.23.29 |  | always |

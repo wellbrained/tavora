@@ -52,6 +52,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     isMaximized: () => false,
     setMaximized: () => Promise.resolve(),
     setDialog: () => Promise.resolve(),
+    setDialogTitle: () => {},
     setLive: () => {},
     workspace: { id: "poe2", displayName: "Path of Exile 2", kind: "game" },
     data: registry.get("local", moduleId, "poe2"),
@@ -270,6 +271,17 @@ describe("panel content", () => {
       expect(await call(p, "panel.setMaximized", params)).toMatchObject({ error: { code: "INVALID_PARAMS" } });
     }
     expect(asked).toEqual([true, false]);
+  });
+
+  it("passes on a checked title for the dialog's frame, trimmed, and null for the module's name", async () => {
+    const titles: (string | null)[] = [];
+    const p = await connected({ ...makeContext(), setDialogTitle: (title) => titles.push(title) });
+    expect(await call(p, "panel.setDialogTitle", { title: "  Countdown " })).toMatchObject({ ok: true, result: null });
+    expect(await call(p, "panel.setDialogTitle", { title: null })).toMatchObject({ ok: true, result: null });
+    for (const params of [{}, { title: "" }, { title: "   " }, { title: 3 }, { title: "x".repeat(LIMITS.maxTitleLength + 1) }]) {
+      expect(await call(p, "panel.setDialogTitle", params)).toMatchObject({ error: { code: "INVALID_PARAMS" } });
+    }
+    expect(titles).toEqual(["Countdown", null]);
   });
 
   it("passes on a live view's state when it is small enough, and refuses a big or missing one", async () => {

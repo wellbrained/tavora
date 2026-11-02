@@ -97,6 +97,9 @@ const api: TavoraHostApi = {
   onPanelDialog: (listener) => {
     ipcRenderer.on("host:panel-dialog", (_event, dialog: PanelDialog | null) => listener(dialog));
   },
+  onPanelDialogTitle: (listener) => {
+    ipcRenderer.on("host:panel-dialog-title", (_event, change: { instanceId: string; title: string | null }) => listener(change.instanceId, change.title));
+  },
   placePanelDialog: (bounds) => ipcRenderer.send("host:panel-dialog-bounds", bounds),
   closePanelDialog: () => ipcRenderer.send("host:panel-dialog-close"),
 };

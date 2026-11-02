@@ -101,6 +101,8 @@ export interface ModuleViewOptions {
    * a click or key press (`byClick`), or from the Add click that carried over to a panel just added (not by a click).
    */
   setDialog(open: boolean, size: PanelDialogSize, how?: { byClick: boolean }): void;
+  /** panel.setDialogTitle from this panel: the title in the frame of its open dialog, or null for the module's name. */
+  setDialogTitle(title: string | null): void;
   /** panel.setLive from this panel (size already checked): what its live view over the game shows; null shows nothing. */
   setLive(state: JsonValue | null): void;
   /** Hosts the user granted this module for network.fetch, as installed now; asked on every call and redirect. */
@@ -661,6 +663,7 @@ export class ModuleView {
           this.options.setMaximized(maximized);
         },
         setDialog: (open, size) => this.requestDialog(open, size),
+        setDialogTitle: (title) => this.options.setDialogTitle(title),
         setLive: (state) => this.options.setLive(state),
         workspace,
         data,

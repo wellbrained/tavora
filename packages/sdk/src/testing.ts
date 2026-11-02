@@ -138,6 +138,8 @@ export interface MemoryHost {
   readonly content: PanelContent | null;
   readonly maximized: boolean;
   readonly dialog: { open: boolean; width: number; height: number };
+  /** The title the panel set for its dialog (`panel.setDialogTitle`), or null for the module's name. Null while no dialog is open. */
+  readonly dialogTitle: string | null;
   /** What `panel.setLive` last set. */
   readonly live: JsonValue | null;
   /** What `overlay.setSources` last set. */
@@ -174,7 +176,7 @@ export interface MemoryHost {
 }
 
 /** Newest Tavora the SDK knows, and the default version of a memory host. */
-export const LATEST_TAVORA = "0.23.43";
+export const LATEST_TAVORA = "0.23.71";
 /** Most panel types one call may name: as many as a manifest may declare (MAX_PANEL_TYPES in @tavora/module-schema). */
 const MAX_PANEL_TYPES = 16;
 
@@ -307,6 +309,7 @@ interface Panel {
   content: PanelContent | null;
   maximized: boolean;
   dialog: { open: boolean; width: number; height: number };
+  dialogTitle: string | null;
   live: JsonValue | null;
   sources: OverlaySource[];
   navigate: ((content: PanelContent) => void | Promise<void>) | null;
@@ -509,7 +512,14 @@ const handlers: Handlers = {
     const next = params.open ? { open: true, width: side("width"), height: side("height") } : { ...panel.dialog, open: false };
     const changed = next.open !== panel.dialog.open;
     panel.dialog = next;
+    if (!next.open) panel.dialogTitle = null;
     if (changed) deliver(panel, "panel.dialog", { open: next.open });
+    return null;
+  },
+  "panel.setDialogTitle": (panel, { title }) => {
+    const limit = panel.shared.limits.maxTitleLength;
+    if (title !== null && (typeof title !== "string" || !title.trim() || title.length > limit)) fail("INVALID_PARAMS", `params.title must be null or a string of 1 to ${limit} characters`);
+    if (panel.dialog.open) panel.dialogTitle = title === null ? null : title.trim();
     return null;
   },
   "panel.setLive": (panel, { state }) => {
@@ -776,6 +786,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     content: null,
     maximized: false,
     dialog: { open: false, width: DIALOG.width, height: DIALOG.height },
+    dialogTitle: null,
     live: null,
     sources: [],
     navigate: null,
@@ -843,6 +854,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       onMaximizedChange: (fn) => on("panel.maximized", ({ maximized }) => fn(maximized)),
       openDialog: async (size) => void (await call("panel.setDialog", { open: true, ...size })),
       closeDialog: async () => void (await call("panel.setDialog", { open: false })),
+      setDialogTitle: async (title) => void (await call("panel.setDialogTitle", { title })),
       onDialogChange: (fn) => on("panel.dialog", ({ open }) => fn(open)),
       onOpenSettings: (fn) => on("panel.openSettings", ({ key }) => fn({ key })),
       onNavigate: (fn) => {
@@ -1011,6 +1023,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     setDialog: (open) => {
       if (panel.dialog.open === open) return;
       panel.dialog = { ...panel.dialog, open };
+      if (!open) panel.dialogTitle = null;
       deliver(panel, "panel.dialog", { open });
     },
     get state() {
@@ -1024,6 +1037,9 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     },
     get dialog() {
       return { ...panel.dialog };
+    },
+    get dialogTitle() {
+      return panel.dialogTitle;
     },
     get live() {
       return panel.live;

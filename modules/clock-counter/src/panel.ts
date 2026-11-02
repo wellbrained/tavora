@@ -1,7 +1,6 @@
 // What a Clock & Counter panel shares with its cards: the store, the time now (ticking while a clock runs), which
 // hotkeys are set, and the calls that need the click that asked for them. Those calls throw when Tavora refuses them
 // (a panel over the game can't use its dialogs and windows): the settings catch that and say what to do.
-import type { GameOverlayResult } from "@tavora/sdk";
 import type { InjectionKey, Ref } from "vue";
 import type { Item, ItemKind } from "./items";
 import type { ItemStore } from "./store";
@@ -25,12 +24,8 @@ export interface PanelContext {
   act(action: string, itemId: string): void;
   setHotkey(action: string, item: Item): Promise<void>;
   copyLink(item: Item): Promise<"copied" | "off" | "denied">;
-  /** Keys of the overlays shown over the game now. */
-  overGame: Ref<ReadonlySet<string>>;
-  /** The key of the overlay an item's link and Over game switch belong to: its own, or its group's when shown as a whole. */
+  /** The key of the overlay an item's OBS link belongs to: its own, or its group's when shown as a whole. */
   keyOf(item: Item): string;
-  showOverGame(item: Item): Promise<GameOverlayResult>;
-  hideOverGame(key: string): Promise<void>;
   preview(item: Item): Promise<void>;
   resetLink(item: Item): Promise<void>;
   remove(item: Item): void;

@@ -3791,6 +3791,7 @@ export class Host {
       setLive: (state) => this.gameOverlays.setLive(record.instanceId, module.owner, state),
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
       setDialog: (open, size, how) => (open ? this.openPanelDialog(record.instanceId, module, size, how?.byClick ?? true) : this.closePanelDialog(record.instanceId)),
+      setDialogTitle: (title) => this.setPanelDialogTitle(record.instanceId, title),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
@@ -4386,6 +4387,12 @@ export class Host {
     this.gameOverlays.endLayer();
     this.bringToFront();
     this.openPendingDialog();
+  }
+
+  /** panel.setDialogTitle: the frame of this panel's dialog shows `title` (null: the module's name); nothing while it has no dialog open. */
+  private setPanelDialogTitle(instanceId: string, title: string | null): void {
+    if (this.window.isDestroyed() || this.panels.dialog?.instanceId !== instanceId) return;
+    this.window.webContents.send("host:panel-dialog-title", { instanceId, title });
   }
 
   /** panel.closeDialog: puts the panel back, and drops a dialog it asked for that is still waiting for its slot. */

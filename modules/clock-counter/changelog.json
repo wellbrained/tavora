@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.1.16",
+    "date": "2026-11-02",
+    "notes": [
+      "Settings are tidier: pages on the left and one footer with Delete and Done.",
+      "The settings window is named after the clock or counter.",
+      "Over game is gone from the settings. Add clocks and counters to your game on the Overlay page.",
+      "Drag a row to put it in a new place, or press Alt and the up or down arrow on it."
+    ]
+  },
+  {
     "version": "0.1.15",
     "date": "2026-11-02",
     "notes": [
