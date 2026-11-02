@@ -283,8 +283,9 @@ export const en = {
   "ex.settings.ModuleSettings": "Settings dialog",
   "ex.settings.ModuleSettings.note": "960 × 680 in the app.",
   "ex.settings.ModuleSettings.rule": "A module's settings page uses ModuleSettings and its parts, not a layout of its own.",
-  "ex.settings.SettingsMenu": "Settings menu",
-  "ex.settings.SettingsMenu.note": "Own pages, then Overlays: Text and Look first, In game and On stream after, with a dot. Build it with settingsMenu.",
+  "ex.settings.SettingsMenu": "Settings menu with Overlays",
+  "ex.settings.SettingsMenu.note": "The module's own pages have no heading. Overlays sits in a divider line; the dot is green when it shows there, hollow when it doesn't. Build it with settingsMenu.",
+  "ex.settings.SettingsMenu.rule": "Overlay pages come last: first how it looks (Text, Look), then where it shows (In game, On stream).",
 };
 
 export type TextKey = keyof typeof en;
@@ -571,6 +572,7 @@ export const de: Record<TextKey, string> = {
   "ex.settings.ModuleSettings": "Einstellungsdialog",
   "ex.settings.ModuleSettings.note": "In der App 960 × 680.",
   "ex.settings.ModuleSettings.rule": "Die Einstellungsseite eines Moduls nutzt ModuleSettings und seine Teile, kein eigenes Layout.",
-  "ex.settings.SettingsMenu": "Einstellungsmenü",
-  "ex.settings.SettingsMenu.note": "Eigene Seiten, dann Overlays: erst Text und Aussehen, danach Im Spiel und Im Stream, mit Punkt. Mit settingsMenu bauen.",
+  "ex.settings.SettingsMenu": "Einstellungsmenü mit Overlays",
+  "ex.settings.SettingsMenu.note": "Die eigenen Seiten haben keine Überschrift. Overlays steht in einer Trennlinie; der Punkt ist grün, wenn es dort läuft, sonst hohl. Mit settingsMenu bauen.",
+  "ex.settings.SettingsMenu.rule": "Overlay-Seiten kommen zuletzt: erst wie es aussieht (Text, Aussehen), dann wo es läuft (Im Spiel, Im Stream).",
 };
