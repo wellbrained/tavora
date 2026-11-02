@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.23",
+    "date": "2026-11-02",
+    "notes": [
+      "Add shows the same icons as the list, so you see what each one becomes."
+    ]
+  },
+  {
     "version": "0.1.22",
     "date": "2026-11-02",
     "notes": [
