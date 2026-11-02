@@ -79,8 +79,8 @@ const refusedRect = computed<Rect | null>(() => {
 
     <!-- A new column or row: a dashed outline, exactly where the panel lands. -->
     <Transition name="dock-fade">
-      <div v-if="landing" key="landing" class="border-primary bg-primary/10 absolute flex items-start justify-center rounded-[10px] border-2 border-dashed" :style="at(landing.rect)" data-testid="dock-landing">
-        <span class="bg-primary text-primary-foreground mt-3 rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap">{{ landing.label }}</span>
+      <div v-if="landing" key="landing" class="border-primary bg-primary/10 absolute flex items-center justify-center rounded-[10px] border-2 border-dashed" :style="at(landing.rect)" data-testid="dock-landing">
+        <span class="bg-primary text-primary-foreground rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap">{{ landing.label }}</span>
       </div>
     </Transition>
 
