@@ -2,7 +2,7 @@
 // and a toast offers Undo for a few seconds (undoable in the kit). Undo puts the thing back exactly as it was; once the
 // toast goes, or the app closes, the delete stays.
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { inModule, launch, layOutColumns, openModule, openWorkspace, TODOS, typeInModule, VANILLA, waitForShown, answerPrompt, toastsPage, layoutMenu, fromMenu, q, hostToast } from "./harness";
+import { inModule, launch, layOutColumns, openModule, openWorkspace, TODOS, typeInModule, VANILLA, waitForShown, answerPrompt, toastsPage, toastsSettled, layoutMenu, fromMenu, q, hostToast } from "./harness";
 
 async function saveLayout(page: Page, name: string) {
   await page.getByTestId("layouts").click();
@@ -70,6 +70,7 @@ test("two quick deletes get an Undo each; undoing the first leaves the second de
   await expect(hostToast(page, "undo-toast")).toHaveCount(2);
 
   // Spread the stack (pointing at it), then Undo on the older one.
+  await toastsSettled(app);
   await toast(page, "Satisfactory moved to Trash").hover();
   await toast(page, "Path of Exile 2 moved to Trash").getByTestId("undo").click();
   await expect(page.getByTestId("rail-workspace-poe2")).toBeVisible();

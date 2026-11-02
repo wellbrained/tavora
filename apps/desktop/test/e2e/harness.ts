@@ -156,6 +156,31 @@ export async function viewStack(app: ElectronApplication): Promise<{ window: Box
   });
 }
 
+/**
+ * Waits until the toast page has its final size: it grows at once and shrinks to the toasts' box a moment after the last
+ * change. A real mouse stays where it is when the page resizes under it; the pointer of a test (sent to the page, not from
+ * the screen) is let go of by the resize, which closes a stack the test just opened. So a test that points at a toast
+ * waits for this first.
+ */
+export async function toastsSettled(app: ElectronApplication): Promise<void> {
+  let last = "";
+  let since = Date.now();
+  await expect
+    .poll(
+      async () => {
+        const top = (await viewStack(app)).views.at(-1)!;
+        const key = JSON.stringify([top.bounds, top.visible]);
+        if (key !== last) {
+          last = key;
+          since = Date.now();
+        }
+        return Date.now() - since >= 700;
+      },
+      { timeout: 10_000 },
+    )
+    .toBe(true);
+}
+
 /** One of Tavora's own toasts by its test id: "toast" for a message, "undo-toast" for a delete with Undo. */
 export function hostToast(page: Page, testid: "toast" | "undo-toast" = "toast"): Locator {
   return toastsPage(page).getByTestId(testid);
