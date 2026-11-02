@@ -7,6 +7,7 @@ import {
   groupOf,
   groupOverlayState,
   insert,
+  itemText,
   lap,
   lapSplits,
   linkedGroups,
@@ -21,6 +22,7 @@ import {
   remove,
   resetClock,
   setStream,
+  sizeScales,
   sourcesOf,
   startPause,
   visualOrder,
@@ -321,5 +323,71 @@ describe("data from before groups", () => {
     const back = parseList(JSON.parse(JSON.stringify({ items: saved.items.map(({ stream: _stream, ...rest }) => rest) })));
     expect(back.items.every((item) => item.kind === "counter" && item.stream === null)).toBe(true);
     expect(groupOf(back, "a")?.stream.whole).toBe(false);
+  });
+});
+
+describe("the text of an overlay", () => {
+  const raw = (look: Record<string, unknown>, label = "Plank timer") => ({
+    items: [{ id: "t", kind: "countdown", label, format: "m:ss", duration: 60_000, look: { showLabel: true, color: "#ffffff", outline: true, font: "inter", align: "center", ...look } }],
+  });
+  const first = (data: ItemList) => data.items[0]!;
+
+  it("is the name before the value for data saved before the text field (Show the name on)", () => {
+    const item = first(parseList(raw({})));
+    expect(item.look.text).toBeUndefined();
+    expect(itemText(item)).toBe("Plank timer {time}");
+    expect(overlayState(item)).toMatchObject({ text: "Plank timer {time}" });
+  });
+
+  it("is the value alone when Show the name was off, and follows a rename until a text is saved", () => {
+    expect(itemText(first(parseList(raw({ showLabel: false }))))).toBe("{time}");
+    const item = first(parseList(raw({})));
+    item.label = "Plank";
+    expect(itemText(item)).toBe("Plank {time}");
+    item.look.text = "{time}";
+    item.label = "Other";
+    expect(itemText(item)).toBe("{time}");
+  });
+
+  it("gives a counter {count}", () => {
+    const data = parseList({ items: [{ id: "d", kind: "counter", label: "Deaths", look: {} }] });
+    expect(itemText(first(data))).toBe("Deaths {count}");
+  });
+
+  it("keeps a text, even an empty one, and the new colours and sizes", () => {
+    const item = first(parseList(raw({ text: "", wordsColor: "#facc15", wordsSize: "xl", numberSize: "s" })));
+    expect(item.look).toMatchObject({ text: "", wordsColor: "#facc15", wordsSize: "xl", numberSize: "s" });
+    expect(itemText(item)).toBe("");
+  });
+
+  it("reads old looks with the old sizes, and drops what it can't read", () => {
+    const old = first(parseList(raw({})));
+    expect(old.look).toMatchObject({ wordsSize: "m", numberSize: "m" });
+    expect(old.look.wordsColor).toBeUndefined();
+    const bad = first(parseList(raw({ text: 5, wordsColor: "red", wordsSize: "huge", numberSize: 3 })));
+    expect(bad.look).toMatchObject({ wordsSize: "m", numberSize: "m" });
+    expect(bad.look.text).toBeUndefined();
+    expect(bad.look.wordsColor).toBeUndefined();
+    expect(first(parseList(raw({ text: "x".repeat(MAX.text + 50) }))).look.text).toHaveLength(MAX.text);
+  });
+
+  it("is written so the previous version still reads it: the old look fields stay, the new ones are added", () => {
+    const item = first(parseList(raw({})));
+    item.look.text = "{time} left";
+    item.look.showLabel = false;
+    const saved = JSON.parse(JSON.stringify(parseList({ items: [item] }))) as { items: { look: Record<string, unknown> }[] };
+    expect(Object.keys(saved.items[0]!.look)).toEqual(expect.arrayContaining(["showLabel", "color", "outline", "font", "align"]));
+    expect(saved.items[0]!.look).toMatchObject({ showLabel: false, color: "#ffffff", text: "{time} left", wordsSize: "m", numberSize: "m" });
+    // The previous version keeps only the old fields; this one then reads that as "Show the name off".
+    const { text: _text, wordsColor: _wordsColor, wordsSize: _wordsSize, numberSize: _numberSize, ...oldLook } = saved.items[0]!.look;
+    expect(itemText(first(parseList(raw(oldLook))))).toBe("{time}");
+  });
+});
+
+describe("sizeScales", () => {
+  it("is M for a look published before the sizes, and each size on its own", () => {
+    expect(sizeScales({})).toEqual({ words: 0.5, number: 1 });
+    expect(sizeScales({ wordsSize: "xl", numberSize: "s" })).toEqual({ words: 1, number: 0.6 });
+    expect(sizeScales({ wordsSize: "nope" as never })).toEqual({ words: 0.5, number: 1 });
   });
 });

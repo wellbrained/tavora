@@ -7,8 +7,6 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { type Size, ZoomPane, type ZoomView } from "@tavora/official-ui/components/ui/zoom-pane";
 import { ref, watch } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const NAMES = ["Iron Ore", "Iron Ingot", "Iron Rod", "Screw", "Reinforced Plate", "Modular Frame", "Copper Ore", "Copper Ingot"];
 const NODE = { width: 120, height: 60 };
 const nodes = Array.from({ length: 32 }, (_, index) => ({ name: NAMES[index % NAMES.length]!, x: 40 + (index % 8) * 200, y: 40 + Math.floor(index / 8) * 120 }));
@@ -55,7 +53,7 @@ watch([view, size], draw, { flush: "post" });
     <ZoomPane ref="pane" class="h-64" view-only :world="WORLD" :min-zoom="0.1" :max-zoom="4" wheel="zoom" whole-label="Show the whole line" label="Canvas line" @view-change="onViewChange">
       <canvas ref="canvas" class="size-full" />
       <template #extras>
-        <Button variant="ghost" size="icon-sm" title="Show the first row" aria-label="Show the first row" :disabled="disabled" @click="pane?.showArea({ x: 0, y: 0, width: WORLD.width, height: 200 })">
+        <Button variant="ghost" size="icon-sm" title="Show the first row" aria-label="Show the first row" @click="pane?.showArea({ x: 0, y: 0, width: WORLD.width, height: 200 })">
           <Focus />
         </Button>
       </template>

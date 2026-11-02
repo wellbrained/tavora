@@ -7,6 +7,7 @@ import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
 import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import type { TavoraSDK } from "@tavora/sdk";
@@ -33,8 +34,9 @@ let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 const editing = ref<string | null>(null);
 /** This panel is shown as a dialog over the workspace; its page is then the settings of the item being edited. */
 const dialogOpen = ref(false);
-/** Settings are a dialog over the workspace when Tavora can; an older one gets a dialog in the middle of the panel. */
-const overWorkspace = computed(() => sdk.value?.supports("panel.openDialog") ?? false);
+/** The page the settings open on (the gear: the item's own; a frame's Settings on the Overlay page: the overlay text), and a count so the same page opens again. */
+const startPage = ref<"item" | "text">("item");
+const startCount = ref(0);
 const editedItem = computed(() => (editing.value ? find(list.value, editing.value) : undefined));
 const now = ref(Date.now());
 const hotkeys = ref<ReadonlySet<string>>(new Set());
@@ -124,13 +126,14 @@ function say(text: string): void {
 
 function openEditing(id: string): void {
   editing.value = id;
+  startPage.value = "item";
+  startCount.value++;
   // Over the game this closes the game layer and opens the dialog in Tavora, so it is no different from the workspace.
-  if (overWorkspace.value) {
-    sdk.value!.panel.openDialog({ width: 960, height: 680 }).catch(() => {
-      editing.value = null;
-      say(t("app.settingsFailed"));
-    });
-  }
+  // An item's settings always have several pages (its own, Text, Look and the overlays), so this is the usual 960 × 680.
+  sdk.value!.panel.openDialog(settingsDialogSize({ pages: 2 })).catch(() => {
+    editing.value = null;
+    say(t("app.settingsFailed"));
+  });
 }
 
 function closeEditing(): void {
@@ -156,9 +159,7 @@ function addItem(kind: ItemKind, settings = true): void {
   const label = same ? `${t(`kind.${kind}`)} ${same + 1}` : t(`kind.${kind}`);
   void store.value?.apply([id], (data) => insert(data, newItem(kind, id, label)));
   // Its settings open too, to name it. From the menu they stay closed: the item is in the list, the gear opens them.
-  if (!settings) return;
-  if (overWorkspace.value) openEditing(id);
-  else editing.value = id;
+  if (settings) openEditing(id);
 }
 
 // ── Order: drag a row, or Alt+Up and Alt+Down on one of its buttons ───
@@ -237,7 +238,18 @@ async function onRowKey(event: KeyboardEvent): Promise<void> {
  * version number.)
  */
 const titled = ref<boolean | null>(null);
-const dialogTitle = computed(() => (editedItem.value ? editedItem.value.label || t(`kind.${editedItem.value.kind}`) : null));
+/** What the settings are of, as the frame says it: the item's label and its type ("Plank timer · Stopwatch"); "Group" once its overlay is its group's. */
+const dialogTitle = computed(() => {
+  const item = editedItem.value;
+  if (!item) return null;
+  const label = item.label || t(`kind.${item.kind}`);
+  const kind = t(`kind.${kindTag(item)}`);
+  // A clock still called "Stopwatch" says what it is already.
+  return label.toLowerCase() === kind.toLowerCase() ? label : t("edit.title", { label, kind });
+});
+function kindTag(item: Item): ItemKind | "group" {
+  return item.kind === "counter" && keyOf(item) !== item.id ? "group" : item.kind;
+}
 watch(
   [dialogOpen, dialogTitle],
   ([open, title]) => {
@@ -353,6 +365,11 @@ async function preview(item: Item): Promise<void> {
   await sdk.value?.overlay.preview(keyOf(item));
 }
 
+/** Tavora's Overlay page, where overlays are added to the game and placed; the dialog goes with it. */
+async function arrange(): Promise<void> {
+  await sdk.value?.overlay.openPage();
+}
+
 async function resetLink(item: Item): Promise<void> {
   await sdk.value?.overlay.resetLink(keyOf(item));
 }
@@ -364,6 +381,7 @@ provide(PANEL, {
   },
   now,
   hotkeys,
+  overGame,
   act,
   setHotkey,
   copyLink,
@@ -371,6 +389,10 @@ provide(PANEL, {
   preview,
   resetLink,
   remove: removeItem,
+  get canArrange() {
+    return sdk.value?.supports("overlay.openPage") ?? false;
+  },
+  arrange,
 });
 
 // ── Live view: what Tavora shows over the game while the game layer is closed ──
@@ -413,7 +435,10 @@ function overGameChanged(keys: string[]): void {
 /** Settings on a frame of the Overlay page: Tavora has the dialog open already; it shows the item's or group's settings. */
 function openSettingsFor(key: string): void {
   const item = itemForKey(list.value, key);
-  if (item) editing.value = item.id;
+  if (!item) return;
+  editing.value = item.id;
+  startPage.value = "text";
+  startCount.value++;
 }
 
 const cleanup: (() => void)[] = [];
@@ -471,7 +496,7 @@ onBeforeUnmount(() => {
   <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
-  <ItemEditor v-else-if="dialogOpen && editedItem" :key="editedItem.id" page :titled="titled" :item="editedItem" @close="closeEditing" />
+  <ItemEditor v-else-if="dialogOpen && editedItem" :key="editedItem.id" :title="dialogTitle ?? ''" :titled="titled" :item="editedItem" :start="startPage" :start-count="startCount" />
   <div v-else class="relative flex h-full min-h-0 flex-col" data-testid="clock-counter-app">
     <header class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2" role="toolbar" :aria-label="t('app.toolbar')">
       <p class="min-w-0 flex-1 truncate px-1 text-xs" role="status">
@@ -517,15 +542,15 @@ onBeforeUnmount(() => {
           @dragend="endDrag"
           @keydown="onRowKey"
         >
-          <ItemCard v-if="row.type === 'item'" :item="row.item" :editing="editing === row.item.id && !overWorkspace" @toggle-edit="toggleEdit(row.item.id)" />
+          <ItemCard v-if="row.type === 'item'" :item="row.item" @toggle-edit="toggleEdit(row.item.id)" />
           <section v-else class="border-border flex flex-col gap-1 rounded-lg border p-1" :aria-label="t('app.linked')" data-testid="linked-group">
             <Badge variant="secondary" class="gap-1 self-start" :title="t('app.linkedHint')"><Link class="size-3" :stroke-width="1.5" aria-hidden="true" />{{ t("app.linked") }}</Badge>
-            <ItemCard v-for="item in row.items" :key="item.id" :item="item" :editing="editing === item.id && !overWorkspace" @toggle-edit="toggleEdit(item.id)" />
+            <ItemCard v-for="item in row.items" :key="item.id" :item="item" @toggle-edit="toggleEdit(item.id)" />
           </section>
         </div>
       </div>
     </div>
-
-    <Toaster />
   </div>
+  <!-- Always there: the Undo of a deleted item and of a reset page shows in the settings dialog too. -->
+  <Toaster />
 </template>

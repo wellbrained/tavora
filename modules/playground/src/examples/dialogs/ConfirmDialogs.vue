@@ -5,8 +5,6 @@ import { ConfirmDialog } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const sharing = ref(false);
 const saving = ref(false);
 const working = ref(false);
@@ -24,9 +22,9 @@ function saveSlowly() {
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button variant="secondary" :disabled="disabled" @click="sharing = true">Share (plain confirm)…</Button>
-    <Button variant="secondary" :disabled="disabled" @click="saving = true">Slow confirm…</Button>
-    <Button variant="secondary" class="text-destructive" :disabled="disabled" @click="deleting = true">Delete group…</Button>
+    <Button variant="secondary" @click="sharing = true">Share (plain confirm)…</Button>
+    <Button variant="secondary" @click="saving = true">Slow confirm…</Button>
+    <Button variant="secondary" class="text-destructive" @click="deleting = true">Delete group…</Button>
   </div>
   <ConfirmDialog v-model:open="sharing" tone="default" title="Share this note?" :icon="Share2" description="Anyone with the link can read it." confirm="Share" @confirm="sharing = false" />
   <ConfirmDialog v-model:open="saving" tone="default" title="Save changes?" description="This takes a moment." confirm="Save" :busy="working" @confirm="saveSlowly" />

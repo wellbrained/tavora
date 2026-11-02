@@ -5,8 +5,6 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { TabStrip, type StripTab } from "@tavora/official-ui/components/ui/tabs";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const tabs = ref<StripTab[]>(["Iron", "Copper", "Steel", "Plastic"].map((label) => ({ id: label.toLowerCase(), label, closable: true, renamable: true })));
 const active = ref("iron");
 let added = 0;
@@ -32,7 +30,7 @@ function add() {
   <div class="flex flex-col gap-2">
     <TabStrip v-model="active" :tabs="tabs" aria-label="Plans" data-testid="tab-strip" @close="close" @reorder="reorder" @rename="rename">
       <template #add>
-        <Button variant="ghost" size="icon-sm" aria-label="New tab" data-testid="strip-add" :disabled="disabled" @click="add"><Plus :stroke-width="1.5" /></Button>
+        <Button variant="ghost" size="icon-sm" aria-label="New tab" data-testid="strip-add" @click="add"><Plus :stroke-width="1.5" /></Button>
       </template>
     </TabStrip>
     <p class="text-muted-foreground text-xs">Drag to reorder (or Alt + ← / →), middle-click or Delete to close, double-click or F2 to rename. The last one can't be closed.</p>

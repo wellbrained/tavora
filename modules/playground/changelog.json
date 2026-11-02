@@ -1,9 +1,26 @@
 [
   {
-    "version": "0.1.18",
+    "version": "0.1.20",
     "date": "2026-11-02",
     "notes": [
       "Settings shows a dialog with one page and one with several pages, with the rules for descriptions and units."
+    ]
+  },
+  {
+    "version": "0.1.19",
+    "date": "2026-11-02",
+    "notes": [
+      "New specimens: a settings menu with Overlays, and text with placeholders.",
+      "The settings dialog example uses the same menu and has a Delete row."
+    ]
+  },
+  {
+    "version": "0.1.18",
+    "date": "2026-11-02",
+    "notes": [
+      "The Foundations pages are filled: colours, text, spacing and corners, motion and writing, each with live examples and their code.",
+      "Show disabled sits in the page header for everyone; the Developer tools switch is gone.",
+      "Show code is coloured and has line numbers; Copy still copies the plain code. Examples no longer carry any Show disabled code, so what you see is what you write."
     ]
   },
   {

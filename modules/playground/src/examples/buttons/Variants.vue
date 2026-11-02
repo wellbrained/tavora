@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import { Button } from "@tavora/official-ui/components/ui/button";
-
-defineProps<{ disabled?: boolean }>();
 </script>
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button :disabled="disabled">Primary</Button>
-    <Button variant="secondary" :disabled="disabled">Secondary</Button>
-    <Button variant="outline" :disabled="disabled">Outline</Button>
-    <Button variant="ghost" :disabled="disabled">Ghost</Button>
-    <Button variant="destructive" :disabled="disabled">Delete for good</Button>
-    <Button variant="danger" :disabled="disabled">Remove</Button>
-    <Button variant="link" :disabled="disabled">Link</Button>
+    <Button>Primary</Button>
+    <Button variant="secondary">Secondary</Button>
+    <Button variant="outline">Outline</Button>
+    <Button variant="ghost">Ghost</Button>
+    <Button variant="destructive">Delete for good</Button>
+    <Button variant="danger">Remove</Button>
+    <Button variant="link">Link</Button>
   </div>
 </template>

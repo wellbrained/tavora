@@ -5,8 +5,6 @@
 import { type Size, useZoomTip, ZoomPane, ZoomTip, type ZoomView } from "@tavora/official-ui/components/ui/zoom-pane";
 import { onBeforeUnmount, ref, watch } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const NAMES = ["Iron Ore", "Iron Ingot", "Iron Rod", "Screw", "Reinforced Plate", "Modular Frame", "Copper Ore", "Copper Ingot"];
 const NODE = { width: 120, height: 60 };
 const nodes = Array.from({ length: 32 }, (_, id) => ({ id, name: NAMES[id % NAMES.length]!, x: 40 + (id % 8) * 200, y: 40 + Math.floor(id / 8) * 120 }));

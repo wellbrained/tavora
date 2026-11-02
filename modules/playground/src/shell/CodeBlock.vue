@@ -1,13 +1,20 @@
 <script setup lang="ts">
-// An example's source: its file name and a copy button on top, then the code in the theme's mono font. The code
-// scrolls on its own and can be reached with Tab, so it scrolls by keyboard too.
+// An example's source: its file name and a copy button on top, then the code in the theme's mono font, coloured by
+// highlight.ts with the theme's own colours (so dark and light both read well), with line numbers in a muted column
+// that can't be selected and a thin line between it and the code. Copy copies the plain source, without the numbers.
+// The code scrolls on its own and can be reached with Tab, so it scrolls by keyboard too.
 import { Check, Copy } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { toast } from "@tavora/official-ui/components/ui/toast";
-import { onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { t } from "../i18n";
+import { cssColour } from "./code-colours";
+import { lineCount, tokenize } from "./highlight";
 
 const props = defineProps<{ code: string; file: string; label: string }>();
+
+const tokens = computed(() => tokenize(props.code));
+const numbers = computed(() => Array.from({ length: lineCount(props.code) }, (_, index) => index + 1));
 
 const copied = ref(false);
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -35,6 +42,14 @@ onBeforeUnmount(() => clearTimeout(timer));
         {{ t("box.copy") }}
       </Button>
     </div>
-    <pre class="max-h-120 overflow-auto px-4 pb-4 font-mono text-xs leading-5 [scrollbar-width:thin]" tabindex="0" :aria-label="label" data-testid="example-code"><code>{{ code }}</code></pre>
+    <!-- One scroll area for both columns, so the numbers keep step with the lines. The numbers stay in view when the code scrolls sideways. -->
+    <div class="max-h-120 overflow-auto font-mono text-xs leading-5 [scrollbar-width:thin]" tabindex="0" role="region" :aria-label="label" data-testid="example-scroll">
+      <div class="flex min-w-max pb-4">
+        <div class="bg-[color-mix(in_srgb,var(--muted)_40%,var(--background))] text-muted-foreground sticky left-0 flex flex-none flex-col border-r py-0 pr-3 pl-4 text-right tabular-nums select-none" aria-hidden="true" data-testid="line-numbers">
+          <span v-for="number in numbers" :key="number">{{ number }}</span>
+        </div>
+        <pre class="px-4" data-testid="example-code"><code><span v-for="(token, index) in tokens" :key="index" :style="{ color: cssColour(token.kind) }" :data-kind="token.kind">{{ token.text }}</span></code></pre>
+      </div>
+    </div>
   </div>
 </template>

@@ -4,8 +4,6 @@ import { Download } from "@lucide/vue";
 import { ProgressButton, type ProgressButtonStatus } from "@tavora/official-ui/components/ui/progress-button";
 import { onBeforeUnmount, ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const known = ref<{ status: ProgressButtonStatus; progress: number }>({ status: "idle", progress: 0 });
 const unknown = ref<ProgressButtonStatus>("idle");
 const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -34,7 +32,7 @@ onBeforeUnmount(() => timers.forEach((timer) => clearInterval(timer)));
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <ProgressButton :status="known.status" :progress="known.progress" busy-label="Installing…" done-label="Installed" :disabled="disabled" @click="installKnown"><Download :stroke-width="1.5" /> Install</ProgressButton>
-    <ProgressButton variant="secondary" :status="unknown" busy-label="Updating…" done-label="Updated" :disabled="disabled" @click="installUnknown">Update</ProgressButton>
+    <ProgressButton :status="known.status" :progress="known.progress" busy-label="Installing…" done-label="Installed" @click="installKnown"><Download :stroke-width="1.5" /> Install</ProgressButton>
+    <ProgressButton variant="secondary" :status="unknown" busy-label="Updating…" done-label="Updated" @click="installUnknown">Update</ProgressButton>
   </div>
 </template>

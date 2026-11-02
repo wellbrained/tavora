@@ -2,13 +2,11 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const reach = ref("tavora");
 </script>
 
 <template>
-  <Select v-model="reach" :disabled="disabled">
+  <Select v-model="reach">
     <SelectTrigger class="w-56" aria-label="How users can reach you" data-testid="select-described">
       <SelectValue />
     </SelectTrigger>

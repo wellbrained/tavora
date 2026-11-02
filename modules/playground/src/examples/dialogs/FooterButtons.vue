@@ -7,8 +7,6 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { toast } from "@tavora/official-ui/components/ui/toast";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const exporting = ref(false);
 const importing = ref(false);
 const tidying = ref(false);
@@ -16,9 +14,9 @@ const tidying = ref(false);
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button variant="secondary" :disabled="disabled" @click="exporting = true">Action + Close…</Button>
-    <Button variant="secondary" :disabled="disabled" @click="importing = true">Cancel + action…</Button>
-    <Button variant="secondary" :disabled="disabled" @click="tidying = true">Only Done…</Button>
+    <Button variant="secondary" @click="exporting = true">Action + Close…</Button>
+    <Button variant="secondary" @click="importing = true">Cancel + action…</Button>
+    <Button variant="secondary" @click="tidying = true">Only Done…</Button>
   </div>
   <Dialog v-model:open="exporting">
     <DialogContent class="top-[12vh] translate-y-0 sm:max-w-[420px]">

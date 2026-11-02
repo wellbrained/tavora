@@ -521,37 +521,104 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   const box = `document.querySelector('[data-testid="example-Combobox"]')`;
   await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').click()`);
   await expect.poll(() => inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]')?.textContent ?? ""`)).toContain("<ComboboxInput");
-  // The playground's own disabled prop is left out of the code shown.
+  // The code is coloured by what it is, and has its own column of line numbers: muted, not selectable, with a thin line before the code.
+  const kinds = await inModule<string[]>(app, PLAYGROUND, `[...new Set([...${box}.querySelectorAll('[data-testid="example-code"] [data-kind]')].map((el) => el.dataset.kind))]`);
+  expect(kinds).toEqual(expect.arrayContaining(["keyword", "string", "tag", "component", "attr", "punct"]));
+  const numbers = `${box}.querySelector('[data-testid="line-numbers"]')`;
+  expect(await inModule(app, PLAYGROUND, `${numbers}.children.length === ${box}.querySelector('[data-testid="example-code"]').textContent.split("\\n").length`)).toBe(true);
+  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${numbers}).userSelect`)).toBe("none");
+  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${numbers}).borderRightWidth`)).toBe("1px");
+  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${numbers}).textAlign`)).toBe("right");
+  // Copy puts the plain source on the clipboard, without the numbers.
+  await inModule(app, PLAYGROUND, `(() => { window.__copied = ""; Object.defineProperty(navigator, "clipboard", { value: { writeText: async (text) => { window.__copied = text; } }, configurable: true }); })()`);
+  await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="copy-code"]').click()`);
+  await expect.poll(() => inModule<string>(app, PLAYGROUND, `window.__copied`)).toBe(await inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]').textContent`));
+  expect(await inModule<string>(app, PLAYGROUND, `window.__copied`)).toContain("<ComboboxInput");
+  // The code shown is the example's whole file: no prop of the playground's in it.
   expect(await inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]').textContent`)).not.toContain("defineProps");
   expect(await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').getAttribute("aria-expanded")`)).toBe("true");
   await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').click()`);
   await expect.poll(() => inModule(app, PLAYGROUND, `!${box}.querySelector('[data-testid="example-code"]')`)).toBe(true);
 
-  // Developer tools are off at first; with them on, Show disabled turns every control in the examples off.
-  expect(await inModule(app, PLAYGROUND, `!${q("disable-all")}`)).toBe(true);
-  await click(app, PLAYGROUND, `[data-testid="dev-tools"] [role="switch"]`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("disable-all")}`)).toBe(true);
+  // There is no Developer tools switch any more; Show disabled is a switch in the page header, off at first.
+  expect(await inModule(app, PLAYGROUND, `!document.querySelector('[data-testid^="dev-tools"]')`)).toBe(true);
+  const header = `${q("disable-all")}.closest("header")`;
+  const buttonsOff = (expected: boolean) => inModule(app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] button')].every((el) => el.matches(":disabled") === ${expected})`);
+  expect(await inModule(app, PLAYGROUND, `!!${header}`)).toBe(true);
+  expect(await inModule(app, PLAYGROUND, `${q("disable-all")}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("false");
+  expect(await inModule(app, PLAYGROUND, `(() => { const el = ${q("disable-all")}.closest("[title],[data-tavora-tooltip]"); return el.title || el.dataset.tavoraTooltip; })()`)).toContain("how it looks when it can't be used");
+  // Turning it on turns every control in the examples off, and nothing in the header or on the page moves.
+  const spots = () =>
+    inModule<string>(app, PLAYGROUND, `JSON.stringify([${q("disable-all")}, ${q("page-title")}, ${q("example-Select")}].map((el) => { const r = el.getBoundingClientRect(); return [r.x, r.y, r.width]; }))`);
+  const beforeSpots = await spots();
   await click(app, PLAYGROUND, `[data-testid="disable-all"] [role="switch"]`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] button')].every((el) => el.disabled)`)).toBe(true);
+  await expect.poll(() => buttonsOff(true)).toBe(true);
+  expect(await spots()).toBe(beforeSpots);
+  // Every example is switched off from outside (a disabled, inert fieldset around it); none takes a prop for it.
+  expect(await inModule(app, PLAYGROUND, `document.querySelectorAll('[data-slot="example-body"] > fieldset[disabled][inert]').length === document.querySelectorAll('[data-slot="example-body"]').length`)).toBe(true);
+  expect(await inModule(app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] [role="combobox"], [data-slot="example-body"] input')].every((el) => el.matches(":disabled"))`)).toBe(true);
+  // Everything looks off too: a number field fades as a whole (its parts don't fade again).
+  await openPage(app, "numbers");
+  const field = `${q("example-NumberField")}.querySelector('[data-slot="number-field"]')`;
+  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${field}).opacity`)).toBe("0.5");
+  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${field}.querySelector("button")).opacity`)).toBe("1");
+  await openPage(app, "pick");
   // Show code still works while the examples are off.
   expect(await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').disabled`)).toBe(false);
-
-  // Developer tools off turns Show disabled off too, so it doesn't come back with the tools.
-  await click(app, PLAYGROUND, `[data-testid="dev-tools"] [role="switch"]`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `!${q("disable-all")}`)).toBe(true);
-  await expect.poll(() => inModule(app, PLAYGROUND, `${q("example-Select")}.querySelector('[data-slot="example-body"] button').disabled`)).toBe(false);
-  await click(app, PLAYGROUND, `[data-testid="dev-tools"] [role="switch"]`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `${q("disable-all")}?.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("false");
-  expect(await inModule(app, PLAYGROUND, `${q("example-Select")}.querySelector('[data-slot="example-body"] button').disabled`)).toBe(false);
-
-  // After a restart the panel opens on its page again, with Developer tools still on.
+  // The panel remembers it with its page: after a restart the switch is still on, on the same page.
   await app.close();
   const again = await launch(userData);
   await openWorkspace(again.page, "poe2");
   await expect(panels(again.page, PLAYGROUND)).toHaveCount(1);
   await ready(again.app, PLAYGROUND, "page-pick");
-  await expect.poll(() => inModule(again.app, PLAYGROUND, `!!${q("disable-all")}`)).toBe(true);
+  await expect.poll(() => inModule(again.app, PLAYGROUND, `${q("disable-all")}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("true");
+  await expect.poll(() => inModule(again.app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] button')].every((el) => el.matches(":disabled"))`)).toBe(true);
+  // Turned off again, the controls come back on.
+  await click(again.app, PLAYGROUND, `[data-testid="disable-all"] [role="switch"]`);
+  await expect.poll(() => inModule(again.app, PLAYGROUND, `${q("example-Select")}.querySelector('[data-slot="example-body"] button').matches(":disabled")`)).toBe(false);
   await again.app.close();
+});
+
+test("ui playground: the foundations pages fill up, show the theme's own values and play their motion", async () => {
+  const { app, page } = await launch();
+  await playgroundReady(app, page);
+  const examples = (id: string) => inModule<string[]>(app, PLAYGROUND, `[...${q(`page-${id}`)}.querySelectorAll('section[data-testid^="example-"]')].map((el) => el.dataset.testid.slice(8))`);
+
+  // Every page of the group lists its examples, and none says it is coming.
+  const expected: Record<string, string[]> = {
+    colours: ["Tokens", "TextOnSurface", "DoDont"],
+    text: ["TypeScale", "Weights", "Numbers", "Capitals", "Mono"],
+    spacing: ["Scale", "Radius", "NestedCorners", "Depth"],
+    motion: ["Curves", "Durations", "Rules", "ReducedMotion"],
+    writing: ["FewWords", "Descriptions", "PlainWords", "YouDu", "Names"],
+  };
+  for (const [id, names] of Object.entries(expected)) {
+    await openPage(app, id);
+    await expect.poll(() => examples(id)).toEqual(names);
+    // Each page shows at least one rule line from the module rules.
+    expect(await inModule(app, PLAYGROUND, `${q(`page-${id}`)}.querySelectorAll('[data-testid="example-rule"]').length`)).toBeGreaterThan(0);
+  }
+
+  // Colours: all 28 tokens, each with the value the host set on the page.
+  await openPage(app, "colours");
+  expect(await inModule(app, PLAYGROUND, `document.querySelectorAll('[data-token]').length`)).toBe(28);
+  const primary = await inModule<string>(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary").trim()`);
+  expect(primary).not.toBe("");
+  await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelector('[data-token="primary"]').textContent`)).toContain(primary);
+
+  // Spacing: the corner steps read their pixels from the theme.
+  await openPage(app, "spacing");
+  expect(await inModule(app, PLAYGROUND, `document.querySelectorAll('[data-step]').length`)).toBe(4);
+  await expect.poll(() => inModule(app, PLAYGROUND, `[...document.querySelectorAll('[data-step]')].every((el) => /\\d+px/.test(el.parentElement.textContent))`)).toBe(true);
+
+  // Motion: the times come from the tokens, and Play moves the dot (reduced motion jumps there at once).
+  await openPage(app, "motion");
+  await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelector('[data-token="--duration-move"]').textContent`)).toContain("300 ms");
+  const dot = `document.querySelector('[data-token="--duration-menu"] [data-testid="demo-dot"]')`;
+  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${dot}).translate`)).toMatch(/^(none|0px)/);
+  await inModule(app, PLAYGROUND, `document.querySelector('[data-token="--duration-menu"] button').click()`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `getComputedStyle(${dot}).translate`)).toMatch(/^96px/);
+  await app.close();
 });
 
 test("ui playground: the name dialog selects its text, counts and locks while busy, and the confirm dialog has a plain variant", async () => {

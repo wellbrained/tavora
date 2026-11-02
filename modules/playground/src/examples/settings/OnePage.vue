@@ -9,8 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { computed, ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const DEFAULTS = { seconds: true, twentyFour: true, size: "m", color: "#ffffff", every: "15" };
 const look = ref({ ...DEFAULTS });
 const savedAt = ref<number>();
@@ -42,19 +40,19 @@ function reset() {
         <SettingsPage title="Clock" description="How the clock looks over your game.">
           <SettingsSection>
             <SettingsRow label="Show seconds" hint="Ticks along with the clock.">
-              <Switch :model-value="look.seconds" aria-label="Show seconds" :disabled="disabled" @update:model-value="set('seconds', $event)" />
+              <Switch :model-value="look.seconds" aria-label="Show seconds" @update:model-value="set('seconds', $event)" />
             </SettingsRow>
             <SettingsRow label="24-hour clock" hint="Instead of AM and PM.">
-              <Switch :model-value="look.twentyFour" aria-label="24-hour clock" :disabled="disabled" @update:model-value="set('twentyFour', $event)" />
+              <Switch :model-value="look.twentyFour" aria-label="24-hour clock" @update:model-value="set('twentyFour', $event)" />
             </SettingsRow>
             <SettingsRow label="Text size" hint="Bigger is easier to read from afar.">
-              <SegmentedControl :model-value="look.size" label="Text size" :options="SIZES" class="w-full min-w-0 [&>*]:flex-1 [&>*]:px-0" :disabled="disabled" @update:model-value="set('size', $event)" />
+              <SegmentedControl :model-value="look.size" label="Text size" :options="SIZES" class="w-full min-w-0 [&>*]:flex-1 [&>*]:px-0" @update:model-value="set('size', $event)" />
             </SettingsRow>
             <SettingsRow label="Text colour" hint="Pick one that stands out.">
-              <ColorPicker :model-value="look.color" :colors="COLORS" label="Text colour" :columns="7" allow-custom :disabled="disabled" @update:model-value="set('color', $event)" />
+              <ColorPicker :model-value="look.color" :colors="COLORS" label="Text colour" :columns="7" allow-custom @update:model-value="set('color', $event)" />
             </SettingsRow>
             <SettingsRow label="Remind me every" hint="In minutes.">
-              <Select :model-value="look.every" :disabled="disabled" @update:model-value="set('every', $event as string)">
+              <Select :model-value="look.every" @update:model-value="set('every', $event as string)">
                 <SelectTrigger class="w-full" aria-label="Remind me every"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="value in EVERY" :key="value" :value="value">{{ value }}</SelectItem>

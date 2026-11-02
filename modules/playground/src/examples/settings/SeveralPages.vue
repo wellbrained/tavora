@@ -7,8 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const DEFAULTS = { cpu: true, memory: true, network: false, c: true, d: true, warn: "90", every: "2", offline: true };
 const look = ref({ ...DEFAULTS });
 const savedAt = ref<number>();
@@ -48,13 +46,13 @@ function reset(id: string) {
         <SettingsPage v-if="page === 'show'" title="Show" description="What the monitor shows.">
           <SettingsSection>
             <SettingsRow label="Processor">
-              <Switch :model-value="look.cpu" aria-label="Processor" :disabled="disabled" @update:model-value="set('cpu', $event)" />
+              <Switch :model-value="look.cpu" aria-label="Processor" @update:model-value="set('cpu', $event)" />
             </SettingsRow>
             <SettingsRow label="Memory">
-              <Switch :model-value="look.memory" aria-label="Memory" :disabled="disabled" @update:model-value="set('memory', $event)" />
+              <Switch :model-value="look.memory" aria-label="Memory" @update:model-value="set('memory', $event)" />
             </SettingsRow>
             <SettingsRow label="Network">
-              <Switch :model-value="look.network" aria-label="Network" :disabled="disabled" @update:model-value="set('network', $event)" />
+              <Switch :model-value="look.network" aria-label="Network" @update:model-value="set('network', $event)" />
             </SettingsRow>
           </SettingsSection>
         </SettingsPage>
@@ -62,15 +60,15 @@ function reset(id: string) {
         <SettingsPage v-else-if="page === 'drives'" title="Drives" description="Which drives it keeps an eye on.">
           <SettingsSection title="Watch">
             <SettingsRow label="Drive C:">
-              <Switch :model-value="look.c" aria-label="Drive C:" :disabled="disabled" @update:model-value="set('c', $event)" />
+              <Switch :model-value="look.c" aria-label="Drive C:" @update:model-value="set('c', $event)" />
             </SettingsRow>
             <SettingsRow label="Drive D:">
-              <Switch :model-value="look.d" aria-label="Drive D:" :disabled="disabled" @update:model-value="set('d', $event)" />
+              <Switch :model-value="look.d" aria-label="Drive D:" @update:model-value="set('d', $event)" />
             </SettingsRow>
           </SettingsSection>
           <SettingsSection title="Warnings">
             <SettingsRow label="Warn when a drive is" hint="In percent full.">
-              <Select :model-value="look.warn" :disabled="disabled" @update:model-value="set('warn', $event as string)">
+              <Select :model-value="look.warn" @update:model-value="set('warn', $event as string)">
                 <SelectTrigger class="w-full" aria-label="Warn when a drive is"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="value in WARN" :key="value" :value="value">{{ value }}</SelectItem>
@@ -83,7 +81,7 @@ function reset(id: string) {
         <SettingsPage v-else title="Connection" description="How it gets its numbers.">
           <SettingsSection>
             <SettingsRow label="Update every" hint="In seconds.">
-              <Select :model-value="look.every" :disabled="disabled" @update:model-value="set('every', $event as string)">
+              <Select :model-value="look.every" @update:model-value="set('every', $event as string)">
                 <SelectTrigger class="w-full" aria-label="Update every"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="value in EVERY" :key="value" :value="value">{{ value }}</SelectItem>
@@ -91,7 +89,7 @@ function reset(id: string) {
               </Select>
             </SettingsRow>
             <SettingsRow label="Keep going offline" hint="Shows the last numbers until you're back online.">
-              <Switch :model-value="look.offline" aria-label="Keep going offline" :disabled="disabled" @update:model-value="set('offline', $event)" />
+              <Switch :model-value="look.offline" aria-label="Keep going offline" @update:model-value="set('offline', $event)" />
             </SettingsRow>
           </SettingsSection>
         </SettingsPage>

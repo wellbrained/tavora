@@ -3,7 +3,8 @@
 // sizes a new frame from `size`. A group's counters are not listed again: the group is their one overlay. A linked group
 // that is not shown as a whole has no line of its own, so its counters are listed one by one.
 import type { OverlaySource } from "@tavora/sdk";
-import { groupLine, linkedGroups, readClock, visualOrder, type Font, type Item, type ItemList } from "./items";
+import { counterShown, groupSegments, itemSegments, linkedGroups, readClock, sizeScales, visualOrder, type Font, type Item, type ItemList, type OverlayLook } from "./items";
+import type { Segment } from "./template";
 import { formatSeconds } from "./time";
 
 /** The most sources a panel lists; Tavora takes at most LIMITS.maxOverlaySources (64). */
@@ -11,10 +12,7 @@ export const MAX_SOURCES = 64;
 
 /** How big the value is at the overlay's natural size, in pixels of a 1080 px high game window. */
 export const VALUE_PX = 48;
-/** The label beside the value, as a share of the value's size, and the gap between them (overlay.css and overlay.ts use the same). */
-export const LABEL_SHARE = 0.5;
-export const GAP_SHARE = 0.4;
-/** The last lap under the time, as a share of the value's size. */
+/** The last lap under the time, as a share of the number's size. */
 export const LAP_SHARE = 0.32;
 /** The line height of the overlay's text. */
 export const LINE_HEIGHT = 1.05;
@@ -57,18 +55,22 @@ function valueText(item: Extract<Item, { kind: "countdown" | "stopwatch" }>, now
   return formatSeconds(seconds, item.format);
 }
 
-/** How big one clock or counter needs to be, as the overlay's row (name and value on one baseline) draws it. */
+/** How big a line of words and values needs to be: the runs side by side, each at the size its style gives it. */
+function lineSize(line: Segment[], look: OverlayLook, measure: Measure, lap: { text: string } | null): { width: number; height: number } {
+  const scales = sizeScales(look);
+  const number = VALUE_PX * scales.number;
+  const words = VALUE_PX * scales.words;
+  const width = line.reduce((total, part) => total + measure(part.text, part.value ? number : words, part.value ? 700 : 600, look.font), 0);
+  const tallest = Math.max(line.some((part) => part.value) ? number : 0, line.some((part) => !part.value) ? words : 0);
+  const lapWidth = lap ? measure(lap.text, number * LAP_SHARE, 500, look.font) : 0;
+  return { width: Math.ceil(Math.max(width, lapWidth)), height: Math.ceil(tallest * LINE_HEIGHT + (lap ? number * LAP_SHARE * LINE_HEIGHT : 0)) };
+}
+
+/** How big one clock or counter needs to be, as the overlay draws its text (words and value on one baseline). */
 export function itemSize(item: Item, measure: Measure, now: number): { width: number; height: number } {
-  const look = item.look;
-  const value = item.kind === "counter" ? (item.goal === null ? String(item.value) : `${item.value} / ${item.goal}`) : valueText(item, now);
-  const label = look.showLabel && item.label ? item.label : "";
-  const labelWidth = label ? measure(label, VALUE_PX * LABEL_SHARE, 600, look.font) + VALUE_PX * GAP_SHARE : 0;
-  const lap = item.kind === "stopwatch" && item.laps && item.showLastLap && item.lapTimes.length > 0;
-  const lapWidth = lap ? measure(formatSeconds(Math.floor((item.lapTimes.at(-1) ?? 0) / 1000), item.format), VALUE_PX * LAP_SHARE, 500, look.font) : 0;
-  return {
-    width: Math.ceil(Math.max(labelWidth + measure(value, VALUE_PX, 700, look.font), lapWidth)),
-    height: Math.ceil(VALUE_PX * LINE_HEIGHT * (lap ? 1 + LAP_SHARE : 1)),
-  };
+  const value = item.kind === "counter" ? counterShown(item.value, item.goal) : valueText(item, now);
+  const lap = item.kind === "stopwatch" && item.laps && item.showLastLap && item.lapTimes.length > 0 ? { text: formatSeconds(Math.floor((item.lapTimes.at(-1) ?? 0) / 1000), item.format) } : null;
+  return lineSize(itemSegments(item, value), item.look, measure, lap);
 }
 
 /** The panel's sources in the order the panel shows them. `nameOf`: an item's name as the panel shows it (its label, or its kind). */
@@ -83,9 +85,9 @@ export function buildSources(list: ItemList, measure: Measure, nameOf: (item: It
     if (group) {
       if (done.has(group.key)) continue;
       done.add(group.key);
-      const line = groupLine(group, nameOf);
-      const look = group.stream.look;
-      sources.push({ key: group.key, name: line || nameOf(item), group: true, size: { width: Math.ceil(measure(line, VALUE_PX, 700, look.font)) || 1, height: Math.ceil(VALUE_PX * LINE_HEIGHT) } });
+      const line = groupSegments(group, nameOf);
+      const size = lineSize(line, group.stream.look, measure, null);
+      sources.push({ key: group.key, name: line.map((part) => part.text).join("") || nameOf(item), group: true, size: { width: size.width || 1, height: size.height || 1 } });
     } else {
       sources.push({ key: item.id, name: nameOf(item), size: itemSize(item, measure, now) });
     }

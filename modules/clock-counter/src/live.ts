@@ -2,7 +2,8 @@
 // read-only, over the game while the panel's game layer is closed. Pure functions, so the rules are easy to test.
 // A running clock keeps its start time, so the page counts it itself and the panel only sends when the list changes.
 import { overlayState, readClock, visualOrder, type ItemList, type OverlayState } from "./items";
-import { formatSeconds } from "./time";
+import { lineOf } from "./line";
+import { wordsOf } from "./template";
 
 /** Rows the live view shows; Tavora accepts at most 16 KB, and this many stay far below it. */
 export const LIVE_MAX_ROWS = 20;
@@ -32,10 +33,17 @@ export function isLive(state: unknown): state is LiveState {
   return typeof state === "object" && state !== null && (state as { kind?: unknown }).kind === "live" && Array.isArray((state as { rows?: unknown }).rows);
 }
 
-/** What a row shows at `now`: the time of a clock, the number of a counter. */
-export function rowText(row: LiveRow, now: number): { text: string; flashing: boolean; running: boolean } {
-  if (row.kind === "counter") return { text: row.goal === null ? String(row.value) : `${row.value} / ${row.goal}`, flashing: false, running: false };
-  const reading = readClock({ id: "", label: "", look: row.look, ...row.clock, laps: false, showLastLap: false, lapTimes: [] }, now);
-  if (reading.done && row.clock.doneText) return { text: row.clock.doneText, flashing: false, running: false };
-  return { text: formatSeconds(reading.seconds, row.clock.format), flashing: reading.done, running: reading.running };
+/**
+ * What a row shows at `now`: the value of a clock or counter (the number), and its words (what the text says around the value, which
+ * the row puts before it), as the text of the item has them.
+ */
+export function rowText(row: LiveRow, now: number): { name: string; text: string; flashing: boolean; running: boolean } {
+  const shown = lineOf(row, now);
+  const reading = row.kind === "counter" ? null : readClock({ id: "", label: "", look: row.look, ...row.clock, laps: false, showLastLap: false, lapTimes: [] }, now);
+  return {
+    name: wordsOf(shown.segments),
+    text: shown.segments.filter((part) => part.value).map((part) => part.text).join(" "),
+    flashing: shown.flashing,
+    running: !!reading?.running,
+  };
 }

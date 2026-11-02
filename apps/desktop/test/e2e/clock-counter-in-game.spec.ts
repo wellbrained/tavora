@@ -51,6 +51,12 @@ async function shotOfPanel(app: ElectronApplication, name: string): Promise<void
   await writeFile(path.join(SHOTS, name), Buffer.from(png, "base64"));
 }
 
+/** Closes the settings dialog with its ×: the settings have no Done button, they save at once. */
+async function closeSettings(page: Page): Promise<void> {
+  await page.getByTestId("panel-dialog-close").click();
+  await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
+}
+
 async function inPersonalWorkspace(): Promise<{ app: ElectronApplication; page: Page }> {
   const userData = await newUserData();
   await mkdir(userData, { recursive: true });
@@ -69,7 +75,7 @@ test("the Overlay page lists a Clock & Counter's things under its panel, adds th
   const { app, page } = await inPersonalWorkspace();
   try {
     await click(app, "add-counter");
-    await click(app, "editor-done");
+    await closeSettings(page);
     await click(app, "add");
     await click(app, "pick-stopwatch");
     await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]').length`)).toBe(2);
@@ -112,7 +118,9 @@ test("the Overlay page lists a Clock & Counter's things under its panel, adds th
     await expect(page.getByTestId("overlay-page")).toBeVisible();
     await expect.poll(() => inModule<boolean>(app, ID, `!!document.querySelector('[data-testid^="editor-"]')`).catch(() => false)).toBe(true);
     // The frame names the item, not the module.
-    await expect(page.getByTestId("panel-dialog").getByRole("heading")).toHaveText(second.name);
+    await expect(page.getByTestId("panel-dialog").getByRole("heading").first()).toHaveText(second.name);
+    // From a frame of the Overlay page the settings open on what the overlay says.
+    await expect.poll(() => attribute(app, "page-text", "aria-current")).toBe("page");
     await page.waitForTimeout(500);
     await shotOfPanel(app, "settings-from-overlay-page.png");
     await page.getByTestId("panel-dialog-close").click();
@@ -125,11 +133,11 @@ test("the Overlay page lists a Clock & Counter's things under its panel, adds th
 });
 
 test("counting, Start and Reset work, and Add is a menu in the page rather than one Tavora draws", async () => {
-  const { app } = await inPersonalWorkspace();
+  const { app, page } = await inPersonalWorkspace();
   try {
     await click(app, "add-counter");
-    // A new item opens its settings (a dialog over the workspace); Done goes back to the list.
-    await click(app, "editor-done");
+    // A new item opens its settings (a dialog over the workspace); closing it goes back to the list.
+    await closeSettings(page);
     await click(app, "up");
     await click(app, "up");
     await expect.poll(() => text(app, "value")).toBe("2");
@@ -149,40 +157,80 @@ test("counting, Start and Reset work, and Add is a menu in the page rather than 
   }
 });
 
-test("an item's settings are pages on the left with one footer, named after the item", async () => {
+test("an item's settings use Tavora's settings layout: the panel, the overlay and the stream link, each in its own place", async () => {
   const { app, page } = await inPersonalWorkspace();
   try {
     await click(app, "add-counter");
     const frame = page.getByTestId("panel-dialog");
     await expect(frame).toBeVisible();
-    // One title: the item's name, in Tavora's frame, and no second heading in the page.
+    // The frame names the item.
     await expect(frame.getByRole("heading").first()).toHaveText("Counter");
-    await expect.poll(() => inModule<string[]>(app, ID, `[...document.querySelectorAll("h1, h2")].map((node) => node.outerHTML.slice(0, 200))`)).toEqual([]);
 
     const texts = (selector: string) => inModule<string[]>(app, ID, `[...document.querySelectorAll(${JSON.stringify(selector)})].map((node) => node.textContent.trim())`);
-    await expect.poll(() => texts('[data-slot="nav-list"] button')).toEqual(["Counter", "Look", "Hotkeys", "On stream"]);
-    // The footer is Delete and Done, nothing else; no Move up or down, and no Over game switch anywhere.
-    expect(await texts("footer button")).toEqual(["Delete", "Done"]);
+    // The module's own pages first, then Overlays under a divider: how it looks (Text, Look), then where it shows (In game, On stream).
+    // Opened from the panel it starts on the item's own page.
+    await expect.poll(() => texts('[data-slot="nav-group"] h3')).toEqual(["Overlays"]);
+    await expect.poll(() => texts('[data-slot="nav-divider"]')).toEqual(["Overlays"]);
+    await expect.poll(() => texts('[data-slot="nav-list"] button')).toEqual(["Counter", "Hotkeys", "Text", "Look", "In game", "On stream"]);
+    // The dots: the overlay is not over a game and Stream overlays are not allowed yet, so both are hollow.
+    await expect.poll(() => inModule<string[]>(app, ID, `[...document.querySelectorAll('[data-nav-item] [data-status]')].map((node) => node.getAttribute("data-status"))`)).toEqual(["off", "off"]);
+    await expect.poll(() => attribute(app, "page-item", "aria-current")).toBe("page");
+    // No Done and no Delete in a footer: saving is automatic, closing is the ×, and Delete is the last row of the item's page.
+    expect(await texts("footer button")).toEqual(["Reset this page"]);
     const everything = () => inModule<string>(app, ID, `document.body.innerText`);
-    for (const page of ["page-item", "page-look", "page-hotkeys", "page-stream"]) {
-      await click(app, page);
-      await expect.poll(() => attribute(app, page, "aria-current")).toBe("page");
-      const shown = await everything();
-      for (const gone of ["Move up", "Move down", "Over game"]) expect(shown).not.toContain(gone);
-    }
-    expect(await everything()).toContain("Copy OBS link");
-    await page.waitForTimeout(500);
-    await shotOfPanel(app, "settings-on-stream.png");
-    await click(app, "page-look");
-    await expect.poll(() => everything()).toContain("Outline");
-    await page.waitForTimeout(500);
-    await shotOfPanel(app, "settings-look.png");
-    await click(app, "page-item");
-    await expect.poll(() => everything()).toContain("Step");
+    await expect.poll(() => everything()).toContain("Delete");
+    expect(await everything()).not.toContain("Done");
     await page.waitForTimeout(500);
     await shotOfPanel(app, "settings-counter.png");
 
-    // A new name shows in the frame as soon as it is saved (Enter saves a field, as leaving it does).
+    for (const id of ["page-hotkeys", "page-text", "page-look", "page-game", "page-stream", "page-item"]) {
+      await click(app, id);
+      await expect.poll(() => attribute(app, id, "aria-current")).toBe("page");
+    }
+    // Hotkeys, In game and On stream have nothing to reset.
+    await click(app, "page-hotkeys");
+    await expect.poll(() => texts("footer button")).toEqual([]);
+
+    // Overlay text: a free text with {count}; the preview is the real overlay.
+    await click(app, "page-text");
+    await expect.poll(() => text(app, "overlay-preview")).toBe("Counter 0");
+    await inModule(
+      app,
+      ID,
+      `(async () => {
+        const field = document.querySelector('[data-testid="overlay-text"]');
+        field.focus();
+        field.value = "Deaths: {count}";
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      })()`,
+    );
+    await expect.poll(() => text(app, "overlay-preview")).toBe("Deaths: 0");
+    await click(app, "idea-3");
+    await expect.poll(() => text(app, "overlay-preview")).toBe("0 kills");
+    await page.waitForTimeout(500);
+    await shotOfPanel(app, "settings-text.png");
+
+    // Look: font, alignment and outline for everything, then Words and Number, one under the other.
+    await click(app, "page-look");
+    await expect.poll(() => texts('[data-slot="settings-section"] h3')).toEqual(["Everything", "Words", "Number"]);
+    await click(app, "number-size-xl");
+    await page.waitForTimeout(500);
+    await shotOfPanel(app, "settings-look.png");
+
+    // Where it shows: over the game (set on the Overlay page) and on stream (the OBS link).
+    await click(app, "page-game");
+    await expect.poll(() => everything()).toContain("Not over your game");
+    await page.waitForTimeout(500);
+    await shotOfPanel(app, "settings-in-game.png");
+    await click(app, "page-stream");
+    await expect.poll(() => everything()).toContain("Copy OBS link");
+    await page.waitForTimeout(500);
+    await shotOfPanel(app, "settings-on-stream.png");
+
+    // A new label shows in the frame as soon as it is saved (Enter saves a field, as leaving it does).
+    await click(app, "page-item");
     await inModule(
       app,
       ID,
@@ -195,19 +243,24 @@ test("an item's settings are pages on the left with one footer, named after the 
         field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
       })()`,
     );
-    await expect(frame.getByRole("heading").first()).toHaveText("Boss");
-    await click(app, "editor-done");
+    await expect(frame.getByRole("heading").first()).toHaveText("Boss · Counter");
+
+    // Delete is the last row; the dialog closes and Undo brings the item back.
+    await inModule(app, ID, `document.querySelector('[data-testid^="delete-"]').click()`);
     await expect(frame).toHaveCount(0);
+    await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]').length`)).toBe(0);
+    await click(app, "undo");
+    await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]').length`)).toBe(1);
   } finally {
     await app.close();
   }
 });
 
 test("rows change places with Alt and the arrows, and Add keeps the new one last", async () => {
-  const { app } = await inPersonalWorkspace();
+  const { app, page } = await inPersonalWorkspace();
   try {
     await click(app, "add-counter");
-    await click(app, "editor-done");
+    await closeSettings(page);
     await click(app, "add");
     await click(app, "pick-stopwatch");
     const names = () => inModule<string[]>(app, ID, `[...document.querySelectorAll('[data-testid="item-name"] h2')].map((node) => node.textContent.trim())`);

@@ -1014,6 +1014,12 @@ export interface Methods {
    * have an `overlay` in its manifest. Tavora 0.21.3 and newer.
    */
   "overlay.preview": { params: { key: string }; result: null };
+  /**
+   * Shows Tavora's Overlay page, where the user adds the module's overlays to their game and arranges them, and closes this
+   * panel's dialog if it is open. Only right after a click or key press in the panel; needs no capability. It opens nothing
+   * the user can't open themselves and tells the module nothing. Tavora 0.23.77 and newer.
+   */
+  "overlay.openPage": { params: undefined; result: null };
   /** The hotkeys the user set for this module in the current workspace. Tavora 0.19.26 and newer. */
   "hotkeys.list": { params: undefined; result: HotkeyBinding[] };
   /**
@@ -1470,6 +1476,7 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "overlay.overGame": later("0.21.3"),
   "overlay.setSources": later("0.23.43"),
   "overlay.preview": later("0.21.3", null, true),
+  "overlay.openPage": later("0.23.77", null, true),
   "hotkeys.list": call("0.19.26"),
   "hotkeys.set": call("0.19.26", null, true),
   "hotkeys.remove": call("0.19.26"),

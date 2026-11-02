@@ -41,7 +41,15 @@ function onKey(event: KeyboardEvent) {
 <template>
   <nav ref="list" data-slot="nav-list" :aria-label="label" :class="cn('flex flex-col gap-0.5', props.class)" @keydown="onKey">
     <div v-for="(group, index) in groups" :key="group.heading ?? index" data-slot="nav-group" :class="cn('flex flex-col gap-0.5', props.groupClass, group.class)">
-      <h3 v-if="group.heading" :class="cn('text-muted-foreground flex items-center gap-1.5 px-3 pb-1 text-xs font-semibold tracking-wider uppercase', index > 0 && 'pt-4', props.headingClass)">
+      <div v-if="group.heading && group.divider" :class="cn('flex items-center gap-2 px-3 pb-1', index > 0 ? 'pt-6' : 'pt-1', props.headingClass)" data-slot="nav-divider">
+        <span class="bg-border h-px flex-1" aria-hidden="true" />
+        <h3 class="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase">
+          <component :is="group.icon" v-if="group.icon" class="size-3.5 flex-none" :stroke-width="2" aria-hidden="true" />
+          {{ group.heading }}
+        </h3>
+        <span class="bg-border h-px flex-1" aria-hidden="true" />
+      </div>
+      <h3 v-else-if="group.heading" :class="cn('text-muted-foreground flex items-center gap-1.5 px-3 pb-1 text-xs font-semibold tracking-wider uppercase', index > 0 && 'pt-4', props.headingClass)">
         <component :is="group.icon" v-if="group.icon" class="size-3.5 flex-none" :stroke-width="2" aria-hidden="true" />
         {{ group.heading }}
       </h3>

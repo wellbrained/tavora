@@ -10,13 +10,11 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@tavora/official-ui/components/ui/context-menu";
-
-defineProps<{ disabled?: boolean }>();
 </script>
 
 <template>
   <ContextMenu>
-    <ContextMenuTrigger :disabled="disabled" class="text-muted-foreground flex h-16 w-56 items-center justify-center rounded-md border border-dashed text-sm">
+    <ContextMenuTrigger class="text-muted-foreground flex h-16 w-56 items-center justify-center rounded-md border border-dashed text-sm">
       Right-click here
     </ContextMenuTrigger>
     <ContextMenuContent class="w-48">

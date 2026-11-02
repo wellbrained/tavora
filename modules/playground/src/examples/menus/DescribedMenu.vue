@@ -2,14 +2,12 @@
 import { FolderInput, Pencil, Pin, Plus } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
-
-defineProps<{ disabled?: boolean }>();
 </script>
 
 <template>
   <DropdownMenu>
     <DropdownMenuTrigger as-child>
-      <Button variant="secondary" :disabled="disabled"><Plus :stroke-width="1.5" /> Add</Button>
+      <Button variant="secondary"><Plus :stroke-width="1.5" /> Add</Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="start" class="w-72">
       <DropdownMenuItem description="Start from a file on your PC.">

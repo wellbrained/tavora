@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.27
+
+- New projects start on `@tavora/sdk` 0.3.9: a panel can show Tavora's Overlay page (`overlay.openPage`).
+
 ## 0.1.26
 
 - New projects start on `@tavora/sdk` 0.3.8: a panel can set the title in the frame of its dialog (`panel.setDialogTitle`).

@@ -23,6 +23,8 @@ export interface NavItem {
 export interface NavGroup {
   /** A small heading above the group. */
   heading?: string;
+  /** Draws the heading inside a divider line (a thin line each side of the label, more room above), for a group that is a section of its own such as a module's Overlays. */
+  divider?: boolean;
   /** A small icon before the heading. */
   icon?: Component;
   items: NavItem[];

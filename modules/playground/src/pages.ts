@@ -16,11 +16,11 @@ export interface PageDef {
 
 export const PAGES = [
   // Foundations
-  { id: "colours", group: "foundations", keywords: "color tokens theme palette swatches", examples: ["Tokens"] },
-  { id: "text", group: "foundations", keywords: "typography fonts headings caption mono numbers link size weight", examples: ["TypeScale", "MonoNumbersLinks"] },
-  { id: "spacing", group: "foundations", keywords: "radius rounded corners gap padding", examples: ["Corners"] },
-  { id: "motion", group: "foundations", keywords: "animation duration ease curve transition", examples: [] },
-  { id: "writing", group: "foundations", keywords: "texts words tone german english translation", examples: [] },
+  { id: "colours", group: "foundations", keywords: "color tokens theme palette swatches tailwind class hex background foreground primary fill", examples: ["Tokens", "TextOnSurface", "DoDont"] },
+  { id: "text", group: "foundations", keywords: "typography fonts headings caption mono numbers size weight tabular case capitals sentence", examples: ["TypeScale", "Weights", "Numbers", "Capitals", "Mono"] },
+  { id: "spacing", group: "foundations", keywords: "radius rounded corners nested gap padding margin scale grid depth shadow border surface elevation", examples: ["Scale", "Radius", "NestedCorners", "Depth"] },
+  { id: "motion", group: "foundations", keywords: "animation duration ease curve spring transition timing reduced press play", examples: ["Curves", "Durations", "Rules", "ReducedMotion"] },
+  { id: "writing", group: "foundations", keywords: "texts words copy tone german english translation you du plain short friendly", examples: ["FewWords", "Descriptions", "PlainWords", "YouDu", "Names"] },
   // Actions
   { id: "buttons", group: "actions", keywords: "primary secondary ghost outline destructive danger remove link icon loading progress install split group menu toggle", examples: ["Variants", "Sizes", "WithIcons", "ProgressButtons", "IconOnly", "ToggleButtons", "SplitButtons"] },
   { id: "menus", group: "actions", keywords: "dropdown menu context right-click submenu actions icon description row", examples: ["DescribedMenu", "Dropdown", "RightClick"] },
@@ -29,7 +29,7 @@ export const PAGES = [
   { id: "dialogs", group: "actions", keywords: "dialog modal confirm delete rename name prompt busy footer scroll", examples: ["NameDialogs", "ConfirmDialogs", "FooterButtons", "LongDialog"] },
   { id: "toasts", group: "actions", keywords: "toast snackbar undo message notification status", examples: ["Kinds", "Loading", "WithButton", "DeleteWithUndo"] },
   // Inputs
-  { id: "fields", group: "inputs", keywords: "input textarea search clear escape magnifier label hint error invalid code one-time mono", examples: ["Basic", "Errors", "Search", "Monospace", "Code", "TextArea"] },
+  { id: "fields", group: "inputs", keywords: "input textarea search clear escape magnifier label hint error invalid code one-time mono template placeholder braces insert highlight", examples: ["Basic", "Errors", "Search", "Monospace", "Code", "TextArea", "Template"] },
   { id: "checks", group: "inputs", keywords: "checkbox tick strike done switch field label description", examples: ["Checkbox", "Switch", "SwitchField", "DoneItem"] },
   { id: "pick", group: "inputs", keywords: "radio segmented select empty choice none clear picker dropdown combobox autocomplete search pictures", examples: ["RadioGroup", "Segmented", "SegmentedSliding", "SegmentedNone", "Select", "SelectDescribed", "SelectEmpty", "SelectPictures", "Combobox", "Picker", "DropdownIcons"] },
   { id: "numbers", group: "inputs", keywords: "slider range number field stepper quantity plus minus", examples: ["Slider", "SliderField", "NumberField"] },
@@ -48,7 +48,7 @@ export const PAGES = [
   { id: "zoom", group: "canvas", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport double-click percent 100 whole extras view-only remember persist glide tooltip", examples: ["WideContent", "AutoFitOff", "RememberView", "HundredExtras", "PersistView", "ViewOnly", "BoxTooltip", "FitWidth"] },
   { id: "map", group: "canvas", keywords: "map tiles pins markers cluster group dots spawns highlight world game zoom fog layer", examples: ["TileMap"] },
   // Tavora features
-  { id: "settings", group: "features", keywords: "module settings dialog overlay preview page reset saved control column row one single narrow menu description unit size", examples: ["OnePage", "SeveralPages", "ModuleSettings"] },
+  { id: "settings", group: "features", keywords: "module settings dialog overlay preview page reset saved control column row menu divider heading in game on stream dot status danger delete one single narrow description unit size", examples: ["OnePage", "SeveralPages", "ModuleSettings", "SettingsMenu"] },
 ] as const satisfies readonly PageDef[];
 
 export type PageId = (typeof PAGES)[number]["id"];

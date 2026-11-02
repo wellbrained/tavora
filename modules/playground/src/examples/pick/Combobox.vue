@@ -2,15 +2,13 @@
 import { Combobox, ComboboxAnchor, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@tavora/official-ui/components/ui/combobox";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const GAMES = ["Path of Exile 2", "Diablo IV", "Final Fantasy XIV", "Guild Wars 2", "Satisfactory", "Stardew Valley", "Enshrouded"];
 const picked = ref<string>();
 </script>
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Combobox v-model="picked" :disabled="disabled">
+    <Combobox v-model="picked">
       <ComboboxAnchor class="w-56">
         <ComboboxInput placeholder="Search games" aria-label="Game" />
       </ComboboxAnchor>

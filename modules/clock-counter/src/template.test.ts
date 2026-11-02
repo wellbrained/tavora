@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { camelName, cleanName, compile, defaultText, display, keys, render, tokenize, type Member } from "./template";
+import { camelName, cleanName, compile, compileItem, defaultText, display, hasWords, keys, legacyText, render, segments, tokenize, wordsOf, type Member } from "./template";
 
 const members: Member[] = [
   { id: "d", name: "Deaths" },
@@ -201,5 +201,65 @@ describe("defaultText", () => {
 
   it("leaves braces out of names", () => {
     expect(cleanName(" a{b}c ")).toBe("abc");
+  });
+});
+
+describe("segments", () => {
+  it("splits a line into the user's words and the values put in", () => {
+    expect(segments("Plank {time} left", new Map([["time", "0:42"]]))).toEqual([
+      { text: "Plank ", value: false },
+      { text: "0:42", value: true },
+      { text: " left", value: false },
+    ]);
+  });
+
+  it("finds a placeholder without regard to case, and a counter of a group by its id", () => {
+    expect(segments("{Time}", new Map([["time", "1:00"]]))).toEqual([{ text: "1:00", value: true }]);
+    expect(segments("{@d} Deaths", new Map([["d", "3"]]))).toEqual([{ text: "3", value: true }, { text: " Deaths", value: false }]);
+  });
+
+  it("keeps a literal brace written twice, and gives up on a name nobody has", () => {
+    expect(segments("{{x}} {time}", new Map([["time", "1"]]))).toEqual([{ text: "{x} ", value: false }, { text: "1", value: true }]);
+    expect(segments("{count}", new Map([["time", "1"]]))).toBeNull();
+    expect(segments("", new Map())).toBeNull();
+  });
+
+  it("joins to the same text as render", () => {
+    const values = new Map([["d", "1"], ["s", "5"]]);
+    expect(render("{@d} Death – {@s} Situps", values)).toBe("1 Death – 5 Situps");
+  });
+});
+
+describe("wordsOf and hasWords", () => {
+  it("name the words of a line, without the values", () => {
+    expect(wordsOf(segments("  Plank {time} left", new Map([["time", "0:42"]]))!)).toBe("Plank  left");
+    expect(hasWords("Plank {time}")).toBe(true);
+    expect(hasWords("{time}")).toBe(false);
+    expect(hasWords(" {time} ")).toBe(false);
+    expect(hasWords("")).toBe(false);
+  });
+});
+
+describe("the text of a clock or counter", () => {
+  it("is what the old Show the name switch showed: the name before the value, or the value alone", () => {
+    expect(legacyText("Plank timer", true, "time")).toBe("Plank timer {time}");
+    expect(legacyText("Plank timer", false, "time")).toBe("{time}");
+    expect(legacyText("", true, "count")).toBe("{count}");
+    expect(legacyText("  ", true, "count")).toBe("{count}");
+  });
+
+  it("keeps braces in a name as the plain text they are", () => {
+    const stored = legacyText("Boss {1}", true, "time");
+    expect(stored).toBe("Boss {{1}} {time}");
+    expect(segments(stored, new Map([["time", "2:00"]]))).toEqual([{ text: "Boss {1} ", value: false }, { text: "2:00", value: true }]);
+  });
+
+  it("accepts its own placeholder only, in any case, and saves it in lower case", () => {
+    expect(compileItem("Plank {Time}", "time")).toEqual({ ok: true, stored: "Plank {time}" });
+    expect(compileItem("", "time")).toEqual({ ok: true, stored: "" });
+    expect(compileItem("{count}", "time")).toEqual({ ok: false, error: "unknown", name: "count" });
+    expect(compileItem("{time", "time")).toMatchObject({ ok: false, error: "unclosed" });
+    expect(compileItem("time}", "time")).toMatchObject({ ok: false, error: "stray" });
+    expect(compileItem("100% {{done}}", "time")).toEqual({ ok: true, stored: "100% {{done}}" });
   });
 });

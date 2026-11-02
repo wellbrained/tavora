@@ -4,8 +4,6 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { ZoomPane } from "@tavora/official-ui/components/ui/zoom-pane";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const STEPS = ["Iron Ore", "Iron Ingot", "Iron Rod", "Screw", "Reinforced Plate", "Modular Frame"];
 const pane = ref<InstanceType<typeof ZoomPane> | null>(null);
 const saved = ref<{ x: number; y: number; zoom: number }>();
@@ -27,9 +25,9 @@ function save() {
       </div>
     </ZoomPane>
     <div class="flex flex-wrap gap-2">
-      <Button size="xs" variant="secondary" :disabled="disabled" @click="save">Save this view</Button>
-      <Button size="xs" variant="secondary" :disabled="disabled" @click="pane?.showArea({ x: 0, y: 0, width: 200, height: 100 })">Show the top-left corner</Button>
-      <Button size="xs" variant="secondary" :disabled="disabled || !saved" @click="saved && pane?.setView(saved)">Back to saved view</Button>
+      <Button size="xs" variant="secondary" @click="save">Save this view</Button>
+      <Button size="xs" variant="secondary" @click="pane?.showArea({ x: 0, y: 0, width: 200, height: 100 })">Show the top-left corner</Button>
+      <Button size="xs" variant="secondary" :disabled="!saved" @click="saved && pane?.setView(saved)">Back to saved view</Button>
     </div>
   </div>
 </template>

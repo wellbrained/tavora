@@ -5,8 +5,6 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Skeleton, placeholderText } from "@tavora/official-ui/components/ui/skeleton";
 import { computed, onBeforeUnmount, ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const loading = ref(false);
 const card = computed(() =>
   loading.value
@@ -25,8 +23,8 @@ onBeforeUnmount(() => clearTimeout(timer));
 <template>
   <div class="flex flex-col gap-2">
     <div class="flex flex-wrap gap-2">
-      <Button size="xs" variant="secondary" :disabled="disabled" @click="load(1800)">Load slowly</Button>
-      <Button size="xs" variant="secondary" :disabled="disabled" @click="load(60)">Load fast (no placeholder)</Button>
+      <Button size="xs" variant="secondary" @click="load(1800)">Load slowly</Button>
+      <Button size="xs" variant="secondary" @click="load(60)">Load fast (no placeholder)</Button>
     </div>
     <Skeleton :loading="loading" class="flex max-w-sm flex-col gap-3 rounded-xl border p-4" data-testid="skeleton-card">
       <div class="flex min-w-0 gap-3">

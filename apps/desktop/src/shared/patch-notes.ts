@@ -28,6 +28,58 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.77",
+    date: "2026-11-02",
+    title: "Clock & Counter settings follow Tavora's layout",
+    notes: [
+      "Clock & Counter settings use Tavora's settings layout: what the panel shows, what the overlay shows and the stream link, each in its own place.",
+      "Write what the overlay says yourself, with its words and its number in their own colour and size, and see it change as you type.",
+      "Settings menus show Overlays under a divider, with In game and On stream and a dot for each.",
+      "Clock & Counter's In game settings have an Arrange in Overlays button that opens the Overlay page.",
+    ],
+    prs: [
+      { number: 635, title: "Clock & Counter: settings on the kit's ModuleSettings, overlay text and a settings menu with Overlays" },
+    ],
+    tags: ["clock-counter", "modules", "privacy", "publishing", "sdk", "todos", "ui-kit", "website"],
+  },
+  {
+    version: "0.23.76",
+    date: "2026-11-02",
+    title: "The UI Playground explains the basics",
+    notes: [
+      "The Foundations pages show colours, text, spacing, motion and how to write texts, each with live examples and their code.",
+      "Show disabled is a switch in the page header now, and Show code is coloured and numbered.",
+    ],
+    prs: [
+      { number: 632, title: "Module Kit stage 2: Foundations pages, Show disabled in the header" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
+    version: "0.23.75",
+    date: "2026-11-02",
+    title: "System Monitor settings",
+    notes: [
+      "System Monitor's settings are in one place: what it shows, which drives and the connection.",
+    ],
+    prs: [
+      { number: 638, title: "System Monitor: one settings dialog (0.1.15)" },
+    ],
+    tags: ["system-monitor"],
+  },
+  {
+    version: "0.23.74",
+    date: "2026-11-02",
+    title: "Tab drops",
+    notes: [
+      "Dropping a tab into another group's tab row keeps every tab in sight, shows a single dashed tab at the slot, and no second copy of the dragged tab.",
+    ],
+    prs: [
+      { number: 633, title: "Docking: tab drops keep every tab in sight, no second drag image" },
+    ],
+    tags: ["workspace"],
+  },
+  {
     version: "0.23.73",
     date: "2026-11-02",
     title: "Undo instead of \"Are you sure?\"",

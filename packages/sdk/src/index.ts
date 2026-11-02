@@ -175,7 +175,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.8";
+export const SDK_VERSION = "0.3.9";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -654,6 +654,12 @@ export interface TavoraSDK {
      * overlays are on. Tavora 0.21.3 and newer.
      */
     preview(key: string): Promise<void>;
+    /**
+     * Shows Tavora's Overlay page, where the user adds this module's overlays to their game and arranges them (a settings
+     * page's "Arrange in Overlays" link); an open dialog of this panel closes. Only right after a click or key press in the
+     * panel. Needs Tavora 0.23.77 or newer: check `sdk.supports("overlay.openPage")`.
+     */
+    openPage(): Promise<void>;
   };
   /**
    * Hotkeys for the manifest's `actions`. The user picks the keys in a Tavora dialog, for this workspace; the module
@@ -1142,6 +1148,9 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       onOverGameChange: (fn) => on("overlay.overGameChanged", ({ keys }) => fn(keys)),
       preview: async (key) => {
         await call("overlay.preview", { key });
+      },
+      openPage: async () => {
+        await call("overlay.openPage", undefined);
       },
       resetLink: async (key) => {
         await call("overlay.resetLink", { key });

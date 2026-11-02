@@ -2,8 +2,6 @@
 import { SegmentedControl } from "@tavora/official-ui";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const period = ref<"day" | "week" | "month">("week");
 </script>
 
@@ -11,7 +9,6 @@ const period = ref<"day" | "week" | "month">("week");
   <SegmentedControl
     v-model="period"
     label="Period"
-    :disabled="disabled"
     :options="[
       { value: 'day', label: 'Day' },
       { value: 'week', label: 'Week' },

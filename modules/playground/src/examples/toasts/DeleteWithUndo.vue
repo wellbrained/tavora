@@ -6,8 +6,6 @@ import { ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { undoable } from "@tavora/official-ui/components/ui/toast";
 
-defineProps<{ disabled?: boolean }>();
-
 const ALL = ["Iron", "Copper", "Coal"];
 const items = ref([...ALL]);
 
@@ -28,7 +26,7 @@ function remove(name: string) {
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button v-for="name in items" :key="name" variant="secondary" :disabled="disabled" @click="remove(name)"><Trash2 />{{ name }}</Button>
-    <Button v-if="!items.length" variant="ghost" :disabled="disabled" @click="items = [...ALL]">Bring them back</Button>
+    <Button v-for="name in items" :key="name" variant="secondary" @click="remove(name)"><Trash2 />{{ name }}</Button>
+    <Button v-if="!items.length" variant="ghost" @click="items = [...ALL]">Bring them back</Button>
   </div>
 </template>
