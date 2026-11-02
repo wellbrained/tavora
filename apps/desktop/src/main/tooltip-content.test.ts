@@ -8,5 +8,11 @@ describe("tooltip boundary", () => {
             expect(() => checkTooltip({ ...base, content })).toThrow();
     });
     it("rejects non-finite coordinates, unknown flags and oversized text", () => { expect(() => checkTooltipAnchor({ id: "x", at: { x: NaN, y: 0 } })).toThrow(); expect(() => checkTooltip({ ...base, pinned: "yes" })).toThrow(); expect(() => checkTooltip({ ...base, content: { title: "x".repeat(201) } })).toThrow(); });
+    it("takes a look, neutral or poe, and leaves it out when none is asked for", () => {
+        for (const look of ["neutral", "poe"] as const)
+            expect(checkTooltip({ ...base, content: { ...base.content, look } }).content.look).toBe(look);
+        expect("look" in checkTooltip(base).content).toBe(false);
+    });
+    it("rejects any other look", () => { for (const look of ["gold", "", "POE", 1, null]) expect(() => checkTooltip({ ...base, content: { ...base.content, look } })).toThrow(); });
     it("never interprets text as HTML", () => { expect(checkTooltip({ ...base, content: { title: "<b>literal</b>" } }).content.title).toBe("<b>literal</b>"); });
 });

@@ -391,9 +391,10 @@ Tavora keeps three lists for modules from other people: publisher keys that were
 ## Shared item tooltips
 
 `ui.tooltip` renders checked, bounded plain content above neighbouring panels in a
-separate host-owned surface. It accepts text, semantic item colours, badges,
+separate host-owned surface. It accepts text, semantic item colours (in the `poe` look), badges,
 requirements and modifier rows, plus a raster asset inside the calling module's
-bundle. No HTML, module styles, links, scripts, remote images or arbitrary file
+bundle. The look is the host's own: neutral in Tavora's theme colours, or the fixed `poe` look a module can pick
+by name, never colours of its own. No HTML, module styles, links, scripts, remote images or arbitrary file
 paths are accepted. Image reads stay inside that bundle and are limited to 512 KB.
 The surface has its own sandboxed renderer and session, no administrative host
 bridge, and no permissions. Its footer identifies the source module.
