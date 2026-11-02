@@ -221,7 +221,7 @@ function onSearchKey(event: KeyboardEvent) {
       :show-close-button="false"
       :aria-describedby="undefined"
     >
-      <div class="thin-scroll settings-menu bg-background flex w-56 flex-none flex-col gap-3 overflow-y-auto border-r px-4 pb-4 lg:w-64">
+      <div class="thin-scroll settings-menu bg-background flex w-60 flex-none flex-col gap-3 overflow-y-auto border-r px-4 pb-4 lg:w-72">
         <div class="relative flex h-16 flex-none items-center">
           <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
           <Input
@@ -248,13 +248,13 @@ function onSearchKey(event: KeyboardEvent) {
           heading-class="pt-1"
           @select="(id: string) => show(id as SettingsSection)"
         />
-        <!-- Updates & About, with the version: rarely needed, so it sits at the foot. Inset by a plate's border and padding
-             (1px + p-1), so its icon, text and version line up with the rows in the plates above. -->
+        <!-- Updates & About, with the version: rarely needed, so it sits at the foot. As wide as a plate, border included;
+             px-4 + its 1px border = a plate row (1px border + p-1 + px-3), so icon, text and version line up with the plates. -->
         <button
           type="button"
           :class="
             cn(
-              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mx-[calc(0.25rem+1px)] mt-auto flex h-9 flex-none items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
+              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mt-auto flex h-9 flex-none items-center gap-3 rounded-xl border border-transparent px-4 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
               !query && entry === 'about' && 'bg-primary/10 text-foreground',
             )
           "
