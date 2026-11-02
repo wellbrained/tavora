@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.20",
+    "date": "2026-11-02",
+    "notes": [
+      "Dialogs you open with the keyboard appear instantly.",
+      "Toasts wait while the panel is hidden, and slide in and out from their edge."
+    ]
+  },
+  {
     "version": "0.1.19",
     "date": "2026-11-02",
     "notes": [
