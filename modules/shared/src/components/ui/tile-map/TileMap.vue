@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// A map made of picture tiles with pins on it, on top of ZoomPane: drag pans, a plain wheel or a pinch zooms, the
-// corner buttons zoom and fit. The map always fills the pane: it never drifts off or shrinks past its whole size; what
+// A map made of picture tiles with pins on it, on top of ZoomPane: drag pans, a plain wheel or a pinch zooms, a
+// double-click zooms in, and the group in the corner zooms, shows the whole map and holds your own buttons (`extras`). The map always fills the pane: it never drifts off or shrinks past its whole size; what
 // is left beside it when fitted shows the background (give the map's own sea colour with a bg-* class). Only the tiles in view load, at the level that is sharp for the zoom; the least detailed
 // level stays underneath, so nothing goes blank while the sharper tiles come in, and a missing tile (sea) shows it.
 // Pins keep their size while zooming. Pins close together merge into a group with a count; a click on a group zooms
@@ -15,7 +15,7 @@ import { computed, ref, shallowRef, type HTMLAttributes } from "vue"
 import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
 import { ZoomPane } from "../zoom-pane"
-import type { Size, ZoomView } from "../zoom-pane/view"
+import type { Size, ViewOptions, ZoomView } from "../zoom-pane/view"
 import { groupFace, groupPins, groupsInView, type MapPin, type MapTone, type PinGroup, pinsArea, tileLevel, type TileSource, visibleTiles } from "./geometry"
 
 const props = withDefaults(defineProps<{
@@ -30,10 +30,16 @@ const props = withDefaults(defineProps<{
   minZoom?: number
   /** 1 shows the most detailed tiles at their real size. */
   maxZoom?: number
+  /** The zoom that reads as 100 % (default 1, the most detailed tiles at their real size). */
+  hundred?: number
+  /** Remembers the view in the module's storage under this key and opens on it; nothing saved: the whole map. */
+  persistKey?: string
+  /** The hint on the Whole map button, if the map is not a map ("Show the whole island"). */
+  wholeLabel?: string
   /** How close pins merge, in screen pixels. */
   cell?: number
   class?: HTMLAttributes["class"]
-}>(), { pins: () => [], selected: null, highlight: null, minZoom: 0.02, maxZoom: 2, cell: 48 })
+}>(), { pins: () => [], selected: null, highlight: null, minZoom: 0.02, maxZoom: 2, hundred: 1, cell: 48 })
 
 const emit = defineEmits<{ select: [pin: MapPin] }>()
 defineSlots<{
@@ -41,6 +47,8 @@ defineSlots<{
   pin?: (props: { pin: MapPin }) => unknown
   /** Over the tiles and under the pins, in map pixels: fill the map's size (`source.size`) to cover it. */
   layer?: () => unknown
+  /** Your own buttons in the control group, after Whole map (kit ghost icon buttons, `size="icon-sm"`). */
+  extras?: () => unknown
 }>()
 
 const pane = ref<InstanceType<typeof ZoomPane> | null>(null)
@@ -112,11 +120,11 @@ function showPins(ids: readonly string[]) {
  * map has been shown and measured, so a view saved too early never replaces the first fit.
  */
 const camera = computed(() => (paneSize.value.width > 0 && paneSize.value.height > 0 && pane.value ? pane.value.center : null))
-function setCamera(next: { x: number, y: number, zoom: number }) {
-  pane.value?.setCenter(next, next.zoom)
+function setCamera(next: { x: number, y: number, zoom: number }, options: ViewOptions = {}) {
+  pane.value?.setCenter(next, next.zoom, options)
 }
 
-defineExpose({ showPins, camera, setCamera, fit: () => pane.value?.fit(), zoomIn: () => pane.value?.zoomIn(), zoomOut: () => pane.value?.zoomOut() })
+defineExpose({ showPins, camera, setCamera, fit: (options?: ViewOptions) => pane.value?.fit(options), zoomIn: () => pane.value?.zoomIn(), zoomOut: () => pane.value?.zoomOut() })
 </script>
 
 <template>
@@ -127,6 +135,9 @@ defineExpose({ showPins, camera, setCamera, fit: () => pane.value?.fit(), zoomIn
     bounds="content"
     :min-zoom="minZoom"
     :max-zoom="maxZoom"
+    :hundred="hundred"
+    :persist-key="persistKey"
+    :whole-label="wholeLabel"
     :label="label"
     :class="cn('bg-muted', props.class)"
     @view-change="onViewChange"
@@ -147,6 +158,9 @@ defineExpose({ showPins, camera, setCamera, fit: () => pane.value?.fit(), zoomIn
         <slot name="layer" />
       </div>
     </div>
+    <template v-if="$slots.extras" #extras>
+      <slot name="extras" />
+    </template>
     <template #overlay>
       <button
         v-for="group in shown"

@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { Focus } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ZoomPane } from "@tavora/official-ui/components/ui/zoom-pane";
 import { ref } from "vue";
 import DemoSection from "../DemoSection.vue";
 import Specimen from "../Specimen.vue";
 import TileMapDemo from "./TileMapDemo.vue";
+import ViewOnlyDemo from "./ViewOnlyDemo.vue";
 import { type SectionId, sectionTitle as title } from "../sections";
 
 defineProps<{ visible: Set<SectionId>; off: boolean }>();
@@ -23,6 +25,8 @@ function saveView() {
   const view = remembering.value?.view;
   if (view) savedView.value = { ...view };
 }
+/** The specimen with its own 100 %: its content is drawn at twice the size, so 100 % is the zoom 0.5. */
+const doubled = ref<InstanceType<typeof ZoomPane> | null>(null);
 /** A card (w-44) and the gap after it (gap-10). */
 const STEP_WIDTH = 176 + 40;
 function addInFront() {
@@ -33,7 +37,7 @@ function addInFront() {
 </script>
 
 <template>
-<DemoSection v-if="visible.has('zoom')" id="zoom" :title="title('zoom')" description="Drag to move, Ctrl + scroll or pinch to zoom. A plain scroll keeps scrolling the page, unless the pane fits only the width.">
+<DemoSection v-if="visible.has('zoom')" id="zoom" :title="title('zoom')" description="Drag to move, Ctrl + scroll or pinch to zoom, double-click to zoom in toward a point; in the corner: zoom out, the % (a click goes back to 100 %), zoom in, show the whole thing, and your own buttons. A plain scroll keeps scrolling the page, unless the pane fits only the width or wheel is zoom. With focus: + and - zoom, 0 shows the whole thing, arrow keys move.">
         <Specimen label="Wide content, starting at its right end when it doesn't fit at 60 %" column>
           <ZoomPane class="h-64" align="end" :fit-floor="0.6" label="Production line">
             <div class="flex items-center gap-10 p-4">
@@ -74,6 +78,37 @@ function addInFront() {
             <Button size="xs" variant="secondary" :disabled="off" @click="remembering?.showArea({ x: 0, y: 0, width: 200, height: 100 })">Show the top-left corner</Button>
             <Button size="xs" variant="secondary" :disabled="off || !savedView" @click="savedView && remembering?.setView(savedView)">Back to saved view</Button>
           </div>
+        </Specimen>
+        <Specimen label="hundred and extras: this content is drawn at twice the size, so its 100 % is the zoom 0.5; the buttons are one of your own after Whole map (wheel zooms, whole-label changes the hint)" column>
+          <ZoomPane ref="doubled" class="h-64" :hundred="0.5" :min-zoom="0.1" :max-zoom="2" wheel="zoom" whole-label="Show the whole line" label="Large line">
+            <div class="flex items-center gap-20 p-8">
+              <div v-for="step in STEPS" :key="step" class="bg-card flex w-88 flex-none flex-col gap-4 rounded-lg border p-6 text-xl">
+                <span class="font-medium">{{ step }}</span>
+                <span class="text-muted-foreground text-base">60 / min</span>
+              </div>
+            </div>
+            <template #extras>
+              <Button variant="ghost" size="icon-sm" title="Show the first step" aria-label="Show the first step" :disabled="off" @click="doubled?.showArea({ x: 0, y: 0, width: 480, height: 240 })">
+                <Focus />
+              </Button>
+            </template>
+          </ZoomPane>
+        </Specimen>
+        <Specimen label="persist-key: the pane remembers its view in the module's storage; move it, reload the Playground and it opens where you left it" column>
+          <ZoomPane class="h-64" persist-key="playground-line" label="Remembering line">
+            <div class="flex items-center gap-10 p-4">
+              <div v-for="step in STEPS" :key="step" class="bg-card flex w-44 flex-none flex-col gap-2 rounded-lg border p-3">
+                <span class="font-medium">{{ step }}</span>
+                <span class="text-muted-foreground text-xs">60 / min</span>
+              </div>
+            </div>
+          </ZoomPane>
+        </Specimen>
+        <Specimen label="view-only: a canvas draws itself; the pane does the inputs, controls, glide and memory and sends the view (Whole map and the first-row button glide)" column>
+          <ViewOnlyDemo :off="off" persist-key="playground-canvas" />
+        </Specimen>
+        <Specimen label="ZoomTip: the kit tooltip beside a box the game passes, for a canvas node with no element to hover (it opens above the node's box, never at the pointer)" column>
+          <ViewOnlyDemo :off="off" tips />
         </Specimen>
         <Specimen label="Tall content with fit=&quot;width&quot;: fills the width, starts at the top, a plain scroll moves it" column>
           <ZoomPane class="h-64" fit="width" label="Production tree">

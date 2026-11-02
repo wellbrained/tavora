@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The tile map specimen on a made-up world: its tiles are drawn here from the theme's colours (a real module serves
 // game tiles), with an island so the levels line up visibly, and a grid with each tile's level and place.
-import { Castle, Egg, Gem } from "@lucide/vue";
+import { Castle, Egg, Focus, Gem } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { type MapPin, TileMap, type TileSource } from "@tavora/official-ui/components/ui/tile-map";
 import { computed, ref } from "vue";
@@ -130,7 +130,12 @@ function toggleDone() {
 
 <template>
   <div class="flex flex-col gap-2">
-    <TileMap ref="map" class="h-96" :source="source" :pins="pins" :selected="selected" :highlight="highlightEggs ? eggs : null" label="Made-up island" @select="selected = $event.id">
+    <TileMap ref="map" class="h-96" :source="source" :pins="pins" :selected="selected" :highlight="highlightEggs ? eggs : null" persist-key="playground-island" whole-label="Show the whole island" label="Made-up island" @select="selected = $event.id">
+      <template #extras>
+        <Button variant="ghost" size="icon-sm" title="Show all eggs" aria-label="Show all eggs" :disabled="off" @click="map?.showPins(eggs)">
+          <Focus />
+        </Button>
+      </template>
       <template #pin="{ pin }">
         <component :is="ICONS[kindOf.get(pin.id) ?? 'tower']" class="text-foreground size-5" :stroke-width="1.5" aria-hidden="true" />
       </template>
@@ -138,7 +143,7 @@ function toggleDone() {
         <img :src="fog()" alt="" draggable="false" class="size-full max-w-none select-none">
       </template>
     </TileMap>
-    <p class="text-muted-foreground text-xs">{{ picked ? `Picked ${picked.label}.` : "Click a pin to pick it; a group with a number zooms in." }}</p>
+    <p class="text-muted-foreground text-xs">{{ picked ? `Picked ${picked.label}.` : "Click a pin to pick it; a group with a number zooms in. Double-click the map to zoom in; the group in the corner has a button of its own (extras) and the view is remembered (persist-key)." }}</p>
     <div class="flex flex-wrap gap-2">
       <Button size="xs" variant="secondary" :disabled="off || !selected || !kindOf.has(selected)" @click="toggleDone">Tick off the picked pin (done)</Button>
       <Button size="xs" variant="secondary" :disabled="off" @click="highlightEggs = !highlightEggs">{{ highlightEggs ? "Stop highlighting" : "Highlight the eggs (highlight)" }}</Button>

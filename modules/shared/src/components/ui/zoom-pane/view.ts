@@ -17,6 +17,35 @@ export interface ZoomLimits {
   max: number
 }
 
+/** How a call that sets the view gets there. */
+export interface ViewOptions {
+  /** Glide there over a moment (none with reduced motion) instead of jumping. */
+  glide?: boolean
+}
+
+/** One press of +, − or a double-click: the zoom changes by this factor. */
+export const ZOOM_STEP = 1.25
+
+/**
+ * What the zoom reads as, in percent. `hundred` is the internal zoom that counts as 100 % (a game's natural size
+ * for its map or tree); 1 shows the content at its real size.
+ */
+export function percentOf(zoom: number, hundred = 1): number {
+  return Math.round((zoom / hundred) * 100)
+}
+
+/**
+ * The next zoom a press of + (`direction` 1) or − (-1) lands on. Steps sit on a ladder that counts from `hundred`
+ * (…, 80 %, 100 %, 125 %, 156 %, …), so 100 % is always a stop; from a zoom between two rungs it goes to the next one.
+ */
+export function stepZoom(zoom: number, hundred: number, direction: 1 | -1): number {
+  const place = Math.log(zoom / hundred) / Math.log(ZOOM_STEP)
+  const rung = Math.round(place)
+  const onRung = Math.abs(place - rung) < 1e-3
+  const next = direction > 0 ? (onRung ? rung + 1 : Math.ceil(place)) : onRung ? rung - 1 : Math.floor(place)
+  return hundred * ZOOM_STEP ** next
+}
+
 /** Room left around the content when it is fitted. */
 export const FIT_PADDING = 16
 

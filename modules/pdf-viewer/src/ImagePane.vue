@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // One open picture in the kit's zoom pane: fits at first, wheel (with Ctrl) zooms, drag pans, and a double-click
-// switches between fitting it and 100 %. The zoom is remembered per file.
+// switches between fitting it and 100 % (so the pane's own double-click zoom is off). The zoom is remembered per file.
 import { ZoomPane } from "@tavora/official-ui/components/ui/zoom-pane";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { nextTick, ref, watch } from "vue";
@@ -61,7 +61,7 @@ function toggle() {
 <template>
   <Notice v-if="failed" variant="error" class="m-3" data-testid="image-error">{{ t("image.failed") }}</Notice>
   <div v-else ref="box" class="h-full min-h-0 p-2" @dblclick="toggle">
-    <ZoomPane ref="pane" class="h-full" :label="name" :min-zoom="0.05" :max-zoom="8" :fit-floor="0.05" data-testid="image-pane">
+    <ZoomPane ref="pane" class="h-full" double-click="off" :label="name" :min-zoom="0.05" :max-zoom="8" :fit-floor="0.05" data-testid="image-pane">
       <img :src="url" :alt="name" class="block max-w-none select-none" draggable="false" data-testid="image-view" @load="loaded" @error="failed = true" />
     </ZoomPane>
   </div>
