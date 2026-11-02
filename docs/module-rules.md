@@ -83,7 +83,7 @@ themes; anything hard-coded breaks in one of them.
   accents, rings, lines and coloured text stay `primary`.
 - **Text sizes**: `text-xs` 12, `text-sm` 13, `text-base` 14, `text-lg` 16, `text-xl` 20 px. Nothing under 12 px, no
   sizes in between. Body text is 14, buttons and menus 13, hints 12. Weights 400, 500 and 600 only. Changing numbers
-  use `tabular-nums`. Sentence case, no all caps.
+  use `tabular-nums`. Sentence case, no all caps; in a short "A & B" name both words start uppercase ("Updates & About").
 - **Font**: the theme's (`font-sans`, `font-mono`, or `var(--font-sans)`); never write out `"Inter Variable"`.
 - **Spacing**: 4, 8, 12, 16, 24, 32 px (Tailwind 1, 2, 3, 4, 6, 8). 8 inside controls, 16 inside a panel area, 24
   between sections.

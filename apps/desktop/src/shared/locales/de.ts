@@ -1768,7 +1768,7 @@ export const de: Record<keyof typeof en, string> = {
   "settings.group.app": "Tavora",
   "settings.group.modules": "Module",
   "settings.section.online": "Online",
-  "settings.section.about": "Über & Updates",
+  "settings.section.about": "Updates & Info",
   "settings.heading.icons": "Spielsymbole",
   "settings.heading.help": "Hilfe",
   "settings.heading.yourData": "Deine Daten",

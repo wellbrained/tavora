@@ -273,7 +273,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
             </span>
           </button>
         </div>
-        <!-- Module settings, as Settings' About & updates: rarely needed, so it sits at the foot. -->
+        <!-- Module settings, as Settings' Updates & About: rarely needed, so it sits at the foot. -->
         <button
           type="button"
           class="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring flex h-9 flex-none items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 sm:mt-auto"
