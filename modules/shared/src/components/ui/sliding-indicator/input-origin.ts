@@ -1,41 +1,56 @@
-// What the user last used: the pointer or the keyboard. A highlight that follows a choice slides when the choice
-// was a click and jumps when it came from the keys (arrows, Enter, hotkeys): nothing a key press starts is animated.
+// Where a change came from. A highlight that follows a choice slides only when the user just pointed at something
+// (a pointerdown, or a mouse click, within the last half second). A key press, a setting that arrives later from
+// disk or another window, or anything else with no pointer in front of it makes the highlight jump: nothing a key
+// press starts is animated, and a change the user didn't just make has nothing to follow.
 //
-// One pair of listeners on the document serves every control; they are added with the first user and removed with
-// the last. Without anything to go on, it is "pointer".
+// One set of listeners on the document serves every control; they are added with the first user and removed with the
+// last, which also forgets what was seen.
 
-export type InputOrigin = "pointer" | "key";
+export type InputOrigin = "pointer" | "key" | "other";
+
+/** How long after a pointer press a change still counts as the press's doing. */
+export const POINTER_WINDOW_MS = 500;
 
 /** The part of `document` this needs; a test passes its own. */
 export interface OriginTarget {
-  addEventListener(type: string, listener: () => void, options?: boolean | { capture?: boolean }): void;
-  removeEventListener(type: string, listener: () => void, options?: boolean | { capture?: boolean }): void;
+  addEventListener(type: string, listener: (event: never) => void, options?: boolean | { capture?: boolean }): void;
+  removeEventListener(type: string, listener: (event: never) => void, options?: boolean | { capture?: boolean }): void;
 }
 
-let origin: InputOrigin = "pointer";
+let clock: () => number = () => (typeof performance === "undefined" ? Date.now() : performance.now());
+let lastPointer = Number.NEGATIVE_INFINITY;
+let lastKey = Number.NEGATIVE_INFINITY;
 let users = 0;
 let attached: OriginTarget | null = null;
 
 const onPointer = () => {
-  origin = "pointer";
+  lastPointer = clock();
 };
 const onKey = () => {
-  origin = "key";
+  lastKey = clock();
+};
+// The click that follows a press marks it again, so a long press still counts. A click made with the keyboard
+// (Enter or Space on a button) has detail 0 and doesn't.
+const onClick = (event: { detail?: number }) => {
+  if ((event.detail ?? 0) > 0) lastPointer = clock();
 };
 
-/** What the user touched last. */
+/** What the change happening now comes from. */
 export function inputOrigin(): InputOrigin {
-  return origin;
+  if (lastKey >= lastPointer && lastKey > Number.NEGATIVE_INFINITY) return "key";
+  return clock() - lastPointer <= POINTER_WINDOW_MS ? "pointer" : "other";
 }
 
 /** Starts following the input; call the returned function when done. Safe to call more than once. */
-export function trackInputOrigin(target: OriginTarget | undefined = typeof document === "undefined" ? undefined : document): () => void {
+export function trackInputOrigin(target: OriginTarget | undefined = typeof document === "undefined" ? undefined : (document as unknown as OriginTarget), now?: () => number): () => void {
   if (!target) return () => {};
   if (users === 0) {
     attached = target;
+    if (now) clock = now;
     // Capture, so a control that stops the event still counts.
     target.addEventListener("pointerdown", onPointer, true);
     target.addEventListener("keydown", onKey, true);
+    target.addEventListener("click", onClick, true);
   }
   users++;
   let released = false;
@@ -46,12 +61,15 @@ export function trackInputOrigin(target: OriginTarget | undefined = typeof docum
     if (users === 0 && attached) {
       attached.removeEventListener("pointerdown", onPointer, true);
       attached.removeEventListener("keydown", onKey, true);
+      attached.removeEventListener("click", onClick, true);
       attached = null;
+      resetInputOrigin();
     }
   };
 }
 
-/** For tests: forget everything. */
+/** Forgets everything seen so far (the last control going away does this too). */
 export function resetInputOrigin() {
-  origin = "pointer";
+  lastPointer = Number.NEGATIVE_INFINITY;
+  lastKey = Number.NEGATIVE_INFINITY;
 }

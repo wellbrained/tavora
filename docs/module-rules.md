@@ -98,7 +98,9 @@ themes; anything hard-coded breaks in one of them.
   `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed button dips to
   0.97 on a fine pointer. Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
   anything shown all day. Reduced motion keeps a short fade and drops the movement. A highlight that follows the picked
-  item of a row (segmented control, tabs) is one element that slides: use `useSlidingIndicator`, never a border per item.
+  item of a row (segmented control, tabs) is one element that slides: use `useSlidingIndicator`, never a border per item. It
+  measures the active item wherever it sits (tabs may be wrapped, e.g. in a tooltip's span); with none to measure, the
+  active tab draws its own line. It slides only right after a click, never for keys or a value that arrives on its own.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
 

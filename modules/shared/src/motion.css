@@ -52,8 +52,10 @@
    useSlidingIndicator (components/ui/sliding-indicator) measures the active item into --indicator-x/-y/-w/-h on the
    container, which must be position: relative, and sets data-indicator there:
      off    no active item (nothing picked, disabled, hidden): the highlight is not shown
-     still  placed without moving: first paint, a resize, a font loading, a change made with the keys
-     slide  moving to the newly picked item
+     still  placed without moving: first paint, a resize, a font loading, a new list of options
+     slide  moving to the newly picked item (a click)
+     jump   the picked item changed without moving the highlight (the keys, or a change nobody just clicked); the
+            labels should not fade either: a component turns its label transition off with group-data-[indicator=jump]
    A component gives the element its colours and shape; for a different shape (an underline) it overrides top and
    height with utility classes. Moves translate and size only. */
 @layer components {
@@ -77,6 +79,7 @@
     translate: 0 var(--indicator-y, 0px);
   }
   [data-indicator="still"] > .tavora-indicator,
+  [data-indicator="jump"] > .tavora-indicator,
   [data-indicator="slide"] > .tavora-indicator {
     opacity: 1;
   }

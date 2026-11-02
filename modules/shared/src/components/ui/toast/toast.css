@@ -103,7 +103,7 @@
 }
 @keyframes tavora-toast-spin { to { transform: rotate(1turn); } }
 
-.tavora-toast-icon-enter-active { animation: tavora-toast-pop var(--duration-move, 300ms) var(--tavora-toast-ease) 0.12s backwards; }
+.tavora-toast-icon-enter-active { animation: tavora-toast-pop var(--duration-panel, 250ms) var(--tavora-toast-ease) 50ms backwards; }
 .tavora-toast-icon-leave-active { transition: opacity 0.12s var(--tavora-toast-ease), transform 0.12s var(--tavora-toast-ease); }
 .tavora-toast-icon-leave-to { opacity: 0; transform: scale(0.8); }
 @keyframes tavora-toast-pop {
@@ -112,10 +112,11 @@
   75% { transform: scale(0.985) rotate(-0.6deg); }
   100% { transform: scale(1) rotate(0); }
 }
-/* The tick and the cross draw themselves. */
+/* The tick and the cross draw themselves. Delay plus time stays within --duration-move (300 ms): the pop 50 + 250, the
+   tick and the first stroke 100 + 140, the second stroke 150 + 140. */
 .tavora-toast-icon[data-icon="success"] path,
-.tavora-toast-icon[data-icon="error"] path { stroke-dasharray: 1; animation: tavora-toast-draw var(--duration-move, 300ms) var(--tavora-toast-ease) 0.16s backwards; }
-.tavora-toast-icon[data-icon="error"] path + path { animation-delay: 0.26s; }
+.tavora-toast-icon[data-icon="error"] path { stroke-dasharray: 1; animation: tavora-toast-draw var(--duration-press, 140ms) var(--tavora-toast-ease) 100ms backwards; }
+.tavora-toast-icon[data-icon="error"] path + path { animation-delay: 150ms; }
 @keyframes tavora-toast-draw { from { stroke-dashoffset: 1; opacity: 0; } }
 
 /* A new title slides up into place, the old one out above it. */

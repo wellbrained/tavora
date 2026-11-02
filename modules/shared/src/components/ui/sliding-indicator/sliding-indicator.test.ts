@@ -1,22 +1,47 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { inputOrigin, resetInputOrigin, trackInputOrigin, type OriginTarget } from "./input-origin";
+import { effectScope, nextTick, ref } from "vue";
+import { inputOrigin, POINTER_WINDOW_MS, resetInputOrigin, trackInputOrigin, type OriginTarget } from "./input-origin";
+import { useSlidingIndicator } from "./use-sliding-indicator";
 import { createSlidingIndicator, type IndicatorEnv } from "./sliding-indicator";
 
 // Tests run in Node, so the container, its items and the browser's observers are stand-ins.
 
-interface FakeItem {
-  offsetLeft: number;
-  offsetTop: number;
-  offsetWidth: number;
-  offsetHeight: number;
+/** An item with a place in the viewport, as getBoundingClientRect reports it (fractions and all). */
+class FakeItem {
+  classList = { contains: (name: string) => this.className === name };
+  constructor(
+    public left: number,
+    public top: number,
+    public width: number,
+    public height: number,
+    public className = "",
+  ) {}
+  getBoundingClientRect() {
+    return { left: this.left, top: this.top, width: this.width, height: this.height };
+  }
 }
 
 class FakeContainer {
+  // The container sits at (100, 50) in the viewport, with a 1px border and no scrolling.
+  left = 100;
+  top = 50;
+  clientLeft = 1;
+  clientTop = 1;
+  scrollLeft = 0;
+  scrollTop = 0;
+  getBoundingClientRect() {
+    return { left: this.left, top: this.top, width: 300, height: 32 };
+  }
   attrs: Record<string, string> = {};
   vars: Record<string, string> = {};
   items: FakeItem[] = [];
   active: FakeItem | null = null;
   selectors: string[] = [];
+  /** Move the whole container, as scrolling the page or dragging the window does. */
+  moveTo(left: number, top: number) {
+    this.left = left;
+    this.top = top;
+  }
   style = { setProperty: (name: string, value: string) => void (this.vars[name] = value) };
   get children() {
     return this.items;
@@ -30,12 +55,12 @@ class FakeContainer {
   }
 }
 
-/** A row of items laid out left to right with a gap of 2. */
+/** A row of items laid out left to right with a gap of 2, inside the container's border and 2px padding. */
 function row(widths: number[]) {
-  let left = 2;
-  return widths.map((offsetWidth) => {
-    const item = { offsetLeft: left, offsetTop: 2, offsetWidth, offsetHeight: 28 };
-    left += offsetWidth + 2;
+  let left = 100 + 1 + 2;
+  return widths.map((width) => {
+    const item = new FakeItem(left, 50 + 1 + 2, width, 28);
+    left += width + 2;
     return item;
   });
 }
@@ -91,6 +116,24 @@ describe("sliding indicator", () => {
     expect(container.attrs).toMatchObject({ "data-indicator": "still", "data-indicator-axis": "x" });
   });
 
+  it("measures fractions, relative to the container's padding box (not whole pixels, not the viewport)", () => {
+    const t = setup();
+    // Inter is not whole pixels wide, and a tab sits at half a pixel (items-center with a -1px margin).
+    Object.assign(t.container.items[0]!, { left: 103.25, top: 53.5, width: 41.4140625, height: 31 });
+    t.resize();
+    expect(t.container.vars).toEqual({ "--indicator-x": "2.25px", "--indicator-y": "2.5px", "--indicator-w": "41.41px", "--indicator-h": "31px" });
+    // The page scrolls: the container and its items move together, so the place inside it stays.
+    t.container.items.forEach((item) => (item.left += 7));
+    t.container.moveTo(107, 50);
+    t.resize();
+    expect(t.container.vars["--indicator-x"]).toBe("2.25px");
+    // A container that scrolls inside (tabs with overflow): its items move left, the highlight scrolls along.
+    t.container.scrollLeft = 30;
+    t.container.items.forEach((item) => (item.left -= 30));
+    t.resize();
+    expect(t.container.vars["--indicator-x"]).toBe("2.25px");
+  });
+
   it("slides when the active item changes", () => {
     const t = setup();
     t.container.active = t.container.items[2]!;
@@ -100,12 +143,12 @@ describe("sliding indicator", () => {
     expect(t.container.vars["--indicator-w"]).toBe("50px");
   });
 
-  it("jumps when smooth says no (a change made with the keys)", () => {
+  it("jumps when smooth says no (a change made with the keys), and says so for the labels", () => {
     let smooth = false;
     const t = setup([40, 60, 50], () => smooth);
     t.container.active = t.container.items[1]!;
     t.changed();
-    expect(t.container.attrs["data-indicator"]).toBe("still");
+    expect(t.container.attrs["data-indicator"]).toBe("jump");
     expect(t.container.vars["--indicator-x"]).toBe("44px");
     smooth = true;
     t.container.active = t.container.items[2]!;
@@ -119,8 +162,8 @@ describe("sliding indicator", () => {
     t.changed();
     // The real font is wider: every item grows.
     t.container.items.forEach((item, index) => {
-      item.offsetWidth += 10;
-      item.offsetLeft = 2 + index * 72;
+      item.width += 10;
+      item.left = 103 + index * 72;
     });
     t.fontsLoaded();
     await Promise.resolve();
@@ -131,7 +174,7 @@ describe("sliding indicator", () => {
 
   it("is placed right again after fonts load later (loadingdone)", () => {
     const t = setup();
-    t.container.items[0]!.offsetWidth = 55;
+    t.container.items[0]!.width = 55;
     [...t.listeners].forEach((listener) => listener());
     expect(t.container.vars["--indicator-w"]).toBe("55px");
   });
@@ -139,12 +182,12 @@ describe("sliding indicator", () => {
   it("is placed right again after a window resize, without sliding", () => {
     const t = setup();
     t.container.items.forEach((item) => {
-      item.offsetWidth *= 2;
+      item.width *= 2;
     });
-    t.container.items[1]!.offsetLeft = 100;
+    t.container.items[1]!.left = 200;
     t.container.active = t.container.items[1]!;
     t.resize();
-    expect(t.container.vars["--indicator-x"]).toBe("100px");
+    expect(t.container.vars["--indicator-x"]).toBe("99px");
     expect(t.container.vars["--indicator-w"]).toBe("120px");
     expect(t.container.attrs["data-indicator"]).toBe("still");
   });
@@ -153,12 +196,21 @@ describe("sliding indicator", () => {
     const t = setup();
     const item = t.container.items[0]!;
     // A new option in front pushes the active one along: same item, new place.
-    item.offsetLeft = 80;
-    t.container.items.unshift({ offsetLeft: 2, offsetTop: 2, offsetWidth: 74, offsetHeight: 28 });
+    item.left = 100 + 1 + 80;
+    t.container.items.unshift(new FakeItem(103, 53, 74, 28));
     t.changed();
     expect(t.container.vars["--indicator-x"]).toBe("80px");
     expect(t.container.attrs["data-indicator"]).toBe("still");
     expect(t.watching.size).toBe(1 + 4);
+  });
+
+  it("does not watch the highlight itself (it changes size every frame of a slide)", () => {
+    const t = setup();
+    const pill = new FakeItem(0, 0, 10, 10, "tavora-indicator");
+    t.container.items.unshift(pill);
+    t.changed();
+    expect(t.watching.has(pill)).toBe(false);
+    expect(t.watching.size).toBe(1 + 3);
   });
 
   it("hides while nothing is active (mixed, disabled) and comes back in place, not sliding in", () => {
@@ -175,10 +227,10 @@ describe("sliding indicator", () => {
   it("hides while the container is not shown (0 x 0) and is placed once it shows", () => {
     const t = setup();
     const item = t.container.items[0]!;
-    Object.assign(item, { offsetLeft: 0, offsetTop: 0, offsetWidth: 0, offsetHeight: 0 });
+    Object.assign(item, { left: 0, top: 0, width: 0, height: 0 });
     t.resize();
     expect(t.container.attrs["data-indicator"]).toBe("off");
-    Object.assign(item, { offsetLeft: 2, offsetTop: 2, offsetWidth: 40, offsetHeight: 28 });
+    Object.assign(item, { left: 103, top: 53, width: 40, height: 28 });
     t.resize();
     expect(t.container.attrs["data-indicator"]).toBe("still");
   });
@@ -204,7 +256,7 @@ describe("sliding indicator", () => {
 
   it("works along the y axis too", () => {
     const container = new FakeContainer();
-    container.items = [{ offsetLeft: 0, offsetTop: 0, offsetWidth: 80, offsetHeight: 24 }];
+    container.items = [new FakeItem(101, 51, 80, 24)];
     container.active = container.items[0]!;
     createSlidingIndicator(container, { selector: ".active", axis: "y", env: {} });
     expect(container.attrs["data-indicator-axis"]).toBe("y");
@@ -212,45 +264,138 @@ describe("sliding indicator", () => {
   });
 });
 
+describe("useSlidingIndicator", () => {
+  // No document here, so the composable follows no input and its default is "not just clicked": changes jump.
+  function mount(enabled = ref(true)) {
+    const container = new FakeContainer();
+    container.items = row([40, 60, 50]);
+    container.active = container.items[0]!;
+    const el = ref<FakeContainer | null>(null);
+    const scope = effectScope();
+    const result = scope.run(() => useSlidingIndicator(el, { selector: ".active", enabled }))!;
+    return { container, el, enabled, scope, result };
+  }
+
+  it("waits for its element, then places the highlight", async () => {
+    const t = mount();
+    expect(t.container.attrs["data-indicator"]).toBeUndefined();
+    t.el.value = t.container;
+    await nextTick();
+    expect(t.container.attrs["data-indicator"]).toBe("still");
+    expect(t.container.vars["--indicator-w"]).toBe("40px");
+    t.scope.stop();
+  });
+
+  it("is switched off and on by `enabled`", async () => {
+    const t = mount();
+    t.el.value = t.container;
+    await nextTick();
+    t.enabled.value = false;
+    await nextTick();
+    // Off: the hook measures no more.
+    t.container.active = t.container.items[2]!;
+    t.result.update();
+    expect(t.container.vars["--indicator-w"]).toBe("40px");
+    t.enabled.value = true;
+    await nextTick();
+    expect(t.container.vars["--indicator-w"]).toBe("50px");
+    t.scope.stop();
+  });
+
+  it("lets go when its scope ends", async () => {
+    const t = mount();
+    t.el.value = t.container;
+    await nextTick();
+    t.scope.stop();
+    t.container.active = t.container.items[1]!;
+    t.result.update();
+    expect(t.container.vars["--indicator-w"]).toBe("40px");
+    // A new element after disposal gets no highlight.
+    const other = new FakeContainer();
+    other.items = row([30]);
+    other.active = other.items[0]!;
+    t.el.value = other;
+    await nextTick();
+    expect(other.attrs["data-indicator"]).toBeUndefined();
+  });
+});
+
 describe("input origin", () => {
   class FakeDocument implements OriginTarget {
-    listeners = new Map<string, Set<() => void>>();
-    addEventListener(type: string, listener: () => void) {
+    listeners = new Map<string, Set<(event: never) => void>>();
+    addEventListener(type: string, listener: (event: never) => void) {
       this.listeners.set(type, (this.listeners.get(type) ?? new Set()).add(listener));
     }
-    removeEventListener(type: string, listener: () => void) {
+    removeEventListener(type: string, listener: (event: never) => void) {
       this.listeners.get(type)?.delete(listener);
     }
-    fire(type: string) {
-      this.listeners.get(type)?.forEach((listener) => listener());
+    fire(type: string, event: object = {}) {
+      this.listeners.get(type)?.forEach((listener) => (listener as (event: object) => void)(event));
     }
     count() {
       return [...this.listeners.values()].reduce((sum, set) => sum + set.size, 0);
     }
   }
 
-  afterEach(resetInputOrigin);
+  let time = 1000;
+  const now = () => time;
+  afterEach(() => {
+    resetInputOrigin();
+    time = 1000;
+  });
 
-  it("follows pointerdown and keydown, and starts as pointer", () => {
+  it("is a pointer change only within half a second of a press", () => {
     const doc = new FakeDocument();
-    const stop = trackInputOrigin(doc);
+    const stop = trackInputOrigin(doc, now);
+    // Nothing seen yet: a value that arrives on its own (settings loading) is not a click.
+    expect(inputOrigin()).toBe("other");
+    doc.fire("pointerdown");
     expect(inputOrigin()).toBe("pointer");
+    time += POINTER_WINDOW_MS;
+    expect(inputOrigin()).toBe("pointer");
+    time += 1;
+    expect(inputOrigin()).toBe("other");
+    stop();
+  });
+
+  it("a mouse click marks the press again; a click made with the keyboard does not", () => {
+    const doc = new FakeDocument();
+    const stop = trackInputOrigin(doc, now);
+    doc.fire("pointerdown");
+    time += 800;
+    doc.fire("click", { detail: 1 });
+    expect(inputOrigin()).toBe("pointer");
+    time += 800;
+    doc.fire("click", { detail: 0 });
+    expect(inputOrigin()).toBe("other");
+    stop();
+  });
+
+  it("a key press after the press makes the change a key's", () => {
+    const doc = new FakeDocument();
+    const stop = trackInputOrigin(doc, now);
+    doc.fire("pointerdown");
+    time += 10;
     doc.fire("keydown");
     expect(inputOrigin()).toBe("key");
+    time += 10;
     doc.fire("pointerdown");
     expect(inputOrigin()).toBe("pointer");
     stop();
   });
 
-  it("shares one pair of listeners and removes them with the last user", () => {
+  it("shares one set of listeners, removes them with the last user, and forgets what it saw", () => {
     const doc = new FakeDocument();
-    const a = trackInputOrigin(doc);
-    const b = trackInputOrigin(doc);
-    expect(doc.count()).toBe(2);
+    const a = trackInputOrigin(doc, now);
+    const b = trackInputOrigin(doc, now);
+    expect(doc.count()).toBe(3);
+    doc.fire("pointerdown");
     a();
     a();
-    expect(doc.count()).toBe(2);
+    expect(doc.count()).toBe(3);
+    expect(inputOrigin()).toBe("pointer");
     b();
     expect(doc.count()).toBe(0);
+    expect(inputOrigin()).toBe("other");
   });
 });

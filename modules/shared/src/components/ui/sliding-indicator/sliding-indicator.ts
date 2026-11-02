@@ -1,12 +1,16 @@
 // One highlight that slides behind (or under) whichever item is active, instead of every item drawing its own.
 //
-// The controller measures the active item (offsetLeft/Width and offsetTop/Height, so it needs the container to be
-// the item's offsetParent: `position: relative`) and writes it to the container as CSS variables:
+// The controller measures the active item with getBoundingClientRect, relative to the container's padding box
+// (fractions included: Inter's widths are not whole pixels, and a whole-pixel offset would be a pixel off), and
+// writes it to the container as CSS variables:
 //   --indicator-x, --indicator-y, --indicator-w, --indicator-h   (px)
-// plus `data-indicator-axis` ("x" or "y") and `data-indicator`:
+// The container must be `position: relative`, so the highlight's own `left`/`top` start at the same corner. The item
+// may sit anywhere inside the container, not only directly in it.
+// It also sets `data-indicator-axis` ("x" or "y") and `data-indicator`:
 //   "off"   no active item, or nothing to measure (hidden, disabled): the highlight is not shown
-//   "still" shown and placed without moving (first paint, a resize, a font arriving, a key press)
-//   "slide" shown and moving to its new place
+//   "still" shown and placed without moving (first paint, a resize, a font arriving, a new list of options)
+//   "slide" shown and moving to the newly picked item
+//   "jump"  shown, and the picked item changed without moving the highlight (a key press): labels should not fade either
 // The look is `.tavora-indicator` in motion.css; this file only measures.
 //
 // It measures again when the container or an item changes size (ResizeObserver), when fonts finish loading
@@ -14,18 +18,20 @@
 // change of the active item slides; a resize, a font or a new list of options just puts the highlight in place.
 
 export type IndicatorAxis = "x" | "y";
-export type IndicatorState = "off" | "still" | "slide";
+export type IndicatorState = "off" | "still" | "slide" | "jump";
 
 /** What an item has to offer. Every HTMLElement does. */
 export interface IndicatorBox {
-  offsetLeft: number;
-  offsetTop: number;
-  offsetWidth: number;
-  offsetHeight: number;
+  getBoundingClientRect(): { left: number; top: number; width: number; height: number };
 }
 
 /** What the container has to offer. Every HTMLElement does. */
-export interface IndicatorContainer {
+export interface IndicatorContainer extends IndicatorBox {
+  /** The border, which the highlight's `left`/`top` do not include, and how far the container is scrolled. */
+  readonly clientLeft: number;
+  readonly clientTop: number;
+  readonly scrollLeft: number;
+  readonly scrollTop: number;
   querySelector(selector: string): IndicatorBox | null;
   readonly children: ArrayLike<unknown>;
   readonly style: { setProperty(name: string, value: string): void };
@@ -34,7 +40,7 @@ export interface IndicatorContainer {
 
 /** The browser parts, so a test can stand in for them. Anything missing is simply not used. */
 export interface IndicatorEnv {
-  ResizeObserver?: new (callback: () => void) => { observe(target: unknown): void; unobserve(target: unknown): void; disconnect(): void };
+  ResizeObserver?: new (callback: () => void) => { observe(target: unknown, options?: { box?: "border-box" | "content-box" }): void; unobserve(target: unknown): void; disconnect(): void };
   MutationObserver?: new (callback: () => void) => { observe(target: unknown, options: Record<string, unknown>): void; disconnect(): void };
   fonts?: {
     ready: Promise<unknown>;
@@ -62,6 +68,8 @@ export interface SlidingIndicator {
 /** The attributes whose change can move or hide the highlight (reka-ui sets these on its items). */
 const WATCHED_ATTRIBUTES = ["data-state", "data-disabled", "aria-checked", "aria-selected", "disabled"];
 
+const isIndicator = (node: unknown) => !!(node as { classList?: { contains(name: string): boolean } }).classList?.contains("tavora-indicator");
+
 function browserEnv(): IndicatorEnv {
   const g = globalThis as unknown as IndicatorEnv & { document?: { fonts?: IndicatorEnv["fonts"] } };
   return { ResizeObserver: g.ResizeObserver, MutationObserver: g.MutationObserver, fonts: g.document?.fonts };
@@ -82,30 +90,38 @@ export function createSlidingIndicator(container: IndicatorContainer, options: S
     container.setAttribute("data-indicator", state);
   }
 
+  const round = (value: number) => Math.round(value * 100) / 100;
+
   function update(slide = false) {
     if (destroyed) return;
     const item = container.querySelector(options.selector);
+    const box = item?.getBoundingClientRect();
     // A hidden container (display: none) measures as 0 x 0: there is nothing to put the highlight on yet. The
     // ResizeObserver tells us when it shows.
-    if (!item || (item.offsetWidth === 0 && item.offsetHeight === 0)) {
+    if (!item || !box || (box.width === 0 && box.height === 0)) {
       shown = false;
       lastItem = null;
       set("off");
       watchItems();
       return;
     }
-    const place = `${item.offsetLeft} ${item.offsetTop} ${item.offsetWidth} ${item.offsetHeight}`;
+    const origin = container.getBoundingClientRect();
+    const x = round(box.left - origin.left - container.clientLeft + container.scrollLeft);
+    const y = round(box.top - origin.top - container.clientTop + container.scrollTop);
+    const place = `${x} ${y} ${round(box.width)} ${round(box.height)}`;
     // Nothing moved (the observers also report changes that don't matter): leave a slide that is running alone.
     if (shown && item === lastItem && place === lastPlace) {
       watchItems();
       return;
     }
-    const moving = slide && shown && item !== lastItem && (options.smooth?.() ?? true);
-    container.style.setProperty("--indicator-x", `${item.offsetLeft}px`);
-    container.style.setProperty("--indicator-y", `${item.offsetTop}px`);
-    container.style.setProperty("--indicator-w", `${item.offsetWidth}px`);
-    container.style.setProperty("--indicator-h", `${item.offsetHeight}px`);
-    set(moving ? "slide" : "still");
+    const picked = slide && item !== lastItem;
+    const smooth = picked ? (options.smooth?.() ?? true) : true;
+    const state: IndicatorState = picked && shown && smooth ? "slide" : picked && !smooth ? "jump" : "still";
+    container.style.setProperty("--indicator-x", `${x}px`);
+    container.style.setProperty("--indicator-y", `${y}px`);
+    container.style.setProperty("--indicator-w", `${round(box.width)}px`);
+    container.style.setProperty("--indicator-h", `${round(box.height)}px`);
+    set(state);
     shown = true;
     lastItem = item;
     lastPlace = place;
@@ -120,7 +136,8 @@ export function createSlidingIndicator(container: IndicatorContainer, options: S
   // The container and every direct child: an item growing (a font arriving, a label changing) moves the ones after it.
   function watchItems() {
     if (!resize) return;
-    const now = new Set<unknown>([container, ...Array.from(container.children)]);
+    // Not the highlight itself: it changes size every frame of a slide.
+    const now = new Set<unknown>([container, ...Array.from(container.children).filter((child) => !isIndicator(child))]);
     for (const target of watched) {
       if (!now.has(target)) {
         resize.unobserve(target);
@@ -129,7 +146,8 @@ export function createSlidingIndicator(container: IndicatorContainer, options: S
     }
     for (const target of now) {
       if (!watched.has(target)) {
-        resize.observe(target);
+        // The border box, so a change of padding (which moves the items without resizing them) counts too.
+        resize.observe(target, { box: "border-box" });
         watched.add(target);
       }
     }
