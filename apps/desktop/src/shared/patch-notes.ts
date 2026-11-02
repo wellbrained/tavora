@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.51",
+    date: "2026-11-02",
+    title: "Calmer dialogs",
+    notes: [
+      "Dialogs have an icon, a short line under the title and a Close button in the corner.",
+      "More room around the content, and no line above the buttons.",
+      "Buttons that do something have an icon; Cancel, Close and Done never do.",
+    ],
+    prs: [
+      { number: 604, title: "Dialogs: icon header, close X, calmer footer, action vs close buttons" },
+    ],
+    tags: ["calculator", "clock-counter", "cloud-copy", "games", "hotkeys", "icons", "notes", "pdf-viewer", "privacy", "publishing", "settings", "system-monitor", "todos", "ui-kit"],
+  },
+  {
     version: "0.23.50",
     date: "2026-11-01",
     title: "Smoother menus and buttons",
