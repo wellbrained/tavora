@@ -78,7 +78,7 @@ function slow(done: () => void) {
 </script>
 
 <template>
-<DemoSection v-if="visible.has('buttons')" id="buttons" :title="title('buttons')" description="One primary button per view; secondary for everything else. Primary and secondary have a little depth and dip when pressed; the rest stay flat.">
+<DemoSection v-if="visible.has('buttons')" id="buttons" :title="title('buttons')" description="One primary button per view; secondary for everything else. Primary and secondary have a faint top light (primary also a hairline shadow) and dip when pressed; the rest stay flat.">
         <Specimen label="Variants">
           <Button :disabled="off">Primary</Button>
           <Button variant="secondary" :disabled="off">Secondary</Button>
