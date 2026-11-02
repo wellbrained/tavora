@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.57",
+    date: "2026-11-02",
+    title: "Buttons with a little depth",
+    notes: [
+      "Buttons have a little depth and feel pressed when you click them.",
+    ],
+    prs: [
+      { number: 615, title: "Kit: buttons get a little depth and a real press" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.23.56",
     date: "2026-11-02",
     title: "Checkboxes, toggles and options animate when you pick them",
