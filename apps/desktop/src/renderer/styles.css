@@ -56,6 +56,13 @@
   --disabled-opacity: 0.75;
 }
 
+/* Bare transition-colors / transition-transform / transition-opacity use these: a press-sized fade on the strong
+   ease-out, instead of Tailwind's 150 ms and its default curve. The values live in motion.css. */
+@theme {
+  --default-transition-duration: var(--duration-press);
+  --default-transition-timing-function: var(--ease-out-strong);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

@@ -261,7 +261,8 @@ onBeforeUnmount(() => endDrag());
       @wheel="onWheel"
       @scroll.passive="updateEdges"
     >
-      <TabsList class="h-full w-max border-b-0" :aria-label="ariaLabel">
+      <!-- The strip keeps each tab's own line (no sliding one): tabs open, close and move all the time. -->
+      <TabsList class="h-full w-max border-b-0" :indicator="false" :aria-label="ariaLabel">
         <template v-for="tab in tabs" :key="tab.id">
           <div v-if="renaming?.id === tab.id" class="flex h-full items-center gap-1 px-1">
             <span v-if="$slots.icon" class="flex flex-none items-center empty:hidden" data-testid="strip-tab-icon"><slot name="icon" :tab="tab" /></span>

@@ -666,7 +666,14 @@ export class AccountClient {
   async renameDevice(id: string, name: string): Promise<void> {
     this.ensure(true);
     await this.call("PUT", `/devices/${encodeURIComponent(id)}/name`, { name: name.trim() }, true);
-    await this.refresh();
+    // The rename is done. Looking at the list again is only to catch up, so a failure there is not a failed rename
+    // (the screen shows the new name at once and would put the old one back).
+    const renamed = this.devices?.find((device) => device.id === id);
+    if (renamed) {
+      renamed.name = name.trim();
+      this.changed();
+    }
+    await this.refresh().catch(() => undefined);
   }
 
   async signOutDevice(id: string): Promise<void> {

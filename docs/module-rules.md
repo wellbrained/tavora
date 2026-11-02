@@ -111,6 +111,10 @@ themes; anything hard-coded breaks in one of them.
   the closed content is out of the layout, so such spacing would jump instead of growing with the height. No margins
   on the content either. For a
   done item, the kit's `tavora-strike` class (with `data-struck` while done) draws the line across the text.
+  A highlight that follows the picked item of a row (segmented control, tabs) is one element that slides: use
+  `useSlidingIndicator`, never a border per item. It measures the active item wherever it sits (tabs may be wrapped, e.g.
+  in a tooltip's span); with none to measure, the active tab draws its own line. It slides only right after a click, never
+  for keys or a value that arrives on its own.
   Dialogs rise 8 px and scale from 0.96 as they fade in (the kit's dialogs do it; centred, never from the trigger).
   Rows the user adds or removes in a vertical list use `AnimatedList`, and a page that replaces another in the same
   frame uses `usePageMotion`; don't hand-roll either. Neither moves for a key press or when a whole list is replaced.
@@ -146,6 +150,11 @@ each pattern.
 - **Saving**: through the SDK store (`openDocument` in `@tavora/sdk/store`, `useDocument`, `useItemSession` in the
   kit). No own conflict handling. Files: `files.saveJson` / `files.openJson`; pictures: `pictures.save`; stored files:
   the module file store.
+- **Act first, confirm later**: a change that waits for a request (the network, not a local save) shows at once, saves
+  in the background and is put back with a short message if saving fails: `useOptimistic` / `useOptimisticKeyed` from
+  `@tavora/official-ui` (`modules/shared/src/optimistic.ts`). It handles two quick changes: the later one wins, and an
+  earlier failure never overwrites a newer value. Not for what can't be put back: deleting, publishing, money, keys,
+  security. No disabled controls or "Saving…" while a local save runs.
 - **Panel state**: what one panel remembers (open item, view, tab, filters, folded parts, scroll or zoom) is saved with
   panel state and **read back on start**. Writing it without reading it is the common bug.
 - **Lifecycle**: `onSuspend` flushes pending saves and panel state and pauses timers and animations; `onResume` starts

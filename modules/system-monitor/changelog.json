@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.11",
+    "version": "0.1.12",
     "date": "2026-11-02",
     "notes": [
       "Lists, dialogs and settings pages move smoothly."
+    ]
+  },
+  {
+    "version": "0.1.11",
+    "date": "2026-11-02",
+    "notes": [
+      "Small fades and menus follow the shared timing."
     ]
   },
   {
