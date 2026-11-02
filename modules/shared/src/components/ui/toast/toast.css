@@ -85,7 +85,9 @@
 }
 .tavora-toast .tavora-toast-button:hover { background: color-mix(in srgb, var(--toast-foreground) 12%, transparent); color: var(--toast-foreground); }
 .tavora-toast .tavora-toast-button:focus-visible { outline: 2px solid var(--toast-foreground); outline-offset: 2px; box-shadow: none; }
-.tavora-toast .tavora-toast-close { margin-left: -4px; }
+/* Room between the parts: 12 px (the gap) from the icon to the text and from Undo to the close button, 20 px from the text to
+   Undo (12 + 8). Without a button the text keeps 12 px to the close button. Only margins: the pill's height and the buttons' hit areas stay. */
+.tavora-toast .tavora-toast-button:not(.tavora-toast-close) { margin-left: 8px; }
 
 /* Icons */
 .tavora-toast-icon { display: grid; width: 16px; height: 16px; flex: none; place-items: center; border-radius: 999px; }

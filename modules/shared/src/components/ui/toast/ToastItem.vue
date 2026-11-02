@@ -14,6 +14,8 @@ const props = defineProps<{
   paused: boolean;
   /** Behind the front toast in a closed stack: take its size and keep quiet. */
   behind?: { width: number; height: number };
+  /** The size to start from, for a toast that comes in front of another: it grows or shrinks to its own size (a morph). */
+  from?: { width: number; height: number };
 }>();
 const emit = defineEmits<{ size: [value: { width: number; height: number }] }>();
 
@@ -53,7 +55,7 @@ onMounted(restart);
 
 // The pill takes the size of what is in it, as numbers, so a change of content can animate.
 const content = ref<HTMLElement>();
-const size = ref<{ width: number; height: number }>();
+const size = ref<{ width: number; height: number } | undefined>(props.from);
 let observer: ResizeObserver | undefined;
 onMounted(() => {
   observer = new ResizeObserver(([entry]) => {

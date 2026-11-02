@@ -147,8 +147,25 @@ test("the Undo button reads as big as the message and is easy to hit, in a compa
       const box = target.getBoundingClientRect();
       return { width: box.width, height: box.height, fontSize: getComputedStyle(target).fontSize };
     };
-    return { pill: element.getBoundingClientRect().height, title: size(".tavora-toast-title"), undo: size('[data-testid="undo"]'), close: size(".tavora-toast-close") };
+    const edges = (selector: string) => {
+      const box = element.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+      return { left: box.left, right: box.right };
+    };
+    const text = edges(".tavora-toast-text");
+    const undo = edges('[data-testid="undo"]');
+    const close = edges(".tavora-toast-close");
+    return {
+      pill: element.getBoundingClientRect().height,
+      title: size(".tavora-toast-title"),
+      undo: size('[data-testid="undo"]'),
+      close: size(".tavora-toast-close"),
+      textToUndo: undo.left - text.right,
+      undoToClose: close.left - undo.right,
+    };
   });
+  // Room between the parts: 20 px from the message to Undo, 12 px from Undo to the close button.
+  expect(measured.textToUndo).toBeCloseTo(20, 0);
+  expect(measured.undoToClose).toBeCloseTo(12, 0);
   expect(measured.undo.fontSize).toBe(measured.title.fontSize);
   // At least the kit's small button (28 px), and room around the word; the X as high.
   expect(measured.undo.height).toBeGreaterThanOrEqual(28);
