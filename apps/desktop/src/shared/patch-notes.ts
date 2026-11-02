@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.65",
+    date: "2026-11-02",
+    title: "Clearer names in Settings",
+    notes: [
+      "About & updates is now Updates & About (German: Updates & Info), with a sharper icon.",
+      "Overlays & Streaming and Name & Ranks start both words uppercase.",
+    ],
+    prs: [
+      { number: 624, title: "Settings: Updates & About (Updates & Info), sharper icon; both words uppercase in A & B names" },
+    ],
+    tags: ["accounts", "modules", "overlays", "privacy", "settings", "website"],
+  },
+  {
     version: "0.23.64",
     date: "2026-11-02",
     title: "Settings menu in its group's colour",
