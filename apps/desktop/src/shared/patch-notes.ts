@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.75",
+    date: "2026-11-02",
+    title: "System Monitor settings",
+    notes: [
+      "System Monitor's settings are in one place: what it shows, which drives and the connection.",
+    ],
+    prs: [
+      { number: 638, title: "System Monitor: one settings dialog (0.1.15)" },
+    ],
+    tags: ["system-monitor"],
+  },
+  {
     version: "0.23.74",
     date: "2026-11-02",
     title: "Tab drops",

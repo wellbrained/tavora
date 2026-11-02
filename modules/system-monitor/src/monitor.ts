@@ -219,10 +219,10 @@ export function createMonitor(sdk: TavoraSDK) {
     toggleSection: (id: SectionId) => setPanel(toggleSection(panel.value, id)),
     toggleTraffic: () => setPanel({ ...panel.value, traffic: !panel.value.traffic }),
     /**
-     * Sets whether the connection is watched and which address is pinged, for the whole PC. Call it straight from the
-     * click that saves (Tavora wants one). Throws when Tavora refuses, for the dialog to say.
+     * Sets whether the connection is watched and/or which address is pinged, for the whole PC. Call it straight from the
+     * click or key press that asks for it (Tavora wants one). Throws when Tavora refuses, for the settings to say.
      */
-    async setConnection(settings: { enabled: boolean; target: string }): Promise<void> {
+    async setConnection(settings: Partial<SystemConnectionSettings>): Promise<void> {
       connectionSettings.value = await sdk.connectors.systemInfo.setConnectionSettings(settings);
     },
     async clearLog(): Promise<void> {
