@@ -85,6 +85,16 @@ W = 820;
 H = 460;
 LAYOUTS["small window"] = layout([["a", "b"], ["c", "d"]]);
 LAYOUTS["small window, tabs"] = layout(["a+b", ["c", "d+e"]]);
+// A panel dragged within its own group: roomy, tight (fits only side by side) and too narrow to split.
+W = 1000;
+H = 700;
+LAYOUTS["own group, roomy"] = layout(["a+b+c"]);
+LAYOUTS["own group beside another"] = layout(["a+b", "c"]);
+W = 560;
+H = 700;
+LAYOUTS["own group, tight"] = layout(["a+b"]);
+W = 400;
+LAYOUTS["own group, too narrow"] = layout(["a+b"]);
 W = 1200;
 H = 700;
 

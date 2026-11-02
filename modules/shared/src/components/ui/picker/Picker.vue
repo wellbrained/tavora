@@ -74,11 +74,11 @@ function pick(value: unknown) {
         align="start"
         :side-offset="6"
         :collision-padding="8"
-        class="bg-popover text-popover-foreground tavora-popup z-50 w-max max-w-80 min-w-(--reka-popover-trigger-width) overflow-hidden rounded-lg border shadow-lg"
+        :class="cn('bg-popover text-popover-foreground tavora-popup z-50 w-max max-w-80 min-w-(--reka-popover-trigger-width) overflow-hidden rounded-lg border shadow-lg', search && 'min-w-[max(16rem,var(--reka-popover-trigger-width))]')"
         :data-testid="part('menu')"
       >
         <ListboxRoot :model-value="model" highlight-on-hover @update:model-value="pick">
-          <div v-if="search" class="relative w-64 max-w-full border-b">
+          <div v-if="search" class="relative w-full border-b">
             <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" />
             <ListboxFilter
               v-model="query"

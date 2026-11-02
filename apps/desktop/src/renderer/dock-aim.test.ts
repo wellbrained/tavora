@@ -33,6 +33,13 @@ describe("a tab strip", () => {
     expect(aimAt(aim, 400, 24)).toEqual({ kind: "tab", group: "a", index: 2 });
   });
 
+  it("keeps the first and last slots where the strip runs to the dock's edge", () => {
+    expect(aimAt(aim, 3, 24)).toEqual({ kind: "tab", group: "a", index: 0 });
+    expect(aimAt(aim, 997, 24)).toEqual({ kind: "tab", group: "b", index: 0 });
+    expect(aimAt(aim, 3, 60)).toEqual({ kind: "edge", side: "left" });
+    expect(aimAt(aim, 40, 3)).toEqual({ kind: "edge", side: "top" });
+  });
+
   it("puts a group without tabs at index 0", () => {
     expect(aimAt(aim, 700, 24)).toEqual({ kind: "tab", group: "b", index: 0 });
   });
