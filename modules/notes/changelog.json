@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.5",
+    "date": "2026-11-02",
+    "notes": [
+      "Checkboxes, toggles and options animate when you pick them, and folding sections open smoothly."
+    ]
+  },
+  {
     "version": "0.6.4",
     "date": "2026-11-01",
     "notes": [
