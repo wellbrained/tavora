@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.88",
+    date: "2026-11-02",
+    title: "Settings",
+    notes: [
+      "Updates & About lines up with the menu above it again.",
+    ],
+    prs: [
+      { number: 653, title: "Settings: Updates & About lines up with the plates above" },
+    ],
+    tags: ["settings"],
+  },
+  {
     version: "0.23.87",
     date: "2026-11-02",
     title: "Clock & Counter",
