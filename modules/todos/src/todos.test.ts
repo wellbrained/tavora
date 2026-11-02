@@ -24,6 +24,10 @@ import {
   parseList,
   pinnedTasks,
   removedBlock,
+  removedGroup,
+  restoreGroup,
+  canRestoreBlock,
+  canRestoreGroup,
   renameGroup,
   restoreBlock,
   restoreDone,
@@ -396,5 +400,69 @@ describe("sub-to-dos", () => {
     insertTask(data, "gone", "a", 0, { id: "n", title: "N", createdAt: AT });
     insertTask(data, "g1", "a", 0, { id: "m", title: "  ", createdAt: AT });
     expect(tree(data)).toBe("a b(a) c(a) d(c) e");
+  });
+});
+
+// Undo instead of "Are you sure?": a deleted group or to-do comes back exactly as it was, and only itself.
+describe("undoing a delete", () => {
+  it("puts a group back where it was, with its id, name, colour and to-dos", () => {
+    const data = list();
+    setGroupColor(data, "g1", "red");
+    const before = structuredClone(data);
+    const removed = removedGroup(data, "g1")!;
+    deleteGroup(data, "g1");
+    expect(canRestoreGroup(data, removed)).toBe(true);
+    expect(restoreGroup(data, removed)).toBe(true);
+    expect(data).toEqual(before);
+    // Twice (a second click on its way): it is back already.
+    expect(restoreGroup(data, removed)).toBe(false);
+    expect(data).toEqual(before);
+  });
+
+  it("keeps two deletes apart: undoing the first brings back neither the second nor breaks it", () => {
+    const data = list();
+    const task = removedBlock(data, "a")!;
+    deleteTask(data, "a");
+    const group = removedGroup(data, "g2")!;
+    deleteGroup(data, "g2");
+    expect(restoreBlock(data, task)).toBe(true);
+    expect(data.groups.map((item) => item.id)).toEqual(["g1"]);
+    expect(titles(data, 0)).toBe("abc");
+    expect(restoreGroup(data, group)).toBe(true);
+    expect(titles(data, 1)).toBe("d");
+  });
+
+  it("can't bring back a to-do alone once its group was deleted after it; the group's own Undo brings the group back", () => {
+    const data = list();
+    const task = removedBlock(data, "b")!;
+    deleteTask(data, "b");
+    const group = removedGroup(data, "g1")!;
+    deleteGroup(data, "g1");
+    expect(canRestoreBlock(data, task)).toBe(false);
+    expect(restoreBlock(data, task)).toBe(false);
+    expect(data.groups.map((item) => item.id)).toEqual(["g2"]);
+    expect(restoreGroup(data, group)).toBe(true);
+    expect(titles(data, 0)).toBe("ac");
+    // With its group back, the to-do can come back too.
+    expect(restoreBlock(data, task)).toBe(true);
+    expect(titles(data, 0)).toBe("abc");
+  });
+
+  it("keeps what changed meanwhile: a new group in its place, a to-do moved there with the same id", () => {
+    const data = list();
+    const removed = removedGroup(data, "g1")!;
+    deleteGroup(data, "g1");
+    addGroup(data, "g3", "Bosses", 0);
+    expect(restoreGroup(data, removed)).toBe(true);
+    expect(data.groups.map((item) => [item.id, item.name])).toEqual([
+      ["g1", "Bosses"],
+      ["g3", "Bosses"],
+      ["g2", "Exploration"],
+    ]);
+    const again = removedGroup(data, "g1")!;
+    deleteGroup(data, "g1");
+    addTask(data, "g3", { id: "a", title: "A again", createdAt: AT }, "unused");
+    expect(canRestoreGroup(data, again)).toBe(false);
+    expect(restoreGroup(data, again)).toBe(false);
   });
 });

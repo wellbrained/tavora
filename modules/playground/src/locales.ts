@@ -230,6 +230,8 @@ export const en = {
   "ex.toasts.Kinds.note": "Up to three stack; pointing at them spreads them out and stops their time.",
   "ex.toasts.Loading": "Loading, then done",
   "ex.toasts.WithButton": "With a button",
+  "ex.toasts.DeleteWithUndo": "Delete with Undo",
+  "ex.toasts.DeleteWithUndo.note": "Gone at once, no question. Undo puts it back in its place.",
 
   "ex.fields.Basic": "Text field",
   "ex.fields.Errors": "With an error",
@@ -603,6 +605,8 @@ export const de: Record<TextKey, string> = {
   "ex.toasts.Kinds.note": "Bis zu drei stapeln sich; zeigst du darauf, fächern sie sich auf und ihre Zeit hält an.",
   "ex.toasts.Loading": "Lädt, dann fertig",
   "ex.toasts.WithButton": "Mit einem Button",
+  "ex.toasts.DeleteWithUndo": "Löschen mit Rückgängig",
+  "ex.toasts.DeleteWithUndo.note": "Sofort weg, ohne Nachfrage. Rückgängig legt es an seinen Platz zurück.",
 
   "ex.fields.Basic": "Textfeld",
   "ex.fields.Errors": "Mit einem Fehler",

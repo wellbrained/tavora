@@ -21,6 +21,8 @@ export interface ToastOptions {
   testid?: string;
   /** Test id on the action button. */
   actionTestid?: string;
+  /** Called once when the toast goes, however it goes: its time ran out, it was closed, its button was pressed, or newer ones pushed it out. */
+  onDismiss?: () => void;
 }
 
 export interface ToastItem extends ToastOptions {
@@ -56,8 +58,16 @@ export function toastDuration(item: ToastOptions): number {
   return item.variant === "error" || item.variant === "warning" || item.variant === "loading" ? Infinity : TOAST_DURATION;
 }
 
+/** Tells each toast that has gone that it went. */
+function gone(items: readonly ToastItem[]): void {
+  for (const item of items) item.onDismiss?.();
+}
+
 export function dismissToast(id: number): void {
+  const leaving = toasts.value.filter((item) => item.id === id);
+  if (!leaving.length) return;
   toasts.value = toasts.value.filter((item) => item.id !== id);
+  gone(leaving);
 }
 
 function updateToast(id: number, options: Partial<ToastOptions>): boolean {
@@ -68,7 +78,9 @@ function updateToast(id: number, options: Partial<ToastOptions>): boolean {
 
 function show(options: ToastOptions): ToastHandle {
   const id = nextId++;
-  toasts.value = [...toasts.value, { ...options, id, revision: 0 }].slice(-MAX_TOASTS);
+  const all = [...toasts.value, { ...options, id, revision: 0 }];
+  toasts.value = all.slice(-MAX_TOASTS);
+  gone(all.slice(0, -MAX_TOASTS));
   return { id, dismiss: () => dismissToast(id), update: (next) => updateToast(id, next) };
 }
 

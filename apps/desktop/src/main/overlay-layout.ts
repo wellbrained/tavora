@@ -107,6 +107,8 @@ const IDLE_CHECK_MS = 1000;
 const FIT_PADDING = 8;
 /** The gap kept between a new frame and the others when it is placed, in canvas units. */
 const PLACE_GAP = 8;
+/** How many removes the page is told about at once (as many as toasts show). */
+const MAX_REMOVALS = 3;
 
 /** Whether an overlay subject is the thing `key` of this panel's module in its workspace. */
 const sameSubject = (subject: { owner: string; moduleId: string; workspaceId: string; key: string }, panel: { owner: string; moduleId: string; workspaceId: string }, key: string) =>
@@ -158,6 +160,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   private readonly hiddenOnCanvas = new Map<string, Set<string>>();
   /** Undo and redo, per setup, while the page is open (layout-history.ts). */
   private readonly histories = new Map<string, LayoutHistory<ItemSnapshot>>();
+  /** What the last Undo on a remove's toast did (layout-view.ts `undone`). */
+  private undone: { step: number; ok: boolean } | null = null;
   private bounds: Rect | null = null;
   private covered = false;
   private notice: string | null = null;
@@ -201,6 +205,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     }
     this.hiddenOnCanvas.clear();
     this.histories.clear();
+    this.undone = null;
     this.selection = [];
     this.notice = null;
     this.copied = null;
@@ -423,6 +428,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       pictureHint: canTakePicture ? null : isGameSetup(gameId) && this.options.source.gameRunning(gameId) ? "switch" : "start",
       canUndo: history.canUndo,
       canRedo: history.canRedo,
+      removals: this.removals(),
+      undone: this.undone,
       enabled: this.options.settings.gameOverlays,
       notice: this.notice,
       copied: this.copied,
@@ -560,6 +567,9 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       }
       case "undo":
         this.step("before");
+        break;
+      case "undo-removal":
+        this.undoRemoval(message.step);
         break;
       case "redo":
         this.step("after");
@@ -735,12 +745,42 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   }
 
   /** Does what the user asked to the items `ids` of the setup shown (and of `alsoIn`), and keeps it as one undo step. */
-  private record(ids: readonly string[], run: () => void, alsoIn: readonly string[] = []): void {
+  private record(ids: readonly string[], run: () => void, alsoIn: readonly string[] = [], tag?: string): void {
     const setupId = this.current(this.games());
     const targets = [setupId, ...alsoIn].flatMap((setup) => ids.map((id) => ({ setupId: setup, id })));
     const before = targets.map((target) => this.snapshot(target.setupId, target.id));
     run();
-    this.history(setupId).record(targets.map((target, index) => ({ ...target, before: before[index]!, after: this.snapshot(target.setupId, target.id) })));
+    this.history(setupId).record(
+      targets.map((target, index) => ({ ...target, before: before[index]!, after: this.snapshot(target.setupId, target.id) })),
+      tag,
+    );
+  }
+
+  /**
+   * The removes that can still be undone, from every setup, newest last (at most a few: the page offers Undo on a toast
+   * for each new one). One taken back by Ctrl+Z, or dropped because its frames changed, leaves the list.
+   */
+  private removals(): { step: number; count: number }[] {
+    return [...this.histories.values()]
+      .flatMap((history) => history.steps("remove"))
+      .sort((a, b) => a.id - b.id)
+      .slice(-MAX_REMOVALS)
+      .map((step) => ({ step: step.id, count: step.parts.length }));
+  }
+
+  /**
+   * The Undo on a remove's toast: that remove only, in the setup it was made in (the page may show another one by now);
+   * changes made after it stay. When the setup shown is that one, the frames that came back are selected.
+   */
+  private undoRemoval(stepId: number): void {
+    for (const [setupId, history] of this.histories) {
+      if (!history.steps("remove").some((step) => step.id === stepId)) continue;
+      const step = history.undoStep(stepId);
+      this.undone = { step: stepId, ok: step !== null };
+      if (step && setupId === this.current(this.games())) this.selection = step.parts.map((part) => part.id);
+      return;
+    }
+    this.undone = { step: stepId, ok: false };
   }
 
   /**
@@ -773,6 +813,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       () => {
         for (const info of infos) this.options.source.remove(setupId, info.ref);
       },
+      [],
+      "remove",
     );
     this.selection = [];
   }

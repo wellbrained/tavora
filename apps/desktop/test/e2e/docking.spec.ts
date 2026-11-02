@@ -9,7 +9,9 @@ import {
   panels,
   RAIL_WIDTH,
   REACT,
+  NOTES,
   setContentSize,
+  TODOS,
   typeInModule,
   VANILLA,
   VUE,
@@ -342,6 +344,75 @@ test("aiming at the first tab or the last slot of a strip makes room for the gho
   await app.close();
 });
 
+for (const width of [1400, 820]) {
+  test(`a tab dropped into another group's tab row (${width} px wide): only our ghost at the slot, every tab stays, one drag label`, async () => {
+    const { app, page } = await launch();
+    await page.getByTestId("layouts").click();
+    await page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-2x1"]').click();
+    for (const id of [NOTES, TODOS, REACT, VANILLA]) await openModule(page, id);
+    await setContentSize(app, width, 900);
+    // The dock settles after the window changes size; wait until the Notes group fits the new width.
+    await expect.poll(async () => ((await page.locator(".dv-dockview").boundingBox())!.width)).toBeLessThan(width);
+    // Notes sits alone in the left group; To-Dos, React and Vanilla are the tabs of the right one. Notes is dragged in.
+    const strip = (id: string) => page.locator(".dv-groupview", { has: page.locator(`[data-module-id="${id}"]`) }).first();
+    const target = strip(TODOS);
+    const names = async () => target.locator(".dv-tab").evaluateAll((tabs) => tabs.map((tab) => tab.querySelector("[data-module-id]")?.getAttribute("data-module-id") ?? ""));
+    const before = await names();
+    expect(before.length).toBeGreaterThanOrEqual(2);
+    expect(before).not.toContain(NOTES);
+    const dataTransfer = await page.evaluateHandle(() => {
+      const transfer = new DataTransfer();
+      const original = transfer.setDragImage.bind(transfer);
+      (transfer as unknown as { images: string[] }).images = [];
+      transfer.setDragImage = (image: Element, x: number, y: number) => {
+        (transfer as unknown as { images: string[] }).images.push((image as HTMLImageElement).src ?? "");
+        original(image, x, y);
+      };
+      return transfer;
+    });
+    const source = page.locator(`[data-panel-tab][data-module-id="${NOTES}"]`).first();
+    await source.dispatchEvent("dragstart", { dataTransfer });
+    await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
+    // The last drag image set is an empty one: the browser draws no second copy of the tab.
+    const last = await dataTransfer.evaluate((transfer) => (transfer as unknown as { images: string[] }).images.at(-1) ?? "");
+    expect(last).toMatch(/^data:image\/gif/);
+    const content = target.locator(".dv-content-container");
+    const tabs = target.locator(".dv-tab");
+    const boxes = async () => tabs.evaluateAll((all) => all.map((tab) => { const r = tab.getBoundingClientRect(); return { x: r.x, right: r.right, y: r.y }; }));
+    const row = await boxes();
+    // A row that overflows scrolls: the slots to aim at are those of the tabs in sight.
+    const group = (await target.boundingBox())!;
+    const shown = row.filter((box) => box.x >= group.x - 1 && box.right <= group.x + group.width + 1);
+    expect(shown.length).toBeGreaterThanOrEqual(1);
+    const slots: [string, number][] = [
+      ["first", shown[0]!.x + 3],
+      ...(shown.length > 1 ? ([["middle", shown[1]!.x + 3]] as [string, number][]) : []),
+      ["last", shown.at(-1)!.right - 3],
+    ];
+    for (const [name, x] of slots) {
+      await content.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: row[0]!.y + 16 });
+      await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "tab");
+      // Nothing but our one ghost marks the slot: no dockview drop indicator anywhere.
+      await expect(page.getByTestId("dock-ghost-tab"), `${name}: one ghost`).toHaveCount(1);
+      await expect(page.locator("[class*='dv-drop-target']:visible")).toHaveCount(0);
+      // Every tab is still there, in order, and none is pushed past the end of the tab row.
+      await page.waitForTimeout(300);
+      expect(await names(), name).toEqual(before);
+      const edge = await target.locator(".dv-tabs-container").evaluate((el) => el.getBoundingClientRect().right);
+      for (const box of await boxes()) expect(box.right, `${name}: a tab is pushed out of the row`).toBeLessThanOrEqual(Math.max(edge, row.at(-1)!.right) + 1);
+      // The ghost is not drawn on top of a tab.
+      const ghost = (await page.getByTestId("dock-ghost-tab").boundingBox())!;
+      for (const box of await boxes()) {
+        const overlap = Math.min(ghost.x + ghost.width, box.right) - Math.max(ghost.x, box.x);
+        expect(overlap, `${name}: the ghost covers a tab`).toBeLessThanOrEqual(6);
+      }
+    }
+    await source.dispatchEvent("dragend", { dataTransfer });
+    await expect(page.getByTestId("dock-preview")).toHaveCount(0);
+    await app.close();
+  });
+}
+
 test("module views are replaced by still images while a menu is open", async () => {
   const { app, page } = await launch();
   await openModule(page, VANILLA);
@@ -389,8 +460,9 @@ test("named layouts are saved, applied, renamed and deleted", async () => {
   await app.close();
 
   const again = await launch(userData);
+  // Deleted at once, with Undo on a toast instead of a question (undo.spec.ts covers the Undo).
   await layoutMenu(again.page, "Mapping", "layout-delete");
-  await again.page.getByTestId("confirm-submit").click();
+  await expect(again.page.getByTestId("undo-toast")).toContainText("Layout deleted");
   await again.page.getByTestId("layouts").click();
   await expect(again.page.locator('[role="menu"][data-state="open"]').getByText("Mapping")).toHaveCount(0);
   await again.page.keyboard.press("Escape");
