@@ -491,6 +491,44 @@ test("a group with one tab and a long empty header shows the dashed ghost tab af
   await app.close();
 });
 
+test("dragging a tab within its own group keeps the move cursor, and says Same place where nothing would change", async () => {
+  const { app, page } = await launch();
+  await page.getByTestId("layouts").click();
+  await page.locator('[role="menu"][data-state="open"] [data-testid="layout-grid-2x1"]').click();
+  for (const id of [NOTES, TODOS, REACT]) await openModule(page, id);
+  const target = page.locator(".dv-groupview", { has: page.locator(`[data-module-id="${TODOS}"]`) }).first();
+  const tabs = target.locator(".dv-tab");
+  await expect(tabs).toHaveCount(2);
+  const dataTransfer = await page.evaluateHandle(() => {
+    // A DataTransfer made by hand ignores dropEffect, so what the page sets is recorded instead.
+    const transfer = new DataTransfer();
+    let effect = "none";
+    Object.defineProperty(transfer, "dropEffect", { get: () => effect, set: (value: string) => (effect = value) });
+    return transfer;
+  });
+  const effect = () => dataTransfer.evaluate((transfer) => transfer.dropEffect);
+  const own = tabs.last();
+  await own.dispatchEvent("dragstart", { dataTransfer });
+  await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
+  const content = target.locator(".dv-content-container");
+  const row = (await tabs.first().boundingBox())!;
+  const group = (await target.boundingBox())!;
+  // Its own place (the end of its tab row): nothing would change, yet it is not a refused place.
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: group.x + group.width - 120, clientY: row.y + 16 });
+  await expect(page.getByTestId("dock-same-place")).toContainText("Same place");
+  await expect(page.getByTestId("dock-refused")).toHaveCount(0);
+  expect(await effect()).toBe("move");
+  // Another slot and a split of its own group are valid places.
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: row.x + 3, clientY: row.y + 16 });
+  await expect(page.getByTestId("dock-same-place")).toHaveCount(0);
+  expect(await effect()).toBe("move");
+  await content.dispatchEvent("dragover", { dataTransfer, clientX: group.x + group.width * 0.9, clientY: group.y + group.height / 2 });
+  await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "split-right");
+  expect(await effect()).toBe("move");
+  await own.dispatchEvent("dragend", { dataTransfer });
+  await app.close();
+});
+
 test("module views are replaced by still images while a menu is open", async () => {
   const { app, page } = await launch();
   await openModule(page, VANILLA);

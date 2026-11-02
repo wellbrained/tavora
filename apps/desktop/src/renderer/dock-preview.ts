@@ -76,8 +76,10 @@ export class DockPreview {
     if (!inside) return void (this.active && this.setTarget(null));
     event.preventDefault();
     event.stopPropagation();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = this.plan?.ok ? "move" : "none";
     this.aim(event.clientX, event.clientY);
+    // Only a drop that is really refused (too little room) shows the not-allowed cursor; a drop on the same spot
+    // does nothing but is still a place to let go, so it keeps the move cursor (and says "Same place").
+    if (event.dataTransfer) event.dataTransfer.dropEffect = this.plan && !this.plan.ok && this.plan.reason !== "same-spot" ? "none" : "move";
   };
   private readonly onEnter = (event: DragEvent) => {
     if (!this.take(event)) return;

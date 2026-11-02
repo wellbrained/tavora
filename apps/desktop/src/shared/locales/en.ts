@@ -1574,6 +1574,7 @@ export const en = {
   "dock.newColumn": "New column",
   "dock.newRow": "New row",
   "dock.addAsTab": "Add as a tab",
+  "dock.samePlace": "Same place",
   "dock.noRoom": "Not enough room here",
   "dock.showLeftColumn": "Show left column",
   "dock.showRightColumn": "Show right column",
