@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.69",
+    date: "2026-11-02",
+    title: "Search line in pick lists",
+    notes: [
+      "The line under the search field in a pick list now runs the whole width of the list.",
+    ],
+    prs: [
+      { number: 630, title: "Kit: Picker search row spans the whole list (line under the search no longer stops short)" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.23.68",
     date: "2026-11-02",
     title: "A tidier UI Playground",
