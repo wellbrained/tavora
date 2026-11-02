@@ -12,15 +12,19 @@ import {
 } from "reka-ui"
 import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
+import { provideDialogInstant } from "./instant"
 
 defineOptions({
   inheritAttrs: false,
 })
 
-const props = defineProps<DialogContentProps & { class?: HTMLAttributes["class"] }>()
+const props = withDefaults(defineProps<DialogContentProps & { class?: HTMLAttributes["class"], instant?: boolean }>(), {
+  instant: false,
+})
 const emits = defineEmits<DialogContentEmits>()
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, "class", "instant")
+const instant = provideDialogInstant(() => props.instant)
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
@@ -28,9 +32,11 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
 <template>
   <DialogPortal>
     <DialogOverlay
+      :data-instant="instant ? '' : undefined"
       class="tavora-dialog-overlay fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/80"
     >
       <DialogContent
+        :data-instant="instant ? '' : undefined"
         :class="
           cn(
             'tavora-dialog relative z-50 grid w-full max-w-lg my-8 gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg md:w-full',

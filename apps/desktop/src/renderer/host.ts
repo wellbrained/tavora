@@ -1,6 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
+import { noteKeyPress } from "@tavora/official-ui/components/ui/sliding-indicator";
 import { handleUndoKey, toast, undoable } from "@tavora/official-ui/components/ui/toast";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
@@ -519,7 +520,11 @@ function runShortcut(shortcut: HostShortcut): void {
   }
 }
 
-api.onShortcut(runShortcut);
+// The page never sees the key main caught, so say it was one: a dialog this opens (Settings, Shortcuts) then appears at once.
+api.onShortcut((shortcut) => {
+  noteKeyPress();
+  runShortcut(shortcut);
+});
 
 // Main catches Tavora's shortcuts before any page sees the key (and stops it
 // there, so this never runs twice for one press). This covers key events that

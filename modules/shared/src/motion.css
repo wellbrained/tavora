@@ -4,6 +4,8 @@
    Curves: ease-out for things that appear, leave or answer a touch; ease-in-out for things that move across the screen.
    Never an ease-in on the interface: it starts slow, right when the eye is on it.
    Durations: nothing in the interface is longer than --duration-move.
+   How often decides how much: what people use many times a day stays instant or gets at most a quick fade (150 ms or
+   less); playful motion (springs, drawing) is only for rare moments or as direct feedback to a click.
    Not for anything a key press starts (undo, nudges, hotkeys, switching by key), nor for what is shown all day.
    Deliberate exceptions: Space on a checkbox is a choice like a click, so it animates like one; and the height may
    animate in two places only, because what is below has to move along: a folding section (Collapsible) and a row the
@@ -274,8 +276,15 @@
 
 /* Dialogs rise out of the middle: a little scale and an 8px rise with the fade, so they settle into place. They leave
    quicker than they arrive (about 150ms). Always centred, never from the trigger. The dialog places itself with the
-   `translate` property, so this `transform` only adds to it. The overlay behind fades with the dialog. */
+   `translate` property, so this `transform` only adds to it. The overlay behind fades with the dialog.
+   A dialog a key opened (Search, Settings with Ctrl+,, Enter on a button) appears at once, overlay too, and one closed
+   with Escape leaves at once: the kit sets data-instant on it (components/ui/dialog/instant.ts). With no animation
+   the dialog is mounted and unmounted in the same frame. */
 @layer components {
+  .tavora-dialog[data-instant][data-state],
+  .tavora-dialog-overlay[data-instant][data-state] {
+    animation: none;
+  }
   .tavora-dialog[data-state="open"] {
     animation: tavora-dialog-in var(--duration-panel) var(--ease-out-strong);
   }
@@ -413,5 +422,10 @@
   .tavora-dialog[data-state="closed"],
   .tavora-dialog-overlay[data-state="closed"] {
     animation: tavora-fade-out 80ms linear forwards !important;
+  }
+  /* A dialog a key opened or Escape closed has no fade either. */
+  .tavora-dialog[data-instant][data-state],
+  .tavora-dialog-overlay[data-instant][data-state] {
+    animation: none !important;
   }
 }

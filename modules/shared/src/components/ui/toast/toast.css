@@ -35,15 +35,18 @@
 .tavora-toaster[data-position="top-center"] .tavora-toast-layer { transform-origin: top center; }
 .tavora-toaster[data-position="bottom-right"] .tavora-toast-layer { transform-origin: bottom right; }
 
-/* Coming and going: the slot fades and blurs, the pill grows from 0.96. */
-.tavora-toast-enter-active { animation: tavora-toast-fade-in var(--duration-move, 300ms) var(--tavora-toast-ease); }
-.tavora-toast-enter-active .tavora-toast { animation: tavora-toast-grow var(--duration-move, 300ms) var(--tavora-toast-spring); }
-.tavora-toast-leave-active { animation: tavora-toast-fade-out 0.22s var(--tavora-toast-ease) forwards; }
-.tavora-toast-leave-active .tavora-toast { animation: tavora-toast-shrink 0.22s var(--tavora-toast-ease) forwards; }
-@keyframes tavora-toast-fade-in { from { opacity: 0; filter: blur(8px); } }
-@keyframes tavora-toast-fade-out { to { opacity: 0; filter: blur(6px); } }
-@keyframes tavora-toast-grow { from { transform: scale(0.96); } }
-@keyframes tavora-toast-shrink { to { transform: scale(0.96); } }
+/* Coming and going: the slot slides in from the screen edge the stack sits on (12px, down from the bottom edge, up from
+   the top one) while it fades and grows from 0.96, and leaves the same way, quicker. These are transitions, not
+   keyframes: a toast that is pushed out while it is still arriving turns around from where it is, and does not jump. */
+.tavora-toaster { --tavora-toast-shift: 12px; }
+.tavora-toaster[data-position="top-center"] { --tavora-toast-shift: -12px; }
+.tavora-toast-slot { transform-origin: bottom center; }
+.tavora-toaster[data-position="top-center"] .tavora-toast-slot { transform-origin: top center; }
+.tavora-toaster[data-position="bottom-right"] .tavora-toast-slot { transform-origin: bottom right; }
+.tavora-toast-enter-active { transition: opacity 0.25s var(--tavora-toast-ease), transform var(--duration-move, 300ms) var(--tavora-toast-spring); }
+.tavora-toast-leave-active { transition: opacity 0.16s var(--tavora-toast-ease), transform 0.18s var(--tavora-toast-ease); }
+.tavora-toast-enter-from,
+.tavora-toast-leave-to { opacity: 0; transform: translateY(var(--tavora-toast-shift)) scale(0.96); }
 
 .tavora-toast {
   box-sizing: border-box;
@@ -121,26 +124,24 @@
 
 /* A new title slides up into place, the old one out above it. */
 .tavora-toast-line-enter-active,
-.tavora-toast-line-leave-active { transition: opacity var(--duration-move, 300ms) var(--tavora-toast-ease), transform var(--duration-move, 300ms) var(--tavora-toast-ease), filter var(--duration-move, 300ms) var(--tavora-toast-ease); }
+.tavora-toast-line-leave-active { transition: opacity var(--duration-move, 300ms) var(--tavora-toast-ease), transform var(--duration-move, 300ms) var(--tavora-toast-ease); }
 .tavora-toast-line-leave-active { position: absolute; inset-inline: 0; top: 2px; }
-.tavora-toast-line-enter-from { opacity: 0; transform: translateY(100%); filter: blur(6px); }
-.tavora-toast-line-leave-to { opacity: 0; transform: translateY(-100%); filter: blur(6px); }
+.tavora-toast-line-enter-from { opacity: 0; transform: translateY(100%); }
+.tavora-toast-line-leave-to { opacity: 0; transform: translateY(-100%); }
 
 .tavora-toast-action-enter-active,
-.tavora-toast-action-leave-active { transition: opacity var(--duration-move, 300ms) var(--tavora-toast-ease), transform var(--duration-move, 300ms) var(--tavora-toast-ease), filter var(--duration-move, 300ms) var(--tavora-toast-ease); }
+.tavora-toast-action-leave-active { transition: opacity var(--duration-move, 300ms) var(--tavora-toast-ease), transform var(--duration-move, 300ms) var(--tavora-toast-ease); }
 .tavora-toast-action-enter-from,
-.tavora-toast-action-leave-to { opacity: 0; transform: translateX(6px); filter: blur(4px); }
+.tavora-toast-action-leave-to { opacity: 0; transform: translateX(6px); }
 
 /* Reduced motion: short fades only, the spinner stands still. */
 @media (prefers-reduced-motion: reduce) {
   .tavora-toast,
   .tavora-toast-layer { transition: opacity 0.2s linear; }
   .tavora-toast-enter-active,
-  .tavora-toast-leave-active { animation: none; transition: opacity 0.2s linear; }
+  .tavora-toast-leave-active { transition: opacity 0.2s linear; }
   .tavora-toast-enter-from,
-  .tavora-toast-leave-to { opacity: 0; }
-  .tavora-toast-enter-active .tavora-toast,
-  .tavora-toast-leave-active .tavora-toast,
+  .tavora-toast-leave-to { opacity: 0; transform: none; }
   .tavora-toast-icon-enter-active,
   .tavora-toast-icon[data-icon] path,
   .tavora-toast-spinner { animation: none; }
@@ -151,5 +152,5 @@
   .tavora-toast-line-enter-from,
   .tavora-toast-line-leave-to,
   .tavora-toast-action-enter-from,
-  .tavora-toast-action-leave-to { transform: none; filter: none; }
+  .tavora-toast-action-leave-to { transform: none; }
 }
