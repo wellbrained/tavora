@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { AlertTriangle, Blocks, FolderOpen, Download, CheckCircle2, Info, LayoutGrid, Link2, Loader2, MoreHorizontal, Plus, StickyNote, Store, X, XCircle } from "@lucide/vue";
+import { AlertTriangle, Blocks, Puzzle, FolderOpen, Download, CheckCircle2, Info, LayoutGrid, Link2, Loader2, MoreHorizontal, Plus, StickyNote, Store, X, XCircle } from "@lucide/vue";
 import { SegmentedControl, Tooltip } from "@tavora/official-ui";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
 import { Expandable } from "@tavora/official-ui/components/ui/expandable";
+import { FadeImage } from "@tavora/official-ui/components/ui/fade-image";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { ActionList, type ActionEntry } from "@tavora/official-ui/components/ui/action-list";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
@@ -13,12 +14,13 @@ import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-li
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
+import { Skeleton, placeholderText } from "@tavora/official-ui/components/ui/skeleton";
 import { Sparkline } from "@tavora/official-ui/components/ui/sparkline";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@tavora/official-ui/components/ui/table";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger, TabStrip, type StripTab } from "@tavora/official-ui/components/ui/tabs";
-import { ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import DemoSection from "../DemoSection.vue";
 import ModuleSettingsDemo from "./ModuleSettingsDemo.vue";
 import Specimen from "../Specimen.vue";
@@ -91,6 +93,34 @@ const PLATE_GROUPS: NavGroup[] = [
   { ...NAV_GROUPS[0]!, icon: Blocks, class: "[--tone:var(--primary)]" },
   { ...NAV_GROUPS[1]!, icon: Store, class: "[--tone:var(--info)]" },
 ];
+
+// Skeleton: the real card with made-up text while it "loads", muted bars of the same boxes.
+const cardLoading = ref(false);
+const card = computed(() =>
+  cardLoading.value
+    ? { name: placeholderText(14), by: placeholderText(10), text: placeholderText(120) }
+    : { name: "Satisfactory Planner", by: "by Wellbrained", text: "Plan factories, belts and power for your next run, and see what each build needs before you place it." },
+);
+let cardTimer: ReturnType<typeof setTimeout> | undefined;
+function loadCard(ms: number) {
+  clearTimeout(cardTimer);
+  cardLoading.value = true;
+  cardTimer = setTimeout(() => (cardLoading.value = false), ms);
+}
+onBeforeUnmount(() => {
+  clearTimeout(cardTimer);
+  clearTimeout(pictureTimer);
+});
+// FadeImage: a picture that arrives late, one that never does, and one that is there at once.
+const PICTURE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAGElEQVR4nGPIq+iZtmALhGSAs4AkA04ZALkyGuGrUrMPAAAAAElFTkSuQmCC";
+const latePicture = ref<string | null>(null);
+let pictureTimer: ReturnType<typeof setTimeout> | undefined;
+function loadPicture() {
+  clearTimeout(pictureTimer);
+  latePicture.value = null;
+  pictureTimer = setTimeout(() => (latePicture.value = `${PICTURE}#${Date.now()}`), 900);
+}
+loadPicture();
 function bump(by: number) {
   progress.value = Math.min(100, Math.max(0, progress.value + by));
 }
@@ -120,7 +150,7 @@ function bump(by: number) {
         </Specimen>
       </DemoSection>
 
-<DemoSection v-if="visible.has('progress')" id="progress" :title="title('progress')" description="Show progress the user started. Nothing loops on its own.">
+<DemoSection v-if="visible.has('progress')" id="progress" :title="title('progress')" description="Show progress the user started. Skeleton and FadeImage keep a view from jumping while it loads.">
         <Specimen label="Progress bar" column>
           <div class="flex items-center gap-3">
             <Progress :model-value="progress" class="max-w-64" aria-label="Import progress" />
@@ -145,11 +175,27 @@ function bump(by: number) {
           <Loader2 class="text-muted-foreground size-4 animate-spin" :stroke-width="1.5" />
           <span class="text-muted-foreground text-sm">Loading notes…</span>
         </Specimen>
-        <Specimen label="Placeholder rows" column>
-          <div v-for="width in ['w-3/4', 'w-1/2', 'w-2/3']" :key="width" class="flex items-center gap-3">
-            <span class="bg-muted size-5 flex-none rounded-full" />
-            <span :class="['bg-muted h-3 rounded-sm', width]" />
+        <Specimen label="Skeleton: the real card, drawn as bars while it loads" column>
+          <div class="flex gap-2">
+            <Button size="xs" variant="secondary" :disabled="off" @click="loadCard(1800)">Load slowly</Button>
+            <Button size="xs" variant="secondary" :disabled="off" @click="loadCard(60)">Load fast (no placeholder)</Button>
           </div>
+          <Skeleton :loading="cardLoading" class="flex max-w-sm flex-col gap-3 rounded-xl border p-4" data-testid="skeleton-card">
+            <div class="flex min-w-0 gap-3">
+              <span class="bg-muted/60 grid size-12 flex-none place-items-center rounded-xl"><Puzzle class="text-muted-foreground size-6" :stroke-width="1.5" /></span>
+              <div class="min-w-0">
+                <p class="truncate font-medium">{{ card.name }}</p>
+                <p class="text-muted-foreground truncate text-xs">{{ card.by }}</p>
+                <p class="text-muted-foreground mt-1.5 line-clamp-2 text-sm">{{ card.text }}</p>
+              </div>
+            </div>
+            <div class="flex justify-end"><Button size="sm">Install</Button></div>
+          </Skeleton>
+        </Specimen>
+        <Specimen label="Picture that loads late: box first, fades in; a failed one keeps the icon">
+          <FadeImage :src="latePicture" :pending="latePicture === null" class="size-16 rounded-xl" alt="" data-testid="fade-late"><template #fallback><Puzzle class="text-muted-foreground size-6" :stroke-width="1.5" /></template></FadeImage>
+          <FadeImage src="missing.png" class="size-16 rounded-xl" alt="" data-testid="fade-failed"><template #fallback><Puzzle class="text-muted-foreground size-6" :stroke-width="1.5" /></template></FadeImage>
+          <Button size="xs" variant="secondary" :disabled="off" @click="loadPicture">Load again</Button>
         </Specimen>
       </DemoSection>
 

@@ -58,6 +58,9 @@ function listing(id: string, name: string, zip: Buffer, owner: string, fields: R
   };
 }
 
+/** How long the fake catalog waits before it lists its modules (0 for most tests). */
+let listDelay = 0;
+
 /** A catalog server that answers like api.mytavora.app/v1/catalog, and records what was asked. */
 async function catalogServer(modules: Listed[]): Promise<{ url: string; server: Server; asked: string[]; reports: unknown[]; moduleRequests: { status: number; bodies: unknown[] } }> {
   const asked: string[] = [];
@@ -88,6 +91,7 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
       return moduleRequests.status === 204 ? (response.writeHead(204), response.end()) : send(moduleRequests.status, { error: "no" });
     }
     if (url.pathname === "/v1/catalog") {
+      if (listDelay) await new Promise((resolve) => setTimeout(resolve, listDelay));
       const game = url.searchParams.get("game");
       const personal = url.searchParams.get("personal") === "1";
       const fits = (entry: Record<string, unknown>) => {
@@ -125,6 +129,43 @@ async function catalogServer(modules: Listed[]): Promise<{ url: string; server: 
   const address = server.address() as { port: number };
   return { url: `http://127.0.0.1:${address.port}`, server, asked, reports, moduleRequests };
 }
+
+test("while the catalog loads, its placeholder cards can't be focused, clicked or read, and they give way to the real ones", async () => {
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const owner = fingerprint(key);
+  const tracker = await packed("wellbrained.tracker", "Tracker", key);
+  const { url, server, asked } = await catalogServer([{ entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { publisher: "wellbrained" }), body: tracker }]);
+  listDelay = 2500;
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
+  try {
+    await openWorkspace(page, "poe2");
+    await page.getByTestId("add-module").click();
+    await page.getByTestId("module-tab-browse").click();
+    const install = page.getByTestId("catalog-install-placeholder.0");
+    await expect(install).toHaveCount(1);
+    // Inside an inert, hidden wrapper: the browser won't focus it, and a screen reader doesn't see it. Real text for them stays outside.
+    const outcome = await install.evaluate((button: HTMLElement) => {
+      button.focus();
+      return { focused: document.activeElement === button, inert: !!button.closest("[inert]"), hidden: button.closest("[aria-hidden=true]") !== null };
+    });
+    expect(outcome).toEqual({ focused: false, inert: true, hidden: true });
+    await expect(page.getByTestId("catalog-loading")).toHaveCount(1);
+    // Tab never lands on a placeholder.
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press("Tab");
+      expect(await page.evaluate(() => document.activeElement?.closest("[data-skeleton]") !== null)).toBe(false);
+    }
+    // The real card replaces them, and it can be used.
+    await expect(page.getByTestId("catalog-install-wellbrained.tracker")).toBeEnabled({ timeout: 10000 });
+    await expect(page.getByTestId("catalog-install-placeholder.0")).toHaveCount(0);
+    await expect(page.getByTestId("catalog-loading")).toHaveCount(0);
+    expect(asked).toContain("/v1/catalog");
+  } finally {
+    listDelay = 0;
+    await app.close();
+    server.close();
+  }
+});
 
 test("a user browses the catalog for a game, sees who publishes a module and installs it", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;

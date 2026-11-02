@@ -25,10 +25,14 @@
   --duration-pop-out: 100ms;
   /* A menu, dropdown, select or popover. */
   --duration-menu: 180ms;
-  /* A panel or a bigger thing coming or going. */
+  /* Content arriving over its placeholder (Skeleton). */
+  --duration-reveal: 200ms;
+  /* A panel or a bigger thing coming or going. A picture fading in when it has loaded (FadeImage). */
   --duration-panel: 250ms;
   /* Something moving across the screen. The longest the interface gets. */
   --duration-move: 300ms;
+  /* One breath of a placeholder that waits (Skeleton). The only motion that repeats; it is off for reduced motion. */
+  --duration-pulse: 1600ms;
   /* Items of a list sliding out of the way of one that is dragged, and settling into their place. */
   --duration-reorder: 200ms;
 }

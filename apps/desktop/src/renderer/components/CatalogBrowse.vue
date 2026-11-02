@@ -5,7 +5,8 @@
 // every text here is shown as plain text, and "by <name>" is only the developer name the service gave.
 // Report is on the module's page: it asks once more, then sends only the module id, its key and its zip's hash (C12).
 // A card's icon or name opens the module's page with its readme, screenshots, homepage and reviews (CatalogModuleDialog.vue).
-// Each card shows its rating (CatalogRating.vue); the list sorts by name, rating or newest.
+// Each card shows its rating (CatalogRating.vue); the list sorts by name, rating or newest. While the list loads, the
+// same cards are drawn with made-up modules as muted bars (Skeleton), so the list does not jump when it arrives.
 import { computed, onMounted, ref, watch } from "vue";
 import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api";
 import { act, addModule, api, dialog, installProgress, openSettings, state, type AddModuleRequest } from "../host";
@@ -14,9 +15,11 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
 import { useActionStatus } from "../action-status";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
+import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@tavora/official-ui/components/ui/select";
 import { t } from "../i18n";
 import { formatSize } from "../catalog-size";
+import { PLACEHOLDER_MODULES } from "../catalog-placeholder";
 import { cn } from "@/lib/utils";
 import { CircleCheck, Gamepad2, ShieldCheck, WifiOff } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
@@ -69,6 +72,9 @@ const shown = computed(() => {
     .sort(sorters[sort.value]);
 });
 
+/** The cards: the modules, or while the list loads made-up ones that the Skeleton draws as bars. */
+const cards = computed(() => (result.value ? shown.value : PLACEHOLDER_MODULES));
+
 watch(
   () => (result.value?.status === "ok" ? shown.value.length : null),
   (count) => emit("count", count),
@@ -116,8 +122,8 @@ function settings() {
 
 <template>
   <div class="min-h-0 flex-1 thin-scroll overflow-y-auto px-6 pb-8 [scrollbar-gutter:stable] lg:px-10" data-testid="catalog-results">
-    <p v-if="!result" class="text-muted-foreground py-16 text-center" role="status" data-testid="catalog-loading">{{ t("catalog.loading") }}</p>
-    <EmptyState v-else-if="result.status !== 'ok'" class="mt-8" role="status" :title="t(`catalog.problem.${result.status}.title`)" :description="t(`catalog.problem.${result.status}.text`)" :data-testid="`catalog-${result.status}`">
+    <p v-if="!result" class="sr-only" role="status" data-testid="catalog-loading">{{ t("catalog.loading") }}</p>
+    <EmptyState v-if="result && result.status !== 'ok'" class="mt-8" role="status" :title="t(`catalog.problem.${result.status}.title`)" :description="t(`catalog.problem.${result.status}.text`)" :data-testid="`catalog-${result.status}`">
       <template #icon><WifiOff /></template>
       <template #action>
         <Button v-if="result.status === 'off'" variant="secondary" data-testid="catalog-settings" @click="settings">{{ t("catalog.openSettings") }}</Button>
@@ -138,8 +144,9 @@ function settings() {
           </SelectContent>
         </Select>
       </div>
+      <Skeleton :loading="!result">
       <ul class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
-        <li v-for="module in shown" :key="module.id" class="bg-background/40 hover:border-primary/40 flex flex-col gap-3 rounded-xl border p-4 transition-colors" :data-testid="`catalog-${module.id}`">
+        <li v-for="module in cards" :key="module.id" class="bg-background/40 hover:border-primary/40 flex flex-col gap-3 rounded-xl border p-4 transition-colors" :data-testid="`catalog-${module.id}`">
           <div class="flex min-w-0 gap-3">
             <button type="button" class="focus-visible:ring-ring flex-none rounded-xl outline-none focus-visible:ring-2" tabindex="-1" aria-hidden="true" @click="open(module)">
               <CatalogIcon :module-id="module.id" :has="module.icon" />
@@ -186,9 +193,10 @@ function settings() {
           </div>
         </li>
       </ul>
-      <p v-if="!shown.length" class="text-muted-foreground py-16 text-center" data-testid="catalog-empty">
+      <p v-if="result && !shown.length" class="text-muted-foreground py-16 text-center" data-testid="catalog-empty">
         {{ query.trim() ? t("addModule.none", { query: query.trim() }) : t("catalog.empty") }}
       </p>
+      </Skeleton>
     </template>
     <CatalogModuleDialog v-if="info" :module="info" :at-reviews="infoAtReviews" :installed="installed.has(info.id)" :status="statusOf(info.id)" :progress="installProgress[info.id] ?? null" :size="formatSize(info.size)"
       :error="errors[info.id]"

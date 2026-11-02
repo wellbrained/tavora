@@ -10,8 +10,10 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
+import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { askKey, type AskedGame } from "../../shared/module-request";
 import { t } from "../i18n";
+import { PLACEHOLDER_MODULES } from "../catalog-placeholder";
 import { addInputFor, defaultTicks, type PickerRow } from "../lib/game-picker";
 import { useGamePicker, whenOf } from "../lib/use-game-picker";
 import CatalogIcon from "./CatalogIcon.vue";
@@ -252,11 +254,12 @@ function onPanelKey(event: KeyboardEvent) {
               <p v-if="activeRow?.workspaceId" class="text-muted-foreground text-sm">{{ t("addGame.added") }}</p>
               <template v-else>
                 <p class="text-muted-foreground truncate text-sm font-medium" :title="heading" data-testid="panel-heading">{{ heading }}</p>
-                <div v-if="activeRow" class="flex flex-col gap-1.5">
-                  <p v-if="catalogModules === null" class="text-muted-foreground text-xs" role="status">{{ t("addGame.loadingModules") }}</p>
-                  <template v-else-if="panelModules.length">
+                <!-- While the catalog answers, the real rows are drawn with made-up modules as muted bars (Skeleton). -->
+                <p v-if="activeRow && catalogModules === null" class="sr-only" role="status">{{ t("addGame.loadingModules") }}</p>
+                <Skeleton v-if="activeRow" :loading="catalogModules === null" class="flex flex-col gap-1.5">
+                  <template v-if="catalogModules === null || panelModules.length">
                     <label
-                      v-for="module in panelModules"
+                      v-for="module in catalogModules === null ? PLACEHOLDER_MODULES.slice(0, 2) : panelModules"
                       :key="module.id"
                       class="hover:bg-accent/60 flex cursor-pointer items-start gap-2.5 rounded-lg p-1.5"
                       :data-testid="`pick-module-${module.id}`"
@@ -265,7 +268,7 @@ function onPanelKey(event: KeyboardEvent) {
                       <CatalogIcon :module-id="module.id" :has="module.icon" size="size-8" />
                       <span class="min-w-0 flex-1">
                         <span class="block truncate text-sm font-medium"
-                          >{{ module.name }}<span class="text-muted-foreground font-normal"> · {{ module.official ? t("addGame.byTavora") : t("addGame.community") }}</span></span
+                          ><span>{{ module.name }}</span><span class="text-muted-foreground font-normal"> · {{ module.official ? t("addGame.byTavora") : t("addGame.community") }}</span></span
                         >
                         <span v-if="module.description" class="text-muted-foreground line-clamp-2 block text-xs">{{ module.description }}</span>
                       </span>
@@ -279,7 +282,7 @@ function onPanelKey(event: KeyboardEvent) {
                       <p v-if="askError" class="text-muted-foreground text-xs" role="alert" data-testid="ask-module-error">{{ askError }}</p>
                     </template>
                   </div>
-                </div>
+                </Skeleton>
                 <p v-else class="text-muted-foreground text-sm" data-testid="panel-no-modules">{{ noModulesText }}</p>
               </template>
 
