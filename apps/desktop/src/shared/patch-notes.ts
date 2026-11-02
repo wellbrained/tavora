@@ -28,6 +28,22 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.61",
+    date: "2026-11-02",
+    title: "Lists, dialogs and settings pages move smoothly",
+    notes: [
+      "A row you add grows in, and one you remove folds away while the rows below slide up.",
+      "Dialogs rise a little as they fade in, and leave a bit quicker.",
+      "A settings page you pick from the side menu fades in.",
+      "A game you pick on the rail fades in.",
+      "With reduced motion on, all of these only fade.",
+    ],
+    prs: [
+      { number: 620, title: "Motion: lists, dialogs, settings pages and workspace switches" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "overlays", "pdf-viewer", "publishing", "rail", "settings", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
+  },
+  {
     version: "0.23.60",
     date: "2026-11-02",
     title: "Changes show right away",
