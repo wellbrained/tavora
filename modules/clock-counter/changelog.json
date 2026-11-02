@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.24",
+    "date": "2026-11-02",
+    "notes": [
+      "Each row has one ··· menu with Settings, Move up, Move down and Delete; dragging rows works again."
+    ]
+  },
+  {
     "version": "0.1.23",
     "date": "2026-11-02",
     "notes": [

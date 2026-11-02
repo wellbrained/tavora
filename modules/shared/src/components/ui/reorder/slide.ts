@@ -36,3 +36,21 @@ export function slideOffsets(slots: readonly Slot[], id: string, target: string,
   })
   return offsets
 }
+
+/**
+ * Where the dragged item lands for a pointer at `pointer` (along the axis), judged against the layout as it was when the
+ * drag began, never against the items as they are on screen. The others slide aside while a drag runs, so measuring them
+ * live makes a row that has just slid under the pointer ask for the swap back, again and again. Against the settled
+ * layout the answer depends on the pointer alone: the item goes before the first other one whose middle the pointer has
+ * not passed, or last. `among` limits which items count as places (a list that is shown in parts). Null when that would
+ * leave the order as it is.
+ */
+export function placeAt(slots: readonly Slot[], id: string, pointer: number, among?: readonly string[]): { id: string; after: boolean } | null {
+  const others = slots.filter((slot) => slot.id !== id && (!among || among.includes(slot.id)))
+  const last = others[others.length - 1]
+  if (!last || !slots.some((slot) => slot.id === id)) return null
+  const next = others.find((slot) => pointer < slot.start + slot.size / 2)
+  const place = next ? { id: next.id, after: false } : { id: last.id, after: true }
+  const order = slots.map((slot) => slot.id)
+  return placeNextTo(order, id, place.id, place.after).join("\n") === order.join("\n") ? null : place
+}

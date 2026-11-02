@@ -1,18 +1,49 @@
 <script setup lang="ts">
-// One clock or counter as a single compact row: its name, the time or number, the buttons to run it, and a gear that
-// opens its settings in a dialog over the workspace; what is open is this panel's own. On a very narrow panel the row wraps to two lines.
-import { Flag, Hash, Hourglass, Minus, Pause, Play, Plus, RotateCcw, Settings, Timer, Trash2 } from "@lucide/vue";
+// One clock or counter as a single compact row: its name, the time or number, the buttons to run it, and a ··· button
+// whose menu has the rest (Settings, which opens in a dialog over the workspace and is this panel's own; Move up, Move down, Delete).
+// On a very narrow panel the row wraps to two lines.
+import { ArrowDown, ArrowUp, Ellipsis, Flag, Hash, Hourglass, Minus, Pause, Play, Plus, RotateCcw, Settings, Timer, Trash2 } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
-import { computed, inject } from "vue";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { computed, inject, ref } from "vue";
 import { t } from "./i18n";
-import { goalReached, lapSplits, readClock, sourcesOf, type Item } from "./items";
+import { canMove, goalReached, lapSplits, readClock, sourcesOf, type Item } from "./items";
 import { PANEL } from "./panel";
 import { formatSeconds } from "./time";
 
+// One ··· button ends the row; it opens the row's menu. A right-click (or Shift+F10) opens the same menu, which the kit
+// places next to the button at the row's end, never at the pointer.
 const props = defineProps<{ item: Item }>();
 const emit = defineEmits<{ toggleEdit: [] }>();
 const panel = inject(PANEL)!;
+
+const menuOpen = ref(false);
+
+function onContextMenu(event: MouseEvent): void {
+  // Inside a field or a link the usual menu stays; nothing here has one, but a future one should keep its copy and paste.
+  if ((event.target as Element | null)?.closest?.("input, textarea, [contenteditable=true]")) return;
+  event.preventDefault();
+  menuOpen.value = true;
+}
+
+/** Del on the row deletes it at once, as in the menu (Undo is in the toast). */
+function onKey(event: KeyboardEvent): void {
+  if (event.key !== "Delete" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) return;
+  if ((event.target as Element | null)?.closest?.("input, textarea, [contenteditable=true]")) return;
+  event.preventDefault();
+  panel.remove(props.item);
+}
+
+function onMenuKey(event: KeyboardEvent): void {
+  if (event.key !== "Delete") return;
+  event.preventDefault();
+  menuOpen.value = false;
+  panel.remove(props.item);
+}
+
+const canUp = computed(() => canMove(panel.store.list.value, props.item.id, -1));
+const canDown = computed(() => canMove(panel.store.list.value, props.item.id, 1));
 
 const icon = computed(() => (props.item.kind === "countdown" ? Hourglass : props.item.kind === "stopwatch" ? Timer : Hash));
 const name = computed(() => props.item.label || t(`kind.${props.item.kind}`));
@@ -55,7 +86,7 @@ const startLabel = computed(() => {
 </script>
 
 <template>
-  <article class="bg-card group/card rounded-lg border" :data-testid="`item-${item.id}`">
+  <article class="bg-card rounded-lg border" :data-testid="`item-${item.id}`" @contextmenu="onContextMenu" @keydown="onKey">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 pr-1.5 pl-3">
       <!-- Name and type. A small marker for linked counters ("also adds to") goes at the end of this block. -->
       <div class="flex min-w-24 flex-[1_1_6rem] items-center gap-2" data-testid="item-name">
@@ -100,21 +131,22 @@ const startLabel = computed(() => {
           </Button>
         </template>
 
-        <Button variant="ghost" size="icon-sm" :aria-label="t('item.edit', { label: name })" :title="t('item.edit', { label: name })" aria-haspopup="dialog" :data-testid="`edit-${item.id}`" @click="emit('toggleEdit')">
-          <Settings :stroke-width="1.5" />
-        </Button>
-        <!-- A quick action on the row: it shows when the row is pointed at or has the focus, and deletes at once (Undo is in the toast). -->
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          class="text-muted-foreground hover:text-destructive opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100 focus-visible:opacity-100"
-          :aria-label="t('item.delete', { label: name })"
-          :title="t('edit.delete')"
-          :data-testid="`delete-${item.id}`"
-          @click="panel.remove(item)"
-        >
-          <Trash2 :stroke-width="1.5" />
-        </Button>
+        <DropdownMenu v-model:open="menuOpen">
+          <DropdownMenuTrigger as-child>
+            <Button variant="ghost" size="icon-sm" :aria-label="t('item.more', { label: name })" :title="t('item.more', { label: name })" :data-testid="`more-${item.id}`">
+              <Ellipsis :stroke-width="1.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" @keydown="onMenuKey">
+            <DropdownMenuItem :data-testid="`menu-settings-${item.id}`" @select="emit('toggleEdit')"><Settings :stroke-width="1.5" />{{ t("item.settings") }}</DropdownMenuItem>
+            <DropdownMenuItem :disabled="!canUp" :data-testid="`menu-up-${item.id}`" @select="panel.move(item.id, -1)"><ArrowUp :stroke-width="1.5" />{{ t("item.moveUp") }}</DropdownMenuItem>
+            <DropdownMenuItem :disabled="!canDown" :data-testid="`menu-down-${item.id}`" @select="panel.move(item.id, 1)"><ArrowDown :stroke-width="1.5" />{{ t("item.moveDown") }}</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" :data-testid="`delete-${item.id}`" @select="panel.remove(item)">
+              <Trash2 :stroke-width="1.5" />{{ t("edit.delete") }}<DropdownMenuShortcut>Del</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
 

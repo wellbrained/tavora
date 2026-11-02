@@ -1,5 +1,5 @@
 import { nextTick, onBeforeUnmount, type Ref } from "vue"
-import { slideOffsets, type Slot } from "./slide"
+import { placeAt, slideOffsets, type Slot } from "./slide"
 import { commitAndWait } from "./settle"
 import "./reorder.css"
 
@@ -22,7 +22,10 @@ export function reducedMotion(): boolean {
  * Motion for a list the user reorders by dragging. The caller still owns the order and the drop line; this only moves
  * the items it is told about, with `translate` and `scale`:
  * - `begin(id)` on grab (`lift` for a drag the page draws itself: the item lifts and `follow` moves it with the pointer),
- * - `preview(place)` while over a place: the others slide to open a gap there (`null`: back where they were),
+ * - `over(x, y)` while the pointer moves in a native drag: it works out the place from the pointer and the layout at the
+ *   grab (never from the items as they slide, which would swap them back and forth) and previews it; returns the place,
+ *   or null where the order would stay. A drag that is not over the list calls `preview(null)`.
+ * - `preview(place)` for a place the page works out itself: the others slide to open a gap there (`null`: back where they were),
  * - `drop(commit)` on release: `commit` changes the order and everything settles from where it was on screen,
  * - `cancel()` when the drag ends without a move.
  * Keyboard reordering never calls it, so it stays instant. Items sit in a list along one axis, one level deep.
@@ -67,7 +70,7 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
   function begin(id: string, { lift = false } = {}) {
     clearTimeout(cleanup)
     reset()
-    if (!container.value || reducedMotion()) return
+    if (!container.value) return
     dragId = id
     const el = container.value
     scroll0 = { left: el.scrollLeft, top: el.scrollTop }
@@ -75,6 +78,7 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
       const box = item.getBoundingClientRect()
       return { id: idOf(item), start: axis === "x" ? box.left : box.top, size: axis === "x" ? box.width : box.height }
     })
+    if (reducedMotion()) return
     el.classList.add("tavora-reordering")
     if (lift) {
       lifted = items().find((item) => idOf(item) === id) ?? null
@@ -86,13 +90,23 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
 
   /** Where the dragged item would land; the others slide to open the gap. */
   function preview(place: { id: string; after: boolean } | null) {
-    if (!dragId) return
+    if (!dragId || reducedMotion()) return
     const offsets = place ? slideOffsets(slots, dragId, place.id, place.after) : null
     for (const el of items()) {
       const id = idOf(el)
       if (id === dragId && lifted) continue
       shift(el, offsets?.get(id) ?? 0)
     }
+  }
+
+  /** The pointer is at `x`, `y` (viewport) in a native drag: the place it means, measured against the layout at the grab, and previewed. `among` limits the places to some ids. */
+  function over(x: number, y: number, among?: readonly string[]): { id: string; after: boolean } | null {
+    if (!dragId || !container.value) return null
+    // The list may have scrolled since the grab: the pointer is taken back to where the layout was measured.
+    const pointer = axis === "x" ? x + (container.value.scrollLeft - scroll0.left) : y + (container.value.scrollTop - scroll0.top)
+    const place = placeAt(slots, dragId, pointer, among)
+    preview(place)
+    return place
   }
 
   /** A lifted item moves with the pointer: `dx`, `dy` is how far the pointer has gone since the grab. */
@@ -110,7 +124,7 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
    */
   async function drop(commit: () => void | Promise<void>) {
     const el = container.value
-    if (!el || !dragId) {
+    if (!el || !dragId || reducedMotion()) {
       await commit()
       reset()
       return
@@ -173,7 +187,7 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
     reset()
   })
 
-  return { begin, preview, follow, drop, cancel }
+  return { begin, preview, over, follow, drop, cancel }
 }
 
 /**

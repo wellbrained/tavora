@@ -14,6 +14,7 @@ import {
   linkedGroups,
   MAX,
   memberNames,
+  canMove,
   move,
   moveTo,
   newItem,
@@ -209,6 +210,38 @@ describe("linked groups", () => {
     expect(ids(visualOrder(data))).toEqual(["run", "solo", "deaths", "squats", "situps"]);
     move(data, "situps", 1);
     expect(ids(visualOrder(data))).toEqual(["run", "solo", "deaths", "squats", "situps"]);
+  });
+
+  it("say whether a move would change anything, so the menu can switch Move up and Move down off at the ends", () => {
+    const data = list();
+    // deaths, situps, squats (a group), run, solo.
+    expect(canMove(data, "deaths", -1)).toBe(false);
+    expect(canMove(data, "deaths", 1)).toBe(true);
+    expect(canMove(data, "situps", -1)).toBe(true);
+    // The last counter of the group still moves: at the edge the whole group goes past the next row.
+    expect(canMove(data, "squats", 1)).toBe(true);
+    expect(canMove(data, "solo", 1)).toBe(false);
+    expect(canMove(data, "solo", -1)).toBe(true);
+    expect(canMove(data, "nobody", 1)).toBe(false);
+    // It agrees with move() everywhere.
+    for (const item of data.items) {
+      for (const by of [-1, 1] as const) {
+        const copy = structuredClone(data);
+        move(copy, item.id, by);
+        expect(canMove(data, item.id, by)).toBe(ids(visualOrder(copy)).join() !== ids(visualOrder(data)).join());
+      }
+    }
+  });
+
+  it("move a whole linked group as one block among the rows, and a counter inside it first", () => {
+    const data = list();
+    move(data, "deaths", 1);
+    expect(ids(visualOrder(data))).toEqual(["situps", "deaths", "squats", "run", "solo"]);
+    move(data, "deaths", 1);
+    expect(ids(visualOrder(data))).toEqual(["situps", "squats", "deaths", "run", "solo"]);
+    // At the group's end it goes on as a block: one place down, never into the middle of another row.
+    move(data, "deaths", 1);
+    expect(ids(visualOrder(data))).toEqual(["run", "situps", "squats", "deaths", "solo"]);
   });
 
   it("can be dropped before or after another row, a group going as one block", () => {

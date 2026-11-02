@@ -327,6 +327,9 @@ export const en = {
   "ex.lists.AnimatedRows": "Rows added and removed",
   "ex.lists.AnimatedRows.note": "A new row grows in; a removed one folds away while the rows below slide up. Replacing the whole list stays still.",
   "ex.lists.AnimatedRows.rule": "Rows the user adds or removes in a vertical list use AnimatedList.",
+  "ex.lists.ReorderRows": "Rows you drag",
+  "ex.lists.ReorderRows.note": "Drag a row below the next one and hold. The rows slide aside once and stay put.",
+  "ex.lists.ReorderRows.rule": "A list the user reorders by dragging uses useReorderMotion: over(x, y) works out the place from the layout at the grab.",
   "ex.lists.SettingRows": "Setting rows",
   "ex.lists.Card": "Card",
 
@@ -715,6 +718,9 @@ export const de: Record<TextKey, string> = {
   "ex.lists.AnimatedRows": "Zeilen hinzufügen und entfernen",
   "ex.lists.AnimatedRows.note": "Eine neue Zeile wächst hinein; eine entfernte klappt weg, die Zeilen darunter rücken nach. Eine ganz neue Liste bleibt ruhig.",
   "ex.lists.AnimatedRows.rule": "Zeilen, die man in einer senkrechten Liste hinzufügt oder entfernt, nutzen AnimatedList.",
+  "ex.lists.ReorderRows": "Zeilen ziehen",
+  "ex.lists.ReorderRows.note": "Zieh eine Zeile unter die nächste und halte sie. Die Zeilen weichen einmal aus und bleiben stehen.",
+  "ex.lists.ReorderRows.rule": "Eine Liste, die man per Ziehen umsortiert, nutzt useReorderMotion: over(x, y) bestimmt den Platz aus dem Layout beim Greifen.",
   "ex.lists.SettingRows": "Einstellungszeilen",
   "ex.lists.Card": "Karte",
 

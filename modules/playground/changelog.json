@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.23",
+    "date": "2026-11-02",
+    "notes": [
+      "New specimen: rows you drag to reorder."
+    ]
+  },
+  {
     "version": "0.1.22",
     "date": "2026-11-02",
     "notes": [
