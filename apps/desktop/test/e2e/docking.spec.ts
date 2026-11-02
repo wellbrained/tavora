@@ -236,7 +236,7 @@ test("a module is removed from one workspace from its panel menu, leaving empty 
   await app.close();
 });
 
-test("a tab dragged to the edge of another group splits it", async () => {
+test("a tab dragged to the edge of the dock makes a column, and the preview shows it", async () => {
   const { app, page } = await launch();
   await openModule(page, VANILLA);
   await openModule(page, REACT);
@@ -250,19 +250,24 @@ test("a tab dragged to the edge of another group splits it", async () => {
   const box = (await content.boundingBox())!;
   const at = { dataTransfer, clientX: box.x + box.width - 10, clientY: box.y + box.height / 2 };
   await tab.dispatchEvent("dragstart", { dataTransfer });
-  // Module views are hidden during the drag, so the drop zones can be seen and used.
+  // Module views are hidden during the drag, so the preview can be seen and used.
   await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
-  // The drop guide shows over the group; aiming at its middle cell means a tab, at its right cell a split.
+  const preview = page.getByTestId("dock-preview");
+  // The middle of the group is a tab, 30 % in from the right a new column on that side.
   const centre = { dataTransfer, clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
   await content.dispatchEvent("dragenter", centre);
   await content.dispatchEvent("dragover", centre);
-  await expect(page.getByTestId("drop-guide")).toHaveAttribute("data-position", "center");
-  await content.dispatchEvent("dragover", { ...centre, clientX: centre.clientX + 46 });
-  await expect(page.getByTestId("drop-guide")).toHaveAttribute("data-position", "right");
+  await expect(preview).toHaveAttribute("data-target", "tab");
+  await content.dispatchEvent("dragover", { ...centre, clientX: box.x + box.width * 0.8 });
+  await expect(preview).toHaveAttribute("data-target", "split-right");
+  await expect(page.getByTestId("dock-landing")).toContainText("New column");
+  // The edge strip of the whole dock lights up at the very edge.
   await content.dispatchEvent("dragover", at);
+  await expect(preview).toHaveAttribute("data-target", "edge-right");
+  await expect(page.getByTestId("dock-edge-right")).toHaveAttribute("data-lit", "true");
   await content.dispatchEvent("drop", at);
   await tab.dispatchEvent("dragend", { dataTransfer });
-  await expect(page.getByTestId("drop-guide")).toHaveCount(0);
+  await expect(preview).toHaveCount(0);
   await expect(groups(page)).toHaveCount(2);
   const left = (await panels(page, VANILLA).boundingBox())!;
   const right = (await panels(page, REACT).boundingBox())!;
@@ -270,7 +275,7 @@ test("a tab dragged to the edge of another group splits it", async () => {
   await app.close();
 });
 
-test("dragging a column beside another in its row moves it there and shows a bar, keeping widths", async () => {
+test("dragging a column beside another in its row moves it there, keeping widths", async () => {
   const { app, page } = await launch();
   await setContentSize(app, RAIL_WIDTH + 1500, 800);
   await layOutColumns(page, 3);
@@ -285,15 +290,18 @@ test("dragging a column beside another in its row moves it there and shows a bar
   const tab = page.locator(".dv-tab", { has: panels(page, VANILLA) });
   const content = column(VUE).locator(".dv-content-container");
   const box = (await content.boundingBox())!;
-  // The guide's right cell.
-  const right = { dataTransfer, clientX: box.x + box.width / 2 + 46, clientY: box.y + box.height / 2 };
+  // The right 30 % of the Vue column.
+  const right = { dataTransfer, clientX: box.x + box.width * 0.85, clientY: box.y + box.height / 2 };
   await tab.dispatchEvent("dragstart", { dataTransfer });
   await content.dispatchEvent("dragenter", right);
   await content.dispatchEvent("dragover", right);
-  await expect(page.locator("[data-drop-line='right']")).toHaveCount(1);
+  await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "split-right");
+  // The outline is the column's own size: the groups only swap places.
+  const outline = (await page.getByTestId("dock-landing").boundingBox())!;
+  expect(Math.abs(outline.width - width)).toBeLessThanOrEqual(10);
   await content.dispatchEvent("drop", right);
   await tab.dispatchEvent("dragend", { dataTransfer });
-  await expect(page.locator("[data-drop-line]")).toHaveCount(0);
+  await expect(page.getByTestId("dock-preview")).toHaveCount(0);
 
   // Vanilla is now the last column, and every column kept its width.
   await expect(groups(page)).toHaveCount(3);
