@@ -152,6 +152,21 @@ html.floating-open .app-drag {
   -webkit-app-region: no-drag;
 }
 
+/* A menu or hint opens at once, but the module panels (native views above this page) step aside only a moment later:
+   until then popups stay unseen, so they never show half-covered. Animations wait too, and start when they show. */
+html.overlay-pending :is(
+    [data-slot$="-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="context-menu-sub-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"],
+    .tavora-tooltip
+  ) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  animation-play-state: paused !important;
+}
+
 /* Rail entries: a pill on the left edge shows state (short on hover, full
    height when active), and the icon tilts slightly and glows on hover. */
 @layer components {

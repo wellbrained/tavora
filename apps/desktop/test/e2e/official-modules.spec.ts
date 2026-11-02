@@ -737,7 +737,7 @@ test("ui playground: the segmented control's pill and the tabs' line follow the 
   await expect.poll(gap).toBeLessThan(0.05);
 
   // Nothing picked, and disabled: no pill.
-  const hidden = (label: string) => inModule(app, PLAYGROUND, `(() => { const g = document.querySelector('[role="radiogroup"][aria-label=${JSON.stringify(label)}]'); return [g.dataset.indicator, getComputedStyle(g.querySelector('[data-testid="segmented-pill"]')).opacity]; })()`);
+  const hidden = (label: string) => inModule<string[]>(app, PLAYGROUND, `(() => { const g = document.querySelector('[role="radiogroup"][aria-label=${JSON.stringify(label)}]'); return [g.dataset.indicator, getComputedStyle(g.querySelector('[data-testid="segmented-pill"]')).opacity]; })()`);
   expect(await hidden("Mixed")).toEqual(["off", "0"]);
   expect(await hidden("Locked")).toEqual(["off", "0"]);
   // The first click on a control with nothing picked slides in like every later one (it fades in out of its resting place).

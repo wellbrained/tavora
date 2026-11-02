@@ -28,6 +28,32 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.56",
+    date: "2026-11-02",
+    title: "Checkboxes, toggles and options animate when you pick them",
+    notes: [
+      "Checkboxes, radio buttons, toggles, style tiles and the side navigation animate when you pick them, and folding sections open smoothly.",
+      "The clear button in search fields pops in and out.",
+    ],
+    prs: [
+      { number: 617, title: "Kit motion: checkboxes, radios, toggles, tiles, nav, search clear and folding sections" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "publishing", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
+    version: "0.23.55",
+    date: "2026-11-02",
+    title: "Menus without the flicker",
+    notes: [
+      "Right-click menus, dropdowns and hints over a panel no longer show half-drawn first.",
+      "They open sooner, too.",
+    ],
+    prs: [
+      { number: 611, title: "Menus over panels: no half-drawn frame, and they open sooner" },
+    ],
+    tags: ["rail", "ui-kit", "workspace"],
+  },
+  {
     version: "0.23.54",
     date: "2026-11-02",
     title: "Clearer Mixed in Overlay settings",

@@ -4,15 +4,24 @@
    Curves: ease-out for things that appear, leave or answer a touch; ease-in-out for things that move across the screen.
    Never an ease-in on the interface: it starts slow, right when the eye is on it.
    Durations: nothing in the interface is longer than --duration-move.
-   Not for anything a key press starts (undo, nudges, hotkeys, switching by key), nor for what is shown all day. */
+   Not for anything a key press starts (undo, nudges, hotkeys, switching by key), nor for what is shown all day.
+   Two deliberate exceptions: Space on a checkbox is a choice like a click, so it animates like one; and a folding
+   section may animate its height (nothing else may). */
 :root {
   --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  /* A little overshoot, then settle. Only for small things popping in (dots, ticks, small icons), never for panels,
+     menus or anything big: there it reads as wobbly. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* A press on a button or a hover on a small thing. */
   --duration-press: 140ms;
   /* A tooltip. */
   --duration-tooltip: 125ms;
+  /* A small thing popping in with the spring: a tick, a dot, a clear button. */
+  --duration-pop: 240ms;
+  /* The same thing leaving: quick and plain. */
+  --duration-pop-out: 100ms;
   /* A menu, dropdown, select or popover. */
   --duration-menu: 180ms;
   /* A panel or a bigger thing coming or going. */
@@ -44,6 +53,172 @@
     to {
       opacity: 0;
       transform: scale(0.96);
+    }
+  }
+}
+
+/* Small things that change state: checkbox, radio dot, clear button, struck-through text. Nothing here adds a part to a
+   control, and a control at rest looks as it always did; only the change between states moves. They come in with a
+   little spring (--ease-spring, --duration-pop) and go quick and plain (--duration-pop-out).
+   A control that is already in its state when it appears (a ticked box in a list that just loaded) does not play. */
+@layer components {
+  /* Checkbox. The fill is the box's ::before, growing from the middle; the tick is drawn by its stroke; the box dips
+     when it gets ticked. The dip needs a keyframe animation, so it waits for the first change (data-armed). */
+  .tavora-check {
+    position: relative;
+  }
+  .tavora-check::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--primary);
+    opacity: 0;
+    scale: 0.4;
+    transition:
+      opacity var(--duration-pop-out) var(--ease-out-strong),
+      scale var(--duration-pop-out) var(--ease-out-strong);
+  }
+  .tavora-check:is([data-state="checked"], [data-state="indeterminate"])::before {
+    opacity: 1;
+    scale: 1;
+    transition:
+      opacity 80ms var(--ease-out-strong),
+      scale var(--duration-pop) var(--ease-spring);
+  }
+  .tavora-check[data-armed][data-state="checked"] {
+    animation: tavora-check-dip var(--duration-pop) var(--ease-out-strong);
+  }
+  @keyframes tavora-check-dip {
+    40% {
+      scale: 0.86;
+    }
+  }
+  /* The mark sits above the fill and fades with the box; the tick path draws itself a moment after the box starts. */
+  .tavora-check-mark {
+    position: relative;
+    opacity: 0;
+    transition: opacity var(--duration-pop-out) var(--ease-out-strong);
+  }
+  .tavora-check-mark:not([data-state="unchecked"]) {
+    opacity: 1;
+    transition-duration: 60ms;
+  }
+  .tavora-tick path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1.1;
+    transition: stroke-dashoffset var(--duration-pop-out) var(--ease-out-strong);
+  }
+  .tavora-check-mark[data-state="checked"] .tavora-tick path {
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 220ms var(--ease-out-strong) 60ms;
+  }
+
+  /* Radio dot: springs in, leaves quick. */
+  .tavora-dot {
+    scale: 0;
+    opacity: 0;
+    transition:
+      scale var(--duration-pop-out) var(--ease-out-strong),
+      opacity var(--duration-pop-out) var(--ease-out-strong);
+  }
+  [data-slot="radio-group-item"][data-state="checked"] .tavora-dot {
+    scale: 1;
+    opacity: 1;
+    transition:
+      scale var(--duration-pop) var(--ease-spring),
+      opacity 80ms var(--ease-out-strong);
+  }
+  /* Arrow keys travel through a radio group (data-travel is set on it, lib/key-travel.ts) without animating. */
+  [data-travel] :is(.tavora-dot, .tavora-quiet-travel) {
+    transition: none !important;
+  }
+
+  /* The clear button of a search field. */
+  .tavora-clear-in {
+    animation: tavora-clear-in var(--duration-pop) var(--ease-spring);
+  }
+  .tavora-clear-out {
+    animation: tavora-clear-out var(--duration-pop-out) var(--ease-out-strong) forwards;
+    pointer-events: none;
+  }
+  @keyframes tavora-clear-in {
+    from {
+      opacity: 0;
+      scale: 0.4;
+      rotate: -90deg;
+    }
+  }
+  @keyframes tavora-clear-out {
+    to {
+      opacity: 0;
+      scale: 0.8;
+    }
+  }
+
+  /* Strike-through that draws itself left to right, for done items. Put the class on the text and data-struck on it
+     while it is done. The line is a background, so wrapped text is struck line by line, one after the other.
+     Draws a moment after the tick (80 ms); taking it back is quick. */
+  .tavora-strike {
+    background: linear-gradient(currentColor, currentColor) no-repeat 0 60% / 0 max(1px, 0.075em);
+    transition:
+      background-size var(--duration-pop-out) var(--ease-out-strong),
+      color var(--duration-pop-out) var(--ease-out-strong);
+  }
+  .tavora-strike[data-struck] {
+    background-size: 100% max(1px, 0.075em);
+    transition:
+      background-size var(--duration-pop) var(--ease-out-strong) 80ms,
+      color var(--duration-press) var(--ease-out-strong);
+  }
+}
+
+/* A folding section (Collapsible) opens and closes by height. This is the one place that animates height instead of
+   transform and opacity: the sections below have to move along, and nothing else can do that. Padding and border are
+   animated with the height so a section with its own padding or divider does not jump at the end. It fades in while
+   it grows and leaves quicker than it arrives. Before the first open or close (data-armed) it just sits there, so a
+   force-mounted section that starts closed does not close itself on load. Once it has shut (data-shut, set when the
+   close animation ends) it leaves the layout like a section that started closed, so it takes no gap either. */
+@layer components {
+  .tavora-collapse[data-state="closed"]:not([data-armed]),
+  .tavora-collapse[data-shut],
+  .tavora-collapse[hidden] {
+    display: none;
+  }
+  .tavora-collapse[data-armed][data-state="open"] {
+    animation: tavora-collapse-in var(--duration-panel) var(--ease-out-strong);
+  }
+  .tavora-collapse[data-armed][data-state="closed"] {
+    animation: tavora-collapse-out calc(var(--duration-panel) * 0.67) var(--ease-out-strong) forwards;
+  }
+  @keyframes tavora-collapse-in {
+    0% {
+      height: 0;
+      padding-block: 0;
+      border-block-width: 0;
+      opacity: 0;
+    }
+    72% {
+      opacity: 1;
+    }
+    100% {
+      height: var(--reka-collapsible-content-height);
+    }
+  }
+  @keyframes tavora-collapse-out {
+    0% {
+      height: var(--reka-collapsible-content-height);
+      opacity: 1;
+    }
+    70% {
+      opacity: 0;
+    }
+    100% {
+      height: 0;
+      padding-block: 0;
+      border-block-width: 0;
+      opacity: 0;
+      visibility: hidden;
     }
   }
 }
@@ -97,6 +272,57 @@
   [data-indicator] > .tavora-indicator {
     transition: none !important;
   }
+  /* Checkbox, radio, strike: no scale, draw or spring, only a short fade. */
+  .tavora-check::before {
+    scale: 1 !important;
+    transition: opacity 100ms linear !important;
+  }
+  .tavora-check[data-armed][data-state="checked"] {
+    animation: none !important;
+  }
+  .tavora-check-mark {
+    transition: opacity 100ms linear !important;
+  }
+  .tavora-tick path {
+    stroke-dashoffset: 0 !important;
+    transition: none !important;
+  }
+  .tavora-dot {
+    scale: 1 !important;
+    transition: opacity 100ms linear !important;
+  }
+  .tavora-clear-in {
+    animation: tavora-fade-in 100ms linear !important;
+  }
+  .tavora-clear-out {
+    animation: tavora-fade-out 80ms linear forwards !important;
+  }
+  .tavora-strike {
+    transition: color 100ms linear !important;
+  }
+  /* A folding section fades and then snaps shut; it does not grow. */
+  .tavora-collapse[data-armed][data-state="open"] {
+    animation: tavora-fade-in 100ms linear !important;
+  }
+  .tavora-collapse[data-armed][data-state="closed"] {
+    animation: tavora-collapse-fade-out 80ms linear forwards !important;
+  }
+  @keyframes tavora-collapse-fade-out {
+    0% {
+      opacity: 1;
+    }
+    99% {
+      opacity: 0;
+    }
+    100% {
+      height: 0;
+      padding-block: 0;
+      border-block-width: 0;
+      opacity: 0;
+      visibility: hidden;
+    }
+  }
+
   .tavora-popup[data-state="open"] {
     animation: tavora-fade-in 100ms linear !important;
   }

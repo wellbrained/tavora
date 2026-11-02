@@ -25,6 +25,10 @@ const api: TavoraHostApi = {
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setWorkspaceBounds: (bounds) => ipcRenderer.send("host:workspace-bounds", bounds),
   setOverlay: (open) => ipcRenderer.send("host:overlay", open),
+  prepareOverlay: () => ipcRenderer.send("host:overlay-prepare"),
+  onOverlayReady: (listener) => {
+    ipcRenderer.on("host:overlay-ready", () => listener());
+  },
   layout: {
     getState: () => ipcRenderer.invoke("layout:get-state"),
     onState: (listener) => {
