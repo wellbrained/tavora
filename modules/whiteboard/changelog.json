@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.3.5",
+    "version": "0.3.6",
     "date": "2026-11-02",
     "notes": [
       "Main buttons and badges can follow a theme's deeper button colour."
+    ]
+  },
+  {
+    "version": "0.3.5",
+    "date": "2026-11-02",
+    "notes": [
+      "Checkboxes, toggles and options animate when you pick them, and folding sections open smoothly."
     ]
   },
   {
