@@ -7,3 +7,5 @@ A theme to copy and make your own. It is the Tavora theme, Dark and Light, under
 3. Press **Reload** in Settings > Appearance and pick your theme.
 
 If a colour pair doesn't have enough contrast, Tavora doesn't load the theme and Appearance names the pair. The format and the contrast rules are in the [theme reference](../../apps/docs/reference/theme.md).
+
+Want a deeper Primary button with light text while `primary` stays bright? Add `primary-fill`, `primary-fill-hover` and `primary-fill-foreground` to a variation. Leave them out and the button uses `primary`.

@@ -79,7 +79,8 @@ themes; anything hard-coded breaks in one of them.
   `text-success`, …) or `var(--card)` etc. in CSS. No hex, `rgb()` or named colours, no Tailwind palette colours
   (`neutral-500`, `white`, `black`), no hex fallbacks such as `var(--warning, #f5c518)`. Allowed exceptions, each with a
   comment saying why: game artwork in its own colours, a game's meaningful colours (rarity), the paper of a document
-  page.
+  page. A solid button or surface with text on it takes the fill (`bg-primary-fill` with `text-primary-fill-foreground`, `hover:bg-primary-fill-hover`);
+  accents, rings, lines and coloured text stay `primary`.
 - **Text sizes**: `text-xs` 12, `text-sm` 13, `text-base` 14, `text-lg` 16, `text-xl` 20 px. Nothing under 12 px, no
   sizes in between. Body text is 14, buttons and menus 13, hints 12. Weights 400, 500 and 600 only. Changing numbers
   use `tabular-nums`. Sentence case, no all caps.

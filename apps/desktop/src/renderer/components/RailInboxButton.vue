@@ -23,7 +23,7 @@ defineProps<{ expanded: boolean }>();
     >
       <RailFooterTile>
         <Mail class="size-5" :stroke-width="1.5" />
-        <span v-if="inbox.unread && !expanded" class="bg-primary text-primary-foreground absolute top-0.5 right-0.5 grid min-w-4 place-items-center rounded-full px-1 text-[10px] leading-4 font-semibold" data-testid="inbox-badge">{{ inbox.unread }}</span>
+        <span v-if="inbox.unread && !expanded" class="bg-primary-fill text-primary-fill-foreground absolute top-0.5 right-0.5 grid min-w-4 place-items-center rounded-full px-1 text-[10px] leading-4 font-semibold" data-testid="inbox-badge">{{ inbox.unread }}</span>
       </RailFooterTile>
       <span v-if="expanded" class="text-sm font-medium">{{ t("inbox.title") }}</span>
       <!-- Open, the count is a plain number at the end of the row. -->

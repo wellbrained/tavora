@@ -26,7 +26,7 @@ defineProps<{ variation: ThemeVariationView; size: "sm" | "md" }>();
         <span class="h-1 w-3/4 rounded-full" :style="{ background: variation.colors.foreground }" />
         <span class="h-1 w-1/2 rounded-full" :style="{ background: variation.colors['muted-foreground'] }" />
         <span class="mt-auto flex gap-1">
-          <span class="h-2.5 w-7" :style="{ background: variation.colors.primary, borderRadius: `${variation.radius / 4}px` }" />
+          <span class="h-2.5 w-7" :style="{ background: variation.colors['primary-fill'], borderRadius: `${variation.radius / 4}px` }" />
           <span class="h-2.5 w-5" :style="{ background: variation.colors.secondary, borderRadius: `${variation.radius / 4}px` }" />
         </span>
       </span>
@@ -45,7 +45,7 @@ defineProps<{ variation: ThemeVariationView; size: "sm" | "md" }>();
     <span class="m-1 flex flex-1 flex-col gap-1 rounded-[3px] p-1" :style="{ background: variation.colors.card }">
       <span class="h-0.5 w-3/4 rounded-full" :style="{ background: variation.colors.foreground }" />
       <span class="h-0.5 w-1/2 rounded-full" :style="{ background: variation.colors['muted-foreground'] }" />
-      <span class="mt-auto h-1.5 w-5 rounded-[2px]" :style="{ background: variation.colors.primary }" />
+      <span class="mt-auto h-1.5 w-5 rounded-[2px]" :style="{ background: variation.colors['primary-fill'] }" />
     </span>
   </span>
 </template>

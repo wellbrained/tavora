@@ -96,6 +96,67 @@ describe("validateTheme", () => {
     expect(dim).toMatchObject({ ok: false, error: expect.stringContaining("toast-foreground on toast") });
   });
 
+  describe("button fill", () => {
+    const { "primary-fill": _fill, "primary-fill-hover": _hover, "primary-fill-foreground": _text, ...plain } = THEME.tokens;
+    const deep = { "primary-fill": "#a3482e", "primary-fill-hover": "#8f3e26", "primary-fill-foreground": "#e6e2da" };
+
+    it("copies primary, its hover and its text when a theme leaves the fill out", () => {
+      expect(validateTheme(manifest({}, { colors: plain }))).toMatchObject({
+        ok: true,
+        theme: {
+          variations: [
+            {
+              colors: {
+                "primary-fill": THEME.tokens.primary,
+                "primary-fill-hover": THEME.tokens["primary-hover"],
+                "primary-fill-foreground": THEME.tokens["primary-foreground"],
+              },
+            },
+          ],
+        },
+      });
+    });
+
+    it("takes a fill of its own and leaves primary alone", () => {
+      const result = validateTheme(manifest({}, { colors: { ...plain, ...deep } }));
+      expect(result).toMatchObject({ ok: true, theme: { variations: [{ colors: { ...deep, primary: THEME.tokens.primary } }] } });
+    });
+
+    it("lets the fill text default to primary-foreground", () => {
+      const { "primary-fill-foreground": _unused, ...noText } = deep;
+      const result = validateTheme(manifest({}, { colors: { ...plain, ...noText, "primary-fill": "#f0b85c", "primary-fill-hover": "#e0a243" } }));
+      expect(result).toMatchObject({ ok: true, theme: { variations: [{ colors: { "primary-fill-foreground": THEME.tokens["primary-foreground"] } }] } });
+    });
+
+    it("wants the fill and its hover together", () => {
+      const { "primary-fill-hover": _h, ...fillOnly } = deep;
+      expect(validateTheme(manifest({}, { colors: { ...plain, ...fillOnly } }))).toMatchObject({
+        ok: false,
+        error: expect.stringContaining("needs primary-fill and primary-fill-hover together"),
+      });
+      const { "primary-fill": _f, ...hoverOnly } = deep;
+      expect(validateTheme(manifest({}, { colors: { ...plain, ...hoverOnly } }))).toMatchObject({ ok: false });
+    });
+
+    it("refuses a fill that isn't a plain hex colour", () => {
+      expect(validateTheme(manifest({}, { colors: { ...plain, ...deep, "primary-fill": "orange" } }))).toMatchObject({
+        ok: false,
+        error: expect.stringContaining("needs primary-fill as a #rrggbb colour"),
+      });
+    });
+
+    it("checks the text on the fill and on its hover, not on primary", () => {
+      // A bright primary with dark text is fine on its own, but light text on a pale fill is not.
+      const pale = validateTheme(manifest({}, { colors: { ...plain, ...deep, "primary-fill": "#e0a243", "primary-fill-hover": "#f0b85c" } }));
+      expect(pale).toMatchObject({ ok: false, error: expect.stringContaining("primary-fill-foreground on primary-fill has a contrast of") });
+      // Hover is checked too: a lighter hover loses the text.
+      const lighter = validateTheme(manifest({}, { colors: { ...plain, ...deep, "primary-fill-hover": "#c0623f" } }));
+      expect(lighter).toMatchObject({ ok: false, error: expect.stringContaining("primary-fill-foreground on primary-fill-hover") });
+      // A high-contrast variation needs 7:1 for the button text.
+      expect(validateTheme(manifest({}, { contrast: "high", colors: { ...plain, ...deep } }))).toMatchObject({ ok: false });
+    });
+  });
+
   it("needs every token as a plain hex colour", () => {
     const { info: _info, ...missing } = THEME.tokens;
     expect(validateTheme(manifest({}, { colors: missing }))).toMatchObject({ ok: false, error: expect.stringContaining("needs info") });
@@ -139,6 +200,21 @@ describe("the official themes", () => {
     const dark = themes.get(DEFAULT_THEME.id)!.theme.variations.find((item) => item.id === DEFAULT_THEME.variation)!;
     expect(dark).toEqual(FALLBACK_THEME.variations[0]);
     expect(moduleTheme(dark)).toEqual(THEME);
+  });
+
+  it("look as before: only Ashen Keep Dark has a button fill of its own", async () => {
+    const { themes } = await discoverThemes({ official: [officialDir] });
+    for (const { theme } of themes.values()) {
+      for (const { id, colors } of theme.variations) {
+        const own = theme.id === "tavora.ashen-keep" && id === "dark";
+        const same = colors["primary-fill"] === colors.primary && colors["primary-fill-hover"] === colors["primary-hover"] && colors["primary-fill-foreground"] === colors["primary-foreground"];
+        expect([theme.id, id, same]).toEqual([theme.id, id, !own]);
+      }
+    }
+    const ashen = themes.get("tavora.ashen-keep")!.theme.variations.find((item) => item.id === "dark")!.colors;
+    expect(ashen).toMatchObject({ primary: "#f06a43", "primary-fill": "#a3482e", "primary-fill-hover": "#8f3e26", "primary-fill-foreground": "#e6e2da" });
+    expect(contrast(ashen["primary-fill-foreground"], ashen["primary-fill"])).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(ashen["primary-fill-foreground"], ashen["primary-fill-hover"])).toBeGreaterThanOrEqual(4.5);
   });
 
   it("are shipped with the installer", async () => {

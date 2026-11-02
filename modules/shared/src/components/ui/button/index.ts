@@ -18,7 +18,7 @@ export const buttonVariants = cva(
         // the press. Everything is a mix of white or black, so a host theme (light or dark) gets it too.
         // The press (a 1px dip, the shadows turning inward) only moves on a fine pointer without reduced motion.
         default:
-          "bg-primary text-primary-foreground shadow-[inset_0_1px_0_color-mix(in_srgb,white_20%,transparent),0_1px_1px_color-mix(in_srgb,black_35%,transparent)] hover:bg-primary-hover " + PRESS,
+          "bg-primary-fill text-primary-fill-foreground shadow-[inset_0_1px_0_color-mix(in_srgb,white_20%,transparent),0_1px_1px_color-mix(in_srgb,black_35%,transparent)] hover:bg-primary-fill-hover " + PRESS,
         destructive:
           "bg-destructive text-white hover:bg-[color-mix(in_srgb,black_15%,var(--destructive))] focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 dark:hover:bg-destructive/85 " + PRESS,
         // Remove, delete and take-back buttons: always red, quieter than a confirm dialog's destructive one.
@@ -52,7 +52,7 @@ export const buttonVariants = cva(
     compoundVariants: [
       // The smallest Primary buttons only get the light on top, no contact shadow (Secondary has none anywhere).
       { variant: "default", size: ["xs", "icon-xs"], class: "shadow-[inset_0_1px_0_color-mix(in_srgb,white_20%,transparent)]" },
-      { variant: "default", soft: true, class: "hover:bg-primary" },
+      { variant: "default", soft: true, class: "hover:bg-primary-fill" },
       { variant: "destructive", soft: true, class: "hover:bg-destructive dark:hover:bg-destructive/60" },
       { variant: "danger", soft: true, class: "hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15" },
       { variant: "outline", soft: true, class: "hover:bg-background hover:text-inherit hover:border-border dark:hover:bg-input/10 dark:hover:border-input" },

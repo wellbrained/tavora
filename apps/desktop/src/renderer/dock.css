@@ -301,8 +301,8 @@
   transform: translateX(-50%);
   padding: 2px 8px;
   border-radius: 6px;
-  background: var(--primary);
-  color: var(--primary-foreground);
+  background: var(--primary-fill, var(--primary));
+  color: var(--primary-fill-foreground, var(--primary-foreground));
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;

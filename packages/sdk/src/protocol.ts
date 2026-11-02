@@ -78,6 +78,9 @@ export const THEME_TOKENS = [
   "primary",
   "primary-hover",
   "primary-foreground",
+  "primary-fill",
+  "primary-fill-hover",
+  "primary-fill-foreground",
   "secondary",
   "secondary-foreground",
   "muted",
@@ -103,8 +106,18 @@ export type ThemeToken = (typeof THEME_TOKENS)[number];
  * are flipped pills by default: the theme's text colour as the background,
  * the theme's background as the text. Tavora fills these in, so a module
  * always gets every token.
+ *
+ * The `primary-fill` trio colours solid surfaces that carry text, the Primary button first: a theme can
+ * have a deep button with light text while `primary` stays bright for links, highlights and lines.
+ * Left out, each copies `primary`, `primary-hover` and `primary-foreground`, so the look is the same as before.
  */
-export const OPTIONAL_THEME_TOKENS = { toast: "foreground", "toast-foreground": "background" } as const satisfies Partial<Record<ThemeToken, ThemeToken>>;
+export const OPTIONAL_THEME_TOKENS = {
+  "primary-fill": "primary",
+  "primary-fill-hover": "primary-hover",
+  "primary-fill-foreground": "primary-foreground",
+  toast: "foreground",
+  "toast-foreground": "background",
+} as const satisfies Partial<Record<ThemeToken, ThemeToken>>;
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 

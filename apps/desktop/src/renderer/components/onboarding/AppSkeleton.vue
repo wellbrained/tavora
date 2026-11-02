@@ -24,7 +24,7 @@ const props = withDefaults(
 const dim = (part: SkeletonPart) => props.lit !== null && props.lit !== part;
 const ring = (part: SkeletonPart) => (props.lit === part ? "ring-primary bg-primary/10 ring-2" : "");
 const badge = (part: SkeletonPart) =>
-  cn("absolute grid size-5 place-items-center rounded-full text-xs font-semibold", props.lit === part ? "bg-primary text-primary-foreground" : "bg-muted text-foreground");
+  cn("absolute grid size-5 place-items-center rounded-full text-xs font-semibold", props.lit === part ? "bg-primary-fill text-primary-fill-foreground" : "bg-muted text-foreground");
 </script>
 
 <template>

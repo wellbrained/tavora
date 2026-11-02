@@ -78,7 +78,7 @@ const shown = computed(() => {
 })
 
 const TONES: Record<MapTone, string> = {
-  primary: "bg-primary text-primary-foreground",
+  primary: "bg-primary-fill text-primary-fill-foreground",
   info: "bg-info text-background",
   success: "bg-success text-background",
   warning: "bg-warning text-background",
@@ -172,7 +172,7 @@ defineExpose({ showPins, camera, setCamera, fit: () => pane.value?.fit(), zoomIn
           <slot name="pin" :pin="groupFace(group)">
             <img v-if="groupFace(group).icon" :src="groupFace(group).icon" alt="" draggable="false" class="size-7 max-w-none">
           </slot>
-          <span v-if="group.pins.length > 1" class="bg-primary text-primary-foreground absolute -top-1.5 -right-2 grid h-5 min-w-5 place-items-center rounded-full px-1 text-xs font-semibold tabular-nums">{{ group.pins.length }}</span>
+          <span v-if="group.pins.length > 1" class="bg-primary-fill text-primary-fill-foreground absolute -top-1.5 -right-2 grid h-5 min-w-5 place-items-center rounded-full px-1 text-xs font-semibold tabular-nums">{{ group.pins.length }}</span>
           <span v-else-if="done(group)" class="bg-success text-background absolute -right-1 -bottom-1 grid size-4 place-items-center rounded-full"><Check class="size-3" :stroke-width="3" aria-hidden="true" /></span>
         </template>
         <template v-else-if="group.pins.length > 1">{{ group.pins.length }}</template>

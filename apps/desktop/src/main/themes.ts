@@ -126,6 +126,9 @@ const PAIRS: Pair[] = [
   ["muted-foreground", "muted", "text"],
   ["primary-foreground", "primary", "text"],
   ["primary-foreground", "primary-hover", "text"],
+  // The button fill and the text on it, resolved with their fallbacks (a theme without a fill checks the same pairs twice).
+  ["primary-fill-foreground", "primary-fill", "text"],
+  ["primary-fill-foreground", "primary-fill-hover", "text"],
   ["primary", "background", "text"],
   ["primary", "card", "text"],
   ["destructive", "background", "text"],
@@ -185,7 +188,11 @@ function parseVariation(raw: unknown, where: string): ThemeVariation | string {
     if (typeof value !== "string" || !HEX.test(value)) return `${where} needs ${token} as a #rrggbb colour`;
     colors[token] = value.toLowerCase();
   }
-  // Toast colours a theme leaves out copy the tokens they default to, so every variation carries the full set.
+  // A button fill without its hover would jump to the bright primary hover, so the two come together.
+  if ((colors["primary-fill"] === undefined) !== (colors["primary-fill-hover"] === undefined)) {
+    return `${where} needs primary-fill and primary-fill-hover together`;
+  }
+  // Colours a theme leaves out (the button fill, the toast) copy the tokens they default to, so every variation carries the full set.
   for (const [token, copies] of Object.entries(OPTIONAL_THEME_TOKENS) as [ThemeToken, ThemeToken][]) colors[token] ??= colors[copies];
   const variation: ThemeVariation = {
     id: raw.id,
