@@ -90,6 +90,7 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
     overlayOpening: () => void calls.push("overlayOpening"),
     frozen: (images) => void frozen.push(images),
     frozenOnScreen: () => Promise.resolve(),
+    overlayReady: () => void calls.push("overlayReady"),
     windowGone: () => world.gone,
     ...overrides,
   });

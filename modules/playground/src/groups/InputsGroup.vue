@@ -32,6 +32,7 @@ const SWATCH_NAMES = ["White", "Yellow", "Orange", "Red", "Blue", "Green", "Blac
 const swatchColor = ref("#60a5fa");
 const checked = ref(true);
 const unchecked = ref(false);
+const struck = ref(false);
 const mixed = ref<boolean | "indeterminate">("indeterminate");
 const switchOn = ref(true);
 const switchOff = ref(false);
@@ -129,7 +130,10 @@ const name = ref("Waystone");
           <SwitchField v-model="quiet" label="Start on Home" :disabled="off" />
           <SwitchField :model-value="true" label="Locked by your admin" disabled />
         </Specimen>
-        <Specimen label="Radio group">
+        <Specimen label="Done item (the tick draws, then the strike follows)" column>
+          <Label><Checkbox v-model="struck" :disabled="off" /> <span :class="['tavora-strike', struck && 'text-muted-foreground']" :data-struck="struck || undefined">Craft the boss weapon</span></Label>
+        </Specimen>
+        <Specimen label="Radio group (the dot springs in; arrow keys move without animating)">
           <RadioGroup v-model="radio" :disabled="off">
             <Label><RadioGroupItem value="compact" /> Compact</Label>
             <Label><RadioGroupItem value="normal" /> Normal</Label>
@@ -271,7 +275,7 @@ const name = ref("Waystone");
             <SelectContent>
               <SelectItem v-for="option in STYLES" :key="option.value" :value="option.value">
                 <template #thumb><span class="bg-muted relative h-5 w-8 flex-none rounded-sm border" aria-hidden="true"><span class="bg-muted-foreground/70 absolute inset-x-1 top-1.5 h-1 rounded-full" /></span>
-<DemoSection v-if="visible.has('toggles')" id="toggles" :title="title('toggles')" description="Buttons that stay pressed, such as Bold next to a text size. Tiles pick one look out of a few by its picture.">
+<DemoSection v-if="visible.has('toggles')" id="toggles" :title="title('toggles')" description="Buttons that stay pressed, such as Bold next to a text size. Tiles pick one look out of a few by its picture. Both dip when you press them with the mouse.">
         <Specimen label="Toggles (separate buttons)">
           <Toggle v-model="bold" label="Bold" class="font-bold" :disabled="off">B</Toggle>
           <Toggle v-model="italic" label="Italic" class="font-serif italic" :disabled="off">I</Toggle>

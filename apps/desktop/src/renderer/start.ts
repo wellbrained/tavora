@@ -5,7 +5,7 @@ import "./dock.css";
 import { createApp, nextTick, watch } from "vue";
 import { installTitleTooltips } from "@tavora/official-ui/title-tooltips";
 import App from "./App.vue";
-import { firstState, setHintFloating, state } from "./host";
+import { api, firstState, setHintFloating, state } from "./host";
 
 /** How long the first state may take; the main process answers at once when it is well. */
 const NO_ANSWER_MS = 15_000;
@@ -64,7 +64,7 @@ export function start(): Promise<void> {
           if (settled) return;
           settle();
           // Every title hint in the page shows as the shared kit tooltip instead of the system's small one.
-          installTitleTooltips(document, { onOpenChange: setHintFloating });
+          installTitleTooltips(document, { onOpenChange: setHintFloating, onPending: () => api.prepareOverlay() });
           resolve();
         });
       },

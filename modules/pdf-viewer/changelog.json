@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.5",
+    "version": "0.1.6",
     "date": "2026-11-02",
     "notes": [
       "Buttons have a little depth and feel pressed when you click them."
+    ]
+  },
+  {
+    "version": "0.1.5",
+    "date": "2026-11-02",
+    "notes": [
+      "Checkboxes, toggles and options animate when you pick them, and folding sections open smoothly."
     ]
   },
   {
