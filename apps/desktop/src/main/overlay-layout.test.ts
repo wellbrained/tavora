@@ -406,6 +406,27 @@ describe("the setups of the picker", () => {
     layout.open("nowhere");
     expect(layout.view().gameId).toBe(LAYOUT_ALL_GAMES);
   });
+
+  it("falls back to All games when the setup shown is deleted, and stays there when the setup comes back", () => {
+    const { layout, world } = setup([clock("a", "elden"), clock("b", "poe2"), { key: "g", gameId: "personal", scope: "all", rect: at(0.1, 0.1, 0.2, 0.2) }]);
+    layout.open("elden");
+    layout.handle({ type: "select", id: layout.view().items[0]!.id }, true);
+    // The game's overlay is deleted (here or on the rail): its setup and frames are gone.
+    world.gameSetups = world.gameSetups.filter((id) => id !== "elden");
+    world.items = world.items.filter((item) => item.gameId !== "elden");
+    layout.refresh();
+    expect(layout.view()).toMatchObject({ gameId: LAYOUT_ALL_GAMES, selected: [] });
+    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_EVERYWHERE, LAYOUT_ALL_GAMES, "poe2"]);
+    expect(layout.view().items.map((item) => item.name)).toEqual(["g"]);
+    // Its Undo brings it back: the picker lists it again, and the page does not jump by itself.
+    world.gameSetups.push("elden");
+    world.items.push(clock("a", "elden"));
+    layout.refresh();
+    expect(layout.view().games.map((game) => game.id)).toEqual([LAYOUT_EVERYWHERE, LAYOUT_ALL_GAMES, "elden", "poe2"]);
+    expect(layout.view().gameId).toBe(LAYOUT_ALL_GAMES);
+    layout.handle({ type: "game", gameId: "elden" }, true);
+    expect(layout.view().items.map((item) => item.name)).toEqual(["a"]);
+  });
 });
 
 describe("the canvas", () => {
@@ -841,6 +862,44 @@ describe("Undo after a remove", () => {
     expect(layout.view().undone).toEqual({ step, ok: false });
     // The move before it is still done: the toast didn't take a second step back.
     expect(layout.view().items.find((item) => item.id === b)!.placed).toMatchObject({ x: 600, y: 400 });
+  });
+
+  it("lets the removes of a deleted setup go: no toast to undo, and no frame comes back into a setup that is gone", () => {
+    const { layout, world } = setup([clock("a"), clock("b"), clock("c", "poe2")]);
+    layout.open("elden");
+    layout.handle({ type: "remove", id: layout.view().items[0]!.id }, false);
+    layout.handle({ type: "game", gameId: "poe2" }, true);
+    layout.handle({ type: "remove", id: layout.view().items[0]!.id }, false);
+    const [elden, poe2] = layout.view().removals;
+    expect(layout.view().removals).toHaveLength(2);
+    // The game's overlay is deleted: its remove leaves the list, the other game's stays.
+    world.gameSetups = world.gameSetups.filter((id) => id !== "elden");
+    world.items = world.items.filter((item) => item.gameId !== "elden");
+    layout.refresh();
+    expect(layout.view().removals).toEqual([{ step: poe2!.step, count: 1 }]);
+    layout.handle({ type: "undo-removal", step: elden!.step }, false);
+    expect(layout.view().undone).toEqual({ step: elden!.step, ok: false });
+    expect(world.items.filter((item) => item.gameId === "elden")).toEqual([]);
+    expect(world.puts).toEqual([]);
+  });
+
+  it("never makes a deleted setup again by Ctrl+Y of a step that touched it", () => {
+    const { layout, world } = setup([clock("a", "elden"), { key: "g", gameId: "personal", scope: "all", rect: at(0.1, 0.1, 0.2, 0.2) }]);
+    layout.open(LAYOUT_ALL_GAMES);
+    const general = layout.view().items[0]!.id;
+    // Move to… the game, and take it back with Ctrl+Z: Ctrl+Y would move it there again.
+    layout.handle({ type: "move", id: general, to: "elden" }, true);
+    layout.handle({ type: "undo" }, false);
+    expect(world.items.find((item) => item.key === "g")!.setup).toBe(LAYOUT_ALL_GAMES);
+    expect(layout.view().canRedo).toBe(true);
+    // The game's overlay is deleted meanwhile.
+    world.gameSetups = world.gameSetups.filter((id) => id !== "elden");
+    world.items = world.items.filter((item) => item.gameId !== "elden");
+    layout.refresh();
+    const puts = world.puts.length;
+    layout.handle({ type: "redo" }, false);
+    expect(world.puts.slice(puts).filter((put) => put.setupId === "elden" && put.there)).toEqual([]);
+    expect(world.items.find((item) => item.key === "g")!.setup).toBe(LAYOUT_ALL_GAMES);
   });
 
   it("starts over when the page opens again: earlier removes can't be undone from there", () => {

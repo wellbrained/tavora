@@ -631,6 +631,20 @@ export class GameOverlayStore {
     return true;
   }
 
+  /** Where a game's setup sits in the list (to put it back in its place after a delete); -1 when it has none. */
+  setupIndex(gameId: string): number {
+    return this.setupList.findIndex((setup) => setup.id === gameId);
+  }
+
+  /** Puts a deleted game's setup back, empty, at its place in the list; false when the game has one again (or it isn't a game's). */
+  insertSetup(gameId: string, index: number): boolean {
+    if (!isGameSetup(gameId) || !validField(gameId) || this.hasSetup(gameId)) return false;
+    // Everywhere and All games stay first, whatever the place says.
+    this.setupList.splice(Math.max(2, Math.min(index, this.setupList.length)), 0, { id: gameId, overlays: [], panels: [] });
+    this.saveSoon();
+    return true;
+  }
+
   /** The setup to add to, made first when it is a game's that has none; null when the item may not go there. */
   private target(setupId: string, workspaceId: string): Setup | null {
     if (!allowedIn(setupId, workspaceId, this.scopeOf(workspaceId))) return null;

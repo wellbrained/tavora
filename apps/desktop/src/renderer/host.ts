@@ -626,15 +626,20 @@ addEventListener("keydown", (event) => {
  * Deletes at once (a layout, a folder, a workspace to Trash) and offers Undo for a few seconds (`undoable` in the kit).
  * The action answers with a token; Undo sends it back, and once the toast went without Undo the main process forgets
  * it, so the delete is final. A failed delete shows its reason as usual. Answers whether the delete went through.
+ * `onUndone` runs once the thing is back (to show it again, say).
  */
-export async function deleteWithUndo(action: HostAction, title: string): Promise<boolean> {
+export async function deleteWithUndo(action: HostAction, title: string, onUndone?: () => void): Promise<boolean> {
   const result = await act(action);
   if (!result.ok) return false;
   const token = result.id;
   if (!token) return true;
   undoable({
     title,
-    undo: async () => (await act({ type: "undo-delete", token }, { quiet: true })).ok,
+    undo: async () => {
+      const back = (await act({ type: "undo-delete", token }, { quiet: true })).ok;
+      if (back) onUndone?.();
+      return back;
+    },
     onFinal: () => void act({ type: "undo-forget", token }, { quiet: true }),
   });
   return true;
