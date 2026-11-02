@@ -16,8 +16,13 @@ test("panels of the old Discord and AI Usage modules say they moved, and their s
   await openModule(first.page, HOSTILE);
   await openModule(first.page, HOSTILE);
   await expect(panels(first.page, HOSTILE)).toHaveCount(2);
-  // The layout is saved a moment after the last change.
-  await first.page.waitForTimeout(1500);
+  // The layout is saved a moment after the last change, and closing the app does not flush it.
+  await expect
+    .poll(async () => {
+      const saved = JSON.parse(await readFile(path.join(userData, "workspace.json"), "utf8").catch(() => "null")) as { workspaces: Record<string, { instances: unknown[] }> } | null;
+      return saved?.workspaces.poe2?.instances.length;
+    })
+    .toBe(2);
   await first.app.close();
   const file = path.join(userData, "workspace.json");
   const saved = JSON.parse(await readFile(file, "utf8"));

@@ -6,32 +6,12 @@ import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs
 import path from "node:path";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, inModule, launch, newUserData, openWorkspace, openModule, panels, seedLibrary, VANILLA } from "./harness";
+import { expectModuleText, inModule, launch, newUserData, openWorkspace, openModule, panels, seedLibrary, VANILLA, addModule } from "./harness";
 
 /** Picks an entry of the More menu in Settings > Modules, where the rarer ways to add a module sit. */
 async function fromMore(page: Page, item: string) {
   await page.getByTestId("modules-more").click();
   await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
-}
-
-async function addModule(userData: string, folder: string, id: string): Promise<string> {
-  const dir = path.join(userData, "modules", folder);
-  await mkdir(dir, { recursive: true });
-  await writeFile(
-    path.join(dir, "tavora.module.json"),
-    JSON.stringify({
-      id,
-      name: "Mini",
-      version: "1.2.3",
-      apiVersion: "1",
-      entry: "index.html",
-      games: [],
-      viewport: { minWidth: 100, minHeight: 100 },
-      permissions: { network: [] },
-    }),
-  );
-  await writeFile(path.join(dir, "index.html"), "<!doctype html><title>Mini</title><p>Mini</p>");
-  return dir;
 }
 
 test("the modules page lists where modules came from, reloads, and removes one with its panels", async () => {
