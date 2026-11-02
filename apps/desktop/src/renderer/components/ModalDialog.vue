@@ -5,15 +5,10 @@
 // so the footer's Save button still submits it.
 import type { Component } from "vue";
 import { cn } from "@/lib/utils";
-import { useFloating } from "../host";
 import { Dialog, DialogContent, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 
 defineProps<{ title: string; description?: string; icon?: Component; testid?: string; class?: string }>();
 const emit = defineEmits<{ close: [] }>();
-
-// Module panels are native views above this page, so they step aside for any dialog. Every dialog built on this one
-// says so here, so a new one cannot forget (host.ts overlayOpen).
-useFloating()(true);
 </script>
 
 <template>

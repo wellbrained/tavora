@@ -20,13 +20,25 @@ const RANK = (request: Request): number | undefined => {
 
 function setup() {
   let open: Request | null = null;
-  const queue = createDialogQueue<Request>({ get: () => open, set: (request) => (open = request) }, RANK);
+  let blocked = false;
+  const queue = createDialogQueue<Request>({ get: () => open, set: (request) => (open = request), blocked: () => blocked }, RANK);
   // What the host does: the slot is freed, then the queue is told.
   const close = () => {
     open = null;
     queue.next();
   };
-  return { queue, close, shown: () => open, set: (request: Request | null) => (open = request) };
+  return {
+    queue,
+    close,
+    shown: () => open,
+    set: (request: Request | null) => (open = request),
+    /** Another dialog (Pairing, Hotkey ...) opens or closes; closing tells the queue, as host.ts does. */
+    quietly: (value: boolean) => (blocked = value),
+    block: (value: boolean) => {
+      blocked = value;
+      if (!value) queue.next();
+    },
+  };
 }
 
 describe("dialog queue", () => {
@@ -129,7 +141,6 @@ describe("dialog queue", () => {
     expect(queue.waiting()).toEqual([{ kind: "link", url: "https://a.test" }]);
     close();
     expect(shown()).toEqual({ kind: "link", url: "https://a.test" });
-    queue.cancel(() => true);
     expect(shown()).toEqual({ kind: "link", url: "https://a.test" });
   });
 
@@ -142,5 +153,75 @@ describe("dialog queue", () => {
     queue.next();
     expect(shown()).toEqual({ kind: "prompt" });
     expect(queue.waiting()).toHaveLength(1);
+  });
+
+  it("waits while another dialog is open, and shows once that closes", () => {
+    const { queue, shown, block } = setup();
+    block(true);
+    queue.request({ kind: "link", url: "https://a.test" });
+    expect(shown()).toBeNull();
+    expect(queue.waiting()).toHaveLength(1);
+    block(false);
+    expect(shown()).toEqual({ kind: "link", url: "https://a.test" });
+  });
+
+  it("does not let a newer request pass a more urgent one that waits", () => {
+    const { queue, shown, block, set } = setup();
+    block(true);
+    queue.request({ kind: "grant", onRequest: 1 });
+    // The dialog closed, but the queue was not told yet when the next request came.
+    set(null);
+    queue.request({ kind: "link", url: "https://a.test" });
+    expect(shown()).toBeNull();
+    block(false);
+    expect(shown()).toEqual({ kind: "grant", onRequest: 1 });
+    expect(queue.waiting()).toEqual([{ kind: "link", url: "https://a.test" }]);
+  });
+
+  it("shows the most urgent waiting request when a free slot gets a newer, less urgent one", () => {
+    const { queue, shown, block, quietly } = setup();
+    block(true);
+    queue.request({ kind: "grant", onRequest: 1 });
+    // The blocking dialog went away without telling the queue; the next request finds nothing open.
+    quietly(false);
+    expect(shown()).toBeNull();
+    queue.request({ kind: "link", url: "https://a.test" });
+    expect(shown()).toEqual({ kind: "grant", onRequest: 1 });
+    expect(queue.waiting()).toEqual([{ kind: "link", url: "https://a.test" }]);
+  });
+
+  it("keeps a request that a dialog the user opened pushed out, and brings it back", () => {
+    const { queue, shown, set, close } = setup();
+    queue.request({ kind: "link", url: "https://a.test" });
+    queue.open({ kind: "prompt" });
+    expect(shown()).toEqual({ kind: "prompt" });
+    expect(queue.waiting()).toEqual([{ kind: "link", url: "https://a.test" }]);
+    close();
+    expect(shown()).toEqual({ kind: "link", url: "https://a.test" });
+    // A dialog the user opened is replaced as before, and not queued.
+    set({ kind: "prompt" });
+    queue.open({ kind: "grant" });
+    expect(shown()).toEqual({ kind: "grant" });
+    expect(queue.waiting()).toEqual([]);
+  });
+
+  it("does not bring back a request whose question ended while a dialog of the user's was over it", () => {
+    const { queue, shown, close } = setup();
+    queue.request({ kind: "game", id: "one" });
+    queue.open({ kind: "prompt" });
+    queue.cancel((request) => request.kind === "game");
+    close();
+    expect(shown()).toBeNull();
+  });
+
+  it("closes the shown request when its question ends, and shows the next one", () => {
+    const { queue, shown, set } = setup();
+    queue.request({ kind: "link", url: "https://a.test" });
+    queue.cancel((request) => request.kind === "link");
+    expect(shown()).toBeNull();
+    // A dialog that is no request of the queue stays.
+    set({ kind: "prompt" });
+    queue.cancel(() => true);
+    expect(shown()).toEqual({ kind: "prompt" });
   });
 });

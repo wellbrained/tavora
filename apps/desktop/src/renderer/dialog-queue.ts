@@ -1,26 +1,37 @@
 // The one dialog slot (`dialog` in host.ts) is also filled by things the host asks on its own: a module wants a link
 // opened, a game started, a module asks for a connector. Those arrive at any moment, so one must never take the slot
-// from a dialog the user is working in. They go through this queue: a request shows at once when the slot is free,
-// and otherwise waits until the dialog in it closes.
+// from a dialog the user is working in, and none may stack on a dialog that has no business under another. They go
+// through this queue: a request shows at once when nothing is open, and otherwise waits until it is.
+//
+// "Open" means the slot, and any other dialog on the page (the slot's `blocked`: Pairing, Hotkey, Publish, the cloud
+// copy question, an inbox note, Search ... counted from the page itself, so a new dialog is covered without being listed).
+// Settings and the profile are the exception: a request may stack on top of them, as a confirmation does.
 //
 // Urgency (`rank`, higher is more urgent), decided in host.ts:
-//   consent for a connector a module asks for (4) > open in a new panel? (3) > where to open a link (2) > switch to the game (1).
+//   consent for a connector a module asks for (4) > open in a new panel (3) > where to open a link (2) > switch to the game (1).
 // A request more urgent than the dialog shown replaces it only when that dialog is a request of this queue too (a plain
 // choice that holds nothing the user typed); the replaced one is put back in the queue and comes back afterwards.
 // Every other dialog, one the user opened or one with input in it (a prompt being typed, a consent, a form), is
 // never replaced, however urgent the request: it waits.
+//
+// And the other way round: a dialog the user opens (`open`) replaces a request that is shown, but the request is not lost:
+// it goes back in the queue and shows again once the slot is free, unless its question ended meanwhile (`cancel`).
 
 export interface DialogSlot<R> {
   get(): R | null;
   set(request: R | null): void;
+  /** Another dialog is open that a request must not stack on (not the slot's own dialog, not Settings or the profile). */
+  blocked(): boolean;
 }
 
 export interface DialogQueue<R extends { kind: string }> {
-  /** Shows the request now (slot free, or a less urgent request of this queue in it), else keeps it for later. A request of a kind already waiting, or shown, replaces it. */
+  /** Shows the request now (nothing open, or a less urgent request of this queue in the slot), else keeps it for later. A request of a kind already shown or waiting replaces it. */
   request(request: R): void;
-  /** Drops the waiting requests that match, for a question that ended (answered elsewhere, its game closed). Not the one shown. */
+  /** Opens a dialog the user asked for, now. A request that was shown goes back in the queue instead of being lost. */
+  open(request: R): void;
+  /** Drops the requests that match, for a question that ended (answered elsewhere, its game closed): waiting ones, and the one shown. */
   cancel(match: (request: R) => boolean): void;
-  /** The slot is free: shows the most urgent request that waits, the oldest first among equals. */
+  /** Something closed: shows the most urgent request that waits, the oldest first among equals, if nothing is open. */
   next(): void;
   /** What waits, in the order it will show. */
   waiting(): readonly R[];
@@ -38,27 +49,36 @@ export function createDialogQueue<R extends { kind: string }>(slot: DialogSlot<R
     waiting.push(request);
     order();
   };
+  const show = () => {
+    if (slot.get() !== null || slot.blocked()) return;
+    const first = waiting.shift();
+    if (first) slot.set(first);
+  };
 
   return {
     request(request) {
       const open = slot.get();
-      if (!open) return slot.set(request);
-      const openRank = rank(open);
-      if (openRank !== undefined && open.kind === request.kind) return slot.set(request);
-      if (openRank !== undefined && urgency(request) > openRank) {
+      const openRank = open ? rank(open) : undefined;
+      if (open && openRank !== undefined && open.kind === request.kind) return slot.set(request);
+      if (open && openRank !== undefined && urgency(request) > openRank) {
         keep(open);
         return slot.set(request);
       }
+      // Through the waiting line, so a more urgent request that waits is not passed by a newer one.
       keep(request);
+      show();
+    },
+    open(request) {
+      const open = slot.get();
+      if (open && rank(open) !== undefined) keep(open);
+      slot.set(request);
     },
     cancel(match) {
       waiting = waiting.filter((request) => !match(request));
+      const open = slot.get();
+      if (open && rank(open) !== undefined && match(open)) slot.set(null);
     },
-    next() {
-      if (slot.get()) return;
-      const first = waiting.shift();
-      if (first) slot.set(first);
-    },
+    next: show,
     waiting: () => waiting,
   };
 }
