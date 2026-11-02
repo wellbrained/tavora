@@ -213,15 +213,48 @@ describe("sliding indicator", () => {
     expect(t.watching.size).toBe(1 + 3);
   });
 
-  it("hides while nothing is active (mixed, disabled) and comes back in place, not sliding in", () => {
-    const t = setup();
+  it("hides while nothing is active (mixed, disabled); a click then slides it back in from where it was, a key press jumps", () => {
+    let smooth = true;
+    const t = setup([40, 60, 50], () => smooth);
     t.container.active = null;
     t.changed();
     expect(t.container.attrs["data-indicator"]).toBe("off");
+    // Hidden, but it keeps its place to slide from.
+    expect(t.container.vars["--indicator-x"]).toBe("2px");
     t.container.active = t.container.items[2]!;
     t.changed();
-    expect(t.container.attrs["data-indicator"]).toBe("still");
+    expect(t.container.attrs["data-indicator"]).toBe("slide");
     expect(t.container.vars["--indicator-x"]).toBe("106px");
+
+    t.container.active = null;
+    t.changed();
+    smooth = false;
+    t.container.active = t.container.items[1]!;
+    t.changed();
+    expect(t.container.attrs["data-indicator"]).toBe("jump");
+  });
+
+  it("the first click slides even when nothing was picked at mount (it rests on the first item until then)", () => {
+    const container = new FakeContainer();
+    container.items = row([40, 60, 50]);
+    container.active = null;
+    const mutations: Array<() => void> = [];
+    const env: IndicatorEnv = {
+      MutationObserver: class {
+        constructor(callback: () => void) {
+          mutations.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    };
+    createSlidingIndicator(container, { selector: ".active", env });
+    expect(container.attrs["data-indicator"]).toBe("off");
+    expect(container.vars).toEqual({ "--indicator-x": "2px", "--indicator-y": "2px", "--indicator-w": "40px", "--indicator-h": "28px" });
+    container.active = container.items[1]!;
+    mutations.forEach((callback) => callback());
+    expect(container.attrs["data-indicator"]).toBe("slide");
+    expect(container.vars["--indicator-x"]).toBe("44px");
   });
 
   it("hides while the container is not shown (0 x 0) and is placed once it shows", () => {
@@ -317,6 +350,72 @@ describe("useSlidingIndicator", () => {
     t.el.value = other;
     await nextTick();
     expect(other.attrs["data-indicator"]).toBeUndefined();
+  });
+});
+
+describe("the first click", () => {
+  // The whole path, as in the app: the control mounts, the document is followed from then on, the first pointer press
+  // is seen, and the change that follows it slides. First paint and a key press still don't.
+  class Doc {
+    listeners = new Map<string, Array<(event: object) => void>>();
+    addEventListener(type: string, listener: (event: object) => void) {
+      this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+    }
+    removeEventListener() {}
+    fire(type: string, event: object = {}) {
+      this.listeners.get(type)?.forEach((listener) => listener(event));
+    }
+  }
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const saved = { document: globals.document, MutationObserver: globals.MutationObserver, ResizeObserver: globals.ResizeObserver };
+  afterEach(() => {
+    Object.assign(globals, saved);
+    resetInputOrigin();
+  });
+
+  function mount() {
+    const doc = new Doc();
+    const mutations: Array<() => void> = [];
+    globals.document = doc;
+    globals.ResizeObserver = undefined;
+    globals.MutationObserver = class {
+      constructor(callback: () => void) {
+        mutations.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    };
+    const container = new FakeContainer();
+    container.items = row([40, 60, 50]);
+    container.active = container.items[0]!;
+    const el = ref<FakeContainer | null>(container);
+    const scope = effectScope();
+    scope.run(() => useSlidingIndicator(el, { selector: ".active" }));
+    return { doc, container, change: (index: number) => { container.active = container.items[index]!; mutations.forEach((callback) => callback()); }, scope };
+  }
+
+  it("slides: the first pointer press after the control appears is seen", async () => {
+    const t = mount();
+    await nextTick();
+    expect(t.container.attrs["data-indicator"]).toBe("still");
+    t.doc.fire("pointerdown");
+    t.change(1);
+    expect(t.container.attrs["data-indicator"]).toBe("slide");
+    t.scope.stop();
+  });
+
+  it("jumps for the first key press, and for a change nobody just made", async () => {
+    const t = mount();
+    await nextTick();
+    t.doc.fire("keydown");
+    t.change(1);
+    expect(t.container.attrs["data-indicator"]).toBe("jump");
+    t.scope.stop();
+    const u = mount();
+    await nextTick();
+    u.change(2);
+    expect(u.container.attrs["data-indicator"]).toBe("jump");
+    u.scope.stop();
   });
 });
 

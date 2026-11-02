@@ -740,6 +740,10 @@ test("ui playground: the segmented control's pill and the tabs' line follow the 
   const hidden = (label: string) => inModule(app, PLAYGROUND, `(() => { const g = document.querySelector('[role="radiogroup"][aria-label=${JSON.stringify(label)}]'); return [g.dataset.indicator, getComputedStyle(g.querySelector('[data-testid="segmented-pill"]')).opacity]; })()`);
   expect(await hidden("Mixed")).toEqual(["off", "0"]);
   expect(await hidden("Locked")).toEqual(["off", "0"]);
+  // The first click on a control with nothing picked slides in like every later one (it fades in out of its resting place).
+  await inModule(app, PLAYGROUND, `(() => { const el = document.querySelector('[role="radiogroup"][aria-label="Mixed"] [role="radio"]:nth-of-type(2)'); el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 })); el.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })); })()`);
+  expect((await hidden("Mixed"))[0]).toBe("slide");
+  await expect.poll(async () => (await hidden("Mixed"))[1]).toBe("1");
 
   // Display: the tabs' line is one piece in the list and the tab has no border of its own; the closable strip keeps
   // its per-tab border and has no moving line.

@@ -9,7 +9,8 @@
 // It also sets `data-indicator-axis` ("x" or "y") and `data-indicator`:
 //   "off"   no active item, or nothing to measure (hidden, disabled): the highlight is not shown
 //   "still" shown and placed without moving (first paint, a resize, a font arriving, a new list of options)
-//   "slide" shown and moving to the newly picked item
+//   "slide" shown and moving to the newly picked item. From "off" (nothing was picked, or it was disabled) it grows out of
+//           where it last was, or out of the first item, fading in: the first click is not a jump
 //   "jump"  shown, and the picked item changed without moving the highlight (a key press): labels should not fade either
 // The look is `.tavora-indicator` in motion.css; this file only measures.
 //
@@ -79,6 +80,8 @@ export function createSlidingIndicator(container: IndicatorContainer, options: S
   const axis = options.axis ?? "x";
   const env = options.env ?? browserEnv();
   let shown = false;
+  /** Whether the variables hold a place to move from: set by the first placement, or by seeding while nothing is picked. */
+  let placed = false;
   let lastItem: IndicatorBox | null = null;
   let lastPlace = "";
   let destroyed = false;
@@ -92,6 +95,20 @@ export function createSlidingIndicator(container: IndicatorContainer, options: S
 
   const round = (value: number) => Math.round(value * 100) / 100;
 
+  // With nothing picked there is nowhere yet to slide from: rest the hidden highlight on the first item, so the first
+  // pick (a click) slides and fades in instead of appearing in place.
+  function seed() {
+    const first = Array.from(container.children).find((child) => !isIndicator(child)) as Partial<IndicatorBox> | undefined;
+    const box = first?.getBoundingClientRect?.();
+    if (!box || (box.width === 0 && box.height === 0)) return;
+    const origin = container.getBoundingClientRect();
+    container.style.setProperty("--indicator-x", `${round(box.left - origin.left - container.clientLeft + container.scrollLeft)}px`);
+    container.style.setProperty("--indicator-y", `${round(box.top - origin.top - container.clientTop + container.scrollTop)}px`);
+    container.style.setProperty("--indicator-w", `${round(box.width)}px`);
+    container.style.setProperty("--indicator-h", `${round(box.height)}px`);
+    placed = true;
+  }
+
   function update(slide = false) {
     if (destroyed) return;
     const item = container.querySelector(options.selector);
@@ -101,6 +118,7 @@ export function createSlidingIndicator(container: IndicatorContainer, options: S
     if (!item || !box || (box.width === 0 && box.height === 0)) {
       shown = false;
       lastItem = null;
+      if (!placed) seed();
       set("off");
       watchItems();
       return;
@@ -116,13 +134,15 @@ export function createSlidingIndicator(container: IndicatorContainer, options: S
     }
     const picked = slide && item !== lastItem;
     const smooth = picked ? (options.smooth?.() ?? true) : true;
-    const state: IndicatorState = picked && shown && smooth ? "slide" : picked && !smooth ? "jump" : "still";
+    // `placed`, not `shown`: a pick made while nothing was picked slides in from where the highlight rests.
+    const state: IndicatorState = picked && placed && smooth ? "slide" : picked && !smooth ? "jump" : "still";
     container.style.setProperty("--indicator-x", `${x}px`);
     container.style.setProperty("--indicator-y", `${y}px`);
     container.style.setProperty("--indicator-w", `${round(box.width)}px`);
     container.style.setProperty("--indicator-h", `${round(box.height)}px`);
     set(state);
     shown = true;
+    placed = true;
     lastItem = item;
     lastPlace = place;
     watchItems();

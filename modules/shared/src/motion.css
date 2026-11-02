@@ -53,7 +53,7 @@
    container, which must be position: relative, and sets data-indicator there:
      off    no active item (nothing picked, disabled, hidden): the highlight is not shown
      still  placed without moving: first paint, a resize, a font loading, a new list of options
-     slide  moving to the newly picked item (a click)
+     slide  moving to the newly picked item (a click); from "off" it also fades in, out of where it last rested
      jump   the picked item changed without moving the highlight (the keys, or a change nobody just clicked); the
             labels should not fade either: a component turns its label transition off with group-data-[indicator=jump]
    A component gives the element its colours and shape; for a different shape (an underline) it overrides top and
@@ -84,7 +84,7 @@
     opacity: 1;
   }
   [data-indicator="slide"] > .tavora-indicator {
-    transition-property: translate, width, height;
+    transition-property: translate, width, height, opacity;
     transition-duration: var(--duration-panel);
     transition-timing-function: var(--ease-in-out-strong);
   }
