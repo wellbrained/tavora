@@ -73,7 +73,8 @@ class Offer implements UndoOffer {
       back = false;
       reason = error;
     }
-    if (!back) toast.error(this.options.failed?.(reason) ?? uiText.value.undoFailed, { testid: "undo-failed" });
+    // An error, but nothing to act on: it goes by itself like any other message.
+    if (!back) toast.error(this.options.failed?.(reason) ?? uiText.value.undoFailed, { testid: "undo-failed", duration: TOAST_DURATION });
     return back;
   }
 
@@ -127,11 +128,12 @@ export function settleUndos(): void {
 }
 
 /**
- * Whether a key press is Ctrl+Z (Cmd+Z) for undoing a delete: no Shift or Alt, and not typed into a text field, which
+ * Whether a key press is Ctrl+Z (Cmd+Z) for undoing a delete: no Shift or Alt, not taken by something else already
+ * (defaultPrevented), and not typed into a text field, which
  * has its own undo.
  */
 export function isUndoKey(event: KeyboardEvent): boolean {
-  if (event.key.toLowerCase() !== "z" || event.shiftKey || event.altKey || !(event.ctrlKey || event.metaKey)) return false;
+  if (event.defaultPrevented || event.key.toLowerCase() !== "z" || event.shiftKey || event.altKey || !(event.ctrlKey || event.metaKey)) return false;
   const target = event.target as Element | null;
   return !target?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable='false'])");
 }

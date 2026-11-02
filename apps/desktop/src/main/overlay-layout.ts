@@ -423,6 +423,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       pictureHint: canTakePicture ? null : isGameSetup(gameId) && this.options.source.gameRunning(gameId) ? "switch" : "start",
       canUndo: history.canUndo,
       canRedo: history.canRedo,
+      removals: this.removals(),
       enabled: this.options.settings.gameOverlays,
       notice: this.notice,
       copied: this.copied,
@@ -560,6 +561,9 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       }
       case "undo":
         this.step("before");
+        break;
+      case "undo-step":
+        this.undoStep(message.step);
         break;
       case "redo":
         this.step("after");
@@ -735,12 +739,12 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   }
 
   /** Does what the user asked to the items `ids` of the setup shown (and of `alsoIn`), and keeps it as one undo step. */
-  private record(ids: readonly string[], run: () => void, alsoIn: readonly string[] = []): void {
+  private record(ids: readonly string[], run: () => void, alsoIn: readonly string[] = [], kind?: string): void {
     const setupId = this.current(this.games());
     const targets = [setupId, ...alsoIn].flatMap((setup) => ids.map((id) => ({ setupId: setup, id })));
     const before = targets.map((target) => this.snapshot(target.setupId, target.id));
     run();
-    this.history(setupId).record(targets.map((target, index) => ({ ...target, before: before[index]!, after: this.snapshot(target.setupId, target.id) })));
+    this.history(setupId).record(targets.map((target, index) => ({ ...target, before: before[index]!, after: this.snapshot(target.setupId, target.id) })), kind);
   }
 
   /**
@@ -753,6 +757,30 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     const history = this.history(setupId);
     const step = side === "before" ? history.undo() : history.redo();
     if (step) this.selection = step.parts.filter((part) => part.setupId === setupId && part[side] !== null).map((part) => part.id);
+  }
+
+  /**
+   * Undo on the toast of a removal: takes back exactly that step, in whichever setup it was made, even with other changes
+   * since; the page then shows that setup with the frames selected. A step that can't any more (taken back already, or
+   * its frames changed) says so in the notice line.
+   */
+  private undoStep(id: number): void {
+    for (const [setupId, history] of this.histories) {
+      if (!history.steps.some((step) => step.id === id)) continue;
+      const step = history.undoStep(id);
+      if (!step) break;
+      if (setupId !== this.current(this.games())) this.switchTo(setupId);
+      this.selection = step.parts.filter((part) => part.setupId === setupId && part.before !== null).map((part) => part.id);
+      return;
+    }
+    this.notice = this.text("error.undo.gone");
+  }
+
+  /** The removals that can still be taken back, in every setup, oldest first: the page offers Undo on a toast for each. */
+  private removals(): { step: number; count: number }[] {
+    return [...this.histories.values()]
+      .flatMap((history) => history.steps.filter((step) => step.kind === "remove").map((step) => ({ step: step.id, count: step.size })))
+      .sort((a, b) => a.step - b.step);
   }
 
   // ── What the user does to the frames ────────────────────────────────
@@ -773,6 +801,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       () => {
         for (const info of infos) this.options.source.remove(setupId, info.ref);
       },
+      [],
+      "remove",
     );
     this.selection = [];
   }

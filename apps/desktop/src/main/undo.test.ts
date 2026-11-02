@@ -13,6 +13,7 @@ import {
   restoreWorkspace,
   trashWorkspace,
   untrashWorkspace,
+  untrashWorkspaces,
   workspacePlace,
   type Library,
 } from "./library";
@@ -255,5 +256,25 @@ describe("UndoShelf", () => {
     });
     await expect(shelf.restore(token)).rejects.toThrow(LibraryError);
     expect(shelf.size).toBe(0);
+  });
+});
+
+describe("several workspaces moved to Trash together, undone", () => {
+  it("bring back those still there when one was deleted for good meanwhile, each in its place", () => {
+    const lib = library();
+    const before = rootIds(lib);
+    const places = [id("a"), id("b"), id("c")].map((name) => ({ id: name, where: workspacePlace(lib, name) }));
+    for (const { id: name } of places) trashWorkspace(lib, name, day(9));
+    deleteTrashedWorkspace(lib, id("b"));
+    expect(untrashWorkspaces(lib, places)).toEqual([id("a"), id("c")]);
+    expect(rootIds(lib)).toEqual(before.filter((item) => item !== `workspace:${id("b")}`));
+  });
+
+  it("can't be undone when none of them is left", () => {
+    const lib = library();
+    const places = [{ id: id("a"), where: workspacePlace(lib, id("a")) }];
+    trashWorkspace(lib, id("a"), day(9));
+    deleteTrashedWorkspace(lib, id("a"));
+    expect(() => untrashWorkspaces(lib, places)).toThrow(LibraryError);
   });
 });

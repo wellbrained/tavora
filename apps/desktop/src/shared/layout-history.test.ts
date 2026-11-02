@@ -139,3 +139,44 @@ describe("LayoutHistory", () => {
     expect(setups.v).toBe(2);
   });
 });
+
+describe("LayoutHistory.undoStep (Undo on a removal's toast)", () => {
+  it("takes back exactly that step, with later steps on other items left as they are", () => {
+    const { setups, history, read } = world({ s: { a: 1, b: 2 } });
+    const record = (id: string, change: () => void, kind?: string) => {
+      const before = setups.get("s")!.get(id) ?? null;
+      change();
+      history.record([{ setupId: "s", id, before, after: setups.get("s")!.get(id) ?? null }], kind);
+    };
+    record("a", () => setups.get("s")!.delete("a"), "remove");
+    const removal = history.steps.find((step) => step.kind === "remove")!;
+    record("b", () => setups.get("s")!.set("b", 20));
+    expect(history.undoStep(removal.id)).not.toBeNull();
+    expect(read("s")).toEqual({ a: 1, b: 20 });
+    // Gone from the steps that can be taken back; the move of b is still the newest.
+    expect(history.steps.map((step) => step.id)).not.toContain(removal.id);
+    history.undo();
+    expect(read("s")).toEqual({ a: 1, b: 2 });
+    // Taken back already: once only.
+    expect(history.undoStep(removal.id)).toBeNull();
+  });
+
+  it("leaves a step whose item came back or changed since, and drops it", () => {
+    const { setups, history, read } = world({ s: { a: 1 } });
+    setups.get("s")!.delete("a");
+    history.record([{ setupId: "s", id: "a", before: 1, after: null }], "remove");
+    const [removal] = history.steps;
+    setups.get("s")!.set("a", 5);
+    expect(history.undoStep(removal!.id)).toBeNull();
+    expect(read("s")).toEqual({ a: 5 });
+    expect(history.steps).toEqual([]);
+  });
+
+  it("gives every step its own id, across histories", () => {
+    const one = world({ s: {} });
+    const two = world({ s: {} });
+    one.history.record([{ setupId: "s", id: "a", before: null, after: 1 }]);
+    two.history.record([{ setupId: "s", id: "a", before: null, after: 1 }]);
+    expect(one.history.steps[0]!.id).not.toBe(two.history.steps[0]!.id);
+  });
+});

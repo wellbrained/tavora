@@ -19,8 +19,21 @@ import OverlaySettings from "../components/layout/OverlaySettings.vue";
 import OverlaySources from "../components/layout/OverlaySources.vue";
 import { selectedItems, send, stills, useLayoutKeys, view } from "../components/layout/layout-state";
 import { withShortcut } from "../shortcuts";
+import { createFrameUndos } from "../components/layout/frame-undo";
+import { undoable } from "@tavora/official-ui/undoable";
 
 useLayoutKeys();
+
+// Removing frames: a toast with Undo for each removal, tied to its step in the page's own history (frame-undo.ts).
+const frameUndos = createFrameUndos((removal) =>
+  undoable({
+    title: removal.count === 1 ? t("undo.frameRemoved") : t("undo.framesRemoved", { count: removal.count }),
+    undo: () => send({ type: "undo-step", step: removal.step }),
+  }),
+);
+frameUndos.skip(view.value?.removals ?? []);
+watch(() => view.value?.removals ?? [], (removals) => frameUndos.sync(removals));
+onBeforeUnmount(() => frameUndos.drop());
 
 /** Where the game's picture is served from (main/layout-pictures.ts; the folder is one of the host UI's image folders). */
 const PICTURE_ORIGIN = "tavora-host://app/";

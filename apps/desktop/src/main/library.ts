@@ -950,3 +950,16 @@ function sanitizeIcon(icon: unknown, name: string): WorkspaceIcon {
 export function isIconFile(file: string): boolean {
   return ICON_FILE.test(file);
 }
+
+/**
+ * Takes several workspaces out of Trash into their places, in rail order so each finds the neighbour it went back next
+ * to. One deleted for good meanwhile is left out; error.undo.gone only when none is left. Answers with those back.
+ */
+export function untrashWorkspaces(library: Library, places: { id: string; where: WorkspacePlace }[]): string[] {
+  const left = places
+    .filter(({ id }) => library.workspaces[id])
+    .sort((a, b) => (a.where.folderId ?? "").localeCompare(b.where.folderId ?? "") || a.where.place.index - b.where.place.index);
+  if (!left.length) throw new LibraryError("error.undo.gone");
+  for (const { id, where } of left) untrashWorkspace(library, id, where);
+  return left.map(({ id }) => id);
+}

@@ -63,6 +63,7 @@ import {
   deleteFolderUndoably,
   restoreFolder,
   untrashWorkspace,
+  untrashWorkspaces,
   workspacePlace,
   iconFileShared,
   deleteTrashedWorkspace,
@@ -2950,11 +2951,9 @@ export class Host {
     for (const id of ids) trashWorkspace(this.library, id, new Date());
     if (open !== null) this.showScreen("welcome");
     this.saveLibrary();
-    // In rail order, so each finds the neighbour it went back next to.
-    places.sort((a, b) => (a.where.folderId ?? "").localeCompare(b.where.folderId ?? "") || a.where.place.index - b.where.place.index);
     return this.undos.put(() => {
-      if (places.some(({ id }) => !this.library.workspaces[id])) throw new LibraryError("error.undo.gone");
-      for (const { id, where } of places) untrashWorkspace(this.library, id, where);
+      // One deleted for good meanwhile stays gone; the others still come back.
+      untrashWorkspaces(this.library, places);
       this.saveLibrary();
       if (open !== null && this.screen === "welcome" && isLive(this.library, open)) this.openWorkspace(open);
     });

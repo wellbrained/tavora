@@ -623,6 +623,56 @@ test("Ctrl+click and a box select several frames, Del removes them all, and one 
   }
 });
 
+test("a removed frame offers Undo on a toast: it takes back exactly that removal after later changes, and the page's Ctrl+Z takes its toast away", async () => {
+  const userData = await newUserData();
+  await seedThree(userData);
+  const { app, page } = await launch(userData, [MODULES], { seed: false });
+  try {
+    await overlayPage(app, page, GAME);
+    await expect.poll(async () => (await state(page))?.items?.length).toBe(3);
+    const [a, b, c] = (await state(page)).items.map((item) => item.id);
+    const layer = layerOf(app);
+    const frame = (id: string) => layer.getByTestId(`layout-item-${id}`);
+    const toasts = page.getByTestId("undo-toast");
+
+    // Del on a frame: gone, no question, and a toast with Undo.
+    await frame(a!).click();
+    await layer.locator("body").press("Delete");
+    await expect.poll(async () => (await state(page)).items.map((item) => item.id)).toEqual([b, c]);
+    await expect(toasts).toHaveCount(1);
+    await expect(toasts).toContainText("Frame removed");
+
+    // Another frame moves after that; the toast's Undo brings back the removed one and leaves the move.
+    const startB = (await state(page)).items.find((item) => item.id === b)!.placed;
+    await frame(b!).click();
+    await layer.locator("body").press("ArrowDown");
+    await expect.poll(async () => (await state(page)).items.find((item) => item.id === b)!.placed.y).toBeGreaterThan(startB.y);
+    const movedB = (await state(page)).items.find((item) => item.id === b)!.placed;
+    await page.getByTestId("undo").click();
+    await expect.poll(async () => (await state(page)).items.map((item) => item.id).sort()).toEqual([a, b, c].sort());
+    expect((await state(page)).items.find((item) => item.id === b)!.placed).toEqual(movedB);
+    await expect(toasts).toHaveCount(0);
+    // The page's own undo still has the move as its newest step: nothing was undone twice.
+    await expect(page.getByTestId("layout-undo")).toBeEnabled();
+
+    // Removed again and taken back with the page's Ctrl+Z: the frame is back and its toast goes, without a word.
+    await frame(c!).click();
+    await layer.locator("body").press("Delete");
+    await expect(toasts).toHaveCount(1);
+    await layer.locator("body").press("ControlOrMeta+z");
+    await expect.poll(async () => (await state(page)).items).toHaveLength(3);
+    await expect(toasts).toHaveCount(0);
+    await expect(page.getByTestId("undo-failed")).toHaveCount(0);
+    // Redo takes it out again but offers no second toast.
+    await layer.locator("body").press("ControlOrMeta+Shift+z");
+    await expect.poll(async () => (await state(page)).items).toHaveLength(2);
+    await page.waitForTimeout(300);
+    await expect(toasts).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
 /** A library with a third game, Valheim, that has no overlay setup, and setups for the two others. */
 const PERSONAL = "local-notes";
 async function seedCopy(userData: string) {

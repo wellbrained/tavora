@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { dismissToast, toAnnounce, toasts, type ToastItem } from "./components/ui/toast/toast";
+import { dismissToast, toAnnounce, toastDuration, toasts, type ToastItem } from "./components/ui/toast/toast";
 import { setUiLanguage } from "./components/ui/text";
 import { placeOf, reinsert } from "./reinsert";
 import { isUndoKey, openUndos, settleUndos, undoable, undoLatest } from "./undoable";
@@ -143,6 +143,8 @@ describe("undoable", () => {
     expect(await offer.undo()).toBe(false);
     expect(data).toEqual(["a", "b"]);
     expect(toasts.value.map((toast) => [toast.variant, toast.title])).toEqual([["error", "Can't undo that anymore."]]);
+    // Nothing to act on, so it goes by itself.
+    expect(toastDuration(toasts.value[0]!)).toBe(5000);
   });
 
   it("shows the reason an undo threw, when the caller turns it into words", async () => {
@@ -232,6 +234,12 @@ describe("isUndoKey", () => {
     expect(key({ key: "z", ctrlKey: true, shiftKey: true })).toBe(false);
     expect(key({ key: "z", ctrlKey: true, altKey: true })).toBe(false);
     expect(key({ key: "y", ctrlKey: true })).toBe(false);
+  });
+
+  it("leaves a key press something else took already", () => {
+    const event = new KeyboardEvent("keydown", { key: "z", ctrlKey: true, cancelable: true });
+    event.preventDefault();
+    expect(isUndoKey(event)).toBe(false);
   });
 
   it("leaves text fields their own undo", () => {

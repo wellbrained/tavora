@@ -465,3 +465,15 @@ describe("undoing a delete", () => {
     expect(removeGroupUndoably(data, "nope")).toBeNull();
   });
 });
+
+describe("undoing a group delete with the list full", () => {
+  it("leaves it deleted rather than going over the group limit", () => {
+    const data = nested();
+    const removed = removeGroupUndoably(data, "g1")!;
+    for (let index = 0; index < LIMITS.groups; index++) addGroup(data, `n${index}`, `Group ${index}`);
+    expect(canRestoreGroup(data, removed)).toBe(false);
+    restoreGroup(data, removed);
+    expect(data.groups).toHaveLength(LIMITS.groups);
+    expect(data.groups.some((group) => group.id === "g1")).toBe(false);
+  });
+});

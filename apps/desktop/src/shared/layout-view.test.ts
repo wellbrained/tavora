@@ -41,6 +41,9 @@ describe("parseLayoutMessage", () => {
     expect(parseLayoutMessage({ type: "preview", choice: "" })).toBeNull();
     expect(parseLayoutMessage({ type: "preview", choice: 3 })).toBeNull();
     for (const type of ["undo", "redo", "drag-end", "take-picture", "choose-picture", "remove-picture", "dismiss-notice", "done"]) expect(parseLayoutMessage({ type })).toEqual({ type });
+    // Undo on a removal's toast names its step: a whole number above 0.
+    expect(parseLayoutMessage({ type: "undo-step", step: 7 })).toEqual({ type: "undo-step", step: 7 });
+    for (const step of [0, -1, 1.5, "7", null, undefined]) expect(parseLayoutMessage({ type: "undo-step", step })).toBeNull();
     // Gone with per-game positions: each setup has its own.
     for (const type of ["customize", "follow-all", "follow-item"]) expect(parseLayoutMessage({ type, id: "a" })).toBeNull();
   });

@@ -124,6 +124,8 @@ export interface LayoutView {
   pictureHint: "start" | "switch" | null;
   canUndo: boolean;
   canRedo: boolean;
+  /** Removals that can still be taken back (in any setup), oldest first: each gets an Undo toast on the page, which goes once its step does. */
+  removals: { step: number; count: number }[];
   /** Game overlays are off in Settings: the layout still works, but nothing shows over the game. */
   enabled: boolean;
   /** A short sentence for the user (the game isn't running, a picture can't be used); null when there is none. */
@@ -177,6 +179,8 @@ export type LayoutMessage =
   | { type: "commit"; rects: PlacedRect[] }
   | { type: "undo" }
   | { type: "redo" }
+  /** Undo on a removal's toast: takes back exactly that step (`removals`), even with changes since. */
+  | { type: "undo-step"; step: number }
   | ({ hidden: boolean } & OneOrMany<"canvas-hidden">)
   /** Reset position: back to where a new item starts, at the size it has. */
   | OneOrMany<"reset">
@@ -305,6 +309,8 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
     case "dismiss-notice":
     case "done":
       return { type: raw.type };
+    case "undo-step":
+      return Number.isSafeInteger(raw.step) && (raw.step as number) > 0 ? { type: "undo-step", step: raw.step as number } : null;
     case "canvas-hidden": {
       const target = oneOrMany(raw);
       return target && typeof raw.hidden === "boolean" ? { type: "canvas-hidden", hidden: raw.hidden, ...target } : null;

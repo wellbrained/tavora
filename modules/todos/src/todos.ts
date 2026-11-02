@@ -475,8 +475,12 @@ export function removeGroupUndoably(data: TodoList, groupId: string): RemovedGro
   return removed;
 }
 
-/** Whether a deleted group can go back: no group with its id, and none of its to-dos, came back some other way. */
+/**
+ * Whether a deleted group can go back: no group with its id, and none of its to-dos, came back some other way, and the
+ * list has room for it (LIMITS.groups; more would be cut off the next time it loads).
+ */
 export function canRestoreGroup(data: TodoList, removed: RemovedGroup): boolean {
+  if (data.groups.length >= LIMITS.groups) return false;
   return !data.groups.some((group) => group.id === removed.group.id) && !removed.group.tasks.some((task) => findTask(data, task.id));
 }
 

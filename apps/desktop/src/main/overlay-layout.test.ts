@@ -818,6 +818,33 @@ describe("the toolbar and Del", () => {
     layout.handle({ type: "remove", id: "nope" }, false);
     expect(world.removed).toHaveLength(1);
   });
+  it("lists a removal for an Undo toast; the toast's undo takes back exactly it, Ctrl+Z takes it off the list", () => {
+    const { layout, world } = setup([clock("a"), clock("b"), clock("c")]);
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "remove", ids: [ids[0]!, ids[1]!] }, false);
+    const [removal] = layout.view().removals;
+    expect(removal).toEqual({ step: expect.any(Number), count: 2 });
+    // A later change to another frame stays when the toast's Undo takes the removal back.
+    layout.handle({ type: "commit", id: ids[2]!, rect: { x: 500, y: 500, width: 400, height: 200 } }, false);
+    const moved = world.items.find((item) => item.key === "c")?.rect;
+    layout.handle({ type: "undo-step", step: removal!.step }, false);
+    expect(layout.view().items).toHaveLength(3);
+    expect(world.items.find((item) => item.key === "c")?.rect).toEqual(moved);
+    expect(layout.view().removals).toEqual([]);
+    expect(layout.view().selected.sort()).toEqual([ids[0]!, ids[1]!].sort());
+    // The same Undo again can't take it back twice; the notice says so.
+    layout.handle({ type: "undo-step", step: removal!.step }, false);
+    expect(layout.view().items).toHaveLength(3);
+    expect(layout.view().notice).toBe("Can't undo that anymore.");
+
+    // Removed again and taken back with the page's own Ctrl+Z: it leaves the list, so its toast goes.
+    layout.handle({ type: "remove", id: ids[0]! }, false);
+    expect(layout.view().removals).toHaveLength(1);
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().removals).toEqual([]);
+    expect(layout.view().items).toHaveLength(3);
+  });
   it("opens the settings of the thing an item shows", () => {
     const { layout, world } = setup([clock("a")]);
     layout.open("elden");

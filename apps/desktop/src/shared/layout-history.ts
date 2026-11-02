@@ -20,8 +20,14 @@ export interface Part<S> {
 }
 
 export interface Step<S> {
+  /** Unique while Tavora runs, across every setup's history, so an Undo toast can name its step. */
+  id: number;
+  /** What the user did, when someone asks (the Overlay page offers Undo on a toast for "remove"). */
+  kind?: string | undefined;
   parts: Part<S>[];
 }
+
+let nextStepId = 1;
 
 /** How the history looks at and changes the items (the layout gives it the setups; a test, a plain map). */
 export interface Stage<S> {
@@ -50,10 +56,10 @@ export class LayoutHistory<S> {
    * Keeps what one user action changed, as one step; parts that end as they began are left out, and with nothing changed
    * there is no step. Redo is forgotten. Whether a step was made.
    */
-  record(parts: readonly Part<S>[]): boolean {
+  record(parts: readonly Part<S>[], kind?: string): boolean {
     const changed = parts.filter((part) => !this.same(part.before, part.after));
     if (changed.length === 0) return false;
-    this.done.push({ parts: changed });
+    this.done.push({ id: nextStepId++, kind, parts: changed });
     if (this.done.length > this.limit) this.done.shift();
     this.undone = [];
     return true;
@@ -70,26 +76,53 @@ export class LayoutHistory<S> {
   }
 
   private apply(from: Step<S>[], to: Step<S>[], side: "before" | "after"): Step<S> | null {
-    const other = side === "before" ? "after" : "before";
     for (;;) {
       const step = from.pop();
       if (!step) return null;
+      const outcome = this.run(step, side);
       // Changed since the step: it can't be taken back or done again without undoing that too.
-      if (!step.parts.every((part) => this.same(this.stage.read(part.setupId, part.id), part[other]))) continue;
-      // Items leave first, so one coming back into a full setup has the room another one leaves.
-      const order = [...step.parts].sort((a, b) => Number(a[side] !== null) - Number(b[side] !== null));
-      const written: Part<S>[] = [];
-      for (const part of order) {
-        if (this.stage.write(part, part[side])) {
-          written.push(part);
-          continue;
-        }
-        for (const back of written.reverse()) this.stage.write(back, back[other]);
-        return null;
-      }
+      if (outcome === "stale") continue;
+      if (outcome === "failed") return null;
       to.push(step);
       return step;
     }
+  }
+
+  /**
+   * Takes back exactly this step (the Undo on a toast), wherever it is in the history: steps after it that touched other
+   * items stay as they are. It then waits to be done again like any step taken back. Null when it is not in the history
+   * any more (taken back already, dropped) or its items changed since; such a step is dropped.
+   */
+  undoStep(id: number): Step<S> | null {
+    const index = this.done.findIndex((step) => step.id === id);
+    if (index < 0) return null;
+    const [step] = this.done.splice(index, 1);
+    if (this.run(step!, "before") !== "done") return null;
+    this.undone.push(step!);
+    return step!;
+  }
+
+  /** The steps that can still be taken back, oldest first, with what they were about. */
+  get steps(): readonly { id: number; kind: string | undefined; size: number }[] {
+    return this.done.map((step) => ({ id: step.id, kind: step.kind, size: step.parts.length }));
+  }
+
+  /** Writes one side of a step; "stale" when its items are no longer as the step left them, "failed" when a write can't be done (what was written is put back). */
+  private run(step: Step<S>, side: "before" | "after"): "done" | "stale" | "failed" {
+    const other = side === "before" ? "after" : "before";
+    if (!step.parts.every((part) => this.same(this.stage.read(part.setupId, part.id), part[other]))) return "stale";
+    // Items leave first, so one coming back into a full setup has the room another one leaves.
+    const order = [...step.parts].sort((a, b) => Number(a[side] !== null) - Number(b[side] !== null));
+    const written: Part<S>[] = [];
+    for (const part of order) {
+      if (this.stage.write(part, part[side])) {
+        written.push(part);
+        continue;
+      }
+      for (const back of written.reverse()) this.stage.write(back, back[other]);
+      return "failed";
+    }
+    return "done";
   }
 
   get canUndo(): boolean {
