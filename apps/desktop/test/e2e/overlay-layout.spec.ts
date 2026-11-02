@@ -333,7 +333,7 @@ test("A game's overlay is deleted from the page and the rail with Undo that brin
     await expect(toast).toBeVisible();
     expect(await games()).toEqual(["$everywhere", "$all"]);
     // Undo: back in its place in the dropdown, shown again, with the frame as it was (place, settings).
-    await page.getByTestId("undo").last().click();
+    await hostToast(page, "undo-toast").getByTestId("undo").last().click();
     await expect.poll(games).toEqual(["$everywhere", "$all", GAME]);
     await expect.poll(async () => (await state(page)).gameId).toBe(GAME);
     const after = (await state(page)).items;
@@ -345,7 +345,7 @@ test("A game's overlay is deleted from the page and the rail with Undo that brin
     await page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove-overlay"]').click();
     await expect.poll(games).toEqual(["$everywhere", "$all"]);
     await expect(toast).toContainText("Overlay for Path of Exile 2 deleted");
-    await page.getByTestId("undo").last().click();
+    await hostToast(page, "undo-toast").getByTestId("undo").last().click();
     await expect.poll(games).toEqual(["$everywhere", "$all", GAME]);
     // The page stayed on All games (the delete left it there); the game's setup is back with its frame as it was.
     await page.evaluate((gameId) => (window as unknown as Host).tavoraHost.layout.send({ type: "game", gameId }), GAME);
@@ -358,7 +358,7 @@ test("A game's overlay is deleted from the page and the rail with Undo that brin
     await expect.poll(async () => (await state(page)).gameId).toBe("$everywhere");
     // The toast of the earlier delete may still be leaving.
     await expect(hostToast(page, "undo-toast")).toHaveCount(1);
-    await page.getByTestId("undo").last().click();
+    await hostToast(page, "undo-toast").getByTestId("undo").last().click();
     await expect.poll(games).toEqual(["$everywhere", "$all", GAME]);
     expect((await state(page)).gameId).toBe("$everywhere");
     await expect(hostToast(page, "undo-toast")).toHaveCount(0);
