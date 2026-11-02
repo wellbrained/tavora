@@ -66,7 +66,7 @@ const refusedRect = computed<Rect | null>(() => {
 </script>
 
 <template>
-  <div class="pointer-events-none absolute inset-0 z-[45]" data-testid="dock-preview" :data-target="target ? (target.kind === 'edge' ? `edge-${target.side}` : target.kind === 'tab' ? 'tab' : `split-${target.side}`) : undefined" :data-refused="refused ? 'true' : undefined" aria-hidden="true">
+  <div class="pointer-events-none absolute inset-0 z-[45]" data-testid="dock-preview" :data-target="target ? (target.kind === 'edge' ? `edge-${target.side}` : target.kind === 'tab' ? 'tab' : `split-${target.side}`) : undefined" :data-refused="refused ? 'true' : undefined" :data-reason="plan && !plan.ok ? plan.reason : undefined" aria-hidden="true">
     <!-- The dock's outer edges: faint while you drag, lit when aimed at. -->
     <div
       v-for="side in SIDES"
@@ -90,11 +90,11 @@ const refusedRect = computed<Rect | null>(() => {
     </Transition>
     <div
       v-if="preview.ghost && tabGroup"
-      class="border-primary bg-primary/15 text-foreground absolute flex items-center rounded-lg border border-dashed px-3 text-[13px] font-medium"
+      :class="cn('absolute flex items-center rounded-lg text-[13px] font-medium', preview.bar ? 'bg-primary-fill shadow-[0_0_0_2px_var(--background)]' : 'border-primary bg-primary/15 text-foreground border border-dashed px-3')"
       :style="at(preview.ghost)"
       data-testid="dock-ghost-tab"
     >
-      <span class="truncate">{{ preview.title }}</span>
+      <span v-if="!preview.bar" class="truncate">{{ preview.title }}</span>
     </div>
 
     <!-- Too little room: no outline, and the reason. -->
