@@ -4,7 +4,7 @@ import { createDockview, type DockviewApi, type DockviewGroupPanel } from "dockv
 import "../../../src/renderer/dock.css";
 import { groupConstraints, toDockview, type PanelInfo } from "../../../src/renderer/dock";
 import { applyDrop } from "../../../src/renderer/dock-drop";
-import { DOCK_GAP, NEW_GROUP, planDrop, groupRects, type Dragged, type DropTarget } from "../../../src/renderer/dock-model";
+import { diffLayouts, DOCK_GAP, NEW_GROUP, planDrop, groupRects, type Dragged, type DropTarget } from "../../../src/renderer/dock-model";
 import type { SavedLayout } from "../../../src/shared/host-api";
 
 export interface Case {
@@ -19,8 +19,8 @@ export interface Spec {
 export interface Report {
   case: Case;
   outcome: "same" | "refused" | "mismatch" | "refused-but-live-works";
-  detail?: string;
-  reason?: string;
+  detail?: string | undefined;
+  reason?: string | undefined;
 }
 
 const host = document.getElementById("host")!;
@@ -58,21 +58,6 @@ function build(spec: Spec): DockviewApi {
 const near = (a: number, b: number, tolerance: number) => Math.abs(a - b) <= tolerance;
 
 type Node = { type: string; size?: number; visible?: boolean; data: unknown };
-function compare(a: Node, b: Node, path: string, ids: Map<string, string>, out: string[]) {
-  if (a.type !== b.type) return void out.push(`${path}: ${a.type} vs ${b.type}`);
-  if (!near(a.size ?? 0, b.size ?? 0, 1)) out.push(`${path}: size model ${a.size} vs dockview ${b.size}`);
-  if (a.type === "branch") {
-    const x = a.data as Node[];
-    const y = b.data as Node[];
-    if (x.length !== y.length) return void out.push(`${path}: ${x.length} children vs ${y.length}`);
-    x.forEach((child, i) => compare(child, y[i]!, `${path}/${i}`, ids, out));
-  } else {
-    const x = a.data as { id: string; views: string[] };
-    const y = b.data as { id: string; views: string[] };
-    ids.set(x.id, y.id);
-    if (x.views.join() !== y.views.join()) out.push(`${path}: tabs model ${x.views.join()} vs dockview ${y.views.join()}`);
-  }
-}
 
 function run(spec: Spec, entry: Case): Report {
   const api = build(spec);
@@ -94,8 +79,7 @@ function run(spec: Spec, entry: Case): Report {
       // Nothing may change when the model says so.
       try {
         applyDrop(api, entry.dragged, entry.target);
-        const kept: string[] = [];
-        compare(before.grid.root as Node, api.toJSON().grid.root as Node, "", new Map(), kept);
+        const kept = diffLayouts(before, api.toJSON());
         out.push(...kept.map((line) => `same-spot but dockview changed: ${line}`));
       } catch {
         // dockview refuses to move a group onto itself, which is the same: nothing changes.
@@ -105,9 +89,7 @@ function run(spec: Spec, entry: Case): Report {
   }
   applyDrop(api, entry.dragged, entry.target);
   const after = api.toJSON();
-  const ids = new Map<string, string>();
-  compare(plan.layout.grid.root as Node, after.grid.root as Node, "", ids, out);
-  if (plan.layout.grid.orientation !== after.grid.orientation) out.push(`orientation ${plan.layout.grid.orientation} vs ${after.grid.orientation}`);
+  out.push(...diffLayouts(plan.layout, after));
   const fresh = api.groups.find((group) => !oldIds.has(group.id));
   const real = origin ? live() : {};
   for (const [id, mine] of Object.entries(plan.rects)) {

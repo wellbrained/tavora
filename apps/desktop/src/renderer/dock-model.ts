@@ -732,3 +732,28 @@ function plan(layout: SerializedDockview, dragged: Dragged, target: DropTarget, 
   if (!rect) return { ok: false, reason: "unknown" };
   return { ok: true, layout: grid.toJSON(layout), rects, group: landing.id, landing: rect, tabIndex, newGroup };
 }
+
+/**
+ * Where two layouts differ (the model's against dockview's after the same drop): the shape, the tabs and the sizes
+ * to within a pixel. Empty when they are the same. The group the drop made new may have any id.
+ */
+export function diffLayouts(model: SerializedDockview, real: SerializedDockview, tolerance = 1): string[] {
+  const out: string[] = [];
+  if (model.grid.orientation !== real.grid.orientation) out.push(`orientation ${model.grid.orientation} vs ${real.grid.orientation}`);
+  const walk = (a: GridNode, b: GridNode, path: string) => {
+    if (a.type !== b.type) return void out.push(`${path || "/"}: ${a.type} vs ${b.type}`);
+    if (Math.abs((a.size ?? 0) - (b.size ?? 0)) > tolerance) out.push(`${path || "/"}: size ${a.size} vs ${b.size}`);
+    if (a.type === "branch") {
+      const x = a.data as GridNode[];
+      const y = b.data as GridNode[];
+      if (x.length !== y.length) return void out.push(`${path || "/"}: ${x.length} children vs ${y.length}`);
+      x.forEach((child, i) => walk(child, y[i]!, `${path}/${i}`));
+    } else {
+      const x = a.data as GroupState;
+      const y = b.data as GroupState;
+      if (x.views.join() !== y.views.join()) out.push(`${path}: tabs ${x.views.join()} vs ${y.views.join()}`);
+    }
+  };
+  walk(model.grid.root, real.grid.root, "");
+  return out;
+}
