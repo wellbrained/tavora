@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.73",
+    date: "2026-11-02",
+    title: "Undo instead of \"Are you sure?\"",
+    notes: [
+      "Deleting a layout, frame or to-do no longer asks first; you can undo it for a few seconds.",
+      "Folders, to-do groups, workspaces you move to Trash, calculator values and a cleared history work the same way.",
+      "Ctrl+Z takes back the latest one.",
+    ],
+    prs: [
+      { number: 636, title: "Undo instead of \"Are you sure?\" for deletes that can be put back" },
+    ],
+    tags: ["calculator", "clock-counter", "games", "notes", "overlays", "pdf-viewer", "rail", "settings", "system-monitor", "todos", "ui-kit", "undo", "whiteboard", "workspace"],
+  },
+  {
     version: "0.23.72",
     date: "2026-11-02",
     title: "Maps and zoomable views share one set of controls",
