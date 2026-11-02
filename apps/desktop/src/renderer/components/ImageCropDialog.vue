@@ -4,7 +4,6 @@ import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Slider } from "@tavora/official-ui/components/ui/slider";
 import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
-import { useFloating } from "../host";
 import { t } from "../i18n";
 
 // Crops a picked image to a square. The whole image stays still and fitted;
@@ -36,8 +35,6 @@ const frame = ref({ x: 0, y: 0, side: 0 });
 const saving = ref(false);
 
 const open = computed(() => props.src !== null);
-const track = useFloating();
-watch(open, track, { immediate: true });
 
 /** Where the fitted image sits in the area, and its scale from natural pixels. */
 const fit = computed(() => {
