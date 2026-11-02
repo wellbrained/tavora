@@ -39,8 +39,11 @@ function block(event: Event) {
   event.stopImmediatePropagation()
 }
 
-// Every text takes the same cell, so the button is as wide as the widest and never jumps when the text changes.
 const cell = "relative col-start-1 row-start-1 inline-flex items-center justify-center gap-[inherit] transition-opacity duration-(--duration-press) ease-(--ease-out-strong)"
+/** Gives a cell the room of its text without being that text. */
+const sizer = "after:invisible after:content-[attr(data-label)]"
+/** The text shown now sits over its cell, centred. */
+const overlay = "absolute inset-0 inline-flex items-center justify-center gap-[inherit] tabular-nums"
 </script>
 
 <template>
@@ -63,16 +66,16 @@ const cell = "relative col-start-1 row-start-1 inline-flex items-center justify-
       />
       <span v-else class="tavora-progress-stripe absolute inset-y-0 left-0 w-2/5 bg-current opacity-25" />
     </span>
+    <!-- Every text takes the same cell, so the button is as wide as the widest. The ones not shown are only sized by a
+         pseudo-element (never text), so the button's text is just what it says now. -->
     <span class="relative inline-grid items-center justify-items-center">
       <span :class="[cell, status !== 'idle' && 'opacity-0']" :aria-hidden="status !== 'idle' || undefined"><slot /></span>
-      <span :class="[cell, status !== 'busy' && 'opacity-0']" :aria-hidden="status !== 'busy' || undefined">
-        <span :class="percent === null ? '' : 'invisible'">{{ busyLabel }}</span>
-        <span v-if="percent !== null" class="absolute inset-0 inline-flex items-center justify-center tabular-nums">{{ percentLabel }}</span>
+      <span :class="[cell, sizer]" :data-label="busyLabel">
+        <span v-if="status === 'busy'" :class="overlay">{{ percent === null ? busyLabel : percentLabel }}</span>
       </span>
-      <span :class="[cell, status !== 'done' && 'opacity-0']" :aria-hidden="status !== 'done' || undefined">
-        <Check v-if="status === 'done'" class="tavora-progress-pop" :stroke-width="2" />
-        <Check v-else class="invisible" :stroke-width="2" />
-        {{ doneLabel }}
+      <span :class="[cell, sizer]" :data-label="doneLabel">
+        <Check class="invisible" :stroke-width="2" aria-hidden="true" />
+        <span v-if="status === 'done'" :class="overlay"><Check class="tavora-progress-pop" :stroke-width="2" /> {{ doneLabel }}</span>
       </span>
     </span>
   </Button>

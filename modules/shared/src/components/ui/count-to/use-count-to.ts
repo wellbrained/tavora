@@ -22,6 +22,7 @@ function kitDuration(): number {
 /** No animation: reduced motion asked for, or no way to run one (a test, a page that isn't shown). */
 function still(): boolean {
   if (typeof requestAnimationFrame !== "function" || typeof matchMedia !== "function") return true
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return true
   return matchMedia("(prefers-reduced-motion: reduce)").matches
 }
 
@@ -34,10 +35,12 @@ function still(): boolean {
 export function useCountTo(source: MaybeRefOrGetter<number>, options: CountToOptions = {}): Readonly<Ref<number>> {
   const shown = ref(toValue(source))
   let frame = 0
+  let fallback: ReturnType<typeof setTimeout> | undefined
 
   const stop = () => {
     if (frame) cancelAnimationFrame(frame)
     frame = 0
+    clearTimeout(fallback)
   }
 
   watch(
@@ -59,6 +62,11 @@ export function useCountTo(source: MaybeRefOrGetter<number>, options: CountToOpt
         frame = progress >= 1 ? 0 : requestAnimationFrame(step)
       }
       frame = requestAnimationFrame(step)
+      // A page that is not drawn (hidden, over a game, behind a window) gets no frames: the number still ends on the value.
+      fallback = setTimeout(() => {
+        stop()
+        shown.value = target
+      }, duration + 120)
     },
   )
 
