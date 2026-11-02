@@ -26,7 +26,7 @@ const travel = useKeyTravel()
     @keydown.capture="travel.onKeydown"
     @keyup="travel.end"
     @pointerdown.capture="travel.end"
-    @focusout="travel.end"
+    @focusout="travel.onFocusout"
   >
     <slot v-bind="slotProps" />
   </RadioGroupRoot>

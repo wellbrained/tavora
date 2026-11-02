@@ -25,7 +25,7 @@ const travel = useKeyTravel();
     @keydown.capture="travel.onKeydown"
     @keyup="travel.end"
     @pointerdown.capture="travel.end"
-    @focusout="travel.end"
+    @focusout="travel.onFocusout"
   >
     <RadioGroupItem
       v-for="option in options"

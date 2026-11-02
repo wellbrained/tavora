@@ -102,7 +102,10 @@ themes; anything hard-coded breaks in one of them.
   panel or a menu; the kit's checkbox, radio dot and search clear button use it with `--duration-pop` (in) and
   `--duration-pop-out` (out). Choosing with the arrow keys in a radio group or style tiles does not animate; Space on
   a checkbox does, like a click. A folding section may animate its height (the kit's `Collapsible` does; nothing
-  else), since what is below has to move along; give it padding and dividers on its own element, not margins. For a
+  else), since what is below has to move along. Spacing goes on the content element (its padding, a divider, a top
+  padding instead of a gap), never on the `Collapsible` root as a `gap` or as padding that depends on open/closed:
+  the closed content is out of the layout, so such spacing would jump instead of growing with the height. No margins
+  on the content either. For a
   done item, the kit's `tavora-strike` class (with `data-struck` while done) draws the line across the text.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.

@@ -177,9 +177,11 @@
    transform and opacity: the sections below have to move along, and nothing else can do that. Padding and border are
    animated with the height so a section with its own padding or divider does not jump at the end. It fades in while
    it grows and leaves quicker than it arrives. Before the first open or close (data-armed) it just sits there, so a
-   force-mounted section that starts closed does not close itself on load. */
+   force-mounted section that starts closed does not close itself on load. Once it has shut (data-shut, set when the
+   close animation ends) it leaves the layout like a section that started closed, so it takes no gap either. */
 @layer components {
   .tavora-collapse[data-state="closed"]:not([data-armed]),
+  .tavora-collapse[data-shut],
   .tavora-collapse[hidden] {
     display: none;
   }

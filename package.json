@@ -25,6 +25,8 @@
     "check": "pnpm check:patches && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
   },
   "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.9",
+    "jsdom": "30.1.3",
     "typescript": "^5.9.3",
     "vitest": "5.0.4"
   },
