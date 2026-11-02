@@ -63,15 +63,23 @@ describe("rowText", () => {
   it("counts a running clock from its start time", () => {
     const watch = newItem("stopwatch", "w", "Run") as Clock;
     startPause(watch, 1_000);
-    expect(rowText(rowOf(watch), 66_000)).toEqual({ text: "1:05", flashing: false, running: true });
+    expect(rowText(rowOf(watch), 66_000)).toEqual({ name: "Run", text: "1:05", flashing: false, running: true });
   });
 
   it("shows a finished countdown as its text, or flashing 0:00", () => {
     const timer = newItem("countdown", "t", "Boss") as Clock;
     timer.duration = 60_000;
     startPause(timer, 0);
-    expect(rowText(rowOf(timer), 61_000)).toEqual({ text: "0:00", flashing: true, running: false });
+    expect(rowText(rowOf(timer), 61_000)).toEqual({ name: "Boss", text: "0:00", flashing: true, running: false });
     timer.doneText = "Go!";
-    expect(rowText(rowOf(timer), 61_000)).toEqual({ text: "Go!", flashing: false, running: false });
+    expect(rowText(rowOf(timer), 61_000)).toEqual({ name: "Boss", text: "Go!", flashing: false, running: false });
+  });
+
+  it("puts the words of the text before the value and leaves the rest to the number", () => {
+    const timer = newItem("countdown", "t", "Boss") as Clock;
+    timer.look.text = "Round over in {time}";
+    expect(rowText(rowOf(timer), 0)).toMatchObject({ name: "Round over in", text: "5:00" });
+    timer.look.text = "";
+    expect(rowText(rowOf(timer), 0)).toMatchObject({ name: "", text: "5:00" });
   });
 });

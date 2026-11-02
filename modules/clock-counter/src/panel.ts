@@ -20,6 +20,8 @@ export interface PanelContext {
   now: Ref<number>;
   /** `action:target` for each hotkey set in this workspace. */
   hotkeys: Ref<ReadonlySet<string>>;
+  /** The overlay keys shown over the game now. */
+  overGame: Ref<ReadonlySet<string>>;
   /** Runs an action on an item, as a button or a hotkey does. */
   act(action: string, itemId: string): void;
   setHotkey(action: string, item: Item): Promise<void>;
@@ -29,6 +31,10 @@ export interface PanelContext {
   preview(item: Item): Promise<void>;
   resetLink(item: Item): Promise<void>;
   remove(item: Item): void;
+  /** Tavora can open its Overlay page for the panel (`overlay.openPage`). */
+  canArrange: boolean;
+  /** Opens Tavora's Overlay page; needs the click that asked for it. */
+  arrange(): Promise<void>;
 }
 
 export const PANEL: InjectionKey<PanelContext> = Symbol("clock-counter-panel");

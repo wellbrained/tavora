@@ -29,7 +29,7 @@ export const PAGES = [
   { id: "dialogs", group: "actions", keywords: "dialog modal confirm delete rename name prompt busy footer scroll", examples: ["NameDialogs", "ConfirmDialogs", "FooterButtons", "LongDialog"] },
   { id: "toasts", group: "actions", keywords: "toast snackbar undo message notification status", examples: ["Kinds", "Loading", "WithButton", "DeleteWithUndo"] },
   // Inputs
-  { id: "fields", group: "inputs", keywords: "input textarea search clear escape magnifier label hint error invalid code one-time mono", examples: ["Basic", "Errors", "Search", "Monospace", "Code", "TextArea"] },
+  { id: "fields", group: "inputs", keywords: "input textarea search clear escape magnifier label hint error invalid code one-time mono template placeholder braces insert highlight", examples: ["Basic", "Errors", "Search", "Monospace", "Code", "TextArea", "Template"] },
   { id: "checks", group: "inputs", keywords: "checkbox tick strike done switch field label description", examples: ["Checkbox", "Switch", "SwitchField", "DoneItem"] },
   { id: "pick", group: "inputs", keywords: "radio segmented select empty choice none clear picker dropdown combobox autocomplete search pictures", examples: ["RadioGroup", "Segmented", "SegmentedSliding", "SegmentedNone", "Select", "SelectDescribed", "SelectEmpty", "SelectPictures", "Combobox", "Picker", "DropdownIcons"] },
   { id: "numbers", group: "inputs", keywords: "slider range number field stepper quantity plus minus", examples: ["Slider", "SliderField", "NumberField"] },
@@ -48,7 +48,7 @@ export const PAGES = [
   { id: "zoom", group: "canvas", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport double-click percent 100 whole extras view-only remember persist glide tooltip", examples: ["WideContent", "AutoFitOff", "RememberView", "HundredExtras", "PersistView", "ViewOnly", "BoxTooltip", "FitWidth"] },
   { id: "map", group: "canvas", keywords: "map tiles pins markers cluster group dots spawns highlight world game zoom fog layer", examples: ["TileMap"] },
   // Tavora features
-  { id: "settings", group: "features", keywords: "module settings dialog overlay preview page reset saved control column row", examples: ["ModuleSettings"] },
+  { id: "settings", group: "features", keywords: "module settings dialog overlay preview page reset saved control column row menu divider heading in game on stream dot status danger delete", examples: ["ModuleSettings", "SettingsMenu"] },
 ] as const satisfies readonly PageDef[];
 
 export type PageId = (typeof PAGES)[number]["id"];

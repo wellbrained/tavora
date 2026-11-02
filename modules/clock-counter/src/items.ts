@@ -3,7 +3,7 @@
 // so it goes on through restarts and needs no saving while it runs. Every change here is a plain function of the
 // list, so a change made twice (after a save conflict) gives the same result.
 import type { JsonValue } from "@tavora/sdk";
-import { compile, defaultText, render, type Member } from "./template";
+import { compile, COUNT, defaultText, legacyText, segments, TIME, type Member, type Segment } from "./template";
 import { DEFAULT_FORMAT, formatSeconds, isFormat } from "./time";
 
 export const LIST_ID = "items";
@@ -18,13 +18,38 @@ export type Align = (typeof ALIGNS)[number];
 /** Text colours for the overlay. */
 export const COLORS = ["#ffffff", "#facc15", "#fb923c", "#f87171", "#f472b6", "#a78bfa", "#60a5fa", "#2dd4bf", "#4ade80", "#111111"] as const;
 
-/** How an item looks on stream. */
+/** How big the words and the number are drawn, S to XL. */
+export const SIZES = ["s", "m", "l", "xl"] as const;
+export type Size = (typeof SIZES)[number];
+/** The number's size and the words' size, as a share of the overlay's base size (VALUE_PX in sources.ts). M is what the overlay always drew. */
+export const NUMBER_SCALE: Record<Size, number> = { s: 0.6, m: 1, l: 1.5, xl: 2 };
+export const WORDS_SCALE: Record<Size, number> = { s: 0.3, m: 0.5, l: 0.75, xl: 1 };
+
+/**
+ * The scales of a look's words and number. A state published by a panel before the sizes (0.1.16) has none: M, what it always drew.
+ * Read the sizes through this wherever a published look is drawn.
+ */
+export function sizeScales(look: Partial<Pick<OverlayLook, "wordsSize" | "numberSize">>): { words: number; number: number } {
+  return { words: WORDS_SCALE[look.wordsSize ?? "m"] ?? WORDS_SCALE.m, number: NUMBER_SCALE[look.numberSize ?? "m"] ?? NUMBER_SCALE.m };
+}
+
+/**
+ * How an item looks on stream. `color` is the number's colour (and, before the words had one, everything's); a version
+ * before the text field reads `showLabel` and `color` and ignores the rest, so they stay in step with what is set here.
+ */
 export type OverlayLook = {
+  /** The name shows before the value. Kept in step with `text` (it has words) for the version before the text field. */
   showLabel: boolean;
   color: string;
   outline: boolean;
   font: Font;
   align: Align;
+  /** What the overlay shows, with `{time}` (clocks) or `{count}` (counters); a group's text is in its `Stream`. Absent: the name before the value, as `showLabel` says. */
+  text?: string;
+  /** The words' colour; absent: the same as `color`. */
+  wordsColor?: string;
+  wordsSize: Size;
+  numberSize: Size;
 };
 
 type Base = {
@@ -104,13 +129,27 @@ const bool = (value: unknown, fallback: boolean) => (typeof value === "boolean" 
 const oneOf = <T extends string>(values: readonly T[], value: unknown, fallback: T): T => (values.includes(value as T) ? (value as T) : fallback);
 
 export function defaultLook(): OverlayLook {
-  return { showLabel: true, color: COLORS[0], outline: true, font: "inter", align: "center" };
+  return { showLabel: true, color: COLORS[0], outline: true, font: "inter", align: "center", wordsSize: "m", numberSize: "m" };
 }
+
+const HEX = /^#[0-9a-f]{6}$/;
 
 function parseLook(raw: unknown): OverlayLook {
   const look = isRecord(raw) ? raw : {};
-  const color = typeof look.color === "string" && /^#[0-9a-f]{6}$/.test(look.color) ? look.color : COLORS[0];
-  return { showLabel: bool(look.showLabel, true), color, outline: bool(look.outline, true), font: oneOf(FONTS, look.font, "inter"), align: oneOf(ALIGNS, look.align, "center") };
+  const color = typeof look.color === "string" && HEX.test(look.color) ? look.color : COLORS[0];
+  const parsed: OverlayLook = {
+    showLabel: bool(look.showLabel, true),
+    color,
+    outline: bool(look.outline, true),
+    font: oneOf(FONTS, look.font, "inter"),
+    align: oneOf(ALIGNS, look.align, "center"),
+    wordsSize: oneOf(SIZES, look.wordsSize, "m"),
+    numberSize: oneOf(SIZES, look.numberSize, "m"),
+  };
+  // Fields of the text settings: left out of data that was saved before them, which reads the old way (see itemText).
+  if (typeof look.text === "string") parsed.text = look.text.slice(0, MAX.text);
+  if (typeof look.wordsColor === "string" && HEX.test(look.wordsColor)) parsed.wordsColor = look.wordsColor;
+  return parsed;
 }
 
 const STREAM_KEY = /^[A-Za-z0-9_-]{1,64}$/;
@@ -418,30 +457,57 @@ export function defaultStored(members: Member[]): string {
   return result.ok ? result.stored : "";
 }
 
-/** The line a group shows now: the saved text, or the default one when there is none or it no longer fits the group. */
-export function groupLine(group: Group, nameOf: (counter: Counter) => string): string {
+/** The line a group shows now, in runs: the saved text, or the default one when there is none or it no longer fits the group. */
+export function groupSegments(group: Group, nameOf: (counter: Counter) => string): Segment[] {
   const names = memberNames(group, nameOf);
   const values = new Map(group.members.map((member) => [member.id, String(member.value)]));
-  return (group.stream.text ? render(group.stream.text, values) : null) ?? render(defaultStored(names), values) ?? "";
+  return (group.stream.text ? segments(group.stream.text, values) : null) ?? segments(defaultStored(names), values) ?? [];
 }
+
+/** The line a group shows now, as one text. */
+export const groupLine = (group: Group, nameOf: (counter: Counter) => string): string => groupSegments(group, nameOf).map((part) => part.text).join("");
+
+// ── The text of one clock or counter ───────────────────────────────────
+
+/** The placeholder a kind of item writes its value with. */
+export const placeholderOf = (kind: ItemKind): string => (kind === "counter" ? COUNT : TIME);
+
+/**
+ * What an item's overlay shows, with its placeholder: the text its owner wrote, or for data saved before the text field its name before
+ * the value (Show the name on) or the value alone (off). An item nobody changed here follows its name; one that was saves the text it has.
+ */
+export function itemText(item: Item): string {
+  return item.look.text ?? legacyText(item.label, item.look.showLabel, placeholderOf(item.kind));
+}
+
+/** An item's line with its value in; a text that can't be used shows the value alone. */
+export function itemSegments(item: Item, value: string): Segment[] {
+  return segments(itemText(item), new Map([[placeholderOf(item.kind), value]])) ?? [{ text: value, value: true }];
+}
+
+/** A counter's number as the overlay draws it: 12, or 12 / 50 with a goal. */
+export const counterShown = (value: number, goal: number | null): string => (goal === null ? String(value) : `${value} / ${goal}`);
 
 // ── On stream ──────────────────────────────────────────────────────────
 
 /** What the overlay of an item gets (overlay.publish): enough to draw it, and to keep a running clock going itself. */
 export type OverlayState =
-  | { kind: "clock"; label: string; look: OverlayLook; clock: Pick<Clock, "kind" | "format" | "since" | "counted" | "duration" | "repeat" | "doneText">; lastLap: number | null }
-  | { kind: "counter"; label: string; look: OverlayLook; value: number; goal: number | null }
-  /** A linked group in one overlay: the finished line. */
-  | { kind: "group"; look: OverlayLook; line: string };
+  /** `text`: what to show around the time, `{time}` for the time (absent from a panel before the text field: the name, if `look` says so). */
+  | { kind: "clock"; label: string; text?: string; look: OverlayLook; clock: Pick<Clock, "kind" | "format" | "since" | "counted" | "duration" | "repeat" | "doneText">; lastLap: number | null }
+  | { kind: "counter"; label: string; text?: string; look: OverlayLook; value: number; goal: number | null }
+  /** A linked group in one overlay: the finished line, whole and in runs (words and values) so each can have its style. */
+  | { kind: "group"; look: OverlayLook; line: string; segments?: Segment[] };
 
 export function overlayState(item: Item): OverlayState {
-  if (item.kind === "counter") return { kind: "counter", label: item.label, look: { ...item.look }, value: item.value, goal: item.goal };
+  const text = itemText(item);
+  if (item.kind === "counter") return { kind: "counter", label: item.label, text, look: { ...item.look }, value: item.value, goal: item.goal };
   const { kind, format, since, counted, duration, repeat, doneText } = item;
   const lastLap = item.kind === "stopwatch" && item.laps && item.showLastLap ? (lapSplits(item).at(-1) ?? null) : null;
-  return { kind: "clock", label: item.label, look: { ...item.look }, clock: { kind, format, since, counted, duration, repeat, doneText }, lastLap };
+  return { kind: "clock", label: item.label, text, look: { ...item.look }, clock: { kind, format, since, counted, duration, repeat, doneText }, lastLap };
 }
 
 /** What the overlay of a whole group gets. */
 export function groupOverlayState(group: Group, nameOf: (counter: Counter) => string): OverlayState {
-  return { kind: "group", look: { ...group.stream.look }, line: groupLine(group, nameOf) };
+  const line = groupSegments(group, nameOf);
+  return { kind: "group", look: { ...group.stream.look }, line: line.map((part) => part.text).join(""), segments: line };
 }

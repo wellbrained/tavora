@@ -1,0 +1,100 @@
+/* The text of one overlay: what OBS shows as a Browser Source, and the preview in the settings. Like the rest of the overlay it is drawn over
+   game art, not in the app, so its colours are the item's own text colours with a dark outline instead of theme colours. */
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+
+.cc-ov {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  padding: 0; /* the view sets the room around the text */
+  background: transparent;
+  color: var(--color, #fff);
+  font-family: "Inter Variable", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  white-space: pre;
+}
+
+/* Nothing published (yet), or the item was deleted. */
+.cc-ov[hidden] {
+  display: none;
+}
+
+.cc-ov[data-font="mono"] {
+  font-family: "JetBrains Mono Variable", ui-monospace, Consolas, monospace;
+}
+
+.cc-ov[data-font="system"] {
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.cc-ov[data-align="left"] {
+  align-items: flex-start;
+  text-align: left;
+}
+.cc-ov[data-align="center"] {
+  align-items: center;
+  text-align: center;
+}
+.cc-ov[data-align="right"] {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.cc-ov[data-outline="true"] {
+  -webkit-text-stroke: 0.04em rgb(0 0 0 / 0.85);
+  paint-order: stroke fill;
+  text-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.6);
+}
+
+/* The words and the values stand on one baseline, in one font (the item's Font setting); the view sets their sizes. */
+.cc-line {
+  width: max-content;
+  max-width: none;
+  font-family: inherit;
+}
+
+.cc-w {
+  color: var(--words, var(--color, #fff));
+  font-family: inherit;
+  font-variant-numeric: normal;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.cc-n {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.cc-lap {
+  width: max-content;
+  max-width: none;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.cc-lap:empty {
+  display: none;
+}
+
+/* A countdown that reached 0 without a text of its own. */
+.cc-ov[data-done="flash"] .cc-n {
+  animation: cc-flash 1s steps(2, jump-none) infinite;
+}
+
+@keyframes cc-flash {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-ov[data-done="flash"] .cc-n {
+    animation: none;
+  }
+}

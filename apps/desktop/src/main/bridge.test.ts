@@ -87,7 +87,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     openLink: () => {},
     showMenu: () => Promise.resolve(null),
     tooltip:{show:async()=>false,move:()=>{},close:()=>{}},
-    overlay: { publish: () => {}, remove: () => {}, copyLink: () => Promise.resolve("copied"), resetLink: () => {}, showOverGame: () => Promise.resolve("shown"), hideOverGame: () => {}, overGame: () => [], setSources: () => {}, preview: () => Promise.resolve() },
+    overlay: { publish: () => {}, remove: () => {}, copyLink: () => Promise.resolve("copied"), resetLink: () => {}, showOverGame: () => Promise.resolve("shown"), hideOverGame: () => {}, overGame: () => [], setSources: () => {}, preview: () => Promise.resolve(), openPage: () => Promise.resolve() },
     hotkeys: { list: () => [], set: () => Promise.resolve("cancelled"), remove: () => {} },
     fetch: () => Promise.reject(new Error("no network in this test")),
     readPage: () => Promise.reject(new Error("no pages in this test")),
@@ -363,6 +363,7 @@ describe("overlay methods", () => {
         overGame: () => ["a", "b"],
         setSources: (sources) => void seen.push(`sources ${JSON.stringify(sources)}`),
         preview: async (key) => void seen.push(`preview ${key}`),
+        openPage: async () => void seen.push("page"),
       },
     });
     expect(await call(p, "overlay.publish", { key: "item-1", state: { n: 1 } })).toMatchObject({ ok: true });
@@ -389,6 +390,15 @@ describe("overlay methods", () => {
   it("refuses a bad key for showOverGame", async () => {
     expect(await call(port, "overlay.showOverGame", { key: "no spaces" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
     expect(await call(port, "overlay.showOverGame", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
+  it("shows the Overlay page for a panel, with no params and no capability, and passes on a refusal when it had no click", async () => {
+    const seen: string[] = [];
+    const p = await connected({ ...makeContext(), overlay: { ...makeContext().overlay, openPage: async () => void seen.push("page") } });
+    expect(await call(p, "overlay.openPage", undefined)).toMatchObject({ ok: true, result: null });
+    expect(seen).toEqual(["page"]);
+    const refused = await connected({ ...makeContext(), overlay: { ...makeContext().overlay, openPage: () => Promise.reject(new HostError("PERMISSION_DENIED", "no click")) } });
+    expect(await call(refused, "overlay.openPage", undefined)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED" } });
   });
 
   it("refuses a bad key for preview, and passes on a refusal", async () => {

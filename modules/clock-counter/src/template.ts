@@ -129,19 +129,70 @@ export function defaultText(members: Member[]): string {
   return members.map((member) => `{${written.get(member.id)}} ${escape(cleanName(member.name))}`).join(" – ");
 }
 
-/** The line to show: saved text with each counter's value in. Null when the text can't be used (a counter that is gone, a broken brace). */
-export function render(stored: string, values: ReadonlyMap<string, string>): string | null {
+/** A run of the line: the user's words, or a value put in for a placeholder (the overlay draws the two in their own styles). */
+export type Segment = { text: string; value: boolean };
+
+/**
+ * The line to show as runs: saved text with each placeholder's value in. `values` is by the name written in the braces
+ * (`time`, `count`) or by counter id for the `{@id}` of a group's counter. Null when the text can't be used (a name nobody has, a broken brace).
+ */
+export function segments(stored: string, values: ReadonlyMap<string, string>): Segment[] | null {
   const tokens = tokenize(stored);
   if ("error" in tokens || !tokens.parts.length) return null;
-  let line = "";
+  const result: Segment[] = [];
   for (const part of tokens.parts) {
     if ("text" in part) {
-      line += part.text;
+      result.push({ text: part.text, value: false });
       continue;
     }
-    const value = part.ref.startsWith("@") ? values.get(part.ref.slice(1)) : undefined;
+    const value = values.get(part.ref.startsWith("@") ? part.ref.slice(1) : part.ref.toLowerCase());
     if (value === undefined) return null;
-    line += value;
+    result.push({ text: value, value: true });
   }
-  return line;
+  return result;
+}
+
+/** The line to show: saved text with each counter's value in. Null when the text can't be used (a counter that is gone, a broken brace). */
+export function render(stored: string, values: ReadonlyMap<string, string>): string | null {
+  return segments(stored, values)?.map((part) => part.text).join("") ?? null;
+}
+
+/** What the words of a line are, without the values. */
+export const wordsOf = (line: Segment[]): string => line.filter((part) => !part.value).map((part) => part.text).join("").trim();
+
+// ── The text of one clock or counter ───────────────────────────────────
+
+/** The one placeholder a clock's text has, and a counter's. A group's texts name its counters instead. */
+export const TIME = "time";
+export const COUNT = "count";
+
+/**
+ * The text a clock or counter shows when its owner wrote none: its name before the value, as the overlay always did. Empty without a
+ * name. (Before the text field there was a switch, Show the name; this is what its answer was.)
+ */
+export function legacyText(label: string, showLabel: boolean, name: string): string {
+  const words = label.trim();
+  return showLabel && words ? `${escape(words)} {${name}}` : `{${name}}`;
+}
+
+/**
+ * The text written for a clock or counter, as it is saved: only `{name}` is a placeholder there. Empty is fine (the overlay then shows
+ * only the value). Names are compared without regard to case and saved in lower case.
+ */
+export function compileItem(source: string, name: string): { ok: true; stored: string } | ({ ok: false } & Problem) {
+  const tokens = tokenize(source);
+  if ("error" in tokens) return { ok: false, ...tokens };
+  let stored = "";
+  for (const part of tokens.parts) {
+    if ("text" in part) stored += escape(part.text);
+    else if (part.ref.toLowerCase() === name) stored += `{${name}}`;
+    else return { ok: false, error: "unknown", name: part.ref };
+  }
+  return { ok: true, stored };
+}
+
+/** Whether the words of a saved text show anything besides the value (the old Show the name switch, kept in step for the version before). */
+export function hasWords(stored: string): boolean {
+  const tokens = tokenize(stored);
+  return "parts" in tokens && tokens.parts.some((part) => "text" in part && part.text.trim() !== "");
 }

@@ -242,6 +242,8 @@ export const en = {
   "ex.fields.Code.note": "Digits only, pasted spaces are fine.",
   "ex.fields.TextArea": "Text area",
   "ex.fields.TextArea.note": "Grows with its text.",
+  "ex.fields.Template": "Text with placeholders",
+  "ex.fields.Template.note": "{time} is marked; {oops} is underlined. The chip adds it at the cursor.",
 
   "ex.checks.Checkbox": "Checkbox",
   "ex.checks.Switch": "Switch",
@@ -372,6 +374,9 @@ export const en = {
   "ex.settings.ModuleSettings": "Settings dialog",
   "ex.settings.ModuleSettings.note": "960 × 680 in the app.",
   "ex.settings.ModuleSettings.rule": "A module's settings page uses ModuleSettings and its parts, not a layout of its own.",
+  "ex.settings.SettingsMenu": "Settings menu with Overlays",
+  "ex.settings.SettingsMenu.note": "The module's own pages have no heading. Overlays sits in a divider line; the dot is green when it shows there, hollow when it doesn't. Build it with settingsMenu.",
+  "ex.settings.SettingsMenu.rule": "Overlay pages come last: first how it looks (Text, Look), then where it shows (In game, On stream).",
 };
 
 export type TextKey = keyof typeof en;
@@ -617,6 +622,8 @@ export const de: Record<TextKey, string> = {
   "ex.fields.Code.note": "Nur Ziffern, eingefügte Leerzeichen sind okay.",
   "ex.fields.TextArea": "Textbereich",
   "ex.fields.TextArea.note": "Wächst mit seinem Text.",
+  "ex.fields.Template": "Text mit Platzhaltern",
+  "ex.fields.Template.note": "{time} ist markiert, {oops} unterstrichen. Der Chip fügt ihn an der Cursorposition ein.",
 
   "ex.checks.Checkbox": "Häkchen",
   "ex.checks.Switch": "Schalter",
@@ -747,4 +754,7 @@ export const de: Record<TextKey, string> = {
   "ex.settings.ModuleSettings": "Einstellungsdialog",
   "ex.settings.ModuleSettings.note": "In der App 960 × 680.",
   "ex.settings.ModuleSettings.rule": "Die Einstellungsseite eines Moduls nutzt ModuleSettings und seine Teile, kein eigenes Layout.",
+  "ex.settings.SettingsMenu": "Einstellungsmenü mit Overlays",
+  "ex.settings.SettingsMenu.note": "Die eigenen Seiten haben keine Überschrift. Overlays steht in einer Trennlinie; der Punkt ist grün, wenn es dort läuft, sonst hohl. Mit settingsMenu bauen.",
+  "ex.settings.SettingsMenu.rule": "Overlay-Seiten kommen zuletzt: erst wie es aussieht (Text, Aussehen), dann wo es läuft (Im Spiel, Im Stream).",
 };

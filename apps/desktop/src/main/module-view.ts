@@ -138,6 +138,8 @@ export interface ModuleViewOptions {
     setSources(sources: OverlaySource[]): void;
     /** Opens the preview window of the overlay for `key`; throws INVALID_PARAMS for a module without an overlay page. */
     preview(key: string): Promise<void>;
+    /** Shows the Overlay page and closes this panel's dialog (overlay.openPage, already given its click). */
+    openPage(): void;
   };
   /** Hotkeys of this module in this workspace; `set` opens Tavora's hotkey dialog. */
   hotkeys: { list(): HotkeyBinding[]; set(action: string, target: string, label: string): Promise<HotkeySetResult>; remove(target: string, action: string | null): void };
@@ -777,6 +779,12 @@ export class ModuleView {
             this.refuseOverGame("overlay.preview");
             await this.takeGesture("overlay.preview");
             return this.options.overlay.preview(key);
+          },
+          openPage: async () => {
+            // One click changes the screen once, so a page cannot keep pulling the user away from what they are doing.
+            this.refuseOverGame("overlay.openPage");
+            await this.takeGesture("overlay.openPage");
+            this.options.overlay.openPage();
           },
         },
         hotkeys: {

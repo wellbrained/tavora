@@ -7,9 +7,10 @@ export type Unit = "h" | "m" | "s";
 type Part = { kind: "text"; text: string } | { kind: "unit"; unit: Unit; digits: number };
 
 export const MAX_FORMAT = 40;
-/** Formats the Format field offers, with the one a new clock gets first. */
-export const FORMAT_PRESETS = ["m:ss", "h:mm:ss", "hh:mm:ss", "mm:ss", "s"] as const;
-export const DEFAULT_FORMAT = FORMAT_PRESETS[0];
+/** Formats the Format field offers, smallest to largest. */
+export const FORMAT_PRESETS = ["s", "m:ss", "mm:ss", "h:mm:ss", "hh:mm:ss"] as const;
+/** The format a new clock gets. */
+export const DEFAULT_FORMAT = "m:ss";
 
 export function parseFormat(pattern: string): Part[] {
   const parts: Part[] = [];
