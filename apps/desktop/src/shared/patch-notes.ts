@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.86",
+    date: "2026-11-02",
+    title: "Clock & Counter",
+    notes: [
+      "A new clock or counter starts with the words and the number at the same size, M.",
+    ],
+    prs: [
+      { number: 650, title: "Clock & Counter: new items start with words and number both at M (0.1.22)" },
+    ],
+    tags: ["clock-counter"],
+  },
+  {
     version: "0.23.85",
     date: "2026-11-02",
     title: "Delete a game's overlay",

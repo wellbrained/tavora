@@ -368,10 +368,10 @@ describe("the text of an overlay", () => {
 
   it("reads old looks with the old sizes, and drops what it can't read", () => {
     const old = first(parseList(raw({})));
-    expect(old.look).toMatchObject({ wordsStep: "xs", numberStep: "m", wordsSize: "l", numberSize: "m" });
+    expect(old.look).toMatchObject({ wordsStep: "m", numberStep: "m", wordsSize: "xl", numberSize: "m" });
     expect(old.look.wordsColor).toBeUndefined();
     const bad = first(parseList(raw({ text: 5, wordsColor: "red", wordsStep: "huge", numberStep: 3, wordsSize: "huge", numberSize: 3 })));
-    expect(bad.look).toMatchObject({ wordsStep: "xs", numberStep: "m", wordsSize: "l", numberSize: "m" });
+    expect(bad.look).toMatchObject({ wordsStep: "m", numberStep: "m", wordsSize: "xl", numberSize: "m" });
     expect(bad.look.text).toBeUndefined();
     expect(bad.look.wordsColor).toBeUndefined();
     expect(first(parseList(raw({ text: "x".repeat(MAX.text + 50) }))).look.text).toHaveLength(MAX.text);
@@ -383,7 +383,7 @@ describe("the text of an overlay", () => {
     item.look.showLabel = false;
     const saved = JSON.parse(JSON.stringify(parseList({ items: [item] }))) as { items: { look: Record<string, unknown> }[] };
     expect(Object.keys(saved.items[0]!.look)).toEqual(expect.arrayContaining(["showLabel", "color", "outline", "font", "align"]));
-    expect(saved.items[0]!.look).toMatchObject({ showLabel: false, color: "#ffffff", text: "{time} left", wordsStep: "xs", numberStep: "m", wordsSize: "l", numberSize: "m" });
+    expect(saved.items[0]!.look).toMatchObject({ showLabel: false, color: "#ffffff", text: "{time} left", wordsStep: "m", numberStep: "m", wordsSize: "xl", numberSize: "m" });
     // The previous version keeps only the old fields; this one then reads that as "Show the name off".
     const { text: _text, wordsColor: _wordsColor, wordsStep: _wordsStep, numberStep: _numberStep, wordsSize: _wordsSize, numberSize: _numberSize, ...oldLook } = saved.items[0]!.look;
     expect(itemText(first(parseList(raw(oldLook))))).toBe("{time}");
@@ -420,9 +420,9 @@ describe("the one size scale", () => {
     expect(sizeScales({ wordsStep: "xl", numberStep: "xs" })).toEqual({ words: SIZE_SCALE.xl, number: SIZE_SCALE.xs });
   });
 
-  it("is XS for the words and M for the number when there are no sizes, and for ones it can't read", () => {
-    expect(sizeScales({})).toEqual({ words: SIZE_SCALE.xs, number: 1 });
-    expect(sizeScales({ wordsStep: "nope", wordsSize: "nope" })).toEqual({ words: SIZE_SCALE.xs, number: 1 });
+  it("is M for the words and the number when there are no sizes, and for ones it can't read", () => {
+    expect(sizeScales({})).toEqual({ words: 1, number: 1 });
+    expect(sizeScales({ wordsStep: "nope", wordsSize: "nope" })).toEqual({ words: 1, number: 1 });
   });
 
   it("reads the new step first, then the old step moved to the nearest new one", () => {

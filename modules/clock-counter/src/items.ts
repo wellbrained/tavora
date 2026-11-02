@@ -26,8 +26,8 @@ export const COLORS = ["#ffffff", "#facc15", "#fb923c", "#f87171", "#f472b6", "#
 export const SIZES = ["xs", "s", "m", "l", "xl"] as const;
 export type Size = (typeof SIZES)[number];
 export const SIZE_SCALE: Record<Size, number> = { xs: 12 / 14, s: 13 / 14, m: 1, l: 16 / 14, xl: 20 / 14 };
-/** What a new item starts with: the number at M, the words at XS beside it. */
-export const DEFAULT_WORDS_SIZE: Size = "xs";
+/** What a new item starts with: M for both, like every size picker. */
+export const DEFAULT_WORDS_SIZE: Size = "m";
 export const DEFAULT_NUMBER_SIZE: Size = "m";
 
 /**
