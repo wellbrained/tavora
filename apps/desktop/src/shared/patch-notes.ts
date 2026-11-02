@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.78",
+    date: "2026-11-02",
+    title: "Compact settings",
+    notes: [
+      "Small settings dialogs are compact, without an empty menu.",
+      "Dialogs that are shorter than the usual ones now keep the same top edge instead of sitting in the middle.",
+    ],
+    prs: [
+      { number: 637, title: "Kit: single-page mode for module settings (compact, no empty menu)" },
+    ],
+    tags: ["clock-counter", "ui-kit", "website"],
+  },
+  {
     version: "0.23.77",
     date: "2026-11-02",
     title: "Clock & Counter settings follow Tavora's layout",
