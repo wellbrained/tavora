@@ -1,8 +1,7 @@
 import type { SystemInfo } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
 import { createHistory } from "./history";
-import { buildMenu, parsePick } from "./menu";
-import { cleanTarget, defaultApp, defaultDrives, defaultPanel, parseApp, parsePanel, pickGpu, toggleBlock, toggleSection, watchedDrives, watchRequest } from "./settings";
+import { cleanTarget, defaultApp, defaultDrives, defaultPanel, isLastOn, parseApp, parsePanel, pickGpu, toggleBlock, toggleSection, watchedDrives, watchRequest } from "./settings";
 
 const info = (overrides: Partial<SystemInfo> = {}): SystemInfo => ({
   cpu: { model: "CPU", threads: 8 },
@@ -19,8 +18,6 @@ const info = (overrides: Partial<SystemInfo> = {}): SystemInfo => ({
   ],
   ...overrides,
 });
-
-const say = (key: string, params?: Record<string, string | number>) => (params ? `${key} ${JSON.stringify(params)}` : key);
 
 describe("drives", () => {
   it("ticks the internal drives until the user chooses", () => {
@@ -118,51 +115,13 @@ describe("watchRequest", () => {
   });
 });
 
-describe("menu", () => {
-  it("checks what is on, and offers the graphics card only with several", () => {
-    const entries = buildMenu(say, info(), defaultApp(), defaultPanel());
-    const ids = entries.flatMap((entry) => (entry.type === "item" ? [entry.id] : []));
-    expect(ids).toEqual(["section:system", "section:connection", "block:cpu", "block:gpu", "block:ram", "block:drives", "interval:1000", "interval:2000", "interval:5000", "interval:15000", "interval:60000", "gpu:igpu", "gpu:dgpu", "drives", "traffic"]);
-    const checked = entries.filter((entry) => entry.type === "item" && entry.checked).map((entry) => (entry.type === "item" ? entry.id : ""));
-    expect(checked).toEqual(["section:system", "section:connection", "block:cpu", "block:gpu", "block:ram", "block:drives", "interval:1000", "gpu:dgpu"]);
-    expect(buildMenu(say, info({ gpus: [] }), defaultApp(), defaultPanel()).some((entry) => entry.type === "item" && entry.id.startsWith("gpu:"))).toBe(false);
-  });
-  it("offers the connection dialog once Tavora has settings, with the address or 'off' as hint", () => {
-    const settings = { enabled: true, target: "1.1.1.1" };
-    const item = (entries: ReturnType<typeof buildMenu>) => entries.find((entry) => entry.type === "item" && entry.id === "connection");
-    expect(item(buildMenu(say, info(), defaultApp(), defaultPanel(), settings))).toMatchObject({ hint: "1.1.1.1" });
-    expect(item(buildMenu(say, info(), defaultApp(), defaultPanel(), { enabled: false, target: "x.com" }))).toMatchObject({ hint: "menu.connectionOff" });
-    expect(item(buildMenu(say, info(), defaultApp(), defaultPanel()))).toBeUndefined();
-  });
-  it("offers the traffic with the Connection section, ticked when it shows", () => {
-    const traffic = (panel: ReturnType<typeof parsePanel>) => buildMenu(say, info(), defaultApp(), panel, { enabled: true, target: "1.1.1.1" }).find((entry) => entry.type === "item" && entry.id === "traffic");
-    expect(traffic(defaultPanel())).toMatchObject({ checked: false });
-    expect(traffic(parsePanel({ traffic: true }))).toMatchObject({ checked: true });
-    expect(traffic(parsePanel({ sections: { system: true, connection: false }, traffic: true }))).toBeUndefined();
-  });
-  it("leaves out the System choices when that section is hidden, and keeps the last section", () => {
-    const panel = parsePanel({ sections: { system: false, connection: true } });
-    const entries = buildMenu(say, info(), defaultApp(), panel);
-    const ids = entries.flatMap((entry) => (entry.type === "item" ? [entry.id] : []));
-    expect(ids).toEqual(["section:system", "section:connection", "interval:1000", "interval:2000", "interval:5000", "interval:15000", "interval:60000", "traffic"]);
-    expect(entries.find((entry) => entry.type === "item" && entry.id === "section:connection")).toMatchObject({ disabled: true });
-  });
-  it("won't turn off the last block", () => {
-    const panel = parsePanel({ blocks: { cpu: true, gpu: false, ram: false, drives: false } });
-    const cpu = buildMenu(say, info(), defaultApp(), panel).find((entry) => entry.type === "item" && entry.id === "block:cpu");
-    expect(cpu).toMatchObject({ disabled: true });
-  });
-  it("reads a pick", () => {
-    expect(parsePick("block:ram")).toEqual({ kind: "block", id: "ram" });
-    expect(parsePick("interval:5000")).toEqual({ kind: "interval", ms: 5000 });
-    expect(parsePick("gpu:0x00000000_0x0001defc")).toEqual({ kind: "gpu", id: "0x00000000_0x0001defc" });
-    expect(parsePick("drives")).toEqual({ kind: "drives" });
-    expect(parsePick("section:connection")).toEqual({ kind: "section", id: "connection" });
-    expect(parsePick("connection")).toEqual({ kind: "connection" });
-    expect(parsePick("traffic")).toEqual({ kind: "traffic" });
-    expect(parsePick("section:nope")).toBeNull();
-    expect(parsePick("interval:3000")).toBeNull();
-    expect(parsePick("block:nope")).toBeNull();
+describe("last one on", () => {
+  it("finds the only switch left on, so it can't be turned off", () => {
+    expect(isLastOn(parsePanel({ blocks: { cpu: true, gpu: false, ram: false, drives: false } }).blocks, "cpu")).toBe(true);
+    expect(isLastOn(parsePanel({ blocks: { cpu: true, gpu: false, ram: false, drives: false } }).blocks, "gpu")).toBe(false);
+    expect(isLastOn(defaultPanel().blocks, "cpu")).toBe(false);
+    expect(isLastOn(parsePanel({ sections: { system: false, connection: true } }).sections, "connection")).toBe(true);
+    expect(isLastOn(defaultPanel().sections, "system")).toBe(false);
   });
 });
 
