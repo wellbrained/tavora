@@ -1084,6 +1084,7 @@ export const en = {
   "catalog.reviews.post": "Post",
   "catalog.reviews.update": "Update",
   "catalog.reviews.notSaved": "Couldn't post your review. It's still in the box.",
+  "catalog.reviews.keepNotSaved": "Couldn't update your rating. Try again.",
   "catalog.reviews.delete": "Delete",
   "catalog.reviews.signIn": "Sign in to rate this module.",
   "catalog.reviews.signInButton": "Sign in",

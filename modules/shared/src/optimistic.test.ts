@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createOptimistic, useOptimistic, useOptimisticKeyed } from "./optimistic";
 import { ref } from "vue";
 
@@ -56,7 +56,7 @@ describe("createOptimistic", () => {
     expect(await done).toBe(false);
     expect(shown.value).toBe(1);
     expect(failed).toHaveBeenCalledTimes(1);
-    expect(failed).toHaveBeenCalledWith(reason);
+    expect(failed).toHaveBeenCalledWith(reason, 2);
     expect(slot.waiting).toBe(false);
   });
 
@@ -229,5 +229,181 @@ describe("useOptimisticKeyed", () => {
     expect(list.value("b")).toBe("dos");
     expect(failed).toHaveBeenCalledTimes(1);
     expect(failed.mock.calls[0]![1]).toBe("a");
+  });
+});
+
+describe("callbacks that throw, and saves that never answer", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("a failed() that throws doesn't stop the queue", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const shown = ref(1);
+    const calls: unknown[] = [];
+    const saved = ref(1);
+    const { calls: more, save } = manualSaves();
+    const throwing = createOptimistic<number>({
+      read: () => saved.value,
+      show: (value) => (shown.value = value),
+      save: async (value) => {
+        await save(value);
+        saved.value = value;
+      },
+      failed: () => {
+        throw new Error("toast broke");
+      },
+    });
+    const first = throwing.set(2);
+    await tick();
+    more[0]!.fail();
+    expect(await first).toBe(false);
+    expect(throwing.waiting).toBe(false);
+    // Still usable afterwards.
+    const second = throwing.set(3);
+    await tick();
+    more[1]!.ok();
+    expect(await second).toBe(true);
+    expect(saved.value).toBe(3);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("a settled() that throws leaves the slot free", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { calls, save } = manualSaves();
+    const slot = createOptimistic<number>({
+      read: () => 1,
+      show: () => undefined,
+      save,
+      failed: () => undefined,
+      settled: () => {
+        throw new Error("boom");
+      },
+    });
+    const first = slot.set(2);
+    await tick();
+    calls[0]!.ok();
+    await first;
+    expect(slot.waiting).toBe(false);
+    const second = slot.set(3);
+    await tick();
+    expect(calls).toHaveLength(2);
+    calls[1]!.ok();
+    expect(await second).toBe(true);
+  });
+
+  it("a save that never answers fails after the timeout and the value goes back", async () => {
+    vi.useFakeTimers();
+    const shown = ref(1);
+    const failed = vi.fn();
+    const slot = createOptimistic<number>({
+      read: () => 1,
+      show: (value) => (shown.value = value),
+      save: () => new Promise(() => undefined),
+      failed,
+      timeoutMs: 1000,
+    });
+    const done = slot.set(2);
+    expect(shown.value).toBe(2);
+    expect(slot.waiting).toBe(true);
+    await vi.advanceTimersByTimeAsync(1001);
+    expect(await done).toBe(false);
+    expect(shown.value).toBe(1);
+    expect(failed).toHaveBeenCalledTimes(1);
+    expect(failed.mock.calls[0]![1]).toBe(2);
+    expect(slot.waiting).toBe(false);
+  });
+
+  it("a save that throws before it returns a promise counts as failed", async () => {
+    const failed = vi.fn();
+    const slot = createOptimistic<number>({
+      read: () => 1,
+      show: () => undefined,
+      save: () => {
+        throw new Error("sync");
+      },
+      failed,
+    });
+    expect(await slot.set(2)).toBe(false);
+    expect(failed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a saved state that arrives late", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("keeps the new value on screen until the source shows it, without blinking back", async () => {
+    const source = ref("old");
+    const flag = useOptimistic(
+      () => source.value,
+      async () => undefined,
+      vi.fn(),
+    );
+    expect(await flag.set("new")).toBe(true);
+    // The save has answered but the state hasn't caught up yet.
+    expect(flag.value.value).toBe("new");
+    expect(flag.waiting.value).toBe(false);
+    source.value = "new";
+    expect(flag.value.value).toBe("new");
+  });
+
+  it("lets go after a while when the source never shows it", async () => {
+    vi.useFakeTimers();
+    const source = ref("old");
+    const flag = useOptimistic(
+      () => source.value,
+      async () => undefined,
+      vi.fn(),
+      { catchUpMs: 500 },
+    );
+    await flag.set("new");
+    expect(flag.value.value).toBe("new");
+    await vi.advanceTimersByTimeAsync(501);
+    expect(flag.value.value).toBe("old");
+  });
+
+  it("compares object values by content, so a rebuilt copy counts as caught up", async () => {
+    const source = ref({ kind: "none", value: null as string | null });
+    const contact = useOptimistic(
+      () => source.value,
+      async () => {
+        source.value = { kind: "email", value: "a@b.c" };
+      },
+      vi.fn(),
+    );
+    await contact.set({ kind: "email", value: "a@b.c" });
+    source.value = { kind: "github", value: "x" };
+    expect(contact.value.value).toEqual({ kind: "github", value: "x" });
+  });
+});
+
+describe("waiting", () => {
+  it("is true from the change until the queue is empty, per key for lists", async () => {
+    const saves: { key: string; ok: () => void }[] = [];
+    const list = useOptimisticKeyed<string, number>(
+      () => 0,
+      (key) => new Promise<void>((resolve) => saves.push({ key, ok: resolve })),
+      vi.fn(),
+    );
+    expect(list.waiting("a")).toBe(false);
+    const done = list.set("a", 1);
+    expect(list.waiting("a")).toBe(true);
+    expect(list.waiting("b")).toBe(false);
+    await tick();
+    saves[0]!.ok();
+    await done;
+    expect(list.waiting("a")).toBe(false);
+  });
+
+  it("useOptimistic reports it too", async () => {
+    const { calls, save } = manualSaves();
+    const flag = useOptimistic(() => 0, save, vi.fn());
+    const done = flag.set(1);
+    expect(flag.waiting.value).toBe(true);
+    await tick();
+    calls[0]!.ok();
+    await done;
+    expect(flag.waiting.value).toBe(false);
   });
 });

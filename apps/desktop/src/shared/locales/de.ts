@@ -1086,6 +1086,7 @@ export const de: Record<keyof typeof en, string> = {
   "catalog.reviews.post": "Veröffentlichen",
   "catalog.reviews.update": "Aktualisieren",
   "catalog.reviews.notSaved": "Deine Bewertung ging nicht raus. Sie steht noch im Feld.",
+  "catalog.reviews.keepNotSaved": "Deine Bewertung wurde nicht aktualisiert. Versuch es nochmal.",
   "catalog.reviews.delete": "Löschen",
   "catalog.reviews.signIn": "Melde dich an, um dieses Modul zu bewerten.",
   "catalog.reviews.signInButton": "Anmelden",

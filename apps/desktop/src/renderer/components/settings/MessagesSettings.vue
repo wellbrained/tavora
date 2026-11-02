@@ -6,7 +6,7 @@ import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { useOptimistic } from "@tavora/official-ui/optimistic";
-import { inbox, notSaved, openInbox, savedBy } from "../../host";
+import { act, inbox, notSaved, openInbox, savedBy } from "../../host";
 import { developerNameOf, type ConversationItem } from "../../../shared/conversations";
 import { formatDate, t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
@@ -15,7 +15,11 @@ import SettingRow from "./SettingRow.vue";
 const copies = computed(() => inbox.value.emailCopies);
 const closed = computed(() => (inbox.value.items ?? []).filter((item) => item.state === "closed"));
 // The switch moves at once; the service hears about it in the background, and it goes back if that fails.
-const { value: copiesOn, set: setCopies } = useOptimistic(() => copies.value?.on ?? false, savedBy((on: boolean) => ({ type: "inbox-email-copies", on })), (error) => notSaved(error));
+const { value: copiesOn, set: setCopies } = useOptimistic(() => copies.value?.on ?? false, savedBy((on: boolean) => ({ type: "inbox-email-copies", on })), (error) => {
+  notSaved(error);
+  // The request may have landed although the answer was lost.
+  void act({ type: "inbox-refresh" }, { quiet: true });
+});
 
 function title(item: ConversationItem): string {
   if (item.kind === "tavora") return t("inbox.tavora");

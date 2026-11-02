@@ -84,7 +84,11 @@ const deviceNames = useOptimisticKeyed<string, string | null>(
     const result = await act({ type: "account-rename-device", deviceId: id, name: name ?? "" }, { quiet: true });
     if (!result.ok) throw new Error(result.error);
   },
-  (error) => notSaved(error),
+  (error) => {
+    notSaved(error);
+    // The request may have landed although the answer was lost.
+    void act({ type: "account-refresh" }, { quiet: true });
+  },
 );
 
 /** The device's name, or its system for a sign-in from before devices had names. */

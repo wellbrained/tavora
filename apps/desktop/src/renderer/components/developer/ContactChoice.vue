@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useOptimistic } from "@tavora/official-ui/optimistic";
 import { CONTACT_KINDS, cleanContactValue, contactNeedsValue, type Contact, type ContactKind } from "../../../shared/conversations";
 import type { MessageKey } from "../../../shared/i18n";
-import { notSaved } from "../../host";
+import { act, notSaved } from "../../host";
 import { t } from "../../i18n";
 
 const props = defineProps<{
@@ -44,10 +44,13 @@ const { value: saved, set: store } = useOptimistic(
     const problem = await props.save(next);
     if (problem) throw new Error(problem);
   },
-  (failure) => {
+  (failure, failedContact) => {
     notSaved(failure);
-    // A choice without an address goes back in the box; an address stays typed, so it can be sent again.
-    if (!contactNeedsValue(kind.value)) {
+    // The request may have landed although the answer was lost.
+    void act({ type: "inbox-refresh" }, { quiet: true });
+    // A choice without an address goes back in the box, unless another was picked meanwhile; an address stays typed, so
+    // it can be sent again.
+    if (!contactNeedsValue(failedContact.kind) && kind.value === failedContact.kind) {
       kind.value = props.contact.kind;
       value.value = props.contact.value ?? "";
     }
