@@ -72,12 +72,13 @@ jobs:
         with:
           name: npm-packages
           path: npm
-      # In the order the pack job numbered them (1-, 2-, ...), each package after the ones it depends on.
+      # In the order the pack job numbered them (1-, 2-, ...), each package after the ones it depends on. The paths
+      # start with ./ on purpose: npm reads a bare `npm/1-tavora-sdk-x.tgz` as a GitHub repo (owner/name) and tries git.
       - name: Publish
         env:
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
-          for file in $(ls npm/*.tgz | sort -V); do
+          for file in $(ls ./npm/*.tgz | sort -V); do
             if [ "$DRY_RUN" = "true" ]; then npm publish "$file" --access public --dry-run; else npm publish "$file" --access public; fi
           done
