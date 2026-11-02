@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.83",
+    date: "2026-11-02",
+    title: "Tab drops",
+    notes: [
+      "Dropping a tab into a group with empty space in its header shows the dashed tab again, not just a thin bar.",
+      "Dragging a tab within its own group keeps the normal move cursor; where nothing would change it says \"Same place\".",
+    ],
+    prs: [
+      { number: 642, title: "Docking: show the dashed ghost tab whenever the header has room" },
+    ],
+    tags: ["workspace"],
+  },
+  {
     version: "0.23.82",
     date: "2026-11-02",
     title: "Search and dialogs you open with the keyboard appear instantly",

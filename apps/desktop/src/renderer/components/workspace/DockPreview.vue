@@ -53,6 +53,13 @@ const tabGroup = computed(() => {
   return plan.value?.ok && aim?.kind === "tab" ? props.preview.rects[aim.group] : null;
 });
 
+/** A drop that would change nothing: the move cursor stays, and a small label says why nothing happens. */
+const samePlace = computed<Rect | null>(() => {
+  const aim = target.value;
+  if (!aim || aim.kind === "edge" || !plan.value || plan.value.ok || plan.value.reason !== "same-spot") return null;
+  return props.preview.rects[aim.group] ?? null;
+});
+
 /** Where a refused drop is pointed: the group, or the strip of the dock's edge. */
 const refusedRect = computed<Rect | null>(() => {
   const aim = target.value;
@@ -96,6 +103,12 @@ const refusedRect = computed<Rect | null>(() => {
     >
       <span v-if="!preview.bar" class="truncate">{{ preview.title }}</span>
     </div>
+
+    <Transition name="dock-fade">
+      <div v-if="samePlace" key="same" class="absolute flex items-center justify-center" :style="at(samePlace)" data-testid="dock-same-place">
+        <span class="bg-card text-foreground rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap shadow-sm">{{ t("dock.samePlace") }}</span>
+      </div>
+    </Transition>
 
     <!-- Too little room: no outline, and the reason. -->
     <Transition name="dock-fade">
