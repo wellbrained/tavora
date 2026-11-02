@@ -146,6 +146,11 @@ each pattern.
 - **Saving**: through the SDK store (`openDocument` in `@tavora/sdk/store`, `useDocument`, `useItemSession` in the
   kit). No own conflict handling. Files: `files.saveJson` / `files.openJson`; pictures: `pictures.save`; stored files:
   the module file store.
+- **Act first, confirm later**: a change that waits for a request (the network, not a local save) shows at once, saves
+  in the background and is put back with a short message if saving fails: `useOptimistic` / `useOptimisticKeyed` from
+  `@tavora/official-ui` (`modules/shared/src/optimistic.ts`). It handles two quick changes: the later one wins, and an
+  earlier failure never overwrites a newer value. Not for what can't be put back: deleting, publishing, money, keys,
+  security. No disabled controls or "Saving…" while a local save runs.
 - **Panel state**: what one panel remembers (open item, view, tab, filters, folded parts, scroll or zoom) is saved with
   panel state and **read back on start**. Writing it without reading it is the common bug.
 - **Lifecycle**: `onSuspend` flushes pending saves and panel state and pauses timers and animations; `onResume` starts

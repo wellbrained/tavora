@@ -265,6 +265,20 @@ describe("signed in", () => {
     expect(calls.filter((call) => call.method === "PUT").at(-1)!.body).toEqual({ name: "Living room" });
     expect(account.view().devices![0]!.name).toBe("Living room");
   });
+
+  it("a rename that went through is not a failed rename when looking at the list again fails", async () => {
+    let listing = true;
+    const { fetchImpl } = service({
+      "GET /": () => (listing ? json({ devices: [{ ...DEVICE, name: "Old" }] }) : new Response(null, { status: 503 })),
+      "PUT /devices/dev1/name": () => new Response(null, { status: 204 }),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED, deviceName: "Old" });
+    await account.init();
+    await account.refresh();
+    listing = false;
+    await account.renameDevice("dev1", "New name");
+    expect(account.view().devices![0]!.name).toBe("New name");
+  });
 });
 
 describe("a device still going by its network name", () => {
