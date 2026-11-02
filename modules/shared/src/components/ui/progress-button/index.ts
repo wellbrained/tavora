@@ -1,1 +1,2 @@
-export { default as ProgressButton, type ProgressButtonStatus } from "./ProgressButton.vue"
+export { default as ProgressButton } from "./ProgressButton.vue"
+export { announcement, type ProgressButtonStatus } from "./announce"

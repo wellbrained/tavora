@@ -10,9 +10,12 @@ export const DONE_FOR_MS = 1600;
  */
 export function useActionStatus() {
   const states = shallowRef<Readonly<Record<string, Exclude<ProgressButtonStatus, "idle">>>>({});
-  const timers = new Set<ReturnType<typeof setTimeout>>();
+  /** One timer per id: a new run of the id must not be put back to idle by the last run's "done" timer. */
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
   const set = (id: string, status: Exclude<ProgressButtonStatus, "idle"> | null) => {
+    clearTimeout(timers.get(id));
+    timers.delete(id);
     const { [id]: _gone, ...rest } = states.value;
     states.value = status === null ? rest : { ...rest, [id]: status };
   };
@@ -25,17 +28,13 @@ export function useActionStatus() {
     } finally {
       if (ok) {
         set(id, "done");
-        const timer = setTimeout(() => {
-          timers.delete(timer);
-          set(id, null);
-        }, DONE_FOR_MS);
-        timers.add(timer);
+        timers.set(id, setTimeout(() => set(id, null), DONE_FOR_MS));
       } else set(id, null);
     }
     return ok;
   }
 
-  onScopeDispose(() => timers.forEach(clearTimeout));
+  onScopeDispose(() => timers.forEach((timer) => clearTimeout(timer)));
 
   return {
     statusOf: (id: string): ProgressButtonStatus => states.value[id] ?? "idle",

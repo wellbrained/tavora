@@ -66,7 +66,8 @@ async function updateAll() {
   await run(ALL, async () => {
     let every = true;
     for (const id of plan.now) every = (await install(id)) && every;
-    return every && plan.now.length > 0;
+    // Not "Updated" while others still wait for a yes to new access.
+    return every && plan.now.length > 0 && plan.ask.length === 0;
   });
   const [first, ...rest] = plan.ask;
   if (first === undefined) return;
@@ -82,7 +83,7 @@ async function updateAll() {
     </div>
     <template v-else>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pt-6">
-        <ProgressButton :disabled="working && statusOf(ALL) === 'idle'" :status="statusOf(ALL)" :busy-label="t('addModule.updates.working')" :done-label="t('addModule.updates.done')" data-testid="update-all-modules" @click="updateAll">
+        <ProgressButton :disabled="working && statusOf(ALL) === 'idle'" :status="statusOf(ALL)" :busy-label="t('addModule.updates.working')" :done-label="t('addModule.updates.done')" :failed-label="t('addModule.updates.failed')" data-testid="update-all-modules" @click="updateAll">
           <CloudDownload :stroke-width="1.5" /> {{ t("addModule.updates.all") }}
         </ProgressButton>
         <p class="text-muted-foreground text-sm">{{ t("addModule.updates.reload") }}</p>
@@ -101,7 +102,7 @@ async function updateAll() {
               size="sm"
               :status="statusOf(module.id)"
               :busy-label="t('addModule.updates.working')"
-              :done-label="t('addModule.updates.done')"
+              :done-label="t('addModule.updates.done')" :failed-label="t('addModule.updates.failed')"
               :aria-label="t('addModule.updates.updateLabel', { name: module.name })"
               :data-testid="`update-module-${module.id}`"
               @click="updateOne(module.id)"

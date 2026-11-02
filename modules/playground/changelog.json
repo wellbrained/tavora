@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.7",
+    "version": "0.1.8",
     "date": "2026-11-02",
     "notes": [
       "New specimens: a button that shows its own progress, and numbers that count to their new value."
+    ]
+  },
+  {
+    "version": "0.1.7",
+    "date": "2026-11-02",
+    "notes": [
+      "Checkboxes, toggles and options animate when you pick them, and folding sections open smoothly."
     ]
   },
   {

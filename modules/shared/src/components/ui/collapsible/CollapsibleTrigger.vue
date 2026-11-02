@@ -17,7 +17,7 @@ const delegatedProps = reactiveOmit(props, "class")
     v-bind="delegatedProps"
     :class="cn('group/trigger focus-visible:ring-ring/50 flex w-full items-center gap-2 rounded-md text-left text-sm font-medium outline-none focus-visible:ring-3', props.class)"
   >
-    <ChevronRight class="text-muted-foreground size-4 shrink-0 transition-transform group-data-[state=open]/trigger:rotate-90" :stroke-width="1.5" aria-hidden="true" />
+    <ChevronRight class="text-muted-foreground size-4 shrink-0 transition-transform duration-(--duration-press) ease-(--ease-out-strong) group-data-[state=open]/trigger:rotate-90" :stroke-width="1.5" aria-hidden="true" />
     <slot />
   </CollapsibleTrigger>
 </template>

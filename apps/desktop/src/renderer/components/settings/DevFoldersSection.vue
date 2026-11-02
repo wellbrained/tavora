@@ -149,7 +149,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
         :key="entry.folder"
         as="li"
         :open="!entry.collapsed"
-        :class="cn('relative flex flex-col gap-2 border-b last:border-b-0', !entry.collapsed && 'pb-3', dragging === entry.folder && 'opacity-50')"
+        :class="cn('relative flex flex-col border-b last:border-b-0', dragging === entry.folder && 'opacity-50')"
         data-testid="development-folder"
         :data-reorder-id="entry.folder"
         :data-collapsed="entry.collapsed || undefined"
@@ -203,7 +203,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
             <Trash2 :stroke-width="1.5" /> {{ t("settings.devFolders.remove") }}
           </Button>
         </div>
-        <CollapsibleContent class="flex flex-col gap-2">
+        <CollapsibleContent class="flex flex-col gap-2 pt-2 pb-3">
           <p v-if="entry.problem" class="text-muted-foreground flex gap-2 pl-7 text-sm" data-testid="development-folder-status">
             <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ advice(entry.kind, entry.values, entry.folder) }}
           </p>

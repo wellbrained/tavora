@@ -51,7 +51,8 @@ function onDragStart(event: DragEvent, entry: NoteEntry) {
 
 function onDragOver(event: DragEvent, entry: NoteEntry) {
   const from = dragId.value ? props.entries.get(dragId.value) : undefined;
-  if (from?.id === entry.id) reorder.preview(null);
+  // Over itself or the other group (a note stays in its own): nothing opens a gap.
+  if (from && (from.id === entry.id || from.pinned !== entry.pinned)) reorder.preview(null);
   if (!from || from.id === entry.id || from.pinned !== entry.pinned) return;
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = "move";

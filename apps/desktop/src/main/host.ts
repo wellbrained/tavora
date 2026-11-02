@@ -427,6 +427,7 @@ export class Host {
     },
     frozen: (images) => this.window.webContents.send("host:frozen", images),
     frozenOnScreen: () => this.frozenOnScreen(),
+    overlayReady: () => this.window.webContents.send("host:overlay-ready"),
     windowGone: () => this.window.isDestroyed(),
     shownAgain: (views) => this.logDraws(views, "dialog closed"),
     ...(timingLog ? { log: timingLog } : {}),
@@ -1930,6 +1931,9 @@ export class Host {
     });
     ipcMain.on("host:overlay", (event, open: unknown) => {
       if (fromHost(event) && typeof open === "boolean") void this.panels.freeze(open);
+    });
+    ipcMain.on("host:overlay-prepare", (event) => {
+      if (fromHost(event)) this.panels.prepareFreeze();
     });
     ipcMain.on("host:frozen-shown", (event) => {
       if (fromHost(event)) this.frozenShown?.();

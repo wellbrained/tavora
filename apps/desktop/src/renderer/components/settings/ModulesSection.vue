@@ -227,7 +227,7 @@ function remove(module: ModuleView) {
             variant="default"
             :status="updating === module.id ? 'busy' : 'idle'"
             :busy-label="t('addModule.updates.working')"
-            :done-label="t('addModule.updates.done')"
+            :done-label="t('addModule.updates.done')" :failed-label="t('addModule.updates.failed')"
             :data-testid="`module-update-${module.id}`"
             :disabled="updating !== null && updating !== module.id"
             @click="updateModule(module)"

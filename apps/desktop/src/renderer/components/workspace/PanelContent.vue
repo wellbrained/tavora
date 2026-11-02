@@ -146,7 +146,7 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
         <p class="max-w-sm text-sm" :data-testid="`panel-module-moved-${id}`">{{ t("panel.moved", { module: panel.name }) }}</p>
         <p v-if="!state?.library.onlineSearch" class="text-muted-foreground max-w-sm text-sm">{{ t("panel.movedOffline") }}</p>
         <!-- The panel turns into the module once it is in, so this button never gets to say it is done. -->
-        <ProgressButton v-else size="sm" :status="installing ? 'busy' : 'idle'" :progress="installProgress[panel.moduleId] ?? null" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')" data-testid="install-moved-module" @click="installMoved()">
+        <ProgressButton v-else size="sm" :status="installing ? 'busy' : 'idle'" :progress="installProgress[panel.moduleId] ?? null" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')" :failed-label="t('catalog.installFailed')" data-testid="install-moved-module" @click="installMoved()">
           {{ t("catalog.install") }}
         </ProgressButton>
       </template>

@@ -96,14 +96,14 @@ function cancel() {
         <span v-else class="text-muted-foreground text-sm">{{ t("officialPublish.preview.noNotes") }}</span>
       </div>
 
-      <Collapsible v-model:open="filesOpen" class="flex flex-col gap-1" data-testid="official-publish-files">
+      <Collapsible v-model:open="filesOpen" data-testid="official-publish-files">
         <CollapsibleTrigger as-child>
           <Button variant="ghost" size="sm" class="w-fit px-1">
-            <ChevronRight :class="['size-4 transition-transform motion-reduce:transition-none', filesOpen ? 'rotate-90' : '']" :stroke-width="1.5" aria-hidden="true" />
+            <ChevronRight :class="['size-4 transition-transform duration-(--duration-press) ease-(--ease-out-strong) motion-reduce:transition-none', filesOpen ? 'rotate-90' : '']" :stroke-width="1.5" aria-hidden="true" />
             {{ t("officialPublish.preview.files", { count: preview.files.length, size: size(preview.size) }) }}
           </Button>
         </CollapsibleTrigger>
-        <CollapsibleContent>
+        <CollapsibleContent class="pt-1">
           <ul class="text-muted-foreground max-h-48 overflow-y-auto pl-6 font-mono text-xs">
             <li v-for="file in preview.files" :key="file.name" class="flex justify-between gap-4">
               <span class="truncate">{{ file.name }}</span>

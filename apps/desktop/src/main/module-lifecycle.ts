@@ -67,6 +67,9 @@ export interface ModuleLifecycleOptions {
 }
 
 export class ModuleLifecycle {
+  /** The newest catalog install running for each module, so only it reports its progress. */
+  private readonly installRuns = new Map<string, number>();
+  private installRunCount = 0;
   /** Keeps modules installed from the catalog up to date (catalog-updates.ts). */
   readonly updates: CatalogUpdater;
 
@@ -110,10 +113,15 @@ export class ModuleLifecycle {
   async installFromCatalog(moduleId: string): Promise<string> {
     if (!this.options.online()) throw new UserError("error.catalogOff");
     const entry = await this.options.catalog.module(moduleId);
+    // Reports belong to one run: when the same module is installed twice at once, a run that is no longer the
+    // newest says nothing, so its end cannot clear the progress of the one still going.
+    const run = ++this.installRunCount;
+    this.installRuns.set(moduleId, run);
     let reported = -1;
     const report = (percent: number | null) => {
-      if (percent === reported) return;
+      if (this.installRuns.get(moduleId) !== run || percent === reported) return;
       reported = percent ?? -1;
+      if (percent === null) this.installRuns.delete(moduleId);
       this.options.installProgress?.(moduleId, percent);
     };
     let id: string;

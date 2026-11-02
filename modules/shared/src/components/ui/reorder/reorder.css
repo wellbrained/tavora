@@ -1,18 +1,16 @@
 /* Reordering by dragging (use-reorder-motion.ts). The items of a list slide out of the way and settle into their
- place on --duration-reorder; the one in the hand is lifted. Only translate, scale and the shadow move. The class is on
+ place on --duration-reorder; the one in the hand is lifted. Only translate and scale move (it may sit over a game). The class is on
  the list only while a drag (and the settling after it) runs, so nothing else in it is ever animated by this. */
 /* Outside a layer on purpose: an item's own transition utility would otherwise win and keep it from sliding. */
 .tavora-reordering [data-reorder-id] {
   transition:
     translate var(--duration-reorder) var(--ease-out-strong),
-    scale var(--duration-reorder) var(--ease-out-strong),
-    box-shadow var(--duration-reorder) var(--ease-out-strong);
+    scale var(--duration-reorder) var(--ease-out-strong);
 }
 /* The lifted item follows the pointer at once: only its lift eases. */
 .tavora-reordering [data-reorder-id][data-reorder-following] {
   transition:
-    scale var(--duration-reorder) var(--ease-out-strong),
-    box-shadow var(--duration-reorder) var(--ease-out-strong);
+    scale var(--duration-reorder) var(--ease-out-strong);
 }
 .tavora-reordering [data-reorder-id][data-reorder-lifted] {
   scale: 1.03;

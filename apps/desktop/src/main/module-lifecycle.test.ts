@@ -250,6 +250,17 @@ describe("ModuleLifecycle", () => {
     expect(progress.at(-1)).toBeNull();
   });
 
+  it("lets only the newest of two installs of the same module report, so the older one ending keeps the progress", async () => {
+    const { lifecycle, publish, progress } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const zip = zipOf("1.0.0", key);
+    publish(listing("1.0.0", zip, fingerprint(key)), zip);
+    await Promise.allSettled([lifecycle.installFromCatalog(ID), lifecycle.installFromCatalog(ID)]);
+    // Never a null before the newest run's own last report, and exactly one end.
+    expect(progress.filter((percent) => percent === null)).toHaveLength(1);
+    expect(progress.at(-1)).toBeNull();
+  });
+
   it("installs from the catalog only while online, and only the listed publisher's zip", async () => {
     const { lifecycle, publish, state, userModules } = await setup();
     const key = generateKeyPairSync("ed25519").privateKey;

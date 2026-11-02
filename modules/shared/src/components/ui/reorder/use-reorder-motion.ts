@@ -1,5 +1,6 @@
 import { nextTick, onBeforeUnmount, type Ref } from "vue"
 import { slideOffsets, type Slot } from "./slide"
+import { commitAndWait } from "./settle"
 import "./reorder.css"
 
 export interface ReorderMotionOptions {
@@ -9,8 +10,8 @@ export interface ReorderMotionOptions {
   attribute?: string
 }
 
-/** The shadow and stacking of the lifted item: Tailwind classes, so the theme's shadow is the one used. */
-const LIFT = ["shadow-lg", "z-20"]
+/** What the lifted item gets besides its scale: to stand above the others. No shadow: the list may sit over a game, so only transform and opacity move. */
+const LIFT = ["z-20"]
 
 /** Reduced motion keeps the lines and drops the sliding, lifting and settling. */
 export function reducedMotion(): boolean {
@@ -103,20 +104,6 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
     lifted.style.translate = axis === "x" ? `${x}px 0` : `0 ${y}px`
   }
 
-  /** Resolves true once the items are in another order than `before` (the owner of the list may take a moment to change it), false after half a second. */
-  async function orderChanged(before: string): Promise<boolean> {
-    await nextTick()
-    const started = performance.now()
-    return new Promise((resolve) => {
-      const look = () => {
-        if (items().map(idOf).join("\n") !== before) resolve(true)
-        else if (performance.now() - started > 500) resolve(false)
-        else requestAnimationFrame(look)
-      }
-      look()
-    })
-  }
-
   /**
    * The order is about to change: `commit` changes it, and everything settles from where it is on screen into its new
    * place. Until the list shows the new order the items stay where the drag left them, so nothing flickers back.
@@ -131,8 +118,9 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
     settling = true
     const before = items().map(idOf).join("\n")
     const first = new Map(items().map((item) => [idOf(item), item.getBoundingClientRect()]))
-    await commit()
-    if (!(await orderChanged(before))) {
+    // The owner of the list may take a moment to change it, and a failed change must not leave the items stuck.
+    const result = await commitAndWait(commit, () => items().map(idOf).join("\n") !== before)
+    if (result !== "changed") {
       settling = false
       cancel()
       return

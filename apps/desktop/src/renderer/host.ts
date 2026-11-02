@@ -723,8 +723,38 @@ export const overlayOpen = computed(
     searchOpen.value ||
     dragging.value,
 );
+
+// A menu or hint opens in this page at once, but the panels (native views above it) step aside only after their pictures
+// are on screen. Until then it would show half-covered, so popups stay hidden while the class is on (styles.css).
+const panelsOut = ref(false);
+/** How long a popup may wait for the panels to step aside before it shows anyway. */
+const PANELS_OUT_CAP_MS = 1200;
+let panelsOutCap: ReturnType<typeof setTimeout> | undefined;
+api.onOverlayReady(() => {
+  if (overlayOpen.value) panelsOut.value = true;
+});
 // The panels' pictures stay after a dialog closes, under the panels, until the host says every panel has drawn again.
-watch(overlayOpen, (open) => api.setOverlay(open));
+// Only a change the host is told of resets this: a menu that closes and opens again within one tick sends nothing, and
+// the panels stay out of the way, so nothing would ever say they are.
+watch(overlayOpen, (open) => {
+  api.setOverlay(open);
+  clearTimeout(panelsOutCap);
+  panelsOut.value = false;
+  if (open) panelsOutCap = setTimeout(() => (panelsOut.value = true), PANELS_OUT_CAP_MS);
+});
+watch(
+  () => overlayOpen.value && !panelsOut.value,
+  (waiting) => document.documentElement.classList.toggle("overlay-pending", waiting),
+  { immediate: true, flush: "sync" },
+);
+
+// Pictures of the panels take up to half a second. Starting them when the user reaches for a menu (the press that opens
+// it, a right-click) rather than when it has opened makes the menu appear at once.
+const OPENS_POPUP = '[aria-haspopup]:not([aria-haspopup="false"]), [data-slot$="-trigger"]';
+const onPopupTrigger = (event: Event) => event.target instanceof Element && event.target.closest(OPENS_POPUP) !== null;
+document.addEventListener("pointerdown", (event) => (event.button === 2 || (event.button === 0 && event.ctrlKey) || onPopupTrigger(event)) && api.prepareOverlay(), true);
+document.addEventListener("contextmenu", () => api.prepareOverlay(), true);
+document.addEventListener("keydown", (event) => (event.key === "ContextMenu" || (["Enter", " ", "ArrowDown"].includes(event.key) && onPopupTrigger(event))) && api.prepareOverlay(), true);
 watch(overlayOpen, (open) => document.documentElement.classList.toggle("floating-open", open), { immediate: true });
 // How panels are drawn (dock.css reads it).
 watch(

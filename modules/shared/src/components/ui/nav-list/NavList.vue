@@ -57,13 +57,13 @@ function onKey(event: KeyboardEvent) {
         :style="item.level ? { paddingLeft: `calc(0.75rem + ${item.level} * 1rem)` } : undefined"
         :class="
           cn(
-            'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring group flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
+            'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring group flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap transition-colors duration-(--duration-press) ease-(--ease-out-strong) outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
             item.id === modelValue && 'bg-primary/10 text-foreground hover:bg-primary/15',
           )
         "
         @click="pick(item.id)"
       >
-        <component :is="item.icon" v-if="item.icon" :class="cn('size-4 flex-none transition-colors', item.id === modelValue ? 'text-primary' : 'group-hover:text-primary/80', props.iconClass)" :stroke-width="1.75" aria-hidden="true" />
+        <component :is="item.icon" v-if="item.icon" :class="cn('size-4 flex-none transition-colors duration-(--duration-press) ease-(--ease-out-strong)', item.id === modelValue ? 'text-primary' : 'group-hover:text-primary/80', props.iconClass)" :stroke-width="1.75" aria-hidden="true" />
         <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
         <span
           v-if="item.status"

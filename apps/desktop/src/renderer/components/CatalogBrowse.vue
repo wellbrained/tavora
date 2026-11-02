@@ -178,7 +178,7 @@ function settings() {
                   :data-testid="`catalog-add-${module.id}`" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
                 >{{ t("common.add") }}</Button>
                 <ProgressButton v-else size="sm" :disabled="(working && statusOf(module.id) === 'idle') || !module.fits"
-                  :status="statusOf(module.id)" :progress="installProgress[module.id] ?? null" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')"
+                  :status="statusOf(module.id)" :progress="installProgress[module.id] ?? null" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')" :failed-label="t('catalog.installFailed')"
                   :data-testid="`catalog-install-${module.id}`" :aria-label="t('catalog.installLabel', { name: module.name })" @click="install(module)"
                 >{{ t("catalog.install") }}</ProgressButton>
               </span>

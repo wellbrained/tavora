@@ -2,13 +2,14 @@
 import type { HTMLAttributes } from "vue"
 import type { ButtonVariants } from "../button"
 import { Check } from "@lucide/vue"
-import { computed } from "vue"
+import { computed, ref, watch } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { formatCount } from "../count-to"
+import { announcement, type ProgressButtonStatus } from "./announce"
 import "./progress-button.css"
 
-export type ProgressButtonStatus = "idle" | "busy" | "done"
+defineOptions({ inheritAttrs: false })
 
 interface Props {
   variant?: ButtonVariants["variant"]
@@ -22,6 +23,8 @@ interface Props {
   busyLabel: string
   /** Written next to the tick when done ("Installed"). */
   doneLabel: string
+  /** Told to a screen reader when the work ended without working ("Couldn't install"); the error itself is the caller's to show. */
+  failedLabel?: string
   disabled?: boolean
   hinted?: boolean
 }
@@ -31,6 +34,15 @@ const props = withDefaults(defineProps<Props>(), { status: "idle", progress: nul
 const percent = computed(() => (props.progress === null ? null : Math.min(100, Math.max(0, props.progress))))
 const locale = () => (typeof document === "undefined" ? undefined : document.documentElement.lang || undefined)
 const percentLabel = computed(() => formatCount((percent.value ?? 0) / 100, "percent", locale()))
+
+/** Heard by a screen reader, once per change of status: the busy label, then the done or failed label. Never the percent. */
+const said = ref("")
+watch(
+  () => props.status,
+  (now, before) => {
+    said.value = announcement(before, now, { busy: props.busyLabel, done: props.doneLabel, failed: props.failedLabel })
+  },
+)
 
 /** While it works or has worked, a click does nothing; it is not disabled, so it keeps its colours. */
 function block(event: Event) {
@@ -48,6 +60,7 @@ const overlay = "absolute inset-0 inline-flex items-center justify-center gap-[i
 
 <template>
   <Button
+    v-bind="$attrs"
     data-slot="progress-button"
     :data-status="status"
     :variant="variant"
@@ -69,14 +82,16 @@ const overlay = "absolute inset-0 inline-flex items-center justify-center gap-[i
     <!-- Every text takes the same cell, so the button is as wide as the widest. The ones not shown are only sized by a
          pseudo-element (never text), so the button's text is just what it says now. -->
     <span class="relative inline-grid items-center justify-items-center">
-      <span :class="[cell, status !== 'idle' && 'opacity-0']" :aria-hidden="status !== 'idle' || undefined"><slot /></span>
+      <span :class="[cell, status !== 'idle' && 'opacity-0']"><slot /></span>
       <span :class="[cell, sizer]" :data-label="busyLabel">
-        <span v-if="status === 'busy'" :class="overlay">{{ percent === null ? busyLabel : percentLabel }}</span>
+        <span v-if="status === 'busy'" :class="overlay" aria-hidden="true">{{ percent === null ? busyLabel : percentLabel }}</span>
       </span>
       <span :class="[cell, sizer]" :data-label="doneLabel">
         <Check class="invisible" :stroke-width="2" aria-hidden="true" />
-        <span v-if="status === 'done'" :class="overlay"><Check class="tavora-progress-pop" :stroke-width="2" /> {{ doneLabel }}</span>
+        <span v-if="status === 'done'" :class="overlay" aria-hidden="true"><Check class="tavora-progress-pop" :stroke-width="2" /> {{ doneLabel }}</span>
       </span>
     </span>
   </Button>
+  <!-- Beside the button, not in it, so the button keeps its own name (an aria-label, or its text). -->
+  <span role="status" class="sr-only">{{ said }}</span>
 </template>

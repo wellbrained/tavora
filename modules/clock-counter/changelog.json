@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.9",
+    "version": "0.1.10",
     "date": "2026-11-02",
     "notes": [
       "A counter counts up or down to its new number."
+    ]
+  },
+  {
+    "version": "0.1.9",
+    "date": "2026-11-02",
+    "notes": [
+      "Checkboxes, toggles and options animate when you pick them, and folding sections open smoothly."
     ]
   },
   {
