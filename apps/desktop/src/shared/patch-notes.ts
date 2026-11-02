@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.82",
+    date: "2026-11-02",
+    title: "Search and dialogs you open with the keyboard appear instantly",
+    notes: [
+      "Search and dialogs you open with the keyboard appear instantly, and Escape closes dialogs at once.",
+      "Dialogs you open with the mouse move as before.",
+      "Toasts wait while Tavora is hidden or the game is in front, and slide in and out from their edge.",
+    ],
+    prs: [
+      { number: 639, title: "Keyboard-opened dialogs appear instantly; toasts wait while hidden and slide from their edge" },
+    ],
+    tags: ["calculator", "clock-counter", "modules", "notes", "pdf-viewer", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
+  },
+  {
     version: "0.23.81",
     date: "2026-11-02",
     title: "Undo in toasts",
