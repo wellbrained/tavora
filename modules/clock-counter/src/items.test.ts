@@ -22,6 +22,9 @@ import {
   remove,
   resetClock,
   setStream,
+  readSizes,
+  SIZE_SCALE,
+  SIZES,
   sizeScales,
   sourcesOf,
   startPause,
@@ -355,17 +358,17 @@ describe("the text of an overlay", () => {
   });
 
   it("keeps a text, even an empty one, and the new colours and sizes", () => {
-    const item = first(parseList(raw({ text: "", wordsColor: "#facc15", wordsSize: "xl", numberSize: "s" })));
-    expect(item.look).toMatchObject({ text: "", wordsColor: "#facc15", wordsSize: "xl", numberSize: "s" });
+    const item = first(parseList(raw({ text: "", wordsColor: "#facc15", scale: 2, wordsSize: "xl", numberSize: "xs" })));
+    expect(item.look).toMatchObject({ text: "", wordsColor: "#facc15", scale: 2, wordsSize: "xl", numberSize: "xs" });
     expect(itemText(item)).toBe("");
   });
 
   it("reads old looks with the old sizes, and drops what it can't read", () => {
     const old = first(parseList(raw({})));
-    expect(old.look).toMatchObject({ wordsSize: "m", numberSize: "m" });
+    expect(old.look).toMatchObject({ scale: 2, wordsSize: "xs", numberSize: "m" });
     expect(old.look.wordsColor).toBeUndefined();
-    const bad = first(parseList(raw({ text: 5, wordsColor: "red", wordsSize: "huge", numberSize: 3 })));
-    expect(bad.look).toMatchObject({ wordsSize: "m", numberSize: "m" });
+    const bad = first(parseList(raw({ text: 5, wordsColor: "red", scale: 2, wordsSize: "huge", numberSize: 3 })));
+    expect(bad.look).toMatchObject({ wordsSize: "xs", numberSize: "m" });
     expect(bad.look.text).toBeUndefined();
     expect(bad.look.wordsColor).toBeUndefined();
     expect(first(parseList(raw({ text: "x".repeat(MAX.text + 50) }))).look.text).toHaveLength(MAX.text);
@@ -377,17 +380,40 @@ describe("the text of an overlay", () => {
     item.look.showLabel = false;
     const saved = JSON.parse(JSON.stringify(parseList({ items: [item] }))) as { items: { look: Record<string, unknown> }[] };
     expect(Object.keys(saved.items[0]!.look)).toEqual(expect.arrayContaining(["showLabel", "color", "outline", "font", "align"]));
-    expect(saved.items[0]!.look).toMatchObject({ showLabel: false, color: "#ffffff", text: "{time} left", wordsSize: "m", numberSize: "m" });
+    expect(saved.items[0]!.look).toMatchObject({ showLabel: false, color: "#ffffff", text: "{time} left", scale: 2, wordsSize: "xs", numberSize: "m" });
     // The previous version keeps only the old fields; this one then reads that as "Show the name off".
-    const { text: _text, wordsColor: _wordsColor, wordsSize: _wordsSize, numberSize: _numberSize, ...oldLook } = saved.items[0]!.look;
+    const { text: _text, wordsColor: _wordsColor, scale: _scale, wordsSize: _wordsSize, numberSize: _numberSize, ...oldLook } = saved.items[0]!.look;
     expect(itemText(first(parseList(raw(oldLook))))).toBe("{time}");
   });
 });
 
-describe("sizeScales", () => {
-  it("is M for a look published before the sizes, and each size on its own", () => {
-    expect(sizeScales({})).toEqual({ words: 0.5, number: 1 });
-    expect(sizeScales({ wordsSize: "xl", numberSize: "s" })).toEqual({ words: 1, number: 0.6 });
-    expect(sizeScales({ wordsSize: "nope" as never })).toEqual({ words: 0.5, number: 1 });
+describe("the one size scale", () => {
+  it("has the kit's text sizes, XS to XL, for the words and the number alike", () => {
+    expect(SIZES).toEqual(["xs", "s", "m", "l", "xl"]);
+    // 12, 13, 14, 16 and 20 px, scaled so that M is the 48 px the number always had.
+    expect(SIZES.map((size) => Math.round(SIZE_SCALE[size] * 48 * 100) / 100)).toEqual([41.14, 44.57, 48, 54.86, 68.57]);
+    expect(sizeScales({ scale: 2, wordsSize: "xl", numberSize: "xs" })).toEqual({ words: SIZE_SCALE.xl, number: SIZE_SCALE.xs });
+  });
+
+  it("is XS for the words and M for the number when there are no sizes, and for ones it can't read", () => {
+    expect(sizeScales({})).toEqual({ words: SIZE_SCALE.xs, number: 1 });
+    expect(sizeScales({ scale: 2, wordsSize: "nope" })).toEqual({ words: SIZE_SCALE.xs, number: 1 });
+  });
+
+  it("moves sizes saved before the one scale to the nearest step", () => {
+    // Words had S 14, M 24, L 36 and XL 48 px; the number S 29, M 48, L 72 and XL 96 px.
+    expect(["s", "m", "l", "xl"].map((size) => readSizes({ wordsSize: size }).wordsSize)).toEqual(["xs", "xs", "xs", "m"]);
+    expect(["s", "m", "l", "xl"].map((size) => readSizes({ numberSize: size }).numberSize)).toEqual(["xs", "m", "xl", "xl"]);
+    expect(readSizes({ wordsSize: "m", numberSize: "m" })).toEqual({ wordsSize: "xs", numberSize: "m" });
+    // A look that says it has the one scale is not moved: S is S.
+    expect(readSizes({ scale: 2, wordsSize: "s", numberSize: "s" })).toEqual({ wordsSize: "s", numberSize: "s" });
+  });
+
+  it("is moved once in the list too, and kept as it is the next time", () => {
+    const first = (data: ItemList) => data.items[0]!;
+    const old = first(parseList({ items: [{ id: "t", kind: "countdown", label: "T", look: { wordsSize: "l", numberSize: "xl" } }] }));
+    expect(old.look).toMatchObject({ scale: 2, wordsSize: "xs", numberSize: "xl" });
+    const again = first(parseList(JSON.parse(JSON.stringify({ items: [old] }))));
+    expect(again.look).toMatchObject({ scale: 2, wordsSize: "xs", numberSize: "xl" });
   });
 });

@@ -43,6 +43,7 @@ classes where you use a control; never copy it.
 | Tabs | `Tabs`; closable, reorderable or renamable tabs: `TabStrip` | own tab bar |
 | Text, number, code field | `Input`, `Textarea`, `CodeInput`, `Label` | own input with an icon positioned by hand |
 | Pick one | `Select` (short list), `Combobox` (searchable), `Picker`, `RadioGroup` | native `<select>` |
+| A field where the user types their own value or picks a suggestion (a format) | `Combobox` with `free` on its `ComboboxInput`, `ignore-filter` and a `ComboboxTrigger` chevron; the list starts at the field's left edge and is as wide | an `Input` with a "···" button beside it and a menu of its own |
 | Yes/no setting | `Switch` / `SwitchField`, `Checkbox` | own switch |
 | Amount on a range | `Slider` / `SliderField` | |
 | Colour | `ColorPicker` | |

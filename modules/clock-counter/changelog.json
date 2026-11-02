@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.1.20",
+    "date": "2026-11-02",
+    "notes": [
+      "Format is a field with a list of formats to pick from, in the same order every time; you can still type your own.",
+      "Delete is a button on each row, shown when you point at it. It deletes at once, and Undo brings it back.",
+      "Words and Number have the same five sizes, XS to XL, the same as the text sizes in Tavora. Saved sizes move to the nearest one.",
+      "Settings opened from the Overlay page show their layout right away instead of an empty window."
+    ]
+  },
+  {
     "version": "0.1.19",
     "date": "2026-11-02",
     "notes": [

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // One clock or counter as a single compact row: its name, the time or number, the buttons to run it, and a gear that
 // opens its settings in a dialog over the workspace; what is open is this panel's own. On a very narrow panel the row wraps to two lines.
-import { Flag, Hash, Hourglass, Minus, Pause, Play, Plus, RotateCcw, Settings, Timer } from "@lucide/vue";
+import { Flag, Hash, Hourglass, Minus, Pause, Play, Plus, RotateCcw, Settings, Timer, Trash2 } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { computed, inject } from "vue";
@@ -55,7 +55,7 @@ const startLabel = computed(() => {
 </script>
 
 <template>
-  <article class="bg-card rounded-lg border" :data-testid="`item-${item.id}`">
+  <article class="bg-card group/card rounded-lg border" :data-testid="`item-${item.id}`">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 pr-1.5 pl-3">
       <!-- Name and type. A small marker for linked counters ("also adds to") goes at the end of this block. -->
       <div class="flex min-w-24 flex-[1_1_6rem] items-center gap-2" data-testid="item-name">
@@ -102,6 +102,18 @@ const startLabel = computed(() => {
 
         <Button variant="ghost" size="icon-sm" :aria-label="t('item.edit', { label: name })" :title="t('item.edit', { label: name })" aria-haspopup="dialog" :data-testid="`edit-${item.id}`" @click="emit('toggleEdit')">
           <Settings :stroke-width="1.5" />
+        </Button>
+        <!-- A quick action on the row: it shows when the row is pointed at or has the focus, and deletes at once (Undo is in the toast). -->
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          class="text-muted-foreground hover:text-destructive opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100 focus-visible:opacity-100"
+          :aria-label="t('item.delete', { label: name })"
+          :title="t('edit.delete')"
+          :data-testid="`delete-${item.id}`"
+          @click="panel.remove(item)"
+        >
+          <Trash2 :stroke-width="1.5" />
         </Button>
       </div>
     </div>

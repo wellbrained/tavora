@@ -22,6 +22,7 @@ export const en = {
   "kind.group": "Group",
 
   "item.edit": "Settings for {label}",
+  "item.delete": "Delete {label}",
   "item.start": "Start",
   "item.pause": "Pause",
   "item.restart": "Start again",
@@ -153,7 +154,6 @@ export const en = {
   "edit.hotkeyNone": "No key",
   "edit.hotkeyOn": "Key set",
   "edit.delete": "Delete",
-  "edit.deleteHint": "You can undo it for a few seconds.",
 
   "action.start-pause": "Start/Pause",
   "action.reset": "Reset",
@@ -196,6 +196,7 @@ export const de: Record<keyof typeof en, string> = {
   "kind.group": "Gruppe",
 
   "item.edit": "Einstellungen für {label}",
+  "item.delete": "{label} löschen",
   "item.start": "Start",
   "item.pause": "Pause",
   "item.restart": "Neu starten",
@@ -327,7 +328,6 @@ export const de: Record<keyof typeof en, string> = {
   "edit.hotkeyNone": "Keine Taste",
   "edit.hotkeyOn": "Taste festgelegt",
   "edit.delete": "Löschen",
-  "edit.deleteHint": "Du kannst es ein paar Sekunden lang rückgängig machen.",
 
   "action.start-pause": "Start/Pause",
   "action.reset": "Zurücksetzen",

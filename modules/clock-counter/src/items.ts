@@ -18,19 +18,37 @@ export type Align = (typeof ALIGNS)[number];
 /** Text colours for the overlay. */
 export const COLORS = ["#ffffff", "#facc15", "#fb923c", "#f87171", "#f472b6", "#a78bfa", "#60a5fa", "#2dd4bf", "#4ade80", "#111111"] as const;
 
-/** How big the words and the number are drawn, S to XL. */
-export const SIZES = ["s", "m", "l", "xl"] as const;
+/**
+ * How big the words and the number are drawn: one scale for both, with the kit's text sizes and names (XS 12, S 13, M 14, L 16,
+ * XL 20 px), scaled for the overlay so that M is the 48 px the number always had (VALUE_PX in sources.ts).
+ */
+export const SIZES = ["xs", "s", "m", "l", "xl"] as const;
 export type Size = (typeof SIZES)[number];
-/** The number's size and the words' size, as a share of the overlay's base size (VALUE_PX in sources.ts). M is what the overlay always drew. */
-export const NUMBER_SCALE: Record<Size, number> = { s: 0.6, m: 1, l: 1.5, xl: 2 };
-export const WORDS_SCALE: Record<Size, number> = { s: 0.3, m: 0.5, l: 0.75, xl: 1 };
+export const SIZE_SCALE: Record<Size, number> = { xs: 12 / 14, s: 13 / 14, m: 1, l: 16 / 14, xl: 20 / 14 };
+/** What a new item starts with: the number at M, the words at XS beside it. */
+export const DEFAULT_WORDS_SIZE: Size = "xs";
+export const DEFAULT_NUMBER_SIZE: Size = "m";
+
+/** The sizes saved before the one scale (a look without `scale: 2`): words and number had steps of their own, as a share of 48 px. */
+const OLD_WORDS: Record<string, number> = { s: 0.3, m: 0.5, l: 0.75, xl: 1 };
+const OLD_NUMBER: Record<string, number> = { s: 0.6, m: 1, l: 1.5, xl: 2 };
+const nearest = (share: number): Size => SIZES.reduce((best, size) => (Math.abs(SIZE_SCALE[size] - share) < Math.abs(SIZE_SCALE[best] - share) ? size : best));
 
 /**
- * The scales of a look's words and number. A state published by a panel before the sizes (0.1.16) has none: M, what it always drew.
- * Read the sizes through this wherever a published look is drawn.
+ * The words' and the number's step of a look, old or new: a look with `scale: 2` has the one scale; any other (saved by 0.1.19 and
+ * before, or published by a panel that old) is moved to the nearest step, so what it showed stays as near as the one scale can say it.
+ * A look without sizes gets the defaults.
  */
-export function sizeScales(look: Partial<Pick<OverlayLook, "wordsSize" | "numberSize">>): { words: number; number: number } {
-  return { words: WORDS_SCALE[look.wordsSize ?? "m"] ?? WORDS_SCALE.m, number: NUMBER_SCALE[look.numberSize ?? "m"] ?? NUMBER_SCALE.m };
+export function readSizes(look: { scale?: unknown; wordsSize?: unknown; numberSize?: unknown }): { wordsSize: Size; numberSize: Size } {
+  if (look.scale === 2) return { wordsSize: oneOf(SIZES, look.wordsSize, DEFAULT_WORDS_SIZE), numberSize: oneOf(SIZES, look.numberSize, DEFAULT_NUMBER_SIZE) };
+  const old = (value: unknown, steps: Record<string, number>, fallback: Size): Size => (typeof value === "string" && value in steps ? nearest(steps[value]!) : fallback);
+  return { wordsSize: old(look.wordsSize, OLD_WORDS, DEFAULT_WORDS_SIZE), numberSize: old(look.numberSize, OLD_NUMBER, DEFAULT_NUMBER_SIZE) };
+}
+
+/** The scales of a look's words and number. Read the sizes through this wherever a published look is drawn: a state from an old panel has old sizes or none. */
+export function sizeScales(look: { scale?: unknown; wordsSize?: unknown; numberSize?: unknown }): { words: number; number: number } {
+  const sizes = readSizes(look);
+  return { words: SIZE_SCALE[sizes.wordsSize], number: SIZE_SCALE[sizes.numberSize] };
 }
 
 /**
@@ -48,6 +66,8 @@ export type OverlayLook = {
   text?: string;
   /** The words' colour; absent: the same as `color`. */
   wordsColor?: string;
+  /** 2: `wordsSize` and `numberSize` are steps of the one scale; without it they are the old steps of each (see readSizes). */
+  scale: 2;
   wordsSize: Size;
   numberSize: Size;
 };
@@ -129,7 +149,7 @@ const bool = (value: unknown, fallback: boolean) => (typeof value === "boolean" 
 const oneOf = <T extends string>(values: readonly T[], value: unknown, fallback: T): T => (values.includes(value as T) ? (value as T) : fallback);
 
 export function defaultLook(): OverlayLook {
-  return { showLabel: true, color: COLORS[0], outline: true, font: "inter", align: "center", wordsSize: "m", numberSize: "m" };
+  return { showLabel: true, color: COLORS[0], outline: true, font: "inter", align: "center", scale: 2, wordsSize: DEFAULT_WORDS_SIZE, numberSize: DEFAULT_NUMBER_SIZE };
 }
 
 const HEX = /^#[0-9a-f]{6}$/;
@@ -143,8 +163,8 @@ function parseLook(raw: unknown): OverlayLook {
     outline: bool(look.outline, true),
     font: oneOf(FONTS, look.font, "inter"),
     align: oneOf(ALIGNS, look.align, "center"),
-    wordsSize: oneOf(SIZES, look.wordsSize, "m"),
-    numberSize: oneOf(SIZES, look.numberSize, "m"),
+    scale: 2,
+    ...readSizes(look),
   };
   // Fields of the text settings: left out of data that was saved before them, which reads the old way (see itemText).
   if (typeof look.text === "string") parsed.text = look.text.slice(0, MAX.text);
