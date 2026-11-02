@@ -107,6 +107,8 @@ function setShowDisabled(value: boolean) {
 function setDevTools(value: boolean) {
   devTools.value = value;
   void sdk.value?.storage.app.set(DEV_TOOLS_KEY, value).catch(() => undefined);
+  // Turning the tools off puts their helpers back, so none of them comes back on by itself next time.
+  if (!value && showDisabled.value) setShowDisabled(false);
 }
 
 onMounted(async () => {

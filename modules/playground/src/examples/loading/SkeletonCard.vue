@@ -24,7 +24,7 @@ onBeforeUnmount(() => clearTimeout(timer));
 
 <template>
   <div class="flex flex-col gap-2">
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <Button size="xs" variant="secondary" :disabled="disabled" @click="load(1800)">Load slowly</Button>
       <Button size="xs" variant="secondary" :disabled="disabled" @click="load(60)">Load fast (no placeholder)</Button>
     </div>

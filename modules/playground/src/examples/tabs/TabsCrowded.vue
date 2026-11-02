@@ -7,5 +7,5 @@ const active = ref("plan-1");
 </script>
 
 <template>
-  <TabStrip v-model="active" :tabs="tabs" class="w-72" aria-label="Many tabs" data-testid="tab-strip-crowd" @close="(id) => (tabs = tabs.filter((tab) => tab.id !== id))" />
+  <TabStrip v-model="active" :tabs="tabs" class="w-full max-w-72" aria-label="Many tabs" data-testid="tab-strip-crowd" @close="(id) => (tabs = tabs.filter((tab) => tab.id !== id))" />
 </template>

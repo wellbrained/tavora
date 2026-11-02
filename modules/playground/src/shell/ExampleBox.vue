@@ -27,7 +27,8 @@ const showCode = ref(false);
         {{ showCode ? t("box.hideCode") : t("box.showCode") }}
       </Button>
     </header>
-    <div class="p-4" data-slot="example-body">
+    <!-- An example wider than a narrow panel scrolls sideways here instead of being cut off by the box. -->
+    <div class="overflow-x-auto p-4 [scrollbar-width:thin]" data-slot="example-body">
       <component :is="example.component" v-bind="example.takesDisabled ? { disabled } : {}" />
     </div>
     <p v-if="rule" class="text-muted-foreground flex gap-2 border-t px-4 py-2.5 text-xs" data-testid="example-rule">

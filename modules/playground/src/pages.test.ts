@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { de, en } from "./locales";
 import { GROUPS, OLD_TABS, PAGES, isPageId, keys, matches, searchText } from "./pages";
+import { shownSource } from "./shown-source";
 
 // The example files on disk, by "<page>/<Name>", and their sources.
 const files = Object.keys(import.meta.glob("./examples/*/*.vue")).map((path) => path.slice("./examples/".length, -".vue".length));
@@ -42,6 +43,28 @@ describe("pages", () => {
 describe("examples", () => {
   it("are small files with a template", () => {
     for (const [path, source] of Object.entries(sources)) expect(source, path).toContain("<template>");
+  });
+
+  it("show their own file, less only the disabled prop line and one blank line", () => {
+    const PROP = "defineProps<{ disabled?: boolean }>();";
+    for (const [path, source] of Object.entries(sources)) {
+      const file = source.replace(/\r\n/g, "\n").trim().split("\n");
+      const shown = shownSource(source).replace(/\r\n/g, "\n").split("\n");
+      expect(shown.join("\n"), path).not.toContain("defineProps");
+      if (!file.includes(PROP)) {
+        expect(shown, path).toEqual(file);
+        continue;
+      }
+      // Take the shown lines out of the file in order; what is left over is the prop line and one blank line.
+      const left: string[] = [];
+      let at = 0;
+      for (const line of file) {
+        if (at < shown.length && shown[at] === line) at++;
+        else left.push(line);
+      }
+      expect(at, path).toBe(shown.length);
+      expect([...left].sort(), path).toEqual(["", PROP].sort());
+    }
   });
 
   it("take Show disabled as an optional prop named disabled", () => {

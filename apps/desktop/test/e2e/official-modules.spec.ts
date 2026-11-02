@@ -520,6 +520,8 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   const box = `document.querySelector('[data-testid="example-Combobox"]')`;
   await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').click()`);
   await expect.poll(() => inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]')?.textContent ?? ""`)).toContain("<ComboboxInput");
+  // The playground's own disabled prop is left out of the code shown.
+  expect(await inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]').textContent`)).not.toContain("defineProps");
   expect(await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').getAttribute("aria-expanded")`)).toBe("true");
   await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').click()`);
   await expect.poll(() => inModule(app, PLAYGROUND, `!${box}.querySelector('[data-testid="example-code"]')`)).toBe(true);
@@ -532,6 +534,14 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   await expect.poll(() => inModule(app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] button')].every((el) => el.disabled)`)).toBe(true);
   // Show code still works while the examples are off.
   expect(await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').disabled`)).toBe(false);
+
+  // Developer tools off turns Show disabled off too, so it doesn't come back with the tools.
+  await click(app, PLAYGROUND, `[data-testid="dev-tools"] [role="switch"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!${q("disable-all")}`)).toBe(true);
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("example-Select")}.querySelector('[data-slot="example-body"] button').disabled`)).toBe(false);
+  await click(app, PLAYGROUND, `[data-testid="dev-tools"] [role="switch"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("disable-all")}?.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("false");
+  expect(await inModule(app, PLAYGROUND, `${q("example-Select")}.querySelector('[data-slot="example-body"] button').disabled`)).toBe(false);
 
   // After a restart the panel opens on its page again, with Developer tools still on.
   await app.close();
