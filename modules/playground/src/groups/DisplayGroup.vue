@@ -186,7 +186,7 @@ function bump(by: number) {
         </Specimen>
       </DemoSection>
 
-<DemoSection v-if="visible.has('tabs')" id="tabs" :title="title('tabs')" description="Switch between views of the same thing. The selected tab carries an accent line, like panel tabs.">
+<DemoSection v-if="visible.has('tabs')" id="tabs" :title="title('tabs')" description="Switch between views of the same thing. The selected tab carries an accent line, like panel tabs; it slides to the tab you click and jumps when you pick with the arrow keys. The closable strip keeps its line still.">
         <Tabs default-value="overview">
           <TabsList>
             <TabsTrigger value="overview" :disabled="off">Overview</TabsTrigger>

@@ -97,7 +97,8 @@ themes; anything hard-coded breaks in one of them.
   properties, so name those in the transition), never `transition-all`, and nothing in the interface runs longer than
   `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed button dips to
   0.97 on a fine pointer. Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
-  anything shown all day. Reduced motion keeps a short fade and drops the movement.
+  anything shown all day. Reduced motion keeps a short fade and drops the movement. A highlight that follows the picked
+  item of a row (segmented control, tabs) is one element that slides: use `useSlidingIndicator`, never a border per item.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
 
