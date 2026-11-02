@@ -58,13 +58,15 @@ Each variation:
 | `mode` | yes | `"dark"` or `"light"`. Native menus, scrollbars and form controls follow it. Users can follow the system (the default): Tavora then shows the variation whose mode matches the system's light or dark setting, so a theme that comes in Dark and Light works with it unchanged. |
 | `contrast` | no | `"normal"` (default) or `"high"`. High-contrast variations need 7:1 for text instead of 4.5:1. |
 | `radius` | no | Corner radius in px, a whole number from 4 to 12. Default 8. |
-| `colors` | yes | Every token below, each as `#rrggbb`. No transparency. `toast` and `toast-foreground` may be left out. |
+| `colors` | yes | Every token below, each as `#rrggbb`. No transparency. `primary-fill`, `primary-fill-hover`, `primary-fill-foreground`, `toast` and `toast-foreground` may be left out. |
 
 ## Tokens
 
-The names are shadcn-vue's semantic tokens plus four of Tavora's. Modules get the same values as `--tavora-<name>` properties and through `ui.getTheme`, and `ui.onThemeChange` tells them when the user picks another theme.
+The names are shadcn-vue's semantic tokens plus a few of Tavora's own. Modules get the same values as `--tavora-<name>` properties and through `ui.getTheme`, and `ui.onThemeChange` tells them when the user picks another theme.
 
-`background`, `foreground`, `card`, `card-foreground`, `popover`, `popover-foreground`, `primary`, `primary-hover`, `primary-foreground`, `secondary`, `secondary-foreground`, `muted`, `muted-foreground`, `accent`, `accent-foreground`, `destructive`, `border`, `input`, `ring`, `rail`, `success`, `warning`, `info`, `toast`, `toast-foreground`.
+`background`, `foreground`, `card`, `card-foreground`, `popover`, `popover-foreground`, `primary`, `primary-hover`, `primary-foreground`, `primary-fill`, `primary-fill-hover`, `primary-fill-foreground`, `secondary`, `secondary-foreground`, `muted`, `muted-foreground`, `accent`, `accent-foreground`, `destructive`, `border`, `input`, `ring`, `rail`, `success`, `warning`, `info`, `toast`, `toast-foreground`.
+
+`primary-fill` is the colour of solid surfaces that carry text, such as the Primary button and badges, `primary-fill-hover` is that surface under the pointer, and `primary-fill-foreground` is the text on it. All three are optional and a theme that leaves them out gets `primary`, `primary-hover` and `primary-foreground`, so it looks the same as before. Use them when a bright `primary` is right for links, highlights and the active-tab line, but too bright for a button with light text. Set `primary-fill` and `primary-fill-hover` together (Tavora refuses one without the other), keep the hover as dark as the fill so the text stays readable, and Tavora fills the three in before modules see them. `primary` keeps everything that is not a text surface: links, focus and selection accents, switches, checkboxes, progress and the lines under the active tab.
 
 `toast` is the background of the notification pills and `toast-foreground` the text on them. Both are optional: a theme that leaves them out gets a flipped pill, `foreground` as the background and `background` as the text, and Tavora fills the two tokens in before modules see them.
 
@@ -72,7 +74,11 @@ The names are shadcn-vue's semantic tokens plus four of Tavora's. Modules get th
 
 Tavora checks every variation against the colour pairs it really draws. Text needs 4.5:1 (7:1 in a high-contrast variation), and outlines and the focus ring need 3:1:
 
-- Text: `foreground` on `background` and `rail`; `card-foreground`, `popover-foreground`, `secondary-foreground` and `accent-foreground` on their surfaces; `muted-foreground` on `background`, `card` and `muted`; `primary-foreground` on `primary` and `primary-hover`; `primary` on `background` and `card`; `destructive` on `background`, `card` and `secondary`; `success`, `warning` and `info` on `background`; `toast-foreground` on `toast`.
+- Text: `foreground` on `background` and `rail`; `card-foreground`, `popover-foreground`, `secondary-foreground` and `accent-foreground` on their surfaces; `muted-foreground` on `background`, `card` and `muted`; `primary-foreground` on `primary` and `primary-hover`; `primary-fill-foreground` on `primary-fill` and `primary-fill-hover`; `primary` on `background` and `card`; `destructive` on `background`, `card` and `secondary`; `success`, `warning` and `info` on `background`; `toast-foreground` on `toast`.
 - Outlines: `input` on `background`, and `ring` on `background` and `card`.
 
 A variation that misses one is not loaded, and Settings shows which pair failed and by how much.
+
+## Older Tavora
+
+Unknown colours are refused, so a Tavora released before `primary-fill`, `primary-fill-hover` and `primary-fill-foreground` does not load a theme that sets them; it lists the folder with "unknown colors" instead. Tavora's own themes ship with the app, so they are fine. Leave the three out if your theme should work everywhere. A published theme that sets them would need a minimum Tavora version, and themes have no such field yet.

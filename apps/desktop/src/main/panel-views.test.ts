@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clampRect, FROZEN_GONE_MS } from "./panel-views";
+import { clampRect, FROZEN_GONE_MS, PREPARED_FRESH_MS } from "./panel-views";
 import { panelViewsRig } from "./panel-views.test-helper";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -315,6 +315,106 @@ describe("host menus and dialogs over the workspace (freeze)", () => {
     await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
     await closing;
     expect(rig.frozen.at(-1)).toEqual({});
+  });
+
+  it("says the panels are out of the way only once they are hidden, and not for a freeze that was overtaken", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    let releasePicture: (image: string) => void = () => undefined;
+    a.capture = () => new Promise((resolve) => (releasePicture = resolve));
+    const freezing = rig.views.freeze(true);
+    expect(rig.calls).not.toContain("overlayReady");
+    releasePicture("data:x");
+    await freezing;
+    expect(a.visible).toBe(false);
+    expect(rig.calls.filter((call) => call === "overlayReady")).toHaveLength(1);
+    // A freeze with no panel to picture still says it, or a menu would wait for nothing.
+    const empty = panelViewsRig();
+    await empty.views.freeze(true);
+    expect(empty.calls).toContain("overlayReady");
+    // Overtaken by a close: the menu is gone, nothing to announce.
+    const overtaken = panelViewsRig();
+    const b = overtaken.add(B);
+    overtaken.views.place([place(B)]);
+    b.capture = () => new Promise((resolve) => (releasePicture = resolve));
+    const slow = overtaken.views.freeze(true);
+    void overtaken.views.freeze(false);
+    releasePicture("data:y");
+    await slow;
+    expect(overtaken.calls).not.toContain("overlayReady");
+  });
+
+  it("uses pictures taken ahead when a menu opens soon after, and takes new ones when they are stale", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    let taken = 0;
+    a.capture = () => Promise.resolve(`data:picture-${++taken}`);
+    rig.views.prepareFreeze();
+    rig.views.prepareFreeze();
+    expect(taken).toBe(1);
+    await rig.views.freeze(true);
+    expect(taken).toBe(1);
+    expect(rig.frozen).toEqual([{ [A]: "data:picture-1" }]);
+    const closing = rig.views.freeze(false);
+    await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
+    await closing;
+    // Taken ahead but not used in time: the menu takes its own.
+    const stale = panelViewsRig({ now: (() => { let t = 0; return () => (t += PREPARED_FRESH_MS); })() });
+    const b = stale.add(B);
+    stale.views.place([place(B)]);
+    let staleTaken = 0;
+    b.capture = () => Promise.resolve(`data:stale-${++staleTaken}`);
+    stale.views.prepareFreeze();
+    await stale.views.freeze(true);
+    expect(stale.frozen.at(-1)).toEqual({ [B]: "data:stale-2" });
+  });
+
+  it("takes a new picture when the one taken ahead came to nothing", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    let taken = 0;
+    a.capture = () => Promise.resolve(++taken === 1 ? null : `data:picture-${taken}`);
+    rig.views.prepareFreeze();
+    await rig.views.freeze(true);
+    expect(taken).toBe(2);
+    expect(rig.frozen).toEqual([{ [A]: "data:picture-2" }]);
+  });
+
+  it("does not use pictures taken ahead once the panels moved, were lent, got a dialog or came and went", async () => {
+    const changes: [string, (rig: ReturnType<typeof panelViewsRig>) => void][] = [
+      ["moved", (rig) => rig.views.place([place(A, 100)])],
+      ["lent", (rig) => void rig.lend(A)],
+      ["dialog", (rig) => void rig.views.openDialog(A, { width: 300, height: 200 })],
+      ["another panel opened", (rig) => rig.add(B)],
+      ["closed", (rig) => rig.views.close(A)],
+    ];
+    for (const [what, change] of changes) {
+      const rig = panelViewsRig();
+      const a = rig.add(A);
+      rig.views.place([place(A)]);
+      let taken = 0;
+      a.capture = () => Promise.resolve(`data:${what}-${++taken}`);
+      rig.views.prepareFreeze();
+      change(rig);
+      await rig.views.freeze(true);
+      // Taken ahead once; the menu took its own for any panel still pictured.
+      expect(taken, what).toBe(rig.frozen.at(-1)?.[A] ? 2 : 1);
+      expect(rig.frozen.at(-1)?.[A] ?? "", what).not.toBe(`data:${what}-1`);
+    }
+  });
+
+  it("takes no pictures ahead while a menu or dialog is open", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    await rig.views.freeze(true);
+    let taken = 0;
+    a.capture = () => Promise.resolve(`data:${++taken}`);
+    rig.views.prepareFreeze();
+    expect(taken).toBe(0);
   });
 
   it("takes no picture of a panel that is not ready, not revealed, lent or unplaced", async () => {

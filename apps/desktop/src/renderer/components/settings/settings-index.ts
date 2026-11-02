@@ -36,13 +36,13 @@ export const GROUPS = [
   },
 ] as const;
 
-/** About & updates sits at the foot of the menu, beside the version. */
+/** Updates & About sits at the foot of the menu, beside the version. */
 export const ABOUT_SECTION = "about";
 
 /** Pages that open from a row on another page, with a way back; their parent stays lit in the menu. */
 export const SUB_PAGES = { workspaces: "games", trash: "games", "patch-notes": "about" } as const;
 
-/** The patch notes open from About & updates or the version; the search doesn't find them. */
+/** The patch notes open from Updates & About or the version; the search doesn't find them. */
 export const PATCH_NOTES_SECTION = "patch-notes";
 
 /** The developer pages, as tabs under one menu entry. The first is Your modules. */

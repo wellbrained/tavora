@@ -56,6 +56,13 @@
   --disabled-opacity: 0.75;
 }
 
+/* Bare transition-colors / transition-transform / transition-opacity use these: a press-sized fade on the strong
+   ease-out, instead of Tailwind's 150 ms and its default curve. The values live in motion.css. */
+@theme {
+  --default-transition-duration: var(--duration-press);
+  --default-transition-timing-function: var(--ease-out-strong);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -66,6 +73,10 @@
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
+  /* The button fill: a theme may set it apart from primary; without it (and on a Tavora that does not know it) it is primary. */
+  --color-primary-fill: var(--primary-fill, var(--primary));
+  --color-primary-fill-hover: var(--primary-fill-hover, var(--primary-hover));
+  --color-primary-fill-foreground: var(--primary-fill-foreground, var(--primary-foreground));
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -143,6 +154,21 @@
 /* While a menu or dialog is open, the drag areas let clicks through, so a click on the header closes it. */
 html.floating-open .app-drag {
   -webkit-app-region: no-drag;
+}
+
+/* A menu or hint opens at once, but the module panels (native views above this page) step aside only a moment later:
+   until then popups stay unseen, so they never show half-covered. Animations wait too, and start when they show. */
+html.overlay-pending :is(
+    [data-slot$="-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="context-menu-sub-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"],
+    .tavora-tooltip
+  ) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  animation-play-state: paused !important;
 }
 
 /* Rail entries: a pill on the left edge shows state (short on hover, full
@@ -429,6 +455,11 @@ nav[data-expanded="true"] .footer-slot > [aria-hidden="true"] {
 .nav-plates [data-slot="nav-group"] [aria-current="page"] {
   background: color-mix(in srgb, var(--tone) 22%, transparent);
   box-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
+}
+/* The open page's icon and counter take the plate's colour, not the kit's primary, so they match their group. */
+.nav-plates [data-slot="nav-group"] [aria-current="page"] > svg,
+.nav-plates [data-slot="nav-group"] [aria-current="page"] > span.text-primary {
+  color: color-mix(in srgb, var(--tone) 85%, var(--foreground));
 }
 /* Hover tints in the plate's own colour instead of the kit's grey. */
 .nav-plates [data-slot="nav-group"] [data-nav-item]:hover {

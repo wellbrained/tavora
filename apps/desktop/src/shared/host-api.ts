@@ -1163,6 +1163,10 @@ export interface TavoraHostApi {
    * host sends `{}` once every panel has drawn again.
    */
   setOverlay(open: boolean): void;
+  /** A menu or hint is about to open (a right-click, a press on a menu button, a hover): the host starts taking the panels' pictures now, so the menu finds them ready. */
+  prepareOverlay(): void;
+  /** The panels are out of the way after `setOverlay(true)`: only now can a menu be drawn without a view covering part of it. */
+  onOverlayReady(listener: () => void): void;
   /** The Overlay layout window's side (main/overlay-layout.ts): its pages get the view and answer with messages. */
   layout: {
     getState(): Promise<LayoutView | null>;
@@ -1191,6 +1195,8 @@ export interface TavoraHostApi {
   /** The user's ranks for the profile card; null from anything but the host UI. Never rejects. */
   profileRanks(): Promise<ProfileRanksView | null>;
   onAccount(listener: (view: AccountView) => void): void;
+  /** A catalog install's download, in whole percent so far; `percent` is null once it ended. */
+  onInstallProgress(listener: (progress: { moduleId: string; percent: number | null }) => void): void;
   getCloudCopy(): Promise<CloudCopyView | null>;
   onCloudCopy(listener: (view: CloudCopyView) => void): void;
   getDeveloperKeys(): Promise<DeveloperKeysView | null>;

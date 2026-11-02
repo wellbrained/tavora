@@ -12,8 +12,10 @@
 // developers use is in Settings > Developer.
 import { ArrowRightLeft, ChevronDown, CircleAlert, CloudDownload, Ellipsis, FileArchive, Flag, FolderInput, FolderOpen, NotebookText, RefreshCw, Store, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -218,17 +220,21 @@ function remove(module: ModuleView) {
       <Switch v-model="autoUpdateModules" :aria-label="t('settings.auto-update-modules.label')" data-testid="auto-update-modules" />
     </SettingRow>
     <div :class="cn('-mx-5 px-5 transition-colors duration-500', highlight === 'installed-modules' && 'bg-primary/10')" data-setting="installed-modules">
-      <ul class="flex flex-col" :aria-label="t('settings.installed-modules.label')" data-testid="module-list">
+      <AnimatedList tag="ul" class="flex flex-col" :aria-label="t('settings.installed-modules.label')" data-testid="module-list">
         <ModuleRow v-for="module in sorted" :key="module.id" :module="module">
-          <Button
+          <!-- The update leaves the row once it is in, so this button never gets to say it is done. -->
+          <ProgressButton
             v-if="module.update"
             variant="default"
+            :status="updating === module.id ? 'busy' : 'idle'"
+            :busy-label="t('addModule.updates.working')"
+            :done-label="t('addModule.updates.done')" :failed-label="t('addModule.updates.failed')"
             :data-testid="`module-update-${module.id}`"
-            :disabled="updating !== null"
+            :disabled="updating !== null && updating !== module.id"
             @click="updateModule(module)"
           >
             <CloudDownload :stroke-width="1.5" /> {{ t("settings.modules.update", { version: module.update.version }) }}
-          </Button>
+          </ProgressButton>
           <Button
             v-if="module.notes.latest"
             variant="ghost"
@@ -280,7 +286,7 @@ function remove(module: ModuleView) {
             </DropdownMenuContent>
           </DropdownMenu>
         </ModuleRow>
-      </ul>
+      </AnimatedList>
     </div>
   </SettingGroup>
   <ModuleNotesDialog v-if="notesModule" :key="notesModule.id" :module="notesModule" @close="notesOpen = null" />
@@ -317,7 +323,7 @@ function remove(module: ModuleView) {
       :details="t('settings.modules.leftoverHint')"
       testid="leftover-data"
     >
-      <ul class="flex flex-col" :aria-label="t('settings.modules.leftover')">
+      <AnimatedList tag="ul" class="flex flex-col" :aria-label="t('settings.modules.leftover')">
         <li
           v-for="entry in leftover"
           :key="`${entry.owner}/${entry.moduleId}`"
@@ -334,7 +340,7 @@ function remove(module: ModuleView) {
             <Trash2 :stroke-width="1.5" /> {{ t("settings.modules.deleteData") }}
           </Button>
         </li>
-      </ul>
+      </AnimatedList>
     </SettingExpand>
   </SettingGroup>
 </template>

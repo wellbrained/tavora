@@ -4,10 +4,14 @@
 // publisher's one reply. Rating needs a sign-in and the module installed, and never your own module;
 // the main process checks the rest and sends the installed version along. Every text is plain text,
 // and a reviewer's picture is a PNG the main process checked by its hash. Report sends only the review's id.
+// Posting a rating and a publisher's reply show at once and save in the background (they come back if saving fails);
+// deleting a rating or a reply and reporting wait for the answer.
 import { computed, onMounted, ref } from "vue";
-import type { CatalogReviewsResult, CatalogReviewView } from "../../shared/host-api";
-import { act, api, dialog, openProfile } from "../host";
+import type { CatalogOwnReview, CatalogReviews, CatalogReviewsResult, CatalogReviewView } from "../../shared/host-api";
+import { act, api, dialog, notSaved, openProfile } from "../host";
+import { useOptimistic, useOptimisticKeyed } from "@tavora/official-ui/optimistic";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
@@ -24,27 +28,94 @@ const busy = ref(false);
 const error = ref<string | null>(null);
 /** The review whose reply is being written, its draft, and the review whose Report waits for a yes. */
 const replying = ref<string | null>(null);
-const replyText = ref("");
+/** The reply being written, per review: a failed one keeps its draft even when another editor was opened meanwhile. */
+const drafts = ref<Record<string, string>>({});
 const reportAsk = ref<string | null>(null);
 const reported = ref<Set<string>>(new Set());
 const reviewErrors = ref<Record<string, string>>({});
 
 const loaded = computed(() => (result.value?.status === "ok" ? result.value : null));
-const mine = computed(() => loaded.value?.mine ?? null);
 const length = computed(() => [...text.value.trim()].length);
 const changed = computed(() => stars.value > 0 && (stars.value !== mine.value?.stars || (text.value.trim() || null) !== (mine.value?.text ?? null)));
 /** Rated on an older version than the one installed: asked once if it still holds. */
 const older = computed(() => (mine.value && loaded.value?.installedVersion && mine.value.version !== loaded.value.installedVersion ? mine.value.version : null));
+// The user's own rating as the screen shows it: the one just posted while it saves, else the service's.
+// It shows "not held, not hidden" until the service answers; a held or hidden notice can appear a moment later.
+const kinds = new WeakMap<CatalogOwnReview, "post" | "keep">();
+const { value: mine, set: setMine, waiting: mineWaiting } = useOptimistic<CatalogOwnReview | null>(
+  () => loaded.value?.mine ?? null,
+  async (own) => {
+    if (!own) return;
+    const sent = { stars: stars.value, text: text.value };
+    const outcome = await act({ type: "rate-catalog-module", moduleId: props.moduleId, stars: own.stars, text: own.text }, { quiet: true });
+    if (!outcome.ok) throw new Error(outcome.error);
+    // Saved. Looking again is only to catch up: when that fails, the screen keeps what was saved.
+    if ((await refresh()) === "failed") patch((view) => ({ ...view, mine: own }));
+    // Nothing typed since: show what the service kept (it may have trimmed or hidden the text).
+    if (stars.value === sent.stars && text.value === sent.text) resetForm();
+  },
+  (failure, own) => {
+    notSaved(failure, t(kinds.get(own!) === "keep" ? "catalog.reviews.keepNotSaved" : "catalog.reviews.notSaved"));
+    // The request may have landed although the answer was lost.
+    void refresh();
+  },
+);
+// A publisher's reply the same way, one per review. When it can't be saved the editor opens again with the draft.
+const replyShown = useOptimisticKeyed<string, CatalogReviewView["reply"]>(
+  (id) => loaded.value?.reviews.find((review) => review.id === id)?.reply ?? null,
+  async (id, reply) => {
+    const outcome = await act({ type: "reply-catalog-review", moduleId: props.moduleId, reviewId: id, text: reply?.text ?? null }, { quiet: true });
+    if (!outcome.ok) throw new Error(outcome.error);
+    if ((await refresh()) === "failed") patch((view) => ({ ...view, reviews: view.reviews.map((review) => (review.id === id ? { ...review, reply } : review)) }));
+    const { [id]: _sent, ...rest } = drafts.value;
+    drafts.value = rest;
+  },
+  (failure, id) => {
+    notSaved(failure);
+    // The editor opens again with the draft, unless another one is open (it stays in its draft).
+    if (replying.value === null) replying.value = id;
+    void refresh();
+  },
+);
 const average = computed(() => (loaded.value?.rating ? formatNumber(loaded.value.rating.average) : ""));
 const rows = computed(() => {
   const rating = loaded.value?.rating;
   return rating ? [5, 4, 3, 2, 1].map((n) => ({ stars: n, percent: Math.round(((rating.stars[n - 1] ?? 0) / rating.count) * 100) })) : [];
 });
 
+/** Only the newest answer counts: an older one that lands late is dropped. */
+let asked = 0;
+/**
+ * Reads the reviews again. `applied`: it is on screen. `stale`: a newer look is on its way and decides. `failed`: an
+ * error, or (with `keep`) an answer that is not a list (offline, busy), which leaves the screen as it is.
+ */
+async function refresh(keep = true): Promise<"applied" | "stale" | "failed"> {
+  const ask = ++asked;
+  try {
+    const answer = await api.catalogReviews(props.moduleId);
+    if (ask !== asked) return "stale";
+    if (keep && answer.status !== "ok") return "failed";
+    result.value = answer;
+    return "applied";
+  } catch {
+    return ask === asked ? "failed" : "stale";
+  }
+}
+/** Changes the list on screen by hand (the save worked but the list can't be read again), and drops older answers. */
+function patch(change: (view: CatalogReviews) => CatalogReviews) {
+  const view = loaded.value;
+  if (!view) return;
+  asked++;
+  result.value = { status: "ok", ...change(view) };
+}
+function resetForm() {
+  const own = loaded.value?.mine ?? null;
+  stars.value = own?.stars ?? 0;
+  text.value = own?.text ?? "";
+}
 async function load() {
-  result.value = await api.catalogReviews(props.moduleId);
-  stars.value = mine.value?.stars ?? 0;
-  text.value = mine.value?.text ?? "";
+  await refresh(false);
+  resetForm();
 }
 onMounted(load);
 async function retry() {
@@ -64,34 +135,64 @@ async function run(action: Parameters<typeof act>[0], onError: (message: string)
   return true;
 }
 
-async function post() {
-  if (await run({ type: "rate-catalog-module", moduleId: props.moduleId, stars: stars.value, text: text.value.trim() || null })) await load();
+/** What the service will have after a rating: the installed version when there is one. Whether it is held or hidden, only the service says. */
+function rated(starsGiven: number, textGiven: string | null): CatalogOwnReview {
+  return { stars: starsGiven, text: textGiven, version: loaded.value?.installedVersion ?? mine.value?.version ?? "", hidden: false, held: false };
+}
+
+function post() {
+  error.value = null;
+  const own = rated(stars.value, text.value.trim() || null);
+  kinds.set(own, "post");
+  void setMine(own);
 }
 
 /** Keeps the rating as it is, given on the installed version now. */
-async function keep() {
+function keep() {
   const own = mine.value;
-  if (own && (await run({ type: "rate-catalog-module", moduleId: props.moduleId, stars: own.stars, text: own.hidden ? null : own.text }))) await load();
+  if (!own) return;
+  error.value = null;
+  const kept = rated(own.stars, own.hidden ? null : own.text);
+  kinds.set(kept, "keep");
+  void setMine(kept);
 }
 
 async function remove() {
+  if (mineWaiting.value) return;
   if (await run({ type: "unrate-catalog-module", moduleId: props.moduleId })) await load();
 }
 
 function startReply(review: CatalogReviewView) {
+  if (replyShown.waiting(review.id)) return;
   replying.value = review.id;
-  replyText.value = review.reply?.text ?? "";
+  drafts.value = { ...drafts.value, [review.id]: drafts.value[review.id] ?? replyShown.value(review.id)?.text ?? "" };
+}
+function stopReply(review: CatalogReviewView) {
+  replying.value = null;
+  const { [review.id]: _gone, ...rest } = drafts.value;
+  drafts.value = rest;
 }
 
-async function sendReply(review: CatalogReviewView, value: string | null) {
+/** Sends the reply written in the editor: it shows at once. */
+function sendReply(review: CatalogReviewView) {
+  const value = (drafts.value[review.id] ?? "").trim();
+  replying.value = null;
+  reviewErrors.value = { ...reviewErrors.value, [review.id]: "" };
+  void replyShown.set(review.id, { text: value, date: new Date().toISOString() });
+}
+
+/** Takes the reply away; this waits for the answer. */
+async function deleteReply(review: CatalogReviewView) {
+  if (replyShown.waiting(review.id)) return;
   const fail = (message: string) => (reviewErrors.value = { ...reviewErrors.value, [review.id]: message });
-  if (await run({ type: "reply-catalog-review", moduleId: props.moduleId, reviewId: review.id, text: value }, fail)) {
+  if (await run({ type: "reply-catalog-review", moduleId: props.moduleId, reviewId: review.id, text: null }, fail)) {
     replying.value = null;
     await load();
   }
 }
 
 async function report(review: CatalogReviewView) {
+  if (replyShown.waiting(review.id)) return;
   const fail = (message: string) => (reviewErrors.value = { ...reviewErrors.value, [review.id]: message });
   if (await run({ type: "report-catalog-review", reviewId: review.id }, fail)) reported.value = new Set([...reported.value, review.id]);
   reportAsk.value = null;
@@ -119,13 +220,13 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
         <div class="flex flex-col items-start gap-1">
           <span class="text-3xl font-semibold tabular-nums">{{ average }}</span>
           <StarRating :model-value="loaded.rating.average" :label="t('catalog.rating.label', { average })" />
-          <span class="text-muted-foreground text-xs">{{ t("catalog.rating.count", { count: loaded.rating.count }) }}</span>
+          <span class="text-muted-foreground text-xs"><CountTo :value="loaded.rating.count" :format="(n) => t('catalog.rating.count', { count: n })" /></span>
         </div>
         <ul class="max-w-80 space-y-1.5">
           <li v-for="row in rows" :key="row.stars" class="grid grid-cols-[3.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 text-xs">
             <span class="text-muted-foreground">{{ t("catalog.rating.stars", { count: row.stars }) }}</span>
             <Progress :model-value="row.percent" :aria-label="t('catalog.rating.stars', { count: row.stars })" />
-            <span class="text-muted-foreground text-right tabular-nums">{{ t("catalog.rating.percent", { percent: row.percent }) }}</span>
+            <span class="text-muted-foreground text-right tabular-nums"><CountTo :value="row.percent" :format="(n) => t('catalog.rating.percent', { percent: n })" /></span>
           </li>
         </ul>
       </div>
@@ -134,21 +235,21 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
         <template v-if="loaded.can === 'rate'">
           <div class="mb-2 flex items-center gap-3">
             <span class="text-sm font-medium">{{ t("catalog.reviews.yours") }}</span>
-            <StarRating v-model="stars" editable size="lg" :label="t('catalog.reviews.yours')" :star-label="(n) => t('catalog.rating.stars', { count: n })" :disabled="busy" data-testid="catalog-reviews-stars" />
+            <StarRating v-model="stars" editable size="lg" :label="t('catalog.reviews.yours')" :star-label="(n) => t('catalog.rating.stars', { count: n })" data-testid="catalog-reviews-stars" />
           </div>
           <p v-if="older" class="mb-2 flex flex-wrap items-center gap-2 text-sm" data-testid="catalog-reviews-older">
             {{ t("catalog.reviews.older", { version: older }) }}
-            <Button size="sm" variant="secondary" :disabled="busy" data-testid="catalog-reviews-keep" @click="keep">{{ t("catalog.reviews.keep") }}</Button>
+            <Button size="sm" variant="secondary" data-testid="catalog-reviews-keep" @click="keep">{{ t("catalog.reviews.keep") }}</Button>
           </p>
           <p v-if="mine?.hidden" class="text-muted-foreground mb-2 text-sm" role="status">{{ t("catalog.reviews.hidden") }}</p>
           <p v-else-if="mine?.held" class="text-muted-foreground mb-2 text-sm" role="status" data-testid="catalog-reviews-held">{{ t("catalog.reviews.held") }}</p>
-          <Textarea v-model="text" :placeholder="t('catalog.reviews.placeholder')" :aria-label="t('catalog.reviews.placeholder')" class="min-h-20 text-sm" :disabled="busy" data-testid="catalog-reviews-text" />
+          <Textarea v-model="text" :placeholder="t('catalog.reviews.placeholder')" :aria-label="t('catalog.reviews.placeholder')" class="min-h-20 text-sm" data-testid="catalog-reviews-text" />
           <div class="mt-2 flex flex-wrap items-center gap-2">
             <span class="text-muted-foreground min-w-0 flex-1 text-xs">{{ t("catalog.reviews.public") }}</span>
             <span class="text-xs tabular-nums" :class="length > MAX_TEXT ? 'text-destructive' : 'text-muted-foreground'">{{ t("catalog.reviews.length", { count: length }) }}</span>
-            <Button v-if="mine" size="sm" variant="ghost" :disabled="busy" data-testid="catalog-reviews-delete" @click="remove">{{ t("catalog.reviews.delete") }}</Button>
-            <Button size="sm" :disabled="busy || !changed || length > MAX_TEXT" data-testid="catalog-reviews-post" @click="post">
-              {{ busy ? t("catalog.reviews.posting") : mine ? t("catalog.reviews.update") : t("catalog.reviews.post") }}
+            <Button v-if="mine" size="sm" variant="ghost" :disabled="busy || mineWaiting" data-testid="catalog-reviews-delete" @click="remove">{{ t("catalog.reviews.delete") }}</Button>
+            <Button size="sm" :disabled="!changed || length > MAX_TEXT" data-testid="catalog-reviews-post" @click="post">
+              {{ mine ? t("catalog.reviews.update") : t("catalog.reviews.post") }}
             </Button>
           </div>
         </template>
@@ -171,16 +272,16 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
           <StarRating :model-value="review.stars" size="sm" class="mt-1.5" :label="t('catalog.rating.stars', { count: review.stars })" />
           <p class="mt-1 text-sm break-words whitespace-pre-line">{{ review.text }}</p>
 
-          <div v-if="review.reply && replying !== review.id" class="border-primary/40 bg-muted/30 mt-3 rounded-md border-l-2 px-3 py-2" data-testid="catalog-review-reply">
-            <p class="text-muted-foreground text-xs">{{ publisher ? t("catalog.reviews.replyFrom", { name: publisher }) : t("catalog.reviews.replyFromDeveloper") }}<template v-if="dateOf(review.reply.date)"> · {{ dateOf(review.reply.date) }}</template></p>
-            <p class="mt-1 text-sm break-words whitespace-pre-line">{{ review.reply.text }}</p>
+          <div v-if="replyShown.value(review.id) && replying !== review.id" class="border-primary/40 bg-muted/30 mt-3 rounded-md border-l-2 px-3 py-2" data-testid="catalog-review-reply">
+            <p class="text-muted-foreground text-xs">{{ publisher ? t("catalog.reviews.replyFrom", { name: publisher }) : t("catalog.reviews.replyFromDeveloper") }}<template v-if="dateOf(replyShown.value(review.id)!.date)"> · {{ dateOf(replyShown.value(review.id)!.date) }}</template></p>
+            <p class="mt-1 text-sm break-words whitespace-pre-line">{{ replyShown.value(review.id)!.text }}</p>
           </div>
           <div v-if="replying === review.id" class="mt-3 space-y-2">
-            <Textarea v-model="replyText" :placeholder="t('catalog.reviews.replyPlaceholder')" :aria-label="t('catalog.reviews.replyPlaceholder')" class="min-h-16 text-sm" :disabled="busy" data-testid="catalog-review-reply-text" />
+            <Textarea v-model="drafts[review.id]" :placeholder="t('catalog.reviews.replyPlaceholder')" :aria-label="t('catalog.reviews.replyPlaceholder')" class="min-h-16 text-sm" data-testid="catalog-review-reply-text" />
             <div class="flex items-center gap-2">
-              <span class="text-muted-foreground flex-1 text-xs tabular-nums">{{ t("catalog.reviews.length", { count: [...replyText.trim()].length }) }}</span>
-              <Button size="sm" variant="ghost" :disabled="busy" @click="replying = null">{{ t("common.cancel") }}</Button>
-              <Button size="sm" :disabled="busy || !replyText.trim() || [...replyText.trim()].length > MAX_TEXT" data-testid="catalog-review-reply-send" @click="sendReply(review, replyText)">{{ t("catalog.reviews.reply") }}</Button>
+              <span class="text-muted-foreground flex-1 text-xs tabular-nums">{{ t("catalog.reviews.length", { count: [...(drafts[review.id] ?? '').trim()].length }) }}</span>
+              <Button size="sm" variant="ghost" @click="stopReply(review)">{{ t("common.cancel") }}</Button>
+              <Button size="sm" :disabled="!(drafts[review.id] ?? '').trim() || [...(drafts[review.id] ?? '').trim()].length > MAX_TEXT" data-testid="catalog-review-reply-send" @click="sendReply(review)">{{ t("catalog.reviews.reply") }}</Button>
             </div>
           </div>
 
@@ -188,15 +289,15 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
           <p v-if="reported.has(review.id)" class="text-muted-foreground mt-2 text-sm" role="status">{{ t("catalog.reviews.reported") }}</p>
           <div v-else-if="reportAsk === review.id" class="bg-muted/40 mt-2 flex flex-wrap items-center gap-2 rounded-md p-3">
             <p class="w-full text-sm">{{ t("catalog.reviews.reportAsk") }}</p>
-            <Button size="sm" variant="secondary" :disabled="busy" :data-testid="`catalog-review-report-send-${review.id}`" @click="report(review)">{{ t("catalog.reviews.reportSend") }}</Button>
+            <Button size="sm" variant="secondary" :disabled="busy || replyShown.waiting(review.id)" :data-testid="`catalog-review-report-send-${review.id}`" @click="report(review)">{{ t("catalog.reviews.reportSend") }}</Button>
             <Button size="sm" variant="ghost" :disabled="busy" @click="reportAsk = null">{{ t("common.cancel") }}</Button>
           </div>
           <div v-else-if="replying !== review.id" class="mt-2 flex gap-1">
             <template v-if="loaded.can === 'own'">
-              <Button size="sm" variant="ghost" class="text-muted-foreground" :disabled="busy" data-testid="catalog-review-reply-start" @click="startReply(review)">
-                {{ review.reply ? t("catalog.reviews.replyEdit") : t("catalog.reviews.reply") }}
+              <Button size="sm" variant="ghost" class="text-muted-foreground" :disabled="busy || replyShown.waiting(review.id)" data-testid="catalog-review-reply-start" @click="startReply(review)">
+                {{ replyShown.value(review.id) ? t("catalog.reviews.replyEdit") : t("catalog.reviews.reply") }}
               </Button>
-              <Button v-if="review.reply" size="sm" variant="ghost" class="text-muted-foreground" :disabled="busy" @click="sendReply(review, null)">{{ t("catalog.reviews.replyDelete") }}</Button>
+              <Button v-if="replyShown.value(review.id)" size="sm" variant="ghost" class="text-muted-foreground" :disabled="busy || replyShown.waiting(review.id)" @click="deleteReply(review)">{{ t("catalog.reviews.replyDelete") }}</Button>
             </template>
             <Button size="sm" variant="ghost" class="text-muted-foreground" :aria-label="t('catalog.reviews.reportLabel', { name: nameOf(review) })" :data-testid="`catalog-review-report-${review.id}`" @click="reportAsk = review.id">
               {{ t("catalog.reviews.report") }}

@@ -6,11 +6,13 @@
 // their own in the profile dialog; what module developers need is in Settings > Developer
 // (ModuleDeveloperSettings.vue).
 import { computed, onMounted, ref, watch } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { CodeInput, codeDigits } from "@tavora/official-ui/components/ui/code-input";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { useOptimisticKeyed } from "@tavora/official-ui/optimistic";
 import type { AccountDevice, HostAction } from "../../../shared/host-api";
-import { account, act, confirmAction, prompt, submitAction } from "../../host";
+import { account, act, confirmAction, notSaved, prompt, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import RecoveryKeySettings from "./RecoveryKeySettings.vue";
 import SignInForm from "./SignInForm.vue";
@@ -76,9 +78,23 @@ function osName(device: AccountDevice): string {
   return t(device.os === "other" ? "account.os.unknown" : `account.os.${device.os}`);
 }
 
+/** A renamed device shows its new name at once; the service hears about it in the background and the old name comes back if that fails. */
+const deviceNames = useOptimisticKeyed<string, string | null>(
+  (id) => view.value?.devices?.find((device) => device.id === id)?.name ?? null,
+  async (id, name) => {
+    const result = await act({ type: "account-rename-device", deviceId: id, name: name ?? "" }, { quiet: true });
+    if (!result.ok) throw new Error(result.error);
+  },
+  (error) => {
+    notSaved(error);
+    // The request may have landed although the answer was lost.
+    void act({ type: "account-refresh" }, { quiet: true });
+  },
+);
+
 /** The device's name, or its system for a sign-in from before devices had names. */
 function deviceLabel(device: AccountDevice): string {
-  return device.name ?? osName(device);
+  return deviceNames.value(device.id) ?? osName(device);
 }
 
 /** The devices list is folded away until the user opens it. */
@@ -88,10 +104,15 @@ function renameDevice(device: AccountDevice) {
   prompt({
     title: t("account.devices.renameTitle"),
     label: t("account.devices.name"),
-    value: device.name ?? "",
+    value: deviceNames.value(device.id) ?? "",
     maxLength: 40,
     confirm: t("common.save"),
-    submit: (name) => submitAction({ type: "account-rename-device", deviceId: device.id, name }),
+    // The dialog closes at once; only an empty name is turned down here.
+    submit: async (name) => {
+      if (!name.trim()) return t("error.name.empty");
+      void deviceNames.set(device.id, name.trim());
+      return null;
+    },
   });
 }
 
@@ -248,7 +269,7 @@ function startDelete() {
       </SettingRow>
       <div v-if="devicesOpen" class="border-b py-2">
         <p v-if="!view?.devices" class="text-muted-foreground py-1 text-sm">{{ t("account.devices.unknown") }}</p>
-        <ul v-else data-testid="account-devices">
+        <AnimatedList tag="ul" v-else data-testid="account-devices">
           <li v-for="device in view.devices" :key="device.id" class="flex min-h-12 items-center gap-3 py-1" :data-testid="`account-device-${device.id}`">
             <span class="flex min-w-0 flex-1 flex-col">
               <span class="truncate font-medium">{{ deviceLabel(device) }}<span v-if="device.current" class="text-muted-foreground font-normal"> · {{ t("account.devices.thisPc") }}</span></span>
@@ -257,7 +278,7 @@ function startDelete() {
             <Button variant="ghost" size="sm" :disabled="busy" :data-testid="`account-device-rename-${device.id}`" @click="renameDevice(device)">{{ t("account.devices.rename") }}</Button>
             <Button v-if="!device.current" variant="danger" size="sm" :disabled="busy" @click="signOutDevice(device)">{{ t("account.signOut") }}</Button>
           </li>
-        </ul>
+        </AnimatedList>
       </div>
 
       <form

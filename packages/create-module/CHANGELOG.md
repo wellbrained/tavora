@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.25
+
+- New projects start on `@tavora/sdk` 0.3.7: themes can set a button fill (`primary-fill`, `primary-fill-hover`, `primary-fill-foreground`), and `theme.tokens` always has the three.
+
 ## 0.1.24
 
 - New projects start on `@tavora/sdk` 0.3.6: the shared tooltip has a neutral look by default, and `look: "poe"` for the Path of Exile 2 one.

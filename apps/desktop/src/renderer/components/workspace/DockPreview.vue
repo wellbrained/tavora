@@ -71,7 +71,7 @@ const refusedRect = computed<Rect | null>(() => {
     <div
       v-for="side in SIDES"
       :key="side"
-      :class="cn('dock-fade bg-primary absolute rounded-full', lit(side) ? (refused ? 'bg-destructive opacity-100' : 'opacity-100') : 'opacity-20')"
+      :class="cn('dock-fade bg-primary-fill absolute rounded-full', lit(side) ? (refused ? 'bg-destructive opacity-100' : 'opacity-100') : 'opacity-20')"
       :style="strip(side)"
       :data-testid="`dock-edge-${side}`"
       :data-lit="lit(side) ? 'true' : undefined"
@@ -80,7 +80,7 @@ const refusedRect = computed<Rect | null>(() => {
     <!-- A new column or row: a dashed outline, exactly where the panel lands. -->
     <Transition name="dock-fade">
       <div v-if="landing" key="landing" class="border-primary bg-primary/10 absolute flex items-center justify-center rounded-[10px] border-2 border-dashed" :style="at(landing.rect)" data-testid="dock-landing">
-        <span class="bg-primary text-primary-foreground rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap">{{ landing.label }}</span>
+        <span class="bg-primary-fill text-primary-fill-foreground rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap">{{ landing.label }}</span>
       </div>
     </Transition>
 

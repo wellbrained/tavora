@@ -48,6 +48,8 @@ export interface ModuleLifecycleOptions {
   /** Tavora's own modules downloaded from the catalogue (official-updates.ts); absent: they never update. */
   official?: OfficialUpdates;
   panels: ModulePanels;
+  /** A catalog install is downloading: whole percent so far (0 to 100), called when it changes; null when it ended. */
+  installProgress?(moduleId: string, percent: number | null): void;
   /** A module was removed from the user's modules folder: whatever Tavora keeps only while it is installed (game overlays) goes. */
   removed?(owner: string, moduleId: string): void;
   /** What a module is granted changed (granted, taken back, or removed with the module); things that run on a grant look again. */
@@ -65,6 +67,9 @@ export interface ModuleLifecycleOptions {
 }
 
 export class ModuleLifecycle {
+  /** The newest catalog install running for each module, so only it reports its progress. */
+  private readonly installRuns = new Map<string, number>();
+  private installRunCount = 0;
   /** Keeps modules installed from the catalog up to date (catalog-updates.ts). */
   readonly updates: CatalogUpdater;
 
@@ -108,8 +113,24 @@ export class ModuleLifecycle {
   async installFromCatalog(moduleId: string): Promise<string> {
     if (!this.options.online()) throw new UserError("error.catalogOff");
     const entry = await this.options.catalog.module(moduleId);
-    const zip = await this.options.catalog.download(entry.zip);
-    const id = await this.finishInstall(await installZipData(zip, { ...(await this.installOptions()), expect: { id: entry.id, owner: entry.owner }, catalog: true }));
+    // Reports belong to one run: when the same module is installed twice at once, a run that is no longer the
+    // newest says nothing, so its end cannot clear the progress of the one still going.
+    const run = ++this.installRunCount;
+    this.installRuns.set(moduleId, run);
+    let reported = -1;
+    const report = (percent: number | null) => {
+      if (this.installRuns.get(moduleId) !== run || percent === reported) return;
+      reported = percent ?? -1;
+      if (percent === null) this.installRuns.delete(moduleId);
+      this.options.installProgress?.(moduleId, percent);
+    };
+    let id: string;
+    try {
+      const zip = await this.options.catalog.download(entry.zip, (done, total) => report(total > 0 ? Math.min(100, Math.floor((done / total) * 100)) : 0));
+      id = await this.finishInstall(await installZipData(zip, { ...(await this.installOptions()), expect: { id: entry.id, owner: entry.owner }, catalog: true }));
+    } finally {
+      report(null);
+    }
     // Counted only here, when the user pressed Install: updates download the zip too but aren't installs.
     void this.options.catalog.installed(id);
     return id;

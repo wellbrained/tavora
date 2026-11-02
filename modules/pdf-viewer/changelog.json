@@ -1,5 +1,47 @@
 [
   {
+    "version": "0.1.10",
+    "date": "2026-11-02",
+    "notes": [
+      "Main buttons and badges can follow a theme's deeper button colour."
+    ]
+  },
+  {
+    "version": "0.1.9",
+    "date": "2026-11-02",
+    "notes": [
+      "Small update to the shared look; nothing changes for you here."
+    ]
+  },
+  {
+    "version": "0.1.8",
+    "date": "2026-11-02",
+    "notes": [
+      "Lists, dialogs and settings pages move smoothly."
+    ]
+  },
+  {
+    "version": "0.1.7",
+    "date": "2026-11-02",
+    "notes": [
+      "Small fades and menus follow the shared timing."
+    ]
+  },
+  {
+    "version": "0.1.6",
+    "date": "2026-11-02",
+    "notes": [
+      "Buttons have a little depth and feel pressed when you click them."
+    ]
+  },
+  {
+    "version": "0.1.5",
+    "date": "2026-11-02",
+    "notes": [
+      "Checkboxes, toggles and options animate when you pick them, and folding sections open smoothly."
+    ]
+  },
+  {
     "version": "0.1.4",
     "date": "2026-11-01",
     "notes": [

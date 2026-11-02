@@ -37,20 +37,3 @@ export const PANEL: InjectionKey<PanelContext> = Symbol("todos-panel");
 /** How long a finished to-do stays before it vanishes; finishing another one restarts the wait for all. */
 export const LINGER_MS = 1500;
 export const UNDO_MS = 6000;
-
-/** Folds a leaving row to nothing so the rows below slide up instead of jumping. */
-export function collapse(element: Element, done: () => void): void {
-  const node = element as HTMLElement;
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return done();
-  let finished = false;
-  const finish = () => !finished && (finished = true) && done();
-  node.style.height = `${node.offsetHeight}px`;
-  node.style.overflow = "hidden";
-  requestAnimationFrame(() => {
-    node.style.transition = "height 220ms ease, opacity 180ms ease";
-    node.style.height = "0px";
-    node.style.opacity = "0";
-  });
-  node.addEventListener("transitionend", (event) => event.target === node && event.propertyName === "height" && finish());
-  setTimeout(finish, 400);
-}

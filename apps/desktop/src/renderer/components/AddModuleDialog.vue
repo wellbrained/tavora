@@ -12,6 +12,7 @@ import { computed, ref } from "vue";
 import { useEventListener } from "@vueuse/core";
 import { account, addModule, dialog, makesModules, openSettings, publishModule, saveModuleZip, state, type AddModuleRequest, type MenuItem } from "../host";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
+import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
@@ -272,7 +273,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
             </span>
           </button>
         </div>
-        <!-- Module settings, as Settings' About & updates: rarely needed, so it sits at the foot. -->
+        <!-- Module settings, as Settings' Updates & About: rarely needed, so it sits at the foot. -->
         <button
           type="button"
           class="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring flex h-9 flex-none items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 sm:mt-auto"
@@ -364,7 +365,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                     >
                       {{ t("addModule.panelCount", { count: module.panels.length }) }}
                       <template v-if="openCount(module.id)">
-                        · <span class="text-primary" :data-testid="`in-workspace-${module.id}`">{{ t("addModule.inWorkspace", { count: openCount(module.id) }) }}</span>
+                        · <span class="text-primary" :data-testid="`in-workspace-${module.id}`"><CountTo :value="openCount(module.id)" :format="(shown) => t('addModule.inWorkspace', { count: shown })" /></span>
                       </template>
                     </button>
                     <ButtonGroup class="shrink-0">
@@ -391,7 +392,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                     </ButtonGroup>
                   </template>
                   <template v-else>
-                    <span v-if="openCount(module.id)" class="text-primary text-xs" :data-testid="`in-workspace-${module.id}`">{{ t("addModule.inWorkspace", { count: openCount(module.id) }) }}</span>
+                    <span v-if="openCount(module.id)" class="text-primary text-xs" :data-testid="`in-workspace-${module.id}`"><CountTo :value="openCount(module.id)" :format="(shown) => t('addModule.inWorkspace', { count: shown })" /></span>
                     <Button
                       size="sm"
                       variant="outline"
@@ -437,7 +438,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
           </div>
         </div>
       </div>
-      <CatalogModuleDialog v-if="info" :module="pageModule(info)" :local="info" installed :installing="false" :error="infoError"
+      <CatalogModuleDialog v-if="info" :module="pageModule(info)" :local="info" installed :error="infoError"
         @close="info = null" @add="addFromInfo(info)"
       />
     </DialogContent>

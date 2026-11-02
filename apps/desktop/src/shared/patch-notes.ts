@@ -28,6 +28,180 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.66",
+    date: "2026-11-02",
+    title: "Tidier dropdowns",
+    notes: [
+      "Dropdown lists open under their field, starting at its left edge, and are at least as wide as it.",
+      "Pickers keep the same width whatever you pick.",
+      "Search lists that filter as you type have a clear button once there is text.",
+      "A switch placed over a map stays where it belongs again.",
+    ],
+    prs: [
+      { number: 625, title: "Kit: tidier dropdowns (aligned, as wide as the field, clear button) + Playground fix" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
+    version: "0.23.65",
+    date: "2026-11-02",
+    title: "Clearer names in Settings",
+    notes: [
+      "About & updates is now Updates & About (German: Updates & Info), with a sharper icon.",
+      "Overlays & Streaming and Name & Ranks start both words uppercase.",
+    ],
+    prs: [
+      { number: 624, title: "Settings: Updates & About (Updates & Info), sharper icon; both words uppercase in A & B names" },
+    ],
+    tags: ["accounts", "modules", "overlays", "privacy", "settings", "website"],
+  },
+  {
+    version: "0.23.64",
+    date: "2026-11-02",
+    title: "Settings menu in its group's colour",
+    notes: [
+      "The open page in the settings menu shows its icon in the colour of its group.",
+    ],
+    prs: [
+      { number: 623, title: "Settings menu: the open page's icon takes its group's colour" },
+    ],
+  },
+  {
+    version: "0.23.63",
+    date: "2026-11-02",
+    title: "Deeper main buttons in Ashen Keep",
+    notes: [
+      "Ashen Keep's main buttons are a deeper orange with light text.",
+      "Themes can now set their own colour for main buttons and badges, apart from the bright accent colour.",
+    ],
+    prs: [
+      { number: 622, title: "Themes can set a button fill: primary-fill, primary-fill-hover, primary-fill-foreground" },
+    ],
+    tags: ["accounts", "calculator", "clock-counter", "games", "notes", "overlays", "pdf-viewer", "publishing", "rail", "sdk", "settings", "system-monitor", "todos", "ui-kit", "website", "whiteboard", "workspace"],
+  },
+  {
+    version: "0.23.62",
+    date: "2026-11-02",
+    title: "Panels and the catalog load smoothly, without jumping.",
+    notes: [
+      "The catalog and a module's page show their layout in soft bars while they load, then fill in.",
+      "Icons and screenshots keep their place and fade in when they arrive.",
+      "Jumping to a setting from search glides there before it lights up.",
+    ],
+    prs: [
+      { number: 618, title: "Smooth loading: skeleton loaders, pictures that fade in, gliding jump to a setting" },
+    ],
+    tags: ["calculator", "catalog", "clock-counter", "games", "modules", "notes", "pdf-viewer", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
+    version: "0.23.61",
+    date: "2026-11-02",
+    title: "Lists, dialogs and settings pages move smoothly",
+    notes: [
+      "A row you add grows in, and one you remove folds away while the rows below slide up.",
+      "Dialogs rise a little as they fade in, and leave a bit quicker.",
+      "A settings page you pick from the side menu fades in.",
+      "A game you pick on the rail fades in.",
+      "With reduced motion on, all of these only fade.",
+    ],
+    prs: [
+      { number: 620, title: "Motion: lists, dialogs, settings pages and workspace switches" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "overlays", "pdf-viewer", "publishing", "rail", "settings", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
+  },
+  {
+    version: "0.23.60",
+    date: "2026-11-02",
+    title: "Changes show right away",
+    notes: [
+      "Changes show right away; if saving fails, they're put back. This covers email copies of messages, how users reach you about a module, a device's name, and ratings, reviews and replies in the catalog.",
+    ],
+    prs: [
+      { number: 619, title: "Act first, confirm later: changes show at once, put back if saving fails" },
+    ],
+    tags: ["accounts", "catalog", "publishing", "settings", "ui-kit"],
+  },
+  {
+    version: "0.23.59",
+    date: "2026-11-02",
+    title: "Switches and tabs slide",
+    notes: [
+      "The highlight on switches and tabs slides to what you pick.",
+      "Picking with the arrow keys jumps right away.",
+      "The list of a picker opens out of its button like the other menus.",
+      "Fades on buttons and controls are quicker and smoother.",
+      "Toasts finish moving a little sooner.",
+    ],
+    prs: [
+      { number: 616, title: "Motion: sliding highlight for segmented control and tabs, picker grows from its button, quicker default fades" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
+    version: "0.23.58",
+    date: "2026-11-02",
+    title: "Installs, dragging and numbers feel better",
+    notes: [
+      "Installing or updating a module now happens on the button itself. It fills as the download goes (or a stripe moves when there's no percent), then shows a tick.",
+      "Things you drag lift a little, the others slide out of the way, and the one you drop settles into its place. Moving with the keys stays instant.",
+      "Numbers that change in front of you, like \"3 left\" or a rating count, count to their new value.",
+    ],
+    prs: [
+      { number: 621, title: "Feel: install progress on the button, lifted and settling drags, numbers that count" },
+    ],
+    tags: ["catalog", "clock-counter", "modules", "notes", "overlays", "rail", "settings", "todos", "ui-kit", "workspace"],
+  },
+  {
+    version: "0.23.57",
+    date: "2026-11-02",
+    title: "Buttons with a little depth",
+    notes: [
+      "Buttons have a little depth and feel pressed when you click them.",
+    ],
+    prs: [
+      { number: 615, title: "Kit: buttons get a little depth and a real press" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
+    version: "0.23.56",
+    date: "2026-11-02",
+    title: "Checkboxes, toggles and options animate when you pick them",
+    notes: [
+      "Checkboxes, radio buttons, toggles, style tiles and the side navigation animate when you pick them, and folding sections open smoothly.",
+      "The clear button in search fields pops in and out.",
+    ],
+    prs: [
+      { number: 617, title: "Kit motion: checkboxes, radios, toggles, tiles, nav, search clear and folding sections" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "publishing", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
+    version: "0.23.55",
+    date: "2026-11-02",
+    title: "Menus without the flicker",
+    notes: [
+      "Right-click menus, dropdowns and hints over a panel no longer show half-drawn first.",
+      "They open sooner, too.",
+    ],
+    prs: [
+      { number: 611, title: "Menus over panels: no half-drawn frame, and they open sooner" },
+    ],
+    tags: ["rail", "ui-kit", "workspace"],
+  },
+  {
+    version: "0.23.54",
+    date: "2026-11-02",
+    title: "Clearer Mixed in Overlay settings",
+    notes: [
+      "With several frames selected, a setting that differs between them now shows a Mixed tag.",
+    ],
+    prs: [
+      { number: 609, title: "Overlay settings: Mixed as a Badge, group Opacity covered by tests" },
+    ],
+    tags: ["overlays"],
+  },
+  {
     version: "0.23.53",
     date: "2026-11-02",
     title: "Calmer item tooltips",

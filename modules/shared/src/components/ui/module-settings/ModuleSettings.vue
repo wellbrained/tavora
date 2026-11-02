@@ -8,6 +8,7 @@ import { onBeforeUnmount, ref, watch } from "vue";
 import { Button } from "../button";
 import { NavList, type NavGroup } from "../nav-list";
 import { uiText } from "../text";
+import { usePageMotion } from "../motion";
 import { toast } from "../toast";
 
 const props = defineProps<{
@@ -20,6 +21,11 @@ const props = defineProps<{
   savedAt?: number;
 }>();
 const page = defineModel<string>("page", { required: true });
+
+// The page picked takes the old one's place: it fades in and settles from 4px below (a pick by key stays instant).
+const holder = ref<HTMLElement>();
+const { play } = usePageMotion(holder);
+watch(page, play, { flush: "post" });
 
 const justSaved = ref(false);
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -43,7 +49,7 @@ function resetPage() {
   <div class="flex h-full min-h-0" data-slot="module-settings" data-testid="module-settings">
     <NavList v-model="page" :groups="groups" :label="label" class="bg-background w-[200px] flex-none overflow-y-auto border-r p-3" />
     <div class="flex min-w-0 flex-1 flex-col">
-      <div class="flex min-h-0 flex-1 flex-col"><slot /></div>
+      <div ref="holder" class="flex min-h-0 flex-1 flex-col"><slot /></div>
       <footer class="text-muted-foreground flex h-12 flex-none items-center gap-2 border-t pr-6 pl-4 text-xs">
         <Button v-if="reset" variant="ghost" size="sm" class="text-muted-foreground" data-testid="settings-reset" @click="resetPage">
           <RotateCcw :stroke-width="1.75" />

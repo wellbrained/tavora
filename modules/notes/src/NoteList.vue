@@ -4,6 +4,7 @@ import { NotebookPen, PanelLeftClose, PanelLeftOpen, Pin, Plus, Search, X } from
 import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import { computed, nextTick, ref } from "vue";
 import { t } from "./i18n";
 import NoteRow from "./NoteRow.vue";
@@ -34,9 +35,14 @@ const results = computed(() => {
 const renamingId = ref<string | null>(null);
 const dragId = ref<string | null>(null);
 const drop = ref<{ id: string; after: boolean } | null>(null);
+// The notes slide aside for the dragged one and settle into place when it is dropped; Alt+arrows move them at once.
+const listEl = ref<HTMLElement | null>(null);
+const reorder = useReorderMotion(listEl);
 
 function onDragStart(event: DragEvent, entry: NoteEntry) {
   dragId.value = entry.id;
+  reorder.begin(entry.id);
+  if (event.currentTarget instanceof HTMLElement) liftedDragImage(event, event.currentTarget);
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", entry.title);
@@ -45,22 +51,33 @@ function onDragStart(event: DragEvent, entry: NoteEntry) {
 
 function onDragOver(event: DragEvent, entry: NoteEntry) {
   const from = dragId.value ? props.entries.get(dragId.value) : undefined;
+  // Over itself or the other group (a note stays in its own): nothing opens a gap.
+  if (from && (from.id === entry.id || from.pinned !== entry.pinned)) reorder.preview(null);
   if (!from || from.id === entry.id || from.pinned !== entry.pinned) return;
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
   drop.value = { id: entry.id, after: event.clientY > rect.top + rect.height / 2 };
+  reorder.preview({ id: entry.id, after: drop.value.after });
 }
 
 function onDrop(event: DragEvent) {
   event.preventDefault();
-  if (dragId.value && drop.value) emit("reorder", dragId.value, drop.value.id, drop.value.after);
-  endDrag();
+  const id = dragId.value;
+  const place = drop.value;
+  clearDrag();
+  if (id && place) void reorder.drop(() => emit("reorder", id, place.id, place.after));
+  else reorder.cancel();
+}
+
+function clearDrag() {
+  dragId.value = null;
+  drop.value = null;
 }
 
 function endDrag() {
-  dragId.value = null;
-  drop.value = null;
+  clearDrag();
+  reorder.cancel();
 }
 
 async function onMove(id: string, delta: -1 | 1) {
@@ -71,6 +88,8 @@ async function onMove(id: string, delta: -1 | 1) {
 }
 
 function dropShadow(entry: NoteEntry): string | false {
+  // The gap that opens is the drop place; the line is for reduced motion.
+  if (!reducedMotion()) return false;
   return drop.value?.id === entry.id && (drop.value.after ? "shadow-[0_2px_0_0_var(--primary)]" : "shadow-[0_-2px_0_0_var(--primary)]");
 }
 
@@ -162,7 +181,7 @@ function onSearchKey(event: KeyboardEvent) {
       </Button>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-y-auto p-1">
+    <div ref="listEl" class="min-h-0 flex-1 overflow-y-auto p-1">
       <template v-if="results">
         <p v-if="!results.length" class="text-muted-foreground px-3 py-6 text-center text-sm" data-testid="no-results">{{ t("list.none", { query: query.trim() }) }}</p>
         <ul v-else role="list" data-testid="results">
@@ -182,6 +201,7 @@ function onSearchKey(event: KeyboardEvent) {
               v-for="entry in grouped.pinned"
               :key="entry.id"
               :draggable="renamingId !== entry.id"
+              :data-reorder-id="entry.id"
               :class="cn(dragId === entry.id && 'opacity-50', dropShadow(entry))"
               @dragstart="onDragStart($event, entry)"
               @dragover="onDragOver($event, entry)"
@@ -198,6 +218,7 @@ function onSearchKey(event: KeyboardEvent) {
             v-for="entry in grouped.others"
             :key="entry.id"
             :draggable="renamingId !== entry.id"
+            :data-reorder-id="entry.id"
             :class="cn(dragId === entry.id && 'opacity-50', dropShadow(entry))"
             @dragstart="onDragStart($event, entry)"
             @dragover="onDragOver($event, entry)"

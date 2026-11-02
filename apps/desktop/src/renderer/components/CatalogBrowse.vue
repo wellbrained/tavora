@@ -5,16 +5,21 @@
 // every text here is shown as plain text, and "by <name>" is only the developer name the service gave.
 // Report is on the module's page: it asks once more, then sends only the module id, its key and its zip's hash (C12).
 // A card's icon or name opens the module's page with its readme, screenshots, homepage and reviews (CatalogModuleDialog.vue).
-// Each card shows its rating (CatalogRating.vue); the list sorts by name, rating or newest.
+// Each card shows its rating (CatalogRating.vue); the list sorts by name, rating or newest. While the list loads, the
+// same cards are drawn with made-up modules as muted bars (Skeleton), so the list does not jump when it arrives.
 import { computed, onMounted, ref, watch } from "vue";
 import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api";
-import { act, addModule, api, dialog, openSettings, state, type AddModuleRequest } from "../host";
+import { act, addModule, api, dialog, installProgress, openSettings, state, type AddModuleRequest } from "../host";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
+import { useActionStatus } from "../action-status";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
+import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@tavora/official-ui/components/ui/select";
 import { t } from "../i18n";
 import { formatSize } from "../catalog-size";
+import { PLACEHOLDER_MODULES } from "../catalog-placeholder";
 import { cn } from "@/lib/utils";
 import { CircleCheck, Gamepad2, ShieldCheck, WifiOff } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
@@ -28,7 +33,8 @@ const props = defineProps<{ query: string; open?: string | undefined }>();
 const emit = defineEmits<{ count: [number | null] }>();
 
 const result = ref<CatalogListResult | null>(null);
-const installing = ref<string | null>(null);
+/** The installs working or just done, by module id; the host tells how far a download is (`installProgress`). */
+const { statusOf, run, working } = useActionStatus();
 const errors = ref<Record<string, string>>({});
 /** The module whose info is open, and whether it opened at its reviews. */
 const info = ref<CatalogModuleView | null>(null);
@@ -66,6 +72,9 @@ const shown = computed(() => {
     .sort(sorters[sort.value]);
 });
 
+/** The cards: the modules, or while the list loads made-up ones that the Skeleton draws as bars. */
+const cards = computed(() => (result.value ? shown.value : PLACEHOLDER_MODULES));
+
 watch(
   () => (result.value?.status === "ok" ? shown.value.length : null),
   (count) => emit("count", count),
@@ -92,12 +101,13 @@ const MIN_INSTALLS_SHOWN = 10;
 const isPreview = (module: CatalogModuleView) => module.version.includes("-");
 
 async function install(module: CatalogModuleView) {
-  installing.value = module.id;
   const { [module.id]: _, ...rest } = errors.value;
   errors.value = rest;
-  const outcome = await act({ type: "install-catalog-module", moduleId: module.id }, { quiet: true });
-  installing.value = null;
-  if (!outcome.ok) errors.value = { ...errors.value, [module.id]: outcome.error };
+  await run(module.id, async () => {
+    const outcome = await act({ type: "install-catalog-module", moduleId: module.id }, { quiet: true });
+    if (!outcome.ok) errors.value = { ...errors.value, [module.id]: outcome.error };
+    return outcome.ok;
+  });
 }
 
 function add(moduleId: string) {
@@ -112,8 +122,8 @@ function settings() {
 
 <template>
   <div class="min-h-0 flex-1 thin-scroll overflow-y-auto px-6 pb-8 [scrollbar-gutter:stable] lg:px-10" data-testid="catalog-results">
-    <p v-if="!result" class="text-muted-foreground py-16 text-center" role="status" data-testid="catalog-loading">{{ t("catalog.loading") }}</p>
-    <EmptyState v-else-if="result.status !== 'ok'" class="mt-8" role="status" :title="t(`catalog.problem.${result.status}.title`)" :description="t(`catalog.problem.${result.status}.text`)" :data-testid="`catalog-${result.status}`">
+    <p v-if="!result" class="sr-only" role="status" data-testid="catalog-loading">{{ t("catalog.loading") }}</p>
+    <EmptyState v-if="result && result.status !== 'ok'" class="mt-8" role="status" :title="t(`catalog.problem.${result.status}.title`)" :description="t(`catalog.problem.${result.status}.text`)" :data-testid="`catalog-${result.status}`">
       <template #icon><WifiOff /></template>
       <template #action>
         <Button v-if="result.status === 'off'" variant="secondary" data-testid="catalog-settings" @click="settings">{{ t("catalog.openSettings") }}</Button>
@@ -134,8 +144,9 @@ function settings() {
           </SelectContent>
         </Select>
       </div>
+      <Skeleton :loading="!result">
       <ul class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
-        <li v-for="module in shown" :key="module.id" class="bg-background/40 hover:border-primary/40 flex flex-col gap-3 rounded-xl border p-4 transition-colors" :data-testid="`catalog-${module.id}`">
+        <li v-for="module in cards" :key="module.id" class="bg-background/40 hover:border-primary/40 flex flex-col gap-3 rounded-xl border p-4 transition-colors" :data-testid="`catalog-${module.id}`">
           <div class="flex min-w-0 gap-3">
             <button type="button" class="focus-visible:ring-ring flex-none rounded-xl outline-none focus-visible:ring-2" tabindex="-1" aria-hidden="true" @click="open(module)">
               <CatalogIcon :module-id="module.id" :has="module.icon" />
@@ -170,22 +181,24 @@ function settings() {
               </span>
               <!-- A disabled button gets no hover, so the reason sits on a wrapper. -->
               <span class="shrink-0" :title="whereFits(module) ?? undefined">
-                <Button v-if="installed.has(module.id)" size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!module.fits"
+                <Button v-if="installed.has(module.id) && statusOf(module.id) === 'idle'" size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!module.fits"
                   :data-testid="`catalog-add-${module.id}`" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
                 >{{ t("common.add") }}</Button>
-                <Button v-else size="sm" :disabled="installing !== null || !module.fits"
+                <ProgressButton v-else size="sm" :disabled="(working && statusOf(module.id) === 'idle') || !module.fits"
+                  :status="statusOf(module.id)" :progress="installProgress[module.id] ?? null" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')" :failed-label="t('catalog.installFailed')"
                   :data-testid="`catalog-install-${module.id}`" :aria-label="t('catalog.installLabel', { name: module.name })" @click="install(module)"
-                >{{ installing === module.id ? t("catalog.installing") : t("catalog.install") }}</Button>
+                >{{ t("catalog.install") }}</ProgressButton>
               </span>
           </div>
           </div>
         </li>
       </ul>
-      <p v-if="!shown.length" class="text-muted-foreground py-16 text-center" data-testid="catalog-empty">
+      <p v-if="result && !shown.length" class="text-muted-foreground py-16 text-center" data-testid="catalog-empty">
         {{ query.trim() ? t("addModule.none", { query: query.trim() }) : t("catalog.empty") }}
       </p>
+      </Skeleton>
     </template>
-    <CatalogModuleDialog v-if="info" :module="info" :at-reviews="infoAtReviews" :installed="installed.has(info.id)" :installing="installing === info.id" :size="formatSize(info.size)"
+    <CatalogModuleDialog v-if="info" :module="info" :at-reviews="infoAtReviews" :installed="installed.has(info.id)" :status="statusOf(info.id)" :progress="installProgress[info.id] ?? null" :size="formatSize(info.size)"
       :error="errors[info.id]"
       @close="info = null" @install="install(info)" @add="add(info.id)"
     />

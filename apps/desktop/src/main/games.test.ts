@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { THEME_TOKENS } from "@tavora/sdk/protocol";
+import { OPTIONAL_THEME_TOKENS, THEME_TOKENS } from "@tavora/sdk/protocol";
 import { describe, expect, it } from "vitest";
 import { THEME } from "./games";
 
@@ -18,7 +18,13 @@ describe("module theme", () => {
     expect(Object.keys(THEME.tokens).sort()).toEqual([...THEME_TOKENS].sort());
     for (const file of ["apps/desktop/src/renderer/styles.css", "modules/shared/src/theme.css"]) {
       const css = await rootTokens(path.join(repo, file));
-      for (const name of THEME_TOKENS) expect([file, name, css[name]]).toEqual([file, name, THEME.tokens[name]]);
+      for (const name of THEME_TOKENS) {
+        // The button fill is not declared in the stylesheets: they fall back to primary in @theme, so an older Tavora that never sends it still gets a matching button.
+        if (name.startsWith("primary-fill")) {
+          expect([file, name, css[name]]).toEqual([file, name, undefined]);
+          expect(THEME.tokens[name]).toBe(THEME.tokens[OPTIONAL_THEME_TOKENS[name as keyof typeof OPTIONAL_THEME_TOKENS]]);
+        } else expect([file, name, css[name]]).toEqual([file, name, THEME.tokens[name]]);
+      }
       expect(css.radius).toBe(`${THEME.radius}px`);
     }
   });

@@ -7,8 +7,10 @@ import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
+import { useOptimistic } from "@tavora/official-ui/optimistic";
 import { CONTACT_KINDS, cleanContactValue, contactNeedsValue, type Contact, type ContactKind } from "../../../shared/conversations";
 import type { MessageKey } from "../../../shared/i18n";
+import { act, notSaved } from "../../host";
 import { t } from "../../i18n";
 
 const props = defineProps<{
@@ -25,7 +27,6 @@ const ICONS = { tavora: MessageSquare, email: Mail, github: GitBranch, "discord-
 const kind = ref<ContactKind>(props.contact.kind);
 const value = ref(props.contact.value ?? "");
 const error = ref<string | null>(null);
-const busy = ref(false);
 watch(
   () => props.contact,
   (contact) => {
@@ -35,20 +36,34 @@ watch(
 );
 
 const needsValue = computed(() => contactNeedsValue(kind.value));
-const unsaved = computed(() => kind.value !== props.contact.kind || (needsValue.value && value.value.trim() !== (props.contact.value ?? "")));
 
-async function store(next: Contact) {
-  busy.value = true;
-  error.value = await props.save(next);
-  busy.value = false;
-}
+// A change shows as saved at once and is saved in the background; if that fails, the saved choice comes back.
+const { value: saved, set: store } = useOptimistic(
+  () => props.contact,
+  async (next: Contact) => {
+    const problem = await props.save(next);
+    if (problem) throw new Error(problem);
+  },
+  (failure, failedContact) => {
+    notSaved(failure);
+    // The request may have landed although the answer was lost.
+    void act({ type: "inbox-refresh" }, { quiet: true });
+    // A choice without an address goes back in the box, unless another was picked meanwhile; an address stays typed, so
+    // it can be sent again.
+    if (!contactNeedsValue(failedContact.kind) && kind.value === failedContact.kind) {
+      kind.value = props.contact.kind;
+      value.value = props.contact.value ?? "";
+    }
+  },
+);
+const unsaved = computed(() => kind.value !== saved.value.kind || (needsValue.value && value.value.trim() !== (saved.value.value ?? "")));
 
 // A choice without an address is saved right away; one with an address waits for Save.
 function pick(next: ContactKind) {
   kind.value = next;
   error.value = null;
-  value.value = next === props.contact.kind ? (props.contact.value ?? "") : "";
-  if (!contactNeedsValue(next) && next !== props.contact.kind) void store({ kind: next, value: null });
+  value.value = next === saved.value.kind ? (saved.value.value ?? "") : "";
+  if (!contactNeedsValue(next) && next !== saved.value.kind) void store({ kind: next, value: null });
 }
 
 function submit() {
@@ -57,6 +72,7 @@ function submit() {
     error.value = t(`contactChoice.bad.${kind.value}` as MessageKey);
     return;
   }
+  error.value = null;
   void store({ kind: kind.value, value: cleaned });
 }
 
@@ -64,12 +80,12 @@ const label = (option: ContactKind) => t(`contactChoice.kind.${option}` as Messa
 </script>
 
 <template>
-  <div class="flex flex-col gap-2" :data-testid="testid" :data-kind="contact.kind">
+  <div class="flex flex-col gap-2" :data-testid="testid" :data-kind="saved.kind">
     <div class="flex flex-wrap items-start gap-x-6 gap-y-2">
       <div class="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
         <slot name="label" />
       </div>
-      <Select :model-value="kind" :disabled="busy" @update:model-value="(next) => pick(next as ContactKind)">
+      <Select :model-value="kind" @update:model-value="(next) => pick(next as ContactKind)">
         <SelectTrigger class="w-52 flex-none" :aria-label="t('contactChoice.label')" :data-testid="`${testid}-kind`">
           <SelectValue />
         </SelectTrigger>
@@ -91,10 +107,9 @@ const label = (option: ContactKind) => t(`contactChoice.kind.${option}` as Messa
         :inputmode="kind === 'email' ? 'email' : kind === 'discord-user' ? 'text' : 'url'"
         :placeholder="t(`contactChoice.placeholder.${kind}` as MessageKey)"
         :aria-label="label(kind)"
-        :disabled="busy"
         :data-testid="`${testid}-value`"
       />
-      <Button type="submit" variant="secondary" :disabled="busy || !value.trim() || !unsaved" :data-testid="`${testid}-save`">{{ t("contactChoice.save") }}</Button>
+      <Button type="submit" variant="secondary" :disabled="!value.trim() || !unsaved" :data-testid="`${testid}-save`">{{ t("contactChoice.save") }}</Button>
     </form>
     <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
     <p class="bg-background/60 text-muted-foreground flex gap-2 rounded-lg border px-3 py-2 text-sm" :data-testid="`${testid}-says`">

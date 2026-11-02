@@ -7,7 +7,9 @@
 // goes through the Overlay page, so it is one undo step for all.
 import { computed } from "vue";
 import { ChevronDown } from "@lucide/vue";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
@@ -65,7 +67,7 @@ const opacity = computed({
     <div class="flex items-baseline justify-between gap-3 px-3 pt-3">
       <h2 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">{{ t("overlays.layout.settings") }}</h2>
       <p v-if="item" class="min-w-0 truncate text-sm font-medium" data-testid="layout-selected">{{ item.name }}</p>
-      <p v-else-if="many" class="min-w-0 truncate text-sm font-medium" data-testid="layout-selected-count">{{ t("overlays.layout.selectedCount", { count: items.length }) }}</p>
+      <p v-else-if="many" class="min-w-0 truncate text-sm font-medium" data-testid="layout-selected-count"><CountTo :value="items.length" :format="(shown) => t('overlays.layout.selectedCount', { count: shown })" /></p>
     </div>
     <p v-if="!items.length" class="text-muted-foreground px-3 py-3 text-sm" data-testid="layout-pick">{{ t("overlays.layout.pick") }}</p>
     <div v-else class="flex flex-col gap-3 px-3 py-3" :data-testid="item ? `layout-row-${item.id}` : 'layout-row-many'">
@@ -74,7 +76,7 @@ const opacity = computed({
           <span class="text-muted-foreground w-28 flex-none text-sm">{{ t("overlays.mode.label") }}</span>
           <!-- Mixed: no choice is shown as picked until one is. -->
           <SegmentedControl :model-value="mode ?? (MIXED as 'always')" :options="modes" :label="t('overlays.mode.label')" @update:model-value="change({ mode: $event })" />
-          <span v-if="mode === null" class="text-muted-foreground text-xs" data-testid="layout-mode-mixed">{{ t("overlays.layout.mixed") }}</span>
+          <Badge v-if="mode === null" variant="secondary" data-testid="layout-mode-mixed">{{ t("overlays.layout.mixed") }}</Badge>
         </div>
         <p v-if="mode !== null" class="text-muted-foreground text-xs" data-testid="layout-mode-hint">{{ t(mode === "toggle" ? "overlays.mode.toggleHint" : "overlays.mode.alwaysHint") }}</p>
       </div>
@@ -104,7 +106,7 @@ const opacity = computed({
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span class="text-muted-foreground w-28 flex-none text-sm">{{ t("overlays.capture.label") }}</span>
           <Switch :model-value="capture === true" :aria-label="t('overlays.capture.label')" data-testid="layout-capture" @update:model-value="change({ hideFromCapture: $event })" />
-          <span v-if="capture === null" class="text-muted-foreground text-xs" data-testid="layout-capture-mixed">{{ t("overlays.layout.mixed") }}</span>
+          <Badge v-if="capture === null" variant="secondary" data-testid="layout-capture-mixed">{{ t("overlays.layout.mixed") }}</Badge>
         </div>
         <p class="text-muted-foreground text-xs">{{ t("overlays.capture.hint") }}</p>
       </div>

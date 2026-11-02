@@ -1,5 +1,54 @@
 [
   {
+    "version": "0.2.11",
+    "date": "2026-11-02",
+    "notes": [
+      "Main buttons and badges can follow a theme's deeper button colour."
+    ]
+  },
+  {
+    "version": "0.2.10",
+    "date": "2026-11-02",
+    "notes": [
+      "Small update to the shared look; nothing changes for you here."
+    ]
+  },
+  {
+    "version": "0.2.9",
+    "date": "2026-11-02",
+    "notes": [
+      "Lists, dialogs and settings pages move smoothly, and a to-do folds away the same way."
+    ]
+  },
+  {
+    "version": "0.2.8",
+    "date": "2026-11-02",
+    "notes": [
+      "Switches and tabs slide to what you pick."
+    ]
+  },
+  {
+    "version": "0.2.7",
+    "date": "2026-11-02",
+    "notes": [
+      "The number of to-dos left counts to its new value, and a to-do you drag settles into its place."
+    ]
+  },
+  {
+    "version": "0.2.6",
+    "date": "2026-11-02",
+    "notes": [
+      "Buttons have a little depth and feel pressed when you click them."
+    ]
+  },
+  {
+    "version": "0.2.5",
+    "date": "2026-11-02",
+    "notes": [
+      "Checkboxes, toggles and options animate when you pick them, and folding sections open smoothly."
+    ]
+  },
+  {
     "version": "0.2.4",
     "date": "2026-11-01",
     "notes": [

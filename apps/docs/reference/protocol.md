@@ -79,7 +79,7 @@ Methods without params must be sent with `params` left out.
 | `blobs.list` | none | `BlobInfo[]` (`{ id, bytes, type, createdAt }`), oldest first |
 | `blobs.usage` | none | `{ bytes, count, maxBytes, maxFileBytes }` for this module and workspace |
 | `blobs.delete` | `{ id }` | `null` (also when the file did not exist); `INVALID_PARAMS` for an id the host did not make |
-| `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius, toasts }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`, with `toast` and `toast-foreground` always filled in), `radius` is in CSS pixels, `toasts` is where the user wants toasts (`bottom-center`, `bottom-right` or `top-center`; older Tavora leaves it out) |
+| `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius, toasts }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`, with `toast`, `toast-foreground` and the three `primary-fill` tokens always filled in), `radius` is in CSS pixels, `toasts` is where the user wants toasts (`bottom-center`, `bottom-right` or `top-center`; older Tavora leaves it out) |
 | `network.fetch` | `{ url, method?, headers?, body?, responseType? }` | `{ status, url, headers, body }`; needs the `network` capability, see [Network](#network) |
 | `network.readPage` | `{ url }` | `{ status, url, title, html }`; isolated public page capture, same `network` grant, Tavora 0.19.3+ |
 | `aiUsage.accounts` | none | `AiUsageAccountInfo[]` in the user's order; needs the `aiUsage` capability, see [Connectors](#connectors) |
@@ -258,7 +258,7 @@ A connector is a part of Tavora that reaches outside the module's panel, such as
 A module that lists an [`overlay`](./manifest.md#overlay) page and the `stream-overlay` connector can show it in OBS or other streaming software on the user's PC, as a Browser Source. It works with keys: one overlay per key, such as an item id, each with its own link.
 
 - `overlay.publish` sets what the overlay for a key shows: any JSON, at most 16 KB. Tavora keeps it, so the overlay goes on showing it while none of the module's panels runs, and after a restart. Publish when something changes, not on every frame: a running clock publishes when it starts or stops, and its overlay counts the time itself.
-- `overlay.copyLink` puts the overlay's link on the clipboard after a click. It and `overlay.resetLink` are the calls that need the connector. A module that lists the connector in [`permissions.onRequest`](./manifest.md) is not asked for it when it is added; Tavora shows its consent dialog on the first `copyLink` instead, and the call gives `"denied"` if the user says no. The user turns Stream overlays on in Settings > Overlays & streaming; while they are off, the call gives `"off"` and Tavora opens that setting.
+- `overlay.copyLink` puts the overlay's link on the clipboard after a click. It and `overlay.resetLink` are the calls that need the connector. A module that lists the connector in [`permissions.onRequest`](./manifest.md) is not asked for it when it is added; Tavora shows its consent dialog on the first `copyLink` instead, and the call gives `"denied"` if the user says no. The user turns Stream overlays on in Settings > Overlays & Streaming; while they are off, the call gives `"off"` and Tavora opens that setting.
 - `overlay.remove` empties an overlay (an item was deleted) and `overlay.resetLink` gives it a new link. The user can also reset every link in Settings.
 
 The overlay page runs in the streaming software, not in Tavora, so it has no bridge. It reads what the module published from `_state` next to it as server-sent events, each message `{ "state": <JSON or null> }`, the first one right away; `watchOverlay(fn)` in the SDK does it for you and reconnects when Tavora restarts. `null` means there is nothing to show.
@@ -303,7 +303,7 @@ When the user shows a panel in game (the [`inGame`](./manifest.md#panel-types) i
 
 A module lists what it can do on a key press in the manifest's [`actions`](./manifest.md#actions), such as Start/Pause. `hotkeys.set` opens Tavora's own dialog, where the user presses the keys for one action on one target (an item id, say); `label` names the target there. The binding belongs to the current workspace. A module never learns which key it is.
 
-When the user presses it, one panel of the module in the workspace shown now, the one used last, gets the `hotkeys.pressed` event with `{ action, target }`, so one press is one action however many panels are open. Hotkeys work system-wide, also while the game has the focus, but only while their workspace is shown in Tavora and the module has a panel in it. The game doesn't get a key that is a hotkey. Settings > Overlays & streaming lists every hotkey, and the user can remove them there.
+When the user presses it, one panel of the module in the workspace shown now, the one used last, gets the `hotkeys.pressed` event with `{ action, target }`, so one press is one action however many panels are open. Hotkeys work system-wide, also while the game has the focus, but only while their workspace is shown in Tavora and the module has a panel in it. The game doesn't get a key that is a hotkey. Settings > Overlays & Streaming lists every hotkey, and the user can remove them there.
 
 ### Documents
 
@@ -495,6 +495,7 @@ SDK:
 | `--tavora-background`, `--tavora-foreground` | Page background and text |
 | `--tavora-card` | Raised surfaces and fields |
 | `--tavora-primary`, `--tavora-primary-hover`, `--tavora-primary-foreground` | The one main action, its hover, and text on it |
+| `--tavora-primary-fill`, `--tavora-primary-fill-hover`, `--tavora-primary-fill-foreground` | Solid surfaces with text on them, such as the main button, its hover and the text on it. The same as `primary` when the theme sets no fill; a Tavora that doesn't know them leaves them out, so fall back to `--tavora-primary` |
 | `--tavora-secondary`, `--tavora-accent` | Default buttons; hover and selection surfaces |
 | `--tavora-muted-foreground` | Secondary text |
 | `--tavora-border`, `--tavora-input`, `--tavora-ring` | Dividers, field outlines, focus ring |

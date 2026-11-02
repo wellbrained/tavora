@@ -59,21 +59,26 @@ function pick(value: unknown) {
         :aria-label="label"
         aria-haspopup="listbox"
       >
-        <span class="truncate">{{ current?.label }}</span>
+        <!-- Every label sits in the same grid cell, hidden but for the current one, so the button is as wide as the longest
+             choice (up to max-w-56) and keeps that size whichever is picked. -->
+        <span class="grid min-w-0 text-left">
+          <span v-for="option in options" :key="option.value" class="invisible col-start-1 row-start-1 truncate" aria-hidden="true">{{ option.label }}</span>
+          <span class="col-start-1 row-start-1 truncate">{{ current?.label }}</span>
+        </span>
         <ChevronsUpDown class="size-4 flex-none" :stroke-width="1.5" />
       </Button>
     </PopoverTrigger>
     <PopoverPortal>
       <PopoverContent
         side="bottom"
-        align="end"
+        align="start"
         :side-offset="6"
         :collision-padding="8"
-        class="bg-popover text-popover-foreground z-50 w-64 overflow-hidden rounded-lg border shadow-lg"
+        class="bg-popover text-popover-foreground tavora-popup z-50 w-max max-w-80 min-w-(--reka-popover-trigger-width) overflow-hidden rounded-lg border shadow-lg"
         :data-testid="part('menu')"
       >
         <ListboxRoot :model-value="model" highlight-on-hover @update:model-value="pick">
-          <div v-if="search" class="relative border-b">
+          <div v-if="search" class="relative w-64 max-w-full border-b">
             <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" />
             <ListboxFilter
               v-model="query"

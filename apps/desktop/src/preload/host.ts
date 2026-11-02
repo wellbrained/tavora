@@ -25,6 +25,10 @@ const api: TavoraHostApi = {
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setWorkspaceBounds: (bounds) => ipcRenderer.send("host:workspace-bounds", bounds),
   setOverlay: (open) => ipcRenderer.send("host:overlay", open),
+  prepareOverlay: () => ipcRenderer.send("host:overlay-prepare"),
+  onOverlayReady: (listener) => {
+    ipcRenderer.on("host:overlay-ready", () => listener());
+  },
   layout: {
     getState: () => ipcRenderer.invoke("layout:get-state"),
     onState: (listener) => {
@@ -60,6 +64,9 @@ const api: TavoraHostApi = {
   profileRanks: () => ipcRenderer.invoke("host:profile-ranks"),
   onAccount: (listener) => {
     ipcRenderer.on("host:account", (_event, view: AccountView) => listener(view));
+  },
+  onInstallProgress: (listener) => {
+    ipcRenderer.on("host:install-progress", (_event, progress: { moduleId: string; percent: number | null }) => listener(progress));
   },
   getCloudCopy: () => ipcRenderer.invoke("host:get-cloud-copy"),
   onCloudCopy: (listener) => {

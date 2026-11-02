@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Gamepad2, Plus, Settings, UserRoundPlus } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
+import { liftedDragImage, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import { cn } from "@/lib/utils";
 import { act, dialog, openSettings, prompt, railToggles, state, submitAction } from "../host";
 import { t } from "../i18n";
@@ -72,6 +74,15 @@ const favorites = computed(() => library.value.favorites.map((id) => library.val
 // A workspace lives in one place: favorited workspaces leave the main list (and its folders) until unfavorited.
 const favoriteIds = computed(() => new Set<string>(library.value.favorites));
 const rootEntries = computed(() => library.value.root.filter((entry) => entry.kind === "folder" || !favoriteIds.value.has(entry.id)));
+// A game moved into a folder or to the favorites leaves the main list while the other list shows it at once: it did not
+// leave the rail, so the main list keeps still for it (and for a game coming back from there).
+const elsewhere = computed(() => new Set<string>([...library.value.favorites, ...Object.values(library.value.folders).flatMap((item) => item.workspaces)]));
+let elsewhereBefore = elsewhere.value;
+watch(elsewhere, (now) => (elsewhereBefore = now), { flush: "post" });
+const movedBetweenLists = (element: Element, change: "enter" | "leave") => {
+  const id = (element as HTMLElement).dataset.railEntry;
+  return id !== undefined && (change === "leave" ? elsewhere.value : elsewhereBefore).has(id);
+};
 /** How many workspace names the tooltip of a folder lists. */
 const FOLDER_TIP_NAMES = 8;
 const folderWorkspaces = (id: string) => folder(id).workspaces.filter((workspaceId) => !favoriteIds.value.has(workspaceId));
@@ -178,7 +189,8 @@ function scrollMore() {
 
 function onNavKey(event: KeyboardEvent) {
   if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-  const items = [...(nav.value?.querySelectorAll<HTMLElement>("[data-rail-item]") ?? [])];
+  // A row on its way out (inert) is already gone for the keyboard.
+  const items = [...(nav.value?.querySelectorAll<HTMLElement>("[data-rail-item]") ?? [])].filter((item) => !item.closest("[inert]"));
   const index = items.indexOf(document.activeElement as HTMLElement);
   if (index < 0) return;
   event.preventDefault();
@@ -201,6 +213,8 @@ interface Target {
 }
 
 const dragged = ref<Dragged | null>(null);
+// The rail's items lift as they are picked up and settle into their new place when dropped; the keys and menus move them at once.
+const motion = useReorderMotion(nav);
 const hint = ref<{ key: string; zone: Zone } | null>(null);
 
 const keyOf = (target: Target) =>
@@ -216,6 +230,8 @@ function onDragStart(event: DragEvent, item: Dragged) {
   if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
   // Dim the item where it came from, a frame later so the drag image stays solid.
   const row = event.currentTarget as HTMLElement;
+  liftedDragImage(event, row);
+  motion.begin(item.id);
   requestAnimationFrame(() => row.classList.add("drag-source"));
 }
 
@@ -274,10 +290,14 @@ async function onDrop(event: DragEvent, target: Target) {
   const item = dragged.value;
   const zone = hint.value?.key === keyOf(target) ? hint.value.zone : null;
   onDragEnd();
-  if (!item || !zone) return;
+  if (!item || !zone) return motion.cancel();
   event.preventDefault();
   event.stopPropagation();
+  await motion.drop(() => moveDropped(item, target, zone));
+}
 
+/** What a drop changes, once it is known where it landed. */
+async function moveDropped(item: Dragged, target: Target, zone: Zone) {
   if (item.kind === "folder") {
     await act({ type: "move-folder", folderId: item.id, index: indexIn(rootKeys(), target.id, zone) });
     return;
@@ -330,6 +350,7 @@ function dnd(target: Target, item: Dragged = { kind: target.kind, id: target.id 
     dragend: (event: DragEvent) => {
       (event.currentTarget as HTMLElement).classList.remove("drag-source");
       onDragEnd();
+      motion.cancel();
     },
     dragover: (event: DragEvent) => onDragOver(event, target),
     dragleave: (event: DragEvent) => onDragLeave(event, target),
@@ -422,6 +443,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       <RailWorkspace
         v-for="item in favorites"
         :key="item.id"
+        :data-reorder-id="item.id"
         :workspace="item"
         :testid="`rail-favorite-${item.id}`"
         :active="isActive(item.id)"
@@ -442,9 +464,13 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     <div class="relative mt-1 min-h-0 flex-1">
     <div ref="scroller" class="size-full overflow-x-hidden overflow-y-auto pb-2 [scrollbar-width:none]" @scroll.passive="updateScrollHints">
     <div ref="listContent" class="flex flex-col gap-1">
-        <template v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`">
+      <!-- A game or folder added or removed grows in or folds away, and the rows below follow; a drag only moves it. -->
+      <AnimatedList class="flex flex-col gap-1 empty:hidden" :skip="movedBetweenLists">
+        <!-- Each entry sits in a plain box of its own, which is what folds away or grows in. -->
+        <div v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`" :data-rail-entry="entry.id">
           <RailWorkspace
             v-if="entry.kind === 'workspace'"
+            :data-reorder-id="entry.id"
             :workspace="workspace(entry.id)"
             :testid="`rail-workspace-${entry.id}`"
             :active="isActive(entry.id)"
@@ -472,6 +498,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               <div
                 :class="cn('group rail-entry relative flex items-center px-2', folderHint(entry.id) && `drop-${folderHint(entry.id)}`)"
                 draggable="true"
+                :data-reorder-id="entry.id"
                 v-on="dnd({ kind: 'folder', id: entry.id, place: { list: 'root' } })"
               >
                 <RailTooltip
@@ -518,6 +545,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               <RailWorkspace
                 v-for="id in folderWorkspaces(entry.id)"
                 :key="id"
+                :data-reorder-id="id"
                 :workspace="workspace(id)"
                 :testid="`rail-workspace-${id}`"
                 :active="isActive(id)"
@@ -532,7 +560,8 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               <p v-if="!folder(entry.id).workspaces.length" class="text-muted-foreground p-2 text-center text-xs">{{ t("rail.emptyFolder") }}</p>
             </div>
           </div>
-        </template>
+        </div>
+      </AnimatedList>
         <!-- Add game and Personal are one more entry under the last workspace: two quiet buttons side by side when
              expanded (an even split), two tiles stacked when compact. -->
         <div :class="cn('mt-1 flex px-2', expanded ? 'gap-1' : 'flex-col gap-1')" data-testid="rail-add">
@@ -557,14 +586,14 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 </template>
                 <span
                   v-else
-                  class="rail-icon bg-card text-primary group-hover:bg-primary group-hover:text-primary-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
+                  class="rail-icon bg-card text-primary group-hover:bg-primary-fill group-hover:text-primary-fill-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
                 >
                   <!-- The game's icon carries a small plus, as the person's does, so the two tiles read as a pair. -->
                   <span class="relative flex">
                     <component :is="add.icon" class="size-5" :stroke-width="1.75" />
                     <Plus
                       v-if="add.badge"
-                      class="bg-card group-hover:bg-primary absolute -right-1 -bottom-1 size-2.5 rounded-full"
+                      class="bg-card group-hover:bg-primary-fill absolute -right-1 -bottom-1 size-2.5 rounded-full"
                       :stroke-width="3"
                     />
                   </span>

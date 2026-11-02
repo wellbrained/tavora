@@ -6,10 +6,12 @@
 import type { MenuEntry } from "@tavora/sdk";
 import { ChevronRight, Ellipsis } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
+import { leaveRow } from "@tavora/official-ui/components/ui/animated-list";
+import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { computed, inject, nextTick, onBeforeUnmount, ref } from "vue";
 import AddInput from "./AddInput.vue";
 import { plural, t } from "./i18n";
-import { collapse, PANEL } from "./panel";
+import { PANEL } from "./panel";
 import type { TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
 import {
@@ -325,7 +327,8 @@ function dropMark(position: number): "before" | "after" | null {
         :class="cn('flex-none rounded-full px-2 py-0.5 text-xs tabular-nums', remaining ? 'bg-background text-muted-foreground' : 'bg-primary/15 text-primary')"
         data-testid="group-count"
       >
-        {{ remaining ? t("group.left", { count: remaining }) : t("group.allDone") }}
+        <CountTo v-if="remaining" :value="remaining" :format="(shown) => t('group.left', { count: shown })" />
+        <template v-else>{{ t("group.allDone") }}</template>
       </span>
       <!-- How much of the group is done, as a thin line along the header's bottom edge. -->
       <span
@@ -349,8 +352,8 @@ function dropMark(position: number): "before" | "after" | null {
     </header>
 
     <div v-if="!collapsed" class="p-1">
-      <TransitionGroup tag="ul" role="list" :css="false" @leave="collapse">
-        <li v-for="entry in entries" :key="'draft' in entry ? 'draft' : entry.row.task.id" @dragover="'draft' in entry || overTask($event, entry.at)">
+      <TransitionGroup tag="ul" role="list" :css="false" @leave="leaveRow">
+        <li v-for="entry in entries" :key="'draft' in entry ? 'draft' : entry.row.task.id" :data-reorder-id="'draft' in entry ? undefined : entry.row.task.id" @dragover="'draft' in entry || overTask($event, entry.at)">
           <AddInput
             v-if="'draft' in entry"
             v-model:level="draftLevel"

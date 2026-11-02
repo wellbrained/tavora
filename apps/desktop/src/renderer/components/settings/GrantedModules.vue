@@ -4,6 +4,7 @@
 // log, module grants row of 2026-10-16). `testid` names the list: `<testid>-users`, `-user-<id>`, `-revoke-<id>`,
 // and `-users-none` when no module may use it yet.
 import { computed } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import type { ModuleConnector } from "../../../shared/host-api";
 import type { MessageKey } from "../../../shared/i18n";
@@ -37,7 +38,7 @@ const users = computed(() =>
   <div class="py-2">
     <p v-if="heading" class="text-muted-foreground pb-1 text-xs font-semibold">{{ heading }}</p>
     <p v-if="!users.length" class="text-muted-foreground py-1 text-sm" :data-testid="`${testid}-users-none`">{{ none }}</p>
-    <ul v-else class="flex flex-col" :data-testid="`${testid}-users`">
+    <AnimatedList tag="ul" v-else class="flex flex-col" :data-testid="`${testid}-users`">
       <li v-for="module in users" :key="module.id" class="flex items-center gap-3 border-b border-dashed py-2 last:border-b-0" :data-testid="`${testid}-user-${module.id}`">
         <span class="module-tile size-8" aria-hidden="true">
           <ModuleIcon :module-id="module.id" size="size-4" />
@@ -53,6 +54,6 @@ const users = computed(() =>
           {{ t("integrations.grants.revoke") }}
         </Button>
       </li>
-    </ul>
+    </AnimatedList>
   </div>
 </template>

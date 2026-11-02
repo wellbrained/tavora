@@ -4,7 +4,9 @@
 // edited is each panel's own state.
 import { ChevronsDownUp, ChevronsUpDown, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
+import { leaveRow } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { liftedDragImage, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
@@ -15,7 +17,7 @@ import GroupSection, { type DropTarget } from "./GroupSection.vue";
 import { plural, setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
 import { buildLiveState, fontStack, LIVE_DEFAULTS, PANEL_LOOK_DEFAULTS, PANEL_SIZES, parseLook, parsePanelLook, throttle, type LiveLook, type LiveState, type PanelLook } from "./live";
-import { collapse, LINGER_MS, PANEL, UNDO_MS, type Draft, type FinishedMode } from "./panel";
+import { LINGER_MS, PANEL, UNDO_MS, type Draft, type FinishedMode } from "./panel";
 import Settings from "./Settings.vue";
 import { createTodoStore, type TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
@@ -55,6 +57,9 @@ const dialogOpen = ref(false);
 const editing = ref<string | null>(null);
 const draft = ref<Draft | null>(null);
 const pendingGroup = shallowRef<Group | null>(null);
+/** The to-dos settle into their new places when one is dropped (they nest and cross groups, so they don't slide aside while it is held). */
+const listEl = ref<HTMLElement | null>(null);
+const reorder = useReorderMotion(listEl);
 const dragging = ref<string | null>(null);
 const drop = ref<DropTarget | null>(null);
 
@@ -226,22 +231,31 @@ function dragStart(taskId: string, event: DragEvent) {
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", findTask(list.value, taskId)?.task.title ?? "");
-    const row = (event.target as HTMLElement).closest("[data-testid^='task-']");
-    if (row) event.dataTransfer.setDragImage(row, 16, 16);
+    const row = (event.target as HTMLElement).closest<HTMLElement>("[data-testid^='task-']");
+    if (row) {
+      event.dataTransfer.setDragImage(row, 16, 16);
+      liftedDragImage(event, row);
+    }
   }
+  reorder.begin(taskId);
+}
+
+function clearDrag() {
+  dragging.value = null;
+  drop.value = null;
 }
 
 function dragEnd() {
-  dragging.value = null;
-  drop.value = null;
+  clearDrag();
+  reorder.cancel();
 }
 
 function dropTask() {
   const taskId = dragging.value;
   const target = drop.value;
-  dragEnd();
-  if (!taskId || !target || target.beforeId === taskId) return;
-  void store.value!.apply((data) => moveTask(data, taskId, target.groupId, target.beforeId));
+  clearDrag();
+  if (!taskId || !target || target.beforeId === taskId) return reorder.cancel();
+  void reorder.drop(() => store.value!.apply((data) => moveTask(data, taskId, target.groupId, target.beforeId)));
 }
 </script>
 
@@ -285,14 +299,14 @@ function dropTask() {
       </Button>
     </header>
 
-    <div class="min-h-0 flex-1 overflow-y-auto p-2" @dragend="dragEnd">
+    <div ref="listEl" class="min-h-0 flex-1 overflow-y-auto p-2" @dragend="dragEnd">
       <EmptyState v-if="!list.groups.length" class="border-0" :title="t('app.empty')" data-testid="empty">
         <template #action><AddInput class="w-full max-w-80" outlined :placeholder="t('app.addTodo')" :maxlength="MAX.title" data-testid="first-task" @add="firstTask" /></template>
       </EmptyState>
 
       <section v-if="objectives.length" class="mb-3" :aria-label="t('app.objectives')" data-testid="objectives">
         <h2 class="text-muted-foreground px-2 pt-1 pb-1 text-xs font-medium">{{ t("app.objectives") }}</h2>
-        <TransitionGroup tag="ul" role="list" :css="false" @leave="collapse">
+        <TransitionGroup tag="ul" role="list" :css="false" @leave="leaveRow">
           <li v-for="{ task, group } in objectives" :key="task.id">
             <TaskRow
               :store="store"

@@ -4,6 +4,7 @@
 // it shows only how many rated, or nothing when nobody has yet. Ratings are every version's together, as the service counts them (reviews.ts).
 import { ChevronDown, MessageSquareText } from "@lucide/vue";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
 import { computed } from "vue";
@@ -40,7 +41,7 @@ const rows = computed(() =>
         <span class="text-foreground font-medium tabular-nums">{{ average }}</span>
         <StarRating :model-value="shown.average" size="sm" :label="t('catalog.rating.label', { average })" />
         <ChevronDown class="size-3.5" :stroke-width="1.5" />
-        <span class="tabular-nums">({{ formatNumber(shown.count) }})</span>
+        <span class="tabular-nums">(<CountTo :value="shown.count" :format="formatNumber" />)</span>
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="start" class="w-64" data-testid="catalog-rating-breakdown">
@@ -48,12 +49,12 @@ const rows = computed(() =>
         <StarRating :model-value="shown.average" :label="t('catalog.rating.label', { average })" />
         <span class="text-sm">{{ t("catalog.rating.label", { average }) }}</span>
       </DropdownMenuLabel>
-      <p class="text-muted-foreground px-2 pb-2 text-xs">{{ t("catalog.rating.count", { count: shown.count }) }}</p>
+      <p class="text-muted-foreground px-2 pb-2 text-xs"><CountTo :value="shown.count" :format="(n) => t('catalog.rating.count', { count: n })" /></p>
       <ul class="space-y-1.5 px-2 pb-2">
         <li v-for="row in rows" :key="row.stars" class="grid grid-cols-[3.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 text-xs">
           <span class="text-muted-foreground">{{ t("catalog.rating.stars", { count: row.stars }) }}</span>
           <Progress :model-value="row.percent" :aria-label="t('catalog.rating.stars', { count: row.stars })" />
-          <span class="text-muted-foreground text-right tabular-nums">{{ t("catalog.rating.percent", { percent: row.percent }) }}</span>
+          <span class="text-muted-foreground text-right tabular-nums"><CountTo :value="row.percent" :format="(n) => t('catalog.rating.percent', { percent: n })" /></span>
         </li>
       </ul>
       <DropdownMenuSeparator />

@@ -184,6 +184,14 @@ describe("CatalogClient.download", () => {
     expect(calls[0]!.url).toBe(`https://catalog.test/v1/catalog/zips/${zip.sha256}.zip`);
   });
 
+  it("tells how many bytes of the listed size have arrived", async () => {
+    const { impl } = fakeFetch(() => new Response(new Uint8Array(data)));
+    const seen: Array<[number, number]> = [];
+    await new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl }).download(zip, (done, total) => seen.push([done, total]));
+    expect(seen.at(-1)).toEqual([data.length, data.length]);
+    expect(seen.every(([done, total]) => done <= total && total === data.length)).toBe(true);
+  });
+
   it("refuses a zip with another hash, or a longer one than listed, before anything uses it (C1)", async () => {
     const client = (body: Buffer) => new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: fakeFetch(() => new Response(new Uint8Array(body))).impl });
     await expect(client(Buffer.from("zip bytez")).download(zip)).rejects.toMatchObject({ key: "error.catalogBadZip" });

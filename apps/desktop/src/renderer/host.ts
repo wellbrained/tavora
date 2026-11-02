@@ -103,6 +103,13 @@ export function openInbox(id?: string): void {
   void act({ type: "inbox-refresh" }, { quiet: true });
 }
 
+/** How far each catalog install has downloaded, in whole percent, by module id; a module not in it reports none. */
+export const installProgress = shallowRef<Readonly<Record<string, number>>>({});
+api.onInstallProgress(({ moduleId, percent }) => {
+  const { [moduleId]: _gone, ...rest } = installProgress.value;
+  installProgress.value = percent === null ? rest : { ...rest, [moduleId]: percent };
+});
+
 /** Settings > Account > Cloud copy, and the questions it asks over the app. */
 export const cloudCopy = shallowRef<CloudCopyView | null>(null);
 api.onCloudCopy((next) => (cloudCopy.value = next));
@@ -621,6 +628,23 @@ export async function submitAction(action: HostAction): Promise<string | null> {
   return result.ok ? null : result.error;
 }
 
+/**
+ * The save for a change that shows at once (`useOptimistic`, modules/shared/src/optimistic.ts): runs the action and
+ * rejects with the reason when it fails. The reason is not toasted here; `notSaved` does that once, after the
+ * change was put back.
+ */
+export function savedBy<T>(build: (value: T) => HostAction): (value: T) => Promise<void> {
+  return async (value) => {
+    const result = await act(build(value), { quiet: true });
+    if (!result.ok) throw new Error(result.error);
+  };
+}
+
+/** The message after a change that showed at once could not be saved and was put back. `text` replaces the usual line. */
+export function notSaved(error: unknown, text: string = t("common.notSaved")): void {
+  toast({ title: text, description: error instanceof Error ? error.message : undefined, variant: "error", duration: 6000, testid: "toast-not-saved" });
+}
+
 // Module panels are separate native views drawn above this page, so they
 // are hidden while a menu, dialog or drag floats over the workspace. Still
 // images of them stand in meanwhile.
@@ -716,8 +740,38 @@ export const overlayOpen = computed(
     searchOpen.value ||
     dragging.value,
 );
+
+// A menu or hint opens in this page at once, but the panels (native views above it) step aside only after their pictures
+// are on screen. Until then it would show half-covered, so popups stay hidden while the class is on (styles.css).
+const panelsOut = ref(false);
+/** How long a popup may wait for the panels to step aside before it shows anyway. */
+const PANELS_OUT_CAP_MS = 1200;
+let panelsOutCap: ReturnType<typeof setTimeout> | undefined;
+api.onOverlayReady(() => {
+  if (overlayOpen.value) panelsOut.value = true;
+});
 // The panels' pictures stay after a dialog closes, under the panels, until the host says every panel has drawn again.
-watch(overlayOpen, (open) => api.setOverlay(open));
+// Only a change the host is told of resets this: a menu that closes and opens again within one tick sends nothing, and
+// the panels stay out of the way, so nothing would ever say they are.
+watch(overlayOpen, (open) => {
+  api.setOverlay(open);
+  clearTimeout(panelsOutCap);
+  panelsOut.value = false;
+  if (open) panelsOutCap = setTimeout(() => (panelsOut.value = true), PANELS_OUT_CAP_MS);
+});
+watch(
+  () => overlayOpen.value && !panelsOut.value,
+  (waiting) => document.documentElement.classList.toggle("overlay-pending", waiting),
+  { immediate: true, flush: "sync" },
+);
+
+// Pictures of the panels take up to half a second. Starting them when the user reaches for a menu (the press that opens
+// it, a right-click) rather than when it has opened makes the menu appear at once.
+const OPENS_POPUP = '[aria-haspopup]:not([aria-haspopup="false"]), [data-slot$="-trigger"]';
+const onPopupTrigger = (event: Event) => event.target instanceof Element && event.target.closest(OPENS_POPUP) !== null;
+document.addEventListener("pointerdown", (event) => (event.button === 2 || (event.button === 0 && event.ctrlKey) || onPopupTrigger(event)) && api.prepareOverlay(), true);
+document.addEventListener("contextmenu", () => api.prepareOverlay(), true);
+document.addEventListener("keydown", (event) => (event.key === "ContextMenu" || (["Enter", " ", "ArrowDown"].includes(event.key) && onPopupTrigger(event))) && api.prepareOverlay(), true);
 watch(overlayOpen, (open) => document.documentElement.classList.toggle("floating-open", open), { immediate: true });
 // How panels are drawn (dock.css reads it).
 watch(
