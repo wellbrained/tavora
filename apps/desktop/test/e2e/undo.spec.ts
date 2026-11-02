@@ -29,7 +29,7 @@ async function layoutNames(page: Page): Promise<string[]> {
   await expect(page.locator('[role="menu"][data-state="open"] [data-testid="layout-save"]')).toBeVisible();
   // Each saved layout is a submenu whose test id is layout-<its id>.
   const names = await page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>('[role="menu"][data-state="open"] [data-testid^="layout-"]')]
+    Array.from(document.querySelectorAll<HTMLElement>('[role="menu"][data-state="open"] [data-testid^="layout-"]'))
       .filter((element) => /^layout-[0-9a-f]{8}-/.test(element.dataset.testid ?? ""))
       .map((element) => element.textContent!.trim()),
   );

@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.17",
+    "date": "2026-11-02",
+    "notes": [
+      "New specimen: Delete with Undo, gone at once and back with Undo.",
+      "Screen readers read each message once."
+    ]
+  },
+  {
     "version": "0.1.16",
     "date": "2026-11-02",
     "notes": [
