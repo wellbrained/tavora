@@ -82,6 +82,10 @@ themes; anything hard-coded breaks in one of them.
 - **Spacing**: 4, 8, 12, 16, 24, 32 px (Tailwind 1, 2, 3, 4, 6, 8). 8 inside controls, 16 inside a panel area, 24
   between sections.
 - **Corners**: the kit's (`rounded-sm`, `rounded-md`, `rounded-lg`, from `--radius`); never a literal px radius.
+  When you build something rounded close inside something rounded (items in a padded list, a chip in a card), give
+  the inner one the step nearest to the outer radius minus the gap between them, so the corners run parallel. Only
+  where it shows: from a gap of 8 px on, or when the inner part has no fill of its own, any step works. Don't change
+  existing kit controls for it.
 - **Depth**: areas separate by a surface step and a 1 px `border-border`. Shadows only on floating layers, and those
   come from the kit. No `z-index` of your own except inside a canvas or map.
 - **Focus**: the kit controls bring the focus ring. Never remove it and never draw your own.

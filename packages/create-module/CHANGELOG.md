@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.24
+
+- New projects start on `@tavora/sdk` 0.3.6: the shared tooltip has a neutral look by default, and `look: "poe"` for the Path of Exile 2 one.
+
 ## 0.1.23
 
 - New projects start on `@tavora/sdk` 0.3.5: a panel can list what it shows over the game (`overlay.setSources`) and open settings from the Overlay page (`panel.onOpenSettings`).

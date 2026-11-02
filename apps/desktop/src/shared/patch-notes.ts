@@ -28,6 +28,30 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.54",
+    date: "2026-11-02",
+    title: "Clearer Mixed in Overlay settings",
+    notes: [
+      "With several frames selected, a setting that differs between them now shows a Mixed tag.",
+    ],
+    prs: [
+      { number: 609, title: "Overlay settings: Mixed as a Badge, group Opacity covered by tests" },
+    ],
+    tags: ["overlays"],
+  },
+  {
+    version: "0.23.53",
+    date: "2026-11-02",
+    title: "Calmer item tooltips",
+    notes: [
+      "Item tooltips in modules now use Tavora's own colours. The gold and purple look stays for Path of Exile 2 items.",
+    ],
+    prs: [
+      { number: 608, title: "Shared tooltip: neutral look by default, poe look on request (TooltipContent.look)" },
+    ],
+    tags: ["privacy", "publishing", "sdk", "website"],
+  },
+  {
     version: "0.23.52",
     date: "2026-11-02",
     title: "Several frames at once, and undo for everything",
