@@ -15,7 +15,7 @@ describe("the overlay view", () => {
   it("draws the words and the value as runs of their own, with the item's colours and font", () => {
     const { root, view, runs } = mount();
     const timer = newItem("countdown", "t", "Boss") as Clock;
-    timer.look = { ...timer.look, text: "Round over in {time}", color: "#facc15", wordsColor: "#60a5fa", font: "mono", align: "left", outline: false, scale: 2, wordsSize: "l", numberSize: "xl" };
+    timer.look = { ...timer.look, text: "Round over in {time}", color: "#facc15", wordsColor: "#60a5fa", font: "mono", align: "left", outline: false, wordsStep: "l", numberStep: "xl" };
     view.draw(overlayState(timer), 0);
     expect(runs()).toEqual([["cc-w", "Round over in "], ["cc-n", "5:00"]]);
     expect(root.style.getPropertyValue("--color")).toBe("#facc15");
@@ -53,7 +53,8 @@ describe("the overlay view", () => {
     const state = JSON.parse(JSON.stringify(overlayState(deaths)));
     // What 0.1.16 published: no text, no sizes, no words colour.
     delete state.text;
-    delete state.look.scale;
+    delete state.look.wordsStep;
+    delete state.look.numberStep;
     delete state.look.wordsSize;
     delete state.look.numberSize;
     delete state.look.wordsColor;

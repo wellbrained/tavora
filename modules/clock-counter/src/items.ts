@@ -20,7 +20,8 @@ export const COLORS = ["#ffffff", "#facc15", "#fb923c", "#f87171", "#f472b6", "#
 
 /**
  * How big the words and the number are drawn: one scale for both, with the kit's text sizes and names (XS 12, S 13, M 14, L 16,
- * XL 20 px), scaled for the overlay so that M is the 48 px the number always had (VALUE_PX in sources.ts).
+ * XL 20 px), scaled for the overlay so that M is the 48 px the number always had (VALUE_PX in sources.ts). A look keeps its step
+ * under `wordsStep` and `numberStep`.
  */
 export const SIZES = ["xs", "s", "m", "l", "xl"] as const;
 export type Size = (typeof SIZES)[number];
@@ -29,26 +30,42 @@ export const SIZE_SCALE: Record<Size, number> = { xs: 12 / 14, s: 13 / 14, m: 1,
 export const DEFAULT_WORDS_SIZE: Size = "xs";
 export const DEFAULT_NUMBER_SIZE: Size = "m";
 
-/** The sizes saved before the one scale (a look without `scale: 2`): words and number had steps of their own, as a share of 48 px. */
-const OLD_WORDS: Record<string, number> = { s: 0.3, m: 0.5, l: 0.75, xl: 1 };
-const OLD_NUMBER: Record<string, number> = { s: 0.6, m: 1, l: 1.5, xl: 2 };
-const nearest = (share: number): Size => SIZES.reduce((best, size) => (Math.abs(SIZE_SCALE[size] - share) < Math.abs(SIZE_SCALE[best] - share) ? size : best));
+/**
+ * The steps before the one scale, kept under `wordsSize` and `numberSize` as the version before reads them: words and number had steps of
+ * their own, as a share of 48 px. They are never reused for the new steps. They stay as they were saved, and are written as the nearest old
+ * step when a new step is picked, so the version before shows about the same.
+ */
+export const OLD_STEPS = ["s", "m", "l", "xl"] as const;
+export type OldStep = (typeof OLD_STEPS)[number];
+const OLD_SCALE = {
+  words: { s: 0.3, m: 0.5, l: 0.75, xl: 1 },
+  number: { s: 0.6, m: 1, l: 1.5, xl: 2 },
+} as const satisfies Record<string, Record<OldStep, number>>;
+
+const closest = <T extends string>(steps: readonly T[], scale: Record<T, number>, share: number): T =>
+  steps.reduce((best, step) => (Math.abs(scale[step] - share) < Math.abs(scale[best] - share) ? step : best));
+
+/** The old step nearest to a step of the one scale. */
+export const oldStepOf = (part: "words" | "number", step: Size): OldStep => closest(OLD_STEPS, OLD_SCALE[part], SIZE_SCALE[step]);
+
+type SizeFields = { wordsStep?: unknown; numberStep?: unknown; wordsSize?: unknown; numberSize?: unknown };
 
 /**
- * The words' and the number's step of a look, old or new: a look with `scale: 2` has the one scale; any other (saved by 0.1.19 and
- * before, or published by a panel that old) is moved to the nearest step, so what it showed stays as near as the one scale can say it.
- * A look without sizes gets the defaults.
+ * The words' and the number's step of a look. The new step is read first; without it (data saved before the one scale, or by the version
+ * before, which keeps only the old keys) the old step is moved to the nearest new one; without either, the defaults.
  */
-export function readSizes(look: { scale?: unknown; wordsSize?: unknown; numberSize?: unknown }): { wordsSize: Size; numberSize: Size } {
-  if (look.scale === 2) return { wordsSize: oneOf(SIZES, look.wordsSize, DEFAULT_WORDS_SIZE), numberSize: oneOf(SIZES, look.numberSize, DEFAULT_NUMBER_SIZE) };
-  const old = (value: unknown, steps: Record<string, number>, fallback: Size): Size => (typeof value === "string" && value in steps ? nearest(steps[value]!) : fallback);
-  return { wordsSize: old(look.wordsSize, OLD_WORDS, DEFAULT_WORDS_SIZE), numberSize: old(look.numberSize, OLD_NUMBER, DEFAULT_NUMBER_SIZE) };
+export function readSizes(look: SizeFields): { wordsStep: Size; numberStep: Size } {
+  const read = (part: "words" | "number", step: unknown, old: unknown, fallback: Size): Size => {
+    if (typeof step === "string" && (SIZES as readonly string[]).includes(step)) return step as Size;
+    return typeof old === "string" && (OLD_STEPS as readonly string[]).includes(old) ? closest(SIZES, SIZE_SCALE, OLD_SCALE[part][old as OldStep]) : fallback;
+  };
+  return { wordsStep: read("words", look.wordsStep, look.wordsSize, DEFAULT_WORDS_SIZE), numberStep: read("number", look.numberStep, look.numberSize, DEFAULT_NUMBER_SIZE) };
 }
 
-/** The scales of a look's words and number. Read the sizes through this wherever a published look is drawn: a state from an old panel has old sizes or none. */
-export function sizeScales(look: { scale?: unknown; wordsSize?: unknown; numberSize?: unknown }): { words: number; number: number } {
-  const sizes = readSizes(look);
-  return { words: SIZE_SCALE[sizes.wordsSize], number: SIZE_SCALE[sizes.numberSize] };
+/** The scales of a look's words and number. Read the sizes through this wherever a published look is drawn: a state from an old panel has the old keys or none. */
+export function sizeScales(look: SizeFields): { words: number; number: number } {
+  const steps = readSizes(look);
+  return { words: SIZE_SCALE[steps.wordsStep], number: SIZE_SCALE[steps.numberStep] };
 }
 
 /**
@@ -66,10 +83,12 @@ export type OverlayLook = {
   text?: string;
   /** The words' colour; absent: the same as `color`. */
   wordsColor?: string;
-  /** 2: `wordsSize` and `numberSize` are steps of the one scale; without it they are the old steps of each (see readSizes). */
-  scale: 2;
-  wordsSize: Size;
-  numberSize: Size;
+  /** The steps of the one scale (XS to XL). */
+  wordsStep: Size;
+  numberStep: Size;
+  /** The same sizes as the version before knows them (S to XL, see OLD_STEPS); kept for it, and read when there are no steps. */
+  wordsSize: OldStep;
+  numberSize: OldStep;
 };
 
 type Base = {
@@ -148,8 +167,13 @@ const whole = (value: unknown, min: number, max: number, fallback: number) =>
 const bool = (value: unknown, fallback: boolean) => (typeof value === "boolean" ? value : fallback);
 const oneOf = <T extends string>(values: readonly T[], value: unknown, fallback: T): T => (values.includes(value as T) ? (value as T) : fallback);
 
+/** The size fields of a look for these steps: the steps, and the old steps next to them. */
+export function sizesOf(wordsStep: Size, numberStep: Size): Pick<OverlayLook, "wordsStep" | "numberStep" | "wordsSize" | "numberSize"> {
+  return { wordsStep, numberStep, wordsSize: oldStepOf("words", wordsStep), numberSize: oldStepOf("number", numberStep) };
+}
+
 export function defaultLook(): OverlayLook {
-  return { showLabel: true, color: COLORS[0], outline: true, font: "inter", align: "center", scale: 2, wordsSize: DEFAULT_WORDS_SIZE, numberSize: DEFAULT_NUMBER_SIZE };
+  return { showLabel: true, color: COLORS[0], outline: true, font: "inter", align: "center", ...sizesOf(DEFAULT_WORDS_SIZE, DEFAULT_NUMBER_SIZE) };
 }
 
 const HEX = /^#[0-9a-f]{6}$/;
@@ -163,9 +187,13 @@ function parseLook(raw: unknown): OverlayLook {
     outline: bool(look.outline, true),
     font: oneOf(FONTS, look.font, "inter"),
     align: oneOf(ALIGNS, look.align, "center"),
-    scale: 2,
     ...readSizes(look),
+    // The old steps stay as they were saved (the version before reads them); where there are none, the nearest to the new ones.
+    wordsSize: oneOf(OLD_STEPS, look.wordsSize, "m"),
+    numberSize: oneOf(OLD_STEPS, look.numberSize, "m"),
   };
+  if (!(OLD_STEPS as readonly string[]).includes(look.wordsSize as string)) parsed.wordsSize = oldStepOf("words", parsed.wordsStep);
+  if (!(OLD_STEPS as readonly string[]).includes(look.numberSize as string)) parsed.numberSize = oldStepOf("number", parsed.numberStep);
   // Fields of the text settings: left out of data that was saved before them, which reads the old way (see itemText).
   if (typeof look.text === "string") parsed.text = look.text.slice(0, MAX.text);
   if (typeof look.wordsColor === "string" && HEX.test(look.wordsColor)) parsed.wordsColor = look.wordsColor;

@@ -137,6 +137,7 @@ test("the Overlay page lists a Clock & Counter's things under its panel, adds th
     const states = await shown;
     expect(states).toContain("editor");
     expect(states).not.toContain("list");
+    expect(states).not.toContain("nothing");
     await page.getByTestId("panel-dialog-close").click();
     await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
     await expect(page.getByTestId("overlay-page")).toBeVisible();
@@ -302,8 +303,14 @@ test("the Format field suggests formats from its own list and keeps what is type
       );
     await expect.poll(edges).toEqual({ left: 0, width: 0 });
     await shotOfPanel(app, "settings-format-list.png");
+    // The preset that is picked already, pressed again, changes nothing (it must not save "undefined").
+    const field = () => inModule<string>(app, ID, `document.querySelector('[data-testid="format-field"]').value`);
+    await click(app, "format-m:ss");
+    await expect.poll(field).toBe("m:ss");
+    await click(app, "format-presets");
+    await expect.poll(edges).toEqual({ left: 0, width: 0 });
     await click(app, "format-hh:mm:ss");
-    await expect.poll(() => inModule<string>(app, ID, `document.querySelector('[data-testid="format-field"]').value`)).toBe("hh:mm:ss");
+    await expect.poll(field).toBe("hh:mm:ss");
 
     // Typed text is the format: Enter keeps it (it does not pick the first suggestion).
     await inModule(

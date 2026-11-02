@@ -40,11 +40,6 @@ const startPage = ref<"item" | "text">("item");
 const startCount = ref(0);
 /** The overlay a frame's Settings press asked for, until the list is there to find its item in. */
 const pendingKey = ref<string | null>(null);
-/**
- * Whether the panel starts as big as the settings dialog, before it can know it is in one (the connection to Tavora is not made yet):
- * then the settings' placeholder is the better wait than a line of text.
- */
-const startsBig = innerWidth >= 800;
 const editedItem = computed(() => (editing.value ? find(list.value, editing.value) : undefined));
 const now = ref(Date.now());
 const hotkeys = ref<ReadonlySet<string>>(new Set());
@@ -469,7 +464,7 @@ onMounted(async () => {
     // The components read the module's own translator; it follows the language the handle reports.
     setLanguage(connection.language);
     cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
-    const items = await createItemStore(connected);
+    // Told about the dialog and a Settings press before the list loads (the slow part), so the settings' placeholder can stand in for it.
     cleanup.push(
       connected.panel.onDialogChange((open) => {
         dialogOpen.value = open;
@@ -478,10 +473,13 @@ onMounted(async () => {
           pendingKey.value = null;
         }
       }),
+      connected.panel.onOpenSettings(({ key }) => openSettingsFor(key)),
+    );
+    const items = await createItemStore(connected);
+    cleanup.push(
       () => void items.dispose(),
       connected.hotkeys.onPress(({ action, target }) => act(action, target)),
       connected.overlay.onOverGameChange(overGameChanged),
-      connected.panel.onOpenSettings(({ key }) => openSettingsFor(key)),
       connected.lifecycle.onSuspend(() => (suspended.value = true)),
       connected.lifecycle.onResume(() => {
         suspended.value = false;
@@ -515,7 +513,7 @@ onBeforeUnmount(() => {
 <template>
   <!-- Never an empty dialog: while the panel starts and the list loads, the settings' own layout is there as placeholder. -->
   <p v-if="!store && error" class="text-muted-foreground p-4 text-sm" data-testid="status">{{ t("connectError", { error }) }}</p>
-  <SettingsSkeleton v-else-if="!store ? startsBig : dialogOpen && !editedItem" />
+  <SettingsSkeleton v-else-if="!store ? dialogOpen || !!pendingKey : dialogOpen && !editedItem" />
   <p v-else-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">{{ t("loading") }}</p>
   <ItemEditor v-else-if="dialogOpen && editedItem" :key="editedItem.id" :title="dialogTitle ?? ''" :titled="titled" :item="editedItem" :start="startPage" :start-count="startCount" />
   <div v-else class="relative flex h-full min-h-0 flex-col" data-testid="clock-counter-app">

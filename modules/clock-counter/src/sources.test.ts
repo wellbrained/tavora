@@ -71,8 +71,8 @@ describe("itemSize", () => {
     // "5:00" at 48 px (M), " left" at XS, 12 / 14 of that.
     const xs = (48 * 12) / 14;
     expect(itemSize(boss, measure, NOW).width).toBe(Math.ceil(4 * 48 * 0.5 + 5 * xs * 0.5));
-    boss.look.wordsSize = "xl";
-    boss.look.numberSize = "xs";
+    boss.look.wordsStep = "xl";
+    boss.look.numberStep = "xs";
     const xl = (48 * 20) / 14;
     expect(itemSize(boss, measure, NOW)).toEqual({ width: Math.ceil(4 * xs * 0.5 + 5 * xl * 0.5), height: Math.ceil(xl * 1.05) });
     boss.look.text = "";

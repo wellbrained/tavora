@@ -7,6 +7,7 @@ import { ComboboxInput, useForwardPropsEmits } from "reka-ui"
 import { onMounted, ref } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
+import { freeKeys } from "./free-keys"
 
 defineOptions({
   inheritAttrs: false,
@@ -31,26 +32,20 @@ const box = ref<HTMLElement | null>(null)
 const text = ref("")
 const input = () => box.value?.querySelector<HTMLInputElement>("input") ?? null
 
-// Whether the arrow keys moved to an item since the text last changed: then Enter picks it.
-let arrowed = false
+const keys = freeKeys()
 function onKeyCapture(event: KeyboardEvent) {
   if (!props.free) return
-  if (event.key === "ArrowDown" || event.key === "ArrowUp") arrowed = true
-  else if (event.key === "Enter" && !arrowed) {
+  if (keys.press(event) === "commit") {
     event.stopImmediatePropagation()
     event.preventDefault()
     emits("commit", (event.target as HTMLInputElement).value)
-  } else if (event.key.length === 1 || event.key === "Backspace" || event.key === "Delete") arrowed = false
+  }
 }
-
-onMounted(() => {
-  text.value = input()?.value ?? ""
-})
 
 // reka keeps the text in the field (typing, or the picked item shown after a choice) and reports every change.
 function onText(value: string | undefined) {
   text.value = value ?? ""
-  arrowed = false
+  keys.reset()
 }
 
 // The search text belongs to reka's Combobox, so the clear goes through the field itself: empty it and send the same
@@ -85,6 +80,7 @@ function clear() {
         props.class,
       )"
       @keydown.capture="onKeyCapture"
+      @blur="keys.reset()"
       @update:model-value="onText"
     />
     <!-- The × turns in with a little spring and leaves quick (motion.css, .tavora-clear-in / -out). -->
