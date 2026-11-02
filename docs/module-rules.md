@@ -88,8 +88,8 @@ themes; anything hard-coded breaks in one of them.
   the inner one the step nearest to the outer radius minus the gap between them, so the corners run parallel. Only
   where it shows: from a gap of 8 px on, or when the inner part has no fill of its own, any step works. Don't change
   existing kit controls for it.
-- **Depth**: areas separate by a surface step and a 1 px `border-border`. Shadows only on floating layers, and those
-  come from the kit. No `z-index` of your own except inside a canvas or map.
+- **Depth**: areas separate by a surface step and a 1 px `border-border`. Shadows only on floating layers and on the kit's Primary and Secondary buttons (a faint
+  top light, Primary also a hairline contact shadow); both come from the kit. No `z-index` of your own except inside a canvas or map.
 - **Focus**: the kit controls bring the focus ring. Never remove it and never draw your own.
 - **Icons**: Lucide (`@lucide/vue`), 16 px in controls, outline only.
 - **Dropdown arrows**: a control where you pick a value shown in the field (`Select`, `Picker`) has the up/down arrow (`ChevronsUpDown`); the kit adds it. A button that opens a menu of actions has the single down arrow (`ChevronDown`). Never put a down arrow on a picker.
@@ -98,7 +98,7 @@ themes; anything hard-coded breaks in one of them.
   Animate `transform` and `opacity` only (in Tailwind v4, `translate-*` and `scale-*` set the `translate` and `scale`
   properties, so name those in the transition), never `transition-all`, and nothing in the interface runs longer than
   `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed button dips to
-  0.97 on a fine pointer. Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
+  0.97 and 1 px down on a fine pointer (Primary, Secondary and Destructive also turn their shadow softly inward). Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
   anything shown all day. Reduced motion keeps a short fade and drops the movement.
   `--ease-spring` (a little overshoot) is only for small things popping in (a dot, a tick, a small icon), never for a
   panel or a menu; the kit's checkbox, radio dot and search clear button use it with `--duration-pop` (in) and
