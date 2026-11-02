@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.28
+
+- New projects start on `@tavora/sdk` 0.3.10: a panel can hear when Tavora's window goes behind the game (`lifecycle.onBehindChange`).
+
 ## 0.1.27
 
 - New projects start on `@tavora/sdk` 0.3.9: a panel can show Tavora's Overlay page (`overlay.openPage`).

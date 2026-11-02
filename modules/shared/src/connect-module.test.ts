@@ -8,6 +8,7 @@ vi.mock("./title-tooltips", () => ({ installTitleTooltips: vi.fn() }));
 import { connectModule } from "./connect-module";
 import { installTitleTooltips } from "./title-tooltips";
 import { toastPosition } from "./components/ui/toast/toast";
+import { toastsPaused } from "./components/ui/toast/visibility";
 
 const texts = {
   en: { hello: "Hello {name}", "left.one": "{count} left", "left.other": "{count} left (many)" },
@@ -60,6 +61,31 @@ describe("connectModule({ texts })", () => {
     host.changeTheme({ mode: "light", toasts: "top-center" });
     expect(root.attributes.get("data-mode")).toBe("light");
     expect(toastPosition.value).toBe("top-center");
+  });
+
+  it("holds toast timers while the host says the panel is hidden, and lets go when disposed", async () => {
+    const { sdk, host } = createMemoryHost();
+    const handle = await connectModule({ sdk });
+    expect(toastsPaused.value).toBe(false);
+    host.suspend();
+    expect(toastsPaused.value).toBe(true);
+    host.resume();
+    expect(toastsPaused.value).toBe(false);
+    host.suspend();
+    handle.dispose();
+    expect(toastsPaused.value).toBe(false);
+  });
+
+  it("holds toast timers while the host says the window is behind the game, and lets go when disposed", async () => {
+    const { sdk, host } = createMemoryHost();
+    const handle = await connectModule({ sdk });
+    host.behind();
+    expect(toastsPaused.value).toBe(true);
+    host.behind(false);
+    expect(toastsPaused.value).toBe(false);
+    host.behind();
+    handle.dispose();
+    expect(toastsPaused.value).toBe(false);
   });
 
   it("installs the title tooltips unless asked not to", async () => {

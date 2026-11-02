@@ -59,6 +59,46 @@ test("a dialog rises and fades in, and only fades with reduced motion", async ()
   await app.close();
 });
 
+test("Search and dialogs a key opens appear at once; a click-opened dialog still moves, and Escape closes at once", async () => {
+  const { app, page } = await launch();
+  await record(page);
+  const dialogMotion = () => seen(page).then((list) => list.filter((item) => item.name === "tavora-dialog-in" || item.name === "tavora-dialog-out" || item.name === "tavora-fade-in" || item.name === "tavora-fade-out"));
+
+  // The recorder first shows that a dialog opened with a click moves (so "nothing moved" below means something).
+  await page.getByTestId("rail-settings").click();
+  await expect(page.getByTestId("settings")).toBeVisible();
+  await expect.poll(() => started(page, "tavora-dialog-in", "settings")).toBe(1);
+  // Closed with Escape: gone at once, without its leaving animation.
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("settings")).toHaveCount(0);
+  expect(await started(page, "tavora-dialog-out")).toBe(0);
+  const before = (await dialogMotion()).length;
+
+  // Ctrl+K: the box is there at once, overlay included, and leaves at once.
+  await page.keyboard.press("Control+K");
+  await expect(page.getByTestId("search")).toBeVisible();
+  await expect(page.getByTestId("search")).toHaveAttribute("data-instant", "");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("search")).toHaveCount(0);
+  await page.waitForTimeout(400);
+  expect((await dialogMotion()).length).toBe(before);
+
+  // Settings opened with its key shortcut is a dialog a key opened: no motion either.
+  await page.keyboard.press("Control+,");
+  await expect(page.getByTestId("settings")).toBeVisible();
+  await expect(page.getByTestId("settings")).toHaveAttribute("data-instant", "");
+  await page.waitForTimeout(400);
+  expect(await started(page, "tavora-dialog-in", "settings")).toBe(1);
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("settings")).toHaveCount(0);
+
+  // The same dialog opened by a click moves again.
+  await page.getByTestId("rail-settings").click();
+  await expect(page.getByTestId("settings")).toBeVisible();
+  await expect.poll(() => started(page, "tavora-dialog-in", "settings")).toBe(2);
+  await app.close();
+});
+
 test("a settings page picked with the pointer fades in; one picked with the keyboard does not", async () => {
   const { app, page } = await launch();
   await record(page);
@@ -82,6 +122,7 @@ test("a settings page picked with the pointer fades in; one picked with the keyb
   await page.getByTestId("settings-nav-games").focus();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("settings-heading")).toHaveText("Games");
+  // The keyboard pick must not play an animation: nothing starts, so give a wrong one time to show.
   await page.waitForTimeout(400);
   expect(await started(page, "tavora-page-in")).toBe(before);
   await app.close();
@@ -130,6 +171,7 @@ test("a workspace picked on the rail fades in; one picked with a hotkey does not
   await page.keyboard.press("ControlOrMeta+1");
   await expect(page.getByTestId("rail-workspace-poe2")).toHaveAttribute("aria-current", "page");
   expect(await workspace.evaluate((element) => element === (window as unknown as { __second: Element }).__second)).toBe(false);
+  // The hotkey must not fade: nothing starts, so give a wrong one time to show.
   await page.waitForTimeout(400);
   expect(await started(page, "tavora-fade-in", "workspace")).toBe(1);
   await app.close();

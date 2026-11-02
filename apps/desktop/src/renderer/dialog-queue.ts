@@ -10,7 +10,8 @@
 // Urgency (`rank`, higher is more urgent), decided in host.ts:
 //   consent for a connector a module asks for (4) > open in a new panel (3) > where to open a link (2) > switch to the game (1).
 // A request more urgent than the dialog shown replaces it only when that dialog is a request of this queue too (a plain
-// choice that holds nothing the user typed); the replaced one is put back in the queue and comes back afterwards.
+// choice that holds nothing the user typed) and no other dialog is open; the replaced one is put back in the queue and
+// comes back afterwards. With another dialog open the request waits, and is shown when that closes.
 // Every other dialog, one the user opened or one with input in it (a prompt being typed, a consent, a form), is
 // never replaced, however urgent the request: it waits.
 //
@@ -25,7 +26,7 @@ export interface DialogSlot<R> {
 }
 
 export interface DialogQueue<R extends { kind: string }> {
-  /** Shows the request now (nothing open, or a less urgent request of this queue in the slot), else keeps it for later. A request of a kind already shown or waiting replaces it. */
+  /** Shows the request now (nothing open, or a less urgent request of this queue in the slot and no other dialog), else keeps it for later. A request of a kind already shown or waiting replaces it. */
   request(request: R): void;
   /** Opens a dialog the user asked for, now. A request that was shown goes back in the queue instead of being lost. */
   open(request: R): void;
@@ -49,21 +50,28 @@ export function createDialogQueue<R extends { kind: string }>(slot: DialogSlot<R
     waiting.push(request);
     order();
   };
+  // Shows the most urgent request that waits: in a free slot, or in place of a less urgent request of the queue. Neither
+  // while another dialog is open: a request must not stack on it, and putting one under it would hide it there.
   const show = () => {
-    if (slot.get() !== null || slot.blocked()) return;
-    const first = waiting.shift();
-    if (first) slot.set(first);
+    const first = waiting[0];
+    if (!first || slot.blocked()) return;
+    const open = slot.get();
+    if (open === null) {
+      waiting.shift();
+      return slot.set(first);
+    }
+    const openRank = rank(open);
+    if (openRank === undefined || urgency(first) <= openRank) return;
+    waiting.shift();
+    keep(open);
+    slot.set(first);
   };
 
   return {
     request(request) {
       const open = slot.get();
-      const openRank = open ? rank(open) : undefined;
-      if (open && openRank !== undefined && open.kind === request.kind) return slot.set(request);
-      if (open && openRank !== undefined && urgency(request) > openRank) {
-        keep(open);
-        return slot.set(request);
-      }
+      // The same question again, with new details: the one shown is updated in place.
+      if (open && rank(open) !== undefined && open.kind === request.kind) return slot.set(request);
       // Through the waiting line, so a more urgent request that waits is not passed by a newer one.
       keep(request);
       show();

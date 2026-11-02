@@ -3,20 +3,10 @@
 
 import path from "node:path";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { desktopDir, expectModuleText, inModule, launch, panels } from "./harness";
+import { desktopDir, expectModuleText, inModule, launch, panels, gesture } from "./harness";
 
 const PROBES = path.join(desktopDir, "test/dialog-fixtures");
 const PROBE = "local.test.welcome-probe";
-
-/** A real key press in the probe's page, so what follows counts as the user's own. */
-async function gesture(app: ElectronApplication) {
-  await app.evaluate(({ webContents }, moduleId) => {
-    const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
-    if (!target) throw new Error("no panel");
-    target.sendInputEvent({ type: "keyDown", keyCode: "Shift" });
-    target.sendInputEvent({ type: "keyUp", keyCode: "Shift" });
-  }, PROBE);
-}
 
 type Answer = { ok: boolean; error?: { code: string } };
 const openDialog = (app: ElectronApplication) => inModule<Answer>(app, PROBE, `window.probe.call("panel.setDialog", { open: true, width: 480, height: 320 })`);
@@ -58,6 +48,7 @@ test("a panel just added opens its welcome over the workspace, and a click besid
     expect(box.y + box.height).toBeLessThanOrEqual(area.y + area.height);
 
     await clickBeside(page);
+    // Nothing may happen, so there is no state to wait for: give a wrong close time to show.
     await page.waitForTimeout(300);
     await expect(frame).toBeVisible();
 
@@ -69,7 +60,7 @@ test("a panel just added opens its welcome over the workspace, and a click besid
     await expect(frame).toHaveCount(0);
 
     // Opened by a press, a click beside it closes it as before.
-    await gesture(app);
+    await gesture(app, PROBE);
     expect((await openDialog(app)).ok).toBe(true);
     await expect(frame).toBeVisible();
     await expect(frame).toHaveAttribute("data-closes-on-click-beside", "");
@@ -112,7 +103,7 @@ test("a panel can name its dialog, and the next dialog starts with the module's 
     await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
     // Nothing happens while there is no dialog, and the next one starts with the module's name.
     expect((await setTitle('"Late"')).ok).toBe(true);
-    await gesture(app);
+    await gesture(app, PROBE);
     expect((await openDialog(app)).ok).toBe(true);
     await expect(page.getByTestId("panel-dialog").getByRole("heading")).toHaveText(moduleName);
   } finally {
@@ -127,7 +118,7 @@ test("opening several panels from the dialog puts the panel back in its slot fir
     await expectModuleText(app, PROBE, "probe-auto", "opened");
     await expect(page.getByTestId("panel-dialog")).toBeVisible();
 
-    await gesture(app);
+    await gesture(app, PROBE);
     const answer = await inModule<{ ok: boolean; result?: Record<string, string> }>(app, PROBE, `window.probe.call("panels.openMany", { types: ["welcome", "other"] })`);
     expect(answer.result).toEqual({ welcome: "shown", other: "opened" });
     await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
@@ -160,10 +151,24 @@ test("the picture behind a dialog shows the panel as it was, not the page the di
     await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
     // The page is green until its module is told a dialog is open, then red, and green again once it closes (probe.js).
     await expectModuleText(app, PROBE, "probe-status", "ready");
-    await page.waitForTimeout(800);
     await expect.poll(() => inModule<string>(app, PROBE, "document.body.style.background")).toBe("rgb(0, 200, 0)");
+    // The picture behind the dialog is taken from what is drawn, so wait until a capture of the panel shows the green page.
+    await expect
+      .poll(() =>
+        app.evaluate(async ({ webContents }, moduleId) => {
+          const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
+          if (!target) return false;
+          const shot = await target.capturePage();
+          const bitmap = shot.toBitmap();
+          // BGRA: count the pixels of the page's green (the red page has none).
+          let green = 0;
+          for (let i = 0; i < bitmap.length; i += 4) if (bitmap[i + 1]! > 150 && bitmap[i + 2]! < 60) green++;
+          return green > 1000;
+        }, PROBE),
+      )
+      .toBe(true);
 
-    await gesture(app);
+    await gesture(app, PROBE);
     expect((await openDialog(app)).ok).toBe(true);
     await expect(page.getByTestId("panel-dialog")).toBeVisible();
     const still = page.locator('img[elementtiming^="frozen:"]');

@@ -1,15 +1,9 @@
 import { readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { expectModuleText, inModule, launch, NOTES, openWorkspace, openModule, panels, PDF_VIEWER, PLAYGROUND, RAIL_WIDTH, setContentSize, TODOS, typeInModule, VUE, waitForShown } from "./harness";
+import { expectModuleText, inModule, launch, type Running, NOTES, openWorkspace, openModule, panels, PDF_VIEWER, PLAYGROUND, RAIL_WIDTH, setContentSize, TODOS, typeInModule, VUE, waitForShown, q, clickSelector } from "./harness";
 
 // The official Notes, To-Dos and UI Playground modules, driven through their own pages.
-
-const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
-
-async function click(app: ElectronApplication, moduleId: string, selector: string, index = 0) {
-  await inModule(app, moduleId, `document.querySelector(${JSON.stringify(selector)}).click()`, index);
-}
 
 /** Opens a menu from its trigger (a JavaScript expression) and picks an item, the way the keyboard does. */
 async function pickFromMenu(app: ElectronApplication, moduleId: string, trigger: string, item: string, index = 0) {
@@ -47,7 +41,7 @@ async function ready(app: ElectronApplication, moduleId: string, testId: string,
 /** Starts a new note and waits until it is ready for typing. */
 async function newNote(app: ElectronApplication, index = 0) {
   const count = await inModule<number>(app, NOTES, `document.querySelectorAll('[data-testid="note-title"]').length`, index);
-  await click(app, NOTES, `[data-testid="new-note"]`, index);
+  await clickSelector(app, NOTES, `[data-testid="new-note"]`, index);
   // Ready once the new note is listed, opened and has the cursor.
   await expect
     .poll(() =>
@@ -90,31 +84,45 @@ const taskTitles = (app: ElectronApplication, scope = "", index = 0) =>
     index,
   );
 
-test("official modules sit under Official without a tag of their own, the examples are marked Example", async () => {
-  const { app, page } = await launch();
-  await page.getByTestId("add-module").click();
-  const official = page.getByRole("region", { name: "Official", exact: true });
-  for (const id of [NOTES, TODOS, PLAYGROUND, PDF_VIEWER]) {
-    await expect(official.getByTestId(`module-${id}`)).toBeVisible();
-    await expect(page.getByTestId(`provenance-${id}`)).toHaveCount(0);
-  }
-  await expect(page.getByTestId(`provenance-${VUE}`)).toHaveText("Example");
-  await app.close();
-});
+// Two looks at the Add module list: nothing is changed, so one app serves both (the dialog is closed between them).
+test.describe("the module list", () => {
+  test.describe.configure({ mode: "serial" });
+  let running: Running;
+  test.beforeAll(async () => {
+    running = await launch();
+  });
+  test.afterEach(async () => {
+    await running.page.keyboard.press("Escape");
+    await expect(running.page.getByTestId("add-module-dialog")).toHaveCount(0);
+  });
+  test.afterAll(async () => {
+    await running?.app.close();
+  });
 
-test("the example modules are listed under Development, the playground with the official modules", async () => {
-  const { app, page } = await launch();
-  await page.getByTestId("add-module").click();
-  const development = page.getByRole("region", { name: "Development" });
-  await expect(development.getByTestId(`module-${VUE}`)).toBeVisible();
-  await expect(development.getByTestId(`module-${PLAYGROUND}`)).toHaveCount(0);
-  await expect(development.getByTestId(`module-${NOTES}`)).toHaveCount(0);
-  const official = page.getByRole("region", { name: "Official" });
-  await expect(official.getByTestId(`module-${NOTES}`)).toBeVisible();
-  await expect(official.getByTestId(`module-${PLAYGROUND}`)).toBeVisible();
-  // Its own entry, under For developers, is only for people who make modules.
-  await expect(page.getByTestId("module-category-development")).toHaveCount(0);
-  await app.close();
+  test("official modules sit under Official without a tag of their own, the examples are marked Example", async () => {
+    const { page } = running;
+    await page.getByTestId("add-module").click();
+    const official = page.getByRole("region", { name: "Official", exact: true });
+    for (const id of [NOTES, TODOS, PLAYGROUND, PDF_VIEWER]) {
+      await expect(official.getByTestId(`module-${id}`)).toBeVisible();
+      await expect(page.getByTestId(`provenance-${id}`)).toHaveCount(0);
+    }
+    await expect(page.getByTestId(`provenance-${VUE}`)).toHaveText("Example");
+  });
+
+  test("the example modules are listed under Development, the playground with the official modules", async () => {
+    const { page } = running;
+    await page.getByTestId("add-module").click();
+    const development = page.getByRole("region", { name: "Development" });
+    await expect(development.getByTestId(`module-${VUE}`)).toBeVisible();
+    await expect(development.getByTestId(`module-${PLAYGROUND}`)).toHaveCount(0);
+    await expect(development.getByTestId(`module-${NOTES}`)).toHaveCount(0);
+    const official = page.getByRole("region", { name: "Official" });
+    await expect(official.getByTestId(`module-${NOTES}`)).toBeVisible();
+    await expect(official.getByTestId(`module-${PLAYGROUND}`)).toBeVisible();
+    // Its own entry, under For developers, is only for people who make modules.
+    await expect(page.getByTestId("module-category-development")).toHaveCount(0);
+  });
 });
 
 test("notes: write, pin and search notes, and find them again after a restart", async () => {
@@ -144,7 +152,7 @@ test("notes: write, pin and search notes, and find them again after a restart", 
   // Pinned notes come before the others.
   await inModule(app, NOTES, `${noteRow("Count Geonor")}.querySelector("button").click()`);
   await expect.poll(() => editorText(app)).toContain("Use fire resistance flasks");
-  await click(app, NOTES, `[data-testid="toggle-pin"]`);
+  await clickSelector(app, NOTES, `[data-testid="toggle-pin"]`);
   await expect.poll(() => inModule(app, NOTES, `${q("pinned")}?.innerText ?? ""`)).toContain("Count Geonor");
   await expect.poll(() => noteTitles(app)).toEqual(["Scratchpad", "Count Geonor", "Atlas plan"]);
 
@@ -202,7 +210,7 @@ test("notes: two panels show the same notes and follow each other's changes", as
   // The second panel still shows the note it had open, says it was deleted elsewhere and can bring it back.
   await expect.poll(() => inModule(app, NOTES, `!!${q("deleted-banner")}`, 1)).toBe(true);
   await expect.poll(() => editorText(app, 1)).toBe("Made in the second panel");
-  await click(app, NOTES, `[data-testid="restore-note"]`, 1);
+  await clickSelector(app, NOTES, `[data-testid="restore-note"]`, 1);
   await expect.poll(() => inModule(app, NOTES, `!!${q("deleted-banner")}`, 1)).toBe(false);
   await expect.poll(() => noteTitles(app, 0)).toEqual(["Scratchpad", "Made in the second panel"]);
   await app.close();
@@ -248,24 +256,24 @@ test("notes: a pasted picture is stored by the host, shown, resized and removed"
     `(() => { const img = ${picture}; const box = img.getBoundingClientRect(); const at = { bubbles: true, cancelable: true, button: 0, detail: 1, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 }; for (const type of ["mousedown", "mouseup", "click"]) img.dispatchEvent(new MouseEvent(type, at)); })()`,
   );
   await expect.poll(() => inModule(app, NOTES, `!!${q("image-bar")}`)).toBe(true);
-  await click(app, NOTES, `[data-testid="image-small"]`);
+  await clickSelector(app, NOTES, `[data-testid="image-small"]`);
   await expect.poll(() => inModule(app, NOTES, `${q("editor")}.querySelector(".note-image").style.width`)).toBe("25%");
 
   // Left lets the text flow around it and keeps its size; Small puts it back on its own line.
-  await click(app, NOTES, `[data-testid="image-left"]`);
+  await clickSelector(app, NOTES, `[data-testid="image-left"]`);
   await expect.poll(() => inModule(app, NOTES, `(() => { const el = ${q("editor")}.querySelector(".note-image"); return el.dataset.mode + " " + getComputedStyle(el).float + " " + el.style.width; })()`)).toBe("left left 25%");
-  await click(app, NOTES, `[data-testid="image-small"]`);
+  await clickSelector(app, NOTES, `[data-testid="image-small"]`);
   await expect.poll(() => inModule(app, NOTES, `${q("editor")}.querySelector(".note-image").dataset.mode`)).toBe("block");
 
   // Open larger shows it big; Escape closes that and leaves the picture selected.
-  await click(app, NOTES, `[data-testid="image-open"]`);
+  await clickSelector(app, NOTES, `[data-testid="image-open"]`);
   await expect.poll(() => inModule(app, NOTES, `!!${q("image-lightbox")}`)).toBe(true);
   await inModule(app, NOTES, `window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
   await expect.poll(() => inModule(app, NOTES, `!${q("image-lightbox")}`)).toBe(true);
 
   expect(await inModule(app, NOTES, `!!${q("image-bar")}`)).toBe(true);
   // Removing it takes it out of the note.
-  await click(app, NOTES, `[data-testid="image-remove"]`);
+  await clickSelector(app, NOTES, `[data-testid="image-remove"]`);
   await expect.poll(() => inModule(app, NOTES, `!${picture}`)).toBe(true);
 
   // Something that is not a picture is refused with a message and nothing is stored.
@@ -395,7 +403,7 @@ test("to-dos: groups, sub-to-dos, editing in place, objectives and finished task
   await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
 
   // Whether finished tasks stay or vanish is this panel's setting in the toolbar.
-  await click(app, TODOS, `[data-testid="finished-mode"][data-mode="stay"]`);
+  await clickSelector(app, TODOS, `[data-testid="finished-mode"][data-mode="stay"]`);
   await expect.poll(() => taskTitles(app)).not.toContain("Defeat Count Geonor");
 
   await app.close();
@@ -405,7 +413,7 @@ test("to-dos: groups, sub-to-dos, editing in place, objectives and finished task
   await expect.poll(() => taskTitles(again.app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
   await expect.poll(() => taskTitles(again.app)).not.toContain("Defeat Count Geonor");
   await expect.poll(() => taskTitles(again.app)).not.toContain("Reach level 30");
-  await click(again.app, TODOS, `[data-testid="finished-mode"][data-mode="vanish"]`);
+  await clickSelector(again.app, TODOS, `[data-testid="finished-mode"][data-mode="vanish"]`);
   await expect.poll(() => taskTitles(again.app)).toContain("Defeat Count Geonor");
   await expectModuleText(again.app, TODOS, "task-children", "1/2");
   await again.app.close();
@@ -447,7 +455,7 @@ test("to-dos: Enter in a to-do starts a new one right below it", async () => {
   // The trash button deletes in one click, with its sub-to-dos, and Undo puts them back.
   await inModule(app, TODOS, `${taskTitled("Tame a wolf")}.querySelector('[data-testid="task-delete"]').click()`);
   await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Build a hut"]);
-  await click(app, TODOS, `[data-testid="undo"]`);
+  await clickSelector(app, TODOS, `[data-testid="undo"]`);
   await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Tame a wolf", "Bring meat", "Build a hut"]);
   await app.close();
 });
@@ -478,7 +486,7 @@ test("to-dos: two panels share one list and both keep their changes", async () =
 
 /** Opens a UI Playground page from its side menu and waits for it. */
 async function openPage(app: ElectronApplication, id: string) {
-  await click(app, PLAYGROUND, `[data-testid="nav-${id}"]`);
+  await clickSelector(app, PLAYGROUND, `[data-testid="nav-${id}"]`);
   await ready(app, PLAYGROUND, `page-${id}`);
 }
 
@@ -488,6 +496,8 @@ async function playgroundReady(app: ElectronApplication, page: Page) {
   await ready(app, PLAYGROUND, "page-colours");
   // The swatches show the host's theme, not only the built-in default (also: the panel is connected).
   await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
+  // The page shows nothing once it has read its saved page back (after the theme), and a page picked before that is not saved.
+  // There is no state to poll for, so this is a fixed wait.
   await page.waitForTimeout(500);
 }
 
@@ -551,7 +561,7 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   const spots = () =>
     inModule<string>(app, PLAYGROUND, `JSON.stringify([${q("disable-all")}, ${q("page-title")}, ${q("example-Select")}].map((el) => { const r = el.getBoundingClientRect(); return [r.x, r.y, r.width]; }))`);
   const beforeSpots = await spots();
-  await click(app, PLAYGROUND, `[data-testid="disable-all"] [role="switch"]`);
+  await clickSelector(app, PLAYGROUND, `[data-testid="disable-all"] [role="switch"]`);
   await expect.poll(() => buttonsOff(true)).toBe(true);
   expect(await spots()).toBe(beforeSpots);
   // Every example is switched off from outside (a disabled, inert fieldset around it); none takes a prop for it.
@@ -574,52 +584,11 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   await expect.poll(() => inModule(again.app, PLAYGROUND, `${q("disable-all")}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("true");
   await expect.poll(() => inModule(again.app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] button')].every((el) => el.matches(":disabled"))`)).toBe(true);
   // Turned off again, the controls come back on.
-  await click(again.app, PLAYGROUND, `[data-testid="disable-all"] [role="switch"]`);
+  await clickSelector(again.app, PLAYGROUND, `[data-testid="disable-all"] [role="switch"]`);
   await expect.poll(() => inModule(again.app, PLAYGROUND, `${q("example-Select")}.querySelector('[data-slot="example-body"] button').matches(":disabled")`)).toBe(false);
   await again.app.close();
 });
 
-test("ui playground: the foundations pages fill up, show the theme's own values and play their motion", async () => {
-  const { app, page } = await launch();
-  await playgroundReady(app, page);
-  const examples = (id: string) => inModule<string[]>(app, PLAYGROUND, `[...${q(`page-${id}`)}.querySelectorAll('section[data-testid^="example-"]')].map((el) => el.dataset.testid.slice(8))`);
-
-  // Every page of the group lists its examples, and none says it is coming.
-  const expected: Record<string, string[]> = {
-    colours: ["Tokens", "TextOnSurface", "DoDont"],
-    text: ["TypeScale", "Weights", "Numbers", "Capitals", "Mono"],
-    spacing: ["Scale", "Radius", "NestedCorners", "Depth"],
-    motion: ["Curves", "Durations", "Rules", "ReducedMotion"],
-    writing: ["FewWords", "Descriptions", "PlainWords", "YouDu", "Names"],
-  };
-  for (const [id, names] of Object.entries(expected)) {
-    await openPage(app, id);
-    await expect.poll(() => examples(id)).toEqual(names);
-    // Each page shows at least one rule line from the module rules.
-    expect(await inModule(app, PLAYGROUND, `${q(`page-${id}`)}.querySelectorAll('[data-testid="example-rule"]').length`)).toBeGreaterThan(0);
-  }
-
-  // Colours: all 28 tokens, each with the value the host set on the page.
-  await openPage(app, "colours");
-  expect(await inModule(app, PLAYGROUND, `document.querySelectorAll('[data-token]').length`)).toBe(28);
-  const primary = await inModule<string>(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary").trim()`);
-  expect(primary).not.toBe("");
-  await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelector('[data-token="primary"]').textContent`)).toContain(primary);
-
-  // Spacing: the corner steps read their pixels from the theme.
-  await openPage(app, "spacing");
-  expect(await inModule(app, PLAYGROUND, `document.querySelectorAll('[data-step]').length`)).toBe(4);
-  await expect.poll(() => inModule(app, PLAYGROUND, `[...document.querySelectorAll('[data-step]')].every((el) => /\\d+px/.test(el.parentElement.textContent))`)).toBe(true);
-
-  // Motion: the times come from the tokens, and Play moves the dot (reduced motion jumps there at once).
-  await openPage(app, "motion");
-  await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelector('[data-token="--duration-move"]').textContent`)).toContain("300 ms");
-  const dot = `document.querySelector('[data-token="--duration-menu"] [data-testid="demo-dot"]')`;
-  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${dot}).translate`)).toMatch(/^(none|0px)/);
-  await inModule(app, PLAYGROUND, `document.querySelector('[data-token="--duration-menu"] button').click()`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `getComputedStyle(${dot}).translate`)).toMatch(/^96px/);
-  await app.close();
-});
 
 test("ui playground: the name dialog selects its text, counts and locks while busy, and the confirm dialog has a plain variant", async () => {
   const { app, page } = await launch();
@@ -640,13 +609,13 @@ test("ui playground: the name dialog selects its text, counts and locks while bu
   await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(true);
   await type("Renamed");
   await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(false);
-  await click(app, PLAYGROUND, `[data-testid="name-submit"]`);
+  await clickSelector(app, PLAYGROUND, `[data-testid="name-submit"]`);
   await expect.poll(() => inModule(app, PLAYGROUND, `!${q("name-dialog")}`)).toBe(true);
 
   // A slow save locks the dialog, then it closes by itself.
   await press("Rename with a slow save…");
   await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("name-dialog")}`)).toBe(true);
-  await click(app, PLAYGROUND, `[data-testid="name-submit"]`);
+  await clickSelector(app, PLAYGROUND, `[data-testid="name-submit"]`);
   await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-input")}.disabled && ${q("name-cancel")}.disabled && ${q("name-submit")}.getAttribute("aria-busy") === "true"`)).toBe(true);
   await expect.poll(() => inModule(app, PLAYGROUND, `!${q("name-dialog")}`)).toBe(true);
 
@@ -655,209 +624,260 @@ test("ui playground: the name dialog selects its text, counts and locks while bu
   await press("New from a save…");
   await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("name-dialog")}`)).toBe(true);
   expect(await inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(true);
-  await click(app, PLAYGROUND, `[data-testid="pick-save"]`);
+  await clickSelector(app, PLAYGROUND, `[data-testid="pick-save"]`);
   await expect.poll(nameValue).toBe("Waystone Camp");
   await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(false);
-  await click(app, PLAYGROUND, `[data-testid="name-cancel"]`);
+  await clickSelector(app, PLAYGROUND, `[data-testid="name-cancel"]`);
   await expect.poll(() => inModule(app, PLAYGROUND, `!${q("name-dialog")}`)).toBe(true);
   await press("New from a save…");
   await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("name-dialog")}`)).toBe(true);
   await type("Mine");
   expect(await inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(true);
-  await click(app, PLAYGROUND, `[data-testid="pick-save"]`);
+  await clickSelector(app, PLAYGROUND, `[data-testid="pick-save"]`);
   await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(false);
   expect(await nameValue()).toBe("Mine");
-  await click(app, PLAYGROUND, `[data-testid="name-cancel"]`);
+  await clickSelector(app, PLAYGROUND, `[data-testid="name-cancel"]`);
   await expect.poll(() => inModule(app, PLAYGROUND, `!${q("name-dialog")}`)).toBe(true);
 
   // The plain confirm is not red; a busy one can't be cancelled.
   await press("Share (plain confirm)…");
   await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("confirm-submit")}`)).toBe(true);
   expect(await inModule(app, PLAYGROUND, `${q("confirm-submit")}.dataset.variant`)).toBe("default");
-  await click(app, PLAYGROUND, `[data-testid="confirm-submit"]`);
+  await clickSelector(app, PLAYGROUND, `[data-testid="confirm-submit"]`);
   await expect.poll(() => inModule(app, PLAYGROUND, `!${q("confirm")}`)).toBe(true);
   await press("Slow confirm…");
   await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("confirm-submit")}`)).toBe(true);
-  await click(app, PLAYGROUND, `[data-testid="confirm-submit"]`);
+  await clickSelector(app, PLAYGROUND, `[data-testid="confirm-submit"]`);
   await expect.poll(() => inModule(app, PLAYGROUND, `${q("confirm-submit")}.disabled && ${q("confirm-cancel")}.disabled`)).toBe(true);
   await expect.poll(() => inModule(app, PLAYGROUND, `!${q("confirm")}`)).toBe(true);
   await app.close();
 });
 
-test("ui playground: a select can pick an empty choice, a switch field toggles from its label and menu rows show a line under the name", async () => {
-  const { app, page } = await launch();
-  await playgroundReady(app, page);
-  const text = (testId: string) => inModule<string>(app, PLAYGROUND, `${q(testId)}.textContent.trim()`);
 
-  // Inputs: the empty choice clears the select to "", and its own text shows in the trigger.
-  await openPage(app, "pick");
-  expect(await text("select-empty")).toContain("Ranger");
-  await inModule(app, PLAYGROUND, `${q("select-empty")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelectorAll('[data-slot="select-item"]').length`)).toBe(3);
-  await inModule(app, PLAYGROUND, `(() => { const item = [...document.querySelectorAll('[data-slot="select-item"]')].find((el) => el.textContent.trim() === "No class"); item.focus(); item.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); })()`);
-  await expect.poll(() => text("select-empty-value")).toBe("Value: (empty)");
-  expect(await text("select-empty")).toContain("No class");
 
-  // The label toggles the switch, and the line under it describes it.
-  await openPage(app, "checks");
-  const field = q("switch-field");
-  expect(await inModule(app, PLAYGROUND, `${field}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("true");
-  await inModule(app, PLAYGROUND, `${field}.querySelector("label").click()`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `${field}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("false");
-  expect(await inModule(app, PLAYGROUND, `document.getElementById(${field}.querySelector('[role="switch"]').getAttribute("aria-describedby")).textContent.trim()`)).toBe("Done to-dos stay in the list, crossed out.");
 
-  // Actions: a menu item with a description shows an icon tile, its name and the line.
-  await openPage(app, "menus");
-  await inModule(app, PLAYGROUND, `[...${q("page-menus")}.querySelectorAll("button")].find((el) => el.textContent.trim() === "Add").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelectorAll('[data-slot="dropdown-menu-item"]').length`)).toBe(3);
-  expect(await inModule(app, PLAYGROUND, `(() => { const item = document.querySelector('[data-slot="dropdown-menu-item"]'); return [!!item.querySelector('[data-slot="action-row-icon"]'), item.textContent.trim()]; })()`)).toEqual([true, "Import a build Start from a file on your PC."]);
+// The pages of the UI Playground are looked at one after another in one panel, so one app serves all of them: each test
+// opens its own pages from the side menu and leaves nothing open.
+test.describe("ui playground pages", () => {
+  test.describe.configure({ mode: "serial" });
+  let running: Running;
+  test.beforeAll(async () => {
+    running = await launch();
+    await playgroundReady(running.app, running.page);
+  });
+  test.afterAll(async () => {
+    await running?.app.close();
+  });
 
-  // Display: the empty state's action list reports the entry that was picked and disables the unavailable one.
-  await inModule(app, PLAYGROUND, `document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
-  await openPage(app, "notices");
-  expect(await inModule(app, PLAYGROUND, `[...${q("page-notices")}.querySelectorAll('[data-slot="action-list"] button')].map((el) => el.disabled)`)).toEqual([false, false, true]);
-  await click(app, PLAYGROUND, `[data-testid="start-import"]`);
-  await expect.poll(() => text("action-list-picked")).toBe("Picked: import");
-  await app.close();
-});
+  test("ui playground: the foundations pages fill up, show the theme's own values and play their motion", async () => {
+    const { app, page } = running;
+    const examples = (id: string) => inModule<string[]>(app, PLAYGROUND, `[...${q(`page-${id}`)}.querySelectorAll('section[data-testid^="example-"]')].map((el) => el.dataset.testid.slice(8))`);
 
-test("ui playground: tabs close with the X and a middle click, reorder by drag, rename in place and scroll with the wheel", async () => {
-  const { app, page } = await launch();
-  await playgroundReady(app, page);
-  await openPage(app, "tabs");
-  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("tab-strip")}`)).toBe(true);
+    // Every page of the group lists its examples, and none says it is coming.
+    const expected: Record<string, string[]> = {
+      colours: ["Tokens", "TextOnSurface", "DoDont"],
+      text: ["TypeScale", "Weights", "Numbers", "Capitals", "Mono"],
+      spacing: ["Scale", "Radius", "NestedCorners", "Depth"],
+      motion: ["Curves", "Durations", "Rules", "ReducedMotion"],
+      writing: ["FewWords", "Descriptions", "PlainWords", "YouDu", "Names"],
+    };
+    for (const [id, names] of Object.entries(expected)) {
+      await openPage(app, id);
+      await expect.poll(() => examples(id)).toEqual(names);
+      // Each page shows at least one rule line from the module rules.
+      expect(await inModule(app, PLAYGROUND, `${q(`page-${id}`)}.querySelectorAll('[data-testid="example-rule"]').length`)).toBeGreaterThan(0);
+    }
 
-  const strip = `document.querySelector('[data-testid="tab-strip"]')`;
-  const labels = () => inModule<string[]>(app, PLAYGROUND, `[...${strip}.querySelectorAll('[data-testid="strip-tab"]')].map((el) => el.textContent.trim())`);
-  const tabNamed = (name: string) => `[...${strip}.querySelectorAll('[data-testid="strip-tab"]')].find((el) => el.textContent.trim() === ${JSON.stringify(name)})`;
-  const state = () => inModule<string>(app, PLAYGROUND, `${q("strip-state")}.textContent.trim()`);
-  await expect.poll(labels).toEqual(["Iron", "Copper", "Steel", "Plastic"]);
+    // Colours: all 28 tokens, each with the value the host set on the page.
+    await openPage(app, "colours");
+    expect(await inModule(app, PLAYGROUND, `document.querySelectorAll('[data-token]').length`)).toBe(28);
+    const primary = await inModule<string>(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary").trim()`);
+    expect(primary).not.toBe("");
+    await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelector('[data-token="primary"]').textContent`)).toContain(primary);
 
-  // The X closes a tab; closing the open one opens the tab after it.
-  await inModule(app, PLAYGROUND, `${tabNamed("Iron")}.querySelector('[data-testid="strip-tab-close"]').click()`);
-  await expect.poll(labels).toEqual(["Copper", "Steel", "Plastic"]);
-  await expect.poll(state).toContain("open: Copper");
+    // Spacing: the corner steps read their pixels from the theme.
+    await openPage(app, "spacing");
+    expect(await inModule(app, PLAYGROUND, `document.querySelectorAll('[data-step]').length`)).toBe(4);
+    await expect.poll(() => inModule(app, PLAYGROUND, `[...document.querySelectorAll('[data-step]')].every((el) => /\\d+px/.test(el.parentElement.textContent))`)).toBe(true);
 
-  // A middle click closes a tab too.
-  await inModule(app, PLAYGROUND, `${tabNamed("Steel")}.dispatchEvent(new MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true }))`);
-  await expect.poll(labels).toEqual(["Copper", "Plastic"]);
+    // Motion: the times come from the tokens, and Play moves the dot (reduced motion jumps there at once).
+    await openPage(app, "motion");
+    await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelector('[data-token="--duration-move"]').textContent`)).toContain("300 ms");
+    const dot = `document.querySelector('[data-token="--duration-menu"] [data-testid="demo-dot"]')`;
+    expect(await inModule(app, PLAYGROUND, `getComputedStyle(${dot}).translate`)).toMatch(/^(none|0px)/);
+    await inModule(app, PLAYGROUND, `document.querySelector('[data-token="--duration-menu"] button').click()`);
+    await expect.poll(() => inModule(app, PLAYGROUND, `getComputedStyle(${dot}).translate`)).toMatch(/^96px/);
+  });
 
-  // Dragging a tab past the last one moves it to the end.
-  await inModule(app, PLAYGROUND, `(() => {
-    const from = ${tabNamed("Copper")};
-    const to = ${tabNamed("Plastic")}.getBoundingClientRect();
-    const box = from.getBoundingClientRect();
-    const at = (x) => ({ bubbles: true, cancelable: true, button: 0, clientX: x, clientY: box.top + box.height / 2, pointerId: 1 });
-    from.dispatchEvent(new PointerEvent("pointerdown", at(box.left + 10)));
-    document.dispatchEvent(new PointerEvent("pointermove", at(box.left + 30)));
-    document.dispatchEvent(new PointerEvent("pointermove", at(to.right - 5)));
-  })()`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `${tabNamed("Plastic")}.dataset.drop`)).toBe("after");
-  await inModule(app, PLAYGROUND, `document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 1 }))`);
-  await expect.poll(labels).toEqual(["Plastic", "Copper"]);
+  test("ui playground: a select can pick an empty choice, a switch field toggles from its label and menu rows show a line under the name", async () => {
+    const { app, page } = running;
+    const text = (testId: string) => inModule<string>(app, PLAYGROUND, `${q(testId)}.textContent.trim()`);
 
-  // Alt + arrow is the keyboard way.
-  await inModule(app, PLAYGROUND, `${tabNamed("Plastic")}.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true, cancelable: true }))`);
-  await expect.poll(labels).toEqual(["Copper", "Plastic"]);
+    // Inputs: the empty choice clears the select to "", and its own text shows in the trigger.
+    await openPage(app, "pick");
+    expect(await text("select-empty")).toContain("Ranger");
+    await inModule(app, PLAYGROUND, `${q("select-empty")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+    await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelectorAll('[data-slot="select-item"]').length`)).toBe(3);
+    await inModule(app, PLAYGROUND, `(() => { const item = [...document.querySelectorAll('[data-slot="select-item"]')].find((el) => el.textContent.trim() === "No class"); item.focus(); item.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); })()`);
+    await expect.poll(() => text("select-empty-value")).toBe("Value: (empty)");
+    expect(await text("select-empty")).toContain("No class");
 
-  // Double-click renames in place; an empty name is not accepted, Escape gives it up.
-  const rename = (action: string) => inModule(app, PLAYGROUND, `(() => { const input = ${strip}.querySelector('[data-testid="tab-rename-input"]'); ${action} })()`);
-  const typeName = (name: string) => rename(`input.value = ${JSON.stringify(name)}; input.dispatchEvent(new Event("input", { bubbles: true }));`);
-  const key = (name: string) => rename(`input.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(name)}, bubbles: true, cancelable: true }));`);
-  await inModule(app, PLAYGROUND, `${tabNamed("Plastic")}.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `!!${strip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
-  expect(await inModule(app, PLAYGROUND, `document.activeElement === ${strip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
-  await typeName("   ");
-  await key("Enter");
-  expect(await inModule(app, PLAYGROUND, `${strip}.querySelector('[data-testid="tab-rename-input"]').getAttribute("aria-invalid")`)).toBe("true");
-  await typeName("Rubber");
-  await key("Enter");
-  await expect.poll(labels).toEqual(["Copper", "Rubber"]);
-  await inModule(app, PLAYGROUND, `${tabNamed("Rubber")}.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", bubbles: true, cancelable: true }))`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `!!${strip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
-  await typeName("Glass");
-  await key("Escape");
-  await expect.poll(labels).toEqual(["Copper", "Rubber"]);
+    // The label toggles the switch, and the line under it describes it.
+    await openPage(app, "checks");
+    const field = q("switch-field");
+    expect(await inModule(app, PLAYGROUND, `${field}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("true");
+    await inModule(app, PLAYGROUND, `${field}.querySelector("label").click()`);
+    await expect.poll(() => inModule(app, PLAYGROUND, `${field}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("false");
+    expect(await inModule(app, PLAYGROUND, `document.getElementById(${field}.querySelector('[role="switch"]').getAttribute("aria-describedby")).textContent.trim()`)).toBe("Done to-dos stay in the list, crossed out.");
 
-  // Delete on a focused tab closes it; the last tab stays.
-  await inModule(app, PLAYGROUND, `${tabNamed("Rubber")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true }))`);
-  await expect.poll(labels).toEqual(["Copper"]);
-  await inModule(app, PLAYGROUND, `${q("strip-add")}.click()`);
-  await expect.poll(labels).toEqual(["Copper", "New plan 1"]);
-  await expect.poll(state).toContain("open: New plan 1");
+    // Actions: a menu item with a description shows an icon tile, its name and the line.
+    await openPage(app, "menus");
+    await inModule(app, PLAYGROUND, `[...${q("page-menus")}.querySelectorAll("button")].find((el) => el.textContent.trim() === "Add").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+    await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelectorAll('[data-slot="dropdown-menu-item"]').length`)).toBe(3);
+    expect(await inModule(app, PLAYGROUND, `(() => { const item = document.querySelector('[data-slot="dropdown-menu-item"]'); return [!!item.querySelector('[data-slot="action-row-icon"]'), item.textContent.trim()]; })()`)).toEqual([true, "Import a build Start from a file on your PC."]);
 
-  // An icon before the name: only the tab that has one shows it, and it stays while the tab is renamed.
-  const iconStrip = `document.querySelector('[data-testid="tab-strip-icon"]')`;
-  const iconTab = (name: string) => `[...${iconStrip}.querySelectorAll('[data-testid="strip-tab"]')].find((el) => el.textContent.trim() === ${JSON.stringify(name)})`;
-  expect(await inModule(app, PLAYGROUND, `!!${iconTab("Iron")}.querySelector('[data-testid="plan-tab-feeds"]')`)).toBe(true);
-  expect(await inModule(app, PLAYGROUND, `!${iconTab("Copper")}.querySelector('[data-testid="plan-tab-feeds"]')`)).toBe(true);
-  await inModule(app, PLAYGROUND, `${iconTab("Iron")}.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `!!${iconStrip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
-  expect(await inModule(app, PLAYGROUND, `${iconStrip}.querySelector('[data-testid="tab-rename-input"]').value`)).toBe("Iron");
-  expect(await inModule(app, PLAYGROUND, `!!${iconStrip}.querySelector('[data-testid="plan-tab-feeds"]')`)).toBe(true);
-  await inModule(app, PLAYGROUND, `${iconStrip}.querySelector('[data-testid="tab-rename-input"]').dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))`);
+    // Display: the empty state's action list reports the entry that was picked and disables the unavailable one.
+    await inModule(app, PLAYGROUND, `document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
+    await openPage(app, "notices");
+    expect(await inModule(app, PLAYGROUND, `[...${q("page-notices")}.querySelectorAll('[data-slot="action-list"] button')].map((el) => el.disabled)`)).toEqual([false, false, true]);
+    await clickSelector(app, PLAYGROUND, `[data-testid="start-import"]`);
+    await expect.poll(() => text("action-list-picked")).toBe("Picked: import");
+  });
 
-  // Too many tabs for the width: the wheel scrolls the row sideways.
-  const crowd = `document.querySelector('[data-testid="tab-strip-crowd"] [data-testid="tab-strip-scroller"]')`;
-  expect(await inModule(app, PLAYGROUND, `${crowd}.scrollWidth > ${crowd}.clientWidth`)).toBe(true);
-  await inModule(app, PLAYGROUND, `${crowd}.dispatchEvent(new WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true }))`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `${crowd}.scrollLeft`)).toBeGreaterThan(0);
-  await app.close();
-});
+  test("ui playground: tabs close with the X and a middle click, reorder by drag, rename in place and scroll with the wheel", async () => {
+    const { app, page } = running;
+    await openPage(app, "tabs");
+    await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("tab-strip")}`)).toBe(true);
 
-test("ui playground: the segmented control's pill and the tabs' line follow the pick, hide when nothing is picked or disabled, and the tab strip keeps its own line", async () => {
-  const { app, page } = await launch();
-  await playgroundReady(app, page);
-  await openPage(app, "pick");
-  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("segmented-many")}`)).toBe(true);
+    const strip = `document.querySelector('[data-testid="tab-strip"]')`;
+    const labels = () => inModule<string[]>(app, PLAYGROUND, `[...${strip}.querySelectorAll('[data-testid="strip-tab"]')].map((el) => el.textContent.trim())`);
+    const tabNamed = (name: string) => `[...${strip}.querySelectorAll('[data-testid="strip-tab"]')].find((el) => el.textContent.trim() === ${JSON.stringify(name)})`;
+    const state = () => inModule<string>(app, PLAYGROUND, `${q("strip-state")}.textContent.trim()`);
+    await expect.poll(labels).toEqual(["Iron", "Copper", "Steel", "Plastic"]);
 
-  const group = `document.querySelector('[data-testid="segmented-many"]')`;
-  const pill = `${group}.querySelector('[data-testid="segmented-pill"]')`;
-  const picked = `${group}.querySelector('[role="radio"][data-state="checked"]')`;
-  const option = (label: string) => `[...${group}.querySelectorAll('[role="radio"]')].find((el) => el.textContent.trim() === ${JSON.stringify(label)})`;
-  const mode = () => inModule<string>(app, PLAYGROUND, `${group}.dataset.indicator`);
-  // The pill sits exactly on the picked option, to a hundredth of a pixel (Inter's widths are fractions).
-  const gap = () =>
-    inModule<number>(app, PLAYGROUND, `(() => { const a = ${pill}.getBoundingClientRect(); const b = ${picked}.getBoundingClientRect(); return Math.max(...["left", "top", "width", "height"].map((k) => Math.abs(a[k] - b[k]))); })()`);
+    // The X closes a tab; closing the open one opens the tab after it.
+    await inModule(app, PLAYGROUND, `${tabNamed("Iron")}.querySelector('[data-testid="strip-tab-close"]').click()`);
+    await expect.poll(labels).toEqual(["Copper", "Steel", "Plastic"]);
+    await expect.poll(state).toContain("open: Copper");
 
-  // First paint: placed, not moving.
-  await expect.poll(mode).toBe("still");
-  expect(await gap()).toBeLessThan(0.05);
+    // A middle click closes a tab too.
+    await inModule(app, PLAYGROUND, `${tabNamed("Steel")}.dispatchEvent(new MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true }))`);
+    await expect.poll(labels).toEqual(["Copper", "Plastic"]);
 
-  // A click slides (a press, then the click); the pill ends on the new option.
-  await inModule(app, PLAYGROUND, `(() => { const el = ${option("Done")}; el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 })); el.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })); })()`);
-  await expect.poll(mode).toBe("slide");
-  await expect.poll(gap).toBeLessThan(0.05);
+    // Dragging a tab past the last one moves it to the end.
+    await inModule(app, PLAYGROUND, `(() => {
+      const from = ${tabNamed("Copper")};
+      const to = ${tabNamed("Plastic")}.getBoundingClientRect();
+      const box = from.getBoundingClientRect();
+      const at = (x) => ({ bubbles: true, cancelable: true, button: 0, clientX: x, clientY: box.top + box.height / 2, pointerId: 1 });
+      from.dispatchEvent(new PointerEvent("pointerdown", at(box.left + 10)));
+      document.dispatchEvent(new PointerEvent("pointermove", at(box.left + 30)));
+      document.dispatchEvent(new PointerEvent("pointermove", at(to.right - 5)));
+    })()`);
+    await expect.poll(() => inModule(app, PLAYGROUND, `${tabNamed("Plastic")}.dataset.drop`)).toBe("after");
+    await inModule(app, PLAYGROUND, `document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 1 }))`);
+    await expect.poll(labels).toEqual(["Plastic", "Copper"]);
 
-  // The arrow keys jump, and the labels don't fade either.
-  await inModule(app, PLAYGROUND, `(() => { const el = ${picked}; el.focus(); el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true })); })()`);
-  await expect.poll(mode).toBe("jump");
-  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${option("Done")}).transitionProperty`)).toBe("none");
-  await expect.poll(gap).toBeLessThan(0.05);
+    // Alt + arrow is the keyboard way.
+    await inModule(app, PLAYGROUND, `${tabNamed("Plastic")}.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true, cancelable: true }))`);
+    await expect.poll(labels).toEqual(["Copper", "Plastic"]);
 
-  // The row changes size (a resize, a font arriving): the pill stays on its option.
-  await inModule(app, PLAYGROUND, `${group}.style.paddingLeft = "30px"`);
-  await expect.poll(gap).toBeLessThan(0.05);
+    // Double-click renames in place; an empty name is not accepted, Escape gives it up.
+    const rename = (action: string) => inModule(app, PLAYGROUND, `(() => { const input = ${strip}.querySelector('[data-testid="tab-rename-input"]'); ${action} })()`);
+    const typeName = (name: string) => rename(`input.value = ${JSON.stringify(name)}; input.dispatchEvent(new Event("input", { bubbles: true }));`);
+    const key = (name: string) => rename(`input.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(name)}, bubbles: true, cancelable: true }));`);
+    await inModule(app, PLAYGROUND, `${tabNamed("Plastic")}.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))`);
+    await expect.poll(() => inModule(app, PLAYGROUND, `!!${strip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
+    expect(await inModule(app, PLAYGROUND, `document.activeElement === ${strip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
+    await typeName("   ");
+    await key("Enter");
+    expect(await inModule(app, PLAYGROUND, `${strip}.querySelector('[data-testid="tab-rename-input"]').getAttribute("aria-invalid")`)).toBe("true");
+    await typeName("Rubber");
+    await key("Enter");
+    await expect.poll(labels).toEqual(["Copper", "Rubber"]);
+    await inModule(app, PLAYGROUND, `${tabNamed("Rubber")}.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", bubbles: true, cancelable: true }))`);
+    await expect.poll(() => inModule(app, PLAYGROUND, `!!${strip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
+    await typeName("Glass");
+    await key("Escape");
+    await expect.poll(labels).toEqual(["Copper", "Rubber"]);
 
-  // Nothing picked, and disabled: no pill.
-  const hidden = (label: string) => inModule<string[]>(app, PLAYGROUND, `(() => { const g = document.querySelector('[role="radiogroup"][aria-label=${JSON.stringify(label)}]'); return [g.dataset.indicator, getComputedStyle(g.querySelector('[data-testid="segmented-pill"]')).opacity]; })()`);
-  expect(await hidden("Mixed")).toEqual(["off", "0"]);
-  expect(await hidden("Locked")).toEqual(["off", "0"]);
-  // The first click on a control with nothing picked slides in like every later one (it fades in out of its resting place).
-  await inModule(app, PLAYGROUND, `(() => { const el = document.querySelector('[role="radiogroup"][aria-label="Mixed"] [role="radio"]:nth-of-type(2)'); el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 })); el.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })); })()`);
-  expect((await hidden("Mixed"))[0]).toBe("slide");
-  await expect.poll(async () => (await hidden("Mixed"))[1]).toBe("1");
+    // Delete on a focused tab closes it; the last tab stays.
+    await inModule(app, PLAYGROUND, `${tabNamed("Rubber")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true }))`);
+    await expect.poll(labels).toEqual(["Copper"]);
+    await inModule(app, PLAYGROUND, `${q("strip-add")}.click()`);
+    await expect.poll(labels).toEqual(["Copper", "New plan 1"]);
+    await expect.poll(state).toContain("open: New plan 1");
 
-  // Display: the tabs' line is one piece in the list and the tab has no border of its own; the closable strip keeps
-  // its per-tab border and has no moving line.
-  await openPage(app, "tabs");
-  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("tab-strip")}`)).toBe(true);
-  const list = `[...document.querySelectorAll('[data-slot="tabs-list"]')].find((el) => el.querySelector('[data-testid="tabs-line"]') && el.textContent.includes("Overview"))`;
-  await expect.poll(() => inModule(app, PLAYGROUND, `${list}.dataset.indicator`)).toBe("still");
-  expect(await inModule(app, PLAYGROUND, `(() => { const l = ${list}; const line = l.querySelector('[data-testid="tabs-line"]'); const tab = l.querySelector('[role="tab"][data-state="active"]'); const a = line.getBoundingClientRect(); const b = tab.getBoundingClientRect(); return [Math.abs(a.left - b.left) < 0.05, Math.abs(a.width - b.width) < 0.05, Math.abs(a.bottom - b.bottom) < 0.05, getComputedStyle(tab).borderBottomColor]; })()`)).toEqual([true, true, true, "rgba(0, 0, 0, 0)"]);
-  const strip = `document.querySelector('[data-testid="tab-strip"]')`;
-  expect(await inModule(app, PLAYGROUND, `[!!${strip}.querySelector('.tavora-indicator'), getComputedStyle(${strip}.querySelector('[role="tab"][data-state="active"]')).borderBottomColor !== "rgba(0, 0, 0, 0)"]`)).toEqual([false, true]);
-  await app.close();
+    // An icon before the name: only the tab that has one shows it, and it stays while the tab is renamed.
+    const iconStrip = `document.querySelector('[data-testid="tab-strip-icon"]')`;
+    const iconTab = (name: string) => `[...${iconStrip}.querySelectorAll('[data-testid="strip-tab"]')].find((el) => el.textContent.trim() === ${JSON.stringify(name)})`;
+    expect(await inModule(app, PLAYGROUND, `!!${iconTab("Iron")}.querySelector('[data-testid="plan-tab-feeds"]')`)).toBe(true);
+    expect(await inModule(app, PLAYGROUND, `!${iconTab("Copper")}.querySelector('[data-testid="plan-tab-feeds"]')`)).toBe(true);
+    await inModule(app, PLAYGROUND, `${iconTab("Iron")}.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))`);
+    await expect.poll(() => inModule(app, PLAYGROUND, `!!${iconStrip}.querySelector('[data-testid="tab-rename-input"]')`)).toBe(true);
+    expect(await inModule(app, PLAYGROUND, `${iconStrip}.querySelector('[data-testid="tab-rename-input"]').value`)).toBe("Iron");
+    expect(await inModule(app, PLAYGROUND, `!!${iconStrip}.querySelector('[data-testid="plan-tab-feeds"]')`)).toBe(true);
+    await inModule(app, PLAYGROUND, `${iconStrip}.querySelector('[data-testid="tab-rename-input"]').dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))`);
+
+    // Too many tabs for the width: the wheel scrolls the row sideways.
+    const crowd = `document.querySelector('[data-testid="tab-strip-crowd"] [data-testid="tab-strip-scroller"]')`;
+    expect(await inModule(app, PLAYGROUND, `${crowd}.scrollWidth > ${crowd}.clientWidth`)).toBe(true);
+    await inModule(app, PLAYGROUND, `${crowd}.dispatchEvent(new WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true }))`);
+    await expect.poll(() => inModule(app, PLAYGROUND, `${crowd}.scrollLeft`)).toBeGreaterThan(0);
+  });
+
+  test("ui playground: the segmented control's pill and the tabs' line follow the pick, hide when nothing is picked or disabled, and the tab strip keeps its own line", async () => {
+    const { app, page } = running;
+    await openPage(app, "pick");
+    await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("segmented-many")}`)).toBe(true);
+
+    const group = `document.querySelector('[data-testid="segmented-many"]')`;
+    const pill = `${group}.querySelector('[data-testid="segmented-pill"]')`;
+    const picked = `${group}.querySelector('[role="radio"][data-state="checked"]')`;
+    const option = (label: string) => `[...${group}.querySelectorAll('[role="radio"]')].find((el) => el.textContent.trim() === ${JSON.stringify(label)})`;
+    const mode = () => inModule<string>(app, PLAYGROUND, `${group}.dataset.indicator`);
+    // The pill sits exactly on the picked option, to a hundredth of a pixel (Inter's widths are fractions).
+    const gap = () =>
+      inModule<number>(app, PLAYGROUND, `(() => { const a = ${pill}.getBoundingClientRect(); const b = ${picked}.getBoundingClientRect(); return Math.max(...["left", "top", "width", "height"].map((k) => Math.abs(a[k] - b[k]))); })()`);
+
+    // First paint: placed, not moving.
+    await expect.poll(mode).toBe("still");
+    expect(await gap()).toBeLessThan(0.05);
+
+    // A click slides (a press, then the click); the pill ends on the new option.
+    await inModule(app, PLAYGROUND, `(() => { const el = ${option("Done")}; el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 })); el.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })); })()`);
+    await expect.poll(mode).toBe("slide");
+    await expect.poll(gap).toBeLessThan(0.05);
+
+    // The arrow keys jump, and the labels don't fade either.
+    await inModule(app, PLAYGROUND, `(() => { const el = ${picked}; el.focus(); el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true })); })()`);
+    await expect.poll(mode).toBe("jump");
+    expect(await inModule(app, PLAYGROUND, `getComputedStyle(${option("Done")}).transitionProperty`)).toBe("none");
+    await expect.poll(gap).toBeLessThan(0.05);
+
+    // The row changes size (a resize, a font arriving): the pill stays on its option.
+    await inModule(app, PLAYGROUND, `${group}.style.paddingLeft = "30px"`);
+    await expect.poll(gap).toBeLessThan(0.05);
+
+    // Nothing picked, and disabled: no pill.
+    const hidden = (label: string) => inModule<string[]>(app, PLAYGROUND, `(() => { const g = document.querySelector('[role="radiogroup"][aria-label=${JSON.stringify(label)}]'); return [g.dataset.indicator, getComputedStyle(g.querySelector('[data-testid="segmented-pill"]')).opacity]; })()`);
+    expect(await hidden("Mixed")).toEqual(["off", "0"]);
+    expect(await hidden("Locked")).toEqual(["off", "0"]);
+    // The first click on a control with nothing picked slides in like every later one (it fades in out of its resting place).
+    await inModule(app, PLAYGROUND, `(() => { const el = document.querySelector('[role="radiogroup"][aria-label="Mixed"] [role="radio"]:nth-of-type(2)'); el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 })); el.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })); })()`);
+    expect((await hidden("Mixed"))[0]).toBe("slide");
+    await expect.poll(async () => (await hidden("Mixed"))[1]).toBe("1");
+
+    // Display: the tabs' line is one piece in the list and the tab has no border of its own; the closable strip keeps
+    // its per-tab border and has no moving line.
+    await openPage(app, "tabs");
+    await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("tab-strip")}`)).toBe(true);
+    const list = `[...document.querySelectorAll('[data-slot="tabs-list"]')].find((el) => el.querySelector('[data-testid="tabs-line"]') && el.textContent.includes("Overview"))`;
+    await expect.poll(() => inModule(app, PLAYGROUND, `${list}.dataset.indicator`)).toBe("still");
+    expect(await inModule(app, PLAYGROUND, `(() => { const l = ${list}; const line = l.querySelector('[data-testid="tabs-line"]'); const tab = l.querySelector('[role="tab"][data-state="active"]'); const a = line.getBoundingClientRect(); const b = tab.getBoundingClientRect(); return [Math.abs(a.left - b.left) < 0.05, Math.abs(a.width - b.width) < 0.05, Math.abs(a.bottom - b.bottom) < 0.05, getComputedStyle(tab).borderBottomColor]; })()`)).toEqual([true, true, true, "rgba(0, 0, 0, 0)"]);
+    const strip = `document.querySelector('[data-testid="tab-strip"]')`;
+    expect(await inModule(app, PLAYGROUND, `[!!${strip}.querySelector('.tavora-indicator'), getComputedStyle(${strip}.querySelector('[role="tab"][data-state="active"]')).borderBottomColor !== "rgba(0, 0, 0, 0)"]`)).toEqual([false, true]);
+  });
 });
 
 test("to-dos: an open menu stays open when a save comes back", async () => {
@@ -886,12 +906,14 @@ test("to-dos: an open menu stays open when a save comes back", async () => {
   // This panel saves a change while its menu is open...
   await addInto(app, TODOS, `${groupNamed("Bosses")}.querySelector("form")`, "Defeat Count Geonor");
   await expect.poll(() => taskTitles(app, "", 1)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor"]);
+  // The menu must stay open: nothing closes it, so give a wrong close time to show.
   await page.waitForTimeout(300);
   expect(await open(0)).toBe(true);
 
   // ...and so does the other panel.
   await addInto(app, TODOS, `${groupNamed("Bosses")}.querySelector("form")`, "Defeat the Executioner", 1);
   await expect.poll(() => taskTitles(app, "", 0)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor", "Defeat the Executioner"]);
+  // As above.
   await page.waitForTimeout(300);
   expect(await open(0)).toBe(true);
   await app.close();
@@ -914,6 +936,7 @@ test("to-dos: a group gets a color from its menu, and keeps it after a restart",
   // The group's menu is drawn by Tavora above every panel (ui.showMenu). A script click opens nothing;
   // a real key press on the ⋯ button does, and Color is a submenu of it.
   await inModule(app, TODOS, `${q("group-menu")}.click()`);
+  // Nothing may open, so there is no state to wait for: give a wrong menu time to show.
   await page.waitForTimeout(300);
   await expect(page.getByTestId("module-menu")).toHaveCount(0);
   await inModule(app, TODOS, `${q("group-menu")}.focus()`);
@@ -994,18 +1017,18 @@ test("calculator: works out sums from keys and the keyboard, and keeps the last 
   const results = (running = app) =>
     inModule<string[]>(running, CALCULATOR, `[...document.querySelectorAll('[data-testid="history-item"] span:last-child')].map((el) => el.textContent)`);
 
-  for (const key of ["1", "2", "*", "(", "3", "+", "4"]) await click(app, CALCULATOR, `[data-testid="key-${key}"]`);
+  for (const key of ["1", "2", "*", "(", "3", "+", "4"]) await clickSelector(app, CALCULATOR, `[data-testid="key-${key}"]`);
   await expect.poll(() => text("display")).toBe("12×(3+4");
   await expect.poll(() => text("preview")).toBe("= 84");
-  await click(app, CALCULATOR, `[data-testid="key-="]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="key-="]`);
   await expect.poll(() => text("display")).toBe("84");
   await expect.poll(() => results()).toEqual(["84"]);
 
   // x² works on the result, and big numbers show their thousands.
-  await click(app, CALCULATOR, `[data-testid="key-square"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="key-square"]`);
   await expect.poll(() => text("display")).toBe("84²");
   await expect.poll(() => text("preview")).toBe("= 7,056");
-  await click(app, CALCULATOR, `[data-testid="key-="]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="key-="]`);
   await expect.poll(() => results()).toEqual(["7,056", "84"]);
 
   // The keyboard works too, and a sum that can't be worked out says why.
@@ -1020,19 +1043,19 @@ test("calculator: works out sums from keys and the keyboard, and keeps the last 
   await ready(again.app, CALCULATOR, "history-item");
   await expect.poll(() => results(again.app)).toEqual(["7,056", "84"]);
   // Clearing happens at once, with Undo on a toast for a few seconds.
-  await click(again.app, CALCULATOR, `[data-testid="clear-history"]`);
+  await clickSelector(again.app, CALCULATOR, `[data-testid="clear-history"]`);
   await expect.poll(() => results(again.app)).toEqual([]);
   await expect.poll(() => inModule(again.app, CALCULATOR, `${q("undo-toast")}?.innerText ?? ""`)).toContain("History cleared");
-  await click(again.app, CALCULATOR, `[data-testid="undo"]`);
+  await clickSelector(again.app, CALCULATOR, `[data-testid="undo"]`);
   await expect.poll(() => results(again.app)).toEqual(["7,056", "84"]);
-  await click(again.app, CALCULATOR, `[data-testid="clear-history"]`);
+  await clickSelector(again.app, CALCULATOR, `[data-testid="clear-history"]`);
   await expect.poll(() => results(again.app)).toEqual([]);
 
   // The toolbar switches to the Basic keypad and hides the history.
   const shown = (testId: string) => inModule<boolean>(again.app, CALCULATOR, `!!${q(testId)}`);
-  await click(again.app, CALCULATOR, `[data-testid="mode-basic"]`);
+  await clickSelector(again.app, CALCULATOR, `[data-testid="mode-basic"]`);
   await expect.poll(() => shown("key-square")).toBe(false);
-  await click(again.app, CALCULATOR, `[data-testid="toggle-history"]`);
+  await clickSelector(again.app, CALCULATOR, `[data-testid="toggle-history"]`);
   await expect.poll(() => shown("history")).toBe(false);
   await again.app.close();
 });
@@ -1066,7 +1089,7 @@ test("calculator: settings are one compact page that saves at once, resets with 
   };
 
   // One page in a compact dialog: no menu, no Done, a short line under every setting, Reset and the saved note in the footer.
-  await click(app, CALCULATOR, `[data-testid="options"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="options"]`);
   await expect(dialog).toBeVisible();
   await ready(app, CALCULATOR, "settings-dialog");
   expect((await dialog.boundingBox())!.width).toBeLessThan(800);
@@ -1083,8 +1106,8 @@ test("calculator: settings are one compact page that saves at once, resets with 
 
   // Every change saves at once.
   await pickDecimals("2");
-  await click(app, CALCULATOR, `[data-testid="options-short"]`);
-  await click(app, CALCULATOR, `[data-testid="history-length-25"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="options-short"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="history-length-25"]`);
   await expect.poll(() => text("settings-saved")).toBe("Saved");
   await shoot("calculator-settings-changed");
   expect(await text("options-decimals")).toBe("2");
@@ -1092,13 +1115,13 @@ test("calculator: settings are one compact page that saves at once, resets with 
   expect(await history()).toEqual(["history-length-25"]);
 
   // Reset puts the three settings back; Undo brings them back.
-  await click(app, CALCULATOR, `[data-testid="settings-reset"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="settings-reset"]`);
   await expect.poll(() => text("options-decimals")).toBe("Auto");
   expect(await short()).toBe("false");
   expect(await history()).toEqual(["history-length-10"]);
   await expect.poll(() => text("settings-reset-toast")).toContain("Page reset");
   await shoot("calculator-settings-reset");
-  await click(app, CALCULATOR, `[data-testid="settings-reset-undo"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="settings-reset-undo"]`);
   await expect.poll(() => text("options-decimals")).toBe("2");
   expect(await short()).toBe("true");
   expect(await history()).toEqual(["history-length-25"]);
@@ -1107,7 +1130,7 @@ test("calculator: settings are one compact page that saves at once, resets with 
   await page.getByTestId("panel-dialog-close").click();
   await expect(dialog).toHaveCount(0);
   await ready(app, CALCULATOR, "key-=");
-  for (const key of ["1", "/", "3"]) await click(app, CALCULATOR, `[data-testid="key-${key}"]`);
+  for (const key of ["1", "/", "3"]) await clickSelector(app, CALCULATOR, `[data-testid="key-${key}"]`);
   await expect.poll(() => text("preview")).toBe("= 0.33");
 
   // The choices are kept after a restart.
@@ -1115,7 +1138,7 @@ test("calculator: settings are one compact page that saves at once, resets with 
   const again = await launch(userData);
   await openWorkspace(again.page, "poe2");
   await ready(again.app, CALCULATOR, "key-=");
-  await click(again.app, CALCULATOR, `[data-testid="options"]`);
+  await clickSelector(again.app, CALCULATOR, `[data-testid="options"]`);
   await ready(again.app, CALCULATOR, "settings-dialog");
   await expect.poll(() => inModule<string>(again.app, CALCULATOR, `${q("options-decimals")}.textContent.trim()`)).toBe("2");
   await again.app.close();
@@ -1160,8 +1183,8 @@ test("calculator: keys keep a usable size and the history keeps room, whatever t
   await setContentSize(app, 640, 1000);
   await expect.poll(fits(390, 56)).toBe(true);
   // Without the history, the Basic keypad fits the smallest window whole (Plus has a row more and may scroll there).
-  await click(app, CALCULATOR, `[data-testid="toggle-history"]`);
-  await click(app, CALCULATOR, `[data-testid="mode-basic"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="toggle-history"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="mode-basic"]`);
   await setContentSize(app, 640, 480);
   await expect.poll(() => inModule<boolean>(app, CALCULATOR, `${q("calculator-body")}.scrollHeight <= ${q("calculator-body")}.clientHeight`)).toBe(true);
   await app.close();

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { clickInModule, desktopDir, expectModuleText, inModule, launch } from "./harness";
+import { clickInModule, desktopDir, expectModuleText, inModule, launch, gesture } from "./harness";
 
 const PROBE = "local.test.leaderboards-probe";
 /** Not in test/fixtures, which every launch loads: a module with the leaderboards connector would show its settings in every spec. */
@@ -75,16 +75,6 @@ async function signUp(page: Page, email: string) {
   await page.getByTestId("profile-close").click();
 }
 
-/** A real key press in the probe's page, so what follows counts as the user's own click. */
-async function gesture(app: ElectronApplication) {
-  await app.evaluate(({ webContents }, moduleId) => {
-    const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
-    if (!target) throw new Error("no panel");
-    target.sendInputEvent({ type: "keyDown", keyCode: "Shift" });
-    target.sendInputEvent({ type: "keyUp", keyCode: "Shift" });
-  }, PROBE);
-}
-
 type Answer = { ok: boolean; result?: Record<string, unknown>; error?: { code: string } };
 /** One call from the probe's page, with the host's answer. */
 const call = (app: ElectronApplication, method: string, params?: unknown) => inModule<Answer>(app, PROBE, `window.probe.call(${JSON.stringify(method)}, ${JSON.stringify(params)})`);
@@ -117,7 +107,7 @@ test("a module's results go public only after the user says yes in its panel, an
     await expect(page.getByTestId("leaderboard-question")).toHaveCount(0);
 
     // After it, the question shows in the panel's place; Not now leaves everything private.
-    await gesture(app);
+    await gesture(app, PROBE);
     await clickInModule(app, PROBE, "probe-show");
     await expect(page.getByTestId("leaderboard-question")).toContainText("Your Tavora name and your results in Leaderboards Probe will be public.");
     await page.getByTestId("leaderboard-question-no").click();
@@ -126,7 +116,7 @@ test("a module's results go public only after the user says yes in its panel, an
     expect((await answers(app, "show"))[1]).toMatchObject({ ok: true, result: { shown: false, name: null } });
 
     // Yes shows the user, under a name the boards can show.
-    await gesture(app);
+    await gesture(app, PROBE);
     await clickInModule(app, PROBE, "probe-show");
     await page.getByTestId("leaderboard-question-yes").click();
     await expect.poll(async () => (await answers(app, "show")).length).toBe(3);
@@ -190,7 +180,7 @@ test("signed out, the question offers to sign in, and the module says offline in
     await expectModuleText(app, PROBE, "probe-status", "ready");
     expect(await call(app, "leaderboards.status")).toMatchObject({ ok: true, result: { online: true, signedIn: false, available: true, shown: false } });
 
-    await gesture(app);
+    await gesture(app, PROBE);
     await clickInModule(app, PROBE, "probe-show");
     await expect(page.getByTestId("leaderboard-question")).toContainText("Sign in to show your results");
     await page.getByTestId("leaderboard-question-yes").click();

@@ -2,36 +2,11 @@
 // front of the module name. The Appearance switch hides them on the tabs only.
 // A module's own icon (the manifest `icon`) wins over the built-in logos, and a
 // module with none gets a puzzle piece.
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { launch, newUserData, NOTES, openWorkspace, openModule, panels, PLAYGROUND } from "./harness";
+import { launch, newUserData, NOTES, openWorkspace, openModule, panels, PLAYGROUND, addModule } from "./harness";
 
 const OWN = "local.test.pictured";
 const PLAIN = "local.test.plain";
-/** A 1x1 PNG. */
-const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
-
-async function addModule(userData: string, folder: string, id: string, name: string, icon?: string): Promise<void> {
-  const dir = path.join(userData, "modules", folder);
-  await mkdir(dir, { recursive: true });
-  await writeFile(
-    path.join(dir, "tavora.module.json"),
-    JSON.stringify({
-      id,
-      name,
-      version: "1.0.0",
-      apiVersion: "1",
-      entry: "index.html",
-      games: [],
-      viewport: { minWidth: 100, minHeight: 100 },
-      permissions: { network: [] },
-      ...(icon ? { icon } : {}),
-    }),
-  );
-  await writeFile(path.join(dir, "index.html"), `<!doctype html><title>${name}</title><p>${name}</p>`);
-  if (icon) await writeFile(path.join(dir, icon), PNG);
-}
 
 test("the icons show on tabs and in the module lists, and the switch only hides them on the tabs", async () => {
   const { app, page } = await launch();
@@ -69,8 +44,8 @@ test("the icons show on tabs and in the module lists, and the switch only hides 
 
 test("a module's own icon is shown, and a module without one gets a puzzle piece", async () => {
   const userData = await newUserData();
-  await addModule(userData, "pictured", OWN, "Pictured", "icon.png");
-  await addModule(userData, "plain", PLAIN, "Plain");
+  await addModule(userData, "pictured", OWN, { name: "Pictured", version: "1.0.0", icon: "icon.png" });
+  await addModule(userData, "plain", PLAIN, { name: "Plain", version: "1.0.0" });
   const { app, page } = await launch(userData);
   await openWorkspace(page, "poe2");
 

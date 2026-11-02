@@ -15,17 +15,22 @@ import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
 import { dialogChromeKey, dialogCloseClass } from "./chrome"
 import DialogOverlay from "./DialogOverlay.vue"
+import { provideDialogInstant } from "./instant"
 
 defineOptions({
   inheritAttrs: false,
 })
 
-const props = withDefaults(defineProps<DialogContentProps & { class?: HTMLAttributes["class"], showCloseButton?: boolean }>(), {
+const props = withDefaults(defineProps<DialogContentProps & { class?: HTMLAttributes["class"], showCloseButton?: boolean, instant?: boolean }>(), {
   showCloseButton: true,
+  instant: false,
 })
 const emits = defineEmits<DialogContentEmits>()
 
-const delegatedProps = reactiveOmit(props, "class", "showCloseButton")
+const delegatedProps = reactiveOmit(props, "class", "showCloseButton", "instant")
+
+// Opened by a key (or closed with Escape), or `instant` for a dialog that never animates: no rise, no fade (instant.ts).
+const instant = provideDialogInstant(() => props.instant)
 
 // A DialogHeader with a title draws the close X itself (centred against the title); without one the X sits in the corner.
 const headerClose = ref(false)
@@ -99,6 +104,7 @@ useEventListener(window, "resize", place)
     <DialogOverlay />
     <DialogContent
       data-slot="dialog-content"
+      :data-instant="instant ? '' : undefined"
       v-bind="{ ...$attrs, ...forwarded }"
       @open-auto-focus="focusFirst"
       :class="

@@ -134,6 +134,7 @@ test("a hostile module cannot escape its sandbox, spoof identity or reach the ne
   const before = await inModule<string>(app, HOSTILE, "location.href");
   for (const target of [`tavora-module://${VANILLA}/dist/index.html`, `${serverUrl}/navigate`]) {
     await inModule(app, HOSTILE, `tryNavigate(${JSON.stringify(target)})`);
+    // A refused navigation leaves nothing to wait for: give a wrong one time to show.
     await page.waitForTimeout(500);
     expect(await inModule<string>(app, HOSTILE, "location.href")).toBe(before);
   }

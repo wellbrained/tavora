@@ -1,6 +1,6 @@
 // The layout model (dock-model.ts) against the real dock: for many layouts and every drop target, the layout and the
 // rectangles dockview ends up with must be the ones the model predicted. A bare Electron window runs both.
-import { _electron as electron, expect, test } from "@playwright/test";
+import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import { build } from "esbuild";
 import { cp, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -103,30 +103,38 @@ function infos(saved: SavedLayout): Spec["infos"] {
 }
 
 test.describe("the layout model matches dockview", () => {
-  test.setTimeout(240_000);
+  // One bare window and one bundle for all layouts: the page builds a fresh dock for every case it compares.
+  test.describe.configure({ mode: "serial" });
+  test.setTimeout(120_000);
+  let app: ElectronApplication;
+  let page: Page;
+
+  test.beforeAll(async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "tavora-dock-compare-"));
+    await build({ entryPoints: [path.join(fixture, "entry.ts")], bundle: true, outfile: path.join(dir, "entry.js"), loader: { ".css": "css" }, logLevel: "silent", conditions: ["source"] });
+    await cp(path.join(fixture, "page.html"), path.join(dir, "page.html"));
+    const delegate = process.env.ELECTRON_RUN_AS_NODE;
+    delete process.env.ELECTRON_RUN_AS_NODE;
+    app = await electron.launch({ args: [fixture], env: { ...process.env, DOCK_COMPARE_DIR: dir } });
+    if (delegate) process.env.ELECTRON_RUN_AS_NODE = delegate;
+    page = await app.firstWindow();
+    await page.waitForFunction(() => typeof (window as never as { compare?: unknown }).compare === "function");
+  });
+
+  test.afterAll(async () => {
+    await app?.close();
+  });
+
   for (const [name, saved] of Object.entries(LAYOUTS)) {
     test(name, async () => {
-      const dir = await mkdtemp(path.join(tmpdir(), "tavora-dock-compare-"));
-      await build({ entryPoints: [path.join(fixture, "entry.ts")], bundle: true, outfile: path.join(dir, "entry.js"), loader: { ".css": "css" }, logLevel: "silent", conditions: ["source"] });
-      await cp(path.join(fixture, "page.html"), path.join(dir, "page.html"));
-      const delegate = process.env.ELECTRON_RUN_AS_NODE;
-      delete process.env.ELECTRON_RUN_AS_NODE;
-      const app = await electron.launch({ args: [fixture], env: { ...process.env, DOCK_COMPARE_DIR: dir } });
-      if (delegate) process.env.ELECTRON_RUN_AS_NODE = delegate;
-      try {
-        const page = await app.firstWindow();
-        await page.waitForFunction(() => typeof (window as never as { compare?: unknown }).compare === "function");
-        const spec: Spec = { layout: saved, infos: infos(saved), cases: casesFor(saved) };
-        if (process.env.DOCK_DUMP) console.log(JSON.stringify(await page.evaluate((input) => (window as never as { dump: (spec: Spec) => unknown }).dump(input), spec)));
-        const reports = await page.evaluate((input) => (window as never as { compare: (spec: Spec) => unknown[] }).compare(input), spec);
-        type Report = { case: Case; outcome: string; detail?: string; reason?: string };
-        const bad = (reports as Report[]).filter((report) => report.outcome === "mismatch");
-        const summary = (reports as Report[]).reduce<Record<string, number>>((all, report) => ({ ...all, [report.outcome]: (all[report.outcome] ?? 0) + 1 }), {});
-        console.log(name, JSON.stringify(summary));
-        expect(bad.slice(0, 8).map((report) => `${JSON.stringify(report.case)} ${report.detail}`)).toEqual([]);
-      } finally {
-        await app.close();
-      }
+      const spec: Spec = { layout: saved, infos: infos(saved), cases: casesFor(saved) };
+      if (process.env.DOCK_DUMP) console.log(JSON.stringify(await page.evaluate((input) => (window as never as { dump: (spec: Spec) => unknown }).dump(input), spec)));
+      const reports = await page.evaluate((input) => (window as never as { compare: (spec: Spec) => unknown[] }).compare(input), spec);
+      type Report = { case: Case; outcome: string; detail?: string; reason?: string };
+      const bad = (reports as Report[]).filter((report) => report.outcome === "mismatch");
+      const summary = (reports as Report[]).reduce<Record<string, number>>((all, report) => ({ ...all, [report.outcome]: (all[report.outcome] ?? 0) + 1 }), {});
+      console.log(name, JSON.stringify(summary));
+      expect(bad.slice(0, 8).map((report) => `${JSON.stringify(report.case)} ${report.detail}`)).toEqual([]);
     });
   }
 });
