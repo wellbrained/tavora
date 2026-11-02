@@ -175,7 +175,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.7";
+export const SDK_VERSION = "0.3.8";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -299,6 +299,14 @@ export interface TavoraSDK {
     openDialog(size?: { width?: number; height?: number }): Promise<void>;
     /** Puts this panel back in its slot after openDialog. Needs Tavora 0.21.95 or newer. */
     closeDialog(): Promise<void>;
+    /**
+     * Changes the title in the frame of this panel's dialog (the module's name by default) while it is open, for example to
+     * name what its settings are about; `null` goes back to the module's name. Plain text of 1 to `LIMITS.maxTitleLength`
+     * characters, on one line. Nothing happens while no dialog is open, and the next one starts with the module's name, so call
+     * it when `onDialogChange` says the dialog opened. Needs no click. Needs Tavora 0.23.67 or newer: check
+     * `sdk.supports("panel.setDialogTitle")` and keep a title of your own in the page for an older one.
+     */
+    setDialogTitle(title: string | null): Promise<void>;
     /** Fires when this panel's dialog opens or closes, whoever did it. Needs Tavora 0.21.95 or newer. */
     onDialogChange(fn: (open: boolean) => void): Unsubscribe;
     /**
@@ -895,6 +903,9 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       },
       closeDialog: async () => {
         await call("panel.setDialog", { open: false });
+      },
+      setDialogTitle: async (title) => {
+        await call("panel.setDialogTitle", { title });
       },
       onDialogChange: (fn) => on("panel.dialog", ({ open }) => fn(open)),
       onOpenSettings: (fn) => on("panel.openSettings", ({ key }) => fn({ key })),

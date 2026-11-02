@@ -662,6 +662,8 @@ api.onModuleMenu((menu) => (moduleMenu.value = menu));
 
 /** The panel shown big in a dialog over the workspace (PanelDialog.vue), or null. */
 export const panelDialog = shallowRef<PanelDialog | null>(null);
+/** The title the open dialog's panel gave itself (panel.setDialogTitle), or null for the module's name. */
+export const panelDialogTitle = shallowRef<string | null>(null);
 let panelDialogChanges = 0;
 api.onPanelDialog(async (shown) => {
   const change = ++panelDialogChanges;
@@ -672,7 +674,11 @@ api.onPanelDialog(async (shown) => {
     await nextTick();
     if (change !== panelDialogChanges) return;
   }
+  panelDialogTitle.value = null;
   panelDialog.value = shown;
+});
+api.onPanelDialogTitle((instanceId, title) => {
+  if (panelDialog.value?.instanceId === instanceId) panelDialogTitle.value = title;
 });
 
 /** Still images of the panels, by instance id, while they are hidden. */

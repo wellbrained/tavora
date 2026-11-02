@@ -276,6 +276,23 @@ describe("panel", () => {
     expect(await failure(sdk.panel.openDialog({ width: 10 }))).toMatchObject({ code: "INVALID_PARAMS" });
   });
 
+  it("keeps the dialog's title only while the dialog is open", async () => {
+    const { sdk, host } = createMemoryHost();
+    expect(sdk.supports("panel.setDialogTitle")).toBe(true);
+    await sdk.panel.setDialogTitle("Countdown");
+    expect(host.dialogTitle).toBeNull();
+    await sdk.panel.openDialog();
+    await sdk.panel.setDialogTitle("  Countdown ");
+    expect(host.dialogTitle).toBe("Countdown");
+    await sdk.panel.setDialogTitle(null);
+    expect(host.dialogTitle).toBeNull();
+    await sdk.panel.setDialogTitle("Boss");
+    host.setDialog(false);
+    expect(host.dialogTitle).toBeNull();
+    expect(await failure(sdk.panel.setDialogTitle(" "))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.panel.setDialogTitle("x".repeat(LIMITS.maxTitleLength + 1)))).toMatchObject({ code: "INVALID_PARAMS" });
+  });
+
   it("keeps the live state", async () => {
     const { sdk, host } = createMemoryHost({ limits: { maxOverlayStateBytes: 10 } });
     await sdk.panel.setLive({ a: 1 });

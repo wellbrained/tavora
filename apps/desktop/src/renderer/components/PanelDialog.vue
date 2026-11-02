@@ -8,7 +8,7 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue
 import { X } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
-import { api, panelDialog } from "../host";
+import { api, panelDialog, panelDialogTitle } from "../host";
 import { t } from "../i18n";
 import { dialogPlace, type Room } from "../panel-dialog-place";
 
@@ -102,7 +102,7 @@ function onPointerDownOutside(event: Event): void {
     >
       <header class="flex h-12 flex-none items-center gap-2.5 border-b pr-2 pl-4">
         <img v-if="panelDialog.icon" :src="panelDialog.icon" alt="" class="size-5 flex-none rounded" />
-        <DialogTitle class="min-w-0 flex-1 truncate text-sm font-semibold">{{ panelDialog.title }}</DialogTitle>
+        <DialogTitle class="min-w-0 flex-1 truncate text-sm font-semibold">{{ panelDialogTitle ?? panelDialog.title }}</DialogTitle>
         <Button variant="ghost" size="icon-sm" :aria-label="t('common.close')" data-testid="panel-dialog-close" @click="close"><X class="size-4" /></Button>
       </header>
       <div ref="body" class="min-h-0 flex-1" data-testid="panel-dialog-body" />

@@ -8,12 +8,13 @@ import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
-import type { GameOverlayResult, TavoraSDK } from "@tavora/sdk";
-import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
+import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
+import type { TavoraSDK } from "@tavora/sdk";
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { plural, setLanguage, t } from "./i18n";
 import ItemCard from "./ItemCard.vue";
 import ItemEditor from "./ItemEditor.vue";
-import { count, find, groupOf, insert, lap, linkedGroups, MAX, newItem, parseList, remove, resetClock, resetCounter, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
+import { count, find, groupOf, insert, lap, linkedGroups, MAX, move, moveTo, newItem, parseList, remove, resetClock, resetCounter, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
 import { buildLiveState } from "./live";
 import { de, en } from "./locales";
 import { PANEL, UNDO_MS } from "./panel";
@@ -61,9 +62,10 @@ const rows = computed<Row[]>(() => {
   }
   return result;
 });
-const placeOf = (item: Item) => order.value.findIndex((other) => other.id === item.id);
+/** What a row is called for the drag: an item's own id, or its first counter's for a linked group. */
+const rowId = (row: Row) => (row.type === "item" ? row.item.id : row.items[0]!.id);
 
-/** The overlay an item's OBS link and Over game switch belong to: the group's, once the group is shown as a whole. */
+/** The overlay an item's OBS link belongs to: the group's, once the group is shown as a whole. */
 function keyOf(item: Item): string {
   return overlayKey(list.value, item);
 }
@@ -159,6 +161,97 @@ function addItem(kind: ItemKind, settings = true): void {
   else editing.value = id;
 }
 
+// ── Order: drag a row, or Alt+Up and Alt+Down on one of its buttons ───
+
+// The rows slide aside for the dragged one and settle into place when it is dropped; Alt+arrows move them at once.
+const listEl = ref<HTMLElement | null>(null);
+const reorder = useReorderMotion(listEl);
+const dragId = ref<string | null>(null);
+const drop = ref<{ id: string; after: boolean } | null>(null);
+
+function onDragStart(event: DragEvent, id: string): void {
+  dragId.value = id;
+  reorder.begin(id);
+  if (event.currentTarget instanceof HTMLElement) liftedDragImage(event, event.currentTarget);
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", id);
+  }
+}
+
+function onDragOver(event: DragEvent, id: string): void {
+  if (!dragId.value) return;
+  if (dragId.value === id) {
+    reorder.preview(null);
+    return;
+  }
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  drop.value = { id, after: event.clientY > box.top + box.height / 2 };
+  reorder.preview({ id, after: drop.value.after });
+}
+
+function onDrop(event: DragEvent): void {
+  event.preventDefault();
+  const from = dragId.value;
+  const place = drop.value;
+  clearDrag();
+  if (from && place) void reorder.drop(() => void store.value?.apply([], (data) => moveTo(data, from, place.id, place.after)));
+  else reorder.cancel();
+}
+
+function clearDrag(): void {
+  dragId.value = null;
+  drop.value = null;
+}
+
+function endDrag(): void {
+  clearDrag();
+  reorder.cancel();
+}
+
+/** The line where a row would land, for reduced motion; otherwise the gap that opens is the place. */
+function dropLine(row: Row): string | false {
+  if (!reducedMotion()) return false;
+  return drop.value?.id === rowId(row) && (drop.value.after ? "shadow-[0_2px_0_0_var(--primary)]" : "shadow-[0_-2px_0_0_var(--primary)]");
+}
+
+async function onRowKey(event: KeyboardEvent): Promise<void> {
+  if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+  const card = (event.target as Element | null)?.closest<HTMLElement>('article[data-testid^="item-"]');
+  const id = card?.dataset.testid?.slice("item-".length);
+  if (!id) return;
+  event.preventDefault();
+  void store.value?.apply([], (data) => move(data, id, event.key === "ArrowUp" ? -1 : 1));
+  // The row is moved in the list, which drops the keyboard focus; give it back.
+  await nextTick();
+  setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="item-${id}"] button`)?.focus(), 60);
+}
+
+// ── The frame of the dialog names what the settings are about ───────
+
+/**
+ * Whether Tavora shows the item's name in the frame of the dialog: null until it has answered, false on an older Tavora, which
+ * keeps the module's name there, so the page names the item itself. (Tried rather than asked with `supports`, which goes by the
+ * version number.)
+ */
+const titled = ref<boolean | null>(null);
+const dialogTitle = computed(() => (editedItem.value ? editedItem.value.label || t(`kind.${editedItem.value.kind}`) : null));
+watch(
+  [dialogOpen, dialogTitle],
+  ([open, title]) => {
+    if (!open || titled.value === false) return;
+    sdk.value?.panel.setDialogTitle(title).then(
+      () => (titled.value = true),
+      (reason: { code?: string }) => {
+        if (reason?.code === "UNKNOWN_METHOD") titled.value = false;
+      },
+    );
+  },
+  { immediate: true },
+);
+
 // ── Delete, with Undo ────────────────────────────────────────────────
 
 // The offer keeps its own time, so the hotkeys go when it ends even if its toast was closed early.
@@ -219,7 +312,7 @@ async function refreshHotkeys(): Promise<void> {
 }
 
 const overGame = ref<ReadonlySet<string>>(new Set());
-// A group's overlay is fed while it is over the game, so the store needs to know which keys are.
+// The Overlay page decides what is over the game. A group's overlay is fed while it is, so the store needs to know which keys are.
 watch([overGame, store], () => store.value?.setShown(overGame.value), { immediate: true });
 
 /** Tavora's key dialog; a refusal (the panel is over the game, say) goes to the settings, which tell the user. */
@@ -242,17 +335,7 @@ async function copyLink(item: Item): Promise<"copied" | "off" | "denied"> {
   return result;
 }
 
-async function showOverGame(item: Item): Promise<GameOverlayResult> {
-  const key = keyOf(item);
-  const result = (await sdk.value?.overlay.showOverGame(key)) ?? "off";
-  // The overlay shows the item from the start, before its first change.
-  if (result === "shown") {
-    store.value?.publish([item.id], list.value);
-    overGame.value = new Set(overGame.value).add(key);
-  }
-  return result;
-}
-
+/** A deleted item leaves the game too, if it was shown there. */
 async function hideOverGame(key: string): Promise<void> {
   await sdk.value?.overlay.hideOverGame(key);
   const next = new Set(overGame.value);
@@ -284,10 +367,7 @@ provide(PANEL, {
   act,
   setHotkey,
   copyLink,
-  overGame,
   keyOf,
-  showOverGame,
-  hideOverGame,
   preview,
   resetLink,
   remove: removeItem,
@@ -391,7 +471,7 @@ onBeforeUnmount(() => {
   <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
-  <ItemEditor v-else-if="dialogOpen && editedItem" page :item="editedItem" :first="placeOf(editedItem) === 0" :last="placeOf(editedItem) === order.length - 1" @close="closeEditing" />
+  <ItemEditor v-else-if="dialogOpen && editedItem" :key="editedItem.id" page :titled="titled" :item="editedItem" @close="closeEditing" />
   <div v-else class="relative flex h-full min-h-0 flex-col" data-testid="clock-counter-app">
     <header class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2" role="toolbar" :aria-label="t('app.toolbar')">
       <p class="min-w-0 flex-1 truncate px-1 text-xs" role="status">
@@ -422,22 +502,27 @@ onBeforeUnmount(() => {
           </Button>
         </div>
       </div>
-      <div class="flex flex-col gap-2">
-        <template v-for="row in rows" :key="row.type === 'item' ? row.item.id : `group-${row.key}`">
-          <ItemCard v-if="row.type === 'item'" :item="row.item" :editing="editing === row.item.id && !overWorkspace" :first="placeOf(row.item) === 0" :last="placeOf(row.item) === order.length - 1" @toggle-edit="toggleEdit(row.item.id)" />
+      <div ref="listEl" class="flex flex-col gap-2">
+        <div
+          v-for="row in rows"
+          :key="row.type === 'item' ? row.item.id : `group-${row.key}`"
+          :data-reorder-id="rowId(row)"
+          :draggable="rows.length > 1"
+          class="rounded-lg"
+          :class="dropLine(row)"
+          :data-testid="`row-${rowId(row)}`"
+          @dragstart="onDragStart($event, rowId(row))"
+          @dragover="onDragOver($event, rowId(row))"
+          @drop="onDrop"
+          @dragend="endDrag"
+          @keydown="onRowKey"
+        >
+          <ItemCard v-if="row.type === 'item'" :item="row.item" :editing="editing === row.item.id && !overWorkspace" @toggle-edit="toggleEdit(row.item.id)" />
           <section v-else class="border-border flex flex-col gap-1 rounded-lg border p-1" :aria-label="t('app.linked')" data-testid="linked-group">
             <Badge variant="secondary" class="gap-1 self-start"><Link class="size-3" :stroke-width="1.5" aria-hidden="true" />{{ t("app.linked") }}</Badge>
-            <ItemCard
-              v-for="item in row.items"
-              :key="item.id"
-              :item="item"
-              :editing="editing === item.id && !overWorkspace"
-              :first="placeOf(item) === 0"
-              :last="placeOf(item) === order.length - 1"
-              @toggle-edit="toggleEdit(item.id)"
-            />
+            <ItemCard v-for="item in row.items" :key="item.id" :item="item" :editing="editing === item.id && !overWorkspace" @toggle-edit="toggleEdit(item.id)" />
           </section>
-        </template>
+        </div>
       </div>
     </div>
 

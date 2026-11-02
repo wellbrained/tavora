@@ -1,32 +1,72 @@
 <script setup lang="ts">
-// An item's settings: name and how it counts, how it looks on stream with its
-// OBS link, and its hotkeys. Every change saves at once; text and number fields save when they lose focus or on Enter,
-// not on every key, and whatever is still typed saves when this goes away. Tavora shows them as a dialog over the
-// workspace (`page`: the panel itself is that dialog, so this is its whole page); an older Tavora gets ItemCard's
-// dialog in the middle of the panel.
-import { ArrowDown, ArrowUp, Link, Plus, Trash2, X } from "@lucide/vue";
+// An item's settings, in pages: how it counts (Clock or Counter), how it looks, its hotkeys and what it does on stream, with
+// Delete and Done in one footer. Every change saves at once; text and number fields save when they lose focus or on Enter,
+// not on every key, and whatever is still typed saves when the page changes or this goes away. Tavora shows them as a dialog
+// over the workspace (`page`: the panel itself is that dialog, so this is its whole page, and `titled` says the dialog's
+// frame already names the item); an older Tavora gets ItemCard's dialog in the middle of the panel. The pages are a list on
+// the left; on a narrow panel they fold into a dropdown on top, and a row puts its control under its name.
+import { Hash, Hourglass, Keyboard, Link, Palette, Plus, Radio, Timer, Trash2, X } from "@lucide/vue";
 import { errorMessage, SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton } from "@tavora/official-ui/components/ui/dialog";
+import { SettingsRow, SettingsSection } from "@tavora/official-ui/components/ui/module-settings";
+import { usePageMotion } from "@tavora/official-ui/components/ui/motion";
+import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
+import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Input } from "@tavora/official-ui/components/ui/input";
-import { Label } from "@tavora/official-ui/components/ui/label";
 import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { TavoraError } from "@tavora/sdk";
-import { computed, inject, nextTick, onBeforeUnmount, reactive, ref, watch, type Ref } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, useTemplateRef, watch, type Ref } from "vue";
 import { t } from "./i18n";
-import { ALIGNS, COLORS, defaultStored, find, FONTS, groupOf, MAX, memberNames, move, setStream, type Align, type Clock, type Counter, type Font, type Item, type ItemList, type OverlayLook } from "./items";
+import { ALIGNS, COLORS, defaultStored, find, FONTS, groupOf, MAX, memberNames, setStream, type Align, type Clock, type Counter, type Font, type Item, type ItemList, type OverlayLook } from "./items";
 import { ACTIONS, PANEL } from "./panel";
 import { counterName } from "./store";
 import { cleanName, compile, display, keys, render } from "./template";
 import { FORMAT_PRESETS, formatSeconds, isFormat, MAX_FORMAT } from "./time";
 
-const props = defineProps<{ item: Item; first: boolean; last: boolean; page?: boolean }>();
+const props = defineProps<{ item: Item; page?: boolean; titled?: boolean | null }>();
 const emit = defineEmits<{ close: [] }>();
 const panel = inject(PANEL)!;
 const id = computed(() => props.item.id);
 const name = computed(() => props.item.label || t(`kind.${props.item.kind}`));
 const prefix = computed(() => `cc-${props.item.id}`);
+
+// ── Pages, and how much room there is ───────────────────────────────
+
+type PageId = "item" | "look" | "hotkeys" | "stream";
+const current = ref<PageId>("item");
+const root = useTemplateRef<HTMLElement>("root");
+const holder = useTemplateRef<HTMLElement>("holder");
+const { play } = usePageMotion(holder);
+/** The width the settings have: the pages fold into a dropdown below FOLD, and a row puts its control under its name below STACK. */
+const FOLD = 640;
+const STACK = 460;
+const width = ref(FOLD);
+let observer: ResizeObserver | undefined;
+onMounted(() => {
+  width.value = root.value?.clientWidth ?? FOLD;
+  observer = new ResizeObserver(([entry]) => entry && (width.value = entry.contentRect.width));
+  if (root.value) observer.observe(root.value);
+});
+const folded = computed(() => width.value < FOLD);
+const stacked = computed(() => width.value < STACK);
+
+const kindIcon = computed(() => (props.item.kind === "countdown" ? Hourglass : props.item.kind === "stopwatch" ? Timer : Hash));
+const pages = computed(() => [
+  { id: "item" as const, label: t(props.item.kind === "counter" ? "edit.page.counter" : "edit.page.clock"), icon: kindIcon.value, testid: "page-item" },
+  { id: "look" as const, label: t("edit.page.look"), icon: Palette, testid: "page-look" },
+  { id: "hotkeys" as const, label: t("edit.page.hotkeys"), icon: Keyboard, testid: "page-hotkeys" },
+  { id: "stream" as const, label: t("edit.page.stream"), icon: Radio, testid: "page-stream" },
+]);
+const navGroups = computed<NavGroup[]>(() => [{ items: pages.value }]);
+const pageOptions = computed(() => pages.value.map((page) => ({ value: page.id, label: page.label })));
+const pageTitle = computed(() => pages.value.find((page) => page.id === current.value)!.label);
+
+// The page picked takes the old one's place; whatever is typed on the old one saves first.
+watch(current, saveFields, { flush: "pre" });
+watch(current, play, { flush: "post" });
 
 const COLOR_NAMES = ["white", "yellow", "orange", "red", "pink", "violet", "blue", "teal", "green", "black"] as const;
 
@@ -242,20 +282,6 @@ function copyLink() {
   });
 }
 
-const overGame = computed(() => panel.overGame.value.has(panel.keyOf(props.item)));
-
-function setOverGame(on: boolean) {
-  return attempt(linkNote, async () => {
-    if (!on) {
-      await panel.hideOverGame(panel.keyOf(props.item));
-      linkNote.value = null;
-      return;
-    }
-    const result = await panel.showOverGame(props.item);
-    linkNote.value = result === "shown" ? t("edit.shownOverGame") : result === "full" ? t("edit.overGameFull") : null;
-  });
-}
-
 function previewOverlay() {
   return attempt(linkNote, () => panel.preview(props.item));
 }
@@ -283,8 +309,8 @@ function setKey(action: string) {
 
 // ── Closing ──────────────────────────────────────────────────────────
 
-/** A field that is still being typed in saves when the dialog goes, even if the browser never sends its blur. */
-onBeforeUnmount(() => {
+/** Saves what is still typed in the open page's fields, even if the browser never sends their blur (the page changes, the dialog goes). */
+function saveFields() {
   saveLabel();
   if (props.item.kind !== "counter" && isFormat(format.value)) saveFormat();
   if (props.item.kind === "countdown") {
@@ -297,225 +323,211 @@ onBeforeUnmount(() => {
     saveGoal();
     Object.keys(amountDrafts).forEach(saveLinkAmount);
   }
+}
+
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  saveFields();
 });
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-col gap-4" :class="page && '@container h-full p-4'" :data-testid="`editor-${item.id}`">
-    <h2 v-if="page" class="truncate pr-1 text-lg font-semibold">{{ t("item.edit", { label: name }) }}</h2>
-    <!-- Two columns over the workspace when there is room: how it counts and its hotkeys on the left, stream on the right. -->
-    <div class="min-h-0 overflow-y-auto text-sm" :class="page ? 'flex-1 pr-1' : '-mx-6 px-6'">
-      <div class="grid gap-x-8 gap-y-4" :class="page && '@3xl:grid-cols-2'">
-        <div class="flex min-w-0 flex-col gap-4">
-    <div class="flex flex-col gap-1.5">
-      <Label :for="`${prefix}-label`">{{ t("edit.name") }}</Label>
-      <Input :id="`${prefix}-label`" v-model="label" :maxlength="MAX.label" :placeholder="t(`kind.${item.kind}`)" @blur="saveLabel" @keydown.enter="saveLabel" />
+  <div ref="root" class="flex h-full min-h-0 flex-col text-sm" :data-testid="`editor-${item.id}`">
+    <!-- Tavora's frame names the item when it can (`titled`); an older Tavora can't, and then the page does. -->
+    <header v-if="page && titled === false" class="flex h-12 flex-none items-center border-b px-4">
+      <h2 class="min-w-0 truncate text-base font-semibold">{{ name }}</h2>
+    </header>
+
+    <div class="flex min-h-0 flex-1" :class="folded && 'flex-col'">
+      <NavList v-if="!folded" v-model="current" :groups="navGroups" :label="t('edit.pages')" class="bg-background w-[200px] flex-none overflow-y-auto border-r p-3" />
+      <div v-else class="flex-none border-b px-4 py-3">
+        <Picker v-model="current" :options="pageOptions" :label="t('edit.pages')" class="w-full" testid="page-picker" />
+      </div>
+
+      <div ref="holder" class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <!-- The page is named by the list (or the dropdown) and the dialog by its frame, so no heading of its own. -->
+        <section :aria-label="pageTitle" class="min-h-0 flex-1 overflow-y-auto px-8 pb-6 [scrollbar-width:thin]" data-testid="settings-page">
+          <!-- How it counts -->
+          <template v-if="current === 'item'">
+            <SettingsSection>
+              <SettingsRow :label="t('edit.name')" :stacked="stacked">
+                <Input :id="`${prefix}-label`" v-model="label" class="w-full" :maxlength="MAX.label" :placeholder="t(`kind.${item.kind}`)" :aria-label="t('edit.name')" @blur="saveLabel" @keydown.enter="saveLabel" />
+              </SettingsRow>
+
+              <template v-if="item.kind !== 'counter'">
+                <SettingsRow :label="t('edit.format')" :hint="formatValid ? t('edit.formatHint', { text: preview }) : undefined" :stacked="stacked">
+                  <div class="flex w-full gap-1">
+                    <Input :id="`${prefix}-format`" v-model="format" class="min-w-0 flex-1 font-mono" :maxlength="MAX_FORMAT" :aria-label="t('edit.format')" :aria-invalid="!formatValid" :title="t('edit.formatHelp')" @blur="saveFormat()" @keydown.enter="saveFormat()" />
+                    <!-- Kit menus, not ui.showMenu: Tavora draws no module menu while the panel is a dialog over the workspace. -->
+                    <DropdownMenu>
+                      <DropdownMenuTrigger as-child>
+                        <Button variant="secondary" size="sm" class="h-8" :aria-label="t('edit.formatPresets')" :title="t('edit.formatPresets')" data-testid="format-presets">···</Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuRadioGroup :model-value="format" @update:model-value="(preset) => saveFormat(String(preset))">
+                          <DropdownMenuRadioItem v-for="preset in FORMAT_PRESETS" :key="preset" :value="preset" class="tabular-nums">{{ preset }} · {{ formatSeconds(4 * 3600 + 5 * 60 + 9, preset) }}</DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <p v-if="!formatValid" class="text-destructive w-full text-xs" role="alert">{{ t("edit.formatInvalid") }}</p>
+                </SettingsRow>
+
+                <template v-if="item.kind === 'countdown'">
+                  <SettingsRow :label="t('edit.duration')" :stacked="stacked">
+                    <div class="flex items-center gap-1">
+                      <Input :id="`${prefix}-h`" v-model="duration.h" class="w-14 text-center tabular-nums" inputmode="numeric" maxlength="2" :aria-label="t('edit.hours')" @blur="saveDuration" @keydown.enter="saveDuration" />
+                      <span aria-hidden="true">:</span>
+                      <Input :id="`${prefix}-m`" v-model="duration.m" class="w-14 text-center tabular-nums" inputmode="numeric" maxlength="3" :aria-label="t('edit.minutes')" @blur="saveDuration" @keydown.enter="saveDuration" />
+                      <span aria-hidden="true">:</span>
+                      <Input :id="`${prefix}-s`" v-model="duration.s" class="w-14 text-center tabular-nums" inputmode="numeric" maxlength="4" :aria-label="t('edit.seconds')" @blur="saveDuration" @keydown.enter="saveDuration" />
+                    </div>
+                  </SettingsRow>
+                  <SettingsRow :label="t('edit.repeat')" :stacked="stacked">
+                    <Switch :model-value="item.repeat" :aria-label="t('edit.repeat')" @update:model-value="(on: boolean) => updateClock((clock) => (clock.repeat = on))" />
+                  </SettingsRow>
+                  <SettingsRow v-if="!item.repeat" :label="t('edit.doneText')" :hint="t('edit.doneTextHint')" :stacked="stacked">
+                    <Input :id="`${prefix}-done`" v-model="doneText" class="w-full" :maxlength="MAX.doneText" :placeholder="t('item.done')" :aria-label="t('edit.doneText')" @blur="saveDoneText" @keydown.enter="saveDoneText" />
+                  </SettingsRow>
+                </template>
+
+                <template v-else>
+                  <SettingsRow :label="t('edit.laps')" :stacked="stacked">
+                    <Switch :model-value="item.laps" :aria-label="t('edit.laps')" @update:model-value="(on: boolean) => updateClock((clock) => (clock.laps = on))" />
+                  </SettingsRow>
+                  <SettingsRow v-if="item.laps" :label="t('edit.lastLap')" :stacked="stacked">
+                    <Switch :model-value="item.showLastLap" :aria-label="t('edit.lastLap')" @update:model-value="(on: boolean) => updateClock((clock) => (clock.showLastLap = on))" />
+                  </SettingsRow>
+                </template>
+              </template>
+
+              <template v-else>
+                <SettingsRow :label="t('edit.step')" :stacked="stacked">
+                  <Input :id="`${prefix}-step`" v-model="step" class="w-24 tabular-nums" inputmode="numeric" :aria-label="t('edit.step')" @blur="saveStep" @keydown.enter="saveStep" />
+                </SettingsRow>
+                <SettingsRow :label="t('edit.goal')" :hint="t('edit.goalHint')" :stacked="stacked">
+                  <Input :id="`${prefix}-goal`" v-model="goal" class="w-24 tabular-nums" inputmode="numeric" :aria-label="t('edit.goal')" @blur="saveGoal" @keydown.enter="saveGoal" />
+                </SettingsRow>
+                <SettingsRow :label="t('edit.negative')" :stacked="stacked">
+                  <Switch :model-value="item.negative" :aria-label="t('edit.negative')" @update:model-value="(on: boolean) => updateCounter((counter) => (counter.negative = on))" />
+                </SettingsRow>
+                <SettingsRow :label="t('edit.links')" :hint="t('edit.linksHint')" :stacked="stacked">
+                  <DropdownMenu v-if="unlinked.length && item.links.length < MAX.links">
+                    <DropdownMenuTrigger as-child>
+                      <Button variant="secondary" size="sm" data-testid="link-add"><Plus :stroke-width="1.5" /> {{ t("edit.linkAdd") }}</Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuLabel>{{ t("edit.linkPick") }}</DropdownMenuLabel>
+                      <DropdownMenuItem v-for="counter in unlinked" :key="counter.id" :data-testid="`link-pick-${counter.id}`" @select="addLink(counter.id)">{{ counter.label || t("kind.counter") }}</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </SettingsRow>
+                <SettingsRow v-for="link in links" :key="link.target" :label="link.label" :stacked="stacked">
+                  <Input
+                    :model-value="amountDrafts[link.target] ?? String(link.amount)"
+                    class="w-20 tabular-nums"
+                    inputmode="numeric"
+                    :aria-label="t('edit.linkAmount', { label: link.label })"
+                    @update:model-value="(value: string | number) => (amountDrafts[link.target] = String(value))"
+                    @blur="saveLinkAmount(link.target)"
+                    @keydown.enter="saveLinkAmount(link.target)"
+                  />
+                  <Link class="text-muted-foreground size-3.5 flex-none" :stroke-width="1.5" aria-hidden="true" />
+                  <Button variant="ghost" size="icon-sm" :aria-label="t('edit.linkRemove', { label: link.label })" :title="t('edit.linkRemove', { label: link.label })" @click="removeLink(link.target)">
+                    <X :stroke-width="1.5" />
+                  </Button>
+                </SettingsRow>
+              </template>
+            </SettingsSection>
+          </template>
+
+          <!-- How it looks on stream -->
+          <SettingsSection v-else-if="current === 'look'">
+            <SettingsRow :label="t('edit.color')" :stacked="stacked">
+              <ColorPicker :model-value="look.color" :label="t('edit.color')" :colors="[...COLORS]" :labels="COLOR_NAMES.map((name) => t(`color.${name}`))" :columns="5" @update:model-value="(color: string) => updateLook((look) => (look.color = color))" />
+            </SettingsRow>
+            <SettingsRow :label="t('edit.font')" :stacked="stacked">
+              <SegmentedControl v-model="font" :label="t('edit.font')" :options="FONTS.map((value) => ({ value, label: t(`edit.font.${value}`) }))" class="w-full min-w-0 [&>*]:flex-1 [&>*]:px-0" />
+            </SettingsRow>
+            <SettingsRow :label="t('edit.align')" :stacked="stacked">
+              <SegmentedControl v-model="align" :label="t('edit.align')" :options="ALIGNS.map((value) => ({ value, label: t(`edit.align.${value}`) }))" class="w-full min-w-0 [&>*]:flex-1 [&>*]:px-0" />
+            </SettingsRow>
+            <SettingsRow :label="t('edit.outline')" :stacked="stacked">
+              <Switch :model-value="look.outline" :aria-label="t('edit.outline')" @update:model-value="(on: boolean) => updateLook((look) => (look.outline = on))" />
+            </SettingsRow>
+            <SettingsRow v-if="!whole" :label="t('edit.showLabel')" :stacked="stacked">
+              <Switch :model-value="look.showLabel" :aria-label="t('edit.showLabel')" @update:model-value="(on: boolean) => updateLook((look) => (look.showLabel = on))" />
+            </SettingsRow>
+          </SettingsSection>
+
+          <!-- Hotkeys -->
+          <SettingsSection v-else-if="current === 'hotkeys'">
+            <SettingsRow v-for="action in actions" :key="action" :label="t(`action.${action}`)" :stacked="stacked">
+              <span class="text-muted-foreground text-xs" :data-testid="`hotkey-${action}-${item.id}`">{{ hasKey(action) ? t("edit.hotkeyOn") : t("edit.hotkeyNone") }}</span>
+              <Button variant="secondary" size="sm" :aria-label="`${t(`action.${action}`)}: ${hasKey(action) ? t('edit.hotkeyChange') : t('edit.hotkeySet')}`" @click="setKey(action)">{{ hasKey(action) ? t("edit.hotkeyChange") : t("edit.hotkeySet") }}</Button>
+            </SettingsRow>
+            <p class="text-muted-foreground pt-3 text-xs">{{ t("edit.hotkeysHint") }}</p>
+            <p v-if="hotkeyNote" class="text-muted-foreground pt-2 text-xs" role="status" data-testid="hotkey-note">{{ hotkeyNote }}</p>
+          </SettingsSection>
+
+          <!-- On stream -->
+          <SettingsSection v-else>
+            <template v-if="group">
+              <SettingsRow :label="t('edit.scope')" :hint="t('edit.scopeHint')" :stacked="stacked">
+                <SegmentedControl
+                  v-model="scope"
+                  :label="t('edit.scope')"
+                  :options="[
+                    { value: 'self', label: t('edit.scopeSelf'), testid: 'scope-self' },
+                    { value: 'group', label: t('edit.scopeGroup'), testid: 'scope-group' },
+                  ]"
+                  class="w-full min-w-0 [&>*]:flex-1 [&>*]:px-0"
+                />
+              </SettingsRow>
+              <SettingsRow v-if="whole" :label="t('edit.groupText')" stacked>
+                <div class="flex w-full flex-col gap-1.5">
+                  <div class="flex items-center gap-2">
+                    <Input
+                      :id="`${prefix}-gtext`"
+                      ref="textField"
+                      v-model="groupText"
+                      :maxlength="MAX.text"
+                      :aria-label="t('edit.groupText')"
+                      :aria-invalid="!!problem"
+                      :aria-describedby="problem ? `${prefix}-gproblem` : undefined"
+                      data-testid="group-text"
+                      @blur="saveGroupText"
+                      @keydown.enter="saveGroupText"
+                    />
+                    <span v-if="problem" class="text-destructive flex-none" role="img" :aria-label="problem" :title="problem" data-testid="group-problem-x"><X class="size-4" :stroke-width="2" aria-hidden="true" /></span>
+                  </div>
+                  <div class="flex flex-wrap gap-1">
+                    <Button v-for="chip in chips" :key="chip.id" variant="secondary" size="xs" :aria-label="t('edit.groupInsert', { name: chip.name })" :title="t('edit.groupInsert', { name: chip.name })" :data-testid="`group-chip-${chip.key}`" @mousedown.prevent @click="insertKey(chip.key)">
+                      {{ chip.key }}
+                    </Button>
+                  </div>
+                  <p v-if="problem" :id="`${prefix}-gproblem`" class="text-destructive text-xs" role="alert" data-testid="group-problem">{{ problem }} {{ t("edit.groupInvalid") }}</p>
+                  <p v-else class="text-muted-foreground text-xs" data-testid="group-preview">{{ t("edit.preview", { text: groupPreview }) }}</p>
+                  <p class="text-muted-foreground text-xs">{{ t("edit.groupHint") }}</p>
+                </div>
+              </SettingsRow>
+            </template>
+            <SettingsRow :label="t('edit.obsLink')" :hint="t('edit.obsLinkHint')" :stacked="stacked">
+              <Button variant="secondary" size="sm" :data-testid="`copy-link-${item.id}`" @click="copyLink">{{ t("edit.copyLink") }}</Button>
+              <Button variant="secondary" size="sm" :data-testid="`preview-${item.id}`" @click="previewOverlay">{{ t("edit.previewOverlay") }}</Button>
+            </SettingsRow>
+            <SettingsRow v-if="panel.store.overlays.value" :label="t('edit.resetLink')" :hint="t('edit.resetLinkHint')" :stacked="stacked">
+              <Button variant="secondary" size="sm" data-testid="reset-link" @click="resetLink">{{ t("edit.resetLink") }}</Button>
+            </SettingsRow>
+            <p v-if="linkNote" class="text-muted-foreground pt-3 text-xs" role="status" data-testid="link-note">{{ linkNote }}</p>
+          </SettingsSection>
+        </section>
+      </div>
     </div>
 
-    <template v-if="item.kind !== 'counter'">
-      <div class="flex flex-col gap-1.5">
-        <Label :for="`${prefix}-format`">{{ t("edit.format") }}</Label>
-        <div class="flex gap-1">
-          <Input :id="`${prefix}-format`" v-model="format" class="font-mono" :maxlength="MAX_FORMAT" :aria-invalid="!formatValid" @blur="saveFormat()" @keydown.enter="saveFormat()" />
-          <!-- Kit menus, not ui.showMenu: Tavora draws no module menu while the panel is a dialog over the workspace. -->
-          <DropdownMenu>
-            <DropdownMenuTrigger as-child>
-              <Button variant="secondary" size="sm" class="h-8" :aria-label="t('edit.formatPresets')" :title="t('edit.formatPresets')" data-testid="format-presets">···</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuRadioGroup :model-value="format" @update:model-value="(preset) => saveFormat(String(preset))">
-                <DropdownMenuRadioItem v-for="preset in FORMAT_PRESETS" :key="preset" :value="preset" class="tabular-nums">{{ preset }} · {{ formatSeconds(4 * 3600 + 5 * 60 + 9, preset) }}</DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <p v-if="!formatValid" class="text-destructive text-xs" role="alert">{{ t("edit.formatInvalid") }}</p>
-        <p class="text-muted-foreground text-xs">{{ t("edit.preview", { text: preview }) }} · {{ t("edit.formatHint") }}</p>
-      </div>
-
-      <template v-if="item.kind === 'countdown'">
-        <fieldset class="flex flex-col gap-1.5">
-          <legend class="mb-1.5 font-medium">{{ t("edit.duration") }}</legend>
-          <div class="flex items-center gap-1">
-            <Input :id="`${prefix}-h`" v-model="duration.h" class="w-16 tabular-nums" inputmode="numeric" maxlength="2" :aria-label="t('edit.hours')" @blur="saveDuration" @keydown.enter="saveDuration" />
-            <span aria-hidden="true">:</span>
-            <Input :id="`${prefix}-m`" v-model="duration.m" class="w-16 tabular-nums" inputmode="numeric" maxlength="3" :aria-label="t('edit.minutes')" @blur="saveDuration" @keydown.enter="saveDuration" />
-            <span aria-hidden="true">:</span>
-            <Input :id="`${prefix}-s`" v-model="duration.s" class="w-16 tabular-nums" inputmode="numeric" maxlength="4" :aria-label="t('edit.seconds')" @blur="saveDuration" @keydown.enter="saveDuration" />
-          </div>
-        </fieldset>
-        <Label class="justify-between font-normal">
-          {{ t("edit.repeat") }}
-          <Switch :model-value="item.repeat" @update:model-value="(on: boolean) => updateClock((clock) => (clock.repeat = on))" />
-        </Label>
-        <div v-if="!item.repeat" class="flex flex-col gap-1.5">
-          <Label :for="`${prefix}-done`">{{ t("edit.doneText") }}</Label>
-          <Input :id="`${prefix}-done`" v-model="doneText" :maxlength="MAX.doneText" :placeholder="t('item.done')" @blur="saveDoneText" @keydown.enter="saveDoneText" />
-          <p class="text-muted-foreground text-xs">{{ t("edit.doneTextHint") }}</p>
-        </div>
-      </template>
-
-      <template v-else>
-        <Label class="justify-between font-normal">
-          {{ t("edit.laps") }}
-          <Switch :model-value="item.laps" @update:model-value="(on: boolean) => updateClock((clock) => (clock.laps = on))" />
-        </Label>
-        <Label v-if="item.laps" class="justify-between font-normal">
-          {{ t("edit.lastLap") }}
-          <Switch :model-value="item.showLastLap" @update:model-value="(on: boolean) => updateClock((clock) => (clock.showLastLap = on))" />
-        </Label>
-      </template>
-    </template>
-
-    <template v-else>
-      <div class="flex flex-wrap gap-3">
-        <div class="flex flex-col gap-1.5">
-          <Label :for="`${prefix}-step`">{{ t("edit.step") }}</Label>
-          <Input :id="`${prefix}-step`" v-model="step" class="w-24 tabular-nums" inputmode="numeric" @blur="saveStep" @keydown.enter="saveStep" />
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <Label :for="`${prefix}-goal`">{{ t("edit.goal") }}</Label>
-          <Input :id="`${prefix}-goal`" v-model="goal" class="w-24 tabular-nums" inputmode="numeric" @blur="saveGoal" @keydown.enter="saveGoal" />
-        </div>
-      </div>
-      <p class="text-muted-foreground -mt-2 text-xs">{{ t("edit.goalHint") }}</p>
-      <Label class="justify-between font-normal">
-        {{ t("edit.negative") }}
-        <Switch :model-value="item.negative" @update:model-value="(on: boolean) => updateCounter((counter) => (counter.negative = on))" />
-      </Label>
-
-      <section class="flex flex-col gap-1.5" :aria-label="t('edit.links')">
-        <h3 class="font-medium">{{ t("edit.links") }}</h3>
-        <p class="text-muted-foreground text-xs">{{ t("edit.linksHint") }}</p>
-        <ul v-if="links.length" class="flex flex-col gap-1">
-          <li v-for="link in links" :key="link.target" class="flex items-center gap-2">
-            <Input
-              :model-value="amountDrafts[link.target] ?? String(link.amount)"
-              class="w-20 tabular-nums"
-              inputmode="numeric"
-              :aria-label="t('edit.linkAmount', { label: link.label })"
-              @update:model-value="(value: string | number) => (amountDrafts[link.target] = String(value))"
-              @blur="saveLinkAmount(link.target)"
-              @keydown.enter="saveLinkAmount(link.target)"
-            />
-            <Link class="text-muted-foreground size-3.5 flex-none" :stroke-width="1.5" aria-hidden="true" />
-            <span class="min-w-0 flex-1 truncate">{{ link.label }}</span>
-            <Button variant="ghost" size="icon-sm" :aria-label="t('edit.linkRemove', { label: link.label })" :title="t('edit.linkRemove', { label: link.label })" @click="removeLink(link.target)">
-              <X :stroke-width="1.5" />
-            </Button>
-          </li>
-        </ul>
-        <DropdownMenu v-if="unlinked.length && item.links.length < MAX.links">
-          <DropdownMenuTrigger as-child>
-            <Button variant="secondary" size="sm" class="self-start" data-testid="link-add"><Plus :stroke-width="1.5" /> {{ t("edit.linkAdd") }}</Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuLabel>{{ t("edit.linkPick") }}</DropdownMenuLabel>
-            <DropdownMenuItem v-for="counter in unlinked" :key="counter.id" :data-testid="`link-pick-${counter.id}`" @select="addLink(counter.id)">{{ counter.label || t("kind.counter") }}</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </section>
-    </template>
-
-
-    <section class="flex flex-col gap-1.5" :aria-label="t('edit.hotkeys')">
-      <h3 class="font-medium">{{ t("edit.hotkeys") }}</h3>
-      <p class="text-muted-foreground text-xs">{{ t("edit.hotkeysHint") }}</p>
-      <ul class="flex flex-col">
-        <li v-for="action in actions" :key="action" class="flex min-h-8 items-center gap-2">
-          <span class="min-w-0 flex-1 truncate">{{ t(`action.${action}`) }}</span>
-          <span class="text-muted-foreground text-xs" :data-testid="`hotkey-${action}-${item.id}`">{{ hasKey(action) ? t("edit.hotkeyOn") : t("edit.hotkeyNone") }}</span>
-          <Button variant="secondary" size="sm" :aria-label="`${t(`action.${action}`)}: ${hasKey(action) ? t('edit.hotkeyChange') : t('edit.hotkeySet')}`" @click="setKey(action)">{{ hasKey(action) ? t("edit.hotkeyChange") : t("edit.hotkeySet") }}</Button>
-        </li>
-      </ul>
-      <p v-if="hotkeyNote" class="text-muted-foreground text-xs" role="status" data-testid="hotkey-note">{{ hotkeyNote }}</p>
-    </section>
-        </div>
-        <div class="flex min-w-0 flex-col gap-4">
-    <section class="flex flex-col gap-2" :aria-label="t('edit.stream')">
-      <h3 class="font-medium">{{ t("edit.stream") }}</h3>
-      <template v-if="group">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <span class="font-medium">{{ t("edit.scope") }}</span>
-          <SegmentedControl
-            v-model="scope"
-            :label="t('edit.scope')"
-            :options="[
-              { value: 'self', label: t('edit.scopeSelf'), testid: 'scope-self' },
-              { value: 'group', label: t('edit.scopeGroup'), testid: 'scope-group' },
-            ]"
-          />
-        </div>
-        <p class="text-muted-foreground text-xs">{{ t("edit.scopeHint") }}</p>
-        <div v-if="whole" class="flex flex-col gap-1.5">
-          <Label :for="`${prefix}-gtext`">{{ t("edit.groupText") }}</Label>
-          <div class="flex items-center gap-2">
-            <Input
-              :id="`${prefix}-gtext`"
-              ref="textField"
-              v-model="groupText"
-              :maxlength="MAX.text"
-              :aria-invalid="!!problem"
-              :aria-describedby="problem ? `${prefix}-gproblem` : undefined"
-              data-testid="group-text"
-              @blur="saveGroupText"
-              @keydown.enter="saveGroupText"
-            />
-            <span v-if="problem" class="text-destructive flex-none" role="img" :aria-label="problem" :title="problem" data-testid="group-problem-x"><X class="size-4" :stroke-width="2" aria-hidden="true" /></span>
-          </div>
-          <div class="flex flex-wrap gap-1">
-            <Button v-for="chip in chips" :key="chip.id" variant="secondary" size="xs" :aria-label="t('edit.groupInsert', { name: chip.name })" :title="t('edit.groupInsert', { name: chip.name })" :data-testid="`group-chip-${chip.key}`" @mousedown.prevent @click="insertKey(chip.key)">
-              {{ chip.key }}
-            </Button>
-          </div>
-          <p v-if="problem" :id="`${prefix}-gproblem`" class="text-destructive text-xs" role="alert" data-testid="group-problem">{{ problem }} {{ t("edit.groupInvalid") }}</p>
-          <p v-else class="text-muted-foreground text-xs" data-testid="group-preview">{{ t("edit.preview", { text: groupPreview }) }}</p>
-          <p class="text-muted-foreground text-xs">{{ t("edit.groupHint") }}</p>
-        </div>
-      </template>
-      <div class="flex flex-wrap gap-2">
-        <Button size="sm" :data-testid="`copy-link-${item.id}`" @click="copyLink">{{ t("edit.copyLink") }}</Button>
-        <Button size="sm" variant="secondary" :data-testid="`preview-${item.id}`" @click="previewOverlay">{{ t("edit.previewOverlay") }}</Button>
-        <Button v-if="panel.store.overlays.value" variant="ghost" size="sm" @click="resetLink">{{ t("edit.resetLink") }}</Button>
-      </div>
-      <Label class="justify-between font-normal">
-        {{ t("edit.overGame") }}
-        <Switch :model-value="overGame" :data-testid="`over-game-${item.id}`" @update:model-value="setOverGame" />
-      </Label>
-      <p v-if="linkNote" class="text-muted-foreground text-xs" role="status">{{ linkNote }}</p>
-      <Label v-if="!whole" class="justify-between font-normal">
-        {{ t("edit.showLabel") }}
-        <Switch :model-value="look.showLabel" @update:model-value="(on: boolean) => updateLook((look) => (look.showLabel = on))" />
-      </Label>
-      <Label class="justify-between font-normal">
-        {{ t("edit.outline") }}
-        <Switch :model-value="look.outline" @update:model-value="(on: boolean) => updateLook((look) => (look.outline = on))" />
-      </Label>
-      <div class="flex flex-col gap-1.5">
-        <span class="font-medium">{{ t("edit.color") }}</span>
-        <ColorPicker :model-value="look.color" :label="t('edit.color')" :colors="[...COLORS]" :labels="COLOR_NAMES.map((name) => t(`color.${name}`))" @update:model-value="(color: string) => updateLook((look) => (look.color = color))" />
-      </div>
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <span class="font-medium">{{ t("edit.font") }}</span>
-        <SegmentedControl v-model="font" :label="t('edit.font')" :options="FONTS.map((value) => ({ value, label: t(`edit.font.${value}`) }))" />
-      </div>
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <span class="font-medium">{{ t("edit.align") }}</span>
-        <SegmentedControl v-model="align" :label="t('edit.align')" :options="ALIGNS.map((value) => ({ value, label: t(`edit.align.${value}`) }))" />
-      </div>
-    </section>
-
-
-        </div>
-      </div>
-    <div class="flex flex-wrap items-center gap-1 mt-4 border-t pt-3">
-      <Button variant="ghost" size="sm" :disabled="first" @click="change([], (data) => move(data, item.id, -1))"><ArrowUp :stroke-width="1.5" /> {{ t("edit.moveUp") }}</Button>
-      <Button variant="ghost" size="sm" :disabled="last" @click="change([], (data) => move(data, item.id, 1))"><ArrowDown :stroke-width="1.5" /> {{ t("edit.moveDown") }}</Button>
-      <Button variant="danger" size="sm" class="ml-auto" :data-testid="`delete-${item.id}`" @click="panel.remove(item)"><Trash2 :stroke-width="1.5" /> {{ t("edit.delete") }}</Button>
-    </div>
-  </div>
-    <div class="flex flex-none justify-end">
-      <Button data-testid="editor-done" @click="emit('close')">{{ t("edit.done") }}</Button>
-    </div>
+    <footer class="flex h-14 flex-none items-center gap-2 border-t px-4">
+      <DialogButton variant="danger" :icon="Trash2" :data-testid="`delete-${item.id}`" @click="panel.remove(item)">{{ t("edit.delete") }}</DialogButton>
+      <DialogButton close class="ml-auto" variant="default" data-testid="editor-done" @click="emit('close')">{{ t("edit.done") }}</DialogButton>
+    </footer>
   </div>
 </template>
