@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.74",
+    date: "2026-11-02",
+    title: "Tab drops",
+    notes: [
+      "Dropping a tab into another group's tab row keeps every tab in sight, shows a single dashed tab at the slot, and no second copy of the dragged tab.",
+    ],
+    prs: [
+      { number: 633, title: "Docking: tab drops keep every tab in sight, no second drag image" },
+    ],
+    tags: ["workspace"],
+  },
+  {
     version: "0.23.73",
     date: "2026-11-02",
     title: "Undo instead of \"Are you sure?\"",
