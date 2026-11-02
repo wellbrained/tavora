@@ -28,6 +28,22 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.52",
+    date: "2026-11-02",
+    title: "Several frames at once, and undo for everything",
+    notes: [
+      "On the Overlay page, Ctrl+click or Shift+click frames, or draw a box on the canvas, to select several.",
+      "Move them together by dragging or with the arrow keys. Del removes them all.",
+      "With several selected, the Settings box changes Show, Opacity and Hide from capture for all of them.",
+      "Undo and redo now cover everything on the page: adding, removing, hiding, moving, Move to…, Copy to… and settings.",
+      "An empty overlay tells you where to find something to add.",
+    ],
+    prs: [
+      { number: 607, title: "Overlay page: select several frames, undo for everything, empty-canvas hint" },
+    ],
+    tags: ["overlays"],
+  },
+  {
     version: "0.23.51",
     date: "2026-11-02",
     title: "Calmer dialogs",
