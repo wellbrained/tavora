@@ -17,6 +17,8 @@ const props = withDefaults(
   defineProps<DropdownMenuContentProps & { class?: HTMLAttributes["class"] }>(),
   {
     sideOffset: 4,
+    // Starts at the button's left edge and opens to the right; reka moves it over when there is no room.
+    align: "start",
   },
 )
 const emits = defineEmits<DropdownMenuContentEmits>()
@@ -31,7 +33,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     <DropdownMenuContent
       data-slot="dropdown-menu-content"
       v-bind="{ ...$attrs, ...forwarded }"
-      :class="cn('bg-popover text-popover-foreground tavora-popup z-50 max-h-(--reka-dropdown-menu-content-available-height) min-w-[8rem] overflow-x-hidden overflow-y-auto rounded-xl border p-1 shadow-lg', props.class)"
+      :class="cn('bg-popover text-popover-foreground tavora-popup z-50 max-h-(--reka-dropdown-menu-content-available-height) min-w-[max(8rem,var(--reka-dropdown-menu-trigger-width))] overflow-x-hidden overflow-y-auto rounded-xl border p-1 shadow-lg', props.class)"
     >
       <slot />
     </DropdownMenuContent>

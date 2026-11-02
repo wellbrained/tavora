@@ -3,7 +3,7 @@
     "version": "0.1.14",
     "date": "2026-11-02",
     "notes": [
-      "The combobox example has a clear button once you type."
+      "Lists open under their field and are at least as wide; the combobox has a clear button; the picture select no longer shows the toggle examples inside its list."
     ]
   },
   {
