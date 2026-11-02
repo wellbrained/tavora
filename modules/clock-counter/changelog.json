@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.23",
+    "version": "0.1.24",
     "date": "2026-11-02",
     "notes": [
       "Loads a little lighter: the app keeps only the Latin letters of its fonts."
+    ]
+  },
+  {
+    "version": "0.1.23",
+    "date": "2026-11-02",
+    "notes": [
+      "Add shows the same icons as the list, so you see what each one becomes."
     ]
   },
   {

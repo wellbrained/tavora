@@ -2,7 +2,7 @@
 // Clock & Counter: a toolbar with Add, then the workspace's clocks and counters. Every panel of a workspace shows the same
 // list; which settings are open is each panel's own. Running clocks tick here only while the panel is visible: they
 // keep their start time, so nothing is lost while it is hidden. Hotkeys arrive at the panel used last.
-import { Link, Plus } from "@lucide/vue";
+import { Hash, Hourglass, Link, Plus, Timer } from "@lucide/vue";
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -25,6 +25,8 @@ import { createItemStore, type ItemStore } from "./store";
 
 const EMPTY = parseList(null);
 const KINDS: ItemKind[] = ["countdown", "stopwatch", "counter"];
+/** The same icons as the rows in the list, so the Add menu shows what each one becomes. */
+const KIND_ICONS = { countdown: Hourglass, stopwatch: Timer, counter: Hash } as const;
 
 const sdk = shallowRef<TavoraSDK | null>(null);
 const store = shallowRef<ItemStore | null>(null);
@@ -532,7 +534,7 @@ onBeforeUnmount(() => {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem v-for="kind in KINDS" :key="kind" :data-testid="`pick-${kind}`" @select="addItem(kind, false)">{{ t(`kind.${kind}`) }}</DropdownMenuItem>
+          <DropdownMenuItem v-for="kind in KINDS" :key="kind" :data-testid="`pick-${kind}`" @select="addItem(kind, false)"><component :is="KIND_ICONS[kind]" />{{ t(`kind.${kind}`) }}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
@@ -542,7 +544,7 @@ onBeforeUnmount(() => {
         <p class="text-muted-foreground text-sm">{{ t("app.empty") }}</p>
         <div class="flex flex-wrap justify-center gap-2">
           <Button v-for="kind in KINDS" :key="kind" variant="secondary" size="sm" :data-testid="`add-${kind}`" @click="addItem(kind)">
-            <Plus :stroke-width="1.5" /> {{ t(`kind.${kind}`) }}
+            <component :is="KIND_ICONS[kind]" :stroke-width="1.5" /> {{ t(`kind.${kind}`) }}
           </Button>
         </div>
       </div>

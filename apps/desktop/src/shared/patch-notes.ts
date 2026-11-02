@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.87",
+    date: "2026-11-02",
+    title: "Clock & Counter",
+    notes: [
+      "Add shows the same icons as the list.",
+    ],
+    prs: [
+      { number: 651, title: "Clock & Counter: Add shows the same icons as the list (0.1.23)" },
+    ],
+    tags: ["clock-counter"],
+  },
+  {
     version: "0.23.86",
     date: "2026-11-02",
     title: "Clock & Counter",
