@@ -626,6 +626,9 @@ export class Host {
       official: this.official,
       panels: { reload: (moduleId) => this.reloadModuleViews(moduleId), close: (moduleId) => this.removeModulePanels(moduleId) },
       grantsChanged: () => this.syncConnection(),
+      installProgress: (moduleId, percent) => {
+        if (!this.window.isDestroyed()) this.window.webContents.send("host:install-progress", { moduleId, percent });
+      },
       removed: (owner, moduleId) => {
         this.gameOverlays.forgetModule(moduleId, owner);
         this.previews.closeModule(moduleId, owner);

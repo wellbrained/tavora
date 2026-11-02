@@ -16,8 +16,9 @@
 import type { IDockviewPanelProps } from "dockview-vue";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
 import { ShieldAlert } from "@lucide/vue";
-import { act, dialog, frozen, needsGrant, state, type GrantRequest } from "../../host";
+import { act, dialog, frozen, installProgress, needsGrant, state, type GrantRequest } from "../../host";
 import { t } from "../../i18n";
 import GrantDialog from "../GrantDialog.vue";
 import LeaderboardQuestion from "../LeaderboardQuestion.vue";
@@ -144,9 +145,10 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
       <template v-if="panel.moved">
         <p class="max-w-sm text-sm" :data-testid="`panel-module-moved-${id}`">{{ t("panel.moved", { module: panel.name }) }}</p>
         <p v-if="!state?.library.onlineSearch" class="text-muted-foreground max-w-sm text-sm">{{ t("panel.movedOffline") }}</p>
-        <Button v-else size="sm" :disabled="installing" data-testid="install-moved-module" @click="installMoved()">
-          {{ installing ? t("catalog.installing") : t("catalog.install") }}
-        </Button>
+        <!-- The panel turns into the module once it is in, so this button never gets to say it is done. -->
+        <ProgressButton v-else size="sm" :status="installing ? 'busy' : 'idle'" :progress="installProgress[panel.moduleId] ?? null" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')" :failed-label="t('catalog.installFailed')" data-testid="install-moved-module" @click="installMoved()">
+          {{ t("catalog.install") }}
+        </ProgressButton>
       </template>
       <p v-else-if="!module" class="max-w-sm text-sm" :data-testid="`panel-module-waiting-${id}`">{{ t("panel.moduleWaiting", { module: panel.name }) }}</p>
       <p v-else class="max-w-sm text-sm">{{ t("panel.typeGone", { module: module.name, type: panel.name }) }}</p>

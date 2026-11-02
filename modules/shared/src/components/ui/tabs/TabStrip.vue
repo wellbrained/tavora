@@ -20,6 +20,7 @@ import { uiText } from "../text";
 import { DEFAULT_NAME_LIMIT } from "../../name-check";
 import TabsList from "./TabsList.vue";
 import TabsTrigger from "./TabsTrigger.vue";
+import { reducedMotion, useReorderMotion } from "../reorder";
 import { checkRename, dropPlace, moveTab, neighbourAfterClose, stepTab, type StripTab } from "./tab-strip";
 
 const props = withDefaults(defineProps<{ tabs: StripTab[]; modelValue?: string; maxLength?: number; ariaLabel?: string; class?: string }>(), {
@@ -151,6 +152,9 @@ function onKeyDown(event: KeyboardEvent, id: string) {
 
 const dragId = ref<string | null>(null);
 const drop = ref<{ target: string; after: boolean } | null>(null);
+/** The tab in the hand lifts and follows the pointer and the others slide aside; under reduced motion the line shows instead. */
+const reorder = useReorderMotion(scroller, { axis: "x" });
+const lifting = ref(false);
 let press: { id: string; x: number } | null = null;
 let swallowClick = false;
 const DRAG_DISTANCE = 4;
@@ -168,7 +172,7 @@ function onPointerDown(event: PointerEvent, id: string) {
   press = { id, x: event.clientX };
   document.addEventListener("pointermove", onPointerMove);
   document.addEventListener("pointerup", onPointerUp);
-  document.addEventListener("pointercancel", endDrag);
+  document.addEventListener("pointercancel", onPointerCancel);
   document.addEventListener("keydown", onDragKey, true);
 }
 
@@ -177,7 +181,10 @@ function onPointerMove(event: PointerEvent) {
   if (!dragId.value) {
     if (Math.abs(event.clientX - press.x) < DRAG_DISTANCE) return;
     dragId.value = press.id;
+    lifting.value = !reducedMotion();
+    reorder.begin(press.id, { lift: true });
   }
+  reorder.follow(event.clientX - press.x, 0);
   const el = scroller.value;
   if (el) {
     const box = el.getBoundingClientRect();
@@ -187,34 +194,47 @@ function onPointerMove(event: PointerEvent) {
   const place = dropPlace(places(), event.clientX);
   // No line where the drop would change nothing.
   drop.value = place && moveTab(ids(), dragId.value, place.target, place.after).join("\n") !== ids().join("\n") ? place : null;
+  reorder.preview(drop.value ? { id: drop.value.target, after: drop.value.after } : null);
 }
 
-function endDrag() {
+/** `settled`: the drop is about to move the tab, so the motion carries on into its new place instead of stopping. */
+function endDrag(settled = false) {
   document.removeEventListener("pointermove", onPointerMove);
   document.removeEventListener("pointerup", onPointerUp);
-  document.removeEventListener("pointercancel", endDrag);
+  document.removeEventListener("pointercancel", onPointerCancel);
   document.removeEventListener("keydown", onDragKey, true);
   if (dragId.value) {
     // The click that follows a drag must not count as a click on the tab.
     swallowClick = true;
     setTimeout(() => (swallowClick = false), 0);
   }
+  if (dragId.value && !settled) reorder.cancel();
   press = null;
   dragId.value = null;
   drop.value = null;
 }
 
+function onPointerCancel() {
+  endDrag();
+  lifting.value = false;
+}
+
 function onPointerUp() {
   const id = dragId.value;
   const place = drop.value;
-  endDrag();
-  if (id && place) emit("reorder", moveTab(ids(), id, place.target, place.after));
+  const moving = lifting.value;
+  endDrag(!!(id && place));
+  lifting.value = false;
+  if (!id || !place) return;
+  const commit = () => emit("reorder", moveTab(ids(), id, place.target, place.after));
+  if (moving) void reorder.drop(commit);
+  else commit();
 }
 
 function onDragKey(event: KeyboardEvent) {
   if (event.key !== "Escape") return;
   event.stopPropagation();
-  endDrag();
+  onPointerCancel();
 }
 
 function onClickCapture(event: MouseEvent) {
@@ -223,7 +243,7 @@ function onClickCapture(event: MouseEvent) {
   event.preventDefault();
 }
 
-onBeforeUnmount(endDrag);
+onBeforeUnmount(() => endDrag());
 </script>
 
 <template>
@@ -264,8 +284,9 @@ onBeforeUnmount(endDrag);
           <TabsTrigger
             v-else
             :value="tab.id"
-            :class="cn('group mb-0 max-w-56 select-none gap-1', dragId === tab.id && 'opacity-50', drop?.target === tab.id && (drop.after ? 'shadow-[inset_-2px_0_0_var(--primary)]' : 'shadow-[inset_2px_0_0_var(--primary)]'))"
+            :class="cn('group mb-0 max-w-56 select-none gap-1', dragId === tab.id && !lifting && 'opacity-50', !lifting && drop?.target === tab.id && (drop.after ? 'shadow-[inset_-2px_0_0_var(--primary)]' : 'shadow-[inset_2px_0_0_var(--primary)]'))"
             :data-tab-id="tab.id"
+            :data-reorder-id="tab.id"
             :data-drop="drop?.target === tab.id ? (drop.after ? 'after' : 'before') : undefined"
             data-testid="strip-tab"
             @pointerdown="onPointerDown($event, tab.id)"

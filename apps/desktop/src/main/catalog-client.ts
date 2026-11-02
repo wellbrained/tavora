@@ -377,14 +377,14 @@ export class CatalogClient {
    * Downloads a listed zip and gives it back only when it is exactly the listed size and SHA-256.
    * It is read into memory with the size as a cap, so a wrong or endless answer writes nothing.
    */
-  async download(zip: CatalogEntry["zip"]): Promise<Buffer> {
-    const data = await this.read(`/v1/catalog/zips/${zip.sha256}.zip`, zip.size, this.downloadTimeoutMs, "application/zip");
+  async download(zip: CatalogEntry["zip"], onProgress?: (done: number, total: number) => void): Promise<Buffer> {
+    const data = await this.read(`/v1/catalog/zips/${zip.sha256}.zip`, zip.size, this.downloadTimeoutMs, "application/zip", onProgress);
     if (createHash("sha256").update(data).digest("hex") !== zip.sha256) throw new CatalogError("error.catalogBadZip");
     return data;
   }
 
-  /** Reads an answer of exactly `expected` bytes into memory, with that as a cap. Throws a CatalogError. */
-  private async read(pathname: string, expected: number, timeoutMs: number, accept: string): Promise<Buffer> {
+  /** Reads an answer of exactly `expected` bytes into memory, with that as a cap; `onProgress` hears the bytes so far. Throws a CatalogError. */
+  private async read(pathname: string, expected: number, timeoutMs: number, accept: string, onProgress?: (done: number, total: number) => void): Promise<Buffer> {
     let response: Response;
     try {
       response = await this.get(pathname, timeoutMs, accept);
@@ -409,6 +409,7 @@ export class CatalogClient {
           throw new CatalogError("error.catalogBadZip");
         }
         chunks.push(Buffer.from(value));
+        onProgress?.(size, expected);
       }
     } catch (error) {
       if (error instanceof CatalogError) throw error;

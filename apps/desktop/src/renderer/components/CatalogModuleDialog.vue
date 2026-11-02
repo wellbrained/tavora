@@ -14,6 +14,7 @@ import { formatSize } from "../catalog-size";
 import { act, api, dialog, state } from "../host";
 import { compareModuleVersions } from "../../shared/module-version";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { ProgressButton, type ProgressButtonStatus } from "@tavora/official-ui/components/ui/progress-button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { formatDate, t } from "../i18n";
 import { ExternalLink, X } from "@lucide/vue";
@@ -25,7 +26,7 @@ import ModuleVersions from "./ModuleVersions.vue";
 import ContactDeveloperDialog from "./messages/ContactDeveloperDialog.vue";
 import ReportModuleDialog from "./messages/ReportModuleDialog.vue";
 
-const props = defineProps<{ module: CatalogModuleView; installed: boolean; installing: boolean; size?: string; error?: string; atReviews?: boolean; local?: InstalledModule }>();
+const props = withDefaults(defineProps<{ module: CatalogModuleView; installed: boolean; status?: ProgressButtonStatus; progress?: number | null; size?: string; error?: string; atReviews?: boolean; local?: InstalledModule }>(), { status: "idle", progress: null });
 const emit = defineEmits<{ close: []; install: []; add: [] }>();
 /** The two ways to reach out: Contact the developer (a conversation) and Report to Tavora (the admin queue). */
 const contacting = ref(false);
@@ -131,8 +132,8 @@ async function openHomepage() {
         <div class="flex flex-none items-center gap-2">
           <!-- A disabled button gets no hover, so the reason sits on a wrapper. -->
           <span :title="notHere ?? undefined">
-            <Button v-if="installed" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!!notHere" data-testid="catalog-info-add" @click="emit('add')">{{ t("common.add") }}</Button>
-            <Button v-else :disabled="installing || !!notHere" data-testid="catalog-info-install" @click="emit('install')">{{ installing ? t("catalog.installing") : t("catalog.install") }}</Button>
+            <Button v-if="installed && status === 'idle'" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!!notHere" data-testid="catalog-info-add" @click="emit('add')">{{ t("common.add") }}</Button>
+            <ProgressButton v-else :disabled="!!notHere" :status="status" :progress="progress" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')" :failed-label="t('catalog.installFailed')" data-testid="catalog-info-install" @click="emit('install')">{{ t("catalog.install") }}</ProgressButton>
           </span>
           <Button variant="ghost" size="icon" :aria-label="t('common.close')" @click="emit('close')"><X class="size-4" /></Button>
         </div>

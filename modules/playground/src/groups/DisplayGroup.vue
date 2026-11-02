@@ -10,6 +10,7 @@ import { ActionList, type ActionEntry } from "@tavora/official-ui/components/ui/
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
+import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { Sparkline } from "@tavora/official-ui/components/ui/sparkline";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
@@ -113,6 +114,12 @@ function bump(by: number) {
             <Button size="xs" variant="secondary" :disabled="off" @click="bump(-15)">Less</Button>
             <Button size="xs" variant="secondary" :disabled="off" @click="bump(15)">More</Button>
           </div>
+        </Specimen>
+        <Specimen label="Counting numbers (they count to the new value; use the buttons above)">
+          <span class="text-sm"><CountTo :value="progress * 24" /> items</span>
+          <span class="text-sm"><CountTo :value="progress / 20" kind="decimal" /> average</span>
+          <span class="text-sm"><CountTo :value="progress / 100" kind="percent" /> done</span>
+          <span class="text-sm"><CountTo :value="progress" :format="(n) => n + ' left'" /></span>
         </Specimen>
         <Specimen label="Sparkline" column>
           <Sparkline :values="spark" class="max-w-64" label="Usage over the last minute" />
