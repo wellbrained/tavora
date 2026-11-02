@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.66",
+    date: "2026-11-02",
+    title: "Tidier dropdowns",
+    notes: [
+      "Dropdown lists open under their field, starting at its left edge, and are at least as wide as it.",
+      "Pickers keep the same width whatever you pick.",
+      "Search lists that filter as you type have a clear button once there is text.",
+      "A switch placed over a map stays where it belongs again.",
+    ],
+    prs: [
+      { number: 625, title: "Kit: tidier dropdowns (aligned, as wide as the field, clear button) + Playground fix" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.23.65",
     date: "2026-11-02",
     title: "Clearer names in Settings",
