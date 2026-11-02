@@ -49,7 +49,9 @@ export function aimAt(aim: Aim, x: number, y: number): DropTarget | null {
     ["bottom", aim.height - y],
   ];
   const [side, distance] = near.reduce((best, item) => (item[1] < best[1] ? item : best));
-  if (distance < OUTER_ZONE) return { kind: "edge", side };
+  // A tab strip that runs to the dock's left or right edge keeps its first and last slots: only the top edge is the dock's there.
+  const inStrip = Object.values(aim.rects).some((rect) => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y - rect.y < TAB_HEIGHT);
+  if (distance < OUTER_ZONE && !(inStrip && (side === "left" || side === "right"))) return { kind: "edge", side };
   for (const [group, rect] of Object.entries(aim.rects)) {
     if (x < rect.x || x > rect.x + rect.width || y < rect.y || y > rect.y + rect.height) continue;
     if (y - rect.y < TAB_HEIGHT) {

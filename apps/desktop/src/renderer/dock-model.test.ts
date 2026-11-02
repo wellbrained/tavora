@@ -153,6 +153,35 @@ describe("a drop that is refused", () => {
     expect(plan(layout, drag("g3", "x"), { kind: "split", group: "g1", side: "right" }, info).ok).toBe(true);
   });
 
+  it("lets a panel split off its own group when the group keeps another tab and both fit", () => {
+    // One group of two tabs, 700 wide: each panel needs 300, so side by side (600) fits.
+    const layout = dock(split(600, leaf("g1", ["a", "x"], 700)), 700, 600);
+    for (const side of ["left", "right"] as const) {
+      const result = ok(plan(layout, drag("g1", "x"), { kind: "split", group: "g1", side }, info));
+      expect(result.newGroup).toBe(true);
+      expect(Object.keys(result.rects)).toHaveLength(2);
+    }
+    for (const side of ["top", "bottom"] as const) expect(plan(layout, drag("g1", "x"), { kind: "split", group: "g1", side }, info).ok).toBe(true);
+  });
+
+  it("refuses that split only when the two would not fit", () => {
+    const layout = dock(split(600, leaf("g1", ["a", "x"], 500)), 500, 600);
+    expect(plan(layout, drag("g1", "x"), { kind: "split", group: "g1", side: "right" }, info)).toEqual({ ok: false, reason: "too-small" });
+  });
+
+  it("counts the room of a group's own panel only once, in a row with neighbours", () => {
+    const layout = dock(split(600, leaf("g1", ["a", "x"], 500), leaf("g2", ["b"], 300)), 800, 600);
+    expect(plan(layout, drag("g1", "x"), { kind: "split", group: "g1", side: "right" }, info).ok).toBe(false);
+    const wide = dock(split(600, leaf("g1", ["a", "x"], 700), leaf("g2", ["b"], 600)), 1300, 600);
+    expect(plan(wide, drag("g1", "x"), { kind: "split", group: "g1", side: "right" }, info).ok).toBe(true);
+  });
+
+  it("says same spot, not too small, for a lone panel dropped on its own edge or its own tab slot", () => {
+    const layout = dock(split(600, leaf("g1", ["a"], 300), leaf("g2", ["b", "x"], 300)), 600, 600);
+    expect(plan(layout, drag("g1", "a"), { kind: "split", group: "g1", side: "right" }, info)).toEqual({ ok: false, reason: "same-spot" });
+    expect(plan(layout, drag("g2", "x"), { kind: "tab", group: "g2", index: 1 }, info)).toEqual({ ok: false, reason: "same-spot" });
+  });
+
   it("says same spot when nothing would change", () => {
     expect(plan(three(), drag("g2", "b"), { kind: "split", group: "g2", side: "left" })).toEqual({ ok: false, reason: "same-spot" });
     // Dropping to the right of the left neighbour is where it already is.
