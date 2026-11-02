@@ -6,8 +6,6 @@ import { NavList } from "@tavora/official-ui/components/ui/nav-list";
 import { settingsMenu } from "@tavora/official-ui/components/ui/module-settings";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const page = ref("text");
 const groups = settingsMenu({
   pages: [{ id: "player", label: "Player", icon: Music }, { id: "hotkeys", label: "Hotkeys", icon: Keyboard }],
@@ -18,5 +16,5 @@ const groups = settingsMenu({
 </script>
 
 <template>
-  <NavList v-model="page" :groups="groups" label="Settings" class="bg-background w-[200px] rounded-lg border p-3" :class="disabled && 'pointer-events-none opacity-50'" />
+  <NavList v-model="page" :groups="groups" label="Settings" class="bg-background w-[200px] rounded-lg border p-3" />
 </template>

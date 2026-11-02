@@ -2,14 +2,12 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const role = ref("ranger");
 </script>
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Select v-model="role" :disabled="disabled">
+    <Select v-model="role">
       <SelectTrigger class="w-56" aria-label="Class" data-testid="select-empty">
         <SelectValue placeholder="Pick a class" />
       </SelectTrigger>

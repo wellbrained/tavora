@@ -5,8 +5,6 @@ import { NameDialog } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const name = ref("Waystone");
 const renaming = ref(false);
 const renamingSlowly = ref(false);
@@ -27,9 +25,9 @@ function saveSlowly() {
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button variant="secondary" :disabled="disabled" @click="renaming = true">Rename…</Button>
-    <Button variant="secondary" :disabled="disabled" @click="renamingSlowly = true">Rename with a slow save…</Button>
-    <Button variant="secondary" :disabled="disabled" @click="pickedSave = ''; fromSave = true">New from a save…</Button>
+    <Button variant="secondary" @click="renaming = true">Rename…</Button>
+    <Button variant="secondary" @click="renamingSlowly = true">Rename with a slow save…</Button>
+    <Button variant="secondary" @click="pickedSave = ''; fromSave = true">New from a save…</Button>
   </div>
   <NameDialog
     v-model:open="renaming"

@@ -5,8 +5,6 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { ZoomPane } from "@tavora/official-ui/components/ui/zoom-pane";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const STEPS = ["Iron Ore", "Iron Ingot", "Iron Rod", "Screw", "Reinforced Plate", "Modular Frame"];
 const from = ref(2);
 const to = ref(4);
@@ -31,8 +29,8 @@ function addInFront() {
       </div>
     </ZoomPane>
     <div class="flex flex-wrap gap-2">
-      <Button size="xs" variant="secondary" :disabled="disabled || from <= 0" @click="addInFront">Add a step in front (moveOrigin)</Button>
-      <Button size="xs" variant="secondary" :disabled="disabled || to >= STEPS.length" @click="to++">Add a step after</Button>
+      <Button size="xs" variant="secondary" :disabled="from <= 0" @click="addInFront">Add a step in front (moveOrigin)</Button>
+      <Button size="xs" variant="secondary" :disabled="to >= STEPS.length" @click="to++">Add a step after</Button>
     </div>
   </div>
 </template>

@@ -2,14 +2,12 @@
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const game = ref("poe2");
 </script>
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Select v-model="game" :disabled="disabled">
+    <Select v-model="game">
       <SelectTrigger class="w-56" aria-label="Game">
         <SelectValue placeholder="Pick a game" />
       </SelectTrigger>
@@ -28,7 +26,7 @@ const game = ref("poe2");
         </SelectGroup>
       </SelectContent>
     </Select>
-    <Select :disabled="disabled">
+    <Select>
       <SelectTrigger size="sm" class="w-40" aria-label="Sort by">
         <SelectValue placeholder="Sort by" />
       </SelectTrigger>

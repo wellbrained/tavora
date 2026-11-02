@@ -3,8 +3,6 @@
 import { SegmentedControl } from "@tavora/official-ui";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const shown = ref<"all" | "open" | "done" | "archived">("open");
 </script>
 
@@ -12,7 +10,6 @@ const shown = ref<"all" | "open" | "done" | "archived">("open");
   <SegmentedControl
     v-model="shown"
     label="Show"
-    :disabled="disabled"
     data-testid="segmented-many"
     :options="[
       { value: 'all', label: 'All' },

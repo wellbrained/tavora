@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.76",
+    date: "2026-11-02",
+    title: "The UI Playground explains the basics",
+    notes: [
+      "The Foundations pages show colours, text, spacing, motion and how to write texts, each with live examples and their code.",
+      "Show disabled is a switch in the page header now, and Show code is coloured and numbered.",
+    ],
+    prs: [
+      { number: 632, title: "Module Kit stage 2: Foundations pages, Show disabled in the header" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.23.75",
     date: "2026-11-02",
     title: "System Monitor settings",

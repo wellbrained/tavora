@@ -2,8 +2,6 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const STYLES = [
   { value: "card", label: "Card" },
   { value: "bar", label: "Bar" },
@@ -13,7 +11,7 @@ const style = ref("card");
 </script>
 
 <template>
-  <Select v-model="style" :disabled="disabled">
+  <Select v-model="style">
     <SelectTrigger class="w-56" aria-label="Style"><SelectValue /></SelectTrigger>
     <SelectContent>
       <SelectItem v-for="option in STYLES" :key="option.value" :value="option.value">

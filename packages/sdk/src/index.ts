@@ -657,7 +657,7 @@ export interface TavoraSDK {
     /**
      * Shows Tavora's Overlay page, where the user adds this module's overlays to their game and arranges them (a settings
      * page's "Arrange in Overlays" link); an open dialog of this panel closes. Only right after a click or key press in the
-     * panel. Needs Tavora 0.23.76 or newer: check `sdk.supports("overlay.openPage")`.
+     * panel. Needs Tavora 0.23.77 or newer: check `sdk.supports("overlay.openPage")`.
      */
     openPage(): Promise<void>;
   };

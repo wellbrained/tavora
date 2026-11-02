@@ -4,8 +4,6 @@ import { SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const mode = ref<"a" | "b" | undefined>(undefined);
 </script>
 
@@ -14,14 +12,13 @@ const mode = ref<"a" | "b" | undefined>(undefined);
     <SegmentedControl
       :model-value="mode ?? ('none' as 'a')"
       label="Mixed"
-      :disabled="disabled"
       :options="[
         { value: 'a', label: 'Always' },
         { value: 'b', label: 'On a key' },
       ]"
       @update:model-value="mode = $event"
     />
-    <Button variant="ghost" size="sm" :disabled="disabled" @click="mode = undefined">Clear</Button>
+    <Button variant="ghost" size="sm" @click="mode = undefined">Clear</Button>
     <SegmentedControl model-value="week" label="Locked" disabled :options="[{ value: 'day', label: 'Day' }, { value: 'week', label: 'Week' }]" />
   </div>
 </template>
