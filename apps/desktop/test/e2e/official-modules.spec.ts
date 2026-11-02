@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import { expectModuleText, inModule, launch, NOTES, openWorkspace, openModule, panels, PDF_VIEWER, PLAYGROUND, RAIL_WIDTH, setContentSize, TODOS, typeInModule, VUE, waitForShown } from "./harness";
@@ -1034,6 +1034,90 @@ test("calculator: works out sums from keys and the keyboard, and keeps the last 
   await expect.poll(() => shown("key-square")).toBe(false);
   await click(again.app, CALCULATOR, `[data-testid="toggle-history"]`);
   await expect.poll(() => shown("history")).toBe(false);
+  await again.app.close();
+});
+
+test("calculator: settings are one compact page that saves at once, resets with Undo and keeps its choices", async ({}, testInfo) => {
+  const CALCULATOR = "tavora.calculator";
+  const { app, page, userData } = await launch();
+  await openModule(page, CALCULATOR);
+  await ready(app, CALCULATOR, "key-=");
+  const dialog = page.getByTestId("panel-dialog");
+  const inDialog = <T>(script: string) => inModule<T>(app, CALCULATOR, script);
+  const text = (testId: string) => inDialog<string>(`${q(testId)}?.textContent.trim() ?? ""`);
+  /** Picks an option of the Decimal places list, the way the keyboard does. */
+  const pickDecimals = async (option: string) => {
+    await inDialog(`${q("options-decimals")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+    await expect.poll(() => inDialog(`!!${q(`decimals-${option}`)}`)).toBe(true);
+    await inDialog(`${q(`decimals-${option}`)}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+    await expect.poll(() => text("options-decimals")).toBe(option);
+  };
+  const history = () => inDialog<string[]>(`[...document.querySelectorAll('[data-testid^="history-length-"][data-state="checked"]')].map((el) => el.dataset.testid)`);
+  const short = () => inDialog<string>(`${q("options-short")}.getAttribute("aria-checked")`);
+  /** The page of the dialog (a module draws in a view of its own, so the window's screenshot shows only the frame). */
+  const shoot = async (name: string) => {
+    // Lists and toasts finish their little motions first.
+    await page.waitForTimeout(600);
+    const png = await app.evaluate(async ({ webContents }, moduleId) => {
+      const view = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
+      return view ? (await view.capturePage()).toPNG().toString("base64") : "";
+    }, CALCULATOR);
+    await writeFile(testInfo.outputPath(`${name}.png`), Buffer.from(png, "base64"));
+  };
+
+  // One page in a compact dialog: no menu, no Done, a short line under every setting, Reset and the saved note in the footer.
+  await click(app, CALCULATOR, `[data-testid="options"]`);
+  await expect(dialog).toBeVisible();
+  await ready(app, CALCULATOR, "settings-dialog");
+  expect((await dialog.boundingBox())!.width).toBeLessThan(800);
+  expect(await inDialog(`!!document.querySelector('[data-slot="nav-list"]')`)).toBe(false);
+  expect(await inDialog(`!!${q("settings-done")}`)).toBe(false);
+  const rows = await inDialog<string[]>(`[...document.querySelectorAll('[data-slot="settings-row"]')].map((row) => row.innerText.replace(/\\s+/g, " ").trim())`);
+  expect(rows).toHaveLength(3);
+  expect(rows[0]).toContain("Decimal places Digits after the point.");
+  expect(rows[1]).toContain("Short numbers Like 1.5M.");
+  expect(rows[2]).toContain("History keeps Older results drop off.");
+  expect(await text("settings-reset")).toBe("Reset this page");
+  expect(await text("settings-saved")).toBe("Changes save as you make them.");
+  await shoot("calculator-settings-open");
+
+  // Every change saves at once.
+  await pickDecimals("2");
+  await click(app, CALCULATOR, `[data-testid="options-short"]`);
+  await click(app, CALCULATOR, `[data-testid="history-length-25"]`);
+  await expect.poll(() => text("settings-saved")).toBe("Saved");
+  await shoot("calculator-settings-changed");
+  expect(await text("options-decimals")).toBe("2");
+  expect(await short()).toBe("true");
+  expect(await history()).toEqual(["history-length-25"]);
+
+  // Reset puts the three settings back; Undo brings them back.
+  await click(app, CALCULATOR, `[data-testid="settings-reset"]`);
+  await expect.poll(() => text("options-decimals")).toBe("Auto");
+  expect(await short()).toBe("false");
+  expect(await history()).toEqual(["history-length-10"]);
+  await expect.poll(() => text("settings-reset-toast")).toContain("Page reset");
+  await shoot("calculator-settings-reset");
+  await click(app, CALCULATOR, `[data-testid="settings-reset-undo"]`);
+  await expect.poll(() => text("options-decimals")).toBe("2");
+  expect(await short()).toBe("true");
+  expect(await history()).toEqual(["history-length-25"]);
+
+  // Closing is the dialog's own X; the panel shows results with the choices.
+  await page.getByTestId("panel-dialog-close").click();
+  await expect(dialog).toHaveCount(0);
+  await ready(app, CALCULATOR, "key-=");
+  for (const key of ["1", "/", "3"]) await click(app, CALCULATOR, `[data-testid="key-${key}"]`);
+  await expect.poll(() => text("preview")).toBe("= 0.33");
+
+  // The choices are kept after a restart.
+  await app.close();
+  const again = await launch(userData);
+  await openWorkspace(again.page, "poe2");
+  await ready(again.app, CALCULATOR, "key-=");
+  await click(again.app, CALCULATOR, `[data-testid="options"]`);
+  await ready(again.app, CALCULATOR, "settings-dialog");
+  await expect.poll(() => inModule<string>(again.app, CALCULATOR, `${q("options-decimals")}.textContent.trim()`)).toBe("2");
   await again.app.close();
 });
 

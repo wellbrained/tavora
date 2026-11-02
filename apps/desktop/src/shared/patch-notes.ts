@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.79",
+    date: "2026-11-02",
+    title: "Calculator settings follow Tavora's layout",
+    notes: [
+      "Calculator settings are one compact page with a short line under each setting.",
+      "There is no Done button any more: changes save as you make them, and Reset this page (with Undo) sits at the bottom.",
+    ],
+    prs: [
+      { number: 640, title: "Calculator: settings on the kit's single-page ModuleSettings (0.1.21)" },
+    ],
+    tags: ["calculator"],
+  },
+  {
     version: "0.23.78",
     date: "2026-11-02",
     title: "Compact settings",
