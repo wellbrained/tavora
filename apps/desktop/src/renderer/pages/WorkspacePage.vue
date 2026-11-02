@@ -9,9 +9,6 @@ import {
   type DockviewApi,
   type DockviewGroupPanel,
   type DockviewReadyEvent,
-  type DockviewWillShowOverlayLocationEvent,
-  type Position,
-  type PositionResolver,
   type VueComponent,
 } from "dockview-vue";
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
@@ -21,24 +18,9 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, api as host, dialog, dragging, nextPanelSlot, panelsToFront, panelToMaximize, panelToShow, state, tabStep } from "../host";
 import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
-import {
-  dropAllowed,
-  dropReorders,
-  fromDockview,
-  groupConstraints,
-  guardDrop,
-  guideFits,
-  layoutAround,
-  maximizedPanel,
-  panelInfo,
-  placePanel,
-  placeTab,
-  resolveDropPosition,
-  resolveOuterEdge,
-  toDockview,
-  type PanelInfo,
-} from "../dock";
-import DropGuide, { type GuideState } from "../components/workspace/DropGuide.vue";
+import { fromDockview, groupConstraints, guardDrop, layoutAround, maximizedPanel, panelInfo, placePanel, placeTab, toDockview, type PanelInfo } from "../dock";
+import { DockPreview } from "../dock-preview";
+import DockPreviewLayer from "../components/workspace/DockPreview.vue";
 import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import EmptySlot from "../components/workspace/EmptySlot.vue";
 import GroupActions from "../components/workspace/GroupActions.vue";
@@ -363,62 +345,19 @@ let resizing = false;
 function endDrag() {
   resizing = false;
   dragging.value = false;
-  guide.value = null;
-  dropLine.value = null;
 }
 
-// ── The drop guide ─────────────────────────────────────────────────────
+// ── The drop preview ───────────────────────────────────────────────────
 
-const guide = ref<GuideState | null>(null);
-/** Set while a drop would only reorder groups: the preview is then a bar on that side of the target. */
-const dropLine = ref<Position | null>(null);
-const POSITIONS: Position[] = ["top", "left", "center", "right", "bottom"];
-
-/**
- * Picks where a drop goes. The outer edges of the dock work as dockview's
- * do; over a group, the guide's cells decide, else the nearest edge, else
- * the middle. The outer target is the only one as big as the whole dock.
- */
-const dropResolver: PositionResolver = {
-  resolve({ x, y, width, height, zones }) {
-    const outer = dock && width >= dock.width - 1 && height >= dock.height - 1;
-    const position = outer ? resolveOuterEdge(x, y, width, height, zones) : resolveDropPosition(x, y, width, height, zones);
-    return position ? { position } : null;
-  },
-};
-
-/** Shows the guide over the group a panel is dragged across, and hides drops that would not fit. */
-function onWillShowOverlay(event: DockviewWillShowOverlayLocationEvent, api: DockviewApi) {
-  const data = event.getData();
-  if (!dropAllowed(api, info, data, event.group, event.position)) event.preventDefault();
-  const source = data ? (api.getGroup(data.groupId) as DockviewGroupPanel | undefined) : undefined;
-  const alone = !!source && (!data?.panelId || source.panels.length === 1) && source !== event.group;
-  dropLine.value =
-    event.kind === "content" && event.group && dropReorders(source?.element.getBoundingClientRect(), alone, event.group.element.getBoundingClientRect(), event.position)
-      ? event.position
-      : null;
-  const content = event.kind === "content" ? event.group?.element.querySelector(".dv-content-container") : null;
-  const container = root.value;
-  if (!content || !container) {
-    guide.value = null;
-    return;
-  }
-  const area = content.getBoundingClientRect();
-  const origin = container.getBoundingClientRect();
-  if (!guideFits(area.width, area.height)) {
-    guide.value = null;
-    return;
-  }
-  const allowed = Object.fromEntries(POSITIONS.map((position) => [position, dropAllowed(api, info, data, event.group, position)]));
-  guide.value = {
-    x: area.left - origin.left,
-    y: area.top - origin.top,
-    width: area.width,
-    height: area.height,
-    position: event.position,
-    allowed: allowed as Record<Position, boolean>,
-  };
-}
+// While a panel is dragged over the dock, dock-preview.ts shows where it lands and does the drop itself, through
+// dockview's own API. Dockview's overlays never show: its drop events do not get past the preview.
+const preview = new DockPreview(
+  () => dock,
+  () => root.value,
+  info,
+  endDrag,
+  () => !!state.value?.devBuild,
+);
 function endResize() {
   if (resizing) endDrag();
 }
@@ -427,6 +366,7 @@ addEventListener("drop", endDrag, true);
 addEventListener("pointerup", endDrag, true);
 addEventListener("pointercancel", endResize, true);
 addEventListener("resize", reportSoon);
+preview.attach();
 
 function onPointerDown(event: PointerEvent) {
   if (!(event.target as Element | null)?.closest(".dv-sash")) return;
@@ -466,7 +406,6 @@ function onReady({ api }: DockviewReadyEvent) {
   api.onWillDragPanel(() => (dragging.value = true));
   api.onWillDragGroup(() => (dragging.value = true));
   api.onWillDrop((event) => guardDrop(event, api, info));
-  api.onWillShowOverlay((event) => onWillShowOverlay(event, api));
   api.onDidDrop(() => endDrag());
 }
 
@@ -487,6 +426,7 @@ onBeforeUnmount(() => {
   removeEventListener("pointerup", endDrag, true);
   removeEventListener("pointercancel", endResize, true);
   removeEventListener("resize", reportSoon);
+  preview.detach();
   endDrag();
   host.setPanelBounds([]);
   host.setWorkspaceBounds(null);
@@ -523,7 +463,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       <HeaderTools @add-module="dialog = { kind: 'add-module' }" />
     </header>
 
-    <div ref="root" class="relative min-h-0 flex-1" :data-drop-line="dropLine ?? undefined" @pointerdown.capture="onPointerDown">
+    <div ref="root" class="relative min-h-0 flex-1" @pointerdown.capture="onPointerDown">
       <div ref="area" class="absolute inset-x-2 top-0 bottom-2 flex gap-2" data-workspace-area>
         <Button
           v-if="leftColumn"
@@ -546,8 +486,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
           :watermark-component="emptySlot"
           :disable-floating-groups="true"
           dnd-strategy="html5"
-          :drop-position-resolver="dropResolver"
-          @ready="onReady"
+                    @ready="onReady"
         />
         <Button
           v-if="rightColumn"
@@ -562,7 +501,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
           <span class="max-h-[70%] truncate text-xs [writing-mode:vertical-rl]">{{ columnTitle(rightColumn) }}</span>
         </Button>
       </div>
-      <DropGuide v-if="guide" :guide="guide" />
+      <DockPreviewLayer v-if="preview.view.value" :preview="preview.view.value" />
       <!-- The workspace just opened: one plain card over the dock until every panel has its data. The host's cover lies over it
            until every panel has drawn, and shows the fire when opening takes long (panel-cover.ts). -->
       <div v-if="view.opening" class="bg-background absolute inset-x-2 top-0 bottom-2 z-20 rounded-[10px] border" role="status" :aria-label="t('panel.loading', { name: workspace?.name ?? '' })" data-testid="workspace-loading"></div>

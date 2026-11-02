@@ -1,0 +1,33 @@
+<script setup lang="ts">
+// Picking a value shows ⇕ (the kit adds it to Select and Picker); a button that opens a menu of actions shows ⌄.
+import { ChevronDown } from "@lucide/vue";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { Picker } from "@tavora/official-ui/components/ui/picker";
+import { ref } from "vue";
+
+defineProps<{ disabled?: boolean }>();
+
+const game = ref("satisfactory");
+</script>
+
+<template>
+  <div class="flex flex-wrap items-center gap-6" data-testid="dropdown-icons">
+    <div class="flex flex-col items-start gap-2">
+      <span class="text-muted-foreground text-xs">Value picker</span>
+      <Picker v-model="game" label="Game" :disabled="disabled" :options="[{ value: 'satisfactory', label: 'Satisfactory' }, { value: 'enshrouded', label: 'Enshrouded' }, { value: 'poe2', label: 'Path of Exile 2' }]" />
+    </div>
+    <div class="flex flex-col items-start gap-2">
+      <span class="text-muted-foreground text-xs">Menu</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="secondary" :disabled="disabled" class="min-w-44 justify-between">More <ChevronDown :stroke-width="1.5" /></Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem>Rename</DropdownMenuItem>
+          <DropdownMenuItem>Duplicate</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  </div>
+</template>
