@@ -15,7 +15,7 @@ describe("the overlay view", () => {
   it("draws the words and the value as runs of their own, with the item's colours and font", () => {
     const { root, view, runs } = mount();
     const timer = newItem("countdown", "t", "Boss") as Clock;
-    timer.look = { ...timer.look, text: "Round over in {time}", color: "#facc15", wordsColor: "#60a5fa", font: "mono", align: "left", outline: false, wordsSize: "l", numberSize: "xl" };
+    timer.look = { ...timer.look, text: "Round over in {time}", color: "#facc15", wordsColor: "#60a5fa", font: "mono", align: "left", outline: false, wordsStep: "l", numberStep: "xl" };
     view.draw(overlayState(timer), 0);
     expect(runs()).toEqual([["cc-w", "Round over in "], ["cc-n", "5:00"]]);
     expect(root.style.getPropertyValue("--color")).toBe("#facc15");
@@ -47,18 +47,22 @@ describe("the overlay view", () => {
     expect(root.textContent).toBe("Boss Go!");
   });
 
-  it("draws the state of a panel from before the sizes and the words' colour at the size it always had, not NaN", () => {
+  it("draws the state of a panel from before the sizes and the words' colour at the default sizes, not NaN", () => {
     const { root, view } = mount();
     const deaths = newItem("counter", "d", "Deaths") as Counter;
     const state = JSON.parse(JSON.stringify(overlayState(deaths)));
     // What 0.1.16 published: no text, no sizes, no words colour.
     delete state.text;
+    delete state.look.wordsStep;
+    delete state.look.numberStep;
     delete state.look.wordsSize;
     delete state.look.numberSize;
     delete state.look.wordsColor;
     view.draw(state, 0);
     const sizes = [...root.querySelectorAll<HTMLElement>(".cc-line > span")].map((run) => run.style.fontSize);
-    expect(sizes).toEqual(["24px", "48px"]);
+    const [words, number] = sizes.map(parseFloat);
+    expect(words).toBeCloseTo((48 * 12) / 14, 6);
+    expect(number).toBe(48);
     expect(root.querySelector<HTMLElement>(".cc-line")!.style.fontSize).toBe("48px");
     expect(root.textContent).toBe("Deaths 0");
   });
