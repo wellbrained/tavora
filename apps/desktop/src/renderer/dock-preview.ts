@@ -22,6 +22,8 @@ export interface PreviewView {
   rects: Record<string, Rect>;
   /** The dashed tab for a drop into a tab strip. */
   ghost: Rect | null;
+  /** Too little room in the strip to open a gap: the ghost is a thin bar between the tabs. */
+  bar: boolean;
 }
 
 interface Tab {
@@ -34,6 +36,11 @@ interface Tab {
 const LIFTED = "dock-lifted";
 const AIMING = "data-dock-aiming";
 const GHOST_GAP = 4;
+/** The narrowest dashed tab worth showing; with less room the ghost is a bar. */
+const MIN_GHOST = 56;
+const BAR = 4;
+/** A drag image nobody can see: our preview is the only picture of what is dragged. */
+const NO_IMAGE = Object.assign(new Image(1, 1), { src: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" });
 
 export class DockPreview {
   readonly view = shallowRef<PreviewView | null>(null);
@@ -42,6 +49,9 @@ export class DockPreview {
   private box: DOMRect | null = null;
   private tabs = new Map<string, Tab[]>();
   private slots: Record<string, Slot[]> = {};
+  /** Where each group's tab row ends (its tabs are clipped there), in the dock's coordinates. */
+  private stripEnd: Record<string, number> = {};
+  private stripStart: Record<string, number> = {};
   private rects: Record<string, Rect> = {};
   private tabWidth = 140;
   private target: DropTarget | null = null;
@@ -91,13 +101,20 @@ export class DockPreview {
     this.onDone();
   };
 
+  /** After dockview's own handler, so its picture of the tab (which would show a second copy next to ours) is replaced. */
+  private readonly onStart = (event: DragEvent) => {
+    if (getPanelData()) event.dataTransfer?.setDragImage(NO_IMAGE, 0, 0);
+  };
+
   attach(): void {
+    addEventListener("dragstart", this.onStart);
     addEventListener("dragenter", this.onEnter, true);
     addEventListener("dragover", this.onOver, true);
     addEventListener("drop", this.onDrop, true);
     addEventListener("dragend", this.onEnd, true);
   }
   detach(): void {
+    removeEventListener("dragstart", this.onStart);
     removeEventListener("dragenter", this.onEnter, true);
     removeEventListener("dragover", this.onOver, true);
     removeEventListener("drop", this.onDrop, true);
@@ -125,6 +142,8 @@ export class DockPreview {
     this.rects = {};
     this.tabs.clear();
     this.slots = {};
+    this.stripEnd = {};
+    this.stripStart = {};
     for (const group of dock.groups as DockviewGroupPanel[]) {
       if (!group.api.isVisible) continue;
       const r = group.element.getBoundingClientRect();
@@ -142,6 +161,9 @@ export class DockPreview {
         else slots.push({ left: tab.left - shift, width: tab.width });
       }
       this.slots[group.id] = slots;
+      const row = group.element.querySelector<HTMLElement>(".dv-tabs-container");
+      this.stripStart[group.id] = row ? row.getBoundingClientRect().left - this.box.left : r.left - this.box.left;
+      this.stripEnd[group.id] = row ? row.getBoundingClientRect().right - this.box.left : r.right - this.box.left;
     }
     const source = dock.getGroup(dragged.groupId) as DockviewGroupPanel | undefined;
     const own = this.tabs.get(dragged.groupId)?.find((tab) => tab.dragged);
@@ -175,10 +197,27 @@ export class DockPreview {
     this.publish(target);
   }
 
+  /**
+   * How a tab slot opens in a group's strip: the dashed tab's width and how far the tabs after the slot move. The strip
+   * clips its tabs, so the gap is only as wide as the room left at its end; with less than a small tab's worth the
+   * ghost is a bar and nothing moves, so no tab is ever pushed out of sight.
+   */
+  private gap(group: string, index: number): { width: number; shift: number; bar: boolean } {
+    const slots = this.slots[group] ?? [];
+    const last = slots.at(-1);
+    const end = last ? last.left + last.width : (this.rects[group]?.x ?? 0);
+    const room = (this.stripEnd[group] ?? Infinity) - end - GHOST_GAP;
+    const width = Math.min(this.tabWidth, room);
+    if (width < MIN_GHOST) return { width: BAR, shift: 0, bar: true };
+    void index;
+    return { width, shift: width + GHOST_GAP, bar: false };
+  }
+
   /** The tabs of the group aimed at make room for the dashed one. */
   private slide(target: DropTarget | null): void {
     const into = target?.kind === "tab" && this.plan?.ok ? target.group : null;
     const index = into && target?.kind === "tab" ? (target.index ?? this.slots[into]?.length ?? 0) : 0;
+    const open = into ? this.gap(into, index).shift : 0;
     for (const [group, tabs] of this.tabs) {
       if (group !== into && !tabs.some((tab) => tab.el.style.transform)) continue;
       let remaining = 0;
@@ -188,7 +227,7 @@ export class DockPreview {
           shift = tab.width;
           continue;
         }
-        tab.el.style.transform = group === into ? `translateX(${(remaining >= index ? this.tabWidth + GHOST_GAP : 0) - shift}px)` : "";
+        tab.el.style.transform = group === into ? `translateX(${(remaining >= index ? open : 0) - shift}px)` : "";
         remaining++;
       }
     }
@@ -198,15 +237,24 @@ export class DockPreview {
     const box = this.box;
     if (!box) return;
     let ghost: Rect | null = null;
+    let bar = false;
     if (target?.kind === "tab" && this.plan?.ok) {
       const rect = this.rects[target.group];
       const slots = this.slots[target.group] ?? [];
       const index = target.index ?? slots.length;
       const last = slots.at(-1);
-      const x = index < slots.length ? slots[index]!.left : last ? last.left + last.width + GHOST_GAP : (rect?.x ?? 0) + 6;
-      if (rect) ghost = { x, y: rect.y + 4, width: this.tabWidth, height: 28 };
+      const slotX = index < slots.length ? slots[index]!.left : last ? last.left + last.width + GHOST_GAP : (rect?.x ?? 0) + 6;
+      // A tab row that scrolls can have its slot out of sight: the ghost stays inside the visible part of the row.
+      const x = Math.max(slotX, this.stripStart[target.group] ?? slotX);
+      const gap = this.gap(target.group, index);
+      bar = gap.bar;
+      if (rect) {
+        // A bar sits on the line between two tabs, and inside the first or last tab at the ends, clear of the group's outline.
+        const at = index === 0 ? x + 3 : index >= slots.length ? x - GHOST_GAP - BAR - 3 : x - BAR / 2 - GHOST_GAP / 2;
+        ghost = bar ? { x: at, y: rect.y + 3, width: BAR, height: 30 } : { x, y: rect.y + 4, width: gap.width, height: 28 };
+      }
     }
-    this.view.value = { origin: this.origin, width: box.width, height: box.height, title: this.title, target, plan: this.plan, rects: this.rects, ghost };
+    this.view.value = { origin: this.origin, width: box.width, height: box.height, title: this.title, target, plan: this.plan, rects: this.rects, ghost, bar };
   }
 
   /** The drop, on the real dock; in development the result is checked against the model. */
