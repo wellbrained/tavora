@@ -6,7 +6,7 @@
 import { Tooltip, tooltipDelay } from "@tavora/official-ui/components/tooltip";
 import { onBeforeUnmount, ref, watch } from "vue";
 import { t } from "../i18n";
-import { useFloating } from "../host";
+import { api, useFloating } from "../host";
 
 const props = defineProps<{
   text: string;
@@ -24,11 +24,16 @@ const open = ref(false);
 const anchor = ref({ left: 0, top: 0, right: 0, bottom: 0 });
 const setFloating = useFloating();
 let delay: ReturnType<typeof setTimeout> | undefined;
+let ready: ReturnType<typeof setTimeout> | undefined;
 let release: ReturnType<typeof setTimeout> | undefined;
 
 function show(trigger: Element | null) {
   if (props.disabled || !trigger || open.value) return;
   clearTimeout(delay);
+  // The panels' pictures take a while: start them half way, so passing over the icons costs nothing but resting on one does not wait.
+  const wait = tooltipDelay(150);
+  clearTimeout(ready);
+  ready = setTimeout(() => api.prepareOverlay(), wait / 2);
   delay = setTimeout(() => {
     // Beside the icon, its arrow on the icon's middle.
     const { left, top, right, bottom } = trigger.getBoundingClientRect();
@@ -36,11 +41,12 @@ function show(trigger: Element | null) {
     clearTimeout(release);
     setFloating(true);
     open.value = true;
-  }, tooltipDelay(150));
+  }, wait);
 }
 /** Closing waits a moment, so moving from one icon to the next does not show and hide the panels each time. */
 function hide() {
   clearTimeout(delay);
+  clearTimeout(ready);
   if (!open.value) return;
   open.value = false;
   release = setTimeout(() => setFloating(false), 400);
@@ -55,6 +61,7 @@ function focus(event: FocusEvent) {
 watch(() => props.disabled, (disabled) => disabled && hide());
 onBeforeUnmount(() => {
   clearTimeout(delay);
+  clearTimeout(ready);
   clearTimeout(release);
 });
 </script>

@@ -6,6 +6,8 @@ const installed = new WeakMap<Document, () => void>();
 export interface TitleTooltipOptions {
   /** Called when a hint appears or goes away, so a host can draw it above views that would cover it. */
   onOpenChange?: (open: boolean) => void;
+  /** Called when the pointer or focus rests on an element with a hint and it will show soon, so a host can get ready for drawing it. */
+  onPending?: () => void;
 }
 
 /** One readable hover layer for title hints, in official modules and in the host: the compact card below the element, as the rail's.
@@ -21,10 +23,12 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
   const suppressed = new WeakSet<Element>();
   let current: Element | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let readyTimer: ReturnType<typeof setTimeout> | undefined;
   let keyboard = false;
 
   function hide() {
     clearTimeout(timer);
+    clearTimeout(readyTimer);
     if (state.open) options.onOpenChange?.(false);
     state.open = false;
     if (current) {
@@ -60,6 +64,10 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     if (element.getAttribute("title")) remember(element, title);
     state.title = title;
     state.shortcut = element.getAttribute("aria-keyshortcuts") || undefined;
+    // Half way to the hint, so a pointer just passing over a row of buttons gets ready for none of them. The host
+    // does not repeat the work for hints that follow each other.
+    const wait = tooltipDelay(180);
+    if (options.onPending) readyTimer = setTimeout(options.onPending, wait / 2);
     timer = setTimeout(() => {
       if (current !== element || !element.isConnected) return;
       const { left, top, right, bottom } = element.getBoundingClientRect();
@@ -68,7 +76,7 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
       options.onOpenChange?.(true);
       const old = element.getAttribute("aria-describedby");
       element.setAttribute("aria-describedby", old ? old + " " + id : id);
-    }, tooltipDelay(180));
+    }, wait);
   }
   const over = (event: PointerEvent) => {
     const element = target(event);
