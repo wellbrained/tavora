@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.15",
+    "date": "2026-11-02",
+    "notes": [
+      "A side menu with search and one page per kind of control. Every example shows its own code, and the developer helpers sit behind a switch."
+    ]
+  },
+  {
     "version": "0.1.14",
     "date": "2026-11-02",
     "notes": [
