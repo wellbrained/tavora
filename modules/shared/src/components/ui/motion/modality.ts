@@ -12,8 +12,11 @@ export function trackInput(): void {
   addEventListener("keydown", () => (keyAt = performance.now()), { capture: true, passive: true })
 }
 
-/** The last thing the user did was a pointer press, no longer ago than `withinMs` (any time by default). */
-export function pointerLed(withinMs = Number.POSITIVE_INFINITY): boolean {
+/** How recent a pointer press must be for a page to count as picked with it. */
+export const POINTER_WINDOW_MS = 1500
+
+/** The last thing the user did was a pointer press, no longer ago than `withinMs` (POINTER_WINDOW_MS by default). */
+export function pointerLed(withinMs = POINTER_WINDOW_MS): boolean {
   return pointerAt > keyAt && performance.now() - pointerAt <= withinMs
 }
 

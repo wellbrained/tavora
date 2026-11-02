@@ -49,19 +49,30 @@ function whole(box: Box): Keyframe {
   return { height: `${box.height}px`, minHeight: box.minHeight, ...box.edges }
 }
 
+// While a row moves it is cut off above and below its own box (the height it is folding to), but not at its sides, so
+// what hangs out of a row to the side (the rail's active pill, a header band with a negative margin) stays whole.
+const CLIP = "inset(0 -9999px)"
+
 function run(element: HTMLElement, frames: Keyframe[], options: KeyframeAnimationOptions, done: () => void) {
-  const restore = element.style.overflow
-  element.style.overflow = "hidden"
+  const restore = element.style.clipPath
+  element.style.clipPath = CLIP
   let ended = false
   const end = () => {
     if (ended) return
     ended = true
-    element.style.overflow = restore
+    element.style.clipPath = restore
     done()
   }
   const animation = element.animate(frames, options)
   animation.addEventListener("finish", end)
   animation.addEventListener("cancel", end)
+}
+
+/** A row on its way out is no longer there for the pointer, the keyboard or a screen reader: a second press cannot reach it. */
+function gone(element: HTMLElement) {
+  element.style.pointerEvents = "none"
+  element.setAttribute("aria-hidden", "true")
+  element.inert = true
 }
 
 /** A row the user added: grows from nothing, fading in and dropping 4px into place. */
@@ -88,6 +99,7 @@ export function enterRow(node: Element, done: () => void): void {
 export function leaveRow(node: Element, done: () => void): void {
   const element = node as HTMLElement
   if (typeof element.animate !== "function") return done()
+  gone(element)
   if (reducedMotion()) {
     const fade = element.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 80, fill: "forwards" })
     fade.addEventListener("finish", done)

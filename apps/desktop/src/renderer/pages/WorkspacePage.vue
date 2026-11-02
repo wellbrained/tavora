@@ -494,9 +494,9 @@ onBeforeUnmount(() => {
 
 // The library types components loosely; these take its documented props.
 // A workspace picked with the pointer fades in over ~120ms (opacity only; the old one is already gone). A key press, a
-// hotkey or the app starting on its last workspace stays instant. The page is made new for each workspace anyway, so
+// hotkey or the app starting on its last workspace stays instant (Ctrl+K is a key too). Reduced motion keeps it as a plain fade. The page is made new for each workspace anyway, so
 // this adds no remount; the module pages are the host's own views and are not touched.
-const arrival = pointerLed(1500) ? "tavora-quick-fade" : undefined;
+const arrival = pointerLed() ? "tavora-quick-fade" : undefined;
 const components = { panel: PanelContent as unknown as VueComponent };
 const tab = PanelTab as unknown as VueComponent;
 const groupActions = GroupActions as unknown as VueComponent;

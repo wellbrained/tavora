@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { MAX_MOVING_ROWS, movesRows } from "./AnimatedList"
+import { MAX_MOVING_ROWS, movesNow, movesRows } from "./AnimatedList"
 
 describe("movesRows", () => {
   it("moves for a row the user adds or removes", () => {
@@ -33,5 +33,21 @@ describe("movesRows", () => {
   it("stays still when the whole list is replaced", () => {
     expect(movesRows(["a", "b"], ["c", "d"])).toBe(false)
     expect(movesRows(["a"], ["b"])).toBe(false)
+  })
+})
+
+describe("movesNow", () => {
+  it("follows movesRows while the switch stays on", () => {
+    expect(movesNow(true, true, ["a", "b"], ["a"])).toBe(true)
+  })
+
+  it("stays still while the switch is off (a filter is typed)", () => {
+    expect(movesNow(false, true, ["a", "b", "c"], ["a"])).toBe(false)
+    expect(movesNow(false, false, ["a", "b", "c"], ["a"])).toBe(false)
+  })
+
+  it("stays still on the render that turns the switch back on (the filter is cleared)", () => {
+    expect(movesNow(true, false, ["a"], ["a", "b"])).toBe(false)
+    expect(movesNow(true, false, ["a", "b"], ["a"])).toBe(false)
   })
 })
