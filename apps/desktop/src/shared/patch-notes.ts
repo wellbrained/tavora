@@ -30,647 +30,92 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.23.89",
     date: "2026-11-02",
-    title: "Messages above your panels",
+    title: "Undo, one settings layout and smoother motion",
     notes: [
-      "Tavora's own messages appear where you set toasts to show, above your panels.",
-      "A new message grows or shrinks smoothly from the size of the one before it, and has a bit more room around its buttons.",
-    ],
-    prs: [
-      { number: 649, title: "Host toasts follow your position setting, above the panels" },
-    ],
-    tags: ["settings", "ui-kit"],
-  },
-  {
-    version: "0.23.88",
-    date: "2026-11-02",
-    title: "Settings",
-    notes: [
-      "Updates & About lines up with the menu above it again.",
+      "Deleting a layout, frame, to-do, folder, workspace and more no longer asks first: press Undo within a few seconds. Ctrl+Z takes back the latest one.",
+      "Tavora's own messages appear where you set toasts to show, above your panels, with more room around their buttons. Undo and close always work.",
+      "Messages wait while Tavora is hidden or the game is in front, and slide in and out from their edge.",
+      "Dialogs no longer replace each other, and panels stay behind every dialog. Search and dialogs you open with the keyboard appear instantly.",
+      "Module settings share one layout: changes save as you make them, and Reset this page (with Undo) sits at the bottom. Small ones are one compact page.",
+      "Settings menus show Overlays under a divider, with In game and On stream and a dot for each.",
+      "The open page in the Settings menu shows its icon in its group's colour. Updates & About (German: Updates & Info) sits at the foot.",
+      "Drag a panel and a dashed outline shows exactly where it will land: a new column, a new row or a tab. Nothing jumps while you drag.",
+      "Dropping onto a tab row opens a gap with a dashed tab. Spots with too little room say so, and where nothing would change it says \"Same place\".",
+      "On the Overlay page, select several frames with Ctrl+click, Shift+click or a box, and move, hide or remove them together. Undo and redo cover everything there.",
+      "A small bar next to the selected frame has Settings, Hide, Reset position, Reset size and Remove. Del removes it, a double-click opens its settings.",
+      "Copy to… copies the frames you see to another game, and Move to… sends one to another setup. Overlay setups for a game can be deleted, with Undo.",
+      "Preview as shows your overlay on another shape: 16:9, 21:9, 32:9 or one of your monitors. Add a picture to Everywhere and All games to place frames on your own image or OBS scene.",
+      "With several frames selected, a setting that differs between them shows a Mixed tag.",
+      "Maps, trees and pictures have the same group in the corner: zoom out, the zoom % (click it for 100 %), zoom in and show the whole thing. Double-click zooms in toward that spot.",
+      "Clock & Counter: show it over your game from the panel's menu, and write what the overlay says yourself, with words and number in their own colour and size (XS to XL, M to start).",
+      "Clock & Counter: settings in Tavora's layout, Format with a list to pick from, Delete on each row with Undo, and the same icons in Add as in the list. Sources lists each clock, counter and linked group on its own.",
+      "Calculator and System Monitor have their settings in one place.",
+      "The UI Playground has a side menu with search, one page per control, Foundations pages, and the code for every example.",
+      "Buttons have a little depth and dip when you press them. Switches, tabs, checkboxes, toggles and folding sections move smoothly; with reduced motion on, things only fade.",
+      "Menus, dropdowns and tooltips open out of the spot they belong to, sooner and never half-drawn. Hover a switched-off button to see why it's off.",
+      "Dialogs have an icon, a short line under the title and a Close button. Buttons that do something have an icon.",
+      "Pickers open under their field, at least as wide as it, and keep their width. Search lists have a clear button.",
+      "A row you add grows in, one you remove folds away, and things you drag lift and settle into place. Numbers that change count to their new value.",
+      "The catalog and module pages show soft placeholder bars while they load, and pictures fade in where they belong.",
+      "Installing or updating a module fills its button as the download goes, then shows a tick.",
+      "Ratings, reviews, a device's name and similar changes show right away, and are put back if saving fails.",
+      "Themes can set their own colour for main buttons; Ashen Keep's are a deeper orange. Item tooltips in modules use Tavora's colours (Path of Exile 2 keeps its gold and purple).",
+      "Tavora looks for the games on your PC when it starts, so Add a game is ready when you open it. The rail has + Game and + Personal under your games.",
+      "In Add a game, type a name the list doesn't know and pick Add as your own game. Ask for a module sends one anonymous vote for that game: only its name and a code, and only when you press it.",
+      "A big dialog no longer shows the panel's settings twice.",
     ],
     prs: [
       { number: 653, title: "Settings: Updates & About lines up with the plates above" },
-    ],
-    tags: ["settings"],
-  },
-  {
-    version: "0.23.87",
-    date: "2026-11-02",
-    title: "Clock & Counter",
-    notes: [
-      "Add shows the same icons as the list.",
-    ],
-    prs: [
       { number: 651, title: "Clock & Counter: Add shows the same icons as the list (0.1.23)" },
-    ],
-    tags: ["clock-counter"],
-  },
-  {
-    version: "0.23.86",
-    date: "2026-11-02",
-    title: "Clock & Counter",
-    notes: [
-      "A new clock or counter starts with the words and the number at the same size, M.",
-    ],
-    prs: [
       { number: 650, title: "Clock & Counter: new items start with words and number both at M (0.1.22)" },
-    ],
-    tags: ["clock-counter"],
-  },
-  {
-    version: "0.23.85",
-    date: "2026-11-02",
-    title: "Delete a game's overlay",
-    notes: [
-      "Overlay setups for a game can be deleted, with Undo.",
-    ],
-    prs: [
+      { number: 649, title: "Host toasts follow your position setting, above the panels" },
       { number: 647, title: "Overlay setups for a game can be deleted, with Undo" },
-    ],
-    tags: ["overlay-setups", "overlays", "rail"],
-  },
-  {
-    version: "0.23.84",
-    date: "2026-11-02",
-    title: "Clock & Counter settings are easier to use",
-    notes: [
-      "Format has a list of formats to pick from, and you can still type your own.",
-      "Delete moves from the settings to each row: point at a row and press the trash can. Undo is a few seconds away.",
-      "Words and Number come in the same five sizes, XS to XL.",
-      "Settings opened from the Overlay page no longer show an empty window first.",
-    ],
-    prs: [
       { number: 645, title: "Clock & Counter: Format on the kit Combobox, Delete on the row, one XS–XL size scale, no empty settings" },
-    ],
-    tags: ["clock-counter", "ui-kit"],
-  },
-  {
-    version: "0.23.83",
-    date: "2026-11-02",
-    title: "Tab drops",
-    notes: [
-      "Dropping a tab into a group with empty space in its header shows the dashed tab again, not just a thin bar.",
-      "Dragging a tab within its own group keeps the normal move cursor; where nothing would change it says \"Same place\".",
-    ],
-    prs: [
-      { number: 642, title: "Docking: show the dashed ghost tab whenever the header has room" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.23.82",
-    date: "2026-11-02",
-    title: "Search and dialogs you open with the keyboard appear instantly",
-    notes: [
-      "Search and dialogs you open with the keyboard appear instantly, and Escape closes dialogs at once.",
-      "Dialogs you open with the mouse move as before.",
-      "Toasts wait while Tavora is hidden or the game is in front, and slide in and out from their edge.",
-    ],
-    prs: [
-      { number: 639, title: "Keyboard-opened dialogs appear instantly; toasts wait while hidden and slide from their edge" },
-    ],
-    tags: ["calculator", "clock-counter", "modules", "notes", "pdf-viewer", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
-  },
-  {
-    version: "0.23.81",
-    date: "2026-11-02",
-    title: "Undo in toasts",
-    notes: [
-      "The Undo and close buttons in Tavora's own toasts can be clicked again.",
-    ],
-    prs: [
       { number: 644, title: "Host toasts: the pill opts out of the title bar's drag region, so Undo and × can be clicked" },
-    ],
-  },
-  {
-    version: "0.23.80",
-    date: "2026-11-02",
-    title: "Dialogs stay put",
-    notes: [
-      "Dialogs no longer replace each other, and panels stay behind every dialog.",
-    ],
-    prs: [
+      { number: 642, title: "Docking: show the dashed ghost tab whenever the header has room" },
       { number: 641, title: "Dialogs no longer replace each other, and panels stay behind every dialog" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.23.79",
-    date: "2026-11-02",
-    title: "Calculator settings follow Tavora's layout",
-    notes: [
-      "Calculator settings are one compact page with a short line under each setting.",
-      "There is no Done button any more: changes save as you make them, and Reset this page (with Undo) sits at the bottom.",
-    ],
-    prs: [
       { number: 640, title: "Calculator: settings on the kit's single-page ModuleSettings (0.1.21)" },
-    ],
-    tags: ["calculator"],
-  },
-  {
-    version: "0.23.78",
-    date: "2026-11-02",
-    title: "Compact settings",
-    notes: [
-      "Small settings dialogs are compact, without an empty menu.",
-      "Dialogs that are shorter than the usual ones now keep the same top edge instead of sitting in the middle.",
-    ],
-    prs: [
-      { number: 637, title: "Kit: single-page mode for module settings (compact, no empty menu)" },
-    ],
-    tags: ["clock-counter", "ui-kit", "website"],
-  },
-  {
-    version: "0.23.77",
-    date: "2026-11-02",
-    title: "Clock & Counter settings follow Tavora's layout",
-    notes: [
-      "Clock & Counter settings use Tavora's settings layout: what the panel shows, what the overlay shows and the stream link, each in its own place.",
-      "Write what the overlay says yourself, with its words and its number in their own colour and size, and see it change as you type.",
-      "Settings menus show Overlays under a divider, with In game and On stream and a dot for each.",
-      "Clock & Counter's In game settings have an Arrange in Overlays button that opens the Overlay page.",
-    ],
-    prs: [
-      { number: 635, title: "Clock & Counter: settings on the kit's ModuleSettings, overlay text and a settings menu with Overlays" },
-    ],
-    tags: ["clock-counter", "modules", "privacy", "publishing", "sdk", "todos", "ui-kit", "website"],
-  },
-  {
-    version: "0.23.76",
-    date: "2026-11-02",
-    title: "The UI Playground explains the basics",
-    notes: [
-      "The Foundations pages show colours, text, spacing, motion and how to write texts, each with live examples and their code.",
-      "Show disabled is a switch in the page header now, and Show code is coloured and numbered.",
-    ],
-    prs: [
-      { number: 632, title: "Module Kit stage 2: Foundations pages, Show disabled in the header" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.23.75",
-    date: "2026-11-02",
-    title: "System Monitor settings",
-    notes: [
-      "System Monitor's settings are in one place: what it shows, which drives and the connection.",
-    ],
-    prs: [
+      { number: 639, title: "Keyboard-opened dialogs appear instantly; toasts wait while hidden and slide from their edge" },
       { number: 638, title: "System Monitor: one settings dialog (0.1.15)" },
-    ],
-    tags: ["system-monitor"],
-  },
-  {
-    version: "0.23.74",
-    date: "2026-11-02",
-    title: "Tab drops",
-    notes: [
-      "Dropping a tab into another group's tab row keeps every tab in sight, shows a single dashed tab at the slot, and no second copy of the dragged tab.",
-    ],
-    prs: [
-      { number: 633, title: "Docking: tab drops keep every tab in sight, no second drag image" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.23.73",
-    date: "2026-11-02",
-    title: "Undo instead of \"Are you sure?\"",
-    notes: [
-      "Deleting a layout, frame or to-do no longer asks first; you can undo it for a few seconds.",
-      "Folders, to-do groups, workspaces you move to Trash, calculator values and a cleared history work the same way.",
-      "Ctrl+Z takes back the latest one.",
-    ],
-    prs: [
+      { number: 637, title: "Kit: single-page mode for module settings (compact, no empty menu)" },
       { number: 636, title: "Undo instead of \"Are you sure?\" for deletes that can be put back" },
-    ],
-    tags: ["calculator", "clock-counter", "games", "notes", "overlays", "pdf-viewer", "rail", "settings", "system-monitor", "todos", "ui-kit", "undo", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.23.72",
-    date: "2026-11-02",
-    title: "Maps and zoomable views share one set of controls",
-    notes: [
-      "Maps, trees and pictures have the same group in the corner: zoom out, the zoom % (click it to go back to 100 %), zoom in, and show the whole thing.",
-      "Double-click a map to zoom in toward that spot. Showing the whole thing glides there, unless your system is set to less motion.",
-    ],
-    prs: [
-      { number: 627, title: "Kit: one set of controls for maps and zoomable views" },
-    ],
-    tags: ["pdf-viewer", "ui-kit"],
-  },
-  {
-    version: "0.23.71",
-    date: "2026-11-02",
-    title: "Clock & Counter settings are tidier",
-    notes: [
-      "Clock & Counter settings are tidier: pages on the left and one footer.",
-      "A module can name its settings window, so Clock & Counter's says \"Countdown\" instead of the module's name.",
-    ],
-    prs: [
-      { number: 629, title: "Clock & Counter: tidier settings (pages, one footer, named frame) and drag to reorder" },
-    ],
-    tags: ["clock-counter", "modules", "privacy", "publishing", "sdk", "website"],
-  },
-  {
-    version: "0.23.70",
-    date: "2026-11-02",
-    title: "Docking drops",
-    notes: [
-      "Docking: dropping at the first or last tab and splitting a panel's own group work as shown.",
-    ],
-    prs: [
+      { number: 635, title: "Clock & Counter: settings on the kit's ModuleSettings, overlay text and a settings menu with Overlays" },
+      { number: 633, title: "Docking: tab drops keep every tab in sight, no second drag image" },
+      { number: 632, title: "Module Kit stage 2: Foundations pages, Show disabled in the header" },
       { number: 631, title: "Docking: first/last tab slots and splitting a panel's own group" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.23.69",
-    date: "2026-11-02",
-    title: "Search line in pick lists",
-    notes: [
-      "The line under the search field in a pick list now runs the whole width of the list.",
-    ],
-    prs: [
       { number: 630, title: "Kit: Picker search row spans the whole list (line under the search no longer stops short)" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.23.68",
-    date: "2026-11-02",
-    title: "A tidier UI Playground",
-    notes: [
-      "The UI Playground has a side menu with search, one page per control, and the code for every example.",
-    ],
-    prs: [
+      { number: 629, title: "Clock & Counter: tidier settings (pages, one footer, named frame) and drag to reorder" },
       { number: 628, title: "Module Kit stage 1: UI Playground with side menu, pages and Show code" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.23.67",
-    date: "2026-11-02",
-    title: "See where a panel lands",
-    notes: [
-      "Drag a panel and a dashed outline shows exactly where it will land, as a new column, a new row or a tab.",
-      "Nothing jumps around while you drag: the panel you lifted just fades.",
-      "Dragging onto a tab strip opens a gap for the new tab. Spots with too little room say so.",
-    ],
-    prs: [
-      { number: 613, title: "Docking: drop preview (recommendation) on our own layout model" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.23.66",
-    date: "2026-11-02",
-    title: "Tidier dropdowns",
-    notes: [
-      "Dropdown lists open under their field, starting at its left edge, and are at least as wide as it.",
-      "Pickers keep the same width whatever you pick.",
-      "Search lists that filter as you type have a clear button once there is text.",
-      "A switch placed over a map stays where it belongs again.",
-    ],
-    prs: [
+      { number: 627, title: "Kit: one set of controls for maps and zoomable views" },
       { number: 625, title: "Kit: tidier dropdowns (aligned, as wide as the field, clear button) + Playground fix" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.23.65",
-    date: "2026-11-02",
-    title: "Clearer names in Settings",
-    notes: [
-      "About & updates is now Updates & About (German: Updates & Info), with a sharper icon.",
-      "Overlays & Streaming and Name & Ranks start both words uppercase.",
-    ],
-    prs: [
       { number: 624, title: "Settings: Updates & About (Updates & Info), sharper icon; both words uppercase in A & B names" },
-    ],
-    tags: ["accounts", "modules", "overlays", "privacy", "settings", "website"],
-  },
-  {
-    version: "0.23.64",
-    date: "2026-11-02",
-    title: "Settings menu in its group's colour",
-    notes: [
-      "The open page in the settings menu shows its icon in the colour of its group.",
-    ],
-    prs: [
       { number: 623, title: "Settings menu: the open page's icon takes its group's colour" },
-    ],
-  },
-  {
-    version: "0.23.63",
-    date: "2026-11-02",
-    title: "Deeper main buttons in Ashen Keep",
-    notes: [
-      "Ashen Keep's main buttons are a deeper orange with light text.",
-      "Themes can now set their own colour for main buttons and badges, apart from the bright accent colour.",
-    ],
-    prs: [
       { number: 622, title: "Themes can set a button fill: primary-fill, primary-fill-hover, primary-fill-foreground" },
-    ],
-    tags: ["accounts", "calculator", "clock-counter", "games", "notes", "overlays", "pdf-viewer", "publishing", "rail", "sdk", "settings", "system-monitor", "todos", "ui-kit", "website", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.23.62",
-    date: "2026-11-02",
-    title: "Panels and the catalog load smoothly, without jumping.",
-    notes: [
-      "The catalog and a module's page show their layout in soft bars while they load, then fill in.",
-      "Icons and screenshots keep their place and fade in when they arrive.",
-      "Jumping to a setting from search glides there before it lights up.",
-    ],
-    prs: [
-      { number: 618, title: "Smooth loading: skeleton loaders, pictures that fade in, gliding jump to a setting" },
-    ],
-    tags: ["calculator", "catalog", "clock-counter", "games", "modules", "notes", "pdf-viewer", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.23.61",
-    date: "2026-11-02",
-    title: "Lists, dialogs and settings pages move smoothly",
-    notes: [
-      "A row you add grows in, and one you remove folds away while the rows below slide up.",
-      "Dialogs rise a little as they fade in, and leave a bit quicker.",
-      "A settings page you pick from the side menu fades in.",
-      "A game you pick on the rail fades in.",
-      "With reduced motion on, all of these only fade.",
-    ],
-    prs: [
-      { number: 620, title: "Motion: lists, dialogs, settings pages and workspace switches" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "overlays", "pdf-viewer", "publishing", "rail", "settings", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.23.60",
-    date: "2026-11-02",
-    title: "Changes show right away",
-    notes: [
-      "Changes show right away; if saving fails, they're put back. This covers email copies of messages, how users reach you about a module, a device's name, and ratings, reviews and replies in the catalog.",
-    ],
-    prs: [
-      { number: 619, title: "Act first, confirm later: changes show at once, put back if saving fails" },
-    ],
-    tags: ["accounts", "catalog", "publishing", "settings", "ui-kit"],
-  },
-  {
-    version: "0.23.59",
-    date: "2026-11-02",
-    title: "Switches and tabs slide",
-    notes: [
-      "The highlight on switches and tabs slides to what you pick.",
-      "Picking with the arrow keys jumps right away.",
-      "The list of a picker opens out of its button like the other menus.",
-      "Fades on buttons and controls are quicker and smoother.",
-      "Toasts finish moving a little sooner.",
-    ],
-    prs: [
-      { number: 616, title: "Motion: sliding highlight for segmented control and tabs, picker grows from its button, quicker default fades" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.23.58",
-    date: "2026-11-02",
-    title: "Installs, dragging and numbers feel better",
-    notes: [
-      "Installing or updating a module now happens on the button itself. It fills as the download goes (or a stripe moves when there's no percent), then shows a tick.",
-      "Things you drag lift a little, the others slide out of the way, and the one you drop settles into its place. Moving with the keys stays instant.",
-      "Numbers that change in front of you, like \"3 left\" or a rating count, count to their new value.",
-    ],
-    prs: [
       { number: 621, title: "Feel: install progress on the button, lifted and settling drags, numbers that count" },
-    ],
-    tags: ["catalog", "clock-counter", "modules", "notes", "overlays", "rail", "settings", "todos", "ui-kit", "workspace"],
-  },
-  {
-    version: "0.23.57",
-    date: "2026-11-02",
-    title: "Buttons with a little depth",
-    notes: [
-      "Buttons have a little depth and feel pressed when you click them.",
-    ],
-    prs: [
-      { number: 615, title: "Kit: buttons get a little depth and a real press" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.23.56",
-    date: "2026-11-02",
-    title: "Checkboxes, toggles and options animate when you pick them",
-    notes: [
-      "Checkboxes, radio buttons, toggles, style tiles and the side navigation animate when you pick them, and folding sections open smoothly.",
-      "The clear button in search fields pops in and out.",
-    ],
-    prs: [
+      { number: 620, title: "Motion: lists, dialogs, settings pages and workspace switches" },
+      { number: 619, title: "Act first, confirm later: changes show at once, put back if saving fails" },
+      { number: 618, title: "Smooth loading: skeleton loaders, pictures that fade in, gliding jump to a setting" },
       { number: 617, title: "Kit motion: checkboxes, radios, toggles, tiles, nav, search clear and folding sections" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "publishing", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.23.55",
-    date: "2026-11-02",
-    title: "Menus without the flicker",
-    notes: [
-      "Right-click menus, dropdowns and hints over a panel no longer show half-drawn first.",
-      "They open sooner, too.",
-    ],
-    prs: [
+      { number: 616, title: "Motion: sliding highlight for segmented control and tabs, picker grows from its button, quicker default fades" },
+      { number: 615, title: "Kit: buttons get a little depth and a real press" },
+      { number: 613, title: "Docking: drop preview (recommendation) on our own layout model" },
       { number: 611, title: "Menus over panels: no half-drawn frame, and they open sooner" },
-    ],
-    tags: ["rail", "ui-kit", "workspace"],
-  },
-  {
-    version: "0.23.54",
-    date: "2026-11-02",
-    title: "Clearer Mixed in Overlay settings",
-    notes: [
-      "With several frames selected, a setting that differs between them now shows a Mixed tag.",
-    ],
-    prs: [
       { number: 609, title: "Overlay settings: Mixed as a Badge, group Opacity covered by tests" },
-    ],
-    tags: ["overlays"],
-  },
-  {
-    version: "0.23.53",
-    date: "2026-11-02",
-    title: "Calmer item tooltips",
-    notes: [
-      "Item tooltips in modules now use Tavora's own colours. The gold and purple look stays for Path of Exile 2 items.",
-    ],
-    prs: [
       { number: 608, title: "Shared tooltip: neutral look by default, poe look on request (TooltipContent.look)" },
-    ],
-    tags: ["privacy", "publishing", "sdk", "website"],
-  },
-  {
-    version: "0.23.52",
-    date: "2026-11-02",
-    title: "Several frames at once, and undo for everything",
-    notes: [
-      "On the Overlay page, Ctrl+click or Shift+click frames, or draw a box on the canvas, to select several.",
-      "Move them together by dragging or with the arrow keys. Del removes them all.",
-      "With several selected, the Settings box changes Show, Opacity and Hide from capture for all of them.",
-      "Undo and redo now cover everything on the page: adding, removing, hiding, moving, Move to…, Copy to… and settings.",
-      "An empty overlay tells you where to find something to add.",
-    ],
-    prs: [
       { number: 607, title: "Overlay page: select several frames, undo for everything, empty-canvas hint" },
-    ],
-    tags: ["overlays"],
-  },
-  {
-    version: "0.23.51",
-    date: "2026-11-02",
-    title: "Calmer dialogs",
-    notes: [
-      "Dialogs have an icon, a short line under the title and a Close button in the corner.",
-      "More room around the content, and no line above the buttons.",
-      "Buttons that do something have an icon; Cancel, Close and Done never do.",
-    ],
-    prs: [
-      { number: 604, title: "Dialogs: icon header, close X, calmer footer, action vs close buttons" },
-    ],
-    tags: ["calculator", "clock-counter", "cloud-copy", "games", "hotkeys", "icons", "notes", "pdf-viewer", "privacy", "publishing", "settings", "system-monitor", "todos", "ui-kit"],
-  },
-  {
-    version: "0.23.50",
-    date: "2026-11-01",
-    title: "Smoother menus and buttons",
-    notes: [
-      "Menus, dropdowns and tooltips open out of the spot they belong to.",
-      "Going along a row of buttons, the next tooltip shows right away.",
-      "Buttons dip a little when you press them.",
-      "The running-game bar on the rail slides in and out more smoothly.",
-      "With reduced motion on, menus and tooltips fade instead of moving.",
-    ],
-    prs: [
       { number: 605, title: "Motion: shared tokens, menus and tooltips grow from their trigger, buttons dip on press" },
-    ],
-    tags: ["calculator", "clock-counter", "games", "notes", "onboarding", "pdf-viewer", "rail", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.23.49",
-    date: "2026-11-01",
-    title: "Buttons that are off still say why",
-    notes: [
-      "Hover a button that's switched off and its tooltip shows, so you can see why. Tab reaches it too.",
-      "On the Overlay page, Undo and Redo show their shortcut.",
-    ],
-    prs: [
-      { number: 599, title: "Disabled buttons keep their tooltip; Undo and Redo show their shortcut" },
-    ],
-    tags: ["hotkeys", "overlays", "ui-kit"],
-  },
-  {
-    version: "0.23.48",
-    date: "2026-11-01",
-    title: "Copy an overlay setup to another game",
-    notes: [
-      "On the Overlay page, press Copy to… next to Overlay for to copy the frames you see to another game.",
-      "A game that already has frames asks first: replace them or add to them.",
-      "Frames that only work in another game stay behind, and a note says so. Press Show to switch to the game you copied to.",
-    ],
-    prs: [
-      { number: 601, title: "Overlay page: Copy to… copies a setup's frames to another game" },
-    ],
-    tags: ["overlays"],
-  },
-  {
-    version: "0.23.47",
-    date: "2026-11-01",
-    title: "A picture for every overlay, and Preview as",
-    notes: [
-      "Add a picture to Everywhere and All games too, to place frames on your own image or OBS scene.",
-      "Preview as shows your overlay on another shape: 16:9, 21:9, 32:9, or one of your monitors. Nothing you placed moves.",
-    ],
-    prs: [
-      { number: 602, title: "Overlay: a picture for every setup, and Preview as" },
-    ],
-    tags: ["overlays", "privacy", "website"],
-  },
-  {
-    version: "0.23.46",
-    date: "2026-11-01",
-    title: "Dialogs",
-    notes: [
-      "A big dialog no longer shows the panel's settings twice, once in the dialog and once frozen behind it.",
-    ],
-    prs: [
-      { number: 600, title: "Dialogs: still behind a dialog shows the panel as it was" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.23.45",
-    date: "2026-11-01",
-    title: "Add a game, tidier",
-    notes: [
-      "The right side of Add a game is about modules only: it no longer repeats the game you picked.",
-      "Removed the Your own game link at the bottom. Type a name the list doesn't know and pick Add as your own game.",
-      "A game without modules now says you can still add any general module once it's added.",
-      "A new Ask for a module button sends one anonymous vote for that game, so we know what to build next. It sends only the game's name and a code, and only when you press it.",
-    ],
-    prs: [
-      { number: 596, title: "Add a game: tidy the right side, drop the Your own game link" },
-    ],
-    tags: ["accounts", "games", "modules", "privacy", "service", "website", "workspace"],
-  },
-  {
-    version: "0.23.44",
-    date: "2026-11-01",
-    title: "Clearer dropdowns",
-    notes: [
-      "Dropdowns where you pick a value now show an up-and-down arrow; menus of actions keep the down arrow.",
-    ],
-    prs: [
+      { number: 604, title: "Dialogs: icon header, close X, calmer footer, action vs close buttons" },
       { number: 603, title: "Kit: value pickers (Select, Picker) get the up/down arrow, menus keep the down arrow" },
-    ],
-    tags: ["calculator", "modules", "todos", "ui-kit"],
-  },
-  {
-    version: "0.23.43",
-    date: "2026-11-01",
-    title: "Place and change your overlays on the Overlay page",
-    notes: [
-      "Press Del to take the selected frame off the canvas. A double-click on it, or the gear, opens its settings right over the Overlay page.",
-      "A small bar next to the selected frame has Settings, Hide, Reset position, Reset size and Remove. Move to… sends a frame to another setup.",
-      "Clock & Counter lists each clock, counter and linked group on its own in Sources, and a new frame fits what it shows.",
-      "Sources keeps its order, shows a gear where a check mark was, and no longer folds away what can't be used.",
-    ],
-    prs: [
+      { number: 602, title: "Overlay: a picture for every setup, and Preview as" },
+      { number: 601, title: "Overlay page: Copy to… copies a setup's frames to another game" },
+      { number: 600, title: "Dialogs: still behind a dialog shows the panel as it was" },
+      { number: 599, title: "Disabled buttons keep their tooltip; Undo and Redo show their shortcut" },
       { number: 597, title: "Overlay page: pick what a panel shows, Settings over the page, a toolbar and a steadier Sources list" },
-    ],
-    tags: ["clock-counter", "modules", "overlays", "privacy", "publishing", "sdk", "website", "workspace"],
-  },
-  {
-    version: "0.23.42",
-    date: "2026-11-01",
-    title: "Clock & Counter over your game",
-    notes: [
-      "Show Clock & Counter over your game from the panel's menu. Your clocks and counters stay in view, and you count or start and stop them while you hold the game layer key.",
-    ],
-    prs: [
+      { number: 596, title: "Add a game: tidy the right side, drop the Your own game link" },
+      { number: 594, title: "Rail: + Game and + Personal buttons; Add a game loads in the background" },
       { number: 591, title: "Clock & Counter 0.1.4: show it over the game" },
     ],
-    tags: ["clock-counter", "publishing"],
-  },
-  {
-    version: "0.23.41",
-    date: "2026-11-01",
-    title: "Add a game is quicker to reach and to open",
-    notes: [
-      "The rail has two buttons under your games: + Game opens Add a game straight away, and + Personal starts a personal workspace.",
-      "Tavora looks for the games on your PC when it starts, so Add a game is ready when you open it. While it still looks, you see a spinner and placeholder rows.",
-    ],
-    prs: [
-      { number: 594, title: "Rail: + Game and + Personal buttons; Add a game loads in the background" },
-    ],
-    tags: ["games", "rail"],
+    tags: ["accounts", "calculator", "catalog", "clock-counter", "cloud-copy", "games", "hotkeys", "icons", "modules", "notes", "onboarding", "overlay-setups", "overlays", "pdf-viewer", "privacy", "publishing", "rail", "sdk", "service", "settings", "system-monitor", "todos", "ui-kit", "undo", "website", "whiteboard", "workspace"],
   },
   {
     version: "0.23.40",
