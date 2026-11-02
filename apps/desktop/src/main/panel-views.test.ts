@@ -371,6 +371,41 @@ describe("host menus and dialogs over the workspace (freeze)", () => {
     expect(stale.frozen.at(-1)).toEqual({ [B]: "data:stale-2" });
   });
 
+  it("takes a new picture when the one taken ahead came to nothing", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    let taken = 0;
+    a.capture = () => Promise.resolve(++taken === 1 ? null : `data:picture-${taken}`);
+    rig.views.prepareFreeze();
+    await rig.views.freeze(true);
+    expect(taken).toBe(2);
+    expect(rig.frozen).toEqual([{ [A]: "data:picture-2" }]);
+  });
+
+  it("does not use pictures taken ahead once the panels moved, were lent, got a dialog or came and went", async () => {
+    const changes: [string, (rig: ReturnType<typeof panelViewsRig>) => void][] = [
+      ["moved", (rig) => rig.views.place([place(A, 100)])],
+      ["lent", (rig) => void rig.lend(A)],
+      ["dialog", (rig) => void rig.views.openDialog(A, { width: 300, height: 200 })],
+      ["another panel opened", (rig) => rig.add(B)],
+      ["closed", (rig) => rig.views.close(A)],
+    ];
+    for (const [what, change] of changes) {
+      const rig = panelViewsRig();
+      const a = rig.add(A);
+      rig.views.place([place(A)]);
+      let taken = 0;
+      a.capture = () => Promise.resolve(`data:${what}-${++taken}`);
+      rig.views.prepareFreeze();
+      change(rig);
+      await rig.views.freeze(true);
+      // Taken ahead once; the menu took its own for any panel still pictured.
+      expect(taken, what).toBe(rig.frozen.at(-1)?.[A] ? 2 : 1);
+      expect(rig.frozen.at(-1)?.[A] ?? "", what).not.toBe(`data:${what}-1`);
+    }
+  });
+
   it("takes no pictures ahead while a menu or dialog is open", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);

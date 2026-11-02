@@ -177,7 +177,7 @@ export class PanelViews {
   private overlayOpen = false;
   private overlayChanges = 0;
   /** Pictures taken ahead of a menu (prepareFreeze), by panel; they count while they are fresh. */
-  private prepared: { at: number; pictures: Map<string, Promise<string | null>> } | null = null;
+  private prepared: { at: number; layout: string; pictures: Map<string, Promise<string | null>> } | null = null;
   private dialogState: { instanceId: string; width: number; height: number; bounds: PanelRect | null; still: Promise<string | null> } | null = null;
 
   constructor(private readonly deps: PanelViewsDeps) {}
@@ -535,7 +535,8 @@ export class PanelViews {
       [...this.entries].map(async ([instanceId, { adapter }]) => {
         if (!this.canBePictured(instanceId, adapter)) return;
         // A panel going into its dialog has already told its module, which may have changed the page: its picture is the one taken before.
-        const image = this.dialogState?.instanceId === instanceId ? await this.dialogState.still : await (prepared?.get(instanceId) ?? this.pictureOf(adapter));
+        // A picture taken ahead that came to nothing (too slow, failed) is taken again, or the panel would leave a hole.
+        const image = this.dialogState?.instanceId === instanceId ? await this.dialogState.still : await this.pictureAhead(prepared?.get(instanceId), adapter);
         if (image) images[instanceId] = image;
       }),
     );
@@ -561,7 +562,7 @@ export class PanelViews {
     if (this.prepared && now - this.prepared.at < PREPARED_FRESH_MS) return;
     const pictures = new Map<string, Promise<string | null>>();
     for (const [instanceId, { adapter }] of this.entries) if (this.canBePictured(instanceId, adapter)) pictures.set(instanceId, this.pictureOf(adapter));
-    this.prepared = { at: now, pictures };
+    this.prepared = { at: now, layout: this.layoutKey(), pictures };
   }
 
   /** The pictures taken ahead, if they are still good; a menu uses them once. */
@@ -569,12 +570,31 @@ export class PanelViews {
     const prepared = this.prepared;
     this.prepared = null;
     if (!prepared) return undefined;
-    return (this.deps.now ?? performance.now.bind(performance))() - prepared.at < PREPARED_FRESH_MS ? prepared.pictures : undefined;
+    const fresh = (this.deps.now ?? performance.now.bind(performance))() - prepared.at < PREPARED_FRESH_MS;
+    // Pictures taken before the panels moved, were lent, got a dialog or came and went show the old page in the new place.
+    return fresh && prepared.layout === this.layoutKey() ? prepared.pictures : undefined;
+  }
+
+  /** Where every panel is and what state it is in, to tell whether pictures taken earlier still match. */
+  private layoutKey(): string {
+    return JSON.stringify([
+      [...this.entries.keys()],
+      [...this.bounds],
+      [...this.lent.keys()],
+      this.dialogState?.instanceId ?? null,
+      this.openingState !== null,
+      [...this.entries].map(([, { adapter }]) => `${adapter.status}${adapter.revealed}`),
+    ]);
   }
 
   /** A panel in its slot, ready and drawn: a still image can stand in for it. */
   private canBePictured(instanceId: string, adapter: PanelViewAdapter): boolean {
     return !this.lent.has(instanceId) && this.bounds.has(instanceId) && adapter.status === "ready" && adapter.revealed && adapter.capturable;
+  }
+
+  /** The picture taken ahead, or a new one at once when there is none or it came to nothing. */
+  private pictureAhead(ahead: Promise<string | null> | undefined, adapter: PanelViewAdapter): Promise<string | null> {
+    return ahead ? ahead.then((image) => image ?? this.pictureOf(adapter)) : this.pictureOf(adapter);
   }
 
   /** A still image of the panel, or null when it takes longer than FREEZE_TIMEOUT_MS. */

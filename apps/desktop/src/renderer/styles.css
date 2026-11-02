@@ -155,7 +155,8 @@ html.overlay-pending :is(
     [data-slot="select-content"],
     .tavora-tooltip
   ) {
-  visibility: hidden;
+  opacity: 0 !important;
+  pointer-events: none !important;
   animation-play-state: paused !important;
 }
 

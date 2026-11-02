@@ -716,8 +716,6 @@ export const overlayOpen = computed(
     searchOpen.value ||
     dragging.value,
 );
-// The panels' pictures stay after a dialog closes, under the panels, until the host says every panel has drawn again.
-watch(overlayOpen, (open) => api.setOverlay(open));
 
 // A menu or hint opens in this page at once, but the panels (native views above it) step aside only after their pictures
 // are on screen. Until then it would show half-covered, so popups stay hidden while the class is on (styles.css).
@@ -728,15 +726,15 @@ let panelsOutCap: ReturnType<typeof setTimeout> | undefined;
 api.onOverlayReady(() => {
   if (overlayOpen.value) panelsOut.value = true;
 });
-watch(
-  overlayOpen,
-  (open) => {
-    clearTimeout(panelsOutCap);
-    panelsOut.value = false;
-    if (open) panelsOutCap = setTimeout(() => (panelsOut.value = true), PANELS_OUT_CAP_MS);
-  },
-  { flush: "sync" },
-);
+// The panels' pictures stay after a dialog closes, under the panels, until the host says every panel has drawn again.
+// Only a change the host is told of resets this: a menu that closes and opens again within one tick sends nothing, and
+// the panels stay out of the way, so nothing would ever say they are.
+watch(overlayOpen, (open) => {
+  api.setOverlay(open);
+  clearTimeout(panelsOutCap);
+  panelsOut.value = false;
+  if (open) panelsOutCap = setTimeout(() => (panelsOut.value = true), PANELS_OUT_CAP_MS);
+});
 watch(
   () => overlayOpen.value && !panelsOut.value,
   (waiting) => document.documentElement.classList.toggle("overlay-pending", waiting),
