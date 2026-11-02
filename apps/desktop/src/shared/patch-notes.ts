@@ -28,6 +28,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.81",
+    date: "2026-11-02",
+    title: "Undo in toasts",
+    notes: [
+      "The Undo and close buttons in Tavora's own toasts can be clicked again.",
+    ],
+    prs: [
+      { number: 644, title: "Host toasts: the pill opts out of the title bar's drag region, so Undo and × can be clicked" },
+    ],
+  },
+  {
     version: "0.23.80",
     date: "2026-11-02",
     title: "Dialogs stay put",
