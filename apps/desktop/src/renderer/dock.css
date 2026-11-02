@@ -188,65 +188,6 @@
   outline-offset: -2px;
 }
 
-/* Dragging a tab over another tab: instead of tinting half of it, a bar at
-   the edge where it would land (the start of the tab to land before it, the
-   end of the tab to land after it). Dropping at the empty end of the tab strip
-   shows the bar at the end of the last tab. Dockview sets the box's position
-   and size itself, hence !important. */
-.dockview-theme-tavora .dv-tab > .dv-drop-target-dropzone > .dv-drop-target-selection,
-.dockview-theme-tavora .dv-void-container > .dv-drop-target-dropzone > .dv-drop-target-selection {
-  top: 0 !important;
-  height: 100% !important;
-  width: 3px !important;
-  border: 0 !important;
-  border-radius: 2px;
-  background: var(--primary) !important;
-  transition: none !important;
-}
-.dockview-theme-tavora .dv-tab > .dv-drop-target-dropzone > .dv-drop-target-selection.dv-drop-target-left,
-.dockview-theme-tavora .dv-void-container > .dv-drop-target-dropzone > .dv-drop-target-selection {
-  left: 0 !important;
-}
-.dockview-theme-tavora .dv-tab > .dv-drop-target-dropzone > .dv-drop-target-selection.dv-drop-target-right {
-  left: calc(100% - 3px) !important;
-}
-
-/* A drop that only reorders groups (dropReorders in dock.ts): a bar on the
-   side where it lands, since the target keeps its size. */
-[data-drop-line] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
-  border: 0 !important;
-  border-radius: 2px;
-  background: var(--primary) !important;
-  transition: none !important;
-}
-[data-drop-line] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection::after {
-  display: none;
-}
-[data-drop-line="left"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection,
-[data-drop-line="right"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
-  top: 0 !important;
-  height: 100% !important;
-  width: 4px !important;
-}
-[data-drop-line="left"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
-  left: 0 !important;
-}
-[data-drop-line="right"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
-  left: calc(100% - 4px) !important;
-}
-[data-drop-line="top"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection,
-[data-drop-line="bottom"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
-  left: 0 !important;
-  width: 100% !important;
-  height: 4px !important;
-}
-[data-drop-line="top"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
-  top: 0 !important;
-}
-[data-drop-line="bottom"] .dockview-theme-tavora .dv-content-container .dv-drop-target-selection {
-  top: calc(100% - 4px) !important;
-}
-
 /* Each group is a card: rounded, outlined and set apart from its
    neighbours by the dock's gap. The corner radius matches PANEL_RADIUS in
    src/main/module-view.ts, which rounds the module's native view to fit. */
@@ -284,43 +225,35 @@
   pointer-events: none;
 }
 
-/* Where a dragged panel will land: a clear, rounded area with a short label.
-   The drop guide (DropGuide.vue) sits on top at the group's centre. */
-.dockview-theme-tavora .dv-content-container .dv-drop-target-selection:not(.dv-drop-target-selection-line) {
-  --dv-drag-over-background-color: color-mix(in srgb, var(--primary) 22%, transparent);
-  border: 2px solid var(--primary);
-  border-radius: 8px;
+/* Dragging a panel (dock-preview.ts, DockPreview.vue): dockview's own drop overlays never show, the dock's drop
+   handlers take over. Nothing moves; the lifted panel's group fades, and the tabs of the group aimed at slide apart
+   (the dashed tab goes in the gap). Reduced motion makes both instant. */
+.dockview-theme-tavora .dv-groupview.dock-lifted {
+  opacity: 0.3;
+  transition: opacity var(--duration-press) var(--ease-out-strong);
 }
-
-.dockview-theme-tavora
-  .dv-content-container
-  .dv-drop-target-selection:not(.dv-drop-target-selection-line, .dv-drop-target-small-vertical, .dv-drop-target-small-horizontal)::after {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
+[data-dock-aiming] .dockview-theme-tavora .dv-tab {
+  transition: transform var(--duration-menu) var(--ease-in-out-strong);
 }
-.dockview-theme-tavora .dv-content-container .dv-drop-target-selection.dv-drop-target-left::after {
-  content: "Place left";
+.dock-fade {
+  transition: opacity var(--duration-press) var(--ease-out-strong);
 }
-.dockview-theme-tavora .dv-content-container .dv-drop-target-selection.dv-drop-target-right::after {
-  content: "Place right";
+.dock-fade-enter-active,
+.dock-fade-leave-active {
+  transition: opacity var(--duration-press) var(--ease-out-strong);
 }
-.dockview-theme-tavora .dv-content-container .dv-drop-target-selection.dv-drop-target-top::after {
-  content: "Place above";
+.dock-fade-enter-from,
+.dock-fade-leave-to {
+  opacity: 0;
 }
-.dockview-theme-tavora .dv-content-container .dv-drop-target-selection.dv-drop-target-bottom::after {
-  content: "Place below";
-}
-.dockview-theme-tavora .dv-content-container .dv-drop-target-selection.dv-drop-target-center::after {
-  content: "Add as a tab";
+@media (prefers-reduced-motion: reduce) {
+  .dockview-theme-tavora .dv-groupview.dock-lifted,
+  [data-dock-aiming] .dockview-theme-tavora .dv-tab,
+  .dock-fade,
+  .dock-fade-enter-active,
+  .dock-fade-leave-active {
+    transition: none !important;
+  }
 }
 
 /* A tab's close button shows on the active tab, and on the others while the pointer or the keyboard is on them. */
