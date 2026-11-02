@@ -188,6 +188,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
   `@tavora/official-ui` (`modules/shared/src/optimistic.ts`). It handles two quick changes: the later one wins, and an
   earlier failure never overwrites a newer value. Not for what can't be put back: deleting, publishing, money, keys,
   security. No disabled controls or "Saving…" while a local save runs.
+- **Add, edit, delete**: What people can add, they can edit and delete; deletes of restorable things use Undo. Fixed built-ins are the exception.
 - **Deleting**<a id="deleting"></a>: what can be put back exactly as it was (an item of the module's own document: a to-do, a
   group, a saved value) is deleted at once and saved, then `undoable({ title, undo })` shows "<Thing> deleted" with Undo
   for a few seconds; Ctrl+Z outside text fields takes back the newest one (`handleUndoKey(event)` in the page's

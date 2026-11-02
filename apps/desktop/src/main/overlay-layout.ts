@@ -465,6 +465,12 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     const games = this.games();
     const gameId = this.current(games);
     if (gameId) this.switchTo(gameId);
+    // A setup that was deleted (on this page, on the rail, or with its workspace) takes the undo steps and eye marks the page
+    // kept for it along. The Undo of its delete brings the setup back (frames, places, settings), and a new setup with its
+    // name starts with a clean page history.
+    const known = new Set(games.map((game) => game.id));
+    for (const id of [...this.histories.keys()]) if (!known.has(id)) this.histories.delete(id);
+    for (const id of [...this.hiddenOnCanvas.keys()]) if (!known.has(id)) this.hiddenOnCanvas.delete(id);
     if (this.pictureFor !== gameId) {
       this.pictureFor = gameId;
       this.picture = null;
@@ -735,6 +741,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   /** Undo and redo: makes the item in the part's setup what `to` says. */
   private restore(part: Part<ItemSnapshot>, to: ItemSnapshot | null): boolean {
     const ref = (part.before ?? part.after)!.ref;
+    // A game's setup that was deleted stays deleted: a step of the page never makes it again (only its own Undo does).
+    if (to !== null && isGameSetup(part.setupId) && !this.options.source.setups().includes(part.setupId)) return false;
     const now = this.snapshot(part.setupId, part.id);
     // Only hidden or shown on the canvas: nothing saved to change.
     const same = to !== null && now !== null && sameItem(now.state.item, to.state.item);
@@ -761,8 +769,11 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
    * for each new one). One taken back by Ctrl+Z, or dropped because its frames changed, leaves the list.
    */
   private removals(): { step: number; count: number }[] {
-    return [...this.histories.values()]
-      .flatMap((history) => history.steps("remove"))
+    // A deleted setup has no frames to take back: its removes leave the list (its toasts go without a word).
+    const known = new Set(this.options.source.setups());
+    return [...this.histories]
+      .filter(([setupId]) => known.has(setupId))
+      .flatMap(([, history]) => history.steps("remove"))
       .sort((a, b) => a.id - b.id)
       .slice(-MAX_REMOVALS)
       .map((step) => ({ step: step.id, count: step.parts.length }));

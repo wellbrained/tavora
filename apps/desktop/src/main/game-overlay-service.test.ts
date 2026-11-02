@@ -166,6 +166,8 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     panelUsed: new Map<string, number>(),
     /** Panel instances that still exist. */
     gone: new Set<string>(),
+    /** Workspaces that left the library. */
+    goneWorkspaces: new Set<string>(),
     probeCalls: 0,
     broken: false,
     /** The panels there are (instance id to the name of their tab). */
@@ -209,7 +211,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     },
     installed: { shown: (id) => world.modules.get(id) },
     workspaces: {
-      name: (id) => (id === "elden" ? "Elden Ring" : id === "personal" ? "Personal" : null),
+      name: (id) => (world.goneWorkspaces.has(id) ? null : id === "elden" ? "Elden Ring" : id === "personal" ? "Personal" : null),
       scopeOf: (id) => world.kinds.get(id) ?? "game",
     },
     settings: {
@@ -2130,6 +2132,141 @@ describe("the Overlay page", () => {
     expect(removed).not.toContain(PANEL);
     expect(service.layout.items("$all").map((item) => item.ref.kind)).toEqual(["panel"]);
     expect(service.layout.setups()).not.toContain("elden");
+  });
+
+  /** A game's setup with an overlay and a panel, each with settings of their own, a key on the overlay, and a second game's setup after it. */
+  async function deletable() {
+    const made = await setup();
+    const { service, key } = made;
+    const panel = { owner: "official", moduleId: TODOS.manifest.id, workspaceId: "personal", instanceId: PANEL };
+    service.layout.addPanel("$all", panel);
+    show(service);
+    show(service, CLOCK, "elden", "item-2");
+    service.addSetup("other");
+    const subject = { owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "elden", key: "item-1" };
+    service.update(subject, { opacity: 50, mode: "toggle" });
+    service.layout.setRect("elden", { kind: "overlay", subject }, { h: "right", v: "bottom", x: 0.1, y: 0.2, width: 0.3, height: 0.15 });
+    service.layout.setPanel("elden", PANEL, { opacity: 25, hideFromCapture: true });
+    const record = key(toggleBinding(subject));
+    /** Every item of the setup as undo keeps it. */
+    const states = () => service.layout.items("elden").map((info) => service.layout.state("elden", info.ref));
+    return { ...made, record, states, subject };
+  }
+
+  it("takes a game's setup with a way back, and never Everywhere, All games or a game without one", async () => {
+    const { service } = await setup();
+    expect(service.takeSetup("$everywhere")).toBeNull();
+    expect(service.takeSetup("$all")).toBeNull();
+    expect(service.takeSetup("elden")).toBeNull();
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all"]);
+    service.addSetup("elden");
+    expect(service.takeSetup("elden")).toBeTypeOf("function");
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all"]);
+  });
+
+  it("puts a deleted setup back exactly: its place in the list, every item with place and settings, and the keys that went", async () => {
+    const { service, world, live, record, states } = await deletable();
+    const before = states();
+    expect(before).toHaveLength(3);
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all", "elden", "other"]);
+    const shownWindows = () => live().filter((window) => window.shown).length;
+    const windows = shownWindows();
+    const restore = service.takeSetup("elden")!;
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all", "other"]);
+    expect(shownWindows()).toBeLessThan(windows);
+    // The overlay is in no other setup, so its key went; the panel is still in All games, so its key stays.
+    expect(world.removedKeys).toEqual([record]);
+    const changes = world.changes;
+
+    expect(restore()).toBe(true);
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all", "elden", "other"]);
+    expect(states()).toEqual(before);
+    expect(world.restoredKeys).toEqual([record]);
+    expect(world.changes).toBeGreaterThan(changes);
+    expect(shownWindows()).toBe(windows);
+    // Back once only: a second go finds the setup there.
+    expect(restore()).toBe(false);
+    expect(states()).toEqual(before);
+  });
+
+  // While the Undo is open, the game can get a setup again on its own (a game workspace's overlay or panel lands in its own
+  // game's setup, Copy to… makes one). Undo must not lose the deleted frames then: they merge into the new setup.
+  const name = (info: { ref: { kind: string; subject?: { key: string } } }) => (info.ref.kind === "overlay" ? info.ref.subject!.key : "panel");
+
+  it("merges a deleted setup back into the one an overlay made for the game meanwhile", async () => {
+    const { service, world, record, states, subject } = await deletable();
+    const before = states();
+    const restore = service.takeSetup("elden")!;
+    // A module shows an overlay for the game: its setup is made again, with a copy of the panel from All games.
+    show(service, CLOCK, "elden", "fresh");
+    expect(service.layout.items("elden").map(name)).toEqual(["fresh", "panel"]);
+    service.layout.setPanel("elden", PANEL, { opacity: 75 });
+
+    expect(restore()).toBe(true);
+    const back = service.layout.items("elden");
+    // Nothing is lost: the deleted overlays are back as they were, the panel copy has its old settings again, the new overlay stays.
+    expect(back.map(name).sort()).toEqual(["fresh", "item-1", "item-2", "panel"]);
+    const byName = (key: string) => service.layout.state("elden", back.find((info) => name(info) === key)!.ref)!;
+    expect(byName("item-1")).toMatchObject({ item: { opacity: 50, mode: "toggle" }, key: record });
+    expect(byName("panel").item).toEqual(before.find((state) => "instanceId" in state!.item)!.item);
+    expect(world.restoredKeys).toContainEqual(record);
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all", "other", "elden"]);
+    expect(service.layout.state("elden", { kind: "overlay", subject })).not.toBeNull();
+    // Back once: a second go does nothing, so the merge never doubles or overwrites later changes.
+    service.update(subject, { opacity: 25 });
+    expect(restore()).toBe(false);
+    expect(service.layout.state("elden", { kind: "overlay", subject })!.item.opacity).toBe(25);
+  });
+
+  it("merges into the setup a panel of the game's own workspace made meanwhile", async () => {
+    const { service, world, states } = await deletable();
+    const restore = service.takeSetup("elden")!;
+    const OTHER_PANEL = "0a1b2c3d-0000-4000-8000-000000000009";
+    world.panelNames.set(OTHER_PANEL, "Notes");
+    expect(service.showPanel({ owner: "official", moduleId: TODOS.manifest.id, workspaceId: "elden", instanceId: OTHER_PANEL })).toBe("shown");
+    expect(service.layout.items("elden")).toHaveLength(2);
+    expect(restore()).toBe(true);
+    expect(states().map((state) => ("instanceId" in state!.item ? state!.item.instanceId : state!.item.key)).sort()).toEqual([OTHER_PANEL, PANEL, "item-1", "item-2"].sort());
+  });
+
+  it("merges into the setup Copy to… made meanwhile, and keeps what does not fit out", async () => {
+    const { service, states } = await deletable();
+    const restore = service.takeSetup("elden")!;
+    // Copy to… makes the game's setup again, with the panel from All games.
+    expect(service.layout.copy("$all", "elden", "add")).toMatchObject({ copied: 1 });
+    for (let index = 0; index < LIMITS.maxGameOverlays - 2; index++) show(service, CLOCK, "elden", `fill-${index}`);
+    expect(service.layout.items("elden")).toHaveLength(LIMITS.maxGameOverlays - 1);
+    expect(restore()).toBe(true);
+    // Room for one more: the panel copy goes back to its old settings, one overlay fits, the other stays out.
+    expect(service.layout.items("elden")).toHaveLength(LIMITS.maxGameOverlays);
+    expect(states().filter((state) => "key" in state!.item && ["item-1", "item-2"].includes(state!.item.key))).toHaveLength(1);
+  });
+
+  it("can't bring a deleted setup back when its workspace is gone", async () => {
+    const { service, world } = await deletable();
+    const restore = service.takeSetup("elden")!;
+    world.goneWorkspaces.add("elden");
+    expect(restore()).toBe(false);
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all", "other"]);
+  });
+
+  it("brings back the items that can be shown again", async () => {
+    const { service, world, states } = await deletable();
+    const restore = service.takeSetup("elden")!;
+    // The panel was closed meanwhile; the overlays still show.
+    world.gone.add(PANEL);
+    expect(restore()).toBe(true);
+    expect(service.layout.items("elden").map((info) => info.ref.kind)).toEqual(["overlay", "overlay"]);
+    expect(states()).toHaveLength(2);
+  });
+
+  it("keeps a deleted setup gone when none of its items can be shown again", async () => {
+    const { service, world } = await deletable();
+    const restore = service.takeSetup("elden")!;
+    world.gone.add(PANEL);
+    world.modules.delete(CLOCK.manifest.id);
+    expect(restore()).toBe(false);
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all", "other"]);
   });
 
   it("starts a new game setup with copies of the items All games has", async () => {

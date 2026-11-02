@@ -10,7 +10,8 @@ import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { GRID_SETTINGS, type GridSetting } from "../../shared/layout-math";
-import { state } from "../host";
+import { LAYOUT_ALL_GAMES } from "../../shared/layout-view";
+import { deleteWithUndo, state } from "../host";
 import { t } from "../i18n";
 import HeaderTools from "../components/workspace/HeaderTools.vue";
 import OverlayCopied from "../components/layout/OverlayCopied.vue";
@@ -125,6 +126,20 @@ const setup = computed({
 const setupOptions = computed(() => (view.value?.games ?? []).map((item) => ({ value: item.id, label: item.name })));
 const setupName = computed(() => view.value?.games.find((item) => item.id === view.value?.gameId)?.name ?? "");
 const selected = computed(() => selectedItems(view.value));
+
+/**
+ * Delete a game's overlay: it goes at once with its frames, and a toast offers Undo (the page's Ctrl+Z stays its own history
+ * and never takes it back). The page falls back to All games, which then shows over the game; Undo brings the overlay
+ * back as it was, and shows it again when the page is still where the delete left it. Everywhere and All games have no button.
+ */
+function deleteSetup() {
+  const current = view.value;
+  if (!current || !isGame.value) return;
+  const id = current.gameId;
+  void deleteWithUndo({ type: "remove-game-setup", workspaceId: id }, t("overlays.layout.setupDeleted", { game: setupName.value }), () => {
+    if (view.value?.gameId === LAYOUT_ALL_GAMES) send({ type: "game", gameId: id });
+  });
+}
 const grid = computed({
   get: () => view.value?.grid ?? "normal",
   set: (value: GridSetting) => send({ type: "grid", grid: value }),
@@ -151,10 +166,14 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
     <div v-if="view" class="flex min-h-0 flex-1 gap-2 px-2 pb-2" :class="{ 'flex-row-reverse': state?.gameOverlays.sidebar === 'left' }" data-testid="overlay-body">
       <section class="bg-card flex min-w-0 flex-1 flex-col rounded-lg border">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-2">
-          <label class="flex items-center gap-2 text-sm">
-            <span class="text-muted-foreground">{{ t("overlays.layout.setup") }}</span>
-            <Picker v-model="setup" :options="setupOptions" :label="t('overlays.layout.setup')" testid="layout-game" />
-          </label>
+          <div class="flex items-center gap-1">
+            <label class="flex items-center gap-2 text-sm">
+              <span class="text-muted-foreground">{{ t("overlays.layout.setup") }}</span>
+              <Picker v-model="setup" :options="setupOptions" :label="t('overlays.layout.setup')" testid="layout-game" />
+            </label>
+            <!-- Only a game's own overlay can go; Everywhere and All games always exist. -->
+            <Button v-if="isGame" variant="ghost" size="icon-sm" :aria-label="t('overlays.layout.deleteSetup', { game: setupName })" :title="t('overlays.layout.deleteSetup', { game: setupName })" data-testid="layout-delete-setup" @click="deleteSetup"><Trash2 :stroke-width="1.5" /></Button>
+          </div>
           <OverlayCopy />
           <div class="flex items-center gap-2 text-sm">
             <span class="text-muted-foreground">{{ t("overlays.layout.grid") }}</span>

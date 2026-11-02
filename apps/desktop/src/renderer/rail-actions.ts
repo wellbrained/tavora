@@ -140,7 +140,7 @@ function overlayItems(workspace: WorkspaceView): MenuItem[] {
   const overlays = state.value!.gameOverlays;
   if (workspace.kind !== "game" || !overlays.supported || !overlays.enabled) return [];
   return overlays.gameSetups.includes(workspace.id)
-    ? [{ label: t("menu.removeOverlay"), testid: "menu-remove-overlay", glyph: MonitorOff, run: () => act({ type: "remove-game-setup", workspaceId: workspace.id }) }]
+    ? [{ label: t("menu.removeOverlay"), testid: "menu-remove-overlay", glyph: MonitorOff, run: () => void deleteWithUndo({ type: "remove-game-setup", workspaceId: workspace.id }, t("overlays.layout.setupDeleted", { game: workspace.name })) }]
     : [{ label: t("menu.addOverlay"), testid: "menu-add-overlay", glyph: Monitor, run: () => act({ type: "add-game-overlay", workspaceId: workspace.id }) }];
 }
 
