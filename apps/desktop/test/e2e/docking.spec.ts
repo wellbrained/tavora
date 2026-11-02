@@ -312,6 +312,36 @@ test("dragging a column beside another in its row moves it there, keeping widths
   await app.close();
 });
 
+test("aiming at the first tab or the last slot of a strip makes room for the ghost tab; a panel can split its own group", async () => {
+  const { app, page } = await launch();
+  await openModule(page, VANILLA);
+  await openModule(page, REACT);
+  await expect(groups(page)).toHaveCount(1);
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  const tabs = page.locator(".dv-tab");
+  const dragged = tabs.nth(1);
+  const content = page.locator(".dv-content-container").first();
+  await dragged.dispatchEvent("dragstart", { dataTransfer });
+  await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
+  const first = (await tabs.first().boundingBox())!;
+  const dock = (await page.locator(".dv-dockview").boundingBox())!;
+  const over = (x: number, y: number) => content.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: y });
+  // The left of the first tab sits at the dock's edge, yet it is a tab slot, not the dock's edge.
+  await over(dock.x + 3, first.y + first.height / 2);
+  await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "tab");
+  const ghost = (await page.getByTestId("dock-ghost-tab").boundingBox())!;
+  expect(Math.abs(ghost.x - first.x)).toBeLessThanOrEqual(8);
+  // The first tab has slid right, out from under the ghost.
+  await expect.poll(async () => (await tabs.first().boundingBox())!.x).toBeGreaterThan(ghost.x + ghost.width - 2);
+  // Over its own group's body: splitting it off is allowed, never "not enough room".
+  const box = (await content.boundingBox())!;
+  await over(box.x + box.width * 0.9, box.y + box.height / 2);
+  await expect(page.getByTestId("dock-preview")).toHaveAttribute("data-target", "split-right");
+  await expect(page.getByTestId("dock-refused")).toHaveCount(0);
+  await tabs.first().dispatchEvent("dragend", { dataTransfer });
+  await app.close();
+});
+
 test("module views are replaced by still images while a menu is open", async () => {
   const { app, page } = await launch();
   await openModule(page, VANILLA);

@@ -403,9 +403,11 @@ export function layoutAround(layout: SavedLayout, anchor: string, slots: Slots, 
 }
 
 /** Whether the row or column beside `group` has room for one more group holding panels `ids`. */
-function fits(api: DockviewApi, group: DockviewGroupPanel, side: Side, ids: readonly string[], info: Info, leaving?: string) {
+function fits(api: DockviewApi, group: DockviewGroupPanel, side: Side, ids: readonly string[], info: Info, leaving?: string, lifted?: string) {
   const horizontal = side === "right";
   const line = lineOf(api, group, side, info);
+  // The panel dragged out of the group it lands beside no longer asks for room there.
+  if (lifted) line.mins[line.index] = leafMinimum(api, group.id, group.panels.map((panel) => panel.id).filter((id) => id !== lifted), horizontal, info);
   // The new group shares the target's size across the line.
   const need = leastAlong(ids, horizontal, horizontal ? group.height : group.width, info);
   // A group that empties by the move gives its room back to the line.
@@ -438,7 +440,9 @@ export function dropAllowed(
   // Moving a group's only panel to its own edge changes nothing.
   if (target === source && target.panels.length === 1) return true;
   const leaving = source && (!data.panelId || source.panels.length === 1) ? source.id : undefined;
-  return fits(api, target, sideways ? "right" : "below", dragged, info, leaving);
+  // A panel split off its own group (which keeps other tabs) leaves that group smaller.
+  const lifted = target === source && data.panelId ? data.panelId : undefined;
+  return fits(api, target, sideways ? "right" : "below", dragged, info, leaving, lifted);
 }
 
 /** Refuses drops that would split a group too small for its panels or the one dropped. */
