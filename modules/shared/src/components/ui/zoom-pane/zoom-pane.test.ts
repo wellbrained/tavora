@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { createApp, defineComponent, h, nextTick, type App } from "vue"
+import { createApp, defineComponent, h, nextTick, reactive, type App } from "vue"
 import { SAVE_DELAY_MS, setViewMemoryStore, type ViewStore } from "./view-memory"
 import { TOOLTIP_GAP } from "../../tooltip"
 import { ZoomPane, ZoomTip, useZoomTip } from "."
@@ -13,7 +13,12 @@ const WORLD: Size = { width: 1000, height: 1000 }
 
 let app: App | undefined
 let reduced = false
+/** The clock the pane reads for "just moved": a double-click soon after the view moved is not a zoom. */
+let clock = 1e9
+const later = (ms = 1000) => void (clock += ms)
 beforeEach(() => {
+  clock = 1e9
+  vi.spyOn(performance, "now").mockImplementation(() => clock)
   // Not the clock itself: Vue ignores a click whose time is before its handler was attached, and a faked clock says so.
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame"] })
   reduced = false
@@ -165,6 +170,7 @@ describe("double-click", () => {
     await flush()
     api().setView({ x: 0, y: 0, zoom: 1 })
     await flush()
+    later()
     dblclick(pane, { x: 100, y: 50 })
     await flush()
     expect(api().zoom).toBeCloseTo(1.25)
@@ -178,6 +184,7 @@ describe("double-click", () => {
     await flush()
     off.api().setView({ x: 0, y: 0, zoom: 1 })
     await flush()
+    later()
     dblclick(off.pane, { x: 100, y: 50 })
     expect(off.api().zoom).toBe(1)
     app?.unmount()
@@ -187,6 +194,7 @@ describe("double-click", () => {
     await flush()
     on.api().setView({ x: 0, y: 0, zoom: 1 })
     await flush()
+    later()
     dblclick(on.root.querySelector("[data-testid=node]")!, { x: 100, y: 50 })
     expect(on.api().zoom).toBe(1)
   })
@@ -387,8 +395,9 @@ describe("ZoomTip", () => {
 
 describe("useZoomTip", () => {
   const rect = { left: 1, top: 2, width: 3, height: 4 }
+  // A tooltip that closed a moment ago makes the next come at once; none has closed lately.
+  beforeEach(() => void (clock = 2e9))
   // A tooltip that closed a moment ago makes the next come at once; no tooltip has closed lately.
-  beforeEach(() => void vi.spyOn(performance, "now").mockReturnValue(1e9))
 
   it("shows the tip after the hover wait, with its content, and hides it", () => {
     const { tip, show, hide } = useZoomTip({ delay: 400 })
@@ -417,5 +426,302 @@ describe("useZoomTip", () => {
     hide()
     vi.advanceTimersByTime(1000)
     expect(tip.rect).toBeNull()
+  })
+})
+
+// ── Review fixes ──
+
+const wheel = (target: Element, deltaY = -100) => target.dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY }))
+const press = (target: Element, type: "pointerdown" | "pointermove" | "pointerup", at = { x: 0, y: 0 }) =>
+  target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: at.x, clientY: at.y, button: 0 }))
+const dblclickAt = (target: Element, at = { x: 100, y: 50 }) => target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, clientX: at.x, clientY: at.y }))
+const AREA = { x: 600, y: 600, width: 100, height: 100 }
+
+/** A pane whose props can change while it is mounted. */
+function mountLive(initial: Record<string, unknown>) {
+  const props = reactive({ viewOnly: true, world: WORLD, minZoom: 0.1, maxZoom: 4, ...initial } as Record<string, unknown>)
+  let api!: PaneApi
+  const root = document.createElement("div")
+  document.body.append(root)
+  app = createApp(defineComponent({ render: () => h(ZoomPane, { ref: (instance: unknown) => (api = instance as PaneApi), ...props }) }))
+  app.mount(root)
+  return { props, api: () => api, pane: root.querySelector("[data-slot=zoom-pane]") as HTMLElement, root, button: (id: string) => root.querySelector(`[data-testid=${id}]`) as HTMLElement }
+}
+
+describe("a glide is stopped by the user", () => {
+  it("by the wheel, and stays where it was stopped", async () => {
+    const { api, pane } = mount({ wheel: "zoom" })
+    await flush()
+    api().setView({ x: 0, y: 0, zoom: 1 })
+    await flush()
+    api().showArea(AREA)
+    vi.advanceTimersByTime(100)
+    wheel(pane)
+    await flush()
+    const stopped = api().zoom
+    vi.advanceTimersByTime(600)
+    await flush()
+    expect(api().zoom).toBe(stopped)
+    expect(stopped).not.toBeCloseTo(2.52)
+  })
+
+  it("by a drag of the pointer, but not by a plain press", async () => {
+    const { api, pane } = mount()
+    await flush()
+    api().setView({ x: 0, y: 0, zoom: 1 })
+    await flush()
+    api().showArea(AREA)
+    vi.advanceTimersByTime(100)
+    await flush()
+    // A press alone (the first half of a double-click) lets it go on.
+    press(pane, "pointerdown", { x: 100, y: 100 })
+    press(pane, "pointerup", { x: 100, y: 100 })
+    vi.advanceTimersByTime(50)
+    await flush()
+    const going = api().zoom
+    // A drag takes over where the view is and stops it.
+    press(pane, "pointerdown", { x: 100, y: 100 })
+    press(pane, "pointermove", { x: 140, y: 100 })
+    const mid = api().zoom
+    vi.advanceTimersByTime(600)
+    await flush()
+    expect(api().zoom).toBe(mid)
+    expect(mid).toBeGreaterThan(1)
+    expect(going).toBeLessThan(2.52)
+  })
+
+  it("and the view that is remembered is the one where it stopped, not the target", async () => {
+    const { store } = fakeStore()
+    setViewMemoryStore(store)
+    const { api, pane } = mount({ persistKey: "map", wheel: "zoom" })
+    await flush()
+    api().setView({ x: 0, y: 0, zoom: 1 })
+    await flush()
+    store.set.mockClear()
+    api().showArea(AREA)
+    vi.advanceTimersByTime(100)
+    wheel(pane, 0)
+    await flush()
+    const stopped = api().view
+    vi.advanceTimersByTime(SAVE_DELAY_MS + 50)
+    expect(store.set).toHaveBeenCalledTimes(1)
+    const saved = store.set.mock.calls[0]![1] as { x: number, y: number, zoom: number }
+    expect(saved.zoom).toBeCloseTo(stopped.zoom)
+    expect(saved.zoom).not.toBeCloseTo(2.52)
+    expect(saved.x).toBeCloseTo((PANE.width / 2 - stopped.x) / stopped.zoom)
+  })
+
+  it("and a glide that gets there is remembered once it has", async () => {
+    const { store } = fakeStore()
+    setViewMemoryStore(store)
+    const { api } = mount({ persistKey: "map" })
+    await flush()
+    api().setView({ x: 0, y: 0, zoom: 1 })
+    await flush()
+    store.set.mockClear()
+    api().showArea(AREA)
+    vi.advanceTimersByTime(400 + SAVE_DELAY_MS)
+    expect(store.set).toHaveBeenCalledTimes(1)
+    expect((store.set.mock.calls[0]![1] as { zoom: number }).zoom).toBeCloseTo(2.52)
+  })
+})
+
+describe("persistKey changing", () => {
+  it("puts back the view of the new key, and writes what was waiting under the old one", async () => {
+    const views: Record<string, unknown> = { "zoom-view:a": { x: 500, y: 400, zoom: 2 }, "zoom-view:b": { x: 300, y: 200, zoom: 1 } }
+    const store = { get: vi.fn(async (key: string) => views[key] ?? null), set: vi.fn(async () => undefined) }
+    setViewMemoryStore(store)
+    const { api, props, pane } = mountLive({ persistKey: "a" })
+    await flush()
+    expect(api().zoom).toBe(2)
+    pane.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }))
+    props.persistKey = "b"
+    await flush()
+    expect(store.set).toHaveBeenCalledWith("zoom-view:a", expect.objectContaining({ zoom: 2 }))
+    expect(api().zoom).toBe(1)
+    expect(api().view.x).toBeCloseTo(200 - 300)
+    expect(api().view.y).toBeCloseTo(150 - 200)
+  })
+
+  it("shows the whole content for a new key with nothing saved", async () => {
+    setViewMemoryStore({ get: async (key: string) => (key === "zoom-view:a" ? { x: 500, y: 400, zoom: 2 } : null), set: async () => undefined })
+    const { api, props } = mountLive({ persistKey: "a" })
+    await flush()
+    expect(api().zoom).toBe(2)
+    props.persistKey = "b"
+    await flush()
+    expect(api().zoom).toBeCloseTo(0.268, 2)
+  })
+})
+
+describe("a saved view and a parent that sets one", () => {
+  /** A store whose answer comes when the test says. */
+  function slowStore(saved: unknown) {
+    let answer!: (value: unknown) => void
+    const store = { get: vi.fn(() => new Promise<unknown>((resolve) => (answer = resolve))), set: vi.fn(async () => undefined) }
+    return { store, answer: () => answer(saved) }
+  }
+
+  it("what the parent asks for before the saved view comes back wins, and is what gets remembered", async () => {
+    const { store, answer } = slowStore({ x: 500, y: 400, zoom: 2 })
+    setViewMemoryStore(store)
+    const { api } = mount({ persistKey: "map" })
+    await flush()
+    api().setView({ x: -10, y: -20, zoom: 1.5 })
+    answer()
+    await flush()
+    expect(api().zoom).toBe(1.5)
+    expect(api().view.x).toBeCloseTo(-10)
+    vi.advanceTimersByTime(SAVE_DELAY_MS + 50)
+    expect(store.set).toHaveBeenCalledWith("zoom-view:map", { x: (200 + 10) / 1.5, y: (150 + 20) / 1.5, zoom: 1.5 })
+  })
+
+  it("also when it is showArea, and the content is shown when the saved view is given up on", async () => {
+    const { store, answer } = slowStore({ x: 500, y: 400, zoom: 2 })
+    setViewMemoryStore(store)
+    const { api, root } = mount({ persistKey: "map" })
+    await flush()
+    api().showArea(AREA)
+    answer()
+    await flush()
+    vi.advanceTimersByTime(400)
+    await flush()
+    expect(api().zoom).toBeCloseTo(2.52)
+    expect((root.querySelector("[data-slot=zoom-pane-content]") as HTMLElement).classList.contains("invisible")).toBe(false)
+  })
+
+  it("a saved view that takes longer than the wait does not make the map jump when it comes", async () => {
+    const { store, answer } = slowStore({ x: 500, y: 400, zoom: 2 })
+    setViewMemoryStore(store)
+    const { api, root } = mount({ persistKey: "map" })
+    await flush()
+    const content = root.querySelector("[data-slot=zoom-pane-content]") as HTMLElement
+    expect(content.classList.contains("invisible")).toBe(true)
+    vi.advanceTimersByTime(1600)
+    await flush()
+    expect(content.classList.contains("invisible")).toBe(false)
+    const whole = api().zoom
+    expect(whole).toBeCloseTo(0.268, 2)
+    answer()
+    await flush()
+    expect(api().zoom).toBe(whole)
+  })
+
+  it("a restored view is not fitted again when the content changes size", async () => {
+    setViewMemoryStore(fakeStore({ x: 500, y: 400, zoom: 2 }).store)
+    const { api, props } = mountLive({ persistKey: "map" })
+    await flush()
+    expect(api().zoom).toBe(2)
+    props.world = { width: 2000, height: 1000 }
+    await flush()
+    expect(api().zoom).toBe(2)
+  })
+})
+
+describe("view-only mode follows its world", () => {
+  it("fits again when the size of what is drawn changes, and takes no notice before it has one", async () => {
+    const { api, props } = mountLive({ world: { width: 0, height: 0 } })
+    await flush()
+    expect(api().zoom).toBe(1)
+    props.world = { width: 1000, height: 1000 }
+    await flush()
+    expect(api().zoom).toBeCloseTo(0.268, 2)
+    props.world = { width: 2000, height: 1000 }
+    await flush()
+    // 2000 wide in the 368 px left inside the padding.
+    expect(api().zoom).toBeCloseTo(368 / 2000, 2)
+  })
+})
+
+describe("a double-click that is not a zoom", () => {
+  it("right after a jump, as the second click of a click on a group of pins lands on the map", async () => {
+    const { api, pane } = mount()
+    await flush()
+    api().setView({ x: 0, y: 0, zoom: 1 })
+    await flush()
+    later()
+    // The click on the group zooms in (a jump that glides); the double-click comes with the second click.
+    api().showArea(AREA)
+    press(pane, "pointerdown", { x: 100, y: 50 })
+    dblclickAt(pane)
+    vi.advanceTimersByTime(500)
+    await flush()
+    expect(api().zoom).toBeCloseTo(2.52)
+  })
+
+  it("right after a drag", async () => {
+    const { api, pane } = mount()
+    await flush()
+    api().setView({ x: 0, y: 0, zoom: 1 })
+    await flush()
+    later()
+    press(pane, "pointerdown", { x: 50, y: 50 })
+    press(pane, "pointermove", { x: 90, y: 50 })
+    press(pane, "pointerup", { x: 90, y: 50 })
+    later(100)
+    press(pane, "pointerdown", { x: 90, y: 50 })
+    press(pane, "pointerup", { x: 90, y: 50 })
+    dblclickAt(pane, { x: 90, y: 50 })
+    expect(api().zoom).toBe(1)
+    // A double-click once things have been still does zoom.
+    later()
+    press(pane, "pointerdown", { x: 90, y: 50 })
+    dblclickAt(pane, { x: 90, y: 50 })
+    expect(api().zoom).toBeCloseTo(1.25)
+  })
+
+  it("right after the wheel", async () => {
+    const { api, pane } = mount({ wheel: "zoom" })
+    await flush()
+    api().setView({ x: 0, y: 0, zoom: 1 })
+    await flush()
+    later()
+    wheel(pane, 0)
+    dblclickAt(pane)
+    expect(api().zoom).toBe(1)
+  })
+
+  it("when the view moved between the press and the double-click", async () => {
+    const { api, pane } = mount()
+    await flush()
+    api().setView({ x: 0, y: 0, zoom: 1 })
+    await flush()
+    later()
+    press(pane, "pointerdown", { x: 100, y: 50 })
+    // Something (a key, a button) moved the view in between.
+    pane.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }))
+    later()
+    dblclickAt(pane)
+    expect(api().zoom).toBe(1)
+  })
+})
+
+describe("the % button", () => {
+  it("says what it does and where the zoom is now, so a screen reader hears both", async () => {
+    const { api, button } = mount({ hundred: 0.5 })
+    await flush()
+    api().setView({ x: 0, y: 0, zoom: 0.265 })
+    await flush()
+    expect(button("zoom-percent").getAttribute("aria-label")).toBe("Back to 100%, now 53%")
+  })
+})
+
+describe("ZoomTip when the view moves", () => {
+  it("says dismiss, so the tip does not hang where the thing no longer is", async () => {
+    const dismissed = vi.fn()
+    let api!: PaneApi
+    const root = document.createElement("div")
+    document.body.append(root)
+    app = createApp(defineComponent({
+      render: () => h(ZoomPane, { ref: (instance: unknown) => (api = instance as PaneApi), viewOnly: true, world: WORLD }, {
+        default: () => h(ZoomTip, { rect: { left: 10, top: 20, width: 30, height: 40 }, title: "Node", onDismiss: dismissed }),
+      }),
+    }))
+    app.mount(root)
+    await flush()
+    dismissed.mockClear()
+    api.setView({ x: 5, y: 5, zoom: 1 })
+    await flush()
+    expect(dismissed).toHaveBeenCalled()
   })
 })

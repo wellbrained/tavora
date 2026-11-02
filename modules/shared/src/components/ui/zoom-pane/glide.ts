@@ -45,14 +45,14 @@ export function parseEase(text: string): ((progress: number) => number) | null {
 const smooth = (progress: number) => progress * progress * (3 - 2 * progress)
 
 export interface Glide {
-  /** Moves from `from` to `to` over a moment, calling `frame` with each view; the last one is exactly `to`. */
+  /** Moves from `from` to `to` over a moment, calling `frame` with each view; the last one is exactly `to`, then `onSettle` is called (at once when there is no glide). */
   start(from: ZoomView, to: ZoomView, pane: Size): void
-  /** Stops where it is; the next input takes over. */
+  /** Stops where it is (no `onSettle`); the next input takes over. */
   cancel(): void
   readonly running: boolean
 }
 
-export function createGlide(frame: (view: ZoomView) => void): Glide {
+export function createGlide(frame: (view: ZoomView) => void, onSettle?: () => void): Glide {
   let handle = 0
   let running = false
   function cancel() {
@@ -66,6 +66,7 @@ export function createGlide(frame: (view: ZoomView) => void): Glide {
     const same = Math.abs(from.x - to.x) < 0.5 && Math.abs(from.y - to.y) < 0.5 && Math.abs(from.zoom - to.zoom) < 1e-4
     if (reducedMotion() || duration <= 0 || same || typeof requestAnimationFrame !== "function") {
       frame(to)
+      onSettle?.()
       return
     }
     const ease = parseEase(motionEase("--ease-in-out-strong", "")) ?? smooth
@@ -76,8 +77,12 @@ export function createGlide(frame: (view: ZoomView) => void): Glide {
       if (began < 0) began = now
       const progress = Math.min(1, Math.max(0, (now - began) / duration))
       frame(glideAt(from, to, pane, ease(progress)))
-      if (progress < 1) handle = requestAnimationFrame(tick)
-      else cancel()
+      if (progress < 1) {
+        handle = requestAnimationFrame(tick)
+        return
+      }
+      cancel()
+      onSettle?.()
     }
     handle = requestAnimationFrame(tick)
   }

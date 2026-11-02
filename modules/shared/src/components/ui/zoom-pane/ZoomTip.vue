@@ -4,7 +4,9 @@
 // left corner, as drawn. It opens next to the box with a small gap, never at the pointer and never on the box, as the
 // kit's tooltips do. Null hides it. Fill the default slot for your own content and look (rows, an icon, a picture); the
 // title, description and shortcut are the kit's usual ones. Easiest with `useZoomTip()`.
-import { computed, inject } from "vue"
+// The box is where the thing was when you showed the tip: when the pane pans or zooms the tip says `dismiss` and closes
+// (show it again where the thing is now), so it never hangs where the thing no longer is.
+import { computed, inject, watch } from "vue"
 import Tooltip from "../../tooltip/Tooltip"
 import type { TooltipSide } from "../../tooltip"
 import { zoomPaneKey } from "./context"
@@ -24,6 +26,9 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ dismiss: [] }>()
 
 const context = inject(zoomPaneKey, null)
+watch(() => context?.view.value, () => {
+  if (props.rect) emit("dismiss")
+})
 /** The box on the screen: the pane's own place plus the box in it. Worked out when `rect` changes. */
 const anchor = computed(() => {
   if (!props.rect) return undefined

@@ -97,6 +97,8 @@ const DRAG_START = 4
 const INTERACTIVE = "button, a, input, select, textarea, [role=button], [role=combobox], [contenteditable=true], [data-zoom-pane-ignore]"
 /** A saved view that does not come back in this time is given up on, so the pane never stays hidden. */
 const RESTORE_WAIT_MS = 1500
+/** A double-click this soon after the view moved is not a zoom. */
+const DOUBLE_CLICK_QUIET_MS = 500
 
 const pane = ref<HTMLElement>()
 const content = ref<HTMLElement>()
@@ -105,7 +107,7 @@ const dragging = ref(false)
 const hint = ref(false)
 /** Waiting for the saved view: the content stays hidden so the whole map does not flash before it. */
 const restoring = ref(Boolean(props.persistKey))
-provide(zoomPaneKey, { element: pane })
+provide(zoomPaneKey, { element: pane, view })
 
 /** With bounds "content" the least zoom shows the whole content, no smaller. */
 const limits = computed(() => {
@@ -117,9 +119,29 @@ const contentSize = ref<Size>({ width: 0, height: 0 })
 const transform = computed(() => `translate(${view.value.x}px, ${view.value.y}px) scale(${view.value.zoom})`)
 const percent = computed(() => percentOf(view.value.zoom, props.hundred))
 
+/** A glide is on its way: the view changes on every frame, so what only needs the end result can wait for this to be false. */
+const gliding = ref(false)
 const glide = createGlide((next) => {
   view.value = next
+}, () => {
+  gliding.value = false
+  remember(view.value)
 })
+/** Stops a glide where it is, and keeps that spot (not the target it was heading for) as the view to remember. */
+function stopGlide() {
+  if (!glide.running) return
+  glide.cancel()
+  gliding.value = false
+  remember(view.value)
+}
+/** When the view last moved by itself or by the pointer (a jump, a pan, the wheel): a double-click right after is not a zoom. */
+let lastMovedAt = -Infinity
+/** The view when the last pointer went down. */
+let pressView: ZoomView | undefined
+/** A call from the parent (setView, showArea, fit…) was made: a saved view that comes back later does not replace it. */
+let parentAsked = false
+/** A saved view was put back: the content growing later does not fit it again. */
+let restored = false
 
 // ── The view ──
 
@@ -154,24 +176,47 @@ function settled() {
 async function openMemory(key: string, first: boolean) {
   void memory?.flush()
   const mine = (memory = createViewMemory(key))
-  if (first) restoreTimer = setTimeout(() => (restoring.value = false), RESTORE_WAIT_MS)
+  parentAsked = false
+  restored = false
+  // The content stays hidden until the saved view is in, or for a while at most: a view that comes later is not put back
+  // (it would make the map jump), and the pane keeps what it shows.
+  restoring.value = true
+  let gaveUp = false
+  clearTimeout(restoreTimer)
+  restoreTimer = setTimeout(() => {
+    gaveUp = true
+    restoring.value = false
+  }, RESTORE_WAIT_MS)
   const saved: SavedView | null = await mine.load()
-  if (memory !== mine) return
-  // Not a move the user made: no glide, and nothing to write back.
-  if (saved) whenMeasured(() => centred(saved, saved.zoom), { remember: false })
-  else if (!first) whenMeasured(wholeView, { remember: false })
+  if (memory !== mine || gaveUp) return
+  // What the parent asked for before this came back wins. Not a move the user made: no glide, nothing to write back.
+  if (!parentAsked) {
+    if (saved) {
+      restored = true
+      whenMeasured(() => centred(saved, saved.zoom), { remember: false, restore: true })
+    }
+    else if (!first) whenMeasured(wholeView, { remember: false, restore: true })
+  }
   settled()
+  if (parentAsked) remember(view.value)
 }
 
 /** Shows `next`, kept in reach: at once, or gliding there. */
 function show(next: ZoomView, options: ViewOptions & { remember?: boolean } = {}) {
   const target = clampPan({ ...next, zoom: clampZoom(next.zoom, limits.value) }, paneSize.value, contentSize.value, props.bounds)
-  glide.cancel()
-  if (options.glide) glide.start(view.value, target, paneSize.value)
-  else view.value = target
+  stopGlide()
+  lastMovedAt = performance.now()
+  if (options.glide) {
+    // Remembered when it gets there, or where it is stopped.
+    gliding.value = true
+    glide.start(view.value, target, paneSize.value)
+    return
+  }
+  view.value = target
   if (options.remember !== false) remember(target)
 }
-function whenMeasured(next: () => ZoomView, options: ViewOptions & { remember?: boolean } = {}) {
+function whenMeasured(next: () => ZoomView, options: ViewOptions & { remember?: boolean, restore?: boolean } = {}) {
+  if (!options.restore) parentAsked = true
   if (measured()) show(next(), options)
   else pendingView = next
 }
@@ -183,7 +228,7 @@ function fit(options: ViewOptions = {}) {
   show(wholeView(), options)
 }
 function zoomBy(factor: number, at = middle()) {
-  glide.cancel()
+  stopGlide()
   view.value = zoomAt(view.value, factor, at, limits.value, paneSize.value, contentSize.value, props.bounds)
   remember(view.value)
 }
@@ -196,7 +241,7 @@ function actualSize() {
   zoomBy(props.hundred / view.value.zoom)
 }
 function panBy(dx: number, dy: number, from = view.value) {
-  glide.cancel()
+  stopGlide()
   view.value = clampPan({ ...from, x: from.x + dx, y: from.y + dy }, paneSize.value, contentSize.value, props.bounds)
   remember(view.value)
 }
@@ -252,9 +297,10 @@ function capture(id: number) {
 const distance = (a: { x: number, y: number }, b: { x: number, y: number }) => Math.hypot(a.x - b.x, a.y - b.y)
 
 function onPointerDown(event: PointerEvent) {
+  pressView = view.value
   if (event.pointerType === "mouse" && event.button !== 0) return
   if (event.target instanceof Element && event.target.closest(INTERACTIVE) && !event.target.closest("[data-zoom-pane-drag]") && event.pointerType === "mouse") return
-  glide.cancel()
+  // A glide goes on under a plain press (a click, the first half of a double-click) and stops when a pan or pinch begins.
   pointers.set(event.pointerId, local(event))
   if (pointers.size === 1) {
     drag = { start: local(event), from: view.value, id: event.pointerId }
@@ -262,6 +308,7 @@ function onPointerDown(event: PointerEvent) {
   else if (pointers.size === 2) {
     const [a, b] = [...pointers.values()] as [{ x: number, y: number }, { x: number, y: number }]
     drag = null
+    stopGlide()
     pinch = { distance: distance(a, b), middle: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, from: view.value }
     capture(event.pointerId)
   }
@@ -274,6 +321,7 @@ function onPointerMove(event: PointerEvent) {
   if (pinch && pointers.size === 2) {
     const [a, b] = [...pointers.values()] as [{ x: number, y: number }, { x: number, y: number }]
     const middleNow = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+    lastMovedAt = performance.now()
     const zoomed = zoomAt(pinch.from, distance(a, b) / pinch.distance, pinch.middle, limits.value, paneSize.value, contentSize.value, props.bounds)
     panBy(middleNow.x - pinch.middle.x, middleNow.y - pinch.middle.y, zoomed)
     return
@@ -285,7 +333,14 @@ function onPointerMove(event: PointerEvent) {
     if (Math.hypot(dx, dy) < DRAG_START) return
     dragging.value = true
     capture(event.pointerId)
+    // The pan starts from where the view is now: a glide that was on its way stops here.
+    stopGlide()
+    lastMovedAt = performance.now()
+    drag.from = view.value
+    drag.start = at
+    return
   }
+  lastMovedAt = performance.now()
   panBy(dx, dy, drag.from)
 }
 
@@ -310,10 +365,17 @@ function onClickCapture(event: MouseEvent) {
   event.preventDefault()
 }
 
-/** One step in toward the point that was double-clicked. Not on a button or field, which have their own meaning. */
+/**
+ * One step in toward the point that was double-clicked. Not on a button or field, which have their own meaning, and not
+ * when the view has just moved: a click on a group of pins zooms in and the pins vanish, so the second click of a
+ * double-click lands on the map and would zoom again; a drag, a jump or the wheel just before is no double-click either.
+ */
 function onDoubleClick(event: MouseEvent) {
   if (props.doubleClick === "off") return
   if (event.target instanceof Element && event.target.closest(INTERACTIVE)) return
+  if (performance.now() - lastMovedAt < DOUBLE_CLICK_QUIET_MS) return
+  const from = pressView
+  if (from && (Math.abs(from.zoom - view.value.zoom) > 1e-6 || Math.abs(from.x - view.value.x) > 0.5 || Math.abs(from.y - view.value.y) > 0.5)) return
   zoomStep(1, local(event))
 }
 
@@ -336,6 +398,7 @@ function onWheel(event: WheelEvent) {
   }
   event.preventDefault()
   hint.value = false
+  lastMovedAt = performance.now()
   const speed = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 0.05 : 0.002
   zoomBy(Math.exp(-event.deltaY * speed), local(event))
 }
@@ -379,11 +442,12 @@ function measure() {
     // The first show, or a restored view: it never glides.
     const asked = pendingView()
     pendingView = undefined
-    glide.cancel()
+    stopGlide()
     view.value = clampPan({ ...asked, zoom: clampZoom(asked.zoom, limits.value) }, nextPane, nextContent, props.bounds)
   }
-  else if ((contentChanged && props.autoFit) || paneWasEmpty || widthChanged) {
-    glide.cancel()
+  // A view that was put back from storage is the user's: content that grows later does not fit it again.
+  else if ((contentChanged && props.autoFit && !restored) || paneWasEmpty || widthChanged) {
+    stopGlide()
     view.value = wholeView()
   }
   else view.value = clampPan({ ...view.value, zoom: clampZoom(view.value.zoom, limits.value) }, nextPane, nextContent, props.bounds)
@@ -417,7 +481,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   observer?.disconnect()
-  glide.cancel()
+  stopGlide()
   pane.value?.removeEventListener("wheel", onWheel)
   window.removeEventListener("pagehide", saveNow)
   document.removeEventListener("visibilitychange", onVisibility)
@@ -427,7 +491,7 @@ onBeforeUnmount(() => {
   memory = undefined
 })
 
-defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, setCenter, center, percent, zoom: computed(() => view.value.zoom), view: computed(() => view.value), pane: computed(() => paneSize.value) })
+defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, setCenter, center, percent, gliding, zoom: computed(() => view.value.zoom), view: computed(() => view.value), pane: computed(() => paneSize.value) })
 </script>
 
 <template>
@@ -473,7 +537,7 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
       <Button variant="ghost" size="icon-sm" :title="uiText.zoomOut" :aria-label="uiText.zoomOut" data-testid="zoom-out" @click="zoomOut">
         <Minus />
       </Button>
-      <Button variant="ghost" size="sm" class="text-muted-foreground min-w-12 px-1.5 tabular-nums" :title="uiText.zoomReset" data-testid="zoom-percent" @click="actualSize">
+      <Button variant="ghost" size="sm" class="text-muted-foreground min-w-12 px-1.5 tabular-nums" :title="uiText.zoomReset" :aria-label="uiText.zoomPercent.replace('{percent}', String(percent))" data-testid="zoom-percent" @click="actualSize">
         {{ percent }}%
       </Button>
       <Button variant="ghost" size="icon-sm" :title="uiText.zoomIn" :aria-label="uiText.zoomIn" data-testid="zoom-in" @click="zoomIn">

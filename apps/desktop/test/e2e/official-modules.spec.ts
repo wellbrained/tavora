@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import { expect, test, type ElectronApplication } from "@playwright/test";
+import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import { expectModuleText, inModule, launch, NOTES, openWorkspace, openModule, panels, PDF_VIEWER, PLAYGROUND, RAIL_WIDTH, setContentSize, TODOS, typeInModule, VUE, waitForShown } from "./harness";
 
 // The official Notes, To-Dos and UI Playground modules, driven through their own pages.
@@ -475,42 +475,90 @@ test("to-dos: two panels share one list and both keep their changes", async () =
   await app.close();
 });
 
-test("ui playground: shows every section, filters them and disables the controls", async () => {
-  const { app, page } = await launch();
+/** Opens a UI Playground page from its side menu and waits for it. */
+async function openPage(app: ElectronApplication, id: string) {
+  await click(app, PLAYGROUND, `[data-testid="nav-${id}"]`);
+  await ready(app, PLAYGROUND, `page-${id}`);
+}
+
+/** Waits until the UI Playground is connected and has read back its saved page; a page opened before that is undone. */
+async function playgroundReady(app: ElectronApplication, page: Page) {
   await openModule(page, PLAYGROUND);
-  await ready(app, PLAYGROUND, "section-colours");
-  const sections = () => inModule<string[]>(app, PLAYGROUND, `[...document.querySelectorAll('[data-testid^="section-"]')].map((el) => el.id)`);
+  await ready(app, PLAYGROUND, "page-colours");
   // The swatches show the host's theme, not only the built-in default (also: the panel is connected).
   await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
+  await page.waitForTimeout(500);
+}
 
-  // Each tab shows its own sections; Basics is open first.
-  await expect.poll(sections).toEqual(["colours", "type"]);
-  await inModule(app, PLAYGROUND, `${q("tab-display")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
-  await expect.poll(sections).toEqual(["status", "progress", "notices", "empty", "expandable", "collapsible", "tabs", "table", "lists", "navlist", "settings"]);
+test("ui playground: lists its pages in a side menu, finds them, shows each example's code, disables the controls and remembers its page", async () => {
+  const { app, page, userData } = await launch();
+  await playgroundReady(app, page);
+  const menu = () => inModule<string[]>(app, PLAYGROUND, `[...document.querySelectorAll('[data-testid^="nav-"]')].map((el) => el.dataset.testid.slice(4))`);
+  const pageTitle = () => inModule<string>(app, PLAYGROUND, `${q("page-title")}.textContent.trim()`);
 
-  await inModule(
-    app,
-    PLAYGROUND,
-    `(() => { const input = ${q("filter")}; input.value = "slider"; input.dispatchEvent(new Event("input", { bubbles: true })); })()`,
-  );
-  await expect.poll(sections).toEqual(["choices"]);
+  // Every page is in the menu, Colours is open first, and the header names its group and title.
+  await expect.poll(menu).toHaveLength(27);
+  expect((await menu()).slice(0, 6)).toEqual(["colours", "text", "spacing", "motion", "writing", "buttons"]);
+  expect(await pageTitle()).toBe("Colours");
+  await openPage(app, "tabs");
+  expect(await pageTitle()).toBe("Tabs");
 
-  await click(app, PLAYGROUND, `[data-testid="disable-all"]`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `[...${q("section-choices")}.querySelectorAll("button")].every((el) => el.disabled)`)).toBe(true);
+  // The search narrows the menu by title, keyword or example; Enter opens the first page it found.
+  const search = (value: string) =>
+    inModule(app, PLAYGROUND, `(() => { const input = ${q("page-search")}; input.value = ${JSON.stringify(value)}; input.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+  await search("slider");
+  await expect.poll(menu).toEqual(["numbers"]);
+  await search("nothing like this");
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("no-match")}`)).toBe(true);
+  await search("combobox");
+  await expect.poll(menu).toEqual(["pick"]);
+  await inModule(app, PLAYGROUND, `${q("page-search")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }))`);
+  await ready(app, PLAYGROUND, "page-pick");
+  await expect.poll(menu).toHaveLength(27);
+
+  // Show code shows the example's own file, and hides it again.
+  const box = `document.querySelector('[data-testid="example-Combobox"]')`;
+  await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').click()`);
+  await expect.poll(() => inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]')?.textContent ?? ""`)).toContain("<ComboboxInput");
+  // The playground's own disabled prop is left out of the code shown.
+  expect(await inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]').textContent`)).not.toContain("defineProps");
+  expect(await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').getAttribute("aria-expanded")`)).toBe("true");
+  await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').click()`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!${box}.querySelector('[data-testid="example-code"]')`)).toBe(true);
+
+  // Developer tools are off at first; with them on, Show disabled turns every control in the examples off.
+  expect(await inModule(app, PLAYGROUND, `!${q("disable-all")}`)).toBe(true);
+  await click(app, PLAYGROUND, `[data-testid="dev-tools"] [role="switch"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("disable-all")}`)).toBe(true);
+  await click(app, PLAYGROUND, `[data-testid="disable-all"] [role="switch"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] button')].every((el) => el.disabled)`)).toBe(true);
+  // Show code still works while the examples are off.
+  expect(await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').disabled`)).toBe(false);
+
+  // Developer tools off turns Show disabled off too, so it doesn't come back with the tools.
+  await click(app, PLAYGROUND, `[data-testid="dev-tools"] [role="switch"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!${q("disable-all")}`)).toBe(true);
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("example-Select")}.querySelector('[data-slot="example-body"] button').disabled`)).toBe(false);
+  await click(app, PLAYGROUND, `[data-testid="dev-tools"] [role="switch"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("disable-all")}?.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("false");
+  expect(await inModule(app, PLAYGROUND, `${q("example-Select")}.querySelector('[data-slot="example-body"] button').disabled`)).toBe(false);
+
+  // After a restart the panel opens on its page again, with Developer tools still on.
   await app.close();
+  const again = await launch(userData);
+  await openWorkspace(again.page, "poe2");
+  await expect(panels(again.page, PLAYGROUND)).toHaveCount(1);
+  await ready(again.app, PLAYGROUND, "page-pick");
+  await expect.poll(() => inModule(again.app, PLAYGROUND, `!!${q("disable-all")}`)).toBe(true);
+  await again.app.close();
 });
 
 test("ui playground: the name dialog selects its text, counts and locks while busy, and the confirm dialog has a plain variant", async () => {
   const { app, page } = await launch();
-  await openModule(page, PLAYGROUND);
-  await ready(app, PLAYGROUND, "section-colours");
-  // The panel loads its saved tab once connected; switching before that would be undone.
-  await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
-  await page.waitForTimeout(500);
-  await inModule(app, PLAYGROUND, `${q("tab-actions")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
-  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("section-dialogs")}`)).toBe(true);
+  await playgroundReady(app, page);
+  await openPage(app, "dialogs");
   const press = (label: string) =>
-    inModule(app, PLAYGROUND, `[...${q("section-dialogs")}.querySelectorAll("button")].find((el) => el.textContent.trim() === ${JSON.stringify(label)}).click()`);
+    inModule(app, PLAYGROUND, `[...${q("page-dialogs")}.querySelectorAll("button")].find((el) => el.textContent.trim() === ${JSON.stringify(label)}).click()`);
   const type = (value: string) =>
     inModule(app, PLAYGROUND, `(() => { const input = ${q("name-input")}; input.value = ${JSON.stringify(value)}; input.dispatchEvent(new Event("input", { bubbles: true })); })()`);
 
@@ -570,19 +618,11 @@ test("ui playground: the name dialog selects its text, counts and locks while bu
 
 test("ui playground: a select can pick an empty choice, a switch field toggles from its label and menu rows show a line under the name", async () => {
   const { app, page } = await launch();
-  await openModule(page, PLAYGROUND);
-  await ready(app, PLAYGROUND, "section-colours");
-  // The panel loads its saved tab once connected; switching before that would be undone.
-  await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
-  await page.waitForTimeout(500);
-  const tab = async (id: string, section: string) => {
-    await inModule(app, PLAYGROUND, `${q("tab-" + id)}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
-    await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("section-" + section)}`)).toBe(true);
-  };
+  await playgroundReady(app, page);
   const text = (testId: string) => inModule<string>(app, PLAYGROUND, `${q(testId)}.textContent.trim()`);
 
   // Inputs: the empty choice clears the select to "", and its own text shows in the trigger.
-  await tab("inputs", "choices");
+  await openPage(app, "pick");
   expect(await text("select-empty")).toContain("Ranger");
   await inModule(app, PLAYGROUND, `${q("select-empty")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
   await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelectorAll('[data-slot="select-item"]').length`)).toBe(3);
@@ -591,6 +631,7 @@ test("ui playground: a select can pick an empty choice, a switch field toggles f
   expect(await text("select-empty")).toContain("No class");
 
   // The label toggles the switch, and the line under it describes it.
+  await openPage(app, "checks");
   const field = q("switch-field");
   expect(await inModule(app, PLAYGROUND, `${field}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("true");
   await inModule(app, PLAYGROUND, `${field}.querySelector("label").click()`);
@@ -598,15 +639,15 @@ test("ui playground: a select can pick an empty choice, a switch field toggles f
   expect(await inModule(app, PLAYGROUND, `document.getElementById(${field}.querySelector('[role="switch"]').getAttribute("aria-describedby")).textContent.trim()`)).toBe("Done to-dos stay in the list, crossed out.");
 
   // Actions: a menu item with a description shows an icon tile, its name and the line.
-  await tab("actions", "menus");
-  await inModule(app, PLAYGROUND, `[...${q("section-menus")}.querySelectorAll("button")].find((el) => el.textContent.trim() === "Add").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await openPage(app, "menus");
+  await inModule(app, PLAYGROUND, `[...${q("page-menus")}.querySelectorAll("button")].find((el) => el.textContent.trim() === "Add").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
   await expect.poll(() => inModule(app, PLAYGROUND, `document.querySelectorAll('[data-slot="dropdown-menu-item"]').length`)).toBe(3);
   expect(await inModule(app, PLAYGROUND, `(() => { const item = document.querySelector('[data-slot="dropdown-menu-item"]'); return [!!item.querySelector('[data-slot="action-row-icon"]'), item.textContent.trim()]; })()`)).toEqual([true, "Import a build Start from a file on your PC."]);
 
   // Display: the empty state's action list reports the entry that was picked and disables the unavailable one.
   await inModule(app, PLAYGROUND, `document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
-  await tab("display", "empty");
-  expect(await inModule(app, PLAYGROUND, `[...${q("section-empty")}.querySelectorAll('[data-slot="action-list"] button')].map((el) => el.disabled)`)).toEqual([false, false, true]);
+  await openPage(app, "notices");
+  expect(await inModule(app, PLAYGROUND, `[...${q("page-notices")}.querySelectorAll('[data-slot="action-list"] button')].map((el) => el.disabled)`)).toEqual([false, false, true]);
   await click(app, PLAYGROUND, `[data-testid="start-import"]`);
   await expect.poll(() => text("action-list-picked")).toBe("Picked: import");
   await app.close();
@@ -614,11 +655,8 @@ test("ui playground: a select can pick an empty choice, a switch field toggles f
 
 test("ui playground: tabs close with the X and a middle click, reorder by drag, rename in place and scroll with the wheel", async () => {
   const { app, page } = await launch();
-  await openModule(page, PLAYGROUND);
-  await ready(app, PLAYGROUND, "section-colours");
-  await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
-  await page.waitForTimeout(500);
-  await inModule(app, PLAYGROUND, `${q("tab-display")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await playgroundReady(app, page);
+  await openPage(app, "tabs");
   await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("tab-strip")}`)).toBe(true);
 
   const strip = `document.querySelector('[data-testid="tab-strip"]')`;
@@ -701,11 +739,8 @@ test("ui playground: tabs close with the X and a middle click, reorder by drag, 
 
 test("ui playground: the segmented control's pill and the tabs' line follow the pick, hide when nothing is picked or disabled, and the tab strip keeps its own line", async () => {
   const { app, page } = await launch();
-  await openModule(page, PLAYGROUND);
-  await ready(app, PLAYGROUND, "section-colours");
-  await expect.poll(() => inModule(app, PLAYGROUND, `document.documentElement.style.getPropertyValue("--primary")`)).not.toBe("");
-  await page.waitForTimeout(500);
-  await inModule(app, PLAYGROUND, `${q("tab-inputs")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await playgroundReady(app, page);
+  await openPage(app, "pick");
   await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("segmented-many")}`)).toBe(true);
 
   const group = `document.querySelector('[data-testid="segmented-many"]')`;
@@ -747,7 +782,7 @@ test("ui playground: the segmented control's pill and the tabs' line follow the 
 
   // Display: the tabs' line is one piece in the list and the tab has no border of its own; the closable strip keeps
   // its per-tab border and has no moving line.
-  await inModule(app, PLAYGROUND, `${q("tab-display")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  await openPage(app, "tabs");
   await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("tab-strip")}`)).toBe(true);
   const list = `[...document.querySelectorAll('[data-slot="tabs-list"]')].find((el) => el.querySelector('[data-testid="tabs-line"]') && el.textContent.includes("Overview"))`;
   await expect.poll(() => inModule(app, PLAYGROUND, `${list}.dataset.indicator`)).toBe("still");

@@ -13,5 +13,5 @@
     "baseUrl": ".",
     "paths": { "@/*": ["./*"] }
   },
-  "include": ["**/*.ts", "**/*.vue", "../shared/**/*.ts"]
+  "include": ["**/*.ts", "**/*.vue", "../shared/**/*.ts", "../../test/fixtures/dock-compare/entry.ts"]
 }

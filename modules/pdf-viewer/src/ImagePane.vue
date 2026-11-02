@@ -42,10 +42,11 @@ async function loaded(event: Event) {
   ready = true;
 }
 
+// The zoom changes on every frame of the pane's glide (its Whole map button); the view is saved once it has settled.
 watch(
-  () => pane.value?.zoom,
-  (zoom) => {
-    if (!ready || zoom === undefined) return;
+  () => [pane.value?.zoom, pane.value?.gliding] as const,
+  ([zoom, gliding]) => {
+    if (!ready || zoom === undefined || gliding) return;
     emit("view", { zoom, fit: Math.abs(zoom - fitZoom) < 0.002 ? "page" : null });
   },
 );
@@ -61,7 +62,7 @@ function toggle() {
 <template>
   <Notice v-if="failed" variant="error" class="m-3" data-testid="image-error">{{ t("image.failed") }}</Notice>
   <div v-else ref="box" class="h-full min-h-0 p-2" @dblclick="toggle">
-    <ZoomPane ref="pane" class="h-full" double-click="off" :label="name" :min-zoom="0.05" :max-zoom="8" :fit-floor="0.05" data-testid="image-pane">
+    <ZoomPane ref="pane" class="h-full" double-click="off" :whole-label="t('image.whole')" :label="name" :min-zoom="0.05" :max-zoom="8" :fit-floor="0.05" data-testid="image-pane">
       <img :src="url" :alt="name" class="block max-w-none select-none" draggable="false" data-testid="image-view" @load="loaded" @error="failed = true" />
     </ZoomPane>
   </div>
