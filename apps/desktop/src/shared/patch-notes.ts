@@ -28,6 +28,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.64",
+    date: "2026-11-02",
+    title: "Settings menu in its group's colour",
+    notes: [
+      "The open page in the settings menu shows its icon in the colour of its group.",
+    ],
+    prs: [
+      { number: 623, title: "Settings menu: the open page's icon takes its group's colour" },
+    ],
+  },
+  {
     version: "0.23.63",
     date: "2026-11-02",
     title: "Deeper main buttons in Ashen Keep",
