@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.70",
+    date: "2026-11-02",
+    title: "Docking drops",
+    notes: [
+      "Docking: dropping at the first or last tab and splitting a panel's own group work as shown.",
+    ],
+    prs: [
+      { number: 631, title: "Docking: first/last tab slots and splitting a panel's own group" },
+    ],
+    tags: ["workspace"],
+  },
+  {
     version: "0.23.69",
     date: "2026-11-02",
     title: "Search line in pick lists",
