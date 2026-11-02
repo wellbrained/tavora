@@ -5,8 +5,9 @@
    Never an ease-in on the interface: it starts slow, right when the eye is on it.
    Durations: nothing in the interface is longer than --duration-move.
    Not for anything a key press starts (undo, nudges, hotkeys, switching by key), nor for what is shown all day.
-   Two deliberate exceptions: Space on a checkbox is a choice like a click, so it animates like one; and a folding
-   section may animate its height (nothing else may). */
+   Deliberate exceptions: Space on a checkbox is a choice like a click, so it animates like one; and the height may
+   animate in two places only, because what is below has to move along: a folding section (Collapsible) and a row the
+   user adds to or removes from a list (AnimatedList). */
 :root {
   --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
@@ -24,17 +25,21 @@
   --duration-pop-out: 100ms;
   /* A menu, dropdown, select or popover. */
   --duration-menu: 180ms;
-  /* A panel or a bigger thing coming or going. */
+  /* Content arriving over its placeholder (Skeleton). */
+  --duration-reveal: 200ms;
+  /* A panel or a bigger thing coming or going. A picture fading in when it has loaded (FadeImage). */
   --duration-panel: 250ms;
   /* Something moving across the screen. The longest the interface gets. */
   --duration-move: 300ms;
+  /* One breath of a placeholder that waits (Skeleton). The only motion that repeats; it is off for reduced motion. */
+  --duration-pulse: 1600ms;
   /* Items of a list sliding out of the way of one that is dragged, and settling into their place. */
   --duration-reorder: 200ms;
 }
 
 /* Menus, dropdowns, selects and popovers grow out of the thing that opened them, never from their own middle
    (reka-ui tells us where that is). They leave quicker than they arrive. A tooltip does the same from its arrow
-   (tooltip.css). Dialogs are exempt: they appear in the middle. */
+   (tooltip.css). Dialogs are exempt: they appear in the middle (below). */
 @layer components {
   .tavora-popup {
     transform-origin: var(--reka-popper-transform-origin, center);
@@ -225,9 +230,121 @@
   }
 }
 
+/* One highlight that slides to the active item of a row (segmented control, tabs), instead of each item drawing its own.
+   useSlidingIndicator (components/ui/sliding-indicator) measures the active item into --indicator-x/-y/-w/-h on the
+   container, which must be position: relative, and sets data-indicator there:
+     off    no active item (nothing picked, disabled, hidden): the highlight is not shown
+     still  placed without moving: first paint, a resize, a font loading, a new list of options
+     slide  moving to the newly picked item (a click); from "off" it also fades in, out of where it last rested
+     jump   the picked item changed without moving the highlight (the keys, or a change nobody just clicked); the
+            labels should not fade either: a component turns its label transition off with group-data-[indicator=jump]
+   A component gives the element its colours and shape; for a different shape (an underline) it overrides top and
+   height with utility classes. Moves translate and size only. */
+@layer components {
+  .tavora-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    opacity: 0;
+  }
+  [data-indicator-axis="x"] > .tavora-indicator {
+    top: var(--indicator-y, 0px);
+    width: var(--indicator-w, 0px);
+    height: var(--indicator-h, 0px);
+    translate: var(--indicator-x, 0px) 0;
+  }
+  [data-indicator-axis="y"] > .tavora-indicator {
+    left: var(--indicator-x, 0px);
+    width: var(--indicator-w, 0px);
+    height: var(--indicator-h, 0px);
+    translate: 0 var(--indicator-y, 0px);
+  }
+  [data-indicator="still"] > .tavora-indicator,
+  [data-indicator="jump"] > .tavora-indicator,
+  [data-indicator="slide"] > .tavora-indicator {
+    opacity: 1;
+  }
+  [data-indicator="slide"] > .tavora-indicator {
+    transition-property: translate, width, height, opacity;
+    transition-duration: var(--duration-panel);
+    transition-timing-function: var(--ease-in-out-strong);
+  }
+}
+
+/* Dialogs rise out of the middle: a little scale and an 8px rise with the fade, so they settle into place. They leave
+   quicker than they arrive (about 150ms). Always centred, never from the trigger. The dialog places itself with the
+   `translate` property, so this `transform` only adds to it. The overlay behind fades with the dialog. */
+@layer components {
+  .tavora-dialog[data-state="open"] {
+    animation: tavora-dialog-in var(--duration-panel) var(--ease-out-strong);
+  }
+  .tavora-dialog[data-state="closed"] {
+    animation: tavora-dialog-out calc(var(--duration-panel) * 0.6) var(--ease-out-strong) forwards;
+  }
+  .tavora-dialog-overlay[data-state="open"] {
+    animation: tavora-fade-in var(--duration-panel) var(--ease-out-strong);
+  }
+  .tavora-dialog-overlay[data-state="closed"] {
+    animation: tavora-fade-out calc(var(--duration-panel) * 0.6) var(--ease-out-strong) forwards;
+  }
+  @keyframes tavora-dialog-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.96);
+    }
+  }
+  @keyframes tavora-dialog-out {
+    to {
+      opacity: 0;
+      transform: translateY(8px) scale(0.96);
+    }
+  }
+}
+
+/* A page that takes the place of another in the same frame (a settings page picked from the side menu): the old one
+   is gone at once, the new one fades in and settles from 4px below. Played by usePageMotion (components/ui/motion),
+   only for a pick with the pointer, never for one made with the keyboard. */
+@layer components {
+  .tavora-page-in {
+    animation: tavora-page-in 180ms var(--ease-out-strong);
+  }
+  @keyframes tavora-page-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+}
+
+/* The workspace page after a switch made with the pointer: opacity only, no movement. The old page is already gone, so
+   nothing overlaps. */
+@layer components {
+  .tavora-quick-fade {
+    animation: tavora-fade-in var(--duration-tooltip) var(--ease-out-strong);
+  }
+}
+
+/* The plain fade. Outside the reduced-motion block, because the dialog overlay, the workspace page and the reduced
+   rules below all use it. */
+@keyframes tavora-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes tavora-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
 /* Reduced motion keeps the fade and drops the movement. The rule that follows (theme.css, styles.css) stops every
    other animation; these few are kept on purpose, so a menu still arrives gently instead of blinking in. */
 @media (prefers-reduced-motion: reduce) {
+  /* The highlight of a row of choices jumps. */
+  [data-indicator] > .tavora-indicator {
+    transition: none !important;
+  }
   /* Checkbox, radio, strike: no scale, draw or spring, only a short fade. */
   .tavora-check::before {
     scale: 1 !important;
@@ -285,14 +402,16 @@
   .tavora-popup[data-state="closed"] {
     animation: tavora-fade-out 80ms linear forwards !important;
   }
-  @keyframes tavora-fade-in {
-    from {
-      opacity: 0;
-    }
+
+  /* Dialogs, the page picked in settings and the workspace page keep the fade and lose the rise and the scale. */
+  .tavora-dialog[data-state="open"],
+  .tavora-dialog-overlay[data-state="open"],
+  .tavora-page-in,
+  .tavora-quick-fade {
+    animation: tavora-fade-in 100ms linear !important;
   }
-  @keyframes tavora-fade-out {
-    to {
-      opacity: 0;
-    }
+  .tavora-dialog[data-state="closed"],
+  .tavora-dialog-overlay[data-state="closed"] {
+    animation: tavora-fade-out 80ms linear forwards !important;
   }
 }

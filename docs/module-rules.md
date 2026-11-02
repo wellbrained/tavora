@@ -55,7 +55,9 @@ classes where you use a control; never copy it.
 | Floating panel | `Popover` | absolutely positioned `div` |
 | Dialog | `ConfirmDialog` (asks), `NameDialog` (asks for a name), else `Dialog` with `DialogHeader`, `DialogFooter`, `DialogButton` (see [Dialogs](#dialogs)) | own overlay |
 | Nothing here yet | `EmptyState` (one sentence, one action) | a bare `<p>` |
-| Loading | `Progress` | "Loading…" in a `<p>` |
+| Loading with a known amount | `Progress` | "Loading…" in a `<p>` |
+| A list, card or page that loads | `Skeleton` around the real template with placeholder data (see [Loading](#loading)) | generic grey bars, a spinner, "Loading…" |
+| A picture that may arrive late | `FadeImage` (reserved box, fades in, keeps a fallback icon if it fails) | a bare `<img>` that pops in and shifts the layout |
 | Error or warning in place | `Notice` | red text in a `<p>` |
 | Short message, Undo | `toast()` from `ui/toast` (the `Toaster` follows the user's toast position) | own status line |
 | Key hint | `Kbd` | |
@@ -77,7 +79,8 @@ themes; anything hard-coded breaks in one of them.
   `text-success`, …) or `var(--card)` etc. in CSS. No hex, `rgb()` or named colours, no Tailwind palette colours
   (`neutral-500`, `white`, `black`), no hex fallbacks such as `var(--warning, #f5c518)`. Allowed exceptions, each with a
   comment saying why: game artwork in its own colours, a game's meaningful colours (rarity), the paper of a document
-  page.
+  page. A solid button or surface with text on it takes the fill (`bg-primary-fill` with `text-primary-fill-foreground`, `hover:bg-primary-fill-hover`);
+  accents, rings, lines and coloured text stay `primary`.
 - **Text sizes**: `text-xs` 12, `text-sm` 13, `text-base` 14, `text-lg` 16, `text-xl` 20 px. Nothing under 12 px, no
   sizes in between. Body text is 14, buttons and menus 13, hints 12. Weights 400, 500 and 600 only. Changing numbers
   use `tabular-nums`. Sentence case, no all caps.
@@ -104,12 +107,21 @@ themes; anything hard-coded breaks in one of them.
   `--ease-spring` (a little overshoot) is only for small things popping in (a dot, a tick, a small icon), never for a
   panel or a menu; the kit's checkbox, radio dot and search clear button use it with `--duration-pop` (in) and
   `--duration-pop-out` (out). Choosing with the arrow keys in a radio group or style tiles does not animate; Space on
-  a checkbox does, like a click. A folding section may animate its height (the kit's `Collapsible` does; nothing
-  else), since what is below has to move along. Spacing goes on the content element (its padding, a divider, a top
+  a checkbox does, like a click. The height may animate in two places only, since what is
+  below has to move along: a folding section (the kit's `Collapsible`) and a row the user adds to or removes from a
+  vertical list (the kit's `AnimatedList`). Spacing goes on the content element (its padding, a divider, a top
   padding instead of a gap), never on the `Collapsible` root as a `gap` or as padding that depends on open/closed:
   the closed content is out of the layout, so such spacing would jump instead of growing with the height. No margins
   on the content either. For a
   done item, the kit's `tavora-strike` class (with `data-struck` while done) draws the line across the text.
+  A highlight that follows the picked item of a row (segmented control, tabs) is one element that slides: use
+  `useSlidingIndicator`, never a border per item. It measures the active item wherever it sits (tabs may be wrapped, e.g.
+  in a tooltip's span); with none to measure, the active tab draws its own line. It slides only right after a click, never
+  for keys or a value that arrives on its own.
+  Dialogs rise 8 px and scale from 0.96 as they fade in (the kit's dialogs do it; centred, never from the trigger).
+  Rows the user adds or removes in a vertical list use `AnimatedList`, and a page that replaces another in the same
+  frame uses `usePageMotion`; don't hand-roll either. Neither moves for a key press or when a whole list is replaced.
+  Waiting is the one thing that may repeat: a skeleton's slow pulse (`--duration-pulse`), off for reduced motion.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
 
@@ -142,6 +154,11 @@ each pattern.
 - **Saving**: through the SDK store (`openDocument` in `@tavora/sdk/store`, `useDocument`, `useItemSession` in the
   kit). No own conflict handling. Files: `files.saveJson` / `files.openJson`; pictures: `pictures.save`; stored files:
   the module file store.
+- **Act first, confirm later**: a change that waits for a request (the network, not a local save) shows at once, saves
+  in the background and is put back with a short message if saving fails: `useOptimistic` / `useOptimisticKeyed` from
+  `@tavora/official-ui` (`modules/shared/src/optimistic.ts`). It handles two quick changes: the later one wins, and an
+  earlier failure never overwrites a newer value. Not for what can't be put back: deleting, publishing, money, keys,
+  security. No disabled controls or "Saving…" while a local save runs.
 - **Panel state**: what one panel remembers (open item, view, tab, filters, folded parts, scroll or zoom) is saved with
   panel state and **read back on start**. Writing it without reading it is the common bug.
 - **Lifecycle**: `onSuspend` flushes pending saves and panel state and pauses timers and animations; `onResume` starts
@@ -152,6 +169,7 @@ each pattern.
 - **Menus and tooltips** open next to their element with a small gap, never at the pointer (see `CLAUDE.md`).
 - **Actions are visible**: nothing is hover-only or right-click-only. A row's actions sit behind a visible ⋯ button too.
 - **States**: every view has its empty, loading and error state from the kit (table above). Long work shows progress.
+  Content that loads shows [a skeleton](#loading), not a text.
 - **Size**: `viewport.minWidth` / `minHeight` in the manifest are the real minimum, and the panel works at exactly that
   size: fixed side columns fold away or become a view switch below it. A separate wide layout uses `viewport.wide` and
   `@media (orientation: landscape)` (each panel is its own page, so media queries measure the panel).
@@ -159,6 +177,35 @@ each pattern.
 - **Data**: bundled with the module, loaded once and shared between panels. Modules have no network.
 - **Accessibility**: icon-only buttons have a label, everything works by keyboard, a tree or list with a role also has
   its arrow keys, state is never shown by colour alone.
+
+### Loading
+
+Tavora shows its own loader (the campfire) while a module's page starts, because the page is a separate view the
+host can't draw into. From the first frame of the module's own page on, loading is the module's job. When a view waits
+for data (the document store, a file, a list), draw the **real template** with placeholder data inside `Skeleton`:
+
+```vue
+<Skeleton :loading="!loaded">
+  <TaskList :tasks="loaded ? tasks : PLACEHOLDER_TASKS" />
+</Skeleton>
+```
+
+- **Same boxes**: while `loading` is true every text, icon, picture and button inside turns into a muted bar of its own
+  box. So the placeholder data has the shape of real data: the same number of rows, and text about as long as real text
+  (`placeholderText(40)` makes a made-up text of that length; it is never seen). Don't build a separate "loading" layout.
+- **Text next to an icon in the same element** (a heading with an icon in front) gets no bar of its own: put the text in a `<span>`.
+- **Only the part that loads**: the wrapper pulses, so keep it off things that are already there (a toolbar, a title).
+- **No flash**: a load shorter than 150 ms shows nothing at all. Longer, the bars appear with a slow pulse (none with
+  reduced motion), and when the data arrives the content fades in over them in 200 ms. `loading` can go back to true
+  (a retry) and it starts over.
+- **Pictures** that arrive late use `FadeImage`, with its box sized by `class` (`size-12`, `aspect-video`), so nothing
+  moves when they load. A picture that fails keeps its `#fallback` (an icon).
+- **A known amount** (an import at 40 %) is a `Progress`, not a skeleton. An error is a `Notice` or `EmptyState`.
+- **Not real until it arrives**: while it waits the wrapper is `inert` and `aria-hidden`, so a placeholder button can't
+  be focused, clicked or read out. Keep a status text for screen readers (`sr-only`, `role="status"`) outside the
+  wrapper, and put what is already known (a toolbar, a title) outside too: it must not turn into bars.
+- **Same shape**: show only the parts every real page has. A part that appears only for some data (patch notes of a
+  module with several versions, say) stays out of the skeleton and arrives with the data.
 
 ## 5. Done checklist
 
@@ -172,7 +219,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Every visible text is in `en` and `de`; `checkCatalogs` passes; no glued sentences.
 - [ ] Saves through the SDK store; panel state is read back after a reload.
 - [ ] `onSuspend` / `onDispose` flush; nothing is lost when the panel is hidden or closed mid-edit.
-- [ ] Empty, loading and error states exist and use the kit.
+- [ ] Empty, loading and error states exist and use the kit; what loads is a `Skeleton` over the real template, a late picture a `FadeImage`.
 - [ ] Menus and tooltips anchor to their element; no hover-only actions.
 - [ ] Motion uses the kit's tokens, animates only `transform` and `opacity`, and leaves out anything a key starts.
 - [ ] Dialogs use the header, footer and `DialogButton` as in [Dialogs](#dialogs); a close-only button has no icon.

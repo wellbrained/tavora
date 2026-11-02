@@ -69,7 +69,7 @@ function pick(value: unknown) {
         align="end"
         :side-offset="6"
         :collision-padding="8"
-        class="bg-popover text-popover-foreground z-50 w-64 overflow-hidden rounded-lg border shadow-lg"
+        class="bg-popover text-popover-foreground tavora-popup z-50 w-64 overflow-hidden rounded-lg border shadow-lg"
         :data-testid="part('menu')"
       >
         <ListboxRoot :model-value="model" highlight-on-hover @update:model-value="pick">

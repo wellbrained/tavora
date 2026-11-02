@@ -38,6 +38,8 @@ const switchOn = ref(true);
 const switchOff = ref(false);
 const radio = ref("normal");
 const segment = ref<"day" | "week" | "month">("week");
+const segmentMany = ref<"all" | "open" | "done" | "archived">("open");
+const segmentMixed = ref<"a" | "b" | "c" | undefined>(undefined);
 const select = ref("poe2");
 const optional = ref("ranger");
 const reach = ref("tavora");
@@ -151,6 +153,34 @@ const name = ref("Waystone");
               { value: 'month', label: 'Month' },
             ]"
           />
+        </Specimen>
+        <Specimen label="Segmented control: the pill slides when you click, jumps with the arrow keys">
+          <SegmentedControl
+            v-model="segmentMany"
+            label="Show"
+            :disabled="off"
+            data-testid="segmented-many"
+            :options="[
+              { value: 'all', label: 'All' },
+              { value: 'open', label: 'Still to do' },
+              { value: 'done', label: 'Done' },
+              { value: 'archived', label: 'Archived for later' },
+            ]"
+          />
+        </Specimen>
+        <Specimen label="Segmented control with nothing picked (no pill), and a disabled one (no pill)">
+          <SegmentedControl
+            :model-value="segmentMixed ?? ('none' as 'a')"
+            label="Mixed"
+            :disabled="off"
+            :options="[
+              { value: 'a', label: 'Always' },
+              { value: 'b', label: 'On a key' },
+            ]"
+            @update:model-value="segmentMixed = $event"
+          />
+          <Button variant="ghost" size="sm" :disabled="off" @click="segmentMixed = undefined">Clear</Button>
+          <SegmentedControl model-value="week" label="Locked" disabled :options="[{ value: 'day', label: 'Day' }, { value: 'week', label: 'Week' }]" />
         </Specimen>
         <Specimen label="Select">
           <Select v-model="select" :disabled="off">

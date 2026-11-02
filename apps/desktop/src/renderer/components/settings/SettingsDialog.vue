@@ -9,6 +9,7 @@ import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { usePageMotion } from "@tavora/official-ui/components/ui/motion";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Tabs, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import { rank } from "@/lib/search";
@@ -46,6 +47,7 @@ import {
   type SettingsSection,
 } from "./settings-index";
 import { SETTINGS_PAGE_TITLE } from "./settings-page";
+import { scrollToCentered, stopScroll } from "../../lib/smooth-scroll";
 
 const section = ref<SettingsSection>("general");
 const query = ref("");
@@ -64,8 +66,22 @@ provide(SETTINGS_PAGE_TITLE, pageTitle);
 /** The setting a search result led to, tinted for a moment. */
 const highlight = ref<string | null>(null);
 let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+/** Counts the jumps to a setting, so a slow scroll that was overtaken doesn't flash a row. */
+let jumps = 0;
 /** The page's scrolling area, back at the top for every new page. */
 const scroller = ref<HTMLElement | null>(null);
+/** Holds the open page. A page picked with the pointer fades in and settles from 4px below; the old one is gone at once. */
+const pageHolder = ref<HTMLElement | null>(null);
+const { play: playPage } = usePageMotion(pageHolder);
+/** Settings opening to its page moves as the dialog does, not on top of it. */
+let opening = false;
+watch(
+  section,
+  () => {
+    if (!opening) playPage();
+  },
+  { flush: "post" },
+);
 
 // Settings opens where it was asked to: its first page, or a setting found with Ctrl+K.
 watch(settingsOpen, (open) => {
@@ -75,7 +91,8 @@ watch(settingsOpen, (open) => {
   }
   query.value = "";
   searchUsed.value = false;
-  void show(settingsTarget.value.section, settingsTarget.value.setting);
+  opening = true;
+  void show(settingsTarget.value.section, settingsTarget.value.setting).then(() => (opening = false));
   void refreshReleaseStatuses();
 });
 // Asked again while open (e.g. Ctrl+/ over Settings): go there.
@@ -84,20 +101,30 @@ watch(settingsTarget, (target) => {
 });
 
 async function show(target: SettingsSection, setting?: string) {
+  // A glide to an earlier setting ends here, so it can't drag the page we are about to show to its old offset.
+  stopScroll();
   // A search led someone who doesn't make modules yet to a developer page: that is a start, so the tabs show.
   if (!makesModules.value && (DEVELOPER_SECTIONS as readonly string[]).includes(target)) void act({ type: "set-makes-modules", on: true }, { quiet: true });
   // New marks of the page left go now; they stayed while the user was on it.
-  if (target !== section.value) markSeen(section.value);
+  const left = target !== section.value;
+  if (left) markSeen(section.value);
+  // A new page, or the page in place of search results: the scrolling starts again from its top.
+  const switched = left || query.value.trim() !== "";
   section.value = target;
   query.value = "";
   clearTimeout(highlightTimer);
-  highlight.value = setting ?? null;
+  highlight.value = null;
+  // Another jump started meanwhile: this one has nothing left to do.
+  const jump = ++jumps;
   await nextTick();
-  if (!setting) {
-    scroller.value?.scrollTo({ top: 0 });
-    return;
-  }
-  document.querySelector(`[data-setting="${CSS.escape(setting)}"]`)?.scrollIntoView({ block: "center" });
+  if (!setting || switched) scroller.value?.scrollTo({ top: 0 });
+  if (!setting) return;
+  // The page is switched by now (and at its top), so the setting can be found; glide to it, then flash it.
+  const row = document.querySelector(`[data-setting="${CSS.escape(setting)}"]`);
+  if (row && scroller.value?.contains(row)) await scrollToCentered(scroller.value, row);
+  else row?.scrollIntoView({ block: "center" });
+  if (jump !== jumps) return;
+  highlight.value = setting;
   highlightTimer = setTimeout(() => (highlight.value = null), 2000);
 }
 
@@ -295,22 +322,24 @@ function onSearchKey(event: KeyboardEvent) {
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
-              <GeneralSection v-if="section === 'general'" :highlight="highlight" />
-              <AppearanceSection v-else-if="section === 'appearance'" :highlight="highlight" />
-              <GamesSection v-else-if="section === 'games'" :highlight="highlight" @show="show" />
-              <ShortcutsSection v-else-if="section === 'shortcuts'" />
-              <ModulesSection v-else-if="section === 'modules'" :highlight="highlight" />
-              <ConnectionsSection v-else-if="section === 'connections'" :highlight="highlight" />
-              <OverlaysSection v-else-if="section === 'overlays'" :highlight="highlight" />
-              <BrowserSection v-else-if="section === 'browser'" :highlight="highlight" />
-              <DevelopmentSection v-else-if="section === 'development'" :highlight="highlight" @show="show" />
-              <DevFoldersSection v-else-if="section === 'dev-folders'" :highlight="highlight" />
-              <DevPublishingSection v-else-if="section === 'dev-publishing'" :highlight="highlight" />
-              <DevHelpSection v-else-if="section === 'dev-help'" :highlight="highlight" />
-              <AboutSection v-else-if="section === 'about'" :highlight="highlight" @patch-notes="show('patch-notes')" />
-              <WorkspacesSection v-else-if="section === 'workspaces'" :highlight="highlight" />
-              <TrashSection v-else-if="section === 'trash'" :highlight="highlight" />
-              <PatchNotesSection v-else-if="section === 'patch-notes'" />
+              <div ref="pageHolder" data-testid="settings-page">
+                <GeneralSection v-if="section === 'general'" :highlight="highlight" />
+                <AppearanceSection v-else-if="section === 'appearance'" :highlight="highlight" />
+                <GamesSection v-else-if="section === 'games'" :highlight="highlight" @show="show" />
+                <ShortcutsSection v-else-if="section === 'shortcuts'" />
+                <ModulesSection v-else-if="section === 'modules'" :highlight="highlight" />
+                <ConnectionsSection v-else-if="section === 'connections'" :highlight="highlight" />
+                <OverlaysSection v-else-if="section === 'overlays'" :highlight="highlight" />
+                <BrowserSection v-else-if="section === 'browser'" :highlight="highlight" />
+                <DevelopmentSection v-else-if="section === 'development'" :highlight="highlight" @show="show" />
+                <DevFoldersSection v-else-if="section === 'dev-folders'" :highlight="highlight" />
+                <DevPublishingSection v-else-if="section === 'dev-publishing'" :highlight="highlight" />
+                <DevHelpSection v-else-if="section === 'dev-help'" :highlight="highlight" />
+                <AboutSection v-else-if="section === 'about'" :highlight="highlight" @patch-notes="show('patch-notes')" />
+                <WorkspacesSection v-else-if="section === 'workspaces'" :highlight="highlight" />
+                <TrashSection v-else-if="section === 'trash'" :highlight="highlight" />
+                <PatchNotesSection v-else-if="section === 'patch-notes'" />
+              </div>
             </template>
           </div>
         </div>

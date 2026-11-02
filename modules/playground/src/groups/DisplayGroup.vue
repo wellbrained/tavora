@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { AlertTriangle, Blocks, FolderOpen, Download, CheckCircle2, Info, LayoutGrid, Link2, Loader2, MoreHorizontal, Plus, StickyNote, Store, XCircle } from "@lucide/vue";
+import { AlertTriangle, Blocks, Puzzle, FolderOpen, Download, CheckCircle2, Info, LayoutGrid, Link2, Loader2, MoreHorizontal, Plus, StickyNote, Store, X, XCircle } from "@lucide/vue";
 import { SegmentedControl, Tooltip } from "@tavora/official-ui";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
 import { Expandable } from "@tavora/official-ui/components/ui/expandable";
+import { FadeImage } from "@tavora/official-ui/components/ui/fade-image";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { ActionList, type ActionEntry } from "@tavora/official-ui/components/ui/action-list";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
@@ -12,12 +14,13 @@ import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-li
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
+import { Skeleton, placeholderText } from "@tavora/official-ui/components/ui/skeleton";
 import { Sparkline } from "@tavora/official-ui/components/ui/sparkline";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@tavora/official-ui/components/ui/table";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger, TabStrip, type StripTab } from "@tavora/official-ui/components/ui/tabs";
-import { ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import DemoSection from "../DemoSection.vue";
 import ModuleSettingsDemo from "./ModuleSettingsDemo.vue";
 import Specimen from "../Specimen.vue";
@@ -65,6 +68,21 @@ const spark = Array.from({ length: 60 }, (_, i) => Math.round(50 + 30 * Math.sin
 const switchOn = ref(true);
 const density = ref<"tight" | "normal">("normal");
 const selectedRow = ref("b");
+const WORKS = ["Boss checklist", "Atlas strategy", "Trade notes", "Crafting plan", "Farming route", "Build ideas", "Loot filter"];
+let worksMade = 3;
+const works = ref(WORKS.slice(0, 3).map((title, id) => ({ id, title })));
+function addWork() {
+  works.value = [...works.value, { id: worksMade, title: WORKS[worksMade % WORKS.length]! }];
+  worksMade += 1;
+}
+function removeWork(id: number) {
+  works.value = works.value.filter((work) => work.id !== id);
+}
+/** A whole new list at once: it changes without moving. */
+function replaceWorks() {
+  works.value = [0, 1, 2, 3].map((n) => ({ id: worksMade + n, title: WORKS[(worksMade + n) % WORKS.length]! }));
+  worksMade += 4;
+}
 const navSelected = ref("all");
 const NAV_GROUPS: NavGroup[] = [
   { heading: "Installed", items: [{ id: "all", label: "All", icon: Blocks, badge: 12 }, { id: "workspace", label: "In this workspace", icon: LayoutGrid, badge: 3 }] },
@@ -75,6 +93,34 @@ const PLATE_GROUPS: NavGroup[] = [
   { ...NAV_GROUPS[0]!, icon: Blocks, class: "[--tone:var(--primary)]" },
   { ...NAV_GROUPS[1]!, icon: Store, class: "[--tone:var(--info)]" },
 ];
+
+// Skeleton: the real card with made-up text while it "loads", muted bars of the same boxes.
+const cardLoading = ref(false);
+const card = computed(() =>
+  cardLoading.value
+    ? { name: placeholderText(14), by: placeholderText(10), text: placeholderText(120) }
+    : { name: "Satisfactory Planner", by: "by Wellbrained", text: "Plan factories, belts and power for your next run, and see what each build needs before you place it." },
+);
+let cardTimer: ReturnType<typeof setTimeout> | undefined;
+function loadCard(ms: number) {
+  clearTimeout(cardTimer);
+  cardLoading.value = true;
+  cardTimer = setTimeout(() => (cardLoading.value = false), ms);
+}
+onBeforeUnmount(() => {
+  clearTimeout(cardTimer);
+  clearTimeout(pictureTimer);
+});
+// FadeImage: a picture that arrives late, one that never does, and one that is there at once.
+const PICTURE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAGElEQVR4nGPIq+iZtmALhGSAs4AkA04ZALkyGuGrUrMPAAAAAElFTkSuQmCC";
+const latePicture = ref<string | null>(null);
+let pictureTimer: ReturnType<typeof setTimeout> | undefined;
+function loadPicture() {
+  clearTimeout(pictureTimer);
+  latePicture.value = null;
+  pictureTimer = setTimeout(() => (latePicture.value = `${PICTURE}#${Date.now()}`), 900);
+}
+loadPicture();
 function bump(by: number) {
   progress.value = Math.min(100, Math.max(0, progress.value + by));
 }
@@ -104,7 +150,7 @@ function bump(by: number) {
         </Specimen>
       </DemoSection>
 
-<DemoSection v-if="visible.has('progress')" id="progress" :title="title('progress')" description="Show progress the user started. Nothing loops on its own.">
+<DemoSection v-if="visible.has('progress')" id="progress" :title="title('progress')" description="Show progress the user started. Skeleton and FadeImage keep a view from jumping while it loads.">
         <Specimen label="Progress bar" column>
           <div class="flex items-center gap-3">
             <Progress :model-value="progress" class="max-w-64" aria-label="Import progress" />
@@ -129,11 +175,27 @@ function bump(by: number) {
           <Loader2 class="text-muted-foreground size-4 animate-spin" :stroke-width="1.5" />
           <span class="text-muted-foreground text-sm">Loading notes…</span>
         </Specimen>
-        <Specimen label="Placeholder rows" column>
-          <div v-for="width in ['w-3/4', 'w-1/2', 'w-2/3']" :key="width" class="flex items-center gap-3">
-            <span class="bg-muted size-5 flex-none rounded-full" />
-            <span :class="['bg-muted h-3 rounded-sm', width]" />
+        <Specimen label="Skeleton: the real card, drawn as bars while it loads" column>
+          <div class="flex gap-2">
+            <Button size="xs" variant="secondary" :disabled="off" @click="loadCard(1800)">Load slowly</Button>
+            <Button size="xs" variant="secondary" :disabled="off" @click="loadCard(60)">Load fast (no placeholder)</Button>
           </div>
+          <Skeleton :loading="cardLoading" class="flex max-w-sm flex-col gap-3 rounded-xl border p-4" data-testid="skeleton-card">
+            <div class="flex min-w-0 gap-3">
+              <span class="bg-muted/60 grid size-12 flex-none place-items-center rounded-xl"><Puzzle class="text-muted-foreground size-6" :stroke-width="1.5" /></span>
+              <div class="min-w-0">
+                <p class="truncate font-medium">{{ card.name }}</p>
+                <p class="text-muted-foreground truncate text-xs">{{ card.by }}</p>
+                <p class="text-muted-foreground mt-1.5 line-clamp-2 text-sm">{{ card.text }}</p>
+              </div>
+            </div>
+            <div class="flex justify-end"><Button size="sm">Install</Button></div>
+          </Skeleton>
+        </Specimen>
+        <Specimen label="Picture that loads late: box first, fades in; a failed one keeps the icon">
+          <FadeImage :src="latePicture" :pending="latePicture === null" class="size-16 rounded-xl" alt="" data-testid="fade-late"><template #fallback><Puzzle class="text-muted-foreground size-6" :stroke-width="1.5" /></template></FadeImage>
+          <FadeImage src="missing.png" class="size-16 rounded-xl" alt="" data-testid="fade-failed"><template #fallback><Puzzle class="text-muted-foreground size-6" :stroke-width="1.5" /></template></FadeImage>
+          <Button size="xs" variant="secondary" :disabled="off" @click="loadPicture">Load again</Button>
         </Specimen>
       </DemoSection>
 
@@ -207,7 +269,7 @@ function bump(by: number) {
         </Specimen>
       </DemoSection>
 
-<DemoSection v-if="visible.has('tabs')" id="tabs" :title="title('tabs')" description="Switch between views of the same thing. The selected tab carries an accent line, like panel tabs.">
+<DemoSection v-if="visible.has('tabs')" id="tabs" :title="title('tabs')" description="Switch between views of the same thing. The selected tab carries an accent line, like panel tabs; it slides to the tab you click and jumps when you pick with the arrow keys. The closable strip keeps its line still.">
         <Tabs default-value="overview">
           <TabsList>
             <TabsTrigger value="overview" :disabled="off">Overview</TabsTrigger>
@@ -312,6 +374,18 @@ function bump(by: number) {
               </Button>
             </li>
           </ul>
+        </Specimen>
+        <Specimen label="Rows added and removed: a new row grows in with a fade and a small drop; a removed one fades and folds away while the rows below slide up. Replacing the whole list stays still." column>
+          <div class="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" :disabled="off" data-testid="animated-list-add" @click="addWork"><Plus :stroke-width="1.5" /> Add a row</Button>
+            <Button variant="ghost" :disabled="off" data-testid="animated-list-replace" @click="replaceWorks">Replace the whole list</Button>
+          </div>
+          <AnimatedList tag="ul" aria-label="Rows added and removed" class="flex flex-col" data-testid="animated-list">
+            <li v-for="work in works" :key="work.id" class="flex min-h-10 items-center gap-2 border-b py-1 last:border-b-0">
+              <span class="min-w-0 flex-1 truncate text-sm">{{ work.title }}</span>
+              <Button size="icon-xs" variant="ghost" :disabled="off" :aria-label="`Remove ${work.title}`" @click="removeWork(work.id)"><X :stroke-width="1.5" /></Button>
+            </li>
+          </AnimatedList>
         </Specimen>
         <Specimen label="Setting rows" column>
           <div class="flex flex-col">

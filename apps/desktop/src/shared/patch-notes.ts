@@ -28,6 +28,64 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.62",
+    date: "2026-11-02",
+    title: "Panels and the catalog load smoothly, without jumping.",
+    notes: [
+      "The catalog and a module's page show their layout in soft bars while they load, then fill in.",
+      "Icons and screenshots keep their place and fade in when they arrive.",
+      "Jumping to a setting from search glides there before it lights up.",
+    ],
+    prs: [
+      { number: 618, title: "Smooth loading: skeleton loaders, pictures that fade in, gliding jump to a setting" },
+    ],
+    tags: ["calculator", "catalog", "clock-counter", "games", "modules", "notes", "pdf-viewer", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
+    version: "0.23.61",
+    date: "2026-11-02",
+    title: "Lists, dialogs and settings pages move smoothly",
+    notes: [
+      "A row you add grows in, and one you remove folds away while the rows below slide up.",
+      "Dialogs rise a little as they fade in, and leave a bit quicker.",
+      "A settings page you pick from the side menu fades in.",
+      "A game you pick on the rail fades in.",
+      "With reduced motion on, all of these only fade.",
+    ],
+    prs: [
+      { number: 620, title: "Motion: lists, dialogs, settings pages and workspace switches" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "overlays", "pdf-viewer", "publishing", "rail", "settings", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
+  },
+  {
+    version: "0.23.60",
+    date: "2026-11-02",
+    title: "Changes show right away",
+    notes: [
+      "Changes show right away; if saving fails, they're put back. This covers email copies of messages, how users reach you about a module, a device's name, and ratings, reviews and replies in the catalog.",
+    ],
+    prs: [
+      { number: 619, title: "Act first, confirm later: changes show at once, put back if saving fails" },
+    ],
+    tags: ["accounts", "catalog", "publishing", "settings", "ui-kit"],
+  },
+  {
+    version: "0.23.59",
+    date: "2026-11-02",
+    title: "Switches and tabs slide",
+    notes: [
+      "The highlight on switches and tabs slides to what you pick.",
+      "Picking with the arrow keys jumps right away.",
+      "The list of a picker opens out of its button like the other menus.",
+      "Fades on buttons and controls are quicker and smoother.",
+      "Toasts finish moving a little sooner.",
+    ],
+    prs: [
+      { number: 616, title: "Motion: sliding highlight for segmented control and tabs, picker grows from its button, quicker default fades" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.23.58",
     date: "2026-11-02",
     title: "Installs, dragging and numbers feel better",

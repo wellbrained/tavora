@@ -1,0 +1,104 @@
+/* Skeleton: the real template with placeholder data, drawn as muted bars (Skeleton.vue, use-skeleton.ts).
+   Outside any layer on purpose, so it wins over the utility classes of the content it covers.
+
+   - Text: a line of text (an element with text and no element inside, but not a control) keeps its box, turns transparent and gets a bar
+     over it, one per line. The bar is a pseudo-element, so it can fade out while the real text is already there.
+   - Controls, icons and pictures (buttons, badges, inputs, svg, img): they become one muted block of their own box;
+     what is inside is hidden. When the content arrives they fade in.
+   - The whole wrapper pulses slowly while it waits. Reduced motion: no pulse, a short fade only. */
+
+[data-skeleton="waiting"] {
+  /* Laid out already, so nothing moves later, but not shown yet: a fast load never flashes. */
+  visibility: hidden;
+}
+
+[data-skeleton="on"],
+[data-skeleton="leaving"] {
+  --skeleton-bar: color-mix(in oklab, var(--foreground) 11%, transparent);
+}
+
+[data-skeleton="on"] {
+  pointer-events: none;
+  user-select: none;
+  animation: tavora-skeleton-pulse var(--duration-pulse) var(--ease-in-out-strong) infinite;
+}
+
+/* Text sitting next to an icon in the same element has no bar of its own, so all text is hidden; wrap it in a span to get its bar. */
+[data-skeleton="on"] * {
+  color: transparent;
+}
+
+/* Text lines. A line that is placed by its own position keeps it. */
+:is([data-skeleton="on"], [data-skeleton="leaving"]) :where(:not(:has(*)):not(:empty)):not(svg *, :is(button, input, textarea, select, [role="button"], [data-slot="button"], [data-slot="badge"]), :is(button, input, textarea, select, [role="button"], [data-slot="button"], [data-slot="badge"]) *):not(.absolute, .fixed, .sticky, .sr-only) {
+  position: relative;
+}
+:is([data-skeleton="on"], [data-skeleton="leaving"]) :where(:not(:has(*)):not(:empty)):not(svg *, :is(button, input, textarea, select, [role="button"], [data-slot="button"], [data-slot="badge"]), :is(button, input, textarea, select, [role="button"], [data-slot="button"], [data-slot="badge"]) *)::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block: 0.14lh;
+  border-radius: var(--radius-sm);
+  /* One bar per line of text (a single line is just one bar). */
+  background: repeating-linear-gradient(to bottom, var(--skeleton-bar) 0 0.72lh, transparent 0.72lh 1lh);
+  pointer-events: none;
+}
+[data-skeleton="on"] :where(:not(:has(*)):not(:empty)):not(svg *, :is(button, input, textarea, select, [role="button"], [data-slot="button"], [data-slot="badge"]), :is(button, input, textarea, select, [role="button"], [data-slot="button"], [data-slot="badge"]) *) {
+  color: transparent;
+  text-shadow: none;
+}
+[data-skeleton="leaving"] :where(:not(:has(*)):not(:empty)):not(svg *, :is(button, input, textarea, select, [role="button"], [data-slot="button"], [data-slot="badge"]), :is(button, input, textarea, select, [role="button"], [data-slot="button"], [data-slot="badge"]) *)::after {
+  animation: tavora-skeleton-out var(--duration-reveal) var(--ease-out-strong) forwards;
+}
+
+/* Controls, icons and pictures. */
+[data-skeleton="on"] :is(button, input, textarea, select, [role="button"], [data-slot="button"], [data-slot="badge"], svg, img, canvas, video) {
+  background: var(--skeleton-bar);
+  border-color: transparent;
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  color: transparent;
+  /* They turn into bars with everything else, not after a transition of their own. */
+  transition: none;
+}
+[data-skeleton="on"] :is(button, [role="button"], [data-slot="button"], [data-slot="badge"]) * {
+  visibility: hidden;
+}
+[data-skeleton="on"] input::placeholder,
+[data-skeleton="on"] textarea::placeholder {
+  color: transparent;
+}
+/* An icon: only its box stays. */
+[data-skeleton="on"] svg * {
+  visibility: hidden;
+}
+[data-skeleton="leaving"] :is(button, input, textarea, select, [role="button"], [data-slot="button"], [data-slot="badge"], svg, img, canvas, video) {
+  animation: tavora-skeleton-in var(--duration-reveal) var(--ease-out-strong);
+}
+
+@keyframes tavora-skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+@keyframes tavora-skeleton-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes tavora-skeleton-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-skeleton="on"] {
+    animation: none !important;
+  }
+  [data-skeleton="leaving"] :where(:not(:has(*)):not(:empty))::after {
+    animation: tavora-fade-out 100ms linear forwards !important;
+  }
+  [data-skeleton="leaving"] :is(button, input, textarea, select, [role="button"], [data-slot="button"], [data-slot="badge"], svg, img, canvas, video) {
+    animation: tavora-fade-in 100ms linear !important;
+  }
+}

@@ -81,4 +81,4 @@ A variation that misses one is not loaded, and Settings shows which pair failed 
 
 ## Older Tavora
 
-Unknown colours are refused, so a Tavora that was released before `primary-fill`, `primary-fill-hover` and `primary-fill-foreground` does not load a theme that sets them; it lists the folder with "unknown colors" instead. Leave them out if your theme should work everywhere. A theme that sets them needs a Tavora that knows them, which matters most once themes can be published: give such a theme its minimum Tavora version then.
+Unknown colours are refused, so a Tavora released before `primary-fill`, `primary-fill-hover` and `primary-fill-foreground` does not load a theme that sets them; it lists the folder with "unknown colors" instead. Tavora's own themes ship with the app, so they are fine. Leave the three out if your theme should work everywhere. A published theme that sets them would need a minimum Tavora version, and themes have no such field yet.
