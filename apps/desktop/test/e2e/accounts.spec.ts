@@ -9,7 +9,7 @@ import { createConnection, createServer, type Socket } from "node:net";
 import os, { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { desktopDir, launch } from "./harness";
+import { desktopDir, hostToast, launch } from "./harness";
 
 const apiDir = path.resolve(desktopDir, "../api");
 let service: ChildProcess | undefined;
@@ -232,7 +232,7 @@ test("a developer chooses a public name and links a key file with tavora-pack li
     await expect(page.getByTestId("developer-keys-none")).toBeVisible();
     await page.getByTestId("account-developer-name").fill("Tavora Team");
     await page.getByTestId("account-developer-save").click();
-    await expect(page.getByTestId("toast")).toContainText("can't be used");
+    await expect(hostToast(page)).toContainText("can't be used");
     await page.getByTestId("account-developer-name").fill("example-dev");
     await page.getByTestId("account-developer-save").click();
     await expect(page.getByTestId("account-developer-name-hint")).toContainText("can change it again on");
@@ -515,7 +515,7 @@ test("a cloud copy in a folder that went missing says so and offers another fold
     // A folder that isn't there at the start: nothing turns on, and the user hears why.
     await pick(path.join(a.userData, "never-existed"));
     await a.page.getByTestId("cloud-copy-on-folder").click();
-    await expect(a.page.getByTestId("toast")).toHaveText("Can't find your folder. Is it still there? You can pick another one.");
+    await expect(hostToast(a.page)).toHaveText("Can't find your folder. Is it still there? You can pick another one.");
     await expect(a.page.getByTestId("cloud-copy-on-folder")).toBeVisible();
 
     // A folder that works, then goes missing: the next upload fails and the problem box offers Change folder.

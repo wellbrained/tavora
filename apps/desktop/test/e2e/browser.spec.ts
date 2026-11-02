@@ -10,7 +10,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { launch, openWorkspace, openModule } from "./harness";
+import { hostToast, launch, openModule, openWorkspace } from "./harness";
 
 const BROWSER = "tavora.browser";
 /** A name EasyList blocks (`||doubleclick.net^`), resolved to the test server. */
@@ -250,7 +250,7 @@ test("new windows open as a Browser tab only after a click, and downloads are re
   // B5: a download is refused and the user is told.
   const downloads = await app.evaluate(({ app }) => app.getPath("downloads"));
   await inPage(app, publicUrl("/"), `location.href = "/download"; null`);
-  await expect(page.getByTestId("toast").getByText("Tavora doesn't download files.")).toBeVisible();
+  await expect(hostToast(page).getByText("Tavora doesn't download files.")).toBeVisible();
   expect(() => readFileSync(path.join(downloads, "tavora-e2e.bin"))).toThrow();
 
   await app.close();

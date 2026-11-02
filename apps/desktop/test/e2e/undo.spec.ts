@@ -2,7 +2,7 @@
 // and a toast offers Undo for a few seconds (undoable in the kit). Undo puts the thing back exactly as it was; once the
 // toast goes, or the app closes, the delete stays.
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { inModule, launch, layOutColumns, openModule, openWorkspace, TODOS, typeInModule, VANILLA, waitForShown } from "./harness";
+import { hostToast, inModule, launch, layOutColumns, openModule, openWorkspace, TODOS, toastsPage, typeInModule, VANILLA, waitForShown } from "./harness";
 
 async function answerPrompt(page: Page, value: string) {
   await page.getByTestId("prompt-input").fill(value);
@@ -43,7 +43,7 @@ async function fromMenu(page: Page, gameId: string, item: string) {
   await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
 }
 
-const toast = (page: Page, title: string) => page.getByTestId("undo-toast").filter({ hasText: title });
+const toast = (page: Page, title: string) => hostToast(page, "undo-toast").filter({ hasText: title });
 
 test("a deleted layout comes back with Undo or Ctrl+Z, also after a switch to another workspace", async () => {
   const { app, page } = await launch();
@@ -57,13 +57,13 @@ test("a deleted layout comes back with Undo or Ctrl+Z, also after a switch to an
   await layoutMenu(page, "Mapping", "layout-delete");
   await expect(page.getByTestId("confirm")).toHaveCount(0);
   await expect(toast(page, "Layout deleted")).toBeVisible();
-  await expect(page.getByTestId("toast-status")).toHaveText("Layout deleted");
+  await expect(toastsPage(page).getByTestId("toast-status")).toHaveText("Layout deleted");
   expect(await layoutNames(page)).toEqual(["Bossing"]);
 
   // The user goes to another workspace; Undo still puts the layout back into the one it came from, in its place.
   await openWorkspace(page, "satisfactory");
   await toast(page, "Layout deleted").getByTestId("undo").click();
-  await expect(page.getByTestId("undo-toast")).toHaveCount(0);
+  await expect(hostToast(page, "undo-toast")).toHaveCount(0);
   await openWorkspace(page, "poe2");
   expect(await layoutNames(page)).toEqual(["Mapping", "Bossing"]);
 
@@ -71,7 +71,7 @@ test("a deleted layout comes back with Undo or Ctrl+Z, also after a switch to an
   await layoutMenu(page, "Bossing", "layout-delete");
   await expect(toast(page, "Layout deleted")).toBeVisible();
   await page.keyboard.press("Control+z");
-  await expect(page.getByTestId("undo-toast")).toHaveCount(0);
+  await expect(hostToast(page, "undo-toast")).toHaveCount(0);
   expect(await layoutNames(page)).toEqual(["Mapping", "Bossing"]);
   // Nothing left to undo: another Ctrl+Z does nothing.
   await page.keyboard.press("Control+z");
@@ -85,7 +85,7 @@ test("two quick deletes get an Undo each; undoing the first leaves the second de
   await fromMenu(page, "satisfactory", "menu-remove");
   await expect(page.getByTestId("rail-workspace-poe2")).toHaveCount(0);
   await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveCount(0);
-  await expect(page.getByTestId("undo-toast")).toHaveCount(2);
+  await expect(hostToast(page, "undo-toast")).toHaveCount(2);
 
   // Spread the stack (pointing at it), then Undo on the older one.
   await toast(page, "Satisfactory moved to Trash").hover();
@@ -112,7 +112,7 @@ test("a delete is final once the toast goes, and when the app closes during it",
   // Closed with the toast's X: no Undo any more.
   await layoutMenu(page, "Mapping", "layout-delete");
   await toast(page, "Layout deleted").getByRole("button", { name: "Dismiss" }).click();
-  await expect(page.getByTestId("undo-toast")).toHaveCount(0);
+  await expect(hostToast(page, "undo-toast")).toHaveCount(0);
   await page.keyboard.press("Control+z");
   expect(await layoutNames(page)).toEqual(["Bossing"]);
 
@@ -121,7 +121,7 @@ test("a delete is final once the toast goes, and when the app closes during it",
   await expect(toast(page, "Layout deleted")).toBeVisible();
   await running.app.close();
   const again = await launch(userData);
-  await expect(again.page.getByTestId("undo-toast")).toHaveCount(0);
+  await expect(hostToast(again.page, "undo-toast")).toHaveCount(0);
   await again.page.getByTestId("layouts").click();
   await expect(again.page.locator('[role="menu"][data-state="open"]').getByText("Bossing", { exact: true })).toHaveCount(0);
   await again.page.keyboard.press("Escape");

@@ -60,7 +60,8 @@
   box-sizing: border-box;
   display: flex;
   width: max-content;
-  max-width: min(420px, calc(100vw - 32px));
+  /* A page that is only as big as the toasts (the host's toast view) says how much room they have, instead of 100vw. */
+  max-width: min(420px, calc(var(--tavora-toast-room, 100vw) - 32px));
   align-items: center;
   gap: 12px;
   padding: 10px 10px 10px 20px;

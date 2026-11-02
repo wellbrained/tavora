@@ -1,3 +1,3 @@
 export { default as Toaster } from "./Toaster.vue"
-export { toast, useToast, type ToastOptions } from "./toast"
+export { dismissToast, setToastPosition, stackExtent, toast, toasts, useToast, type ToastItem, type ToastKind, type ToastOptions, type ToastPosition } from "./toast"
 export { handleUndoKey, openUndos, undoable, type Undoable, type UndoableOptions, type UndoAnswer, type UndoState } from "./undoable"

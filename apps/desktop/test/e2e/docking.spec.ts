@@ -2,6 +2,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   expectModuleText,
+  hostToast,
   inModule,
   launch,
   layOutColumns,
@@ -462,7 +463,7 @@ test("named layouts are saved, applied, renamed and deleted", async () => {
   const again = await launch(userData);
   // Deleted at once, with Undo on a toast instead of a question (undo.spec.ts covers the Undo).
   await layoutMenu(again.page, "Mapping", "layout-delete");
-  await expect(again.page.getByTestId("undo-toast")).toContainText("Layout deleted");
+  await expect(hostToast(again.page, "undo-toast")).toContainText("Layout deleted");
   await again.page.getByTestId("layouts").click();
   await expect(again.page.locator('[role="menu"][data-state="open"]').getByText("Mapping")).toHaveCount(0);
   await again.page.keyboard.press("Escape");

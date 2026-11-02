@@ -38,6 +38,23 @@ export interface ToastHandle {
   update: (options: Partial<ToastOptions>) => boolean;
 }
 
+/** The space between two toasts when the stack is spread out. */
+export const GAP = 8;
+/** How far each older toast peeks out of a closed stack, and how much smaller it gets. */
+export const PEEK = 10;
+export const SHRINK = 0.06;
+
+/**
+ * How much room the stack needs when it is spread out (the most it ever takes): as wide as the widest toast, as tall as
+ * all of them with the gaps. A toast not measured yet counts for its height only, and for no width.
+ */
+export function stackExtent(sizes: readonly ({ width: number; height: number } | undefined)[]): { width: number; height: number } {
+  if (!sizes.length) return { width: 0, height: 0 };
+  const width = Math.max(0, ...sizes.map((size) => size?.width ?? 0));
+  const height = sizes.reduce((sum, size) => sum + (size?.height ?? 44), 0) + GAP * (sizes.length - 1);
+  return { width, height };
+}
+
 /** Five seconds is long enough to read a line and press Undo. */
 export const TOAST_DURATION = 5000;
 /** More than this at once would cover the panel; the oldest goes first. */

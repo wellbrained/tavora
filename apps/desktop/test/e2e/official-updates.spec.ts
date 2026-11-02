@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, inModule, launch, newUserData, openModule, openWorkspace } from "./harness";
+import { expectModuleText, hostToast, inModule, launch, newUserData, openModule, openWorkspace } from "./harness";
 
 const ID = "tavora.updatable";
 
@@ -125,7 +125,7 @@ test("a built-in module updates from the catalogue, survives a restart, falls ba
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-modules").click();
     await page.getByTestId("check-module-updates").click();
-    await expect(page.getByTestId("toast")).toHaveText("Found 1 update. It is ready when you are.");
+    await expect(hostToast(page)).toHaveText("Found 1 update. It is ready when you are.");
     expect(asked).toContain("/v1/catalog?include=official");
     await page.getByTestId("settings-close").click();
     await page.getByTestId("module-updates-button").click();
@@ -174,7 +174,7 @@ test("with the pins empty, Tavora's own modules are not asked for and nothing do
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-modules").click();
     await page.getByTestId("check-module-updates").click();
-    await expect(page.getByTestId("toast")).toBeVisible();
+    await expect(hostToast(page)).toBeVisible();
     expect(asked.filter((line) => line.includes("official"))).toEqual([]);
     await app.close();
   } finally {

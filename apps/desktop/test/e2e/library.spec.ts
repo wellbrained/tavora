@@ -7,6 +7,7 @@ import {
   desktopDir,
   openAddGame,
   expectModuleText,
+  hostToast,
   launch,
   newUserData,
   NOTES,
@@ -412,7 +413,7 @@ test("many workspaces are moved to Trash, restored and deleted together from Set
   await page.getByTestId("workspaces-select-all").check();
   await expect(page.getByTestId("workspaces-selected")).toHaveText("2 selected");
   await page.getByTestId("workspaces-remove").click();
-  await expect(page.getByTestId("undo-toast")).toContainText("Moved 2 workspaces to Trash.");
+  await expect(hostToast(page, "undo-toast")).toContainText("Moved 2 workspaces to Trash.");
   await expect(page.getByTestId("workspaces-empty")).toBeVisible();
   await expect(page.getByTestId("rail-workspace-poe2")).toHaveCount(0);
   await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveCount(0);

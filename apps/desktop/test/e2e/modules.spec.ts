@@ -6,7 +6,7 @@ import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs
 import path from "node:path";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, inModule, launch, newUserData, openWorkspace, openModule, panels, seedLibrary, VANILLA } from "./harness";
+import { expectModuleText, hostToast, inModule, launch, newUserData, openModule, openWorkspace, panels, seedLibrary, VANILLA } from "./harness";
 
 /** Picks an entry of the More menu in Settings > Modules, where the rarer ways to add a module sit. */
 async function fromMore(page: Page, item: string) {
@@ -201,7 +201,7 @@ test("a signed zip installs from Settings, updates only from its publisher, and 
   await writeFile(copycat, (await packModule(path.join(source, "mini"), generateKeyPairSync("ed25519").privateKey)).zip);
   await pickFile(app, copycat);
   await fromMore(page, "install-module");
-  await expect(page.getByTestId("toast").getByText("comes from a different publisher")).toBeVisible();
+  await expect(hostToast(page).getByText("comes from a different publisher")).toBeVisible();
   expect(await openedIn(app)).toBe(path.resolve(work));
 
   // Only a zip that installed moves it.

@@ -6,21 +6,28 @@
 import { computed, reactive, ref, watch } from "vue";
 import "./toast.css";
 import ToastItem from "./ToastItem.vue";
-import { toastPosition, toasts, type ToastPosition } from "./toast";
+import { GAP, PEEK, SHRINK, stackExtent, toastPosition, toasts, type ToastPosition } from "./toast";
 
-/** A fixed place, for a page that must not follow the setting (the host window). */
-const props = defineProps<{ position?: ToastPosition }>();
+/**
+ * `position`: a fixed place, for a page that must not follow the setting. `paused`: every timer stops, for a page that
+ * is out of sight (Tavora hidden). The Toaster says its `extent` (see stackExtent) when a page of its own, the host's
+ * toast view, has to be as big as the stack.
+ */
+const props = defineProps<{ position?: ToastPosition; paused?: boolean }>();
+const emit = defineEmits<{ extent: [value: { width: number; height: number }] }>();
 
 const position = computed(() => props.position ?? toastPosition.value);
 const fromTop = computed(() => position.value === "top-center");
 
-const GAP = 8;
-/** How far each older toast peeks out, and how much smaller it gets. */
-const PEEK = 10;
-const SHRINK = 0.06;
-
 const sizes = reactive(new Map<number, { width: number; height: number }>());
 const expanded = ref(false);
+
+// The room the stack needs spread out, so a view of its own is already big enough when the pointer opens it.
+watch(
+  () => stackExtent(toasts.value.map((item) => sizes.get(item.id))),
+  (value) => emit("extent", value),
+  { immediate: true, flush: "post" },
+);
 let collapseTimer: ReturnType<typeof setTimeout> | undefined;
 
 function open() {
@@ -82,7 +89,7 @@ function forget(id: number) {
            list transition never touches the layer's transform. -->
       <div v-for="{ item, depth, behind, style } in placed" :key="item.id" :data-id="item.id" class="tavora-toast-slot" :style="{ zIndex: style.zIndex }" :inert="!expanded && depth > 0">
         <div class="tavora-toast-layer" :style="{ transform: style.transform, opacity: style.opacity }" @pointerenter="open" @pointerleave="close" @focusin="open" @focusout="close">
-          <ToastItem :item="item" :paused="expanded" :behind="behind" @size="(value) => sizes.set(item.id, value)" />
+          <ToastItem :item="item" :paused="expanded || !!paused" :behind="behind" @size="(value) => sizes.set(item.id, value)" />
         </div>
       </div>
     </TransitionGroup>

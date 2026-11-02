@@ -2,7 +2,7 @@ import { access, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { _electron as electron, expect, type ElectronApplication, type Page } from "@playwright/test";
+import { _electron as electron, expect, type ElectronApplication, type Locator, type Page } from "@playwright/test";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const desktopDir = path.resolve(here, "../..");
@@ -121,7 +121,43 @@ export async function launch(
   const page = await hostWindow(app);
   await expect(page.getByTestId("rail")).toBeVisible();
   await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]!.setContentSize(size.width, size.height), WINDOW);
+  // Tavora's own toasts live in a page of their own above the panels; it is there from the start.
+  await expect.poll(() => findToastsPage(page) !== undefined).toBe(true);
   return { app, page, userData: dir };
+}
+
+const findToastsPage = (page: Page) => page.context().pages().find((candidate) => candidate.url().includes("/toasts.html"));
+
+/** The page of Tavora's own toasts (main/toast-view.ts): drawn above every panel, so their texts and buttons are in it, not in the window's page. */
+export function toastsPage(page: Page): Page {
+  const found = findToastsPage(page);
+  if (!found) throw new Error("The toast page is not open");
+  return found;
+}
+
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** The views in the Tavora window from the bottom up (the order they are drawn in), with where each is and whether it shows. */
+export async function viewStack(app: ElectronApplication): Promise<{ window: Box; views: { url: string; bounds: Box; visible: boolean }[] }> {
+  return app.evaluate(({ BrowserWindow }) => {
+    const host = BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().includes("/index.html"))!;
+    const { width, height } = host.getContentBounds();
+    const views = host.contentView.children.map((view) => {
+      const item = view as unknown as { webContents: { getURL(): string }; getBounds(): Box; getVisible(): boolean };
+      return { url: item.webContents.getURL(), bounds: item.getBounds(), visible: item.getVisible() };
+    });
+    return { window: { x: 0, y: 0, width, height }, views };
+  });
+}
+
+/** One of Tavora's own toasts by its test id: "toast" for a message, "undo-toast" for a delete with Undo. */
+export function hostToast(page: Page, testid: "toast" | "undo-toast" = "toast"): Locator {
+  return toastsPage(page).getByTestId(testid);
 }
 
 /** Opens the Add a game picker from the rail's Add game button. */
@@ -132,7 +168,7 @@ export async function openAddGame(page: Page): Promise<void> {
 
 /** The Tavora window. Panels restored from the last run can open before it, so the first window is not always this one. */
 async function hostWindow(app: ElectronApplication): Promise<Page> {
-  const isHost = (page: Page) => page.url().startsWith("tavora-host://app/");
+  const isHost = (page: Page) => page.url().startsWith("tavora-host://app/") && !/\/(toasts|layout)\.html/.test(page.url());
   await expect.poll(() => app.windows().some(isHost)).toBe(true);
   return app.windows().find(isHost)!;
 }
