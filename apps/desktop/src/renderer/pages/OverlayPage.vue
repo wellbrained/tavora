@@ -18,9 +18,14 @@ import OverlayCopy from "../components/layout/OverlayCopy.vue";
 import OverlaySettings from "../components/layout/OverlaySettings.vue";
 import OverlaySources from "../components/layout/OverlaySources.vue";
 import { selectedItems, send, stills, useLayoutKeys, view } from "../components/layout/layout-state";
+import { watchRemovals } from "../components/layout/removal-undo";
 import { withShortcut } from "../shortcuts";
 
 useLayoutKeys();
+
+// Each remove gets a toast with Undo; leaving the page ends them.
+const removals = watchRemovals({ view, send, title: (count) => t("overlays.layout.removed", { count }) });
+onBeforeUnmount(() => removals.stop());
 
 /** Where the game's picture is served from (main/layout-pictures.ts; the folder is one of the host UI's image folders). */
 const PICTURE_ORIGIN = "tavora-host://app/";

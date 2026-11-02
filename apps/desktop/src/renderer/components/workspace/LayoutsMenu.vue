@@ -13,7 +13,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { act, confirmAction, prompt, state, submitAction, type MenuItem } from "../../host";
+import { act, deleteWithUndo, prompt, state, submitAction, type MenuItem } from "../../host";
 import { t, templateName } from "../../i18n";
 import MenuButton from "../menus/MenuButton.vue";
 import GridPicker from "./GridPicker.vue";
@@ -55,14 +55,8 @@ function snapshotItems(snapshot: SnapshotView): MenuItem[] {
       testid: "layout-delete",
       glyph: Trash2,
       danger: true,
-      run: () =>
-        confirmAction({
-          title: t("layouts.delete.title", { name: snapshot.name }),
-          message: t("layouts.delete.message"),
-          confirm: t("layouts.delete.confirm"),
-          danger: true,
-          run: () => submitAction({ type: "delete-snapshot", snapshotId: snapshot.id }),
-        }),
+      // Gone at once; Undo on the toast brings it back for a few seconds.
+      run: () => void deleteWithUndo({ type: "delete-snapshot", snapshotId: snapshot.id }, t("layouts.deleted")),
     },
   ];
 }

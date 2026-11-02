@@ -58,7 +58,7 @@ test("data from before the workspace names opens with every workspace, its panel
     await expect(page.getByTestId("rail-workspace-poe2")).toBeVisible();
     await expect(panels(page, NOTES)).toHaveCount(1);
     await page.getByTestId("rail-workspace-local-personal").click({ button: "right" });
-    await expect(page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove"]')).toHaveText("Remove workspace…");
+    await expect(page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove"]')).toHaveText("Remove workspace");
     await page.keyboard.press("Escape");
   } finally {
     await app.close();

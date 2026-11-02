@@ -92,7 +92,6 @@ test("a row the user removes folds away; the rows around it stay", async () => {
   await record(page);
   await page.getByTestId("rail-workspace-poe2").click({ button: "right" });
   await page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove"]').click();
-  await page.getByTestId("confirm-submit").click();
   await expect(page.getByTestId("rail-workspace-poe2")).toHaveCount(0);
   await expect(page.getByTestId("rail-workspace-satisfactory")).toBeVisible();
   const rows = await seen(page);

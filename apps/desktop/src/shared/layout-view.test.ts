@@ -35,6 +35,8 @@ describe("parseLayoutMessage", () => {
     expect(parseLayoutMessage({ type: "reset", id: "a" })).toEqual({ type: "reset", id: "a" });
     expect(parseLayoutMessage({ type: "reset-size", id: "a" })).toEqual({ type: "reset-size", id: "a" });
     expect(parseLayoutMessage({ type: "remove", id: "a" })).toEqual({ type: "remove", id: "a" });
+    expect(parseLayoutMessage({ type: "undo-removal", step: 3 })).toEqual({ type: "undo-removal", step: 3 });
+    for (const step of [0, -1, 1.5, "3", null]) expect(parseLayoutMessage({ type: "undo-removal", step })).toBeNull();
     expect(parseLayoutMessage({ type: "settings", id: "a" })).toEqual({ type: "settings", id: "a" });
     expect(parseLayoutMessage({ type: "remove", id: "" })).toBeNull();
     expect(parseLayoutMessage({ type: "preview", choice: "21:9" })).toEqual({ type: "preview", choice: "21:9" });

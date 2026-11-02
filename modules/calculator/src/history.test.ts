@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_HISTORY, parseHistory, remember } from "./history";
+import { MAX_HISTORY, parseHistory, remember, restoreHistory } from "./history";
 
 describe("history", () => {
   it("keeps only valid entries", () => {
@@ -23,5 +23,16 @@ describe("history", () => {
   it("moves a repeated calculation up instead of keeping it twice", () => {
     const history = remember(remember(remember([], { expression: "1+1", result: "2" }), { expression: "2+2", result: "4" }), { expression: "1+1", result: "2" });
     expect(history.map((item) => item.result)).toEqual(["2", "4"]);
+  });
+});
+
+describe("undoing Clear history", () => {
+  const sum = (expression: string, result: string) => ({ expression, result });
+
+  it("brings the cleared results back below new ones, without doubles, up to the length", () => {
+    const cleared = [sum("2+2", "4"), sum("1+1", "2")];
+    expect(restoreHistory([], cleared)).toEqual(cleared);
+    expect(restoreHistory([sum("3*3", "9"), sum("1+1", "2")], cleared)).toEqual([sum("3*3", "9"), sum("1+1", "2"), sum("2+2", "4")]);
+    expect(restoreHistory([sum("3*3", "9")], cleared, 2)).toEqual([sum("3*3", "9"), sum("2+2", "4")]);
   });
 });

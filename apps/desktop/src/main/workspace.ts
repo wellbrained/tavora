@@ -53,6 +53,24 @@ export class WorkspaceError extends UserError {}
 export const MAX_SNAPSHOTS = 50;
 export const MAX_SNAPSHOT_NAME = 80;
 
+/** A deleted snapshot with where it was, kept for Undo. */
+export interface RemovedSnapshot {
+  workspaceId: string;
+  index: number;
+  snapshot: Snapshot;
+}
+
+/** The name, or with " (2)", " (3)" … after it when another snapshot has it now (names are compared ignoring case). */
+export function freeName(snapshots: readonly Snapshot[], name: string): string {
+  const taken = new Set(snapshots.map((snapshot) => snapshot.name.toLocaleLowerCase()));
+  if (!taken.has(name.toLocaleLowerCase())) return name;
+  for (let number = 2; ; number++) {
+    const suffix = ` (${number})`;
+    const candidate = `${name.slice(0, MAX_SNAPSHOT_NAME - suffix.length)}${suffix}`;
+    if (!taken.has(candidate.toLocaleLowerCase())) return candidate;
+  }
+}
+
 export function emptyWorkspace(): Workspace {
   return { instances: [], layout: null, snapshots: [] };
 }
@@ -395,11 +413,29 @@ export class Workspaces {
     this.save();
   }
 
-  deleteSnapshot(workspaceId: string, snapshotId: string): void {
+  /** Deletes a snapshot; answers with it and where it was, so the delete can be undone (restoreSnapshot). */
+  deleteSnapshot(workspaceId: string, snapshotId: string): RemovedSnapshot {
     const workspace = this.workspace(workspaceId);
-    const { id } = this.snapshot(workspace, snapshotId);
-    workspace.snapshots = workspace.snapshots.filter((snapshot) => snapshot.id !== id);
+    const snapshot = this.snapshot(workspace, snapshotId);
+    const index = workspace.snapshots.indexOf(snapshot);
+    workspace.snapshots = workspace.snapshots.filter((other) => other.id !== snapshot.id);
     this.save();
+    return { workspaceId, index, snapshot: structuredClone(snapshot) };
+  }
+
+  /**
+   * Undo of deleteSnapshot: the snapshot comes back into its workspace (wherever the user is now) at the place it had,
+   * with its id, name and panels. A layout saved under its name since keeps that name; the one coming back gets a
+   * number after it. False when it can't come back: its workspace was deleted for good, it is back already, or the
+   * workspace has as many layouts as it can hold.
+   */
+  restoreSnapshot(removed: RemovedSnapshot): boolean {
+    const workspace = this.state.workspaces[removed.workspaceId];
+    if (!workspace || workspace.snapshots.length >= MAX_SNAPSHOTS || workspace.snapshots.some((other) => other.id === removed.snapshot.id)) return false;
+    const snapshot = { ...structuredClone(removed.snapshot), name: freeName(workspace.snapshots, removed.snapshot.name) };
+    workspace.snapshots.splice(Math.min(removed.index, workspace.snapshots.length), 0, snapshot);
+    this.save();
+    return true;
   }
 
   /**
