@@ -1396,8 +1396,8 @@ export class GameOverlays {
    * Delete overlay (the rail, the Overlay page): the same as removeSetup, and the answer is how to put the setup back
    * exactly as it was (its place in the list, every item with its place and settings, and the keys that went with them),
    * or null when the game has no setup (Everywhere and All games are never taken). The way back answers false when it
-   * can't come back any more: the game has a setup again, its workspace is gone, or none of its items can be shown again.
-   * Items that can't (their panel closed, their module is gone) stay out; the rest come back.
+   * can't come back any more: its workspace is gone, or none of its items can be shown again. Items that can't (their panel
+   * closed, their module is gone, the setup is full) stay out; the rest come back, also into a setup the game got meanwhile.
    */
   takeSetup(gameId: string): (() => boolean) | null {
     if (!isGameSetup(gameId) || !this.store.hasSetup(gameId)) return null;
@@ -1416,21 +1416,30 @@ export class GameOverlays {
     this.store.removeSetup(gameId);
     this.options.changed();
     this.tick();
-    return () => this.putBackSetup(gameId, index, kept);
+    // Once only: a second go would merge the same items into the setup again.
+    let used = false;
+    return () => {
+      if (used) return false;
+      used = true;
+      return this.putBackSetup(gameId, index, kept);
+    };
   }
 
-  /** The way back of takeSetup: the setup returns in its place, with the items that can be shown again. */
+  /**
+   * The way back of takeSetup: the setup returns in its place, with the items that can be shown again. When the game has a
+   * setup again by then (a module showed an overlay for it, a panel was added, Copy to… went into it), nothing of the deleted
+   * one may be lost: its items are merged in. One the new setup has too (a copy of an All games item) goes back to how it
+   * was, the others are added up to the limit, and what the new setup got on its own stays.
+   */
   private putBackSetup(gameId: string, index: number, kept: readonly { ref: ItemRef; state: LayoutItemState }[]): boolean {
-    if (this.options.workspaces.name(gameId) == null || !this.store.insertSetup(gameId, index)) return false;
+    if (this.options.workspaces.name(gameId) == null) return false;
+    const made = !this.store.hasSetup(gameId);
+    if (made && !this.store.insertSetup(gameId, index)) return false;
     let back = 0;
-    for (const { ref, state } of kept) {
-      if (!this.bringBack(gameId, ref, state)) continue;
-      back++;
-      if (state.key) this.options.streaming.restoreKey(state.key);
-    }
-    // A setup that had items and gets none of them back is not what was deleted: it stays gone.
+    for (const { ref, state } of kept) if (this.putItem(gameId, ref, state)) back++;
+    // Nothing of a setup that had items came back: there is nothing to show for it (the new one, if any, is left alone).
     if (kept.length > 0 && back === 0) {
-      this.store.removeSetup(gameId);
+      if (made) this.store.removeSetup(gameId);
       return false;
     }
     this.options.changed();

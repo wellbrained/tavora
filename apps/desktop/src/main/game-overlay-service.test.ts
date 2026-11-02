@@ -2189,16 +2189,57 @@ describe("the Overlay page", () => {
     expect(states()).toEqual(before);
   });
 
-  it("can't bring a deleted setup back when the game has a setup again", async () => {
+  // While the Undo is open, the game can get a setup again on its own (a game workspace's overlay or panel lands in its own
+  // game's setup, Copy to… makes one). Undo must not lose the deleted frames then: they merge into the new setup.
+  const name = (info: { ref: { kind: string; subject?: { key: string } } }) => (info.ref.kind === "overlay" ? info.ref.subject!.key : "panel");
+
+  it("merges a deleted setup back into the one an overlay made for the game meanwhile", async () => {
+    const { service, world, record, states, subject } = await deletable();
+    const before = states();
+    const restore = service.takeSetup("elden")!;
+    // A module shows an overlay for the game: its setup is made again, with a copy of the panel from All games.
+    show(service, CLOCK, "elden", "fresh");
+    expect(service.layout.items("elden").map(name)).toEqual(["fresh", "panel"]);
+    service.layout.setPanel("elden", PANEL, { opacity: 75 });
+
+    expect(restore()).toBe(true);
+    const back = service.layout.items("elden");
+    // Nothing is lost: the deleted overlays are back as they were, the panel copy has its old settings again, the new overlay stays.
+    expect(back.map(name).sort()).toEqual(["fresh", "item-1", "item-2", "panel"]);
+    const byName = (key: string) => service.layout.state("elden", back.find((info) => name(info) === key)!.ref)!;
+    expect(byName("item-1")).toMatchObject({ item: { opacity: 50, mode: "toggle" }, key: record });
+    expect(byName("panel").item).toEqual(before.find((state) => "instanceId" in state!.item)!.item);
+    expect(world.restoredKeys).toContainEqual(record);
+    expect(service.layout.setups()).toEqual(["$everywhere", "$all", "other", "elden"]);
+    expect(service.layout.state("elden", { kind: "overlay", subject })).not.toBeNull();
+    // Back once: a second go does nothing, so the merge never doubles or overwrites later changes.
+    service.update(subject, { opacity: 25 });
+    expect(restore()).toBe(false);
+    expect(service.layout.state("elden", { kind: "overlay", subject })!.item.opacity).toBe(25);
+  });
+
+  it("merges into the setup a panel of the game's own workspace made meanwhile", async () => {
+    const { service, world, states } = await deletable();
+    const restore = service.takeSetup("elden")!;
+    const OTHER_PANEL = "0a1b2c3d-0000-4000-8000-000000000009";
+    world.panelNames.set(OTHER_PANEL, "Notes");
+    expect(service.showPanel({ owner: "official", moduleId: TODOS.manifest.id, workspaceId: "elden", instanceId: OTHER_PANEL })).toBe("shown");
+    expect(service.layout.items("elden")).toHaveLength(2);
+    expect(restore()).toBe(true);
+    expect(states().map((state) => ("instanceId" in state!.item ? state!.item.instanceId : state!.item.key)).sort()).toEqual([OTHER_PANEL, PANEL, "item-1", "item-2"].sort());
+  });
+
+  it("merges into the setup Copy to… made meanwhile, and keeps what does not fit out", async () => {
     const { service, states } = await deletable();
     const restore = service.takeSetup("elden")!;
-    // Something made the game's setup again (a module showed an overlay for it).
-    show(service, CLOCK, "elden", "fresh");
-    const fresh = states();
-    expect(restore()).toBe(false);
-    // The new setup is left as it is.
-    expect(states()).toEqual(fresh);
-    expect(service.layout.items("elden").map((info) => info.name)).not.toContain("Clock & Counter · item-1");
+    // Copy to… makes the game's setup again, with the panel from All games.
+    expect(service.layout.copy("$all", "elden", "add")).toMatchObject({ copied: 1 });
+    for (let index = 0; index < LIMITS.maxGameOverlays - 2; index++) show(service, CLOCK, "elden", `fill-${index}`);
+    expect(service.layout.items("elden")).toHaveLength(LIMITS.maxGameOverlays - 1);
+    expect(restore()).toBe(true);
+    // Room for one more: the panel copy goes back to its old settings, one overlay fits, the other stays out.
+    expect(service.layout.items("elden")).toHaveLength(LIMITS.maxGameOverlays);
+    expect(states().filter((state) => "key" in state!.item && ["item-1", "item-2"].includes(state!.item.key))).toHaveLength(1);
   });
 
   it("can't bring a deleted setup back when its workspace is gone", async () => {
