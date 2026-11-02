@@ -10,9 +10,10 @@
 // With `inPanel` the same question is the content of the panel that asks (decision of 2026-10-28): the module's first
 // panel when it is added or still misses access, or the running panel that asks for a connector on request. Cancel then
 // closes the panels that wait for the answer; Allow lets the host start them (main/host.ts questionOf).
-import { Cpu, Gauge, Globe, Headphones, Music, Radio, Trophy } from "@lucide/vue";
+import { Check, Cpu, Gauge, Globe, Headphones, Music, Radio, ShieldCheck, Trophy } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { act, aiUsage, dialog, discord, nextUpdateAsk, openPanels, openSettings, state, stopUpdateAsks, type GrantRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
@@ -134,7 +135,7 @@ async function allow() {
   <component
     :is="inPanel ? 'section' : ModalDialog"
     v-if="module"
-    v-bind="inPanel ? { class: 'flex w-full max-w-[460px] flex-col gap-4', 'aria-labelledby': titleId, 'data-testid': 'grant-question' } : { title, class: 'sm:max-w-[480px]', testid: 'grant-dialog' }"
+    v-bind="inPanel ? { class: 'flex w-full max-w-[460px] flex-col gap-4', 'aria-labelledby': titleId, 'data-testid': 'grant-question' } : { title, icon: ShieldCheck, class: 'sm:max-w-[480px]', testid: 'grant-dialog' }"
     @close="close"
   >
     <h2 v-if="inPanel" :id="titleId" class="text-lg font-semibold">{{ title }}</h2>
@@ -196,12 +197,12 @@ async function allow() {
     <ModuleNotes v-if="update && update.notes.length" :module-id="module.id" :version="update.version" :unseen="false" :entries="update.notes" />
     <p class="text-muted-foreground text-sm">{{ t("grant.later") }}</p>
     <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
-    <div class="flex justify-end gap-2">
-      <Button type="button" variant="secondary" autofocus data-testid="grant-cancel" @click="close">
+    <DialogFooter>
+      <DialogButton type="button" close autofocus data-testid="grant-cancel" @click="close">
         {{ request.review ? t("grant.notNow") : t("common.cancel") }}
-      </Button>
-      <Button type="button" data-testid="grant-allow" :disabled="busy" @click="allow">{{ update ? t("grant.updateAllow") : t("grant.allow") }}</Button>
-    </div>
+      </DialogButton>
+      <DialogButton type="button" :icon="Check" :loading="busy" data-testid="grant-allow" :disabled="busy" @click="allow">{{ update ? t("grant.updateAllow") : t("grant.allow") }}</DialogButton>
+    </DialogFooter>
   </component>
 </template>
 

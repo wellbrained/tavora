@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { Download, Gamepad2, Search, Upload } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { SteamGameView } from "../../shared/host-api";
@@ -87,11 +89,13 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
   <ModalDialog
     :title="t('steamImport.title')"
     :description="t('steamImport.description')"
+    :icon="Gamepad2"
     testid="steam-import-dialog"
     class="sm:max-w-[500px]"
     @close="dialog = null"
   >
-    <form v-if="!games" class="flex flex-col gap-3" @submit.prevent="lookUp">
+    <div class="flex flex-col gap-4">
+    <form v-if="!games" id="steam-lookup-form" class="flex flex-col gap-3" @submit.prevent="lookUp">
       <label class="text-sm" for="steam-profile">{{ t("steamImport.profile") }}</label>
       <Input
         id="steam-profile"
@@ -110,12 +114,6 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
         {{ t("steamImport.remember") }}
       </label>
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="steam-import-error">{{ error }}</p>
-      <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" @click="dialog = null">{{ t("common.cancel") }}</Button>
-        <Button type="submit" data-testid="steam-lookup" :disabled="looking || !profile.trim()">
-          {{ looking ? t("steamImport.looking") : t("steamImport.lookUp") }}
-        </Button>
-      </div>
     </form>
 
     <template v-else>
@@ -151,27 +149,35 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
         </p>
       </template>
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="steam-import-error">{{ error }}</p>
-      <div class="flex justify-end gap-2">
-        <Button type="button" :variant="games.length > 0 ? 'secondary' : 'default'" :disabled="busy" data-testid="steam-back" @click="back">{{ t("common.back") }}</Button>
-        <Button
-          v-if="games.length > 0"
-          type="button"
-          variant="secondary"
-          data-testid="steam-share-only"
-          :title="t('steamImport.shareOnlyHelp')"
-          :disabled="busy || count === 0 || !state?.library.steamIcons"
-          @click="shareOnly"
-        >
-          {{ t("steamImport.shareOnly") }}
-        </Button>
-        <Button v-if="games.length > 0" type="button" data-testid="steam-import-submit" :disabled="busy || count === 0" @click="runImport">
-          {{ t("steamImport.import", { count }) }}
-        </Button>
-      </div>
     </template>
 
     <p class="text-muted-foreground text-xs leading-relaxed">
       {{ t("steamImport.trademark") }}
     </p>
+    </div>
+    <DialogFooter v-if="!games">
+      <DialogButton type="button" close @click="dialog = null">{{ t("common.cancel") }}</DialogButton>
+      <DialogButton type="submit" form="steam-lookup-form" :icon="Search" :loading="looking" data-testid="steam-lookup" :disabled="looking || !profile.trim()">
+        {{ looking ? t("steamImport.looking") : t("steamImport.lookUp") }}
+      </DialogButton>
+    </DialogFooter>
+    <DialogFooter v-else>
+      <DialogButton type="button" close :variant="games.length > 0 ? 'secondary' : 'default'" :disabled="busy" data-testid="steam-back" @click="back">{{ t("common.back") }}</DialogButton>
+      <DialogButton
+        v-if="games.length > 0"
+        type="button"
+        variant="secondary"
+        :icon="Upload"
+        data-testid="steam-share-only"
+        :title="t('steamImport.shareOnlyHelp')"
+        :disabled="busy || count === 0 || !state?.library.steamIcons"
+        @click="shareOnly"
+      >
+        {{ t("steamImport.shareOnly") }}
+      </DialogButton>
+      <DialogButton v-if="games.length > 0" type="button" :icon="Download" data-testid="steam-import-submit" :disabled="busy || count === 0" @click="runImport">
+        {{ t("steamImport.import", { count }) }}
+      </DialogButton>
+    </DialogFooter>
   </ModalDialog>
 </template>

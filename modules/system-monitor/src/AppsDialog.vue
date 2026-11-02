@@ -2,11 +2,11 @@
 // The apps running on this PC with their memory and CPU, opened from the Memory card. Tavora reads the list only
 // while this dialog is open and the panel is shown: every 2 seconds, the next read only after the last one came back.
 // Apps under 5 % of the installed RAM fold away below the rest until the user opens them; a search finds them too.
-import { ArrowDown, ArrowUp } from "@lucide/vue";
+import { ArrowDown, ArrowUp, MemoryStick } from "@lucide/vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { SystemApps, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
@@ -97,11 +97,8 @@ const COLUMNS: { id: AppsSort; label: "apps.app" | "apps.ram" | "apps.share" | "
 
 <template>
   <Dialog :open="true" @update:open="(value: boolean) => !value && emit('close')">
-    <DialogContent class="top-[6vh] flex max-h-[88vh] translate-y-0 flex-col gap-3 sm:max-w-[500px]" data-testid="apps-dialog">
-      <DialogHeader>
-        <DialogTitle class="text-lg">{{ t("apps.title") }}</DialogTitle>
-        <DialogDescription class="sr-only">{{ t("apps.title") }}</DialogDescription>
-      </DialogHeader>
+    <DialogContent class="top-[6vh] flex max-h-[88vh] translate-y-0 flex-col gap-4 sm:max-w-[500px]" data-testid="apps-dialog">
+      <DialogHeader :icon="MemoryStick" :title="t('apps.title')" :description="t('apps.about')" />
       <Input v-model="query" type="search" :placeholder="t('apps.search')" :aria-label="t('apps.search')" data-testid="apps-search" />
 
       <p v-if="failed && !read" class="text-muted-foreground py-6 text-center text-sm" role="alert" data-testid="apps-error">{{ t("apps.error") }}</p>

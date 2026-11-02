@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // The Calculator's settings. Tavora shows them as a dialog over the workspace (`page`: the panel itself is that dialog,
 // so this is its whole page); an older Tavora gets a dialog in the middle of the panel.
-import { Button } from "@tavora/official-ui/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { SlidersHorizontal } from "@lucide/vue";
+import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 import { t } from "./i18n";
 import SettingsRows from "./SettingsRows.vue";
 
@@ -19,18 +19,16 @@ const historyLength = defineModel<string>("historyLength", { required: true });
       <SettingsRows v-model:decimals="decimals" v-model:history-length="historyLength" :short="short" @update:short="(on: boolean) => emit('update:short', on)" />
     </div>
     <div class="flex justify-end">
-      <Button data-testid="settings-done" @click="emit('close')">{{ t("done") }}</Button>
+      <DialogButton close data-testid="settings-done" @click="emit('close')">{{ t("done") }}</DialogButton>
     </div>
   </div>
   <Dialog v-else :open="true" @update:open="(open: boolean) => !open && emit('close')">
-    <DialogContent class="gap-4 sm:max-w-[360px]" data-testid="settings-dialog">
-      <DialogHeader>
-        <DialogTitle class="text-lg">{{ t("options.title") }}</DialogTitle>
-      </DialogHeader>
+    <DialogContent class="sm:max-w-[360px]" data-testid="settings-dialog">
+      <DialogHeader :icon="SlidersHorizontal" :title="t('options.title')" :description="t('options.about')" />
       <SettingsRows v-model:decimals="decimals" v-model:history-length="historyLength" :short="short" @update:short="(on: boolean) => emit('update:short', on)" />
-      <div class="flex justify-end">
-        <Button data-testid="settings-done" @click="emit('close')">{{ t("done") }}</Button>
-      </div>
+      <DialogFooter>
+        <DialogButton close data-testid="settings-done" @click="emit('close')">{{ t("done") }}</DialogButton>
+      </DialogFooter>
     </DialogContent>
   </Dialog>
 </template>

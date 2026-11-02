@@ -3,8 +3,10 @@
 // needs a sign-in; the developer never sees who wrote. The Tavora and module version are filled in and shown before
 // sending. If the developer chose another way (contactChoice), that is offered instead: a link opens with a warning
 // that it leaves Tavora and isn't anonymous, an email address or Discord name can be copied; Nobody says so.
+import { LogIn, MessageCircle, Send } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
@@ -60,18 +62,19 @@ function signIn() {
 </script>
 
 <template>
-  <ModalDialog :title="t('contact.title', { name })" class="sm:max-w-[480px]" testid="contact-dialog" @close="emit('close')">
+  <ModalDialog :title="t('contact.title', { name })" :icon="MessageCircle" class="sm:max-w-[480px]" testid="contact-dialog" @close="emit('close')">
     <p v-if="!draft" class="text-muted-foreground text-sm" role="status">{{ t("contact.loading") }}</p>
 
-    <div v-else-if="draft.status === 'signed-out'" class="grid gap-3">
+    <template v-else-if="draft.status === 'signed-out'">
       <p class="text-sm">{{ t("contact.signIn") }}</p>
-      <div class="flex justify-end gap-2">
-        <Button variant="secondary" @click="emit('close')">{{ t("common.cancel") }}</Button>
-        <Button data-testid="contact-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</Button>
-      </div>
-    </div>
+      <DialogFooter>
+        <DialogButton close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton :icon="LogIn" data-testid="contact-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</DialogButton>
+      </DialogFooter>
+    </template>
 
-    <div v-else-if="draft.status === 'off'" class="grid gap-3" data-testid="contact-off">
+    <template v-else-if="draft.status === 'off'">
+    <div class="grid gap-3" data-testid="contact-off">
       <template v-if="draft.value && draft.host">
         <p class="text-sm">{{ t(`contact.off.${draft.kind}` as MessageKey, { name }) }}</p>
         <Notice variant="warning">{{ t("contact.offWarning") }}</Notice>
@@ -87,12 +90,14 @@ function signIn() {
       </template>
       <p v-else class="text-sm">{{ t("contact.offNone", { name }) }}</p>
       <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
-      <div class="flex justify-end"><Button variant="secondary" @click="emit('close')">{{ t("common.close") }}</Button></div>
     </div>
+    <DialogFooter><DialogButton close @click="emit('close')">{{ t("common.close") }}</DialogButton></DialogFooter>
+    </template>
 
     <p v-else-if="draft.status !== 'ok'" class="text-destructive text-sm" role="alert">{{ draft.error ?? t("error.generic") }}</p>
 
-    <form v-else class="grid gap-4" @submit.prevent="send">
+    <form v-else class="contents" @submit.prevent="send">
+      <div class="grid gap-4">
       <div class="grid gap-2">
         <Label class="text-muted-foreground font-normal">{{ t("contact.type") }}</Label>
         <RadioGroup v-model="kind" class="gap-2" :aria-label="t('contact.type')" data-testid="contact-type">
@@ -111,10 +116,11 @@ function signIn() {
       </div>
       <p class="text-muted-foreground text-sm">{{ t("contact.anonymous") }}</p>
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="contact-error">{{ error }}</p>
-      <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" @click="emit('close')">{{ t("common.cancel") }}</Button>
-        <Button type="submit" :disabled="busy || problem !== null" data-testid="contact-send">{{ t("contact.send") }}</Button>
       </div>
+      <DialogFooter>
+        <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton type="submit" :icon="Send" :loading="busy" :disabled="busy || problem !== null" data-testid="contact-send">{{ t("contact.send") }}</DialogButton>
+      </DialogFooter>
     </form>
   </ModalDialog>
 </template>

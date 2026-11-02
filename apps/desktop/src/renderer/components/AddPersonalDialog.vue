@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { Plus, UserRoundPlus } from "@lucide/vue";
 import { ref } from "vue";
 import { act, dialog, state } from "../host";
-import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
@@ -28,15 +29,17 @@ async function submit() {
 </script>
 
 <template>
-  <ModalDialog :title="t('addPersonal.title')" testid="add-personal-dialog" @close="dialog = null">
-    <form class="flex flex-col gap-3" @submit.prevent="submit">
-      <label class="text-sm font-medium" for="personal-name">{{ t("addPersonal.name") }}</label>
-      <Input id="personal-name" v-model="name" :placeholder="t('addPersonal.placeholder')" autocomplete="off" maxlength="80" data-testid="personal-name" autofocus />
-      <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="add-game-error">{{ error }}</p>
-      <p class="text-muted-foreground text-xs">{{ t("addPersonal.hint") }}</p>
-      <Button type="submit" class="w-fit" data-testid="create-personal" :disabled="busy || !name.trim()">
-        {{ t("addPersonal.create") }}
-      </Button>
+  <ModalDialog :title="t('addPersonal.title')" :description="t('addPersonal.about')" :icon="UserRoundPlus" testid="add-personal-dialog" @close="dialog = null">
+    <form class="contents" @submit.prevent="submit">
+      <div class="flex flex-col gap-2">
+        <label class="text-sm font-medium" for="personal-name">{{ t("addPersonal.name") }}</label>
+        <Input id="personal-name" v-model="name" :placeholder="t('addPersonal.placeholder')" autocomplete="off" maxlength="80" data-testid="personal-name" autofocus />
+        <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="add-game-error">{{ error }}</p>
+      </div>
+      <DialogFooter>
+        <DialogButton type="button" close @click="dialog = null">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton type="submit" :icon="Plus" :loading="busy" data-testid="create-personal" :disabled="busy || !name.trim()">{{ t("addPersonal.create") }}</DialogButton>
+      </DialogFooter>
     </form>
   </ModalDialog>
 </template>

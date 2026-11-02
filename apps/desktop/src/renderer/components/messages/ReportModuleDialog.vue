@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Report a catalog module to Tavora: a reason and an optional note. It needs a sign-in; Tavora keeps who reported
 // only while the report is open, and the developer is told only that the module was reported.
+import { Flag, LogIn } from "@lucide/vue";
 import { computed, ref } from "vue";
-import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
@@ -44,15 +45,16 @@ function signIn() {
 </script>
 
 <template>
-  <ModalDialog :title="t('report.title', { name: moduleName })" :description="t('catalog.reportHint')" testid="report-module-dialog" @close="emit('close')">
-    <div v-if="!signedIn" class="grid gap-3">
+  <ModalDialog :title="t('report.title', { name: moduleName })" :description="t('catalog.reportHint')" :icon="Flag" testid="report-module-dialog" @close="emit('close')">
+    <template v-if="!signedIn">
       <p class="text-sm">{{ t("error.reportSignIn") }}</p>
-      <div class="flex justify-end gap-2">
-        <Button variant="secondary" @click="emit('close')">{{ t("common.cancel") }}</Button>
-        <Button data-testid="report-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</Button>
-      </div>
-    </div>
-    <form v-else class="grid gap-4" @submit.prevent="send">
+      <DialogFooter>
+        <DialogButton close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton :icon="LogIn" data-testid="report-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</DialogButton>
+      </DialogFooter>
+    </template>
+    <form v-else class="contents" @submit.prevent="send">
+      <div class="grid gap-4">
       <RadioGroup v-model="reason" class="gap-2" :aria-label="t('report.reason')" data-testid="report-reason">
         <Label v-for="option in MODULE_REPORT_REASONS" :key="option" class="font-normal">
           <RadioGroupItem :value="option" :data-testid="`report-reason-${option}`" />
@@ -64,10 +66,11 @@ function signIn() {
         <p class="text-muted-foreground text-right text-xs" :class="tooLong && 'text-destructive'">{{ noteLength }} / {{ MAX_NOTE_LENGTH }}</p>
       </div>
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="report-error">{{ error }}</p>
-      <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" @click="emit('close')">{{ t("common.cancel") }}</Button>
-        <Button type="submit" :disabled="busy || tooLong" data-testid="report-send">{{ t("catalog.reportSend") }}</Button>
       </div>
+      <DialogFooter>
+        <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton type="submit" :icon="Flag" :loading="busy" :disabled="busy || tooLong" data-testid="report-send">{{ t("catalog.reportSend") }}</DialogButton>
+      </DialogFooter>
     </form>
   </ModalDialog>
 </template>

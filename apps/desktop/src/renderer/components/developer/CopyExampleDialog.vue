@@ -3,8 +3,9 @@
 // project goes, in one of their project folders or a folder they pick next. Main copies the sources into
 // a new folder named after the module, gives it its own id, and loads it from there (main/example-copy.ts). Settings
 // then shows Project folders, where the new project waits for its first build.
+import { Copy } from "@lucide/vue";
 import { computed, ref } from "vue";
-import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
@@ -53,8 +54,9 @@ async function submit() {
 </script>
 
 <template>
-  <ModalDialog :title="t('examples.copyTitle', { name: example?.name ?? '' })" :description="t('examples.copyText')" testid="copy-example-dialog" @close="dialog = null">
-    <form class="grid gap-4" @submit.prevent="submit">
+  <ModalDialog :title="t('examples.copyTitle', { name: example?.name ?? '' })" :description="t('examples.copyText')" :icon="Copy" testid="copy-example-dialog" @close="dialog = null">
+    <form class="contents" @submit.prevent="submit">
+      <div class="grid gap-4">
       <div class="grid gap-2">
         <Label for="copy-example-name" class="text-muted-foreground font-normal">{{ t("examples.nameLabel") }}</Label>
         <Input
@@ -82,10 +84,11 @@ async function submit() {
         <p v-else class="text-sm">{{ t("examples.pickNext") }}</p>
       </div>
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="copy-example-error">{{ error }}</p>
-      <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" @click="dialog = null">{{ t("common.cancel") }}</Button>
-        <Button type="submit" data-testid="copy-example-submit" :disabled="busy || !name.trim()">{{ t("examples.copyButton") }}</Button>
       </div>
+      <DialogFooter>
+        <DialogButton type="button" close @click="dialog = null">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton type="submit" :icon="Copy" :loading="busy" data-testid="copy-example-submit" :disabled="busy || !name.trim()">{{ t("examples.copyButton") }}</DialogButton>
+      </DialogFooter>
     </form>
   </ModalDialog>
 </template>

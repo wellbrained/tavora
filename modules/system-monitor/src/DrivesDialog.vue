@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // Which drives to watch. Lists every drive Tavora sees (internal, removable, network) plus any picked drive that is
 // unplugged now. Saving stores the user's choice, so a drive that shows up later is not added on its own.
-import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { HardDrive, Save } from "@lucide/vue";
+import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 import type { SystemInfo } from "@tavora/sdk";
 import { computed, ref } from "vue";
 import { size } from "./format";
@@ -42,11 +42,8 @@ const detail = (row: (typeof rows.value)[number]) =>
 
 <template>
   <Dialog :open="true" @update:open="(open: boolean) => !open && emit('cancel')">
-    <DialogContent class="top-[8vh] max-h-[84vh] translate-y-0 gap-3 overflow-y-auto sm:max-w-[380px]" data-testid="drives-dialog" :show-close-button="false">
-      <DialogHeader>
-        <DialogTitle class="text-lg">{{ t("drives.dialogTitle") }}</DialogTitle>
-        <DialogDescription>{{ t("drives.dialogText") }}</DialogDescription>
-      </DialogHeader>
+    <DialogContent class="top-[8vh] max-h-[84vh] translate-y-0 overflow-y-auto sm:max-w-[380px]" data-testid="drives-dialog">
+      <DialogHeader :icon="HardDrive" :title="t('drives.dialogTitle')" :description="t('drives.dialogText')" />
       <ul class="flex flex-col">
         <li v-for="row in rows" :key="row.id">
           <label class="hover:bg-accent flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5" :data-testid="`pick-${row.id}`">
@@ -57,10 +54,10 @@ const detail = (row: (typeof rows.value)[number]) =>
           </label>
         </li>
       </ul>
-      <div class="flex justify-end gap-2">
-        <Button type="button" variant="secondary" @click="emit('cancel')">{{ t("drives.cancel") }}</Button>
-        <Button type="button" data-testid="drives-save" @click="emit('save', chosen())">{{ t("drives.save") }}</Button>
-      </div>
+      <DialogFooter>
+        <DialogButton type="button" close @click="emit('cancel')">{{ t("drives.cancel") }}</DialogButton>
+        <DialogButton type="button" :icon="Save" data-testid="drives-save" @click="emit('save', chosen())">{{ t("drives.save") }}</DialogButton>
+      </DialogFooter>
     </DialogContent>
   </Dialog>
 </template>

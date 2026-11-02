@@ -8,7 +8,7 @@
 // Save as… keeps the result under a name; the Values tab taps it into a sum, where it counts with its number now.
 // The history and the values are one document of the workspace, so every panel of the workspace shares them and sees
 // another panel's change at once.
-import { BookmarkPlus, Check, Copy, Delete, Ellipsis, History, Pencil, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
+import { BookmarkPlus, Check, Copy, Delete, Ellipsis, Eraser, History, Pencil, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage, SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
@@ -494,6 +494,8 @@ onBeforeUnmount(() => {
       :title="t('history.clearTitle')"
       :description="t('history.clearText')"
       :confirm="t('history.clear')"
+      :icon="Eraser"
+      :confirm-icon="Eraser"
       :cancel="t('cancel')"
       @confirm="confirmClear"
       @cancel="clearing = false"
@@ -503,6 +505,8 @@ onBeforeUnmount(() => {
       :title="t('values.deleteTitle', { name: deleting })"
       :description="t('values.deleteText')"
       :confirm="t('values.delete')"
+      :icon="Trash2"
+      :confirm-icon="Trash2"
       :cancel="t('cancel')"
       @confirm="confirmDelete"
       @cancel="deleting = null"

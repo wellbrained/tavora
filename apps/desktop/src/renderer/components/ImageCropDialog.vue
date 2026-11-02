@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Minus, Plus } from "@lucide/vue";
+import { Crop, Minus, Plus, Save } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Slider } from "@tavora/official-ui/components/ui/slider";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 import { useFloating } from "../host";
 import { t } from "../i18n";
 
@@ -163,11 +163,8 @@ function onOpenChange(value: boolean) {
 
 <template>
   <Dialog :open="open" @update:open="onOpenChange">
-    <DialogContent class="gap-5 sm:max-w-[360px]" data-testid="crop-dialog" :show-close-button="false">
-      <div class="flex flex-col gap-1">
-        <DialogTitle class="text-lg">{{ title }}</DialogTitle>
-        <DialogDescription>{{ round ? t("crop.help.round") : t("crop.help.square") }}</DialogDescription>
-      </div>
+    <DialogContent class="sm:max-w-[360px]" data-testid="crop-dialog">
+      <DialogHeader :icon="Crop" :title="title" :description="round ? t('crop.help.round') : t('crop.help.square')" />
 
       <div
         class="bg-muted focus-visible:ring-ring relative mx-auto touch-none overflow-hidden rounded-lg select-none focus-visible:ring-2 focus-visible:outline-none"
@@ -229,10 +226,10 @@ function onOpenChange(value: boolean) {
         </Button>
       </div>
 
-      <div class="flex justify-end gap-2">
-        <Button variant="secondary" data-testid="crop-cancel" @click="emit('cancel')">{{ t("common.cancel") }}</Button>
-        <Button data-testid="crop-save" :disabled="!image || saving" @click="save">{{ t("common.save") }}</Button>
-      </div>
+      <DialogFooter>
+        <DialogButton close data-testid="crop-cancel" @click="emit('cancel')">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton :icon="Save" :loading="saving" data-testid="crop-save" :disabled="!image || saving" @click="save">{{ t("common.save") }}</DialogButton>
+      </DialogFooter>
     </DialogContent>
   </Dialog>
 </template>

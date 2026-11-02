@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bold, ChevronDown, ChevronRight, CircleHelp, Copy, Folder, FolderInput, FolderPlus, Italic, Loader2, MoreHorizontal, Pencil, Pin, Plus, Settings, Trash2, Undo2 } from "@lucide/vue";
+import { Bold, ChevronDown, ChevronRight, CircleHelp, Copy, Download, Folder, FolderInput, FolderPlus, Italic, Loader2, MoreHorizontal, Pencil, Pin, Plus, Save, Settings, Share2, SlidersHorizontal, Trash2, Undo2, Upload } from "@lucide/vue";
 import { ConfirmDialog, NameDialog, Tooltip, TooltipRows, type TooltipRow } from "@tavora/official-ui";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -29,6 +29,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
 import { toast } from "@tavora/official-ui/components/ui/toast";
@@ -65,6 +66,10 @@ const pickSave = () => (pickedSave.value = "Waystone Camp");
 const sharing = ref(false);
 const savingConfirm = ref(false);
 const working = ref(false);
+/** The three footer patterns: an action and Close, Cancel and an action, only Done. */
+const exporting = ref(false);
+const importing = ref(false);
+const tidying = ref(false);
 /** A pretend save: locks the dialog for a moment, then runs `done`. */
 function slow(done: () => void) {
   working.value = true;
@@ -290,7 +295,7 @@ function slow(done: () => void) {
         </Specimen>
       </DemoSection>
 
-<DemoSection v-if="visible.has('dialogs')" id="dialogs" :title="title('dialogs')" description="420 px wide, a title and one sentence, buttons bottom right with the action last.">
+<DemoSection v-if="visible.has('dialogs')" id="dialogs" :title="title('dialogs')" description="420 px wide: an icon, a title and one short line, then the buttons bottom right with the action last. A button that does something may have an icon; Cancel, Close and Done never do.">
         <Specimen label="Dialogs">
           <Button variant="secondary" :disabled="off" @click="renaming = true">Rename…</Button>
           <Button variant="secondary" :disabled="off" @click="renamingBusy = true">Rename with a slow save…</Button>
@@ -299,9 +304,49 @@ function slow(done: () => void) {
           <Button variant="secondary" :disabled="off" @click="savingConfirm = true">Slow confirm…</Button>
           <Button variant="secondary" class="text-destructive" :disabled="off" @click="confirming = true">Delete group…</Button>
         </Specimen>
+        <Specimen label="Footer buttons: an action may have an icon, a button that only closes never does">
+          <Button variant="secondary" :disabled="off" @click="exporting = true">Action + Close…</Button>
+          <Button variant="secondary" :disabled="off" @click="importing = true">Cancel + action…</Button>
+          <Button variant="secondary" :disabled="off" @click="tidying = true">Only Done…</Button>
+        </Specimen>
+        <Dialog v-model:open="exporting">
+          <DialogContent class="top-[12vh] translate-y-0 sm:max-w-[420px]">
+            <DialogHeader :icon="Share2" title="Share this note" description="Pick how it leaves Tavora." />
+            <div class="flex flex-col gap-2">
+              <Input model-value="https://tavora.app/n/waystone" readonly aria-label="Link" />
+            </div>
+            <DialogFooter>
+              <DialogButton close>Close</DialogButton>
+              <DialogButton :icon="Copy" @click="toast({ title: 'Link copied' })">Copy link</DialogButton>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog v-model:open="importing">
+          <DialogContent class="top-[12vh] translate-y-0 sm:max-w-[420px]">
+            <DialogHeader :icon="Download" title="Import a build" description="Paste a build link or open a saved file." />
+            <Input placeholder="https://" aria-label="Build link" />
+            <DialogFooter>
+              <DialogButton close @click="importing = false">Cancel</DialogButton>
+              <DialogButton :icon="Upload" @click="importing = false">Import</DialogButton>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog v-model:open="tidying">
+          <DialogContent class="top-[12vh] translate-y-0 sm:max-w-[420px]">
+            <DialogHeader :icon="SlidersHorizontal" title="Settings" description="Changes save as you make them." />
+            <div class="text-muted-foreground flex flex-col gap-1 text-sm">
+              <span>Nothing to confirm here.</span>
+            </div>
+            <DialogFooter>
+              <DialogButton close @click="tidying = false">Done</DialogButton>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <NameDialog
           v-model:open="renaming"
           title="Rename note"
+          :icon="Pencil"
+          :confirm-icon="Save"
           description="The new name shows in the list and the panel tab."
           label="Name"
           :value="name"
@@ -336,6 +381,7 @@ function slow(done: () => void) {
           v-model:open="sharing"
           tone="default"
           title="Share this note?"
+          :icon="Share2"
           description="Anyone with the link can read it."
           confirm="Share"
           @confirm="sharing = false"
@@ -354,6 +400,7 @@ function slow(done: () => void) {
           title="Delete “Act 2”?"
           description="Its 4 to-dos are removed for good. This cannot be undone."
           confirm="Delete group"
+          :confirm-icon="Trash2"
           @confirm="confirming = false"
           @cancel="confirming = false"
         />

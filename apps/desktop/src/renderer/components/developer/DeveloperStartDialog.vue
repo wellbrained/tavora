@@ -4,9 +4,10 @@
 // needed for Publish; the prefix and the project can wait, so they have Later. A step moves on by itself
 // once the account says it is done. Opened from Settings > Development, and by Publish or Save as zip
 // while publishing isn't set up (`then`: the module whose Publish opened it, reviewed at the end).
-import { CircleCheck, Copy, FolderCode } from "@lucide/vue";
+import { CircleCheck, Code, Copy, FolderCode } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { HostAction } from "../../../shared/host-api";
 import { suggestPrefix } from "../../../shared/id-prefix";
@@ -124,7 +125,7 @@ watch(
 </script>
 
 <template>
-  <ModalDialog :title="step === 'key' && keys?.recoveryKey ? t('devStart.recovery.title') : t(TITLES[step ?? 'done'])" class="sm:max-w-[480px]" testid="developer-start" @close="close">
+  <ModalDialog :title="step === 'key' && keys?.recoveryKey ? t('devStart.recovery.title') : t(TITLES[step ?? 'done'])" class="sm:max-w-[480px]" :icon="Code" testid="developer-start" @close="close">
     <p v-if="step" class="text-muted-foreground -mt-2 text-xs" data-testid="developer-start-step">{{ t("devStart.step", { step: number, count: COUNT }) }}</p>
 
     <template v-if="step === 'sign-in'">
@@ -176,9 +177,9 @@ watch(
     <template v-else-if="step === 'prefix'">
       <p class="text-muted-foreground text-sm">{{ t("devStart.prefix.text") }}</p>
       <PrefixClaim :initial="suggested" />
-      <div class="flex justify-end">
-        <Button variant="ghost" data-testid="developer-start-later" @click="skip">{{ t("devStart.later") }}</Button>
-      </div>
+      <DialogFooter>
+        <DialogButton close variant="ghost" data-testid="developer-start-later" @click="skip">{{ t("devStart.later") }}</DialogButton>
+      </DialogFooter>
     </template>
 
     <template v-else-if="step === 'project'">
@@ -187,19 +188,19 @@ watch(
         <code class="bg-muted rounded px-2 py-1 font-mono text-sm select-all">npm create @tavora/module</code>
         <Button variant="ghost" size="sm" data-testid="developer-start-copy" @click="copyCommand"><Copy :stroke-width="1.5" /> {{ t("devStart.project.copy") }}</Button>
       </div>
-      <div class="flex justify-between gap-2">
-        <Button variant="secondary" data-testid="developer-start-folder" @click="act({ type: 'add-development-folder' })">
-          <FolderCode :stroke-width="1.5" /> {{ t("devStart.project.pick") }}
-        </Button>
-        <Button variant="ghost" data-testid="developer-start-later" @click="skip">{{ t("devStart.later") }}</Button>
-      </div>
+      <DialogFooter>
+        <DialogButton variant="secondary" :icon="FolderCode" class="mr-auto" data-testid="developer-start-folder" @click="act({ type: 'add-development-folder' })">
+          {{ t("devStart.project.pick") }}
+        </DialogButton>
+        <DialogButton close variant="ghost" data-testid="developer-start-later" @click="skip">{{ t("devStart.later") }}</DialogButton>
+      </DialogFooter>
     </template>
 
     <template v-else>
       <p class="text-muted-foreground text-sm" data-testid="developer-start-done">{{ t("devStart.done.text") }}</p>
-      <div class="flex justify-end">
-        <Button data-testid="developer-start-finish" @click="finish">{{ t("devStart.done.button") }}</Button>
-      </div>
+      <DialogFooter>
+        <DialogButton close data-testid="developer-start-finish" @click="finish">{{ t("devStart.done.button") }}</DialogButton>
+      </DialogFooter>
     </template>
   </ModalDialog>
 </template>

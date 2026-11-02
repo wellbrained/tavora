@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { CircleHelp, TriangleAlert } from "@lucide/vue";
 import { ref } from "vue";
-import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { dialog, type ConfirmRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
@@ -18,19 +19,20 @@ async function run() {
 </script>
 
 <template>
-  <ModalDialog :title="request.title" :description="request.message" testid="confirm" @close="dialog = null">
+  <ModalDialog :title="request.title" :description="request.message" :icon="request.danger ? TriangleAlert : CircleHelp" testid="confirm" @close="dialog = null">
     <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
-    <div class="flex justify-end gap-2">
-      <Button type="button" variant="secondary" autofocus @click="dialog = null">{{ t("common.cancel") }}</Button>
-      <Button
+    <DialogFooter>
+      <DialogButton type="button" close autofocus @click="dialog = null">{{ t("common.cancel") }}</DialogButton>
+      <DialogButton
         type="button"
         :variant="request.danger ? 'destructive' : 'default'"
+        :loading="busy"
         data-testid="confirm-submit"
         :disabled="busy"
         @click="run"
       >
         {{ request.confirm }}
-      </Button>
-    </div>
+      </DialogButton>
+    </DialogFooter>
   </ModalDialog>
 </template>

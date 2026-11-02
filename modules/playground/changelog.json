@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.6",
+    "date": "2026-11-01",
+    "notes": [
+      "Dialogs have an icon box, a short line under the title, a Close button in the corner and footer buttons that carry an icon only when they do something. New specimens show it."
+    ]
+  },
+  {
     "version": "0.1.5",
     "date": "2026-11-01",
     "notes": [

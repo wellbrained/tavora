@@ -4,7 +4,7 @@
 // 30 days (only once there is one), and the traffic of this week and the last months when the user turned it on. Tavora's connection watcher does the
 // pinging (it runs even while this panel is hidden, so drops are logged); this only shows what it found. A red notice
 // tops the section while the connection is down. No sound and no system notification, by design.
-import { ArrowDown, ArrowUp } from "@lucide/vue";
+import { ArrowDown, ArrowUp, Trash2 } from "@lucide/vue";
 import { cn, ConfirmDialog } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
@@ -190,6 +190,6 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
       </div>
     </template>
 
-    <ConfirmDialog v-if="confirming" :title="t('drops.clearTitle')" :description="t('drops.clearText')" :confirm="t('drops.clearConfirm')" @confirm="clear" @cancel="confirming = false" />
+    <ConfirmDialog v-if="confirming" :title="t('drops.clearTitle')" :description="t('drops.clearText')" :confirm="t('drops.clearConfirm')" :icon="Trash2" :confirm-icon="Trash2" @confirm="clear" @cancel="confirming = false" />
   </div>
 </template>

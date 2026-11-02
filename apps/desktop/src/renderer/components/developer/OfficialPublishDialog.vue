@@ -3,9 +3,10 @@
 // clean copy of origin/main, the steps show with the current one marked; then the preview shows exactly what Sign and
 // upload sends: version, patch notes, files and the commit. The key is the one saved on this PC, or a key file picked
 // on Sign and upload (with "Remember the key on this PC"). Cancel stops the build or throws the preview away.
-import { Check, ChevronRight, Circle, KeyRound, Loader } from "@lucide/vue";
+import { Check, ChevronRight, Circle, KeyRound, Loader, Upload } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
 import type { OfficialPublishStep } from "../../../shared/host-api";
@@ -58,7 +59,7 @@ function cancel() {
 </script>
 
 <template>
-  <ModalDialog v-if="run" :title="title" class="sm:max-w-[520px]" testid="official-publish-dialog" @close="cancel">
+  <ModalDialog v-if="run" :title="title" :icon="Upload" class="sm:max-w-[520px]" testid="official-publish-dialog" @close="cancel">
     <!-- Building, signing or uploading: the steps, with the current one marked. -->
     <template v-if="!preview || uploading">
       <ol class="flex flex-col gap-2 text-sm" :aria-label="title" data-testid="official-publish-steps">
@@ -70,9 +71,9 @@ function cancel() {
         </li>
       </ol>
       <p v-if="!preview" class="text-muted-foreground text-sm">{{ t("officialPublish.dialog.hint") }}</p>
-      <div class="flex justify-end">
-        <Button variant="secondary" :disabled="uploading" data-testid="official-publish-cancel" @click="cancel">{{ t("common.cancel") }}</Button>
-      </div>
+      <DialogFooter>
+        <DialogButton close :disabled="uploading" data-testid="official-publish-cancel" @click="cancel">{{ t("common.cancel") }}</DialogButton>
+      </DialogFooter>
     </template>
 
     <!-- The preview: exactly what Sign and upload sends. -->
@@ -124,12 +125,12 @@ function cancel() {
         </span>
       </label>
 
-      <div class="flex items-center justify-end gap-2">
-        <Button variant="secondary" :disabled="busy" data-testid="official-publish-cancel" @click="cancel">{{ t("common.cancel") }}</Button>
-        <Button :disabled="busy" data-testid="official-publish-upload" @click="upload">
+      <DialogFooter>
+        <DialogButton close :disabled="busy" data-testid="official-publish-cancel" @click="cancel">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton :icon="Upload" :disabled="busy" data-testid="official-publish-upload" @click="upload">
           {{ key.saved ? t("officialPublish.preview.upload") : t("officialPublish.preview.chooseKey") }}
-        </Button>
-      </div>
+        </DialogButton>
+      </DialogFooter>
     </template>
   </ModalDialog>
 </template>

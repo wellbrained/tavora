@@ -2,8 +2,10 @@
 // Asked right after signing in on a PC without the account's recovery key, when the account has one:
 // confirm on a PC that has it (PairingAsk), or type it in. Later leaves it for Settings > Account, where
 // the cloud copy and publishing ask again when they need it. Closes once this PC has the key.
+import { KeyRound } from "@lucide/vue";
 import { ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { act, developerKeys, dialog, showToast } from "../../host";
 import { t } from "../../i18n";
@@ -38,7 +40,8 @@ watch(
 </script>
 
 <template>
-  <ModalDialog :title="t('recoveryAsk.title')" :description="t('recoveryAsk.text')" class="sm:max-w-[480px]" testid="recovery-ask" @close="close">
+  <ModalDialog :title="t('recoveryAsk.title')" :description="t('recoveryAsk.text')" class="sm:max-w-[480px]" :icon="KeyRound" testid="recovery-ask" @close="close">
+    <div class="flex flex-col gap-4">
     <PairingAsk />
     <form class="flex flex-col gap-2" @submit.prevent="keyText.trim() && enter()">
       <span class="text-muted-foreground text-sm">{{ t("pairing.typeKey") }}</span>
@@ -47,8 +50,9 @@ watch(
         <Button type="submit" :disabled="busy || !keyText.trim()" data-testid="recovery-ask-submit">{{ t("cloudCopy.askKey.continue") }}</Button>
       </div>
     </form>
-    <div class="flex justify-end">
-      <Button variant="ghost" data-testid="recovery-ask-later" @click="close">{{ t("devStart.later") }}</Button>
     </div>
+    <DialogFooter>
+      <DialogButton close variant="ghost" data-testid="recovery-ask-later" @click="close">{{ t("devStart.later") }}</DialogButton>
+    </DialogFooter>
   </ModalDialog>
 </template>

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.8",
+    "date": "2026-11-01",
+    "notes": [
+      "The drives, connection and apps dialogs have an icon, a short line under the title and a Close button in the corner."
+    ]
+  },
+  {
     "version": "0.1.7",
     "date": "2026-11-01",
     "notes": [
