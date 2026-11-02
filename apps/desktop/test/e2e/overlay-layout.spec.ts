@@ -317,7 +317,7 @@ test("A game's overlay is deleted from the page and the rail with Undo that brin
     await page.evaluate(({ id }) => (window as unknown as Host).tavoraHost.layout.send({ type: "set", ids: [id], change: { opacity: 50, mode: "toggle" } }), { id });
     await expect.poll(async () => (await state(page)).items[0]!.opacity).toBe(50);
     const before = (await state(page)).items[0]!;
-    const toast = page.getByTestId("undo-toast").last();
+    const toast = hostToast(page, "undo-toast").last();
     const deleteButton = page.getByTestId("layout-delete-setup");
     const games = async () => (await state(page)).games.map((game) => game.id);
 
@@ -357,11 +357,11 @@ test("A game's overlay is deleted from the page and the rail with Undo that brin
     await page.evaluate((gameId) => (window as unknown as Host).tavoraHost.layout.send({ type: "game", gameId }), "$everywhere");
     await expect.poll(async () => (await state(page)).gameId).toBe("$everywhere");
     // The toast of the earlier delete may still be leaving.
-    await expect(page.getByTestId("undo-toast")).toHaveCount(1);
+    await expect(hostToast(page, "undo-toast")).toHaveCount(1);
     await page.getByTestId("undo").last().click();
     await expect.poll(games).toEqual(["$everywhere", "$all", GAME]);
     expect((await state(page)).gameId).toBe("$everywhere");
-    await expect(page.getByTestId("undo-toast")).toHaveCount(0);
+    await expect(hostToast(page, "undo-toast")).toHaveCount(0);
     await page.keyboard.press("Control+z");
     await page.keyboard.press("Control+z");
     await page.evaluate((gameId) => (window as unknown as Host).tavoraHost.layout.send({ type: "game", gameId }), GAME);
