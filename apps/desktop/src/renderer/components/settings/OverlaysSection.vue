@@ -6,6 +6,7 @@
 // links and the modules that may show them. Then the hotkeys set for module actions, in every workspace. Lists open
 // in place, so the page stays short.
 import { computed, reactive, ref, watch } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
@@ -187,7 +188,7 @@ watch(
       :highlighted="highlight === 'overlay-links'"
       testid="overlay-links"
     >
-      <ul v-if="streaming.links.length" class="flex flex-col" data-testid="overlay-link-list">
+      <AnimatedList tag="ul" v-if="streaming.links.length" class="flex flex-col" data-testid="overlay-link-list">
         <li v-for="link in streaming.links" :key="`${link.workspaceId}:${link.moduleId}:${link.key}`" class="flex items-center gap-3 border-b border-dashed py-2 last:border-b-0">
           <span class="flex min-w-0 flex-1 flex-col">
             <span class="truncate font-medium">{{ link.moduleName }} · {{ link.key }}</span>
@@ -195,7 +196,7 @@ watch(
           </span>
           <Button variant="secondary" size="sm" :aria-label="t('overlays.previewLabel', { name: link.moduleName })" :data-testid="`link-preview-${link.key}`" @click="previewLink(link)">{{ t("overlays.preview") }}</Button>
         </li>
-      </ul>
+      </AnimatedList>
       <div class="py-2">
         <Button variant="danger" size="sm" data-testid="overlay-links-reset" @click="resetLinks">{{ t("streaming.links.reset") }}</Button>
       </div>

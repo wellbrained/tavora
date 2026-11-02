@@ -4,6 +4,7 @@
 // publisher key (host.ts), so publishing from Tavora needs nothing more here; the keys (Export, Lost
 // it?, Unlink), key files, link codes and publish tokens are folded away under Publisher keys and CI.
 import { computed, ref, watch } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { AccountPublishToken, HostAction } from "../../../shared/host-api";
@@ -195,7 +196,7 @@ function removeToken(token: AccountPublishToken) {
         <p v-if="keys?.status === 'ask'" class="text-muted-foreground mt-2 text-sm" data-testid="developer-keys-ask">{{ t("account.developer.askKey") }}</p>
         <p v-else-if="keys?.status === 'offline'" class="text-muted-foreground mt-2 text-sm">{{ t("account.developer.offline") }}</p>
         <p v-if="!rows.length" class="text-muted-foreground mt-2 text-sm" data-testid="developer-keys-none">{{ t("account.developer.noKept") }}</p>
-        <ul v-else class="mt-2" data-testid="developer-keys-list">
+        <AnimatedList tag="ul" v-else class="mt-2" data-testid="developer-keys-list">
           <li v-for="row in rows" :key="row.fingerprint" :data-testid="`developer-key-${row.fingerprint}`">
             <div class="flex min-h-10 items-center gap-3">
               <span class="flex-1 font-mono text-sm" :title="row.fingerprint">{{ row.fingerprint.slice(0, 16) }}…</span>
@@ -231,7 +232,7 @@ function removeToken(token: AccountPublishToken) {
               </div>
             </div>
           </li>
-        </ul>
+        </AnimatedList>
         <div class="mt-3 flex flex-wrap items-center gap-2">
           <!-- Saving the name makes the first key; this is for an account left without one. -->
           <Button v-if="canKeep && !rows.length" variant="secondary" :disabled="busy || !view?.developer" data-testid="developer-key-create" @click="makeKey">{{ t("account.developer.create") }}</Button>
@@ -262,7 +263,7 @@ function removeToken(token: AccountPublishToken) {
           </div>
         </div>
         <p v-if="!view?.publishTokens?.length" class="text-muted-foreground mt-2 text-sm" data-testid="publish-tokens-none">{{ t("account.developer.noTokens") }}</p>
-        <ul v-else class="mt-2" data-testid="publish-tokens-list">
+        <AnimatedList tag="ul" v-else class="mt-2" data-testid="publish-tokens-list">
           <li v-for="token in view.publishTokens" :key="token.id" class="flex min-h-10 items-center gap-3" :data-testid="`publish-token-${token.id}`">
             <span class="min-w-0 flex-1 truncate text-sm">{{ token.name }}</span>
             <span class="text-muted-foreground text-sm">
@@ -276,7 +277,7 @@ function removeToken(token: AccountPublishToken) {
               {{ t("account.developer.tokenRemove") }}
             </Button>
           </li>
-        </ul>
+        </AnimatedList>
         <form class="mt-3 flex items-center gap-2" @submit.prevent="makeToken">
           <Input v-model="tokenName" class="max-w-60" maxlength="40" autocomplete="off" spellcheck="false" :aria-label="t('account.developer.tokenName')" :placeholder="t('account.developer.tokenPlaceholder')" data-testid="publish-token-name" />
           <Button type="submit" variant="secondary" :disabled="busy || !view?.developer || !tokenName.trim()" data-testid="publish-token-create">{{ t("account.developer.tokenCreate") }}</Button>

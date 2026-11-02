@@ -9,6 +9,7 @@ import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { usePageMotion } from "@tavora/official-ui/components/ui/motion";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Tabs, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import { rank } from "@/lib/search";
@@ -69,6 +70,18 @@ let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 let jumps = 0;
 /** The page's scrolling area, back at the top for every new page. */
 const scroller = ref<HTMLElement | null>(null);
+/** Holds the open page. A page picked with the pointer fades in and settles from 4px below; the old one is gone at once. */
+const pageHolder = ref<HTMLElement | null>(null);
+const { play: playPage } = usePageMotion(pageHolder);
+/** Settings opening to its page moves as the dialog does, not on top of it. */
+let opening = false;
+watch(
+  section,
+  () => {
+    if (!opening) playPage();
+  },
+  { flush: "post" },
+);
 
 // Settings opens where it was asked to: its first page, or a setting found with Ctrl+K.
 watch(settingsOpen, (open) => {
@@ -78,7 +91,8 @@ watch(settingsOpen, (open) => {
   }
   query.value = "";
   searchUsed.value = false;
-  void show(settingsTarget.value.section, settingsTarget.value.setting);
+  opening = true;
+  void show(settingsTarget.value.section, settingsTarget.value.setting).then(() => (opening = false));
   void refreshReleaseStatuses();
 });
 // Asked again while open (e.g. Ctrl+/ over Settings): go there.
@@ -308,22 +322,24 @@ function onSearchKey(event: KeyboardEvent) {
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
-              <GeneralSection v-if="section === 'general'" :highlight="highlight" />
-              <AppearanceSection v-else-if="section === 'appearance'" :highlight="highlight" />
-              <GamesSection v-else-if="section === 'games'" :highlight="highlight" @show="show" />
-              <ShortcutsSection v-else-if="section === 'shortcuts'" />
-              <ModulesSection v-else-if="section === 'modules'" :highlight="highlight" />
-              <ConnectionsSection v-else-if="section === 'connections'" :highlight="highlight" />
-              <OverlaysSection v-else-if="section === 'overlays'" :highlight="highlight" />
-              <BrowserSection v-else-if="section === 'browser'" :highlight="highlight" />
-              <DevelopmentSection v-else-if="section === 'development'" :highlight="highlight" @show="show" />
-              <DevFoldersSection v-else-if="section === 'dev-folders'" :highlight="highlight" />
-              <DevPublishingSection v-else-if="section === 'dev-publishing'" :highlight="highlight" />
-              <DevHelpSection v-else-if="section === 'dev-help'" :highlight="highlight" />
-              <AboutSection v-else-if="section === 'about'" :highlight="highlight" @patch-notes="show('patch-notes')" />
-              <WorkspacesSection v-else-if="section === 'workspaces'" :highlight="highlight" />
-              <TrashSection v-else-if="section === 'trash'" :highlight="highlight" />
-              <PatchNotesSection v-else-if="section === 'patch-notes'" />
+              <div ref="pageHolder" data-testid="settings-page">
+                <GeneralSection v-if="section === 'general'" :highlight="highlight" />
+                <AppearanceSection v-else-if="section === 'appearance'" :highlight="highlight" />
+                <GamesSection v-else-if="section === 'games'" :highlight="highlight" @show="show" />
+                <ShortcutsSection v-else-if="section === 'shortcuts'" />
+                <ModulesSection v-else-if="section === 'modules'" :highlight="highlight" />
+                <ConnectionsSection v-else-if="section === 'connections'" :highlight="highlight" />
+                <OverlaysSection v-else-if="section === 'overlays'" :highlight="highlight" />
+                <BrowserSection v-else-if="section === 'browser'" :highlight="highlight" />
+                <DevelopmentSection v-else-if="section === 'development'" :highlight="highlight" @show="show" />
+                <DevFoldersSection v-else-if="section === 'dev-folders'" :highlight="highlight" />
+                <DevPublishingSection v-else-if="section === 'dev-publishing'" :highlight="highlight" />
+                <DevHelpSection v-else-if="section === 'dev-help'" :highlight="highlight" />
+                <AboutSection v-else-if="section === 'about'" :highlight="highlight" @patch-notes="show('patch-notes')" />
+                <WorkspacesSection v-else-if="section === 'workspaces'" :highlight="highlight" />
+                <TrashSection v-else-if="section === 'trash'" :highlight="highlight" />
+                <PatchNotesSection v-else-if="section === 'patch-notes'" />
+              </div>
             </template>
           </div>
         </div>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Settings > Games > Trash: removed workspaces, kept for 30 days. Tick several to restore or delete them together.
 import { computed, ref, watch } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { cn } from "@/lib/utils";
@@ -85,7 +86,7 @@ function deleteNow(workspaceId: string, name: string) {
           {{ t("settings.trash.deleteSelected") }}
         </Button>
       </div>
-      <ul>
+      <AnimatedList tag="ul">
         <li
           v-for="entry in library.trash"
           :key="entry.workspace.id"
@@ -117,7 +118,7 @@ function deleteNow(workspaceId: string, name: string) {
             {{ t("settings.trash.deleteNow") }}
           </Button>
         </li>
-      </ul>
+      </AnimatedList>
     </template>
   </SettingGroup>
 </template>

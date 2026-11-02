@@ -5,6 +5,7 @@
 // the developer closes folders and drags them into their own order. Publishing is on Your modules.
 import { CircleAlert, FolderCode, FolderOpen, GripVertical, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
 import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
@@ -64,6 +65,10 @@ function moveTo(folder: string, index: number) {
 
 /** The folders slide aside for a dragged one and settle into place when it is dropped (the keys move them at once). */
 const list = ref<HTMLElement | null>(null);
+/** The list is a component; the reorder motion works on its element. */
+function setList(component: unknown) {
+  list.value = (component as { $el?: HTMLElement } | null)?.$el ?? null;
+}
 const reorder = useReorderMotion(list);
 /** While a folder is dragged, the gap that opens is the drop place, so the line is for reduced motion only. */
 const sliding = computed(() => dragging.value !== null && !reducedMotion());
@@ -143,7 +148,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
         <FolderCode :stroke-width="1.5" /> {{ t("settings.devFolders.add") }}
       </Button>
     </SettingRow>
-    <ul v-if="folders.length" ref="list" class="flex flex-col" :aria-label="t('settings.development-folders.label')" data-testid="development-folders">
+    <AnimatedList :ref="setList" tag="ul" v-if="folders.length" class="flex flex-col" :aria-label="t('settings.development-folders.label')" data-testid="development-folders">
       <Collapsible
         v-for="(entry, index) in folders"
         :key="entry.folder"
@@ -231,7 +236,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
           </ul>
         </CollapsibleContent>
       </Collapsible>
-    </ul>
+    </AnimatedList>
   </SettingGroup>
 
 </template>

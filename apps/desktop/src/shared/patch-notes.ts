@@ -28,6 +28,34 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.60",
+    date: "2026-11-02",
+    title: "Changes show right away",
+    notes: [
+      "Changes show right away; if saving fails, they're put back. This covers email copies of messages, how users reach you about a module, a device's name, and ratings, reviews and replies in the catalog.",
+    ],
+    prs: [
+      { number: 619, title: "Act first, confirm later: changes show at once, put back if saving fails" },
+    ],
+    tags: ["accounts", "catalog", "publishing", "settings", "ui-kit"],
+  },
+  {
+    version: "0.23.59",
+    date: "2026-11-02",
+    title: "Switches and tabs slide",
+    notes: [
+      "The highlight on switches and tabs slides to what you pick.",
+      "Picking with the arrow keys jumps right away.",
+      "The list of a picker opens out of its button like the other menus.",
+      "Fades on buttons and controls are quicker and smoother.",
+      "Toasts finish moving a little sooner.",
+    ],
+    prs: [
+      { number: 616, title: "Motion: sliding highlight for segmented control and tabs, picker grows from its button, quicker default fades" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.23.58",
     date: "2026-11-02",
     title: "Installs, dragging and numbers feel better",

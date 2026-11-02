@@ -1,9 +1,23 @@
 [
   {
-    "version": "0.1.16",
+    "version": "0.1.18",
     "date": "2026-11-02",
     "notes": [
       "Small update to the shared look; nothing changes for you here."
+    ]
+  },
+  {
+    "version": "0.1.17",
+    "date": "2026-11-02",
+    "notes": [
+      "Lists, dialogs and settings pages move smoothly."
+    ]
+  },
+  {
+    "version": "0.1.16",
+    "date": "2026-11-02",
+    "notes": [
+      "Switches and tabs slide to what you pick."
     ]
   },
   {
