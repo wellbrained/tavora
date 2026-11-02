@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.16",
+    "date": "2026-11-02",
+    "notes": [
+      "The Foundations pages are filled: colours, text, spacing and corners, motion and writing, each with live examples and their code.",
+      "Show disabled sits in the page header for everyone; the Developer tools switch is gone."
+    ]
+  },
+  {
     "version": "0.1.15",
     "date": "2026-11-02",
     "notes": [

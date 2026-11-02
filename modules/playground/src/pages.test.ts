@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { THEME_TOKENS } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
 import { de, en } from "./locales";
 import { GROUPS, OLD_TABS, PAGES, isPageId, keys, matches, searchText } from "./pages";
@@ -7,6 +9,10 @@ import { shownSource } from "./shown-source";
 const files = Object.keys(import.meta.glob("./examples/*/*.vue")).map((path) => path.slice("./examples/".length, -".vue".length));
 const sources = import.meta.glob<string>("./examples/*/*.vue", { eager: true, query: "?raw", import: "default" });
 const listed = PAGES.flatMap((page) => page.examples.map((name) => `${page.id}/${name}`));
+// The kit's own stylesheets, which the Foundations examples describe (read as text; a CSS import would be processed).
+const kitCss = (name: string) => readFileSync(new URL(`../../shared/src/${name}.css`, import.meta.url), "utf8");
+const themeCss = kitCss("theme");
+const motionCss = kitCss("motion");
 const lookup = (catalog: Record<string, string>) => (key: string) => catalog[key];
 
 describe("pages", () => {
@@ -72,6 +78,47 @@ describe("examples", () => {
       const props = source.match(/defineProps<([^>]*)>/)?.[1];
       if (props) expect(props, path).toBe("{ disabled?: boolean }");
     }
+  });
+});
+
+describe("foundations", () => {
+  const source = (file: string) => sources[`./examples/${file}.vue`] ?? "";
+
+  it("fill every page of the group, so none says it is coming", () => {
+    for (const page of PAGES.filter((entry) => entry.group === "foundations")) expect(page.examples.length, page.id).toBeGreaterThan(0);
+  });
+
+  it("show every theme token on the Colours page, once", () => {
+    for (const token of THEME_TOKENS) expect(source("colours/Tokens").split(`["${token}", `).length - 1, token).toBe(1);
+  });
+
+  it("keep the labels inside examples in both languages, and leave none unused", () => {
+    const used = new Set<string>();
+    for (const code of Object.values(sources)) for (const match of code.matchAll(/"(demo\.[\w.]+)"/g)) used.add(match[1]!);
+    for (const catalog of [en, de] as Record<string, string>[]) for (const key of used) expect(catalog[key], key).toBeTruthy();
+    expect([...used].sort()).toEqual(Object.keys(en).filter((key) => key.startsWith("demo.")).sort());
+  });
+
+  it("list text sizes that the theme has", () => {
+    const sizes = [...source("text/TypeScale").matchAll(/cls: "text-(\w+)[^"]*", size: "(\d+) \/ (\d+) px"/g)];
+    expect(sizes.map((match) => match[1])).toEqual(["xl", "lg", "base", "sm", "xs"]);
+    for (const [, name, size, line] of sizes) {
+      expect(themeCss, name).toContain(`--text-${name}: ${size}px;`);
+      expect(themeCss, name).toContain(`--text-${name}--line-height: ${line}px;`);
+    }
+  });
+
+  it("list spacing steps that sit on the 4 px grid", () => {
+    const steps = [...source("spacing/Scale").matchAll(/px: (\d+), box: "size-(\d+)", tailwind: "(\d+)"/g)];
+    expect(steps.map((match) => Number(match[1]))).toEqual([4, 8, 12, 16, 24, 32]);
+    for (const [, px, size, tailwind] of steps) {
+      expect(Number(size), px).toBe(Number(tailwind));
+      expect(Number(px), px).toBe(Number(tailwind) * 4);
+    }
+  });
+
+  it("only demo curves and times that motion.css defines", () => {
+    for (const token of [...source("motion/Curves").matchAll(/"(--ease-[\w-]+)"/g), ...source("motion/Durations").matchAll(/"(--(?:ease|duration)-[\w-]+)"/g)]) expect(motionCss, token[1]).toContain(`${token[1]}:`);
   });
 });
 

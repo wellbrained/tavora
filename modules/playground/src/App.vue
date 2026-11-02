@@ -2,8 +2,7 @@
 // UI Playground: every control the official modules share, one page per kind, each example live with its own code.
 // This file is the shell: the side menu with its search (a page picker when the panel is narrow), the fixed page
 // header and the page. The examples live in examples/<page>/<Name>.vue and are listed in pages.ts.
-// Saved: the open page and Show disabled with the panel; Developer tools for the whole module (storage.app).
-import { Wrench } from "@lucide/vue";
+// Saved with the panel: the open page and Show disabled (a switch on the right of the header, always there).
 import { connectModule } from "@tavora/official-ui";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { usePageMotion } from "@tavora/official-ui/components/ui/motion";
@@ -12,7 +11,6 @@ import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { SearchInput } from "@tavora/official-ui/components/ui/search-input";
 import { SwitchField } from "@tavora/official-ui/components/ui/switch";
 import { Toaster } from "@tavora/official-ui/components/ui/toast";
-import { Toggle } from "@tavora/official-ui/components/ui/toggle";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { exampleFor } from "./examples";
@@ -25,17 +23,15 @@ interface PanelState {
   page: PageId;
   disabled: boolean;
 }
-const DEV_TOOLS_KEY = "devTools";
+/** The key of the Developer tools switch of 0.1.15, which is gone; its value is deleted once. */
+const OLD_DEV_TOOLS_KEY = "devTools";
 /** Below this width the menu and a page don't fit side by side; the menu becomes a picker on top. */
 const NARROW = "(max-width: 679px)";
 
 const sdk = shallowRef<TavoraSDK | null>(null);
 const page = ref<PageId>(FIRST_PAGE);
 const query = ref("");
-const devTools = ref(false);
 const showDisabled = ref(false);
-/** Developer tools off puts every helper back, so nothing stays switched on out of sight. */
-const off = computed(() => devTools.value && showDisabled.value);
 const narrow = ref(false);
 const cleanup: (() => void)[] = [];
 
@@ -104,12 +100,6 @@ function setShowDisabled(value: boolean) {
   showDisabled.value = value;
   savePanel();
 }
-function setDevTools(value: boolean) {
-  devTools.value = value;
-  void sdk.value?.storage.app.set(DEV_TOOLS_KEY, value).catch(() => undefined);
-  // Turning the tools off puts their helpers back, so none of them comes back on by itself next time.
-  if (!value && showDisabled.value) setShowDisabled(false);
-}
 
 onMounted(async () => {
   const media = matchMedia(NARROW);
@@ -124,15 +114,12 @@ onMounted(async () => {
     if (!connected) throw connection.error;
     setLanguage(connection.language);
     cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
-    const [state, tools] = await Promise.all([
-      connected.panel.getState<Partial<PanelState> & { group?: string }>(),
-      connected.storage.app.get<boolean>(DEV_TOOLS_KEY).catch(() => null),
-    ]);
+    const state = await connected.panel.getState<Partial<PanelState> & { group?: string }>();
     // A panel saved before the side menu has its tab instead of a page: it opens that tab's first page.
     const saved = isPageId(state?.page) ? state.page : typeof state?.group === "string" ? OLD_TABS[state.group] : undefined;
     showDisabled.value = state?.disabled === true;
-    devTools.value = tools === true;
     sdk.value = connected;
+    void connected.storage.app.delete(OLD_DEV_TOOLS_KEY).catch(() => undefined);
     if (saved && !pickedEarly) page.value = saved;
   } catch {
     // Not inside Tavora.
@@ -152,34 +139,26 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
         <NavList v-if="menu.length" :model-value="page" :label="t('app.pages')" :groups="menu" @select="open" />
         <p v-else class="text-muted-foreground px-3 py-2 text-sm" data-testid="no-match">{{ t("app.noMatch", { query: query.trim() }) }}</p>
       </div>
-      <div class="flex flex-none flex-col gap-3 border-t p-4">
-        <SwitchField :model-value="devTools" :label="t('app.devTools')" :description="t('app.devToolsHint')" data-testid="dev-tools" @update:model-value="setDevTools" />
-        <SwitchField v-if="devTools" :model-value="showDisabled" :label="t('app.showDisabled')" :description="t('app.showDisabledHint')" data-testid="disable-all" @update:model-value="setShowDisabled" />
-      </div>
     </aside>
 
     <div class="bg-card flex min-w-0 flex-1 flex-col">
-      <header class="flex h-14 flex-none items-center gap-2.5 border-b" :class="narrow ? 'px-4' : 'px-6'">
-        <template v-if="narrow">
-          <Picker :model-value="page" :options="pickerOptions" :label="t('app.page')" :search="t('app.search')" :empty="t('app.noPage')" class="max-w-none min-w-0 flex-1" testid="page-picker" @update:model-value="open" />
-          <Toggle :model-value="devTools" :label="t('app.devTools')" data-testid="dev-tools-toggle" @update:model-value="setDevTools"><Wrench class="size-4" :stroke-width="1.5" /></Toggle>
-        </template>
-        <!-- Where you are: the group, then the page. Room on the right for a link to the docs later. -->
-        <div v-else class="flex min-w-0 items-center gap-2.5 text-base">
+      <header class="flex h-14 flex-none items-center gap-3 border-b" :class="narrow ? 'px-4' : 'px-6'">
+        <Picker v-if="narrow" :model-value="page" :options="pickerOptions" :label="t('app.page')" :search="t('app.search')" :empty="t('app.noPage')" class="max-w-none min-w-0 flex-1" testid="page-picker" @update:model-value="open" />
+        <!-- Where you are: the group, then the page. -->
+        <div v-else class="flex min-w-0 flex-1 items-center gap-2.5 text-base">
           <span class="text-muted-foreground flex-none font-medium">{{ text(keys.group(current.group)) }}</span>
           <span class="text-muted-foreground/60 flex-none" aria-hidden="true">/</span>
           <h1 class="truncate font-semibold" data-testid="page-title">{{ text(keys.page(current.id)) }}</h1>
         </div>
+        <!-- Always there, in the same place on every page, so turning it on or off moves nothing. The title is its tooltip. -->
+        <SwitchField :model-value="showDisabled" :label="t('app.showDisabled')" :title="t('app.showDisabledHint')" class="flex-none items-center [&_label]:whitespace-nowrap" data-testid="disable-all" @update:model-value="setShowDisabled" />
       </header>
-      <div v-if="narrow && devTools" class="flex-none border-b px-4 py-3">
-        <SwitchField :model-value="showDisabled" :label="t('app.showDisabled')" :description="t('app.showDisabledHint')" data-testid="disable-all" @update:model-value="setShowDisabled" />
-      </div>
 
       <main ref="scroller" class="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] [scrollbar-width:thin]" data-testid="playground-main">
         <div ref="holder">
           <div :id="current.id" :key="current.id" class="flex flex-col gap-6 py-6" :class="narrow ? 'px-4' : 'px-6'" :data-testid="`page-${current.id}`">
             <p class="text-muted-foreground text-sm">{{ text(keys.intro(current.id)) }}</p>
-            <ExampleBox v-for="item in examples" :key="item.name" :name="item.name" :example="item.example" :title="item.title" :note="item.note" :rule="item.rule" :disabled="off" />
+            <ExampleBox v-for="item in examples" :key="item.name" :name="item.name" :example="item.example" :title="item.title" :note="item.note" :rule="item.rule" :disabled="showDisabled" />
             <EmptyState v-if="!examples.length" :title="t('app.comingTitle')" :description="t('app.coming')" class="rounded-lg border" />
           </div>
         </div>
