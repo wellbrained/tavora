@@ -4,15 +4,13 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const name = ref("Waystone");
 </script>
 
 <template>
   <Popover>
     <PopoverTrigger as-child>
-      <Button variant="secondary" :disabled="disabled">Rename</Button>
+      <Button variant="secondary">Rename</Button>
     </PopoverTrigger>
     <PopoverContent align="start" class="flex flex-col gap-2">
       <Input v-model="name" aria-label="Name" />

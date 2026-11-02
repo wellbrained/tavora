@@ -51,32 +51,17 @@ describe("examples", () => {
     for (const [path, source] of Object.entries(sources)) expect(source, path).toContain("<template>");
   });
 
-  it("show their own file, less only the disabled prop line and one blank line", () => {
-    const PROP = "defineProps<{ disabled?: boolean }>();";
+  it("show their own file, exactly, with plain line ends and no empty lines at its ends", () => {
     for (const [path, source] of Object.entries(sources)) {
-      const file = source.replace(/\r\n/g, "\n").trim().split("\n");
-      const shown = shownSource(source).replace(/\r\n/g, "\n").split("\n");
-      expect(shown.join("\n"), path).not.toContain("defineProps");
-      if (!file.includes(PROP)) {
-        expect(shown, path).toEqual(file);
-        continue;
-      }
-      // Take the shown lines out of the file in order; what is left over is the prop line and one blank line.
-      const left: string[] = [];
-      let at = 0;
-      for (const line of file) {
-        if (at < shown.length && shown[at] === line) at++;
-        else left.push(line);
-      }
-      expect(at, path).toBe(shown.length);
-      expect([...left].sort(), path).toEqual(["", PROP].sort());
+      expect(shownSource(source), path).toBe(source.replace(/\r\n/g, "\n").trim());
+      expect(shownSource(source), path).not.toContain("\r");
     }
   });
 
-  it("take Show disabled as an optional prop named disabled", () => {
+  it("know nothing about Show disabled: no props, no disabled binding to a prop", () => {
     for (const [path, source] of Object.entries(sources)) {
-      const props = source.match(/defineProps<([^>]*)>/)?.[1];
-      if (props) expect(props, path).toBe("{ disabled?: boolean }");
+      expect(source, path).not.toContain("defineProps");
+      expect(source, path).not.toMatch(/:disabled="disabled\b/);
     }
   });
 });

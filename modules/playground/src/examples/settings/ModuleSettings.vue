@@ -9,8 +9,6 @@ import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Toggle } from "@tavora/official-ui/components/ui/toggle";
 import { computed, ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const DEFAULTS = { size: "m", bold: true, italic: false, color: "#ffffff", opacity: 70, overlay: true, autoplay: false };
 const look = ref({ ...DEFAULTS });
 const savedAt = ref<number>();
@@ -49,7 +47,7 @@ function reset() {
       <SettingsPage v-if="page === 'overlay'" title="Over your game" description="What shows over your game while a song plays.">
         <template #main>
           <SettingsMainBar label="Show over your game" hint="Changes apply at once.">
-            <Switch :model-value="look.overlay" aria-label="Show over your game" :disabled="disabled" @update:model-value="set('overlay', $event)" />
+            <Switch :model-value="look.overlay" aria-label="Show over your game" @update:model-value="set('overlay', $event)" />
           </SettingsMainBar>
         </template>
         <template #preview>
@@ -62,24 +60,24 @@ function reset() {
         </template>
         <SettingsSection title="Text">
           <SettingsRow label="Title">
-            <SegmentedControl :model-value="look.size" label="Title size" :options="SIZES" class="w-full min-w-0 [&>*]:flex-1 [&>*]:px-0" :disabled="disabled" @update:model-value="set('size', $event)" />
-            <Toggle :model-value="look.bold" label="Bold" class="font-bold" :disabled="disabled" @update:model-value="set('bold', $event)">B</Toggle>
-            <Toggle :model-value="look.italic" label="Italic" class="font-serif italic" :disabled="disabled" @update:model-value="set('italic', $event)">I</Toggle>
+            <SegmentedControl :model-value="look.size" label="Title size" :options="SIZES" class="w-full min-w-0 [&>*]:flex-1 [&>*]:px-0" @update:model-value="set('size', $event)" />
+            <Toggle :model-value="look.bold" label="Bold" class="font-bold" @update:model-value="set('bold', $event)">B</Toggle>
+            <Toggle :model-value="look.italic" label="Italic" class="font-serif italic" @update:model-value="set('italic', $event)">I</Toggle>
           </SettingsRow>
           <SettingsRow label="Text colour">
-            <ColorPicker :model-value="look.color" :colors="COLORS" label="Text colour" :columns="7" allow-custom :disabled="disabled" @update:model-value="set('color', $event)" />
+            <ColorPicker :model-value="look.color" :colors="COLORS" label="Text colour" :columns="7" allow-custom @update:model-value="set('color', $event)" />
           </SettingsRow>
         </SettingsSection>
         <SettingsSection title="Background">
           <SettingsRow label="Opacity">
-            <SliderField :model-value="look.opacity" :min="0" :max="100" :step="5" unit="%" label="Opacity" :disabled="disabled" @update:model-value="set('opacity', $event)" />
+            <SliderField :model-value="look.opacity" :min="0" :max="100" :step="5" unit="%" label="Opacity" @update:model-value="set('opacity', $event)" />
           </SettingsRow>
         </SettingsSection>
       </SettingsPage>
       <SettingsPage v-else :title="page === 'player' ? 'Player' : page === 'hotkeys' ? 'Hotkeys' : 'On stream'" description="A page with only rows.">
         <SettingsSection>
           <SettingsRow label="Play when Tavora starts" hint="Picks up where you left off.">
-            <Switch :model-value="look.autoplay" aria-label="Play when Tavora starts" :disabled="disabled" @update:model-value="set('autoplay', $event)" />
+            <Switch :model-value="look.autoplay" aria-label="Play when Tavora starts" @update:model-value="set('autoplay', $event)" />
           </SettingsRow>
         </SettingsSection>
       </SettingsPage>

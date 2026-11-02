@@ -6,8 +6,6 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { type MapPin, TileMap, type TileSource } from "@tavora/official-ui/components/ui/tile-map";
 import { computed, ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const WORLD = 4096;
 const TILE = 256;
 
@@ -140,13 +138,13 @@ function toggleDone() {
     </TileMap>
     <p class="text-muted-foreground text-xs">{{ picked ? `Picked ${picked.label}.` : "Click a pin to pick it; a group with a number zooms in." }}</p>
     <div class="flex flex-wrap gap-2">
-      <Button size="xs" variant="secondary" :disabled="disabled || !selected || !kindOf.has(selected)" @click="toggleDone">Tick off the picked pin (done)</Button>
-      <Button size="xs" variant="secondary" :disabled="disabled" @click="highlightEggs = !highlightEggs">{{ highlightEggs ? "Stop highlighting" : "Highlight the eggs (highlight)" }}</Button>
-      <Button size="xs" variant="secondary" :disabled="disabled" @click="map?.showPins(eggs)">Show all eggs (showPins)</Button>
-      <Button size="xs" variant="secondary" :disabled="disabled" @click="showDots = !showDots">{{ showDots ? "Hide the spawn dots" : "Show the spawn dots" }}</Button>
-      <Button size="xs" variant="secondary" :disabled="disabled" @click="showFog = !showFog">{{ showFog ? "Hide the fog (layer)" : "Show a fog (layer)" }}</Button>
-      <Button size="xs" variant="secondary" :disabled="disabled" @click="saved = map?.camera ? { ...map.camera } : undefined">Save this view (camera)</Button>
-      <Button size="xs" variant="secondary" :disabled="disabled || !saved" @click="saved && map?.setCamera(saved)">Back to saved view (setCamera)</Button>
+      <Button size="xs" variant="secondary" :disabled="!selected || !kindOf.has(selected)" @click="toggleDone">Tick off the picked pin (done)</Button>
+      <Button size="xs" variant="secondary" @click="highlightEggs = !highlightEggs">{{ highlightEggs ? "Stop highlighting" : "Highlight the eggs (highlight)" }}</Button>
+      <Button size="xs" variant="secondary" @click="map?.showPins(eggs)">Show all eggs (showPins)</Button>
+      <Button size="xs" variant="secondary" @click="showDots = !showDots">{{ showDots ? "Hide the spawn dots" : "Show the spawn dots" }}</Button>
+      <Button size="xs" variant="secondary" @click="showFog = !showFog">{{ showFog ? "Hide the fog (layer)" : "Show a fog (layer)" }}</Button>
+      <Button size="xs" variant="secondary" @click="saved = map?.camera ? { ...map.camera } : undefined">Save this view (camera)</Button>
+      <Button size="xs" variant="secondary" :disabled="!saved" @click="saved && map?.setCamera(saved)">Back to saved view (setCamera)</Button>
     </div>
   </div>
 </template>

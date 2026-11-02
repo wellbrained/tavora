@@ -3,8 +3,6 @@
 import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const game = ref("satisfactory");
 const language = ref("en");
 const LANGUAGES = [
@@ -21,13 +19,12 @@ const LANGUAGES = [
     <Picker
       v-model="game"
       label="Game"
-      :disabled="disabled"
       :options="[
         { value: 'satisfactory', label: 'Satisfactory' },
         { value: 'enshrouded', label: 'Enshrouded' },
         { value: 'poe2', label: 'Path of Exile 2' },
       ]"
     />
-    <Picker v-model="language" label="Language" search="Search languages" empty="No language found" :disabled="disabled" :options="LANGUAGES" />
+    <Picker v-model="language" label="Language" search="Search languages" empty="No language found" :options="LANGUAGES" />
   </div>
 </template>

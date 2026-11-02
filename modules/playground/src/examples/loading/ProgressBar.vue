@@ -3,8 +3,6 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const progress = ref(45);
 const bump = (by: number) => (progress.value = Math.min(100, Math.max(0, progress.value + by)));
 </script>
@@ -16,8 +14,8 @@ const bump = (by: number) => (progress.value = Math.min(100, Math.max(0, progres
       <span class="text-muted-foreground text-xs tabular-nums">{{ progress }}%</span>
     </div>
     <div class="flex gap-2">
-      <Button size="xs" variant="secondary" :disabled="disabled" @click="bump(-15)">Less</Button>
-      <Button size="xs" variant="secondary" :disabled="disabled" @click="bump(15)">More</Button>
+      <Button size="xs" variant="secondary" @click="bump(-15)">Less</Button>
+      <Button size="xs" variant="secondary" @click="bump(15)">More</Button>
     </div>
   </div>
 </template>

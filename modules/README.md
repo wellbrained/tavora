@@ -48,7 +48,7 @@ or starts another kit. Restyle a control with classes where it's used.
 Need a control or variant the kit doesn't have? Talk it through with the
 maintainer first. Once it's agreed, it goes in `shared/src/components` and gets
 an example in the playground: one small file in `playground/src/examples/<page>/`, listed in
-`playground/src/pages.ts` with its name in `locales.ts`.
+`playground/src/pages.ts` with its name in `locales.ts`. An example is plain code a module author could write: no props or helpers of the playground in it (Show disabled switches it off from outside).
 
 ## Game modules live outside this repo
 

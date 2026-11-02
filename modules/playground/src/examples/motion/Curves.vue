@@ -6,8 +6,6 @@ import { reactive } from "vue";
 import { t } from "../../i18n";
 import type { TextKey } from "../../locales";
 
-defineProps<{ disabled?: boolean }>();
-
 const CURVES: { token: string; use: TextKey }[] = [
   { token: "--ease-out-strong", use: "demo.motion.outStrong" },
   { token: "--ease-in-out-strong", use: "demo.motion.inOutStrong" },
@@ -31,7 +29,7 @@ const moved = reactive<Record<string, boolean>>({});
           data-testid="demo-dot"
         />
       </div>
-      <Button variant="ghost" size="xs" :disabled="disabled" @click="moved[curve.token] = !moved[curve.token]"><Play :stroke-width="1.5" /> {{ t("demo.motion.play") }}</Button>
+      <Button variant="ghost" size="xs" @click="moved[curve.token] = !moved[curve.token]"><Play :stroke-width="1.5" /> {{ t("demo.motion.play") }}</Button>
     </div>
   </div>
 </template>

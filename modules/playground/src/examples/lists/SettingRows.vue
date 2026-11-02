@@ -4,8 +4,6 @@ import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const showFinished = ref(true);
 const density = ref<"tight" | "normal">("normal");
 </script>
@@ -17,7 +15,7 @@ const density = ref<"tight" | "normal">("normal");
         <span class="text-sm font-medium">Show finished</span>
         <span class="text-muted-foreground text-xs">Keep done to-dos in the list.</span>
       </div>
-      <Switch v-model="showFinished" aria-label="Show finished" :disabled="disabled" />
+      <Switch v-model="showFinished" aria-label="Show finished" />
     </div>
     <Separator />
     <div class="flex items-center gap-6 py-3">
@@ -28,7 +26,6 @@ const density = ref<"tight" | "normal">("normal");
       <SegmentedControl
         v-model="density"
         label="Density"
-        :disabled="disabled"
         :options="[
           { value: 'tight', label: 'Tight' },
           { value: 'normal', label: 'Normal' },

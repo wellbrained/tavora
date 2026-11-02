@@ -7,8 +7,6 @@ import { onMounted, reactive, ref } from "vue";
 import { t } from "../../i18n";
 import type { TextKey } from "../../locales";
 
-defineProps<{ disabled?: boolean }>();
-
 const DURATIONS: { token: string; ease: string; use: TextKey }[] = [
   { token: "--duration-pop-out", ease: "--ease-out-strong", use: "demo.motion.popOut" },
   { token: "--duration-tooltip", ease: "--ease-out-strong", use: "demo.motion.tooltip" },
@@ -46,7 +44,7 @@ onMounted(() => {
           data-testid="demo-dot"
         />
       </div>
-      <Button variant="ghost" size="xs" :disabled="disabled" @click="moved[row.token] = !moved[row.token]"><Play :stroke-width="1.5" /> {{ t("demo.motion.play") }}</Button>
+      <Button variant="ghost" size="xs" @click="moved[row.token] = !moved[row.token]"><Play :stroke-width="1.5" /> {{ t("demo.motion.play") }}</Button>
     </div>
   </div>
 </template>

@@ -520,7 +520,20 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   const box = `document.querySelector('[data-testid="example-Combobox"]')`;
   await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').click()`);
   await expect.poll(() => inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]')?.textContent ?? ""`)).toContain("<ComboboxInput");
-  // The playground's own disabled prop is left out of the code shown.
+  // The code is coloured by what it is, and has its own column of line numbers: muted, not selectable, with a thin line before the code.
+  const kinds = await inModule<string[]>(app, PLAYGROUND, `[...new Set([...${box}.querySelectorAll('[data-testid="example-code"] [data-kind]')].map((el) => el.dataset.kind))]`);
+  expect(kinds).toEqual(expect.arrayContaining(["keyword", "string", "tag", "component", "attr", "punct"]));
+  const numbers = `${box}.querySelector('[data-testid="line-numbers"]')`;
+  expect(await inModule(app, PLAYGROUND, `${numbers}.children.length === ${box}.querySelector('[data-testid="example-code"]').textContent.split("\\n").length`)).toBe(true);
+  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${numbers}).userSelect`)).toBe("none");
+  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${numbers}).borderRightWidth`)).toBe("1px");
+  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${numbers}).textAlign`)).toBe("right");
+  // Copy puts the plain source on the clipboard, without the numbers.
+  await inModule(app, PLAYGROUND, `(() => { window.__copied = ""; Object.defineProperty(navigator, "clipboard", { value: { writeText: async (text) => { window.__copied = text; } }, configurable: true }); })()`);
+  await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="copy-code"]').click()`);
+  await expect.poll(() => inModule<string>(app, PLAYGROUND, `window.__copied`)).toBe(await inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]').textContent`));
+  expect(await inModule<string>(app, PLAYGROUND, `window.__copied`)).toContain("<ComboboxInput");
+  // The code shown is the example's whole file: no prop of the playground's in it.
   expect(await inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]').textContent`)).not.toContain("defineProps");
   expect(await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').getAttribute("aria-expanded")`)).toBe("true");
   await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').click()`);
@@ -529,7 +542,7 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   // There is no Developer tools switch any more; Show disabled is a switch in the page header, off at first.
   expect(await inModule(app, PLAYGROUND, `!document.querySelector('[data-testid^="dev-tools"]')`)).toBe(true);
   const header = `${q("disable-all")}.closest("header")`;
-  const buttonsOff = (expected: boolean) => inModule(app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] button')].every((el) => el.disabled === ${expected})`);
+  const buttonsOff = (expected: boolean) => inModule(app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] button')].every((el) => el.matches(":disabled") === ${expected})`);
   expect(await inModule(app, PLAYGROUND, `!!${header}`)).toBe(true);
   expect(await inModule(app, PLAYGROUND, `${q("disable-all")}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("false");
   expect(await inModule(app, PLAYGROUND, `(() => { const el = ${q("disable-all")}.closest("[title],[data-tavora-tooltip]"); return el.title || el.dataset.tavoraTooltip; })()`)).toContain("how it looks when it can't be used");
@@ -540,6 +553,9 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   await click(app, PLAYGROUND, `[data-testid="disable-all"] [role="switch"]`);
   await expect.poll(() => buttonsOff(true)).toBe(true);
   expect(await spots()).toBe(beforeSpots);
+  // Every example is switched off from outside (a disabled, inert fieldset around it); none takes a prop for it.
+  expect(await inModule(app, PLAYGROUND, `document.querySelectorAll('[data-slot="example-body"] > fieldset[disabled][inert]').length === document.querySelectorAll('[data-slot="example-body"]').length`)).toBe(true);
+  expect(await inModule(app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] [role="combobox"], [data-slot="example-body"] input')].every((el) => el.matches(":disabled"))`)).toBe(true);
   // Show code still works while the examples are off.
   expect(await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').disabled`)).toBe(false);
   // The panel remembers it with its page: after a restart the switch is still on, on the same page.
@@ -549,10 +565,10 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   await expect(panels(again.page, PLAYGROUND)).toHaveCount(1);
   await ready(again.app, PLAYGROUND, "page-pick");
   await expect.poll(() => inModule(again.app, PLAYGROUND, `${q("disable-all")}.querySelector('[role="switch"]').getAttribute("aria-checked")`)).toBe("true");
-  await expect.poll(() => inModule(again.app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] button')].every((el) => el.disabled)`)).toBe(true);
+  await expect.poll(() => inModule(again.app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] button')].every((el) => el.matches(":disabled"))`)).toBe(true);
   // Turned off again, the controls come back on.
   await click(again.app, PLAYGROUND, `[data-testid="disable-all"] [role="switch"]`);
-  await expect.poll(() => inModule(again.app, PLAYGROUND, `${q("example-Select")}.querySelector('[data-slot="example-body"] button').disabled`)).toBe(false);
+  await expect.poll(() => inModule(again.app, PLAYGROUND, `${q("example-Select")}.querySelector('[data-slot="example-body"] button').matches(":disabled")`)).toBe(false);
   await again.app.close();
 });
 

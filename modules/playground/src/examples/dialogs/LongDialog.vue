@@ -3,13 +3,11 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogButton, DialogFooter, DialogHeader, DialogScrollContent } from "@tavora/official-ui/components/ui/dialog";
 import { ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const reading = ref(false);
 </script>
 
 <template>
-  <Button variant="secondary" :disabled="disabled" data-testid="long-dialog" @click="reading = true">Long dialog…</Button>
+  <Button variant="secondary" data-testid="long-dialog" @click="reading = true">Long dialog…</Button>
   <Dialog v-model:open="reading">
     <DialogScrollContent class="sm:max-w-[420px]">
       <DialogHeader title="Patch notes" description="A long text pushes the dialog past the window; the page scrolls." />

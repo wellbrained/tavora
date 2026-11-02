@@ -1,15 +1,13 @@
 <script setup lang="ts">
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
-
-defineProps<{ disabled?: boolean }>();
 </script>
 
 <template>
   <Tabs default-value="overview">
     <TabsList>
-      <TabsTrigger value="overview" :disabled="disabled">Overview</TabsTrigger>
-      <TabsTrigger value="skills" :disabled="disabled">Skills</TabsTrigger>
-      <TabsTrigger value="gear" :disabled="disabled">Gear</TabsTrigger>
+      <TabsTrigger value="overview">Overview</TabsTrigger>
+      <TabsTrigger value="skills">Skills</TabsTrigger>
+      <TabsTrigger value="gear">Gear</TabsTrigger>
       <TabsTrigger value="locked" disabled>Locked</TabsTrigger>
     </TabsList>
     <TabsContent value="overview" class="text-muted-foreground text-sm">The build at a glance.</TabsContent>

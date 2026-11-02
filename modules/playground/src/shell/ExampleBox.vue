@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // One example on a page: its name (and a note), Show code, the live example, an optional rule from the module rules,
 // and the example's own source when Show code is on. The live part sits on the panel's background, like in a module.
+// With Show disabled on, everything in the live part is switched off from here (see the fieldset below).
 import { Code } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent } from "@tavora/official-ui/components/ui/collapsible";
@@ -29,7 +30,11 @@ const showCode = ref(false);
     </header>
     <!-- An example wider than a narrow panel scrolls sideways here instead of being cut off by the box. -->
     <div class="overflow-x-auto p-4 [scrollbar-width:thin]" data-slot="example-body">
-      <component :is="example.component" v-bind="example.takesDisabled ? { disabled } : {}" />
+      <!-- Show disabled: the examples don't know about it. A disabled fieldset turns every native control off (and gives
+           it the kit's disabled look); inert stops everything else (sliders, rows, drag, right-click) and takes it out of the Tab order. -->
+      <fieldset :disabled="disabled" :inert="disabled" class="contents" :data-off="disabled || undefined">
+        <component :is="example.component" />
+      </fieldset>
     </div>
     <p v-if="rule" class="text-muted-foreground flex gap-2 border-t px-4 py-2.5 text-xs" data-testid="example-rule">
       <span class="text-foreground flex-none font-medium">{{ t("box.rule") }}</span>

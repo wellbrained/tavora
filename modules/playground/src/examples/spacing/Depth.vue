@@ -3,8 +3,6 @@
 // dialogs); the kit's Primary and Secondary buttons also get a faint top light.
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { t } from "../../i18n";
-
-defineProps<{ disabled?: boolean }>();
 </script>
 
 <template>
@@ -19,8 +17,8 @@ defineProps<{ disabled?: boolean }>();
     </figure>
     <figure class="flex flex-col gap-2">
       <div class="flex h-20 items-center justify-center gap-2">
-        <Button :disabled="disabled">Primary</Button>
-        <Button variant="secondary" :disabled="disabled">Secondary</Button>
+        <Button>Primary</Button>
+        <Button variant="secondary">Secondary</Button>
       </div>
       <figcaption class="text-muted-foreground text-xs"><code class="font-mono">Button</code><br />{{ t("demo.depth.buttons") }}</figcaption>
     </figure>

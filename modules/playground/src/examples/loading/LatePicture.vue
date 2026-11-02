@@ -5,8 +5,6 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { FadeImage } from "@tavora/official-ui/components/ui/fade-image";
 import { onBeforeUnmount, ref } from "vue";
 
-defineProps<{ disabled?: boolean }>();
-
 const PICTURE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAGElEQVR4nGPIq+iZtmALhGSAs4AkA04ZALkyGuGrUrMPAAAAAElFTkSuQmCC";
 const late = ref<string | null>(null);
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -23,6 +21,6 @@ onBeforeUnmount(() => clearTimeout(timer));
   <div class="flex flex-wrap items-center gap-2">
     <FadeImage :src="late" :pending="late === null" class="size-16 rounded-xl" alt="" data-testid="fade-late"><template #fallback><Puzzle class="text-muted-foreground size-6" :stroke-width="1.5" /></template></FadeImage>
     <FadeImage src="missing.png" class="size-16 rounded-xl" alt="" data-testid="fade-failed"><template #fallback><Puzzle class="text-muted-foreground size-6" :stroke-width="1.5" /></template></FadeImage>
-    <Button size="xs" variant="secondary" :disabled="disabled" @click="load">Load again</Button>
+    <Button size="xs" variant="secondary" @click="load">Load again</Button>
   </div>
 </template>
