@@ -388,7 +388,8 @@ test("to-dos: groups, sub-to-dos, editing in place, objectives and finished task
   // Finishing a task un-pins it and offers to undo that.
   await inModule(app, TODOS, `${taskTitled("Defeat Count Geonor")}.querySelector('[data-testid="task-done"]').click()`);
   await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
-  await click(app, TODOS, `[data-testid="undo"]`);
+  // Each change has its own toast now (an earlier one may still show): Undo on the one for this to-do.
+  await inModule(app, TODOS, `[...document.querySelectorAll('[data-testid="undo-toast"]')].findLast((el) => el.innerText.includes("Defeat Count Geonor")).querySelector('[data-testid="undo"]').click()`);
   await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor"]);
   await inModule(app, TODOS, `${taskTitled("Defeat Count Geonor")}.querySelector('[data-testid="task-done"]').click()`);
   await expect.poll(() => taskTitles(app, `[data-testid="objectives"]`)).toEqual(["Find the Ancient Crypt"]);
