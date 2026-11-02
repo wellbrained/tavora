@@ -55,14 +55,26 @@ describe("buildSources", () => {
 });
 
 describe("itemSize", () => {
-  it("is as wide as the name and the value side by side, with the gap between them", () => {
+  it("is as wide as the words and the value side by side", () => {
     const counter = newItem("counter", "c", "Deaths") as Counter;
     counter.value = 10;
     counter.goal = 50;
-    // "10 / 50" at 48 px, "Deaths" at half that, and 0.4 of the value's size between them.
-    expect(itemSize(counter, measure, NOW).width).toBe(Math.ceil(7 * 48 * 0.5 + 6 * 24 * 0.5 + 48 * 0.4));
+    // "Deaths " at half the value's size, then "10 / 50" at 48 px.
+    expect(itemSize(counter, measure, NOW).width).toBe(Math.ceil(7 * 24 * 0.5 + 7 * 48 * 0.5));
     counter.look.showLabel = false;
     expect(itemSize(counter, measure, NOW).width).toBe(Math.ceil(7 * 48 * 0.5));
+  });
+
+  it("follows the text written for the overlay and the sizes of the words and the number", () => {
+    const boss = newItem("countdown", "b", "Boss") as Clock;
+    boss.look.text = "{time} left";
+    // "5:00" at 48 px, " left" at 24 px.
+    expect(itemSize(boss, measure, NOW).width).toBe(Math.ceil(4 * 48 * 0.5 + 5 * 24 * 0.5));
+    boss.look.wordsSize = "xl";
+    boss.look.numberSize = "s";
+    expect(itemSize(boss, measure, NOW)).toEqual({ width: Math.ceil(4 * 48 * 0.6 * 0.5 + 5 * 48 * 0.5), height: Math.ceil(48 * 1.05) });
+    boss.look.text = "";
+    expect(itemSize(boss, measure, NOW).height).toBe(Math.ceil(48 * 0.6 * 1.05));
   });
 
   it("makes room for the whole time of a countdown that has not run, and the last lap under a stopwatch", () => {

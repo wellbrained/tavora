@@ -67,6 +67,7 @@ Some calls need no grant but only work right after the user clicked or pressed a
 - `tavora.overlay.copyLink(key)`: copies an overlay's link for OBS.
 - `tavora.overlay.showOverGame(key)`: shows an overlay over the user's game. It needs no permission, only the click.
 - `tavora.overlay.preview(key)`: opens a preview window of an overlay. It needs no permission, only the click.
+- `tavora.overlay.openPage()`: shows Tavora's Overlay page, where the user arranges the module's overlays. It needs no permission, only the click.
 - `tavora.hotkeys.set(action, target, label)`: opens Tavora's hotkey dialog.
 - `discord.connect`, `discord.allowControl`, joining a voice channel, muting and unmuting.
 

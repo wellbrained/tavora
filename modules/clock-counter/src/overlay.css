@@ -1,6 +1,6 @@
-/* The overlay OBS draws over the game: transparent, nothing but the text, which fills the Browser Source. */
-@import "@fontsource-variable/inter/wght.css";
-@import "@fontsource-variable/jetbrains-mono/wght.css";
+/* The page OBS shows (and the game layer): transparent, nothing but the text, which fills the Browser Source. The text itself is
+   drawn by overlay-view.ts and styled in overlay-view.css, which the settings' preview uses too. */
+@import "./overlay-view.css";
 
 html,
 body {
@@ -8,109 +8,6 @@ body {
   height: 100%;
   overflow: hidden;
   background: transparent;
-}
-
-main {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  height: 100%;
-  padding: 0; /* overlay.ts sets the room around the text */
-  background: transparent;
-  color: var(--color, #fff);
-  font-family: "Inter Variable", system-ui, sans-serif;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.05;
-  white-space: nowrap;
-}
-
-/* Nothing published (yet), or the item was deleted. */
-main[hidden] {
-  display: none;
-}
-
-main[data-font="mono"] {
-  font-family: "JetBrains Mono Variable", ui-monospace, Consolas, monospace;
-}
-
-main[data-font="system"] {
-  font-family: "Segoe UI", system-ui, sans-serif;
-}
-
-main[data-align="left"] {
-  align-items: flex-start;
-  text-align: left;
-}
-main[data-align="center"] {
-  align-items: center;
-  text-align: center;
-}
-main[data-align="right"] {
-  align-items: flex-end;
-  text-align: right;
-}
-
-main[data-outline="true"] {
-  -webkit-text-stroke: 0.04em rgb(0 0 0 / 0.85);
-  paint-order: stroke fill;
-  text-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.6);
-}
-
-/* The name and the value on one line, sitting on a common baseline, one font between them (the item's Font setting). overlay.ts
-   sizes them (the name a share of the value) and sets the gap. */
-.line {
-  display: flex;
-  align-items: baseline;
-  font-family: inherit;
-}
-
-.label {
-  font-family: inherit;
-  font-variant-numeric: normal;
-  font-weight: 600;
-  opacity: 0.9;
-}
-
-.value {
-  font-family: inherit;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-}
-
-.lap {
-  font-weight: 500;
-  opacity: 0.85;
-}
-
-.line,
-.label,
-.value,
-.lap {
-  width: max-content;
-  max-width: none;
-}
-
-.label:empty,
-.lap:empty {
-  display: none;
-}
-
-/* A countdown that reached 0 without a text of its own. */
-main[data-done="flash"] .value {
-  animation: flash 1s steps(2, jump-none) infinite;
-}
-
-@keyframes flash {
-  50% {
-    opacity: 0.25;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  main[data-done="flash"] .value {
-    animation: none;
-  }
 }
 
 /* The live view of a panel shown over the game: one row per clock or counter, the name on the left and the value on the right.
@@ -166,6 +63,7 @@ main[data-done="flash"] .value {
 }
 
 #live .name {
+  color: var(--words, var(--color, #fff));
   min-width: 0;
   overflow: clip;
   font-size: 16px;

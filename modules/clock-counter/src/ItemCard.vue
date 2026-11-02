@@ -4,15 +4,13 @@
 import { Flag, Hash, Hourglass, Minus, Pause, Play, Plus, RotateCcw, Settings, Timer } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
-import { Dialog, DialogContent, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 import { computed, inject } from "vue";
 import { t } from "./i18n";
-import ItemEditor from "./ItemEditor.vue";
 import { goalReached, lapSplits, readClock, sourcesOf, type Item } from "./items";
 import { PANEL } from "./panel";
 import { formatSeconds } from "./time";
 
-const props = defineProps<{ item: Item; editing: boolean }>();
+const props = defineProps<{ item: Item }>();
 const emit = defineEmits<{ toggleEdit: [] }>();
 const panel = inject(PANEL)!;
 
@@ -114,13 +112,5 @@ const startLabel = computed(() => {
         <span>{{ formatSeconds(Math.floor(lap.ms / 1000), format) }}</span>
       </li>
     </ol>
-
-    <!-- Only for a Tavora that can't show the settings over the workspace: a dialog in the middle of the panel. -->
-    <Dialog v-if="editing" :open="true" @update:open="(open: boolean) => !open && emit('toggleEdit')">
-      <DialogContent class="max-h-[calc(100%-2rem)] grid-rows-[auto_minmax(0,1fr)]">
-        <DialogHeader :icon="Settings" :title="name" />
-        <ItemEditor :item="item" @close="emit('toggleEdit')" />
-      </DialogContent>
-    </Dialog>
   </article>
 </template>

@@ -151,6 +151,8 @@ export const en = {
   "ex.fields.Code.note": "Digits only, pasted spaces are fine.",
   "ex.fields.TextArea": "Text area",
   "ex.fields.TextArea.note": "Grows with its text.",
+  "ex.fields.Template": "Text with placeholders",
+  "ex.fields.Template.note": "{time} is marked; {oops} is underlined. The chip adds it at the cursor.",
 
   "ex.checks.Checkbox": "Checkbox",
   "ex.checks.Switch": "Switch",
@@ -281,6 +283,8 @@ export const en = {
   "ex.settings.ModuleSettings": "Settings dialog",
   "ex.settings.ModuleSettings.note": "960 × 680 in the app.",
   "ex.settings.ModuleSettings.rule": "A module's settings page uses ModuleSettings and its parts, not a layout of its own.",
+  "ex.settings.SettingsMenu": "Settings menu",
+  "ex.settings.SettingsMenu.note": "Own pages, then Overlays: Text and Look first, In game and On stream after, with a dot. Build it with settingsMenu.",
 };
 
 export type TextKey = keyof typeof en;
@@ -435,6 +439,8 @@ export const de: Record<TextKey, string> = {
   "ex.fields.Code.note": "Nur Ziffern, eingefügte Leerzeichen sind okay.",
   "ex.fields.TextArea": "Textbereich",
   "ex.fields.TextArea.note": "Wächst mit seinem Text.",
+  "ex.fields.Template": "Text mit Platzhaltern",
+  "ex.fields.Template.note": "{time} ist markiert, {oops} unterstrichen. Der Chip fügt ihn an der Cursorposition ein.",
 
   "ex.checks.Checkbox": "Häkchen",
   "ex.checks.Switch": "Schalter",
@@ -565,4 +571,6 @@ export const de: Record<TextKey, string> = {
   "ex.settings.ModuleSettings": "Einstellungsdialog",
   "ex.settings.ModuleSettings.note": "In der App 960 × 680.",
   "ex.settings.ModuleSettings.rule": "Die Einstellungsseite eines Moduls nutzt ModuleSettings und seine Teile, kein eigenes Layout.",
+  "ex.settings.SettingsMenu": "Einstellungsmenü",
+  "ex.settings.SettingsMenu.note": "Eigene Seiten, dann Overlays: erst Text und Aussehen, danach Im Spiel und Im Stream, mit Punkt. Mit settingsMenu bauen.",
 };

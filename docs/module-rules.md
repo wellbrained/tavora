@@ -67,7 +67,8 @@ classes where you use a control; never copy it.
 | A tooltip for a canvas node or anything without an element to hover | `ZoomTip` with `useZoomTip()`: you pass the box on the pane, the kit tooltip opens beside it | a tooltip at the pointer, own hover box |
 | Small chart | `Sparkline` | |
 | Rating | `StarRating` | |
-| Module settings page | `ModuleSettings` and its parts | own settings layout |
+| Module settings page | `ModuleSettings` and its parts; the menu with `settingsMenu` (own pages, then Overlays: Text, Look, In game, On stream) | own settings layout, own menu order or icons |
+| A one-line text with `{placeholders}` | `TemplateInput` (marks the placeholders it knows; `insert` adds one at the cursor) | an `Input` with a hint about braces |
 | Welcome on first add (optional) | kit parts as in [module-welcome.md](../apps/docs/guide/module-welcome.md) (Palworld is the reference) | a tour, popups over the panel, own frame |
 
 Known gaps (ask before building, then add to the kit): number field with steps, tree, drop zone, scroll area, input

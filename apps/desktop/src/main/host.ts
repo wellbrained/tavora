@@ -3808,6 +3808,10 @@ export class Host {
         overGame: () => this.gameOverlays.keysOf(module, workspace.id),
         setSources: (sources) => this.gameOverlays.setSources(record.instanceId, module.owner, sources),
         preview: async (key) => this.previews.show({ owner: module.owner, moduleId: module.manifest.id, workspaceId: workspace.id, key }),
+        openPage: () => {
+          this.closePanelDialog(record.instanceId);
+          this.showOverlayPage(null);
+        },
       },
       hotkeys: this.streaming.hotkeysFor(module, workspace.id),
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),

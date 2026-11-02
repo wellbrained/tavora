@@ -176,7 +176,7 @@ export interface MemoryHost {
 }
 
 /** Newest Tavora the SDK knows, and the default version of a memory host. */
-export const LATEST_TAVORA = "0.23.71";
+export const LATEST_TAVORA = "0.23.73";
 /** Most panel types one call may name: as many as a manifest may declare (MAX_PANEL_TYPES in @tavora/module-schema). */
 const MAX_PANEL_TYPES = 16;
 
@@ -185,7 +185,7 @@ const SILENT = new Set<CallName>([
   "files.forget", "files.showInFolder", "files.check", "links.open", "ui.tooltip.show", "ui.tooltip.move", "ui.tooltip.hide", "ui.tooltip.close", "ui.showMenu",
   "systemInfo.watch", "systemInfo.clearConnectionLog", "media.watch", "media.control", "discord.connect", "discord.allowControl",
   "discord.subscribe", "discord.unsubscribe", "overlay.resetLink", "overlay.preview", "clipboard.writeImage", "files.pickReadOnly",
-  "files.openJson", "discord.image", "hotkeys.set", "overlay.copyLink", "overlay.showOverGame", "panel.navigated",
+  "files.openJson", "discord.image", "hotkeys.set", "overlay.copyLink", "overlay.showOverGame", "overlay.openPage", "panel.navigated",
 ]);
 const SILENT_ANSWER: Partial<Record<CallName, unknown>> = {
   "files.check": { found: false, reason: "unlinked" },
@@ -972,6 +972,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       setSources: async (sources) => void (await call("overlay.setSources", { sources })),
       onOverGameChange: (fn) => on("overlay.overGameChanged", ({ keys }) => fn(keys)),
       preview: async (key) => void (await call("overlay.preview", { key })),
+      openPage: async () => void (await call("overlay.openPage", undefined)),
       resetLink: async (key) => void (await call("overlay.resetLink", { key })),
     },
     hotkeys: {
