@@ -951,9 +951,13 @@ test("calculator: works out sums from keys and the keyboard, and keeps the last 
   await expect(panels(again.page, CALCULATOR)).toHaveCount(1);
   await ready(again.app, CALCULATOR, "history-item");
   await expect.poll(() => results(again.app)).toEqual(["7,056", "84"]);
+  // Clearing happens at once, with Undo on a toast for a few seconds.
   await click(again.app, CALCULATOR, `[data-testid="clear-history"]`);
-  // Clearing asks first.
-  await click(again.app, CALCULATOR, `[data-testid="confirm-submit"]`);
+  await expect.poll(() => results(again.app)).toEqual([]);
+  await expect.poll(() => inModule(again.app, CALCULATOR, `${q("undo-toast")}?.innerText ?? ""`)).toContain("History cleared");
+  await click(again.app, CALCULATOR, `[data-testid="undo"]`);
+  await expect.poll(() => results(again.app)).toEqual(["7,056", "84"]);
+  await click(again.app, CALCULATOR, `[data-testid="clear-history"]`);
   await expect.poll(() => results(again.app)).toEqual([]);
 
   // The toolbar switches to the Basic keypad and hides the history.

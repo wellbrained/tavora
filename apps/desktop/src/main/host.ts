@@ -35,6 +35,7 @@ import { resolveLanguage, translate, type Language, type MessageKey } from "../s
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
 import { UserError } from "./messages";
+import { UndoGoneError, UndoShelf } from "./undo-shelf";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { popularGames } from "./catalog";
 import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
@@ -60,6 +61,9 @@ import {
   addWorkspace,
   createFolder,
   deleteFolder,
+  placeOf,
+  undeleteFolder,
+  untrashWorkspaces,
   iconFileShared,
   deleteTrashedWorkspace,
   cleanDevelopmentFolders,
@@ -434,6 +438,8 @@ export class Host {
   });
   /** Every open question to the user: link, navigation, game switch, connector, leaderboard, waiting panel dialog and module menu (pending-questions.ts). */
   private readonly questions = new PendingQuestions();
+  /** How to put back what the user deleted a moment ago (a layout, a folder, a workspace), while its toast offers Undo. */
+  private readonly undos = new UndoShelf();
   /** What every browser session is made safe with; built when the first Browser panel opens. */
   private browserHooks: BrowserSessionHooks | undefined;
   /** The Discord connector: Tavora's Discord sign-in and the connection to the Discord app, for modules granted it. */
@@ -2318,11 +2324,8 @@ export class Host {
       "share-icons": (action) => this.shareIcons(action.workspaceIds),
       "share-steam-icons": (action) => this.shareSteamIcons(action.appids),
       "import-steam-games": (action) => this.importSteam(action.games),
-      "trash-workspace": saved((action) => {
-        const wasOpen = this.workspaceId === action.workspaceId;
-        trashWorkspace(this.library, action.workspaceId, new Date());
-        if (wasOpen) this.showScreen("welcome");
-      }),
+      // Answers with the token that puts it back (undo-delete).
+      "trash-workspace": (action) => this.trashWorkspaces([action.workspaceId], true),
       "restore-workspace": saved((action) => restoreWorkspace(this.library, action.workspaceId)),
       "delete-workspace": saved(async (action) => {
         const workspace = deleteTrashedWorkspace(this.library, action.workspaceId);
@@ -2330,11 +2333,7 @@ export class Host {
         await this.deleteWorkspaceData(workspace);
       }),
       // Many at once: workspaces already gone are skipped, so a list the screen showed a moment ago still works.
-      "trash-workspaces": saved((action) => {
-        const live = action.workspaceIds.filter((id) => isLive(this.library, id));
-        for (const id of live) trashWorkspace(this.library, id, new Date());
-        if (this.workspaceId !== null && live.includes(this.workspaceId)) this.showScreen("welcome");
-      }),
+      "trash-workspaces": (action) => this.trashWorkspaces(action.workspaceIds, false),
       "restore-workspaces": saved((action) => {
         for (const id of action.workspaceIds) if (this.library.workspaces[id]?.trashedAt) restoreWorkspace(this.library, id);
       }),
@@ -2354,7 +2353,17 @@ export class Host {
       },
       "rename-folder": saved((action) => renameFolder(this.library, action.folderId, action.name)),
       "set-folder-label": saved((action) => setFolderLabel(this.library, action.folderId, action.label)),
-      "delete-folder": saved((action) => deleteFolder(this.library, action.folderId)),
+      "delete-folder": (action) => {
+        const removed = deleteFolder(this.library, action.folderId);
+        this.saveLibrary();
+        return this.undos.keep(() => {
+          if (!undeleteFolder(this.library, removed)) throw new UndoGoneError();
+          this.saveLibrary();
+        });
+      },
+      // Undo of a delete above (or of a layout's): the token it answered with. Forget: the toast went, the delete stays.
+      "undo-delete": (action) => this.undos.undo(action.token),
+      "undo-forget": (action) => this.undos.forget(action.token),
       "move-folder": saved((action) => moveFolder(this.library, action.folderId, action.index)),
 
       // Settings
@@ -2625,7 +2634,13 @@ export class Host {
       "update-snapshot": (action) => this.workspaces.updateSnapshot(this.currentWorkspaceId(), action.snapshotId),
       "apply-snapshot": (action) => this.applySnapshot(action.snapshotId),
       "rename-snapshot": (action) => this.workspaces.renameSnapshot(this.currentWorkspaceId(), action.snapshotId, action.name),
-      "delete-snapshot": (action) => this.workspaces.deleteSnapshot(this.currentWorkspaceId(), action.snapshotId),
+      // Undo puts it back into the workspace it came from, whichever one is open by then.
+      "delete-snapshot": (action) => {
+        const removed = this.workspaces.deleteSnapshot(this.currentWorkspaceId(), action.snapshotId);
+        return this.undos.keep(() => {
+          if (!this.workspaces.restoreSnapshot(removed)) throw new UndoGoneError();
+        });
+      },
 
       // Browser panels
       "browser-new-tab": (action) => this.openBrowserTab(action.instanceId, null, false),
@@ -2922,6 +2937,27 @@ export class Host {
     if (!module || module.owner !== changed.owner) return;
     const keys = this.gameOverlays.keysOf(module, changed.workspaceId);
     for (const record of this.records(changed.workspaceId)) if (record.moduleId === changed.moduleId) this.moduleView(record.instanceId)?.overGameChanged(keys);
+  }
+
+  /**
+   * Moves workspaces to Trash (those already gone are skipped, so a list the screen showed a moment ago still works) and
+   * answers with the token that takes it back: out of Trash into their places. Undo opens a workspace again only when it
+   * was open and the user is still on the start screen it left them on; one switched to meanwhile stays open.
+   */
+  private trashWorkspaces(ids: readonly string[], strict: boolean): string {
+    const live = strict ? [...ids] : ids.filter((id) => isLive(this.library, id));
+    const places = live.map((id) => placeOf(this.library, id));
+    const now = new Date();
+    for (const id of live) trashWorkspace(this.library, id, now);
+    const wasOpen = this.workspaceId !== null && live.includes(this.workspaceId) ? this.workspaceId : null;
+    if (wasOpen) this.showScreen("welcome");
+    this.saveLibrary();
+    return this.undos.keep(() => {
+      const back = untrashWorkspaces(this.library, places);
+      if (!back.length) throw new UndoGoneError();
+      this.saveLibrary();
+      if (wasOpen && back.includes(wasOpen) && this.screen === "welcome" && this.workspaceId === null) this.openWorkspace(wasOpen);
+    });
   }
 
   private openWorkspace(workspaceId: string): void {

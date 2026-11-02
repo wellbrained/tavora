@@ -805,6 +805,57 @@ describe("selection", () => {
 });
 
 
+// A remove gets a toast with Undo on the page (renderer/components/layout/removal-undo.ts); the view lists the removes
+// that can still be undone, and `undo-removal` takes back exactly one.
+describe("Undo after a remove", () => {
+  it("lists each remove and takes back only the one asked for, even from another setup", () => {
+    const { layout, world } = setup([clock("a"), clock("b"), clock("c", "poe2")]);
+    layout.open("elden");
+    const [a, b] = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "remove", id: a! }, false);
+    layout.handle({ type: "remove", ids: [b!] }, false);
+    const [first, second] = layout.view().removals;
+    expect(layout.view().removals).toEqual([
+      { step: first!.step, count: 1 },
+      { step: second!.step, count: 1 },
+    ]);
+    // The user looks at another game meanwhile; Undo still puts the frame back where it was taken out.
+    layout.handle({ type: "game", gameId: "poe2" }, true);
+    layout.handle({ type: "undo-removal", step: first!.step }, false);
+    expect(layout.view()).toMatchObject({ undone: { step: first!.step, ok: true }, removals: [{ step: second!.step, count: 1 }], gameId: "poe2" });
+    layout.handle({ type: "game", gameId: "elden" }, true);
+    expect(layout.view().items.map((item) => item.id)).toEqual([a]);
+    expect(world.items.map((item) => item.key).sort()).toEqual(["a", "c"]);
+  });
+
+  it("never undoes twice: after Ctrl+Z took the remove back, its Undo does nothing", () => {
+    const { layout } = setup([clock("a"), clock("b")]);
+    layout.open("elden");
+    const [a, b] = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "commit", id: b!, rect: { x: 600, y: 400, width: 300, height: 200 } }, false);
+    layout.handle({ type: "remove", id: a! }, false);
+    const { step } = layout.view().removals[0]!;
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().removals).toEqual([]);
+    layout.handle({ type: "undo-removal", step }, false);
+    expect(layout.view().undone).toEqual({ step, ok: false });
+    // The move before it is still done: the toast didn't take a second step back.
+    expect(layout.view().items.find((item) => item.id === b)!.placed).toMatchObject({ x: 600, y: 400 });
+  });
+
+  it("starts over when the page opens again: earlier removes can't be undone from there", () => {
+    const { layout } = setup([clock("a")]);
+    layout.open("elden");
+    layout.handle({ type: "remove", id: layout.view().items[0]!.id }, false);
+    const { step } = layout.view().removals[0]!;
+    layout.close();
+    layout.open("elden");
+    expect(layout.view().removals).toEqual([]);
+    layout.handle({ type: "undo-removal", step }, false);
+    expect(layout.view()).toMatchObject({ undone: { step, ok: false }, items: [] });
+  });
+});
+
 describe("the toolbar and Del", () => {
   it("removes an item from the setup shown and lets go of the selection", () => {
     const { layout, world } = setup([clock("a"), clock("b")]);

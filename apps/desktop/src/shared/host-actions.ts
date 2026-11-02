@@ -216,6 +216,9 @@ export function hostActionTable(c: HostChecks) {
     "rename-folder": { folderId: c.uuid, name: text() },
     "set-folder-label": { folderId: c.uuid, label },
     "delete-folder": { folderId: c.uuid },
+    /** Puts back what a delete (trash-workspace, trash-workspaces, delete-folder, delete-snapshot) answered with as its token; forget: the delete stays. */
+    "undo-delete": { token: c.uuid },
+    "undo-forget": { token: c.uuid },
     "move-folder": { folderId: c.uuid, index: position },
 
     // Settings

@@ -124,6 +124,14 @@ export interface LayoutView {
   pictureHint: "start" | "switch" | null;
   canUndo: boolean;
   canRedo: boolean;
+  /**
+   * Removes that can still be undone, in any setup, newest last (a few at most): `step` names one for `undo-removal`,
+   * `count` is how many frames it took out. The page offers Undo on a toast for each new one, and takes the toast away
+   * once its remove leaves this list (Ctrl+Z took it back, or its frames changed since).
+   */
+  removals: { step: number; count: number }[];
+  /** What the last `undo-removal` did: whether its frames came back. Null before the first. */
+  undone: { step: number; ok: boolean } | null;
   /** Game overlays are off in Settings: the layout still works, but nothing shows over the game. */
   enabled: boolean;
   /** A short sentence for the user (the game isn't running, a picture can't be used); null when there is none. */
@@ -177,6 +185,8 @@ export type LayoutMessage =
   | { type: "commit"; rects: PlacedRect[] }
   | { type: "undo" }
   | { type: "redo" }
+  /** The Undo on a remove's toast: takes back that remove (one of `removals`) only, wherever it was made. */
+  | { type: "undo-removal"; step: number }
   | ({ hidden: boolean } & OneOrMany<"canvas-hidden">)
   /** Reset position: back to where a new item starts, at the size it has. */
   | OneOrMany<"reset">
@@ -296,6 +306,8 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
       const rect = parseRect(raw.rect);
       return text(raw.id) && rect ? ({ type: raw.type as "drag" | "commit", id: raw.id, rect } as LayoutMessage) : null;
     }
+    case "undo-removal":
+      return typeof raw.step === "number" && Number.isSafeInteger(raw.step) && raw.step > 0 ? { type: "undo-removal", step: raw.step } : null;
     case "undo":
     case "redo":
     case "drag-end":

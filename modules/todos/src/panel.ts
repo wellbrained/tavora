@@ -26,8 +26,8 @@ export interface PanelContext {
   /** Keeps a just-finished to-do on screen for a moment before it vanishes. */
   linger: (taskId: string, wasPinned: boolean) => void;
   lingering: Ref<ReadonlySet<string>>;
-  /** Shows a toast that can put a change back. */
-  offerUndo: (message: string, undo: () => void) => void;
+  /** Shows a toast with Undo that can put a change back; `undo` answers false when it can't any more (undoable in the kit). */
+  offerUndo: (message: string, undo: () => boolean | void) => void;
   /** A menu Tavora draws above every panel (ui.showMenu): the chosen item's id, or null. */
   showMenu: (request: MenuOptions) => Promise<string | null>;
 }
@@ -36,4 +36,3 @@ export const PANEL: InjectionKey<PanelContext> = Symbol("todos-panel");
 
 /** How long a finished to-do stays before it vanishes; finishing another one restarts the wait for all. */
 export const LINGER_MS = 1500;
-export const UNDO_MS = 6000;

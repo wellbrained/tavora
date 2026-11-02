@@ -21,7 +21,7 @@ import {
   Trash2,
 } from "@lucide/vue";
 import type { FolderView, WorkspaceView } from "../shared/host-api";
-import { act, confirmAction, dialog, openSettings, prompt, state, submitAction, type MenuItem } from "./host";
+import { act, deleteWithUndo, dialog, openSettings, prompt, state, submitAction, type MenuItem } from "./host";
 import { t } from "./i18n";
 
 function lib() {
@@ -212,14 +212,8 @@ function ownItems(workspace: WorkspaceView): MenuItem[] {
       testid: "menu-remove",
       glyph: Trash2,
       danger: true,
-      run: () =>
-        confirmAction({
-          title: t("menu.remove.title", { name: workspace.name }),
-          message: t("menu.remove.message"),
-          confirm: t("menu.remove.confirm"),
-          danger: true,
-          run: () => submitAction({ type: "trash-workspace", workspaceId: workspace.id }),
-        }),
+      // To Trash at once; Undo on the toast puts it back where it was.
+      run: () => void deleteWithUndo({ type: "trash-workspace", workspaceId: workspace.id }, t("menu.remove.done", { name: workspace.name })),
     },
   ];
 }
@@ -287,14 +281,8 @@ export function folderMenu(folder: FolderView): MenuItem[] {
     testid: "menu-delete-folder",
     glyph: Trash2,
     danger: true,
-    run: () =>
-      confirmAction({
-        title: t("menu.folder.delete.title", { name: folder.name }),
-        message: t("menu.folder.delete.message"),
-        confirm: t("menu.folder.delete"),
-        danger: true,
-        run: () => submitAction({ type: "delete-folder", folderId: folder.id }),
-      }),
+    // Its workspaces go back to the rail; Undo on the toast puts the folder back around them.
+    run: () => void deleteWithUndo({ type: "delete-folder", folderId: folder.id }, t("menu.folder.deleted")),
   });
   return items;
 }

@@ -37,6 +37,7 @@ import {
   outdentTask,
   removedBlock,
   restoreBlock,
+  canRestoreBlock,
   restoreDone,
   setDone,
   shiftTask,
@@ -95,7 +96,13 @@ function remove() {
   const removed = removedBlock(props.store.list.value, id.value);
   const taskId = id.value;
   change((data) => deleteTask(data, taskId));
-  if (removed) panel.offerUndo(t("app.undoDeleted", { title: props.task.title }), () => change((data) => restoreBlock(data, removed)));
+  if (!removed) return;
+  const store = props.store;
+  panel.offerUndo(t("app.undoDeleted", { title: props.task.title }), () => {
+    // Checked on the list as it is now (its group may be gone since); the change may run again on a newer one.
+    if (!canRestoreBlock(store.list.value, removed)) return false;
+    store.apply((data) => void restoreBlock(data, removed));
+  });
 }
 
 function setPinned(pinned: boolean) {
