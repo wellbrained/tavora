@@ -2902,8 +2902,13 @@ export class Host {
     this.gameOverlays.addSetup(workspaceId);
   }
 
-  private removeGameSetup(workspaceId: string): void {
-    this.gameOverlays.removeSetup(workspaceId);
+  /** Delete overlay (the rail, the Overlay page): answers with the token that puts the setup back (undo-delete); none when the game has no setup. */
+  private removeGameSetup(workspaceId: string): string | undefined {
+    const restore = this.gameOverlays.takeSetup(workspaceId);
+    if (!restore) return undefined;
+    return this.undos.keep(() => {
+      if (!restore()) throw new UndoGoneError();
+    });
   }
 
   /** Every panel of every workspace, for the Overlay page's Sources. */

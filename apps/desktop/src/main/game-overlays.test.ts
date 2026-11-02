@@ -226,6 +226,29 @@ describe("setups", () => {
     expect(store.setupIds()).toEqual([EVERYWHERE, ALL_GAMES]);
   });
 
+  it("put a deleted game's setup back empty in its place, never twice and never as Everywhere or All games", async () => {
+    const store = await loadStore(dir);
+    store.add("poe2", subject("a"));
+    store.add("elden", subject("b", "elden"));
+    store.add("other", subject("c", "other"));
+    expect(store.setupIds()).toEqual([EVERYWHERE, ALL_GAMES, "poe2", "elden", "other"]);
+    const index = store.setupIndex("elden");
+    expect(index).toBe(3);
+    expect(store.setupIndex("missing")).toBe(-1);
+    expect(store.removeSetup("elden")).toBe(true);
+    expect(store.insertSetup("elden", index)).toBe(true);
+    expect(store.insertSetup("elden", index)).toBe(false);
+    expect(store.setupIds()).toEqual([EVERYWHERE, ALL_GAMES, "poe2", "elden", "other"]);
+    expect(store.count("elden")).toBe(0);
+    expect(store.insertSetup(ALL_GAMES, 0)).toBe(false);
+    // A place that no longer exists puts it last; one in front of the fixed setups puts it after them.
+    store.removeSetup("other");
+    expect(store.insertSetup("other", 99)).toBe(true);
+    store.removeSetup("poe2");
+    expect(store.insertSetup("poe2", 0)).toBe(true);
+    expect(store.setupIds()).toEqual([EVERYWHERE, ALL_GAMES, "poe2", "elden", "other"]);
+  });
+
   it("start a second item of a setup below the first, so it doesn't hide it", async () => {
     const store = await loadStore(dir);
     store.add("poe2", subject("a"));

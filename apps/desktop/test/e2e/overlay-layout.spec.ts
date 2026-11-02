@@ -303,6 +303,73 @@ test("The page opens on Everywhere, lists every panel with the reason one can't 
   expect(saved.setups.map((setup: { id: string }) => setup.id)).toEqual(["$everywhere", "$all", GAME]);
 });
 
+test("A game's overlay is deleted from the page and the rail with Undo that brings it back exactly, and Everywhere and All games can't be deleted", async () => {
+  const userData = await newUserData();
+  await seed(userData);
+  const { app, page } = await launch(userData, [MODULES], { seed: false });
+  try {
+    await overlayPage(app, page, GAME);
+    await expect.poll(async () => (await state(page))?.items?.length).toBe(1);
+    // Give the frame a place and settings of its own, so "exactly" means something.
+    const id: string = (await state(page)).items[0]!.id;
+    await page.evaluate(({ id }) => (window as unknown as Host).tavoraHost.layout.send({ type: "commit", id, rect: { x: 420, y: 300, width: 300, height: 200 } }), { id });
+    await expect.poll(async () => (await state(page)).items[0]!.placed.x).toBe(420);
+    await page.evaluate(({ id }) => (window as unknown as Host).tavoraHost.layout.send({ type: "set", ids: [id], change: { opacity: 50, mode: "toggle" } }), { id });
+    await expect.poll(async () => (await state(page)).items[0]!.opacity).toBe(50);
+    const before = (await state(page)).items[0]!;
+    const toast = page.getByTestId("undo-toast");
+    const deleteButton = page.getByTestId("layout-delete-setup");
+    const games = async () => (await state(page)).games.map((game) => game.id);
+
+    // Delete: the setup and its frame are gone at once, the page falls back to All games, and a toast offers Undo.
+    await expect(deleteButton).toBeVisible();
+    await expect(deleteButton).toHaveAccessibleName("Delete overlay for Path of Exile 2");
+    await deleteButton.click();
+    await expect.poll(games).toEqual(["$everywhere", "$all"]);
+    expect((await state(page)).gameId).toBe("$all");
+    await expect(toast).toContainText("Overlay for Path of Exile 2 deleted");
+    // Ctrl+Z on the page is the page's own history: it does not take the delete back, and the offer stays.
+    await page.keyboard.press("Control+z");
+    await expect(toast).toBeVisible();
+    expect(await games()).toEqual(["$everywhere", "$all"]);
+    // Undo: back in its place in the dropdown, shown again, with the frame as it was (place, settings).
+    await page.getByTestId("undo").click();
+    await expect.poll(games).toEqual(["$everywhere", "$all", GAME]);
+    await expect.poll(async () => (await state(page)).gameId).toBe(GAME);
+    const after = (await state(page)).items;
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ id: before.id, rect: before.rect, placed: before.placed, mode: "toggle", opacity: 50 });
+
+    // The rail deletes the same way, also with Undo.
+    await page.getByTestId(`rail-workspace-${GAME}`).click({ button: "right" });
+    await page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove-overlay"]').click();
+    await expect.poll(games).toEqual(["$everywhere", "$all"]);
+    await expect(toast).toContainText("Overlay for Path of Exile 2 deleted");
+    await page.getByTestId("undo").click();
+    await expect.poll(games).toEqual(["$everywhere", "$all", GAME]);
+    // The page stayed on All games (the delete left it there); the game's setup is back with its frame as it was.
+    await page.evaluate((gameId) => (window as unknown as Host).tavoraHost.layout.send({ type: "game", gameId }), GAME);
+    await expect.poll(async () => (await state(page)).items[0]).toMatchObject({ rect: before.rect, opacity: 50, mode: "toggle" });
+
+    // Everywhere and All games have no delete button.
+    for (const setupId of ["$everywhere", "$all"]) {
+      await page.evaluate((gameId) => (window as unknown as Host).tavoraHost.layout.send({ type: "game", gameId }), setupId);
+      await expect.poll(async () => (await state(page)).gameId).toBe(setupId);
+      await expect(deleteButton).toHaveCount(0);
+    }
+
+    // A delete nobody undoes stays: it is saved already when the toast is still on screen.
+    await page.evaluate((gameId) => (window as unknown as Host).tavoraHost.layout.send({ type: "game", gameId }), GAME);
+    await expect.poll(async () => (await state(page)).gameId).toBe(GAME);
+    await deleteButton.click();
+    await expect.poll(games).toEqual(["$everywhere", "$all"]);
+  } finally {
+    await app.close();
+  }
+  const saved = JSON.parse(await readFile(path.join(userData, "game-overlays.json"), "utf8"));
+  expect(saved.setups.map((setup: { id: string }) => setup.id)).toEqual(["$everywhere", "$all"]);
+});
+
 test("the sidebar sits where Settings > Overlays puts it", async () => {
   const userData = await newUserData();
   await mkdir(userData, { recursive: true });
