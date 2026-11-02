@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.22",
+    "date": "2026-11-02",
+    "notes": [
+      "A new clock or counter starts with Words and Number both at M."
+    ]
+  },
+  {
     "version": "0.1.21",
     "date": "2026-11-02",
     "notes": [
