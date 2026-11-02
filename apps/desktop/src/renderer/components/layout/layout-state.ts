@@ -1,9 +1,9 @@
 // The Overlay page's view as the main process last sent it (the page in the main window and the layer on the canvas both
-// use it), and the keys both share: the arrow keys nudge the selected item, Del and Backspace remove it, Ctrl+Z and Ctrl+Y
-// undo and redo, Esc lets go of the selection.
+// use it), and the keys both share: the arrow keys nudge the selected frames (together), Del and Backspace remove them,
+// Ctrl+Z and Ctrl+Y (or Ctrl+Shift+Z) undo and redo, Esc lets go of the selection.
 import { nextTick, onBeforeUnmount, onMounted, shallowRef } from "vue";
-import type { LayoutMessage, LayoutStills, LayoutView } from "../../../shared/layout-view";
-import { nudge } from "../../../shared/layout-math";
+import type { LayoutItemView, LayoutMessage, LayoutStills, LayoutView } from "../../../shared/layout-view";
+import { boundsOf, moveGroup, nudge } from "../../../shared/layout-math";
 import { api } from "../../host";
 
 export const view = shallowRef<LayoutView | null>(null);
@@ -55,18 +55,33 @@ export function onLayoutKey(event: KeyboardEvent): void {
     send({ type: "select", id: null });
     return;
   }
+  const selected = selectedItems(current);
   if (key === "delete" || key === "backspace") {
-    const selected = current.items.find((candidate) => candidate.id === current.selection);
-    if (!selected) return;
+    if (!selected.length) return;
     event.preventDefault();
-    if (!event.repeat) send({ type: "remove", id: selected.id });
+    if (!event.repeat) send({ type: "remove", ids: selected.map((item) => item.id) });
     return;
   }
   const direction = ({ arrowleft: "left", arrowright: "right", arrowup: "up", arrowdown: "down" } as const)[key as "arrowleft"];
-  const item = current.items.find((candidate) => candidate.id === current.selection);
-  if (!direction || !item || item.hiddenOnCanvas) return;
+  const shown = selected.filter((item) => !item.hiddenOnCanvas);
+  if (!direction || !shown.length) return;
   event.preventDefault();
-  send({ type: "commit", id: item.id, rect: nudge(item.placed, direction, current.canvas, current.cell, event.shiftKey) });
+  if (shown.length === 1) {
+    send({ type: "commit", id: shown[0]!.id, rect: nudge(shown[0]!.placed, direction, current.canvas, current.cell, event.shiftKey) });
+    return;
+  }
+  // Several move as one: their box is nudged, and each by as much.
+  const rects = shown.map((item) => item.placed);
+  const box = boundsOf(rects)!;
+  const to = nudge(box, direction, current.canvas, current.cell, event.shiftKey);
+  const moved = moveGroup(rects, to.x - box.x, to.y - box.y, current.canvas);
+  send({ type: "commit", rects: shown.map((item, index) => ({ id: item.id, rect: moved[index]! })) });
+}
+
+/** The selected items of a view, in the order they were picked. */
+export function selectedItems(current: LayoutView | null): LayoutItemView[] {
+  if (!current) return [];
+  return current.selected.flatMap((id) => current.items.filter((item) => item.id === id));
 }
 
 /** Installs the shared keys on the page while the component is mounted. */

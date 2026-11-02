@@ -17,7 +17,7 @@ import OverlayCopied from "../components/layout/OverlayCopied.vue";
 import OverlayCopy from "../components/layout/OverlayCopy.vue";
 import OverlaySettings from "../components/layout/OverlaySettings.vue";
 import OverlaySources from "../components/layout/OverlaySources.vue";
-import { send, stills, useLayoutKeys, view } from "../components/layout/layout-state";
+import { selectedItems, send, stills, useLayoutKeys, view } from "../components/layout/layout-state";
 import { withShortcut } from "../shortcuts";
 
 useLayoutKeys();
@@ -119,7 +119,7 @@ const setup = computed({
 });
 const setupOptions = computed(() => (view.value?.games ?? []).map((item) => ({ value: item.id, label: item.name })));
 const setupName = computed(() => view.value?.games.find((item) => item.id === view.value?.gameId)?.name ?? "");
-const selected = computed(() => view.value?.items.find((item) => item.id === view.value?.selection) ?? null);
+const selected = computed(() => selectedItems(view.value));
 const grid = computed({
   get: () => view.value?.grid ?? "normal",
   set: (value: GridSetting) => send({ type: "grid", grid: value }),
@@ -195,7 +195,7 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
       </section>
       <aside class="flex w-[22rem] flex-none flex-col gap-2" :aria-label="setupName">
         <OverlaySources />
-        <OverlaySettings :item="selected" :setup="view.gameId" :setup-name="setupName" />
+        <OverlaySettings :items="selected" :setup-name="setupName" />
       </aside>
     </div>
     <div class="pointer-events-none fixed inset-0 z-10" aria-hidden="true" data-testid="layout-stills">

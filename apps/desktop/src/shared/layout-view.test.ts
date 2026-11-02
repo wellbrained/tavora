@@ -77,3 +77,33 @@ describe("parseLayoutMessage", () => {
     expect(parseLayoutMessage({ type: "move" })).toBeNull();
   });
 });
+
+describe("messages about several frames", () => {
+  it("takes one id or a list of ids", () => {
+    expect(parseLayoutMessage({ type: "remove", ids: ["a", "b", "a"] })).toEqual({ type: "remove", ids: ["a", "b"] });
+    expect(parseLayoutMessage({ type: "remove", id: "a" })).toEqual({ type: "remove", id: "a" });
+    expect(parseLayoutMessage({ type: "remove", ids: [] })).toEqual({ type: "remove", ids: [] });
+    expect(parseLayoutMessage({ type: "remove", ids: "a" })).toBeNull();
+    expect(parseLayoutMessage({ type: "reset", ids: [1] })).toBeNull();
+    expect(parseLayoutMessage({ type: "canvas-hidden", ids: ["a"], hidden: true })).toEqual({ type: "canvas-hidden", ids: ["a"], hidden: true });
+    expect(parseLayoutMessage({ type: "select", ids: ["a", "b"] })).toEqual({ type: "select", ids: ["a", "b"] });
+    expect(parseLayoutMessage({ type: "select", ids: Array.from({ length: 65 }, (_, index) => `i${index}`) })).toBeNull();
+  });
+
+  it("takes the rectangles of a drag or a drop of several", () => {
+    const rect = { x: 1, y: 2, width: 3, height: 4 };
+    expect(parseLayoutMessage({ type: "commit", rects: [{ id: "a", rect }, { id: "b", rect }] })).toEqual({ type: "commit", rects: [{ id: "a", rect }, { id: "b", rect }] });
+    expect(parseLayoutMessage({ type: "drag", rects: [{ id: "a", rect }] })).toEqual({ type: "drag", rects: [{ id: "a", rect }] });
+    expect(parseLayoutMessage({ type: "commit", rects: [] })).toBeNull();
+    expect(parseLayoutMessage({ type: "commit", rects: [{ id: "a", rect }, { id: "a", rect }] })).toBeNull();
+    expect(parseLayoutMessage({ type: "drag", rects: [{ id: "a", rect: { x: "1" } }] })).toBeNull();
+  });
+
+  it("takes the Settings box's changes, and nothing else", () => {
+    expect(parseLayoutMessage({ type: "set", ids: ["a"], change: { opacity: 50, mode: "toggle", hideFromCapture: true } })).toEqual({ type: "set", ids: ["a"], change: { opacity: 50, mode: "toggle", hideFromCapture: true } });
+    expect(parseLayoutMessage({ type: "set", ids: ["a"], change: { opacity: 40 } })).toBeNull();
+    expect(parseLayoutMessage({ type: "set", ids: ["a"], change: { mode: "sometimes" } })).toBeNull();
+    expect(parseLayoutMessage({ type: "set", ids: ["a"], change: {} })).toBeNull();
+    expect(parseLayoutMessage({ type: "set", ids: ["a"], change: { rect: { x: 1 } } })).toBeNull();
+  });
+});

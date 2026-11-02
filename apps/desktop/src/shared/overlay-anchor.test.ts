@@ -4,6 +4,7 @@ import {
   MAX_CONTENT_SCALE,
   MIN_CONTENT_SCALE,
   MIN_OVERLAY_SIZE,
+  anchorIn,
   anchorOf,
   contentScale,
   migrateLegacy,
@@ -115,6 +116,21 @@ describe("anchorOf", () => {
         near(placeAnchored(anchorOf(onScreen, size), size), onScreen);
       }
     }
+  });
+});
+
+describe("anchorIn", () => {
+  it("keeps the anchors it is given, wherever the rectangle is, and lands where it was", () => {
+    const g = game(1920, 1080);
+    const rect = { x: 100, y: 50, width: 300, height: 200 };
+    for (const h of ["left", "center", "right"] as const) {
+      for (const v of ["top", "middle", "bottom"] as const) {
+        const anchored = anchorIn(rect, g, h, v);
+        expect(anchored).toMatchObject({ h, v });
+        near(placeAnchored(anchored, g), rect);
+      }
+    }
+    expect(anchorIn(rect, g, "right", "bottom")).toMatchObject({ x: (1920 - 400) / 1080, y: (1080 - 250) / 1080 });
   });
 });
 
