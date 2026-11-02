@@ -38,6 +38,8 @@ export const en = {
   "settings.interval": "Update every",
   "settings.intervalHint": "In seconds.",
   "settings.noDrives": "No drives found.",
+  "settings.openError": "Can't open settings: {error}",
+  "settings.driveLimit": "You can watch up to {count} drives.",
 
   "drives.dialogText": "Tick the drives you want to see.",
   "drives.internal": "Internal",
@@ -160,6 +162,8 @@ export const de: typeof en = {
   "settings.interval": "Aktualisieren alle",
   "settings.intervalHint": "In Sekunden.",
   "settings.noDrives": "Keine Laufwerke gefunden.",
+  "settings.openError": "Einstellungen lassen sich nicht öffnen: {error}",
+  "settings.driveLimit": "Du kannst bis zu {count} Laufwerke beobachten.",
 
   "drives.dialogText": "Hake die Laufwerke an, die du sehen willst.",
   "drives.internal": "Intern",

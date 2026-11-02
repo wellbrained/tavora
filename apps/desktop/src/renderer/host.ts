@@ -1,7 +1,7 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
-import { toast } from "@tavora/official-ui/components/ui/toast";
+import { handleUndoKey, toast, undoable } from "@tavora/official-ui/components/ui/toast";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
@@ -534,6 +534,33 @@ addEventListener("keydown", (event) => {
   runShortcut(shortcut);
 });
 
+
+// ── Undo instead of "Are you sure?" ───────────────────────────────────
+
+/**
+ * Deletes at once (a layout, a folder, a workspace to Trash) and offers Undo for a few seconds (`undoable` in the kit).
+ * The action answers with a token; Undo sends it back, and once the toast went without Undo the main process forgets
+ * it, so the delete is final. A failed delete shows its reason as usual. Answers whether the delete went through.
+ */
+export async function deleteWithUndo(action: HostAction, title: string): Promise<boolean> {
+  const result = await act(action);
+  if (!result.ok) return false;
+  const token = result.id;
+  if (!token) return true;
+  undoable({
+    title,
+    undo: async () => (await act({ type: "undo-delete", token }, { quiet: true })).ok,
+    onFinal: () => void act({ type: "undo-forget", token }, { quiet: true }),
+  });
+  return true;
+}
+
+// Ctrl+Z takes back the newest delete, outside text fields. Not on the Overlay page: its own undo (layout-state.ts) has
+// the frames it removed, so one press never undoes twice.
+addEventListener("keydown", (event) => {
+  if (state.value?.screen === "overlay") return;
+  handleUndoKey(event);
+});
 export function prompt(request: Omit<PromptRequest, "kind" | "value" | "maxLength"> & { value?: string; maxLength?: number }) {
   dialog.value = { kind: "prompt", value: "", maxLength: 80, ...request };
 }

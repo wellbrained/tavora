@@ -139,3 +139,78 @@ describe("LayoutHistory", () => {
     expect(setups.v).toBe(2);
   });
 });
+
+// The Undo on a remove's toast (renderer/components/layout/removal-undo.ts) takes back one step by its id.
+describe("LayoutHistory.undoStep", () => {
+  /** Removes an item as one step tagged "remove", and answers with that step's id. */
+  function removing(setups: Map<string, Map<string, number>>, history: LayoutHistory<number>, setupId: string, id: string): number {
+    const before = setups.get(setupId)!.get(id)!;
+    setups.get(setupId)!.delete(id);
+    history.record([{ setupId, id, before, after: null }], "remove");
+    return history.steps("remove").at(-1)!.id;
+  }
+
+  it("takes back an older remove only, leaving the changes made after it", () => {
+    const { setups, history, read, act } = world({ s: { a: 1, b: 2 } });
+    const step = removing(setups, history, "s", "a");
+    act([["s", "b"]], () => setups.get("s")!.set("b", 20));
+    expect(history.undoStep(step)?.id).toBe(step);
+    expect(read("s")).toEqual({ a: 1, b: 20 });
+    expect(history.steps("remove")).toEqual([]);
+    // Ctrl+Z still takes back the newer change; the remove is not on redo, as later steps came after it.
+    history.undo();
+    expect(read("s")).toEqual({ a: 1, b: 2 });
+    history.redo();
+    expect(read("s")).toEqual({ a: 1, b: 20 });
+  });
+
+  it("undoes the newest step like Ctrl+Z, so it can be done again", () => {
+    const { setups, history, read } = world({ s: { a: 1 } });
+    const step = removing(setups, history, "s", "a");
+    history.undoStep(step);
+    expect(history).toMatchObject({ canUndo: false, canRedo: true });
+    history.redo();
+    expect(read("s")).toEqual({});
+  });
+
+  it("never takes a step back twice: after Ctrl+Z took it, the toast finds nothing", () => {
+    const { setups, history, read, writes } = world({ s: { a: 1, b: 2 } });
+    const first = removing(setups, history, "s", "a");
+    const second = removing(setups, history, "s", "b");
+    history.undo();
+    expect(read("s")).toEqual({ b: 2 });
+    expect(history.undoStep(second)).toBeNull();
+    expect(read("s")).toEqual({ b: 2 });
+    // Each remove has its own: undoing the first doesn't bring back the second's item, nor break it.
+    const writesBefore = writes.length;
+    expect(history.undoStep(first)?.id).toBe(first);
+    expect(read("s")).toEqual({ a: 1, b: 2 });
+    expect(writes.length).toBe(writesBefore + 1);
+  });
+
+  it("drops a remove whose item came back some other way (made again with the same id)", () => {
+    const { setups, history, read } = world({ s: { a: 1 } });
+    const step = removing(setups, history, "s", "a");
+    setups.get("s")!.set("a", 7);
+    expect(history.undoStep(step)).toBeNull();
+    expect(read("s")).toEqual({ a: 7 });
+    expect(history.steps()).toEqual([]);
+  });
+
+  it("drops a remove that can't be written back (the setup is full now)", () => {
+    const { setups, history, read } = world({ s: { a: 1, b: 2 } }, 2);
+    const step = removing(setups, history, "s", "a");
+    setups.get("s")!.set("c", 3);
+    expect(history.undoStep(step)).toBeNull();
+    expect(read("s")).toEqual({ b: 2, c: 3 });
+  });
+
+  it("gives every step its own id, across histories", () => {
+    const one = world({ s: { a: 1 } });
+    const two = world({ s: { a: 1 } });
+    const a = removing(one.setups, one.history, "s", "a");
+    const b = removing(two.setups, two.history, "s", "a");
+    expect(a).not.toBe(b);
+    expect(two.history.undoStep(a)).toBeNull();
+  });
+});

@@ -27,7 +27,7 @@ export const PAGES = [
   { id: "tooltips", group: "actions", keywords: "tooltip hover help readable keyboard shortcut arrow values rows divider disabled", examples: ["FromTitle", "OnDisabled", "Rich", "Values"] },
   { id: "popovers", group: "actions", keywords: "popover floating panel form anchor close", examples: ["WithField"] },
   { id: "dialogs", group: "actions", keywords: "dialog modal confirm delete rename name prompt busy footer scroll", examples: ["NameDialogs", "ConfirmDialogs", "FooterButtons", "LongDialog"] },
-  { id: "toasts", group: "actions", keywords: "toast snackbar undo message notification status", examples: ["Kinds", "Loading", "WithButton"] },
+  { id: "toasts", group: "actions", keywords: "toast snackbar undo message notification status", examples: ["Kinds", "Loading", "WithButton", "DeleteWithUndo"] },
   // Inputs
   { id: "fields", group: "inputs", keywords: "input textarea search clear escape magnifier label hint error invalid code one-time mono", examples: ["Basic", "Errors", "Search", "Monospace", "Code", "TextArea"] },
   { id: "checks", group: "inputs", keywords: "checkbox tick strike done switch field label description", examples: ["Checkbox", "Switch", "SwitchField", "DoneItem"] },

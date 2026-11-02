@@ -2,13 +2,13 @@
 // To-Dos: a toolbar, current objectives, then the user's own groups. Every
 // To-Dos panel of a workspace shows the same list; what is folded, hidden or being
 // edited is each panel's own state.
-import { ChevronsDownUp, ChevronsUpDown, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
-import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
+import { ChevronsDownUp, ChevronsUpDown, Settings as SettingsIcon } from "@lucide/vue";
+import { connectModule, errorMessage } from "@tavora/official-ui";
 import { leaveRow } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { liftedDragImage, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
-import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
+import { handleUndoKey, Toaster, undoable, type Undoable, type UndoAnswer } from "@tavora/official-ui/components/ui/toast";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import type { MenuOptions, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
@@ -17,11 +17,11 @@ import GroupSection, { type DropTarget } from "./GroupSection.vue";
 import { plural, setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
 import { buildLiveState, fontStack, LIVE_DEFAULTS, PANEL_LOOK_DEFAULTS, PANEL_SIZES, parseLook, parsePanelLook, throttle, type LiveLook, type LiveState, type PanelLook } from "./live";
-import { LINGER_MS, PANEL, UNDO_MS, type Draft, type FinishedMode } from "./panel";
+import { LINGER_MS, PANEL, type Draft, type FinishedMode } from "./panel";
 import Settings from "./Settings.vue";
 import { createTodoStore, type TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
-import { addGroup, addTask, childCount, deleteGroup, findTask, MAX, moveTask, parseList, type Group, type TodoList } from "./todos";
+import { addGroup, addTask, canRestoreGroup, childCount, deleteGroup, findTask, MAX, moveTask, parseList, removedGroup, restoreGroup, type Group, type TodoList } from "./todos";
 
 const EMPTY = parseList(null);
 
@@ -56,7 +56,6 @@ const savedAt = ref<number>();
 const dialogOpen = ref(false);
 const editing = ref<string | null>(null);
 const draft = ref<Draft | null>(null);
-const pendingGroup = shallowRef<Group | null>(null);
 /** The to-dos settle into their new places when one is dropped (they nest and cross groups, so they don't slide aside while it is held). */
 const listEl = ref<HTMLElement | null>(null);
 const reorder = useReorderMotion(listEl);
@@ -89,11 +88,13 @@ const objectives = computed(() =>
 
 // ── Undo ─────────────────────────────────────────────────────────────
 
-let undoToast: { dismiss: () => void } | null = null;
+// Each change that can be put back (a to-do deleted or finished, a group deleted) gets its own toast with Undo, for
+// a few seconds (undoable in the kit). Ctrl+Z takes back the newest one.
+const offers = new Set<Undoable>();
 
-function offerUndo(message: string, run: () => void) {
-  undoToast?.dismiss();
-  undoToast = toast({ title: message, duration: UNDO_MS, testid: "undo-toast", actionTestid: "undo", action: { label: t("undo"), onClick: run } });
+function offerUndo(message: string, run: () => UndoAnswer) {
+  const offer = undoable({ title: message, undo: run, onFinal: () => offers.delete(offer) });
+  offers.add(offer);
 }
 
 // ── Panel state ──────────────────────────────────────────────────────
@@ -127,6 +128,8 @@ function openSettings() {
 }
 
 function onKey(event: KeyboardEvent) {
+  // Outside text fields; what is being typed keeps its own Ctrl+Z.
+  if (handleUndoKey(event)) return;
   // Esc in an open list (a Select, say) closes only that.
   const inPopup = (event.target as Element | null)?.closest?.("[role=listbox], [role=menu], [role=dialog]");
   if (event.key === "Escape" && dialogOpen.value && !event.defaultPrevented && !inPopup) void sdk.value?.panel.closeDialog();
@@ -197,7 +200,8 @@ onBeforeUnmount(() => {
   cleanup.forEach((fn) => fn());
   clearTimeout(lingerTimer);
   sendLive.cancel();
-  undoToast?.dismiss();
+  // The panel goes: its offers end, and what was deleted stays deleted.
+  for (const offer of offers) offer.close();
 });
 
 function createGroup(name: string) {
@@ -213,15 +217,17 @@ function firstTask(text: string) {
   void store.value!.apply((data) => addTask(data, null, { id, title: text, createdAt }, groupId));
 }
 
-function removeGroup() {
-  const group = pendingGroup.value!;
-  pendingGroup.value = null;
-  void store.value!.apply((data) => deleteGroup(data, group.id));
-}
-
-function askRemoveGroup(group: Group) {
-  if (group.tasks.length) pendingGroup.value = group;
-  else void store.value!.apply((data) => deleteGroup(data, group.id));
+/** Deletes a group with its to-dos at once; Undo on the toast puts it back where it was, as it was. */
+function removeGroup(group: Group) {
+  const todos = store.value!;
+  const removed = removedGroup(todos.list.value, group.id);
+  if (!removed) return;
+  todos.apply((data) => deleteGroup(data, group.id));
+  offerUndo(t("app.groupDeleted", { name: group.name }), () => {
+    // Checked on the list as it is now; the change itself may run again on a newer one (another panel saved first).
+    if (!canRestoreGroup(todos.list.value, removed)) return false;
+    todos.apply((data) => void restoreGroup(data, removed));
+  });
 }
 
 // ── Drag and drop ────────────────────────────────────────────────────
@@ -335,7 +341,7 @@ function dropTask() {
           :dragging="dragging !== null"
           :drop="drop"
           @toggle-collapsed="toggleCollapsed(group.id)"
-          @remove="askRemoveGroup(group)"
+          @remove="removeGroup(group)"
           @dragstart="dragStart"
           @dragend="dragEnd"
           @dragover="(target) => (drop = target)"
@@ -354,18 +360,6 @@ function dropTask() {
         @add="createGroup"
       />
     </div>
-
-    <ConfirmDialog
-      v-if="pendingGroup"
-      :title="t('app.deleteGroupTitle', { name: pendingGroup.name })"
-      :description="plural('app.deleteGroupMessage', pendingGroup.tasks.length)"
-      :confirm="t('app.deleteGroupConfirm')"
-      :icon="Trash2"
-      :confirm-icon="Trash2"
-      :cancel="t('cancel')"
-      @confirm="removeGroup"
-      @cancel="pendingGroup = null"
-    />
   </div>
   <!-- Outside the views, so Undo toasts show in the settings too. -->
   <Toaster />

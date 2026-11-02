@@ -49,7 +49,7 @@ test("a personal workspace offers only modules for any game, and is worded as a 
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await page.getByTestId("rail-workspace-local-personal").click({ button: "right" });
-    await expect(page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove"]')).toHaveText("Remove workspace…");
+    await expect(page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove"]')).toHaveText("Remove workspace");
   } finally {
     await app.close();
   }

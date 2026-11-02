@@ -176,6 +176,7 @@ function resetAddress(): void {
             @update:model-value="(value: boolean | 'indeterminate') => pickDrive(drive.id, value === true)"
           />
         </SettingsRow>
+        <p v-if="chosen.size >= SYSTEM_MAX_DRIVES" class="text-muted-foreground pt-3 text-xs" role="status" data-testid="settings-drive-limit">{{ t("settings.driveLimit", { count: SYSTEM_MAX_DRIVES }) }}</p>
         <p v-if="!drives.length" class="text-muted-foreground py-3 text-sm" data-testid="settings-no-drives">{{ t("settings.noDrives") }}</p>
       </SettingsSection>
     </SettingsPage>

@@ -20,6 +20,8 @@ import SystemSection from "./SystemSection.vue";
 const sdk = shallowRef<TavoraSDK | null>(null);
 const monitor = shallowRef<Monitor | null>(null);
 const connectError = ref<string | null>(null);
+/** Why the settings would not open (an older Tavora, or no real press), told in the footer. */
+const openError = ref<string | null>(null);
 /** The panel is shown big as a dialog, with its settings. */
 const dialogOpen = ref(false);
 const showingApps = ref(false);
@@ -60,7 +62,8 @@ const tavora = computed(() => {
 
 /** Opens the settings: the panel shows them big, in a dialog over the app, as every module's settings. */
 function openSettings(): void {
-  void sdk.value?.panel.openDialog({ width: 880, height: 700 }).catch(() => undefined);
+  openError.value = null;
+  void sdk.value?.panel.openDialog({ width: 960, height: 680 }).catch((reason) => (openError.value = errorMessage(reason)));
 }
 
 function onKey(event: KeyboardEvent): void {
@@ -93,7 +96,8 @@ const bothSections = computed(() => sections.value.system && sections.value.conn
     </div>
 
     <footer v-if="status === 'ready'" class="flex flex-none items-center gap-2 border-t py-1 pr-1 pl-3">
-      <span class="text-muted-foreground min-w-0 flex-1 truncate text-xs tabular-nums" data-testid="tavora-use">{{ tavora }}</span>
+      <span v-if="openError" class="text-destructive min-w-0 flex-1 truncate text-xs" role="alert" :title="openError" data-testid="settings-error">{{ t("settings.openError", { error: openError }) }}</span>
+      <span v-else class="text-muted-foreground min-w-0 flex-1 truncate text-xs tabular-nums" data-testid="tavora-use">{{ tavora }}</span>
       <Button variant="ghost" size="icon-xs" :title="t('settings.title')" :aria-label="t('settings.title')" data-testid="settings" @click="openSettings">
         <SettingsIcon :stroke-width="1.75" />
       </Button>
