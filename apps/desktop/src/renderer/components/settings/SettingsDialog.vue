@@ -219,7 +219,7 @@ function onSearchKey(event: KeyboardEvent) {
       :show-close-button="false"
       :aria-describedby="undefined"
     >
-      <div class="thin-scroll settings-menu bg-background flex w-56 flex-none flex-col gap-3 overflow-y-auto border-r px-4 pb-4 lg:w-64">
+      <div class="thin-scroll settings-menu bg-background flex w-60 flex-none flex-col gap-3 overflow-y-auto border-r px-4 pb-4 lg:w-72">
         <div class="relative flex h-16 flex-none items-center">
           <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
           <Input
