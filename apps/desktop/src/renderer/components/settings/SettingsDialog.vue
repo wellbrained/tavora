@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Settings: a short menu of pages in groups on the left, with a search that finds any setting, and About & updates
+// Settings: a short menu of pages in groups on the left, with a search that finds any setting, and Updates & About
 // at its foot; the chosen page on the right, under a title that stays put while it scrolls. A page that opens from a
 // row (SUB_PAGES) has a way back in its title; the developer pages are tabs under one entry. Each page is its own
 // component; settings-index.ts lists them and every setting the search can find.
@@ -246,7 +246,7 @@ function onSearchKey(event: KeyboardEvent) {
           heading-class="pt-1"
           @select="(id: string) => show(id as SettingsSection)"
         />
-        <!-- About & updates, with the version: rarely needed, so it sits at the foot. -->
+        <!-- Updates & About, with the version: rarely needed, so it sits at the foot. -->
         <button
           type="button"
           :class="
@@ -260,7 +260,7 @@ function onSearchKey(event: KeyboardEvent) {
           data-testid="settings-nav-about"
           @click="show('about')"
         >
-          <Info class="size-4 flex-none" :stroke-width="1.75" aria-hidden="true" />
+          <Info class="size-4 flex-none" :stroke-width="2" aria-hidden="true" />
           <span class="min-w-0 flex-1 truncate">{{ t("settings.section.about") }}</span>
           <span class="text-xs tabular-nums" data-testid="settings-version">{{ version }}</span>
         </button>

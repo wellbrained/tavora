@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The profile dialog, opened from the avatar in the rail (ProfileMenu.vue) or wherever the account is needed
 // (openProfile). On the left: the picture over a banner the user picks (BannerPicker.vue), the name beside it, and a
-// short menu on a plate like Settings': Name & ranks, Account (signing in and everything about the account), Cloud copy
+// short menu on a plate like Settings': Name & Ranks, Account (signing in and everything about the account), Cloud copy
 // and Messages. The menu shows only what this run has: Account once accounts are on, Cloud copy and Messages once they
 // are there. On the right: the chosen part, under Profile / its name, like a Settings page.
 import { Camera, Cloud, Mail, UserRound, UserRoundPen, X } from "@lucide/vue";

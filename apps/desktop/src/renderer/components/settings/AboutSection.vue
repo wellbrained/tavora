@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Settings > About & updates: this version (its patch notes are a page of their own), updates, backups and the
+// Settings > Updates & About: this version (its patch notes are a page of their own), updates, backups and the
 // diagnostic info.
 import { ScrollText } from "@lucide/vue";
 import { computed, ref } from "vue";
