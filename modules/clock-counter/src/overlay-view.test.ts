@@ -61,7 +61,7 @@ describe("the overlay view", () => {
     view.draw(state, 0);
     const sizes = [...root.querySelectorAll<HTMLElement>(".cc-line > span")].map((run) => run.style.fontSize);
     const [words, number] = sizes.map(parseFloat);
-    expect(words).toBeCloseTo((48 * 12) / 14, 6);
+    expect(words).toBe(48);
     expect(number).toBe(48);
     expect(root.querySelector<HTMLElement>(".cc-line")!.style.fontSize).toBe("48px");
     expect(root.textContent).toBe("Deaths 0");

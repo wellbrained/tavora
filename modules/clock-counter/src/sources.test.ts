@@ -59,8 +59,8 @@ describe("itemSize", () => {
     const counter = newItem("counter", "c", "Deaths") as Counter;
     counter.value = 10;
     counter.goal = 50;
-    // "Deaths " at XS (12 / 14 of the value's size), then "10 / 50" at 48 px.
-    expect(itemSize(counter, measure, NOW).width).toBe(Math.ceil(7 * ((48 * 12) / 14) * 0.5 + 7 * 48 * 0.5));
+    // "Deaths " and "10 / 50" both at M, 48 px.
+    expect(itemSize(counter, measure, NOW).width).toBe(Math.ceil(7 * 48 * 0.5 + 7 * 48 * 0.5));
     counter.look.showLabel = false;
     expect(itemSize(counter, measure, NOW).width).toBe(Math.ceil(7 * 48 * 0.5));
   });
@@ -68,9 +68,9 @@ describe("itemSize", () => {
   it("follows the text written for the overlay and the sizes of the words and the number", () => {
     const boss = newItem("countdown", "b", "Boss") as Clock;
     boss.look.text = "{time} left";
-    // "5:00" at 48 px (M), " left" at XS, 12 / 14 of that.
+    // "5:00" and " left" both at M, 48 px.
     const xs = (48 * 12) / 14;
-    expect(itemSize(boss, measure, NOW).width).toBe(Math.ceil(4 * 48 * 0.5 + 5 * xs * 0.5));
+    expect(itemSize(boss, measure, NOW).width).toBe(Math.ceil(4 * 48 * 0.5 + 5 * 48 * 0.5));
     boss.look.wordsStep = "xl";
     boss.look.numberStep = "xs";
     const xl = (48 * 20) / 14;

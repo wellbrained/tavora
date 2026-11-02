@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.22",
+    "version": "0.1.23",
     "date": "2026-11-02",
     "notes": [
       "Loads a little lighter: the app keeps only the Latin letters of its fonts."
+    ]
+  },
+  {
+    "version": "0.1.22",
+    "date": "2026-11-02",
+    "notes": [
+      "A new clock or counter starts with Words and Number both at M."
     ]
   },
   {
