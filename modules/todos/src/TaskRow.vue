@@ -308,7 +308,8 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
               data-testid="task-open"
               @click="startEdit"
             >
-              <span :class="cn(task.done && 'text-muted-foreground line-through')" data-testid="task-title">{{ task.title }}</span>
+              <!-- Done: the line draws across the title and the text fades to muted (the kit's .tavora-strike). -->
+              <span :class="cn('tavora-strike', task.done && 'text-muted-foreground')" :data-struck="task.done || undefined" data-testid="task-title">{{ task.title }}</span>
             </button>
             <div v-if="hasMeta" class="text-muted-foreground -mt-1 flex min-w-0 items-center gap-2 px-1 pb-1.5 text-xs leading-4">
               <span v-if="compact" class="truncate">{{ group.name }}</span>
