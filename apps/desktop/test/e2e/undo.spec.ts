@@ -2,25 +2,12 @@
 // and a toast offers Undo for a few seconds (undoable in the kit). Undo puts the thing back exactly as it was; once the
 // toast goes, or the app closes, the delete stays.
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { hostToast, inModule, launch, layOutColumns, openModule, openWorkspace, TODOS, toastsPage, typeInModule, VANILLA, waitForShown } from "./harness";
-
-async function answerPrompt(page: Page, value: string) {
-  await page.getByTestId("prompt-input").fill(value);
-  await page.getByTestId("prompt-submit").click();
-  await expect(page.getByTestId("prompt")).toHaveCount(0);
-}
+import { inModule, launch, layOutColumns, openModule, openWorkspace, TODOS, typeInModule, VANILLA, waitForShown, answerPrompt, toastsPage, layoutMenu, fromMenu, q, hostToast } from "./harness";
 
 async function saveLayout(page: Page, name: string) {
   await page.getByTestId("layouts").click();
   await page.locator('[role="menu"][data-state="open"] [data-testid="layout-save"]').click();
   await answerPrompt(page, name);
-}
-
-/** Picks an item from a saved layout's submenu. */
-async function layoutMenu(page: Page, name: string, item: string) {
-  await page.getByTestId("layouts").click();
-  await page.locator('[role="menu"][data-state="open"]').getByText(name, { exact: true }).click();
-  await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
 }
 
 /** The names of the saved layouts, as the Layouts menu lists them. */
@@ -36,11 +23,6 @@ async function layoutNames(page: Page): Promise<string[]> {
   await page.keyboard.press("Escape");
   await expect(page.locator('[role="menu"][data-state="open"]')).toHaveCount(0);
   return names;
-}
-
-async function fromMenu(page: Page, gameId: string, item: string) {
-  await page.getByTestId(`rail-workspace-${gameId}`).click({ button: "right" });
-  await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
 }
 
 const toast = (page: Page, title: string) => hostToast(page, "undo-toast").filter({ hasText: title });
@@ -128,9 +110,56 @@ test("a delete is final once the toast goes, and when the app closes during it",
   await again.app.close();
 });
 
-// ── A module: To-Dos, in its own view ──────────────────────────────────
+test("the Undo toast waits while Tavora is behind the game, and counts down again when the user is back", async () => {
+  const { app, page } = await launch();
+  await layOutColumns(page, 2);
+  await openModule(page, VANILLA);
+  await saveLayout(page, "Mapping");
+  await saveLayout(page, "Bossing");
 
-const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
+  // The window loses the focus to the game (the page is not hidden, so only the window's blur tells).
+  await layoutMenu(page, "Mapping", "layout-delete");
+  await expect(toast(page, "Layout deleted")).toBeVisible();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.emit("blur")));
+  // Longer than the toast stays (5 s): it is still there, with its Undo.
+  await page.waitForTimeout(6500);
+  await expect(toast(page, "Layout deleted")).toBeVisible();
+
+  // Back in front: it goes after its time, and not before the user had a second to see it.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((window) => window.emit("focus")));
+  await expect(hostToast(page, "undo-toast")).toHaveCount(0, { timeout: 10_000 });
+  await app.close();
+});
+
+test("the Undo button reads as big as the message and is easy to hit, in a compact toast", async () => {
+  const { app, page } = await launch();
+  await layOutColumns(page, 2);
+  await openModule(page, VANILLA);
+  await saveLayout(page, "Mapping");
+  await layoutMenu(page, "Mapping", "layout-delete");
+  const pill = toast(page, "Layout deleted");
+  await expect(pill).toBeVisible();
+  // Let the toast settle before measuring (it slides in).
+  await page.waitForTimeout(500);
+  const measured = await pill.evaluate((element) => {
+    const size = (selector: string) => {
+      const target = element.querySelector<HTMLElement>(selector)!;
+      const box = target.getBoundingClientRect();
+      return { width: box.width, height: box.height, fontSize: getComputedStyle(target).fontSize };
+    };
+    return { pill: element.getBoundingClientRect().height, title: size(".tavora-toast-title"), undo: size('[data-testid="undo"]'), close: size(".tavora-toast-close") };
+  });
+  expect(measured.undo.fontSize).toBe(measured.title.fontSize);
+  // At least the kit's small button (28 px), and room around the word; the X as high.
+  expect(measured.undo.height).toBeGreaterThanOrEqual(28);
+  expect(measured.undo.width).toBeGreaterThanOrEqual(56);
+  expect(measured.close.height).toBeGreaterThanOrEqual(28);
+  expect(measured.close.width).toBeGreaterThanOrEqual(28);
+  expect(measured.pill).toBeLessThanOrEqual(48);
+  await app.close();
+});
+
+// ── A module: To-Dos, in its own view ──────────────────────────────────
 
 async function addInto(app: ElectronApplication, formExpr: string, text: string) {
   await inModule(

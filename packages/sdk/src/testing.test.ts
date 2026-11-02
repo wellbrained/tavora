@@ -573,6 +573,23 @@ describe("events", () => {
     expect(error).toHaveBeenCalled();
   });
 
+  it("tells onBehindChange when the window goes behind the game and back, and a late listener about a window that is behind", () => {
+    const { sdk, host } = createMemoryHost();
+    const seen: boolean[] = [];
+    sdk.lifecycle.onBehindChange((behind) => seen.push(behind));
+    host.behind();
+    host.behind(false);
+    expect(seen).toEqual([true, false]);
+    host.behind(true);
+    const late = vi.fn();
+    sdk.lifecycle.onBehindChange(late);
+    expect(late).toHaveBeenCalledWith(true);
+    host.behind(false);
+    const after = vi.fn();
+    sdk.lifecycle.onBehindChange(after);
+    expect(after).not.toHaveBeenCalled();
+  });
+
   it("tells a late onSuspend listener about a current suspension, and onDispose about the end", () => {
     const { sdk, host } = createMemoryHost();
     host.suspend();

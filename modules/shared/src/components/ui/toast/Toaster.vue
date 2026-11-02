@@ -3,10 +3,11 @@
 // them (Settings > Appearance): the newest in front, older ones peeking out behind. Pointing at
 // or focusing the stack spreads it out and stops every timer. Two hidden live regions read each
 // new toast out, errors as alerts.
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import "./toast.css";
 import ToastItem from "./ToastItem.vue";
 import { GAP, PEEK, SHRINK, stackExtent, toastPosition, toasts, type ToastPosition } from "./toast";
+import { toastsPaused, trackDocumentVisibility } from "./visibility";
 
 /**
  * `position`: a fixed place, for a page that must not follow the setting. `paused`: every timer stops, for a page that
@@ -18,6 +19,11 @@ const emit = defineEmits<{ extent: [value: { width: number; height: number }] }>
 
 const position = computed(() => props.position ?? toastPosition.value);
 const fromTop = computed(() => position.value === "top-center");
+
+// Timers stand still while the page is hidden or its panel is suspended, so a toast is never gone before it was seen.
+let stopVisibility: (() => void) | undefined;
+onMounted(() => (stopVisibility = trackDocumentVisibility()));
+onBeforeUnmount(() => stopVisibility?.());
 
 const sizes = reactive(new Map<number, { width: number; height: number }>());
 const expanded = ref(false);
@@ -89,7 +95,7 @@ function forget(id: number) {
            list transition never touches the layer's transform. -->
       <div v-for="{ item, depth, behind, style } in placed" :key="item.id" :data-id="item.id" class="tavora-toast-slot" :style="{ zIndex: style.zIndex }" :inert="!expanded && depth > 0">
         <div class="tavora-toast-layer" :style="{ transform: style.transform, opacity: style.opacity }" @pointerenter="open" @pointerleave="close" @focusin="open" @focusout="close">
-          <ToastItem :item="item" :paused="expanded || !!paused" :behind="behind" @size="(value) => sizes.set(item.id, value)" />
+          <ToastItem :item="item" :paused="expanded || toastsPaused || !!paused" :behind="behind" @size="(value) => sizes.set(item.id, value)" />
         </div>
       </div>
     </TransitionGroup>

@@ -10,7 +10,6 @@ import { mirrorToasts } from "../toast-mirror";
 
 const api: TavoraToastsApi = window.tavoraToasts;
 const state = ref<ToastsPageState>();
-const pageHidden = ref(document.visibilityState === "hidden");
 
 const presses = { action: (id: number) => api.action(id), dismiss: (id: number) => api.dismiss(id) };
 
@@ -34,18 +33,15 @@ function extent(size: { width: number; height: number }): void {
   api.extent(size);
 }
 
-const onVisibility = () => (pageHidden.value = document.visibilityState === "hidden");
 // A press moved the keys here; the main process gives them back to the page they came from.
 const onClick = () => setTimeout(() => api.release(), 0);
 
 onMounted(() => {
   api.onState(show);
-  document.addEventListener("visibilitychange", onVisibility);
   addEventListener("click", onClick, true);
   api.ready();
 });
 onBeforeUnmount(() => {
-  document.removeEventListener("visibilitychange", onVisibility);
   removeEventListener("click", onClick, true);
 });
 
@@ -58,7 +54,7 @@ const room = computed(() => `${state.value?.room ?? 0}px`);
   <Toaster
     v-if="state"
     :position="state.position"
-    :paused="state.paused || pageHidden"
+    :paused="state.paused"
     :style="{ '--tavora-toast-room': room }"
     class="tavora-toasts-room"
     @extent="extent"

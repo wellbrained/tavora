@@ -421,7 +421,7 @@ const pictureFile = (userData: string, setupId: string) => path.join(userData, "
 // With TAVORA_SHOTS=<folder> the test also saves screenshots of the page (the native views over the canvas are not in them).
 const SHOTS = process.env.TAVORA_SHOTS;
 const shot = async (page: Page, name: string) => {
-  // The views over the canvas follow a moment after the canvas moves.
+  // A picture only: the views over the canvas follow a moment after the canvas moves, and nothing is asserted here.
   if (SHOTS) {
     await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(SHOTS, `${name}.png`) });

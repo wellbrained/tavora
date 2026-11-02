@@ -1,10 +1,11 @@
 // Host UI state: the latest view state from the main process, plus the
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
-import { handleUndoKey, toast, undoable } from "@tavora/official-ui/components/ui/toast";
+import { handleUndoKey, setWindowBehind, toast, undoable } from "@tavora/official-ui/components/ui/toast";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
 import { shortcutForKey } from "../shared/shortcut-keys";
+import { noteShortcut } from "./shortcut-origin";
 import { SETTING_SECTIONS, type SettingsPlace, type SettingsSection } from "./components/settings/settings-index";
 import { numberedWorkspaces } from "./shortcuts";
 import { setLanguage, t } from "./i18n";
@@ -597,7 +598,13 @@ function runShortcut(shortcut: HostShortcut): void {
   }
 }
 
-api.onShortcut(runShortcut);
+// The window went behind the game: toasts wait there, since nobody sees them count down.
+api.onWindowBehind(setWindowBehind);
+
+api.onShortcut((shortcut) => {
+  noteShortcut(shortcut);
+  runShortcut(shortcut);
+});
 
 // Main catches Tavora's shortcuts before any page sees the key (and stops it
 // there, so this never runs twice for one press). This covers key events that

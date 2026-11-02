@@ -1,23 +1,6 @@
 // Docking: splits and tabs, the layout saved per game, and named layouts.
 import { expect, test, type Page } from "@playwright/test";
-import {
-  expectModuleText,
-  hostToast,
-  inModule,
-  launch,
-  layOutColumns,
-  openModule,
-  panels,
-  RAIL_WIDTH,
-  REACT,
-  NOTES,
-  setContentSize,
-  TODOS,
-  typeInModule,
-  VANILLA,
-  VUE,
-  waitForShown,
-} from "./harness";
+import { expectModuleText, inModule, launch, layOutColumns, openModule, panels, RAIL_WIDTH, REACT, NOTES, setContentSize, TODOS, typeInModule, VANILLA, VUE, waitForShown, answerPrompt, layoutMenu, expectLayoutSaved, groupsIn, hostToast } from "./harness";
 
 const groups = (page: Page) => page.locator(".dv-groupview");
 
@@ -36,7 +19,7 @@ test("outer columns fold together, suspend their panels, and survive a restart",
   await expectModuleText(app, REACT, "lifecycle", "suspended");
   await expectModuleText(app, VUE, "lifecycle", "suspended");
   await expect(page.getByTestId("hide-left-column")).toHaveCount(0);
-  await page.waitForTimeout(500);
+  await expectLayoutSaved(userData, (nodes) => nodes.some((node) => node.hidden));
   await app.close();
 
   const again = await launch(userData);
@@ -85,19 +68,6 @@ async function panelMenu(page: Page, moduleId: string, item: string) {
   await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
 }
 
-async function answerPrompt(page: Page, value: string) {
-  await page.getByTestId("prompt-input").fill(value);
-  await page.getByTestId("prompt-submit").click();
-  await expect(page.getByTestId("prompt")).toHaveCount(0);
-}
-
-/** Picks an item from a saved layout's submenu. */
-async function layoutMenu(page: Page, name: string, item: string) {
-  await page.getByTestId("layouts").click();
-  await page.locator('[role="menu"][data-state="open"]').getByText(name, { exact: true }).click();
-  await page.locator(`[role="menu"][data-state="open"] [data-testid="${item}"]`).click();
-}
-
 test("a module added goes in as a tab where you work, nothing else moves, and that is kept", async () => {
   const { app, page, userData } = await launch();
   await setContentSize(app, RAIL_WIDTH + 1000, 500);
@@ -124,7 +94,7 @@ test("a module added goes in as a tab where you work, nothing else moves, and th
 
   // The group last worked in is kept: after a restart a new module still goes there.
   await panels(page).nth(3).click();
-  await page.waitForTimeout(500); // the layout is saved once it has been still briefly
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).at(-1)?.focused === true);
   await app.close();
   const again = await launch(userData);
   await expect(groups(again.page)).toHaveCount(3);
@@ -167,7 +137,7 @@ test("panels are moved, split and maximized from their menu, and the layout is k
   await expectModuleText(app, VANILLA, "lifecycle", "suspended");
   await panelMenu(page, REACT, "panel-restore");
   await expectModuleText(app, VANILLA, "lifecycle", "active");
-  await page.waitForTimeout(500); // the layout is saved once it has been still briefly
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).length === 2 && !nodes.some((node) => node.kind === "group" && node.maximized));
   await app.close();
 
   // The arrangement comes back after a restart.
@@ -197,7 +167,7 @@ test("a module maximizes its own panel after a key press, and it stays maximized
   await typeInModule(app, VANILLA, "\n");
   await expectModuleText(app, VANILLA, "maximized", "yes");
   await expectModuleText(app, REACT, "lifecycle", "suspended");
-  await page.waitForTimeout(500); // the layout is saved once it has been still briefly
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).some((group) => group.maximized));
   await app.close();
 
   const again = await launch(userData);
@@ -397,6 +367,7 @@ for (const width of [1400, 820]) {
       await expect(page.getByTestId("dock-ghost-tab"), `${name}: one ghost`).toHaveCount(1);
       await expect(page.locator("[class*='dv-drop-target']:visible")).toHaveCount(0);
       // Every tab is still there, in order, and none is pushed past the end of the tab row.
+      // Nothing may happen here, so there is no state to wait for: give a wrong move time to show.
       await page.waitForTimeout(300);
       expect(await names(), name).toEqual(before);
       const edge = await target.locator(".dv-tabs-container").evaluate((el) => el.getBoundingClientRect().right);
@@ -495,7 +466,7 @@ test("a template lays out empty slots that modules fill, and is kept", async () 
   await slots.first().getByTestId("slot-remove").click();
   await expect(slots).toHaveCount(0);
   await expect(groups(page)).toHaveCount(2);
-  await page.waitForTimeout(500); // the layout is saved once it has been still briefly
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).length === 2);
   await app.close();
 
   // Applying a template to open panels fills its first slots with them, and empty slots are kept.
@@ -506,7 +477,7 @@ test("a template lays out empty slots that modules fill, and is kept", async () 
   await expect(groups(again.page)).toHaveCount(4);
   await expect(panels(again.page)).toHaveCount(2);
   await expect(again.page.locator("[data-testid^='empty-slot-']")).toHaveCount(2);
-  await again.page.waitForTimeout(500);
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).length === 4);
   await again.app.close();
 
   const third = await launch(userData);
@@ -534,6 +505,7 @@ test("the templates submenu opens level with its entry and stays open on the way
   await page.mouse.move(start.x, start.y);
   for (let step = 1; step <= 20; step++) {
     await page.mouse.move(start.x + ((end.x - start.x) * step) / 20, start.y + ((end.y - start.y) * step) / 20);
+    // The pace is what is tested: an unhurried move must not close the submenu on the way.
     await page.waitForTimeout(50);
   }
   await expect(target).toBeVisible();

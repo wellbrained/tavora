@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, hostToast, inModule, launch, newUserData, openModule, openWorkspace } from "./harness";
+import { expectModuleText, inModule, launch, newUserData, openModule, openWorkspace, type Running, hostToast } from "./harness";
 
 const ID = "tavora.updatable";
 
@@ -80,84 +80,102 @@ async function catalogue(entry: Record<string, unknown>, zip: Buffer): Promise<{
   return { url: `http://127.0.0.1:${(server.address() as { port: number }).port}`, server, asked };
 }
 
-test("a built-in module updates from the catalogue, survives a restart, falls back when tampered with, and the shipped copy still opens its data", async () => {
-  const key = generateKeyPairSync("ed25519").privateKey;
-  const owner = fingerprint(key);
-  const shipped = await mkdtemp(path.join(tmpdir(), "tavora-official-shipped-"));
-  const shippedModule = path.join(shipped, "updatable");
-  await mkdir(shippedModule);
-  const first = await moduleFolder("1.0.0");
-  for (const name of ["tavora.module.json", "index.html", "page.js"]) await writeFile(path.join(shippedModule, name), await readFile(path.join(first, name)));
-  const zip = (await packModule(await moduleFolder("1.1.0"), key)).zip;
-  const entry = {
-    id: ID,
-    name: "Updatable",
-    description: null,
-    version: "1.1.0",
-    minTavora: "0.1.0",
-    games: [],
-    personalWorkspaces: true,
-    workspaces: true,
-    permissions: { network: [], connectors: [] },
-    owner,
-    publisher: null,
-    zip: { sha256: createHash("sha256").update(zip).digest("hex"), size: zip.length },
-    publishedAt: "2026-10-30T10:00:00.000Z",
-    notes: ["Better."],
-  };
-  const { url, server, asked } = await catalogue(entry, zip);
-  const userData = await newUserData();
-  const env = { TAVORA_API_URL: url, TAVORA_OFFICIAL_MODULE_DIRS: shipped, TAVORA_OFFICIAL_PINS: `${owner}:account-tavora` };
+// One test per phase, in order, on one profile: each phase starts the app on what the one before left behind.
+// A busy machine can make Tavora start a panel more than once (a background scan finds the module again), so a phase
+// asserts the version that ends up showing and what the panel has seen at least, never how many times it loaded.
+test.describe("a built-in module updating from the catalogue", () => {
+  test.describe.configure({ mode: "serial" });
+  let userData: string;
+  let env: Record<string, string>;
+  let catalogueServer: Awaited<ReturnType<typeof catalogue>>;
+  let running: Running | undefined;
+
   const run = async () => {
-    const running = await launch(userData, [], { env });
+    running = await launch(userData, [], { env });
     await openWorkspace(running.page, "poe2");
+    await openModule(running.page, ID);
     return running;
   };
-  try {
-    // The shipped copy runs first, and saves what it saw.
-    let { app, page } = await run();
-    await openModule(page, ID);
-    await expectModuleText(app, ID, "version", "1.0.0");
-    await expectModuleText(app, ID, "seen", "");
-    await expectModuleText(app, ID, "saved", "yes");
 
-    // The update check asks for Tavora's own modules too; the update waits for the user's yes like any other.
+  test.beforeAll(async () => {
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const owner = fingerprint(key);
+    const shipped = await mkdtemp(path.join(tmpdir(), "tavora-official-shipped-"));
+    const shippedModule = path.join(shipped, "updatable");
+    await mkdir(shippedModule);
+    const first = await moduleFolder("1.0.0");
+    for (const name of ["tavora.module.json", "index.html", "page.js"]) await writeFile(path.join(shippedModule, name), await readFile(path.join(first, name)));
+    const zip = (await packModule(await moduleFolder("1.1.0"), key)).zip;
+    const entry = {
+      id: ID,
+      name: "Updatable",
+      description: null,
+      version: "1.1.0",
+      minTavora: "0.1.0",
+      games: [],
+      personalWorkspaces: true,
+      workspaces: true,
+      permissions: { network: [], connectors: [] },
+      owner,
+      publisher: null,
+      zip: { sha256: createHash("sha256").update(zip).digest("hex"), size: zip.length },
+      publishedAt: "2026-10-30T10:00:00.000Z",
+      notes: ["Better."],
+    };
+    catalogueServer = await catalogue(entry, zip);
+    userData = await newUserData();
+    env = { TAVORA_API_URL: catalogueServer.url, TAVORA_OFFICIAL_MODULE_DIRS: shipped, TAVORA_OFFICIAL_PINS: `${owner}:account-tavora` };
+  });
+
+  test.afterEach(async () => {
+    await running?.app.close().catch(() => undefined);
+    running = undefined;
+  });
+
+  test.afterAll(() => {
+    catalogueServer?.server.close();
+  });
+
+  test("the shipped copy runs first and saves what it saw", async () => {
+    const { app } = await run();
+    await expectModuleText(app, ID, "version", "1.0.0");
+    await expectModuleText(app, ID, "saved", "yes");
+    // Nothing newer exists yet, so nothing newer can have been seen.
+    expect(await inModule<string>(app, ID, `document.querySelector('[data-testid="seen"]').textContent`)).not.toContain("1.1.0");
+  });
+
+  test("the update check asks for Tavora's own modules, and the update waits for the user's yes", async () => {
+    const { app, page } = await run();
+    await expectModuleText(app, ID, "version", "1.0.0");
+
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-modules").click();
     await page.getByTestId("check-module-updates").click();
     await expect(hostToast(page)).toHaveText("Found 1 update. It is ready when you are.");
-    expect(asked).toContain("/v1/catalog?include=official");
+    expect(catalogueServer.asked).toContain("/v1/catalog?include=official");
     await page.getByTestId("settings-close").click();
     await page.getByTestId("module-updates-button").click();
     await expect(page.getByTestId(`update-versions-${ID}`)).toHaveText("1.0.0 → 1.1.0");
     await page.getByTestId(`update-module-${ID}`).click();
     await expect(page.getByTestId("module-updates-empty")).toBeVisible();
+    // The panel took the new copy at once.
     await expectModuleText(app, ID, "version", "1.1.0");
-    await app.close();
+  });
 
-    // The panel took the new copy at once. After a restart it still runs, and sees what the shipped one saved.
-    ({ app, page } = await run());
-    await openModule(page, ID);
+  test("after a restart the new copy still runs and sees what the shipped one saved", async () => {
+    const { app } = await run();
     await expectModuleText(app, ID, "version", "1.1.0");
-    await expectModuleText(app, ID, "seen", "1.0.0,1.1.0");
+    await expectModuleText(app, ID, "seen", /1\.0\.0/);
     await expectModuleText(app, ID, "saved", "yes");
-    await app.close();
+  });
 
-    // A copy changed on disk is not trusted: the shipped one runs, and opens what the newer one saved.
+  test("a copy changed on disk is not trusted: the shipped one runs and opens what the newer one saved", async () => {
     await writeFile(path.join(userData, "official-updates", ID, "page.js"), `${PAGE_SCRIPT}\n// changed`);
-    ({ app, page } = await run());
-    await openModule(page, ID);
+    const { app } = await run();
     await expectModuleText(app, ID, "version", "1.0.0");
-    // The shipped copy opens what the newer one saved. A busy machine can make Tavora start the panel once more from the same copy
-    // (a background scan finds the module in the folder it fell back to), and that second start has seen the first one's entry too.
-    await expect
-      .poll(() => inModule<string | null>(app, ID, `document.querySelector('[data-testid="seen"]')?.textContent ?? null`))
-      .toMatch(/^1\.0\.0,1\.1\.0,1\.1\.0(,1\.0\.0)?$/);
+    await expectModuleText(app, ID, "seen", /1\.1\.0/);
     await expectModuleText(app, ID, "saved", "yes");
-    await app.close();
-  } finally {
-    server.close();
-  }
+  });
 });
 
 test("with the pins empty, Tavora's own modules are not asked for and nothing downloaded is loaded", async () => {

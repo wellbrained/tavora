@@ -330,6 +330,9 @@ export class ModuleView {
   private bridge: BridgeSession | undefined;
   private viewport: TavoraViewport = { width: 0, height: 0 };
   private suspended = false;
+  /** Tavora's window is behind another program (the game), as the host last said. The panel is behind only while it is not over the game itself. */
+  private windowBehind = false;
+  private behind = false;
   /** This panel's watch of the PC (system-info.ts), once it asked to watch something. */
   private systemWatch: SystemSubscription | undefined;
   /** This panel's watch of what plays on the PC (media.ts), while it watches. */
@@ -705,6 +708,7 @@ export class ModuleView {
           }),
         getViewport: () => ({ ...this.viewport }),
         isSuspended: () => this.suspended,
+        isBehind: () => this.behind,
         getTheme: this.options.getTheme,
         getLanguage: this.options.getLanguage,
         onBusy: (busy, served) => this.onBridgeBusy(busy, served),
@@ -1081,12 +1085,14 @@ export class ModuleView {
     this.overGame = { arranging, opacity: 100, zoom: 1, css: undefined };
     // Without a colour of its own, so the opacity the user chose lets the game show through.
     this.view.setBackgroundColor("#00000000");
+    this.refreshBehind();
   }
 
   leaveGame(): void {
     const away = this.overGame;
     if (!away) return;
     this.overGame = null;
+    this.refreshBehind();
     this.view.setBackgroundColor(this.options.getTheme().tokens.background);
     // After any style being set or removed, so the style it inserts last isn't left behind.
     const contents = this.view.webContents;
@@ -1185,6 +1191,22 @@ export class ModuleView {
     this.suspended = true;
     this.systemWatch?.setSuspended(true);
     this.bridge?.emit("lifecycle.suspend", null);
+  }
+
+  /**
+   * Tavora's window went behind another program or came back in front. Tells the panel (lifecycle.behind) so what the user
+   * must be there to see waits. A panel over the game is seen there, so it is never behind.
+   */
+  setWindowBehind(behind: boolean): void {
+    this.windowBehind = behind;
+    this.refreshBehind();
+  }
+
+  private refreshBehind(): void {
+    const behind = this.windowBehind && this.overGame === null;
+    if (behind === this.behind) return;
+    this.behind = behind;
+    this.bridge?.emit("lifecycle.behind", { behind });
   }
 
   resume(): void {

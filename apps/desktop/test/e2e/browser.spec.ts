@@ -189,12 +189,14 @@ test("a page cannot reach Tavora, modules, other schemes or the local network (B
   // B3 and B7: the page cannot take the panel to another scheme or to this PC.
   for (const target of ["file:///etc/passwd", "tavora-module://tavora.notes/dist/index.html", "steam://run/730", localUrl("/local-nav")]) {
     await inPage(app, publicUrl("/"), `location.href = ${JSON.stringify(target)}; null`);
+    // A refused navigation changes nothing to wait for: give a wrong one time to show.
     await page.waitForTimeout(400);
     expect(await pageUrls(app)).toEqual([publicUrl("/page")]);
   }
   // Nor can a redirect.
   for (const target of ["/redirect-file", "/redirect-local"]) {
     await inPage(app, publicUrl("/"), `location.href = ${JSON.stringify(target)}; null`);
+    // As above: a refused redirect leaves nothing to wait for.
     await page.waitForTimeout(400);
     expect((await pageUrls(app)).some((url) => url.startsWith("file:") || url.startsWith(localUrl("/")))).toBe(false);
   }
@@ -231,6 +233,7 @@ test("new windows open as a Browser tab only after a click, and downloads are re
 
   // B4: a popup nobody asked for is dropped; no window ever opens.
   expect(await inPage(app, publicUrl("/"), "window.openNow()")).toBe(true);
+  // A dropped popup leaves nothing to wait for: give a wrong one time to show.
   await page.waitForTimeout(500);
   expect(hits).not.toContain("public.test/popup");
   // A clicked target=_blank link opens as a new Browser tab, not a window.
@@ -244,6 +247,7 @@ test("new windows open as a Browser tab only after a click, and downloads are re
   await waitForPage(app, publicUrl("/burst"));
   await clickPage(app, publicUrl("/burst"));
   await waitForPage(app, publicUrl("/page?n=0"));
+  // One click opens one tab: the others the page asked for must not show up late, so a count right now proves nothing.
   await page.waitForTimeout(500);
   await expect(page.locator('[data-panel-tab][data-module-id="tavora.browser"]')).toHaveCount(3);
 

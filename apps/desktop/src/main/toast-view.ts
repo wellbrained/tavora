@@ -30,7 +30,8 @@ export class ToastView {
   private readonly top: { raise(): void; stop(): void };
   private items: HostToast[] = [];
   private ready = false;
-  private paused = false;
+  private hidden = false;
+  private behind = false;
   private disposed = false;
   private readonly listeners: [string, (event: IpcMainEvent, ...args: unknown[]) => void][] = [];
   private readonly onResize = () => {
@@ -102,8 +103,15 @@ export class ToastView {
 
   /** Tavora is hidden or shown: hidden, no toast runs out of time. */
   setHidden(hidden: boolean): void {
-    if (hidden === this.paused) return;
-    this.paused = hidden;
+    if (hidden === this.hidden) return;
+    this.hidden = hidden;
+    this.send();
+  }
+
+  /** Tavora's window went behind another program (the game) or came back: behind, no toast runs out of time either. */
+  setBehind(behind: boolean): void {
+    if (behind === this.behind) return;
+    this.behind = behind;
     this.send();
   }
 
@@ -137,7 +145,7 @@ export class ToastView {
       radius: theme.radius,
       language: this.options.language(),
       room: toastRoom(width),
-      paused: this.paused,
+      paused: this.hidden || this.behind,
     };
   }
 
