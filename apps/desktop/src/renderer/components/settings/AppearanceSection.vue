@@ -71,7 +71,7 @@ const tabOverflowOptions = computed(() =>
 
 type ToastPosition = HostViewState["library"]["toasts"];
 
-// Where toasts show in every panel; the app's own messages stay at the top, over the toolbar.
+// Where toasts show: in every panel, and Tavora's own messages too (they sit above the panels, see main/toast-view.ts).
 const toasts = computed({
   get: () => state.value!.library.toasts,
   set: (position: ToastPosition) => void act({ type: "set-toasts", position }),

@@ -225,8 +225,8 @@ export function showToast(message: string): void {
 }
 
 /**
- * Settings > Appearance > Notifications > Try it: a few toasts where the user put them. Settings covers the
- * panels, so the host window shows them in the chosen place while it is open (see App.vue).
+ * Settings > Appearance > Notifications > Try it: a few toasts where the user put them, like every toast of Tavora's own
+ * (they are drawn above the panels, see toast-bridge.ts).
  */
 export function tryToasts(): void {
   void toast.promise(new Promise((resolve) => setTimeout(resolve, 1200)), {

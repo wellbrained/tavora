@@ -20,9 +20,9 @@ import SearchDialog from "./components/SearchDialog.vue";
 import ShareIconsDialog from "./components/ShareIconsDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
 import InboxDialogs from "./components/messages/InboxDialogs.vue";
-import { Toaster } from "@tavora/official-ui/components/ui/toast";
-import { computed, defineAsyncComponent, onMounted } from "vue";
-import { dialog, pairing, publish, settingsOpen, state, trialWelcome } from "./host";
+import { defineAsyncComponent, onMounted } from "vue";
+import { api, dialog, pairing, publish, state, trialWelcome } from "./host";
+import { bridgeToasts } from "./toast-bridge";
 import OverlayPage from "./pages/OverlayPage.vue";
 import WorkspacePage from "./pages/WorkspacePage.vue";
 import OnboardingPage from "./pages/OnboardingPage.vue";
@@ -42,13 +42,13 @@ const publishWanted = everWanted(publish);
 const officialPublishWanted = everWanted(() => state.value?.officialPublish?.run);
 const pairingWanted = everWanted(() => pairing.value?.approve);
 
-// Settings covers the panels, so while it is open toasts show where the user wants them, as Try it shows.
 // Finding the games on this PC takes a while the first time, so it starts quietly a few seconds after launch
 // (once the app has drawn and loaded what it needs) and the Add a game dialog finds the list ready.
 const FIRST_SEARCH_DELAY_MS = 4000;
 onMounted(() => setTimeout(() => void findInstalledGames(), FIRST_SEARCH_DELAY_MS));
 
-const toastPosition = computed(() => (settingsOpen.value && state.value ? state.value.library.toasts : "top-center"));
+// Tavora's own toasts are drawn by a page above the panels, where the user put them (main/toast-view.ts).
+bridgeToasts(api.toasts);
 </script>
 
 <template>
@@ -94,9 +94,5 @@ const toastPosition = computed(() => (settingsOpen.value && state.value ? state.
     <PublishDialog v-if="publishWanted" />
     <OfficialPublishDialog v-if="officialPublishWanted" />
     <PairingDialog v-if="pairingWanted" />
-
-    <!-- At the top, over the toolbar: module panels are native views drawn
-         above this page, so anything lower would be hidden behind them. -->
-    <Toaster :position="toastPosition" :class="settingsOpen ? 'z-[60]!' : 'top-1! z-[60]!'" />
   </div>
 </template>

@@ -1,7 +1,7 @@
 // Accessibility checks on the host UI: small text, off switches and dimmed buttons keep enough
 // contrast in every official theme, and every button has a name a screen reader can say.
 import { expect, test, type Page } from "@playwright/test";
-import { inModule, launch, NOTES, openModule, openWorkspace, TODOS } from "./harness";
+import { inModule, launch, NOTES, openModule, openWorkspace, TODOS, toastsPage } from "./harness";
 
 /** WCAG 2 contrast ratio of two sRGB colours given as [r, g, b] in 0–255. */
 function contrast(a: number[], b: number[]): number {
@@ -237,9 +237,10 @@ test("every button on Home, in a workspace and in Settings has a name", async ()
   await openModule(page, "tavora.calculator");
   await expect(page.locator("[data-panel-tab]")).toHaveCount(3);
   found.workspace = await unnamedButtons(page);
-  // Screen readers hear what changes on its own: the workspace notice and the toast's region, which waits empty.
+  // Screen readers hear what changes on its own: the workspace notice and the toast's region (in the toast page above the
+  // panels), which waits empty.
   await expect(page.getByTestId("notice")).toHaveAttribute("role", "status");
-  await expect(page.locator('[role="status"][aria-live="polite"]')).not.toHaveCount(0);
+  await expect(toastsPage(page).locator('[role="status"][aria-live="polite"]')).not.toHaveCount(0);
 
   await page.getByTestId("rail-settings").click();
   await expect(page.getByTestId("settings")).toBeVisible();

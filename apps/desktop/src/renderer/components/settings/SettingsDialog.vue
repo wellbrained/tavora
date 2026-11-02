@@ -248,12 +248,13 @@ function onSearchKey(event: KeyboardEvent) {
           heading-class="pt-1"
           @select="(id: string) => show(id as SettingsSection)"
         />
-        <!-- Updates & About, with the version: rarely needed, so it sits at the foot. -->
+        <!-- Updates & About, with the version: rarely needed, so it sits at the foot. Inset by a plate's border and padding
+             (1px + p-1), so its icon, text and version line up with the rows in the plates above. -->
         <button
           type="button"
           :class="
             cn(
-              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mt-auto flex h-9 flex-none items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
+              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mx-[calc(0.25rem+1px)] mt-auto flex h-9 flex-none items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
               !query && entry === 'about' && 'bg-primary/10 text-foreground',
             )
           "

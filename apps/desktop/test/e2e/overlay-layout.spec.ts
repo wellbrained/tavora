@@ -4,7 +4,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { deflateSync } from "node:zlib";
 import type { ElectronApplication, Page } from "@playwright/test";
-import { launch, newUserData, openModule, seedLibrary } from "./harness";
+import { hostToast, launch, newUserData, openModule, seedLibrary, viewStack } from "./harness";
 import type { LayoutView } from "../../src/shared/layout-view";
 
 // The Overlay page, in the hidden test app (never on screen): the real controller, canvas views and pages, on the
@@ -317,7 +317,7 @@ test("A game's overlay is deleted from the page and the rail with Undo that brin
     await page.evaluate(({ id }) => (window as unknown as Host).tavoraHost.layout.send({ type: "set", ids: [id], change: { opacity: 50, mode: "toggle" } }), { id });
     await expect.poll(async () => (await state(page)).items[0]!.opacity).toBe(50);
     const before = (await state(page)).items[0]!;
-    const toast = page.getByTestId("undo-toast").last();
+    const toast = hostToast(page, "undo-toast").last();
     const deleteButton = page.getByTestId("layout-delete-setup");
     const games = async () => (await state(page)).games.map((game) => game.id);
 
@@ -333,7 +333,7 @@ test("A game's overlay is deleted from the page and the rail with Undo that brin
     await expect(toast).toBeVisible();
     expect(await games()).toEqual(["$everywhere", "$all"]);
     // Undo: back in its place in the dropdown, shown again, with the frame as it was (place, settings).
-    await page.getByTestId("undo").last().click();
+    await hostToast(page, "undo-toast").getByTestId("undo").last().click();
     await expect.poll(games).toEqual(["$everywhere", "$all", GAME]);
     await expect.poll(async () => (await state(page)).gameId).toBe(GAME);
     const after = (await state(page)).items;
@@ -345,7 +345,7 @@ test("A game's overlay is deleted from the page and the rail with Undo that brin
     await page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove-overlay"]').click();
     await expect.poll(games).toEqual(["$everywhere", "$all"]);
     await expect(toast).toContainText("Overlay for Path of Exile 2 deleted");
-    await page.getByTestId("undo").last().click();
+    await hostToast(page, "undo-toast").getByTestId("undo").last().click();
     await expect.poll(games).toEqual(["$everywhere", "$all", GAME]);
     // The page stayed on All games (the delete left it there); the game's setup is back with its frame as it was.
     await page.evaluate((gameId) => (window as unknown as Host).tavoraHost.layout.send({ type: "game", gameId }), GAME);
@@ -357,11 +357,11 @@ test("A game's overlay is deleted from the page and the rail with Undo that brin
     await page.evaluate((gameId) => (window as unknown as Host).tavoraHost.layout.send({ type: "game", gameId }), "$everywhere");
     await expect.poll(async () => (await state(page)).gameId).toBe("$everywhere");
     // The toast of the earlier delete may still be leaving.
-    await expect(page.getByTestId("undo-toast")).toHaveCount(1);
-    await page.getByTestId("undo").last().click();
+    await expect(hostToast(page, "undo-toast")).toHaveCount(1);
+    await hostToast(page, "undo-toast").getByTestId("undo").last().click();
     await expect.poll(games).toEqual(["$everywhere", "$all", GAME]);
     expect((await state(page)).gameId).toBe("$everywhere");
-    await expect(page.getByTestId("undo-toast")).toHaveCount(0);
+    await expect(hostToast(page, "undo-toast")).toHaveCount(0);
     await page.keyboard.press("Control+z");
     await page.keyboard.press("Control+z");
     await page.evaluate((gameId) => (window as unknown as Host).tavoraHost.layout.send({ type: "game", gameId }), GAME);
@@ -692,13 +692,15 @@ test("Ctrl+click and a box select several frames, Del removes them all, and one 
     await expect.poll(async () => (await state(page)).items.length).toBe(0);
     await expect(layer.getByTestId("layout-canvas-empty")).toHaveText("Add something from the list on the right");
     // The remove says so with Undo, as deleting does everywhere.
-    await expect(page.getByTestId("undo-toast")).toContainText("3 frames removed");
+    await expect(hostToast(page, "undo-toast")).toContainText("3 frames removed");
+    // The toast page is above the canvas' layer and its live pages, so the toast shows and its Undo can be pressed.
+    expect((await viewStack(app)).views.at(-1)!.url).toMatch(/\/toasts\.html$/);
 
     // One undo brings all three back, in their places with their own opacity, and selected. Ctrl+Z is the page's own
     // undo; it took back the remove, so the toast goes with it.
     await layer.locator("body").press("ControlOrMeta+z");
     await expect.poll(async () => (await state(page)).items.length).toBe(3);
-    await expect(page.getByTestId("undo-toast")).toHaveCount(0);
+    await expect(hostToast(page, "undo-toast")).toHaveCount(0);
     const back = (await state(page)).items;
     expect(back.map((item) => [item.id, item.placed, item.opacity])).toEqual(moved.map((item) => [item.id, item.placed, item.opacity]));
     expect([...(await state(page)).selected].sort()).toEqual([a, b, c].sort());
@@ -712,9 +714,9 @@ test("Ctrl+click and a box select several frames, Del removes them all, and one 
     // Undo on the toast takes back that same step, once: the frames come back and nothing before them is undone.
     await layer.locator("body").press("Delete");
     await expect.poll(async () => (await state(page)).items.length).toBe(0);
-    await page.getByTestId("undo-toast").getByTestId("undo").click();
+    await hostToast(page, "undo-toast").getByTestId("undo").click();
     await expect.poll(async () => (await state(page)).items.map((item) => item.placed)).toEqual(moved.map((item) => item.placed));
-    await expect(page.getByTestId("undo-toast")).toHaveCount(0);
+    await expect(hostToast(page, "undo-toast")).toHaveCount(0);
   } finally {
     await app.close();
   }

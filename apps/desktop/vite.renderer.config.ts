@@ -17,7 +17,14 @@ export default defineConfig({
     modulePreload: { polyfill: false },
     // Inlined assets would need data: URLs in more places of the CSP.
     assetsInlineLimit: 0,
-    // The Tavora window, and the layer on the Overlay page's canvas (src/main/overlay-canvas.ts).
-    rollupOptions: { input: { index: fileURLToPath(new URL("src/renderer/index.html", import.meta.url)), layout: fileURLToPath(new URL("src/renderer/layout.html", import.meta.url)) } },
+    // The Tavora window, the layer on the Overlay page's canvas (src/main/overlay-canvas.ts) and the page of toasts
+    // above the panels (src/main/toast-view.ts).
+    rollupOptions: {
+      input: {
+        index: fileURLToPath(new URL("src/renderer/index.html", import.meta.url)),
+        layout: fileURLToPath(new URL("src/renderer/layout.html", import.meta.url)),
+        toasts: fileURLToPath(new URL("src/renderer/toasts.html", import.meta.url)),
+      },
+    },
   },
 });

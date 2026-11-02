@@ -28,6 +28,31 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.89",
+    date: "2026-11-02",
+    title: "Messages above your panels",
+    notes: [
+      "Tavora's own messages appear where you set toasts to show, above your panels.",
+      "A new message grows or shrinks smoothly from the size of the one before it, and has a bit more room around its buttons.",
+    ],
+    prs: [
+      { number: 649, title: "Host toasts follow your position setting, above the panels" },
+    ],
+    tags: ["settings", "ui-kit"],
+  },
+  {
+    version: "0.23.88",
+    date: "2026-11-02",
+    title: "Settings",
+    notes: [
+      "Updates & About lines up with the menu above it again.",
+    ],
+    prs: [
+      { number: 653, title: "Settings: Updates & About lines up with the plates above" },
+    ],
+    tags: ["settings"],
+  },
+  {
     version: "0.23.87",
     date: "2026-11-02",
     title: "Clock & Counter",
