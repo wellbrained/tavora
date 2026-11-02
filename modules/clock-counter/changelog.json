@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.19",
+    "date": "2026-11-02",
+    "notes": [
+      "Settings ask Tavora for the usual dialog size through the shared settings parts; nothing looks different."
+    ]
+  },
+  {
     "version": "0.1.18",
     "date": "2026-11-02",
     "notes": [

@@ -18,7 +18,8 @@ let roomObserver: ResizeObserver | undefined;
 
 /** The workspace area the frame centres over, while a dialog is open. */
 const room = shallowRef<Room | null>(null);
-const place = computed(() => dialogPlace(room.value));
+/** The page's height plus the frame's header (48px and its line). */
+const place = computed(() => dialogPlace(room.value, panelDialog.value ? panelDialog.value.height + 49 : undefined));
 
 function measureRoom(): void {
   const area = document.querySelector<HTMLElement>("[data-workspace-area]");

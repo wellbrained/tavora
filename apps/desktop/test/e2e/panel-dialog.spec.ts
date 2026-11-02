@@ -44,11 +44,12 @@ test("a panel just added opens its welcome over the workspace, and a click besid
     // The welcome is the next step after Add: the library steps aside.
     await expect(page.getByTestId("add-module-dialog")).toHaveCount(0);
 
-    // Centred over the workspace area and inside it: the rail and the header stay in sight around it.
+    // Centred across the workspace area, hanging from the top edge a usual (960 × 680) dialog has, and inside the area: the rail and the header stay in sight around it.
     const area = (await page.locator("[data-workspace-area]").boundingBox())!;
+    const usualTop = area.y + (area.height - Math.min(680 + 49, area.height - 32)) / 2;
     await expect.poll(async () => {
       const box = (await frame.boundingBox())!;
-      return Math.abs(box.x + box.width / 2 - (area.x + area.width / 2)) < 2 && Math.abs(box.y + box.height / 2 - (area.y + area.height / 2)) < 2;
+      return Math.abs(box.x + box.width / 2 - (area.x + area.width / 2)) < 2 && Math.abs(box.y - usualTop) < 2;
     }).toBe(true);
     const box = (await frame.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(area.x);

@@ -7,6 +7,7 @@ import { connectModule, errorMessage } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
 import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import type { TavoraSDK } from "@tavora/sdk";
@@ -128,7 +129,8 @@ function openEditing(id: string): void {
   startPage.value = "item";
   startCount.value++;
   // Over the game this closes the game layer and opens the dialog in Tavora, so it is no different from the workspace.
-  sdk.value!.panel.openDialog({ width: 960, height: 680 }).catch(() => {
+  // An item's settings always have several pages (its own, Text, Look and the overlays), so this is the usual 960 × 680.
+  sdk.value!.panel.openDialog(settingsDialogSize({ pages: 2 })).catch(() => {
     editing.value = null;
     say(t("app.settingsFailed"));
   });
