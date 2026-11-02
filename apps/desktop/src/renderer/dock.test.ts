@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { DockviewApi, Position } from "dockview-vue";
-import { dropReorders, fromDockview, GUIDE, groupConstraints, heightSpans, layoutAround, leastAlong, maximizedPanel, MISSING_MODULE_SIZE, PANEL_COMPONENT, panelInfo, placePanel, resolveDropPosition, resolveOuterEdge, TAB_HEIGHT, toDockview, widthSpans, type GroupShape, type Sizes } from "./dock";
+import type { DockviewApi } from "dockview-vue";
+import { fromDockview, groupConstraints, heightSpans, layoutAround, leastAlong, maximizedPanel, MISSING_MODULE_SIZE, PANEL_COMPONENT, panelInfo, placePanel, TAB_HEIGHT, toDockview, widthSpans, type GroupShape, type Sizes } from "./dock";
 import type { HostViewState, LayoutGroup, LayoutSplit, PanelView, SavedLayout } from "../shared/host-api";
 import type { Slots } from "../shared/panel-layout";
 
@@ -170,58 +170,6 @@ describe("placing a new panel", () => {
     ]);
     placePanel(api, "new", info);
     expect(added).toMatchObject([{ position: { referenceGroup: "big" } }]);
-  });
-});
-
-describe("resolveDropPosition", () => {
-  const all = new Set<Position>(["top", "bottom", "left", "right", "center"]);
-  const step = GUIDE.cell + GUIDE.gap;
-
-  it("takes the guide cell under the pointer", () => {
-    expect(resolveDropPosition(400, 300, 800, 600, all)).toBe("center");
-    expect(resolveDropPosition(400 + step, 300, 800, 600, all)).toBe("right");
-    expect(resolveDropPosition(400 - step, 300, 800, 600, all)).toBe("left");
-    expect(resolveDropPosition(400, 300 - step, 800, 600, all)).toBe("top");
-    expect(resolveDropPosition(400, 300 + step, 800, 600, all)).toBe("bottom");
-  });
-
-  it("drops beside the nearest edge when close to it, else as a tab", () => {
-    expect(resolveDropPosition(20, 300, 800, 600, all)).toBe("left");
-    expect(resolveDropPosition(780, 40, 800, 600, all)).toBe("right");
-    expect(resolveDropPosition(600, 580, 800, 600, all)).toBe("bottom");
-    expect(resolveDropPosition(250, 200, 800, 600, all)).toBe("center");
-  });
-
-  it("offers only the zones a target accepts", () => {
-    expect(resolveDropPosition(400, 300, 800, 600, new Set<Position>(["left", "right"]))).toBeNull();
-    expect(resolveDropPosition(400 + step, 300, 800, 600, new Set<Position>(["center"]))).toBe("center");
-  });
-
-  it("keeps the dock's outer edges thin", () => {
-    expect(resolveOuterEdge(5, 300, 800, 600, all)).toBe("left");
-    expect(resolveOuterEdge(100, 300, 800, 600, new Set<Position>(["left", "right"]))).toBeNull();
-  });
-});
-
-describe("dropReorders", () => {
-  const box = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
-  const a = box(0, 0, 300, 600);
-  const c = box(620, 0, 300, 600);
-
-  it("is true for a lone panel moved beside a group in its row", () => {
-    expect(dropReorders(a, true, c, "right")).toBe(true);
-    expect(dropReorders(a, true, c, "left")).toBe(true);
-  });
-
-  it("is false when the dragged panel leaves others behind, or as a tab", () => {
-    expect(dropReorders(a, false, c, "right")).toBe(false);
-    expect(dropReorders(a, true, c, "center")).toBe(false);
-  });
-
-  it("is false when the groups are not in the same row or column", () => {
-    expect(dropReorders(box(0, 0, 300, 290), true, c, "right")).toBe(false);
-    expect(dropReorders(a, true, c, "bottom")).toBe(false);
-    expect(dropReorders(box(0, 0, 300, 290), true, box(0, 310, 300, 290), "bottom")).toBe(true);
   });
 });
 
