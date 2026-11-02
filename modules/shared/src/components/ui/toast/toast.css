@@ -66,19 +66,20 @@
   max-width: min(420px, calc(100vw - 32px));
   align-items: center;
   gap: 12px;
-  padding: 10px 10px 10px 20px;
+  padding: 8px 8px 8px 20px;
 }
 .tavora-toast[data-behind] .tavora-toast-content { opacity: 0; }
 .tavora-toast-text { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 2px; padding-block: 2px; }
 .tavora-toast-title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
 .tavora-toast-description { margin: 0; font-size: 12px; font-weight: 500; line-height: 1.3; opacity: 0.7; }
 
-/* Kit buttons, drawn for the pill. */
+/* Kit buttons, drawn for the pill: the action reads as big as the message and, like the close X, is the kit's small
+   button (28px high, with room around the text) so it is easy to hit; the pill stays 44px high. */
 .tavora-toast .tavora-toast-button {
   flex: none;
   background: transparent;
   color: color-mix(in srgb, var(--toast-foreground) 76%, transparent);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
 }
 .tavora-toast .tavora-toast-button:hover { background: color-mix(in srgb, var(--toast-foreground) 12%, transparent); color: var(--toast-foreground); }

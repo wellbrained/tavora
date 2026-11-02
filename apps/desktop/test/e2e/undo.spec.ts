@@ -149,6 +149,34 @@ test("the Undo toast waits while Tavora is behind the game, and counts down agai
   await app.close();
 });
 
+test("the Undo button reads as big as the message and is easy to hit, in a compact toast", async () => {
+  const { app, page } = await launch();
+  await layOutColumns(page, 2);
+  await openModule(page, VANILLA);
+  await saveLayout(page, "Mapping");
+  await layoutMenu(page, "Mapping", "layout-delete");
+  const pill = toast(page, "Layout deleted");
+  await expect(pill).toBeVisible();
+  // Let the toast settle before measuring (it slides in).
+  await page.waitForTimeout(500);
+  const measured = await pill.evaluate((element) => {
+    const size = (selector: string) => {
+      const target = element.querySelector<HTMLElement>(selector)!;
+      const box = target.getBoundingClientRect();
+      return { width: box.width, height: box.height, fontSize: getComputedStyle(target).fontSize };
+    };
+    return { pill: element.getBoundingClientRect().height, title: size(".tavora-toast-title"), undo: size('[data-testid="undo"]'), close: size(".tavora-toast-close") };
+  });
+  expect(measured.undo.fontSize).toBe(measured.title.fontSize);
+  // At least the kit's small button (28 px), and room around the word; the X as high.
+  expect(measured.undo.height).toBeGreaterThanOrEqual(28);
+  expect(measured.undo.width).toBeGreaterThanOrEqual(56);
+  expect(measured.close.height).toBeGreaterThanOrEqual(28);
+  expect(measured.close.width).toBeGreaterThanOrEqual(28);
+  expect(measured.pill).toBeLessThanOrEqual(48);
+  await app.close();
+});
+
 // ── A module: To-Dos, in its own view ──────────────────────────────────
 
 const q = (testId: string) => `document.querySelector('[data-testid="${testId}"]')`;
