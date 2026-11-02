@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Gamepad2, Plus, Settings, UserRoundPlus } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
 import { cn } from "@/lib/utils";
 import { act, dialog, openSettings, prompt, railToggles, state, submitAction } from "../host";
@@ -442,7 +443,10 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
     <div class="relative mt-1 min-h-0 flex-1">
     <div ref="scroller" class="size-full overflow-x-hidden overflow-y-auto pb-2 [scrollbar-width:none]" @scroll.passive="updateScrollHints">
     <div ref="listContent" class="flex flex-col gap-1">
-        <template v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`">
+      <!-- A game or folder added or removed grows in or folds away, and the rows below follow; a drag only moves it. -->
+      <AnimatedList class="flex flex-col gap-1 empty:hidden">
+        <!-- Each entry sits in a plain box of its own, which is what folds away or grows in. -->
+        <div v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`">
           <RailWorkspace
             v-if="entry.kind === 'workspace'"
             :workspace="workspace(entry.id)"
@@ -532,7 +536,8 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               <p v-if="!folder(entry.id).workspaces.length" class="text-muted-foreground p-2 text-center text-xs">{{ t("rail.emptyFolder") }}</p>
             </div>
           </div>
-        </template>
+        </div>
+      </AnimatedList>
         <!-- Add game and Personal are one more entry under the last workspace: two quiet buttons side by side when
              expanded (an even split), two tiles stacked when compact. -->
         <div :class="cn('mt-1 flex px-2', expanded ? 'gap-1' : 'flex-col gap-1')" data-testid="rail-add">

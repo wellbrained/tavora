@@ -48,6 +48,7 @@ import PanelContent from "../components/workspace/PanelContent.vue";
 import PanelTab from "../components/workspace/PanelTab.vue";
 import { DOCK } from "../components/workspace/dock-context";
 import { outerColumns, type ColumnSide, type DockColumn } from "../dock-columns";
+import { pointerLed } from "@tavora/official-ui/components/ui/motion";
 
 /** Space between panel cards and around the dock, in px. */
 const GAP = 8;
@@ -492,6 +493,10 @@ onBeforeUnmount(() => {
 });
 
 // The library types components loosely; these take its documented props.
+// A workspace picked with the pointer fades in over ~120ms (opacity only; the old one is already gone). A key press, a
+// hotkey or the app starting on its last workspace stays instant. The page is made new for each workspace anyway, so
+// this adds no remount; the module pages are the host's own views and are not touched.
+const arrival = pointerLed(1500) ? "tavora-quick-fade" : undefined;
 const components = { panel: PanelContent as unknown as VueComponent };
 const tab = PanelTab as unknown as VueComponent;
 const groupActions = GroupActions as unknown as VueComponent;
@@ -499,7 +504,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
 </script>
 
 <template>
-  <main class="workspace-canvas flex h-full min-w-0 flex-col" data-testid="workspace">
+  <main :class="['workspace-canvas flex h-full min-w-0 flex-col', arrival]" data-testid="workspace">
     <!-- pl-6 leaves room for the rail's round expand button, which hangs over the rail's edge. -->
     <header class="app-drag flex h-14 flex-none items-center gap-3 pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+0.5rem)] pl-6">
       <WorkspaceIcon v-if="workspace" :workspace="workspace" :size="32" />

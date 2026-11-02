@@ -32,7 +32,7 @@ export const SECTIONS = [
   { id: "tabs", group: "display", title: "Tabs", keywords: "tabs views strip close closable reorder drag rename middle-click scroll overflow add" },
   { id: "navlist", group: "display", title: "Side navigation", keywords: "nav list categories settings sidebar sections menu" },
   { id: "table", group: "display", title: "Table", keywords: "table rows columns grid data cells header list stats compare" },
-  { id: "lists", group: "display", title: "Lists and rows", keywords: "list row hover selected settings divider card" },
+  { id: "lists", group: "display", title: "Lists and rows", keywords: "list row hover selected settings divider card add remove animated grow fold" },
   { id: "settings", group: "display", title: "Module settings", keywords: "settings dialog overlay preview page reset saved control column row" },
   { id: "zoom", group: "canvas", title: "Pan and zoom", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport" },
   { id: "map", group: "canvas", title: "Tile map", keywords: "map tiles pins markers cluster group dots spawns highlight world game zoom" },

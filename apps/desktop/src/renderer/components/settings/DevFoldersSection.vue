@@ -5,6 +5,7 @@
 // the developer closes folders and drags them into their own order. Publishing is on Your modules.
 import { CircleAlert, FolderCode, FolderOpen, GripVertical, Trash2 } from "@lucide/vue";
 import { computed, ref } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
 import { cn } from "@/lib/utils";
@@ -125,7 +126,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
         <FolderCode :stroke-width="1.5" /> {{ t("settings.devFolders.add") }}
       </Button>
     </SettingRow>
-    <ul v-if="folders.length" class="flex flex-col" :aria-label="t('settings.development-folders.label')" data-testid="development-folders">
+    <AnimatedList tag="ul" v-if="folders.length" class="flex flex-col" :aria-label="t('settings.development-folders.label')" data-testid="development-folders">
       <Collapsible
         v-for="(entry, index) in folders"
         :key="entry.folder"
@@ -212,7 +213,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
           </ul>
         </CollapsibleContent>
       </Collapsible>
-    </ul>
+    </AnimatedList>
   </SettingGroup>
 
 </template>

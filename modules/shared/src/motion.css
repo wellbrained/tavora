@@ -23,7 +23,7 @@
 
 /* Menus, dropdowns, selects and popovers grow out of the thing that opened them, never from their own middle
    (reka-ui tells us where that is). They leave quicker than they arrive. A tooltip does the same from its arrow
-   (tooltip.css). Dialogs are exempt: they appear in the middle. */
+   (tooltip.css). Dialogs are exempt: they appear in the middle (below). */
 @layer components {
   .tavora-popup {
     transform-origin: var(--reka-popper-transform-origin, center);
@@ -48,23 +48,82 @@
   }
 }
 
+/* Dialogs rise out of the middle: a little scale and an 8px rise with the fade, so they settle into place. They leave
+   quicker than they arrive (about 150ms). Always centred, never from the trigger. The dialog places itself with the
+   `translate` property, so this `transform` only adds to it. The overlay behind fades with the dialog. */
+@layer components {
+  .tavora-dialog[data-state="open"] {
+    animation: tavora-dialog-in var(--duration-panel) var(--ease-out-strong);
+  }
+  .tavora-dialog[data-state="closed"] {
+    animation: tavora-dialog-out calc(var(--duration-panel) * 0.6) var(--ease-out-strong) forwards;
+  }
+  .tavora-dialog-overlay[data-state="open"] {
+    animation: tavora-fade-in var(--duration-panel) var(--ease-out-strong);
+  }
+  .tavora-dialog-overlay[data-state="closed"] {
+    animation: tavora-fade-out calc(var(--duration-panel) * 0.6) var(--ease-out-strong) forwards;
+  }
+  @keyframes tavora-dialog-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.96);
+    }
+  }
+  @keyframes tavora-dialog-out {
+    to {
+      opacity: 0;
+      transform: translateY(8px) scale(0.96);
+    }
+  }
+}
+
+/* A page that takes the place of another in the same frame (a settings page picked from the side menu): the old one
+   is gone at once, the new one fades in and settles from 4px below. Played by usePageMotion (components/ui/motion),
+   only for a pick with the pointer, never for one made with the keyboard. */
+@layer components {
+  .tavora-page-in {
+    animation: tavora-page-in 180ms var(--ease-out-strong);
+  }
+  @keyframes tavora-page-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+}
+
+/* The workspace page after a switch made with the pointer: opacity only, no movement. The old page is already gone, so
+   nothing overlaps. Reduced motion gets no animation at all (the rule below stops it). */
+@layer components {
+  .tavora-quick-fade {
+    animation: tavora-fade-in var(--duration-tooltip) var(--ease-out-strong);
+  }
+}
+
+@keyframes tavora-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes tavora-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
 /* Reduced motion keeps the fade and drops the movement. The rule that follows (theme.css, styles.css) stops every
    other animation; these few are kept on purpose, so a menu still arrives gently instead of blinking in. */
 @media (prefers-reduced-motion: reduce) {
-  .tavora-popup[data-state="open"] {
+  .tavora-popup[data-state="open"],
+  .tavora-dialog[data-state="open"],
+  .tavora-dialog-overlay[data-state="open"],
+  .tavora-page-in {
     animation: tavora-fade-in 100ms linear !important;
   }
-  .tavora-popup[data-state="closed"] {
+  .tavora-popup[data-state="closed"],
+  .tavora-dialog[data-state="closed"],
+  .tavora-dialog-overlay[data-state="closed"] {
     animation: tavora-fade-out 80ms linear forwards !important;
-  }
-  @keyframes tavora-fade-in {
-    from {
-      opacity: 0;
-    }
-  }
-  @keyframes tavora-fade-out {
-    to {
-      opacity: 0;
-    }
   }
 }

@@ -5,6 +5,7 @@
 // only once an installed module asks for them (hiddenSettingIds). A search result opens its row.
 import { Cpu, Globe, Headphones, Music, Sparkles, Trophy } from "@lucide/vue";
 import { computed, reactive, watch } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { account, act, aiUsage, confirmAction, discord, hiddenSettingIds, state, submitAction } from "../../host";
 import { t } from "../../i18n";
@@ -182,7 +183,7 @@ function leaveBoards(module: ModuleView) {
       testid="connection-leaderboards"
     >
       <template #lead><span class="module-tile size-9" aria-hidden="true"><Trophy class="size-4" :stroke-width="1.75" /></span></template>
-      <ul class="flex flex-col py-2" data-testid="leaderboards-users">
+      <AnimatedList tag="ul" class="flex flex-col py-2" data-testid="leaderboards-users">
         <li v-for="module in boards" :key="module.id" class="flex items-center gap-3 border-b border-dashed py-2 last:border-b-0" :data-testid="`leaderboards-user-${module.id}`">
           <span class="module-tile size-8" aria-hidden="true">
             <ModuleIcon :module-id="module.id" size="size-4" />
@@ -209,7 +210,7 @@ function leaveBoards(module: ModuleView) {
             {{ t("integrations.grants.revoke") }}
           </Button>
         </li>
-      </ul>
+      </AnimatedList>
     </SettingExpand>
   </SettingGroup>
 </template>

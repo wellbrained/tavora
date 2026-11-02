@@ -6,6 +6,7 @@
 // their own in the profile dialog; what module developers need is in Settings > Developer
 // (ModuleDeveloperSettings.vue).
 import { computed, onMounted, ref, watch } from "vue";
+import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { CodeInput, codeDigits } from "@tavora/official-ui/components/ui/code-input";
 import { Input } from "@tavora/official-ui/components/ui/input";
@@ -248,7 +249,7 @@ function startDelete() {
       </SettingRow>
       <div v-if="devicesOpen" class="border-b py-2">
         <p v-if="!view?.devices" class="text-muted-foreground py-1 text-sm">{{ t("account.devices.unknown") }}</p>
-        <ul v-else data-testid="account-devices">
+        <AnimatedList tag="ul" v-else data-testid="account-devices">
           <li v-for="device in view.devices" :key="device.id" class="flex min-h-12 items-center gap-3 py-1" :data-testid="`account-device-${device.id}`">
             <span class="flex min-w-0 flex-1 flex-col">
               <span class="truncate font-medium">{{ deviceLabel(device) }}<span v-if="device.current" class="text-muted-foreground font-normal"> · {{ t("account.devices.thisPc") }}</span></span>
@@ -257,7 +258,7 @@ function startDelete() {
             <Button variant="ghost" size="sm" :disabled="busy" :data-testid="`account-device-rename-${device.id}`" @click="renameDevice(device)">{{ t("account.devices.rename") }}</Button>
             <Button v-if="!device.current" variant="danger" size="sm" :disabled="busy" @click="signOutDevice(device)">{{ t("account.signOut") }}</Button>
           </li>
-        </ul>
+        </AnimatedList>
       </div>
 
       <form

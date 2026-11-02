@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.5",
+    "date": "2026-11-02",
+    "notes": [
+      "Lists, dialogs and settings pages move smoothly."
+    ]
+  },
+  {
     "version": "0.1.4",
     "date": "2026-11-01",
     "notes": [

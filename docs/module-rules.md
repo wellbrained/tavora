@@ -98,6 +98,10 @@ themes; anything hard-coded breaks in one of them.
   `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed button dips to
   0.97 on a fine pointer. Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
   anything shown all day. Reduced motion keeps a short fade and drops the movement.
+  Dialogs rise 8 px and scale from 0.96 as they fade in (the kit's dialogs do it; centred, never from the trigger).
+  Rows the user adds or removes in a vertical list use the kit's `AnimatedList` (it folds a row's height so the rows
+  below follow, the one place height is animated), and a page that replaces another in the same frame uses
+  `usePageMotion`; don't hand-roll either. Neither moves for a key press or when a whole list is replaced.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
 

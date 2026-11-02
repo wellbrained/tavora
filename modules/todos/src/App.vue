@@ -4,6 +4,7 @@
 // edited is each panel's own state.
 import { ChevronsDownUp, ChevronsUpDown, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
 import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
+import { leaveRow } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
@@ -15,7 +16,7 @@ import GroupSection, { type DropTarget } from "./GroupSection.vue";
 import { plural, setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
 import { buildLiveState, fontStack, LIVE_DEFAULTS, PANEL_LOOK_DEFAULTS, PANEL_SIZES, parseLook, parsePanelLook, throttle, type LiveLook, type LiveState, type PanelLook } from "./live";
-import { collapse, LINGER_MS, PANEL, UNDO_MS, type Draft, type FinishedMode } from "./panel";
+import { LINGER_MS, PANEL, UNDO_MS, type Draft, type FinishedMode } from "./panel";
 import Settings from "./Settings.vue";
 import { createTodoStore, type TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
@@ -292,7 +293,7 @@ function dropTask() {
 
       <section v-if="objectives.length" class="mb-3" :aria-label="t('app.objectives')" data-testid="objectives">
         <h2 class="text-muted-foreground px-2 pt-1 pb-1 text-xs font-medium">{{ t("app.objectives") }}</h2>
-        <TransitionGroup tag="ul" role="list" :css="false" @leave="collapse">
+        <TransitionGroup tag="ul" role="list" :css="false" @leave="leaveRow">
           <li v-for="{ task, group } in objectives" :key="task.id">
             <TaskRow
               :store="store"
