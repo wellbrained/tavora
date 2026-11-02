@@ -1089,7 +1089,7 @@ test("calculator: settings are one compact page that saves at once, resets with 
   };
 
   // One page in a compact dialog: no menu, no Done, a short line under every setting, Reset and the saved note in the footer.
-  await click(app, CALCULATOR, `[data-testid="options"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="options"]`);
   await expect(dialog).toBeVisible();
   await ready(app, CALCULATOR, "settings-dialog");
   expect((await dialog.boundingBox())!.width).toBeLessThan(800);
@@ -1106,8 +1106,8 @@ test("calculator: settings are one compact page that saves at once, resets with 
 
   // Every change saves at once.
   await pickDecimals("2");
-  await click(app, CALCULATOR, `[data-testid="options-short"]`);
-  await click(app, CALCULATOR, `[data-testid="history-length-25"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="options-short"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="history-length-25"]`);
   await expect.poll(() => text("settings-saved")).toBe("Saved");
   await shoot("calculator-settings-changed");
   expect(await text("options-decimals")).toBe("2");
@@ -1115,13 +1115,13 @@ test("calculator: settings are one compact page that saves at once, resets with 
   expect(await history()).toEqual(["history-length-25"]);
 
   // Reset puts the three settings back; Undo brings them back.
-  await click(app, CALCULATOR, `[data-testid="settings-reset"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="settings-reset"]`);
   await expect.poll(() => text("options-decimals")).toBe("Auto");
   expect(await short()).toBe("false");
   expect(await history()).toEqual(["history-length-10"]);
   await expect.poll(() => text("settings-reset-toast")).toContain("Page reset");
   await shoot("calculator-settings-reset");
-  await click(app, CALCULATOR, `[data-testid="settings-reset-undo"]`);
+  await clickSelector(app, CALCULATOR, `[data-testid="settings-reset-undo"]`);
   await expect.poll(() => text("options-decimals")).toBe("2");
   expect(await short()).toBe("true");
   expect(await history()).toEqual(["history-length-25"]);
@@ -1130,7 +1130,7 @@ test("calculator: settings are one compact page that saves at once, resets with 
   await page.getByTestId("panel-dialog-close").click();
   await expect(dialog).toHaveCount(0);
   await ready(app, CALCULATOR, "key-=");
-  for (const key of ["1", "/", "3"]) await click(app, CALCULATOR, `[data-testid="key-${key}"]`);
+  for (const key of ["1", "/", "3"]) await clickSelector(app, CALCULATOR, `[data-testid="key-${key}"]`);
   await expect.poll(() => text("preview")).toBe("= 0.33");
 
   // The choices are kept after a restart.
@@ -1138,7 +1138,7 @@ test("calculator: settings are one compact page that saves at once, resets with 
   const again = await launch(userData);
   await openWorkspace(again.page, "poe2");
   await ready(again.app, CALCULATOR, "key-=");
-  await click(again.app, CALCULATOR, `[data-testid="options"]`);
+  await clickSelector(again.app, CALCULATOR, `[data-testid="options"]`);
   await ready(again.app, CALCULATOR, "settings-dialog");
   await expect.poll(() => inModule<string>(again.app, CALCULATOR, `${q("options-decimals")}.textContent.trim()`)).toBe("2");
   await again.app.close();
