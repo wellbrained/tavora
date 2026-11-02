@@ -99,7 +99,7 @@ function slow(done: () => void) {
 </script>
 
 <template>
-<DemoSection v-if="visible.has('buttons')" id="buttons" :title="title('buttons')" description="One primary button per view; secondary for everything else.">
+<DemoSection v-if="visible.has('buttons')" id="buttons" :title="title('buttons')" description="One primary button per view; secondary for everything else. Primary and secondary have a faint top light (primary also a hairline shadow) and dip when pressed; the rest stay flat.">
         <Specimen label="Variants">
           <Button :disabled="off">Primary</Button>
           <Button variant="secondary" :disabled="off">Secondary</Button>
@@ -110,6 +110,7 @@ function slow(done: () => void) {
           <Button variant="link" :disabled="off">Link</Button>
         </Specimen>
         <Specimen label="Sizes">
+          <Button size="xs" :disabled="off">Extra small</Button>
           <Button size="xs" variant="secondary" :disabled="off">Extra small</Button>
           <Button size="sm" variant="secondary" :disabled="off">Small</Button>
           <Button variant="secondary" :disabled="off">Default</Button>
@@ -127,6 +128,7 @@ function slow(done: () => void) {
         </Specimen>
         <Specimen label="Icon only (each has a label and a shared tooltip)">
           <Button size="icon-xs" variant="ghost" aria-label="Pin" title="Pin" :disabled="off"><Pin :stroke-width="1.5" /></Button>
+          <Button size="icon-xs" variant="secondary" aria-label="Copy" title="Copy" :disabled="off"><Copy :stroke-width="1.5" /></Button>
           <Button size="icon-sm" variant="ghost" aria-label="Edit" title="Edit" :disabled="off"><Pencil :stroke-width="1.5" /></Button>
           <Button size="icon" variant="secondary" aria-label="Settings" title="Settings" :disabled="off"><Settings :stroke-width="1.5" /></Button>
           <Button size="icon-lg" variant="outline" aria-label="Add" title="Add" :disabled="off"><Plus :stroke-width="1.5" /></Button>
