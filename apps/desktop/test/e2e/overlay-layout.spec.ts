@@ -558,6 +558,14 @@ test("Ctrl+click and a box select several frames, Del removes them all, and one 
     await expect(bar.getByTestId("layout-frame-settings")).toHaveCount(0);
     await expect(page.getByTestId("layout-selected-count")).toHaveText("2 frames selected");
     await expect(page.getByTestId("layout-opacity-many")).toContainText("Mixed");
+    // Picking an opacity sets it on both frames, and one undo gives each its own back.
+    await page.getByTestId("layout-opacity-many").click();
+    await page.getByRole("option", { name: "25%", exact: true }).click();
+    await expect.poll(async () => (await state(page)).items.filter((item) => [a, b].includes(item.id)).map((item) => item.opacity)).toEqual([25, 25]);
+    await expect(page.getByTestId("layout-opacity-many")).toContainText("25%");
+    await page.getByTestId("layout-undo").click();
+    await expect.poll(async () => (await state(page)).items.filter((item) => [a, b].includes(item.id)).map((item) => item.opacity)).toEqual([100, 50]);
+    await expect(page.getByTestId("layout-opacity-many")).toContainText("Mixed");
     // Shift and a click takes one away again.
     await frame(b!).click({ modifiers: ["Shift"] });
     await expect.poll(async () => (await state(page)).selected).toEqual([a]);
