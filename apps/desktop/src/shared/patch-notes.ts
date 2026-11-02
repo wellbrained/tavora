@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.71",
+    date: "2026-11-02",
+    title: "Clock & Counter settings are tidier",
+    notes: [
+      "Clock & Counter settings are tidier: pages on the left and one footer.",
+      "A module can name its settings window, so Clock & Counter's says \"Countdown\" instead of the module's name.",
+    ],
+    prs: [
+      { number: 629, title: "Clock & Counter: tidier settings (pages, one footer, named frame) and drag to reorder" },
+    ],
+    tags: ["clock-counter", "modules", "privacy", "publishing", "sdk", "website"],
+  },
+  {
     version: "0.23.70",
     date: "2026-11-02",
     title: "Docking drops",
