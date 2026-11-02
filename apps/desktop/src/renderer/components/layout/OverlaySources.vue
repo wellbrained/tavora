@@ -9,6 +9,7 @@
 import { ChevronDown, ChevronRight, Eye, EyeOff, Link, Plus, Settings } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { SourceBlock } from "../../../shared/layout-view";
@@ -132,7 +133,7 @@ const selected = (row: Row) => row.item !== null && (current.value?.selected.inc
   <section class="bg-card flex min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-lg border py-3 pr-3 pl-3" :aria-label="t('overlays.layout.sources')" data-testid="layout-sources">
     <div class="flex items-baseline justify-between px-1">
       <h2 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">{{ t("overlays.layout.sources") }}</h2>
-      <span class="text-muted-foreground text-xs" data-testid="layout-count">{{ t("overlays.layout.count", { count, max: current?.limit ?? 0 }) }}</span>
+      <span class="text-muted-foreground text-xs" data-testid="layout-count"><CountTo :value="count" :format="(shown) => t('overlays.layout.count', { count: shown, max: current?.limit ?? 0 })" /></span>
     </div>
     <Input v-model="query" type="search" :placeholder="t('overlays.layout.search')" :aria-label="t('overlays.layout.search')" data-testid="layout-search" />
     <p v-if="!shown.length" class="text-muted-foreground px-1 py-2 text-sm" :data-testid="blockedLine ? 'layout-blocked' : 'layout-empty'">{{ blockedLine ?? (query ? t("overlays.layout.noSources") : t("overlays.layout.nothing")) }}</p>

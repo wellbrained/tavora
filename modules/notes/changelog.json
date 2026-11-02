@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.6.7",
+    "version": "0.6.8",
     "date": "2026-11-02",
     "notes": [
       "Lists, dialogs and settings pages move smoothly."
+    ]
+  },
+  {
+    "version": "0.6.7",
+    "date": "2026-11-02",
+    "notes": [
+      "Notes lift when you drag them, the others slide out of the way, and the note settles into its place."
     ]
   },
   {

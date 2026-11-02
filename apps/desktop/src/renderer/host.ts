@@ -103,6 +103,13 @@ export function openInbox(id?: string): void {
   void act({ type: "inbox-refresh" }, { quiet: true });
 }
 
+/** How far each catalog install has downloaded, in whole percent, by module id; a module not in it reports none. */
+export const installProgress = shallowRef<Readonly<Record<string, number>>>({});
+api.onInstallProgress(({ moduleId, percent }) => {
+  const { [moduleId]: _gone, ...rest } = installProgress.value;
+  installProgress.value = percent === null ? rest : { ...rest, [moduleId]: percent };
+});
+
 /** Settings > Account > Cloud copy, and the questions it asks over the app. */
 export const cloudCopy = shallowRef<CloudCopyView | null>(null);
 api.onCloudCopy((next) => (cloudCopy.value = next));

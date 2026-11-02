@@ -29,6 +29,8 @@
   --duration-panel: 250ms;
   /* Something moving across the screen. The longest the interface gets. */
   --duration-move: 300ms;
+  /* Items of a list sliding out of the way of one that is dragged, and settling into their place. */
+  --duration-reorder: 200ms;
 }
 
 /* Menus, dropdowns, selects and popovers grow out of the thing that opened them, never from their own middle

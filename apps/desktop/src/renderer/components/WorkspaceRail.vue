@@ -3,6 +3,7 @@ import { ChevronDown, PanelLeftClose, PanelLeftOpen, Gamepad2, Plus, Settings, U
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
+import { liftedDragImage, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import { cn } from "@/lib/utils";
 import { act, dialog, openSettings, prompt, railToggles, state, submitAction } from "../host";
 import { t } from "../i18n";
@@ -212,6 +213,8 @@ interface Target {
 }
 
 const dragged = ref<Dragged | null>(null);
+// The rail's items lift as they are picked up and settle into their new place when dropped; the keys and menus move them at once.
+const motion = useReorderMotion(nav);
 const hint = ref<{ key: string; zone: Zone } | null>(null);
 
 const keyOf = (target: Target) =>
@@ -227,6 +230,8 @@ function onDragStart(event: DragEvent, item: Dragged) {
   if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
   // Dim the item where it came from, a frame later so the drag image stays solid.
   const row = event.currentTarget as HTMLElement;
+  liftedDragImage(event, row);
+  motion.begin(item.id);
   requestAnimationFrame(() => row.classList.add("drag-source"));
 }
 
@@ -285,10 +290,14 @@ async function onDrop(event: DragEvent, target: Target) {
   const item = dragged.value;
   const zone = hint.value?.key === keyOf(target) ? hint.value.zone : null;
   onDragEnd();
-  if (!item || !zone) return;
+  if (!item || !zone) return motion.cancel();
   event.preventDefault();
   event.stopPropagation();
+  await motion.drop(() => moveDropped(item, target, zone));
+}
 
+/** What a drop changes, once it is known where it landed. */
+async function moveDropped(item: Dragged, target: Target, zone: Zone) {
   if (item.kind === "folder") {
     await act({ type: "move-folder", folderId: item.id, index: indexIn(rootKeys(), target.id, zone) });
     return;
@@ -341,6 +350,7 @@ function dnd(target: Target, item: Dragged = { kind: target.kind, id: target.id 
     dragend: (event: DragEvent) => {
       (event.currentTarget as HTMLElement).classList.remove("drag-source");
       onDragEnd();
+      motion.cancel();
     },
     dragover: (event: DragEvent) => onDragOver(event, target),
     dragleave: (event: DragEvent) => onDragLeave(event, target),
@@ -433,6 +443,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       <RailWorkspace
         v-for="item in favorites"
         :key="item.id"
+        :data-reorder-id="item.id"
         :workspace="item"
         :testid="`rail-favorite-${item.id}`"
         :active="isActive(item.id)"
@@ -459,6 +470,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         <div v-for="entry in rootEntries" :key="`${entry.kind}:${entry.id}`" :data-rail-entry="entry.id">
           <RailWorkspace
             v-if="entry.kind === 'workspace'"
+            :data-reorder-id="entry.id"
             :workspace="workspace(entry.id)"
             :testid="`rail-workspace-${entry.id}`"
             :active="isActive(entry.id)"
@@ -486,6 +498,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               <div
                 :class="cn('group rail-entry relative flex items-center px-2', folderHint(entry.id) && `drop-${folderHint(entry.id)}`)"
                 draggable="true"
+                :data-reorder-id="entry.id"
                 v-on="dnd({ kind: 'folder', id: entry.id, place: { list: 'root' } })"
               >
                 <RailTooltip
@@ -532,6 +545,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               <RailWorkspace
                 v-for="id in folderWorkspaces(entry.id)"
                 :key="id"
+                :data-reorder-id="id"
                 :workspace="workspace(id)"
                 :testid="`rail-workspace-${id}`"
                 :active="isActive(id)"
