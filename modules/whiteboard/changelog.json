@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.11",
+    "date": "2026-11-02",
+    "notes": [
+      "Screen readers hear each message once, and Undo says that Ctrl+Z works too."
+    ]
+  },
+  {
     "version": "0.3.10",
     "date": "2026-11-02",
     "notes": [

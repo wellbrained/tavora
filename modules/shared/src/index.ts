@@ -18,3 +18,5 @@ export { createOptimistic, useOptimistic, useOptimisticKeyed, type Optimistic, t
 
 export{Tooltip,TooltipRows,type TooltipRow}from"./components/tooltip";
 export{installTitleTooltips}from"./title-tooltips";
+/** Writes the views zoomable panes are waiting to save; call it from `onSuspend` and `onDispose`. */
+export { flushViewMemory } from "./components/ui/zoom-pane/view-memory";

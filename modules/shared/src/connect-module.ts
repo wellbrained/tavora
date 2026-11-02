@@ -1,6 +1,7 @@
 import type { TavoraSDK, TavoraTheme } from "@tavora/sdk";
 import { bootstrapModule, type BootstrapStatus } from "@tavora/sdk/bootstrap";
 import { createTranslator, type Translator } from "./i18n";
+import { setViewMemoryStore } from "./components/ui/zoom-pane/view-memory";
 import { installTitleTooltips } from "./title-tooltips";
 import { applyKitTheme } from "./theme";
 
@@ -44,6 +45,8 @@ export async function connectModule<K extends string = string>(options: ConnectM
     if (boot.theme) applyKitTheme(boot.theme);
     if (options.titleTooltips !== false && typeof document !== "undefined" && document.body) installTitleTooltips(document);
     translator.setLanguage(boot.language);
+    // Zoomable views (ZoomPane with a persistKey) keep where they were left in the module's own storage.
+    if (boot.sdk?.storage) setViewMemoryStore(boot.sdk.storage);
     boot.onTheme(applyKitTheme);
     boot.onLanguage((language) => translator.setLanguage(language));
   }

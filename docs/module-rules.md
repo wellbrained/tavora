@@ -64,7 +64,8 @@ classes where you use a control; never copy it.
 | Short message | `toast()` from `ui/toast` (the `Toaster` follows the user's toast position) | own status line |
 | Deleting something you can put back (a group, a value, a saved layout) | delete at once, then `undoable({ title, undo })` from `@tavora/official-ui`: a toast with Undo for 5 s, each delete its own; `reinsert` puts it back in its place; bind Ctrl+Z with `isUndoKey` and `undoLatest` | `ConfirmDialog` ("Are you sure?"), one Undo that replaces the last |
 | Key hint | `Kbd` | |
-| Zoomable picture or canvas | `ZoomPane` | own wheel and drag handling |
+| Zoomable picture, map, tree or canvas | `ZoomPane` (one control group: −, %, +, Whole map, and your own buttons in `extras`; `hundred` sets what 100 % is; `persist-key` remembers the view; a game that draws itself, canvas or SVG, uses `view-only`) and `TileMap` for tiles and pins | own wheel, drag, double-click or zoom buttons, own zoom controls per game |
+| A tooltip for a canvas node or anything without an element to hover | `ZoomTip` with `useZoomTip()`: you pass the box on the pane, the kit tooltip opens beside it | a tooltip at the pointer, own hover box |
 | Small chart | `Sparkline` | |
 | Rating | `StarRating` | |
 | Module settings page | `ModuleSettings` and its parts | own settings layout |
@@ -164,9 +165,9 @@ each pattern.
   earlier failure never overwrites a newer value. Not for what can't be put back: deleting, publishing, money, keys,
   security. No disabled controls or "Saving…" while a local save runs.
 - **Panel state**: what one panel remembers (open item, view, tab, filters, folded parts, scroll or zoom) is saved with
-  panel state and **read back on start**. Writing it without reading it is the common bug.
+  panel state and **read back on start**. Writing it without reading it is the common bug. The view of a `ZoomPane` or `TileMap` is the exception: give it a `persist-key` and the kit saves and restores it in the module's storage (nothing saved: the whole map), so don't copy it into panel state.
 - **Lifecycle**: `onSuspend` flushes pending saves and panel state and pauses timers and animations; `onResume` starts
-  them again; `onDispose` flushes. Every module registers them, even without timers, if anything saves after a delay.
+  them again; `onDispose` flushes. Call `flushViewMemory()` (from `@tavora/official-ui`) in `onSuspend` and `onDispose` too, so a view still waiting to be saved is written. Every module registers them, even without timers, if anything saves after a delay.
 - **One pane, many copies**: a component may be shown twice. Reach your own elements through refs, never
   `document.querySelector`. Keyboard shortcuts act on the focused pane only, not through a window-wide listener. Ctrl+K
   belongs to Tavora.

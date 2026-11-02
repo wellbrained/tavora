@@ -1,9 +1,17 @@
 [
   {
+    "version": "0.1.17",
+    "date": "2026-11-02",
+    "notes": [
+      "The Undo toast example shows the kit's undoable().",
+      "Screen readers hear each message once, and Undo says that Ctrl+Z works too."
+    ]
+  },
+  {
     "version": "0.1.16",
     "date": "2026-11-02",
     "notes": [
-      "The Undo toast example shows the kit's undoable()."
+      "Pan and zoom and the tile map show the new shared controls: zoom, the % (back to 100 %), the whole map and your own buttons, double-click to zoom in, a canvas that draws itself, a tooltip next to a node, and a view that is remembered."
     ]
   },
   {

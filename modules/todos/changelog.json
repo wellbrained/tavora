@@ -4,7 +4,8 @@
     "date": "2026-11-02",
     "notes": [
       "Deleting a group no longer asks first; you can undo it for a few seconds.",
-      "Each deleted to-do gets its own Undo, and Ctrl+Z takes back the newest."
+      "Each deleted to-do gets its own Undo, and Ctrl+Z takes back the newest.",
+      "Screen readers hear each message once, and Undo says that Ctrl+Z works too."
     ]
   },
   {
