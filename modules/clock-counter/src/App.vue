@@ -15,6 +15,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRe
 import { plural, setLanguage, t } from "./i18n";
 import ItemCard from "./ItemCard.vue";
 import ItemEditor from "./ItemEditor.vue";
+import SettingsSkeleton from "./SettingsSkeleton.vue";
 import { count, find, groupOf, insert, lap, linkedGroups, MAX, move, moveTo, newItem, parseList, remove, resetClock, resetCounter, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
 import { buildLiveState } from "./live";
 import { de, en } from "./locales";
@@ -37,6 +38,8 @@ const dialogOpen = ref(false);
 /** The page the settings open on (the gear: the item's own; a frame's Settings on the Overlay page: the overlay text), and a count so the same page opens again. */
 const startPage = ref<"item" | "text">("item");
 const startCount = ref(0);
+/** The overlay a frame's Settings press asked for, until the list is there to find its item in. */
+const pendingKey = ref<string | null>(null);
 const editedItem = computed(() => (editing.value ? find(list.value, editing.value) : undefined));
 const now = ref(Date.now());
 const hotkeys = ref<ReadonlySet<string>>(new Set());
@@ -434,12 +437,21 @@ function overGameChanged(keys: string[]): void {
 
 /** Settings on a frame of the Overlay page: Tavora has the dialog open already; it shows the item's or group's settings. */
 function openSettingsFor(key: string): void {
-  const item = itemForKey(list.value, key);
-  if (!item) return;
-  editing.value = item.id;
+  pendingKey.value = key;
   startPage.value = "text";
   startCount.value++;
+  findPending();
 }
+
+/** Finds the item of the pressed overlay once the list is loaded; one that is gone closes the dialog. */
+function findPending(): void {
+  if (!pendingKey.value || !store.value) return;
+  const item = itemForKey(list.value, pendingKey.value);
+  pendingKey.value = null;
+  if (item) editing.value = item.id;
+  else if (dialogOpen.value) void sdk.value?.panel.closeDialog();
+}
+watch(store, findPending);
 
 const cleanup: (() => void)[] = [];
 
@@ -452,16 +464,22 @@ onMounted(async () => {
     // The components read the module's own translator; it follows the language the handle reports.
     setLanguage(connection.language);
     cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
-    const items = await createItemStore(connected);
+    // Told about the dialog and a Settings press before the list loads (the slow part), so the settings' placeholder can stand in for it.
     cleanup.push(
       connected.panel.onDialogChange((open) => {
         dialogOpen.value = open;
-        if (!open) editing.value = null;
+        if (!open) {
+          editing.value = null;
+          pendingKey.value = null;
+        }
       }),
+      connected.panel.onOpenSettings(({ key }) => openSettingsFor(key)),
+    );
+    const items = await createItemStore(connected);
+    cleanup.push(
       () => void items.dispose(),
       connected.hotkeys.onPress(({ action, target }) => act(action, target)),
       connected.overlay.onOverGameChange(overGameChanged),
-      connected.panel.onOpenSettings(({ key }) => openSettingsFor(key)),
       connected.lifecycle.onSuspend(() => (suspended.value = true)),
       connected.lifecycle.onResume(() => {
         suspended.value = false;
@@ -493,9 +511,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
-    {{ error ? t("connectError", { error }) : t("loading") }}
-  </p>
+  <!-- Never an empty dialog: while the panel starts and the list loads, the settings' own layout is there as placeholder. -->
+  <p v-if="!store && error" class="text-muted-foreground p-4 text-sm" data-testid="status">{{ t("connectError", { error }) }}</p>
+  <SettingsSkeleton v-else-if="!store ? dialogOpen || !!pendingKey : dialogOpen && !editedItem" />
+  <p v-else-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">{{ t("loading") }}</p>
   <ItemEditor v-else-if="dialogOpen && editedItem" :key="editedItem.id" :title="dialogTitle ?? ''" :titled="titled" :item="editedItem" :start="startPage" :start-count="startCount" />
   <div v-else class="relative flex h-full min-h-0 flex-col" data-testid="clock-counter-app">
     <header class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2" role="toolbar" :aria-label="t('app.toolbar')">

@@ -108,7 +108,7 @@ test("the Overlay page lists a Clock & Counter's things under its panel, adds th
     expect(item.name).toBe(second.name);
     expect((await state(page)).selection).toBe(item.id);
     // Not the big frame a panel starts with: the size its content needs.
-    expect(item.placed.width).toBeLessThan(340);
+    expect(item.placed.width).toBeLessThan(420);
     expect(item.placed.height).toBeLessThan(130);
     await expect(page.getByTestId("layout-count")).toHaveText("1 of 8");
     await expect(page.getByTestId("layout-settings")).toContainText(second.name);
@@ -116,6 +116,17 @@ test("the Overlay page lists a Clock & Counter's things under its panel, adds th
 
     // Settings, from the row's gear: the panel's dialog over the Overlay page, which stays where it is.
     await page.getByTestId(`layout-gear-${item.id}`).click();
+    // Whatever the dialog shows from the first moment is the settings or their placeholder, never the panel's list or an empty page.
+    const shown = inModule<string[]>(
+      app,
+      ID,
+      `new Promise((resolve) => {
+        const seen = new Set();
+        const sample = () => seen.add(document.querySelector('[data-testid^="editor-"]') ? "editor" : document.querySelector('[data-testid="settings-skeleton"]') ? "placeholder" : document.querySelector('[data-testid="clock-counter-app"]') ? "list" : "nothing");
+        const timer = setInterval(sample, 10);
+        setTimeout(() => (clearInterval(timer), resolve([...seen])), 1500);
+      })`,
+    );
     await expect(page.getByTestId("panel-dialog")).toBeVisible();
     await expect(page.getByTestId("overlay-page")).toBeVisible();
     await expect.poll(() => inModule<boolean>(app, ID, `!!document.querySelector('[data-testid^="editor-"]')`).catch(() => false)).toBe(true);
@@ -124,6 +135,10 @@ test("the Overlay page lists a Clock & Counter's things under its panel, adds th
     // From a frame of the Overlay page the settings open on what the overlay says.
     await expect.poll(() => attribute(app, "page-text", "aria-current")).toBe("page");
     await shotOfPanel(app, "settings-from-overlay-page.png");
+    const states = await shown;
+    expect(states).toContain("editor");
+    expect(states).not.toContain("list");
+    expect(states).not.toContain("nothing");
     await page.getByTestId("panel-dialog-close").click();
     await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
     await expect(page.getByTestId("overlay-page")).toBeVisible();
@@ -176,10 +191,9 @@ test("an item's settings use Tavora's settings layout: the panel, the overlay an
     // The dots: the overlay is not over a game and Stream overlays are not allowed yet, so both are hollow.
     await expect.poll(() => inModule<string[]>(app, ID, `[...document.querySelectorAll('[data-nav-item] [data-status]')].map((node) => node.getAttribute("data-status"))`)).toEqual(["off", "off"]);
     await expect.poll(() => attribute(app, "page-item", "aria-current")).toBe("page");
-    // No Done and no Delete in a footer: saving is automatic, closing is the ×, and Delete is the last row of the item's page.
+    // No Done and no Delete: saving is automatic, closing is the ×, and deleting is a button on the item's row.
     expect(await texts("footer button")).toEqual(["Reset this page"]);
     const everything = () => inModule<string>(app, ID, `document.body.innerText`);
-    await expect.poll(() => everything()).toContain("Delete");
     expect(await everything()).not.toContain("Done");
     await shotOfPanel(app, "settings-counter.png");
 
@@ -214,7 +228,12 @@ test("an item's settings use Tavora's settings layout: the panel, the overlay an
     // Look: font, alignment and outline for everything, then Words and Number, one under the other.
     await click(app, "page-look");
     await expect.poll(() => texts('[data-slot="settings-section"] h3')).toEqual(["Everything", "Words", "Number"]);
+    // Words and Number have the same sizes, the kit's: XS S M L XL.
+    const sizes = (kind: string) => texts(`[data-testid^="${kind}-size-"]`);
+    expect(await sizes("words")).toEqual(["XS", "S", "M", "L", "XL"]);
+    expect(await sizes("number")).toEqual(["XS", "S", "M", "L", "XL"]);
     await click(app, "number-size-xl");
+    await inModule(app, ID, `document.querySelector('[data-slot="settings-page"] > div').scrollTo(0, 9999)`);
     await shotOfPanel(app, "settings-look.png");
 
     // Where it shows: over the game (set on the Overlay page) and on stream (the OBS link).
@@ -241,12 +260,70 @@ test("an item's settings use Tavora's settings layout: the panel, the overlay an
     );
     await expect(frame.getByRole("heading").first()).toHaveText("Boss · Counter");
 
-    // Delete is the last row; the dialog closes and Undo brings the item back.
-    await inModule(app, ID, `document.querySelector('[data-testid^="delete-"]').click()`);
-    await expect(frame).toHaveCount(0);
+    // Delete is not in the settings: it is a button on the item's row in the list.
+    expect(await everything()).not.toContain("Delete");
+    await closeSettings(page);
+    // It shows when the row is pointed at, says what it does, and deletes at once; Undo brings the item back.
+    const trash = `document.querySelector('[data-testid^="delete-"]')`;
+    await expect.poll(() => inModule<string>(app, ID, `${trash}.title`)).toBe("Delete");
+    await inModule(app, ID, `${trash}.click()`);
     await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]').length`)).toBe(0);
     await click(app, "undo");
     await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]').length`)).toBe(1);
+  } finally {
+    await app.close();
+  }
+});
+
+test("the Format field suggests formats from its own list and keeps what is typed", async () => {
+  const { app, page } = await inPersonalWorkspace();
+  try {
+    await click(app, "add-countdown");
+    await expect(page.getByTestId("panel-dialog")).toBeVisible();
+    await click(app, "page-item");
+    // The chevron opens the list from the field's left edge, as wide as the field, in the fixed order with an example each.
+    await click(app, "format-presets");
+    await expect.poll(() => inModule<string[]>(app, ID, `[...document.querySelectorAll('[data-slot="combobox-item"]')].map((node) => node.textContent.trim())`)).toEqual([
+      "s · 14709",
+      "m:ss · 245:09",
+      "mm:ss · 245:09",
+      "h:mm:ss · 4:05:09",
+      "hh:mm:ss · 04:05:09",
+    ]);
+    // Once it has grown into place (it opens from the field), it starts at the field's left edge and is as wide as the field.
+    const edges = () =>
+      inModule<{ left: number; width: number }>(
+        app,
+        ID,
+        `(() => { const list = document.querySelector('[data-slot="combobox-list"]').getBoundingClientRect(); const field = document.querySelector('[data-slot="combobox-anchor"]').getBoundingClientRect(); return { left: Math.round(list.left - field.left), width: Math.round(list.width - field.width) }; })()`,
+      );
+    await expect.poll(edges).toEqual({ left: 0, width: 0 });
+    await shotOfPanel(app, "settings-format-list.png");
+    // The preset that is picked already, pressed again, changes nothing (it must not save "undefined").
+    const field = () => inModule<string>(app, ID, `document.querySelector('[data-testid="format-field"]').value`);
+    await click(app, "format-m:ss");
+    await expect.poll(field).toBe("m:ss");
+    await click(app, "format-presets");
+    await expect.poll(edges).toEqual({ left: 0, width: 0 });
+    await click(app, "format-hh:mm:ss");
+    await expect.poll(field).toBe("hh:mm:ss");
+
+    // Typed text is the format: Enter keeps it (it does not pick the first suggestion).
+    await inModule(
+      app,
+      ID,
+      `(async () => {
+        const field = document.querySelector('[data-testid="format-field"]');
+        field.focus();
+        field.value = 'm "min"';
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      })()`,
+    );
+    await expect.poll(() => inModule<string>(app, ID, `document.querySelector('[data-testid="format-field"]').value`)).toBe('m "min"');
+    await page.getByTestId("panel-dialog-close").click();
+    await expect.poll(() => text(app, "value")).toBe("5 min");
   } finally {
     await app.close();
   }

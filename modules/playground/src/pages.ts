@@ -31,7 +31,7 @@ export const PAGES = [
   // Inputs
   { id: "fields", group: "inputs", keywords: "input textarea search clear escape magnifier label hint error invalid code one-time mono template placeholder braces insert highlight", examples: ["Basic", "Errors", "Search", "Monospace", "Code", "TextArea", "Template"] },
   { id: "checks", group: "inputs", keywords: "checkbox tick strike done switch field label description", examples: ["Checkbox", "Switch", "SwitchField", "DoneItem"] },
-  { id: "pick", group: "inputs", keywords: "radio segmented select empty choice none clear picker dropdown combobox autocomplete search pictures", examples: ["RadioGroup", "Segmented", "SegmentedSliding", "SegmentedNone", "Select", "SelectDescribed", "SelectEmpty", "SelectPictures", "Combobox", "Picker", "DropdownIcons"] },
+  { id: "pick", group: "inputs", keywords: "radio segmented select empty choice none clear picker dropdown combobox autocomplete search pictures free text suggestions format", examples: ["RadioGroup", "Segmented", "SegmentedSliding", "SegmentedNone", "Select", "SelectDescribed", "SelectEmpty", "SelectPictures", "Combobox", "ComboboxFree", "Picker", "DropdownIcons"] },
   { id: "numbers", group: "inputs", keywords: "slider range number field stepper quantity plus minus", examples: ["Slider", "SliderField", "NumberField"] },
   { id: "colour-stars", group: "inputs", keywords: "color colour picker swatch custom palette stars rating review score", examples: ["Swatches", "CustomColour", "StarsShown", "StarSizes", "StarsPick"] },
   { id: "toggles", group: "inputs", keywords: "toggle pressed bold italic underline format group style tiles looks pictures", examples: ["Toggles", "ToggleGroup", "StyleTiles"] },

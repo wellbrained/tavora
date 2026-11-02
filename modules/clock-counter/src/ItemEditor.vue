@@ -3,10 +3,11 @@
 // Overlays: what the overlay says and how it looks (with a live preview, the same in game and on stream), and where it shows (in game, on stream). Tavora shows them as a dialog over the workspace
 // and names it after the item; every change saves at once. Text and number fields save when they lose focus or on Enter, not on
 // every key, and whatever is still typed saves when the page changes or this goes away.
-import { Hash, Hourglass, Keyboard, Link, Paintbrush, Plus, Timer, Trash2, Type, X } from "@lucide/vue";
+import { Hash, Hourglass, Keyboard, Link, Paintbrush, Plus, Timer, Type, X } from "@lucide/vue";
 import { errorMessage, SegmentedControl } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
+import { Combobox, ComboboxAnchor, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from "@tavora/official-ui/components/ui/combobox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { ModuleSettings, SettingsMainBar, SettingsPage, SettingsPreview, SettingsRow, SettingsSection, settingsMenu } from "@tavora/official-ui/components/ui/module-settings";
@@ -31,6 +32,7 @@ import {
   placeholderOf,
   setStream,
   SIZES,
+  sizesOf,
   type Align,
   type Clock,
   type Counter,
@@ -219,8 +221,9 @@ const font = computed({ get: () => look.value.font, set: (next: Font) => updateL
 const align = computed({ get: () => look.value.align, set: (next: Align) => updateLook((value) => (value.align = next)) });
 const wordsColor = computed({ get: () => look.value.wordsColor ?? look.value.color, set: (next: string) => updateLook((value) => (value.wordsColor = next)) });
 const numberColor = computed({ get: () => look.value.color, set: (next: string) => updateLook((value) => (value.color = next)) });
-const wordsSize = computed({ get: () => look.value.wordsSize, set: (next: Size) => updateLook((value) => (value.wordsSize = next)) });
-const numberSize = computed({ get: () => look.value.numberSize, set: (next: Size) => updateLook((value) => (value.numberSize = next)) });
+// The step is saved with the old step nearest to it, for the version before.
+const wordsSize = computed({ get: () => look.value.wordsStep, set: (next: Size) => updateLook((value) => Object.assign(value, sizesOf(next, value.numberStep))) });
+const numberSize = computed({ get: () => look.value.numberStep, set: (next: Size) => updateLook((value) => Object.assign(value, sizesOf(value.wordsStep, next))) });
 const sizeOptions = (kind: string) => SIZES.map((value) => ({ value, label: value.toUpperCase(), testid: `${kind}-size-${value}` }));
 
 // ── Fields that save when they lose focus ────────────────────────────
@@ -265,6 +268,20 @@ function saveLabel() {
 
 const formatValid = computed(() => isFormat(format.value));
 const sample = 4 * 3600 + 5 * 60 + 9;
+
+const formatOpen = ref(false);
+
+/** A suggestion picked: the list sends nothing when the one already picked is pressed again (it toggles), and then the format stays. */
+function pickSuggestion(preset: unknown) {
+  if (typeof preset === "string") pickFormat(preset);
+  else formatOpen.value = false;
+}
+
+/** A suggestion picked, or Enter on what is typed: saves it and closes the list. */
+function pickFormat(next: string) {
+  formatOpen.value = false;
+  saveFormat(next);
+}
 
 function saveFormat(next = format.value) {
   format.value = next;
@@ -416,7 +433,7 @@ function reset(page: string): () => void {
   const before = { ...look.value };
   const defaults = defaultLook();
   const put = (value: OverlayLook, from: OverlayLook) => {
-    Object.assign(value, { font: from.font, align: from.align, outline: from.outline, color: from.color, wordsSize: from.wordsSize, numberSize: from.numberSize });
+    Object.assign(value, { font: from.font, align: from.align, outline: from.outline, color: from.color, wordsStep: from.wordsStep, numberStep: from.numberStep, wordsSize: from.wordsSize, numberSize: from.numberSize });
     if (from.wordsColor === undefined) delete value.wordsColor;
     else value.wordsColor = from.wordsColor;
   };
@@ -463,20 +480,30 @@ onBeforeUnmount(saveFields);
 
             <template v-if="item.kind !== 'counter'">
               <SettingsRow :label="t('edit.format')" :hint="formatValid ? t('edit.formatHint', { text: formatSeconds(sample, format) }) : t('edit.formatUnits')">
-                <div class="flex w-full gap-1">
-                  <Input :id="`${prefix}-format`" v-model="format" class="min-w-0 flex-1 font-mono" :maxlength="MAX_FORMAT" :aria-label="t('edit.format')" :aria-invalid="!formatValid" :title="t('edit.formatHelp')" @blur="saveFormat()" @keydown.enter="saveFormat()" />
-                  <!-- Kit menus, not ui.showMenu: Tavora draws no module menu while the panel is a dialog over the workspace. -->
-                  <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                      <Button variant="secondary" size="sm" class="h-8" :aria-label="t('edit.formatPresets')" :title="t('edit.formatPresets')" data-testid="format-presets">···</Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuRadioGroup :model-value="format" @update:model-value="(preset) => saveFormat(String(preset))">
-                        <DropdownMenuRadioItem v-for="preset in FORMAT_PRESETS" :key="preset" :value="preset" class="tabular-nums">{{ preset }} · {{ formatSeconds(sample, preset) }}</DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                <!-- A field with suggestions: the text is the format, the list (from the field's left edge, as wide as it) only suggests. -->
+                <Combobox v-model:open="formatOpen" :model-value="format" ignore-filter :reset-search-term-on-blur="false" :reset-search-term-on-select="false" @update:model-value="pickSuggestion">
+                  <ComboboxAnchor>
+                    <ComboboxInput
+                      :id="`${prefix}-format`"
+                      v-model="format"
+                      free
+                      :icon="false"
+                      :clearable="false"
+                      class="font-mono"
+                      :maxlength="MAX_FORMAT"
+                      :aria-label="t('edit.format')"
+                      :aria-invalid="!formatValid"
+                      :title="t('edit.formatHelp')"
+                      data-testid="format-field"
+                      @blur="saveFormat()"
+                      @commit="pickFormat"
+                    />
+                    <ComboboxTrigger :label="t('edit.formatPresets')" data-testid="format-presets" />
+                  </ComboboxAnchor>
+                  <ComboboxList>
+                    <ComboboxItem v-for="preset in FORMAT_PRESETS" :key="preset" :value="preset" class="tabular-nums" :data-testid="`format-${preset}`">{{ preset }} · {{ formatSeconds(sample, preset) }}</ComboboxItem>
+                  </ComboboxList>
+                </Combobox>
                 <p v-if="!formatValid" class="text-destructive w-full text-xs" role="alert">{{ t("edit.formatInvalid") }}</p>
               </SettingsRow>
 
@@ -545,12 +572,6 @@ onBeforeUnmount(saveFields);
                 </Button>
               </SettingsRow>
             </template>
-          </SettingsSection>
-
-          <SettingsSection>
-            <SettingsRow :label="t('edit.delete')" :hint="t('edit.deleteHint')" danger>
-              <Button variant="destructive" size="sm" :data-testid="`delete-${item.id}`" @click="panel.remove(item)"><Trash2 :stroke-width="1.5" />{{ t("edit.delete") }}</Button>
-            </SettingsRow>
           </SettingsSection>
         </SettingsPage>
 

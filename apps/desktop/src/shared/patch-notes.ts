@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.84",
+    date: "2026-11-02",
+    title: "Clock & Counter settings are easier to use",
+    notes: [
+      "Format has a list of formats to pick from, and you can still type your own.",
+      "Delete moves from the settings to each row: point at a row and press the trash can. Undo is a few seconds away.",
+      "Words and Number come in the same five sizes, XS to XL.",
+      "Settings opened from the Overlay page no longer show an empty window first.",
+    ],
+    prs: [
+      { number: 645, title: "Clock & Counter: Format on the kit Combobox, Delete on the row, one XS–XL size scale, no empty settings" },
+    ],
+    tags: ["clock-counter", "ui-kit"],
+  },
+  {
     version: "0.23.83",
     date: "2026-11-02",
     title: "Tab drops",
