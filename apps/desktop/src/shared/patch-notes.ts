@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.54",
+    date: "2026-11-02",
+    title: "Clearer Mixed in Overlay settings",
+    notes: [
+      "With several frames selected, a setting that differs between them now shows a Mixed tag.",
+    ],
+    prs: [
+      { number: 609, title: "Overlay settings: Mixed as a Badge, group Opacity covered by tests" },
+    ],
+    tags: ["overlays"],
+  },
+  {
     version: "0.23.53",
     date: "2026-11-02",
     title: "Calmer item tooltips",

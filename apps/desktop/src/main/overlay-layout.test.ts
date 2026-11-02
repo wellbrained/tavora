@@ -1531,6 +1531,25 @@ describe("several frames at once", () => {
     expect(layout.view().items.map((item) => item.mode)).toEqual(["always", "always", "always"]);
   });
 
+  it("sets Opacity on a group whose values differ, for toggle and always frames alike, as one undo step", () => {
+    const items = three();
+    items[0]!.opacity = 50;
+    items[1]!.mode = "toggle";
+    items[1]!.opacity = 75;
+    const { layout, world } = setup(items, { seen: SEEN });
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    expect(layout.view().items.map((item) => item.opacity)).toEqual([50, 75, 100]);
+    layout.handle({ type: "set", ids, change: { opacity: 25 } }, true);
+    expect(layout.view().items.map((item) => item.opacity)).toEqual([25, 25, 25]);
+    // One undo gives every frame its own opacity back, and redo sets them all again.
+    layout.handle({ type: "undo" }, true);
+    expect(world.items.map((item) => item.opacity ?? 100)).toEqual([50, 75, 100]);
+    expect(layout.view().canUndo).toBe(false);
+    layout.handle({ type: "redo" }, true);
+    expect(layout.view().items.map((item) => item.opacity)).toEqual([25, 25, 25]);
+  });
+
   it("takes adding a frame back, and adds it again", () => {
     const { layout, world } = setup([clock("a", "elden")], { sources: [panel("map", "elden")] });
     layout.open("elden");
