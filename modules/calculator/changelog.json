@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.24",
+    "date": "2026-11-03",
+    "notes": [
+      "Under the hood: newer libraries."
+    ]
+  },
+  {
     "version": "0.1.23",
     "date": "2026-11-02",
     "notes": [

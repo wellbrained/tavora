@@ -14,10 +14,10 @@
   },
   "devDependencies": {
     "typedoc": "0.28.20",
-    "typedoc-plugin-markdown": "4.14.0",
+    "typedoc-plugin-markdown": "4.14.1",
     "typedoc-vitepress-theme": "1.1.4",
     "vitepress": "1.6.4",
-    "vue": "3.5.43"
+    "vue": "3.5.44"
   },
   "license": "MIT"
 }
