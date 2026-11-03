@@ -234,22 +234,32 @@ describe("what a code waits for", () => {
     expect(account.view().pending).toBeNull();
   });
 
-  it("a code that expired before Create is refused there; the question stays until it is cancelled", async () => {
+  it("a code that expired before Create goes back to the code step with a short message, and a new code works", async () => {
+    // The service answers an expired code like a wrong one (reason "wrong-code"); the old code stuck the user on Create.
     let expired = false;
     const { fetchImpl } = service({
-      "POST /code": () => json({ status: "sent" }, 202),
-      "POST /verify": (body) => (body?.create && expired ? json({ reason: "wrong-code" }, 400) : json({ status: "no-account" })),
+      "POST /code": () => {
+        expired = false;
+        return json({ status: "sent" }, 202);
+      },
+      "POST /verify": (body) => (body?.create && expired ? json({ error: "That code is wrong or has expired.", reason: "wrong-code" }, 400) : json({ status: "no-account" })),
     });
-    const { account } = client(fetchImpl);
+    const { account, views } = client(fetchImpl);
     await account.sendCode("me@example.com");
     await account.verify(CODE);
+    expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "create" });
     expired = true;
-    await expect(account.create(true)).rejects.toMatchObject({ key: "account.error.wrongCode" });
+    await expect(account.create(true)).rejects.toMatchObject({ key: "account.error.codeExpired" });
+    expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "code" });
+    expect(views.at(-1)!.pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "code" });
+    // Create needs a checked code again.
+    await expect(account.create(true)).rejects.toMatchObject({ key: "account.error.noCode" });
+    // A new code gets the user to Create once more.
+    await account.sendCode("me@example.com");
+    await account.verify(CODE);
     expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "create" });
     account.cancel();
     expect(account.view().pending).toBeNull();
-    // Nothing is left to create with.
-    await expect(account.create(true)).rejects.toMatchObject({ key: "account.error.noCode" });
   });
 
   it("signing out while a code is pending forgets it, and the code can't be used after", async () => {

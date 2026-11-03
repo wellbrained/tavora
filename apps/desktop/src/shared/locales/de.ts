@@ -606,6 +606,7 @@ export const de: Record<keyof typeof en, string> = {
   "cloudCopy.error.noCopy": "Es gibt noch keine Cloud-Kopie.",
   "account.error.badEmail": "Das ist keine E-Mail-Adresse.",
   "account.error.wrongCode": "Der Code ist falsch oder abgelaufen. Prüf die E-Mail oder lass dir einen neuen schicken.",
+  "account.error.codeExpired": "Der Code ist abgelaufen. Hol dir einen neuen.",
   "account.error.mailFailed": "Tavora konnte die E-Mail nicht senden. Bitte versuche es später noch einmal.",
   "account.error.unavailable": "Konten klappen gerade nicht. Versuch es gleich noch mal.",
   "account.error.unreachable": "Der Tavora-Dienst ist nicht erreichbar. Prüf deine Verbindung und versuch es noch mal.",

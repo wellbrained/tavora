@@ -292,7 +292,9 @@ type RunState =
   | { phase: "preview"; prepared: Prepared }
   | { phase: "confirming"; prepared: Prepared }
   /** Signing or uploading: nothing can stop it now. */
-  | { phase: "uploading"; prepared: Prepared; step: OfficialUploadStep };
+  | { phase: "uploading"; prepared: Prepared; step: OfficialUploadStep }
+  /** The build is thrown away and its worktree is being removed: the run reads as idle, but a new prepare waits for `removed`. */
+  | { phase: "discarding"; worktree: string; removed: Promise<void> };
 
 const noStep = () => undefined;
 
@@ -309,6 +311,7 @@ export class OfficialPublisher {
     const state = this.state;
     switch (state.phase) {
       case "idle":
+      case "discarding":
         return { phase: "idle" };
       case "building":
         return { phase: "building", moduleId: state.moduleId, name: state.name, step: state.step };
@@ -358,6 +361,8 @@ export class OfficialPublisher {
    * shows until the preview is there.
    */
   async prepare(moduleId: string, onStep: (step: OfficialBuildStep) => void = noStep, name = moduleId): Promise<OfficialPublishPreview> {
+    // A build thrown away a moment ago is still being removed: wait for that before starting over.
+    while (this.state.phase === "discarding") await this.state.removed;
     if (this.state.phase !== "idle") throw new UserError("officialPublish.error.busy");
     if (!isModuleId(moduleId) || !moduleId.startsWith(OFFICIAL_PREFIX) || NEVER_PUBLISHED.has(moduleId)) throw new UserError("officialPublish.error.notBuiltIn");
     const abort = new AbortController();
@@ -521,6 +526,7 @@ export class OfficialPublisher {
     const state = this.state;
     switch (state.phase) {
       case "idle":
+      case "discarding":
       case "confirming":
       case "uploading":
         return;
@@ -537,8 +543,14 @@ export class OfficialPublisher {
   }
 
   private async discard(prepared: Prepared): Promise<void> {
-    this.set({ phase: "idle" });
-    await this.removeWorktree(prepared.worktree);
+    const state: RunState = { phase: "discarding", worktree: prepared.worktree, removed: this.removeWorktree(prepared.worktree) };
+    this.set(state);
+    try {
+      await state.removed;
+    } finally {
+      // The window already reads "idle" since the discard began: no second change to announce.
+      this.state = { phase: "idle" };
+    }
   }
 
   /** Removes worktrees an earlier run left behind (a crash, a quit with a preview open), and git's note of them. */
@@ -549,7 +561,7 @@ export class OfficialPublisher {
     for (const name of entries) {
       if (!name.startsWith(WORKTREE_PREFIX)) continue;
       const full = path.join(temp, name);
-      if (full === this.prepared?.worktree) continue;
+      if (full === this.prepared?.worktree || (this.state.phase === "discarding" && full === this.state.worktree)) continue;
       const info = await stat(full).catch(() => null);
       if (info && now - info.mtimeMs > STALE_WORKTREE_MS) await removeFolder(full);
     }

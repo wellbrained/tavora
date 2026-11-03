@@ -382,7 +382,18 @@ export class AccountClient {
     }
     if (pending?.kind !== "sign-in" || pending.step !== "create") throw new UserError("account.error.noCode");
     if (!ageConfirmed) throw new UserError("account.error.ageRequired");
-    await this.signedIn(await this.call("POST", "/verify", { email: pending.email, code: pending.code, ...this.device(), create: true }));
+    try {
+      await this.signedIn(await this.call("POST", "/verify", { email: pending.email, code: pending.code, ...this.device(), create: true }));
+    } catch (error) {
+      // The code was right a moment ago (verify), so a wrong code now means it ran out (the service answers both alike):
+      // back to the code step, where a new code can be asked for, instead of a Create that can never work.
+      if (error instanceof UserError && error.key === "account.error.wrongCode" && this.pending === pending) {
+        this.pending = { kind: "sign-in", email: pending.email, step: "code" };
+        this.changed();
+        throw new UserError("account.error.codeExpired");
+      }
+      throw error;
+    }
   }
 
   cancel(): void {
