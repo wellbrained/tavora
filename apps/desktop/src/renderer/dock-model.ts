@@ -451,7 +451,8 @@ class Grid {
     const siblingVisible = visible(sibling);
     const siblingCached = sibling.cached;
     const parentSize = this.reduced(parent);
-    const liftedSizes = sibling.kind === "branch" ? sibling.children.map((child) => this.readSize(child)) : [];
+    // dockview 8.8 lifts a split's children by their size along the parent's axis (before, a split's own axis was read).
+    const liftedSizes = sibling.kind === "branch" ? sibling.children.map((child) => this.reduced(child)) : [];
     this.removeChild(parent, 0, sizing);
     const sizes = grand.children.map((child) => child.size);
     this.removeChild(grand, parentIndex, sizing);
