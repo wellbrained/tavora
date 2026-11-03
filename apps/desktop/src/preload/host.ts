@@ -28,6 +28,9 @@ const api: TavoraHostApi = {
     onEvent: (listener) => {
       ipcRenderer.on("host:toast-event", (_event, event: ToastsEvent) => listener(event));
     },
+    onFallback: (listener) => {
+      ipcRenderer.on("host:toasts-fallback", (_event, on: unknown) => listener(on === true));
+    },
   },
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setWorkspaceBounds: (bounds) => ipcRenderer.send("host:workspace-bounds", bounds),

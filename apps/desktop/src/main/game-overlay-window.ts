@@ -13,7 +13,7 @@ import { BrowserWindow, WebContentsView, app, screen, session, type Session } fr
 import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
 import { dragRect, panelBounds, type Opacity, type Rect } from "./game-overlays";
-import { GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
+import { GAME_OVERLAY_FRAME_URL, GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
 import { GAME_OVERLAY_FRAME_DOCUMENT } from "../shared/game-overlay-frame";
 
 /** What the window needs of a panel it holds (implemented by ModuleView). */
@@ -152,7 +152,7 @@ export class GameOverlayWindow {
       }
     });
     // A panel brings its own page; this window only holds it.
-    if (!options.panel) void contents.loadURL(`${GAME_OVERLAY_ORIGIN}/`).catch(() => this.end());
+    if (!options.panel) void contents.loadURL(GAME_OVERLAY_FRAME_URL).catch(() => this.end());
 
     const frameSession = lockedSession(`game-overlay-frame-${name}`, (url) => url.startsWith("data:"));
     this.frame = new WebContentsView({

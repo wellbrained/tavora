@@ -227,7 +227,7 @@ test("an item's settings use Tavora's settings layout: the panel, the overlay an
 
     // Look: font, alignment and outline for everything, then Words and Number, one under the other.
     await click(app, "page-look");
-    await expect.poll(() => texts('[data-slot="settings-section"] h3')).toEqual(["Everything", "Words", "Number"]);
+    await expect.poll(() => texts('[data-slot="settings-section"] h3')).toEqual(["Everything", "Words", "Number", "Box"]);
     // Words and Number have the same sizes, the kit's: XS S M L XL.
     const sizes = (kind: string) => texts(`[data-testid^="${kind}-size-"]`);
     expect(await sizes("words")).toEqual(["XS", "S", "M", "L", "XL"]);
@@ -631,3 +631,60 @@ for (const theme of ["dark", "light"] as const) {
     }
   });
 }
+
+test("a linked group lights up as one block, not row by row, and a row outside it stays plain", async () => {
+  const { app, page } = await inPersonalWorkspace();
+  try {
+    // Two counters and a stopwatch; the first counter adds to the second, so they are drawn as one linked group.
+    await click(app, "add-counter");
+    await closeSettings(page);
+    await click(app, "add");
+    await click(app, "pick-counter");
+    await click(app, "add");
+    await click(app, "pick-stopwatch");
+    await expect.poll(() => names(app)).toEqual(["Counter", "Counter 2", "Stopwatch"]);
+    await inModule(app, ID, `document.querySelectorAll('[data-testid^="more-"]')[0].click()`);
+    await click(app, "menu-settings-" + (await inModule<string>(app, ID, `document.querySelector('article[data-testid^="item-"]').dataset.testid.slice(5)`)));
+    await click(app, "link-add");
+    await inModule(app, ID, `document.querySelector('[data-testid^="link-pick-"]').click()`);
+    await closeSettings(page);
+    await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('[data-testid="linked-group"] article').length`)).toBe(2);
+
+    const look = (selector: string) =>
+      inModule<{ background: string; border: string }>(
+        app,
+        ID,
+        `(() => { const style = getComputedStyle(document.querySelector(${JSON.stringify(selector)})); return { background: style.backgroundColor, border: style.borderTopColor }; })()`,
+      );
+    const group = '[data-testid="linked-group"]';
+    const inner = (index: number) => `${group} article:nth-of-type(${index})`;
+    const settled = () => new Promise((resolve) => setTimeout(resolve, 400));
+    await inModule(app, ID, `document.activeElement?.blur()`);
+    await settled();
+    const idleGroup = await look(group);
+    const idleInner = await look(inner(1));
+    const idleAlone = await look(`[data-testid^="row-"]:last-child article`);
+
+    // The keyboard in one row of the group marks the whole group block; the rows inside keep their plain look.
+    await inModule(app, ID, `document.querySelectorAll('${group} [data-testid^="more-"]')[1].focus()`);
+    await settled();
+    const lit = await look(group);
+    expect(lit.background).not.toBe(idleGroup.background);
+    expect(lit.border).not.toBe(idleGroup.border);
+    expect(await look(inner(1))).toEqual(idleInner);
+    expect(await look(inner(2))).toEqual(idleInner);
+    expect(await look(`[data-testid^="row-"]:last-child article`)).toEqual(idleAlone);
+
+    // The same from the other row, and while a row's menu is open.
+    await inModule(app, ID, `document.querySelectorAll('${group} [data-testid^="more-"]')[0].focus()`);
+    await settled();
+    expect(await look(group)).toEqual(lit);
+    await inModule(app, ID, `document.querySelectorAll('${group} [data-testid^="more-"]')[1].click()`);
+    await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('[role=menuitem]').length`)).toBeGreaterThan(0);
+    await inModule(app, ID, `document.activeElement?.blur()`);
+    await settled();
+    expect(await look(group)).toEqual(lit);
+  } finally {
+    await app.close();
+  }
+});

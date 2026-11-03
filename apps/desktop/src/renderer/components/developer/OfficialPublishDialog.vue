@@ -9,33 +9,24 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
-import type { OfficialPublishStep } from "../../../shared/host-api";
 import { act, showToast, state } from "../../host";
 import { t } from "../../i18n";
+import { officialDialog } from "../../official-publish";
 import ModalDialog from "../ModalDialog.vue";
 
-const BUILD_STEPS: OfficialPublishStep[] = ["fetch", "check", "worktree", "install", "build", "pack"];
-const UPLOAD_STEPS: OfficialPublishStep[] = ["sign", "upload"];
-
 const view = computed(() => state.value?.officialPublish ?? null);
-const run = computed(() => view.value?.run ?? null);
-const preview = computed(() => run.value?.preview ?? null);
+const dialog = computed(() => officialDialog(view.value?.run ?? { phase: "idle" }));
 const key = computed(() => view.value?.key ?? { saved: false, canRemember: false });
 /** Signing or uploading: nothing can be cancelled then. */
-const uploading = computed(() => preview.value !== null && UPLOAD_STEPS.includes(run.value!.step));
+const uploading = computed(() => dialog.value.show === "steps" && !dialog.value.canCancel);
 const busy = ref(false);
 const remember = ref(false);
 const filesOpen = ref(false);
 
-const steps = computed(() => {
-  const list = preview.value ? UPLOAD_STEPS : BUILD_STEPS;
-  const at = run.value ? list.indexOf(run.value.step) : -1;
-  return list.map((step, index) => ({ step, state: index < at ? "done" : index === at ? "now" : "todo" }));
-});
-
 const title = computed(() => {
-  if (!run.value) return "";
-  return preview.value && !uploading.value ? t("officialPublish.preview.title", { name: preview.value.name, version: preview.value.version }) : t("officialPublish.dialog.title", { name: run.value.name });
+  const shown = dialog.value;
+  if (shown.show === "none") return "";
+  return shown.show === "preview" ? t("officialPublish.preview.title", { name: shown.preview.name, version: shown.preview.version }) : t("officialPublish.dialog.title", { name: shown.name });
 });
 
 function size(bytes: number): string {
@@ -59,39 +50,39 @@ function cancel() {
 </script>
 
 <template>
-  <ModalDialog v-if="run" :title="title" :icon="Upload" class="sm:max-w-[520px]" testid="official-publish-dialog" @close="cancel">
+  <ModalDialog v-if="dialog.show !== 'none'" :title="title" :icon="Upload" class="sm:max-w-[520px]" testid="official-publish-dialog" @close="cancel">
     <!-- Building, signing or uploading: the steps, with the current one marked. -->
-    <template v-if="!preview || uploading">
+    <template v-if="dialog.show === 'steps'">
       <ol class="flex flex-col gap-2 text-sm" :aria-label="title" data-testid="official-publish-steps">
-        <li v-for="item in steps" :key="item.step" class="flex items-center gap-2" :data-step="item.step" :data-state="item.state" :aria-current="item.state === 'now' ? 'step' : undefined">
+        <li v-for="item in dialog.steps" :key="item.step" class="flex items-center gap-2" :data-step="item.step" :data-state="item.state" :aria-current="item.state === 'now' ? 'step' : undefined">
           <Check v-if="item.state === 'done'" class="text-success size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
           <Loader v-else-if="item.state === 'now'" class="text-primary size-4 flex-none animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
           <Circle v-else class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
           <span :class="item.state === 'todo' ? 'text-muted-foreground' : ''">{{ t(`officialPublish.step.${item.step}`) }}</span>
         </li>
       </ol>
-      <p v-if="!preview" class="text-muted-foreground text-sm">{{ t("officialPublish.dialog.hint") }}</p>
+      <p v-if="dialog.hint" class="text-muted-foreground text-sm">{{ t("officialPublish.dialog.hint") }}</p>
       <DialogFooter>
         <DialogButton close :disabled="uploading" data-testid="official-publish-cancel" @click="cancel">{{ t("common.cancel") }}</DialogButton>
       </DialogFooter>
     </template>
 
     <!-- The preview: exactly what Sign and upload sends. -->
-    <template v-else>
+    <template v-else-if="dialog.show === 'preview'">
       <ul class="text-muted-foreground flex flex-col gap-1 text-sm" data-testid="official-publish-preview">
         <li>
           <span class="text-foreground">{{ t("officialPublish.preview.version") }}</span>
-          <span class="tabular-nums"> {{ t("officialPublish.versions", { shipped: preview.shipped, version: preview.version }) }}</span>
+          <span class="tabular-nums"> {{ t("officialPublish.versions", { shipped: dialog.preview.shipped, version: dialog.preview.version }) }}</span>
         </li>
-        <li>{{ preview.listed ? t("officialPublish.preview.listed", { listed: preview.listed }) : t("officialPublish.preview.notListed") }}</li>
-        <li>{{ t("officialPublish.preview.minTavora", { version: preview.minTavora }) }}</li>
-        <li>{{ t("officialPublish.preview.commit", { commit: preview.commit.slice(0, 8) }) }}</li>
+        <li>{{ dialog.preview.listed ? t("officialPublish.preview.listed", { listed: dialog.preview.listed }) : t("officialPublish.preview.notListed") }}</li>
+        <li>{{ t("officialPublish.preview.minTavora", { version: dialog.preview.minTavora }) }}</li>
+        <li>{{ t("officialPublish.preview.commit", { commit: dialog.preview.commit.slice(0, 8) }) }}</li>
       </ul>
 
       <div class="flex flex-col gap-1" data-testid="official-publish-notes">
         <span class="text-sm font-medium">{{ t("officialPublish.preview.notes") }}</span>
-        <ul v-if="preview.notes.length" class="text-muted-foreground list-disc pl-5 text-sm">
-          <li v-for="(line, index) in preview.notes" :key="index">{{ line }}</li>
+        <ul v-if="dialog.preview.notes.length" class="text-muted-foreground list-disc pl-5 text-sm">
+          <li v-for="(line, index) in dialog.preview.notes" :key="index">{{ line }}</li>
         </ul>
         <span v-else class="text-muted-foreground text-sm">{{ t("officialPublish.preview.noNotes") }}</span>
       </div>
@@ -100,12 +91,12 @@ function cancel() {
         <CollapsibleTrigger as-child>
           <Button variant="ghost" size="sm" class="w-fit px-1">
             <ChevronRight :class="['size-4 transition-transform duration-(--duration-press) ease-(--ease-out-strong) motion-reduce:transition-none', filesOpen ? 'rotate-90' : '']" :stroke-width="1.5" aria-hidden="true" />
-            {{ t("officialPublish.preview.files", { count: preview.files.length, size: size(preview.size) }) }}
+            {{ t("officialPublish.preview.files", { count: dialog.preview.files.length, size: size(dialog.preview.size) }) }}
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent class="pt-1">
           <ul class="text-muted-foreground max-h-48 overflow-y-auto pl-6 font-mono text-xs">
-            <li v-for="file in preview.files" :key="file.name" class="flex justify-between gap-4">
+            <li v-for="file in dialog.preview.files" :key="file.name" class="flex justify-between gap-4">
               <span class="truncate">{{ file.name }}</span>
               <span class="flex-none tabular-nums">{{ size(file.size) }}</span>
             </li>
@@ -126,8 +117,8 @@ function cancel() {
       </label>
 
       <DialogFooter>
-        <DialogButton close :disabled="busy" data-testid="official-publish-cancel" @click="cancel">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :icon="Upload" :disabled="busy" data-testid="official-publish-upload" @click="upload">
+        <DialogButton close :disabled="busy || dialog.confirming" data-testid="official-publish-cancel" @click="cancel">{{ t("common.cancel") }}</DialogButton>
+        <DialogButton :icon="Upload" :disabled="busy || dialog.confirming" data-testid="official-publish-upload" @click="upload">
           {{ key.saved ? t("officialPublish.preview.upload") : t("officialPublish.preview.chooseKey") }}
         </DialogButton>
       </DialogFooter>

@@ -1,9 +1,10 @@
 // What the panel tells Tavora it can show over the game on its own (overlay.setSources): each clock and counter, and each
 // linked group that shows as one line, with how big it needs to be. The Overlay page lists them under the panel and
 // sizes a new frame from `size`. A group's counters are not listed again: the group is their one overlay. A linked group
-// that is not shown as a whole has no line of its own, so its counters are listed one by one.
+// that is not shown as a whole has no line of its own, so its counters are listed one by one. A source whose look grows with
+// the text says so (`grows`): its frame is then as big as `size` times the frame's scale, and follows it.
 import type { OverlaySource } from "@tavora/sdk";
-import { counterShown, groupSegments, itemSegments, linkedGroups, readClock, sizeScales, visualOrder, type Font, type Item, type ItemList, type OverlayLook } from "./items";
+import { boxOf, counterShown, groupSegments, itemSegments, linkedGroups, readClock, sizeScales, visualOrder, type Font, type Item, type ItemList, type OverlayLook } from "./items";
 import type { Segment } from "./template";
 import { formatSeconds } from "./time";
 
@@ -73,6 +74,9 @@ export function itemSize(item: Item, measure: Measure, now: number): { width: nu
   return lineSize(itemSegments(item, value), item.look, measure, lap);
 }
 
+/** Whether a look's frame grows with the text (the default) or is a fixed box: said either way, so Tavora knows a fixed box from an older panel's. */
+const grows = (look: OverlayLook): { grows: boolean } => ({ grows: boxOf(look).box === "grow" });
+
 /** The panel's sources in the order the panel shows them. `nameOf`: an item's name as the panel shows it (its label, or its kind). */
 export function buildSources(list: ItemList, measure: Measure, nameOf: (item: Item) => string, now = Date.now()): OverlaySource[] {
   const groups = linkedGroups(list);
@@ -87,9 +91,9 @@ export function buildSources(list: ItemList, measure: Measure, nameOf: (item: It
       done.add(group.key);
       const line = groupSegments(group, nameOf);
       const size = lineSize(line, group.stream.look, measure, null);
-      sources.push({ key: group.key, name: line.map((part) => part.text).join("") || nameOf(item), group: true, size: { width: size.width || 1, height: size.height || 1 } });
+      sources.push({ key: group.key, name: line.map((part) => part.text).join("") || nameOf(item), group: true, size: { width: size.width || 1, height: size.height || 1 }, ...grows(group.stream.look) });
     } else {
-      sources.push({ key: item.id, name: nameOf(item), size: itemSize(item, measure, now) });
+      sources.push({ key: item.id, name: nameOf(item), size: itemSize(item, measure, now), ...grows(item.look) });
     }
     if (sources.length >= MAX_SOURCES) break;
   }

@@ -46,6 +46,8 @@ interface Item {
   hideFromCapture?: boolean;
   locked?: boolean;
   z?: number;
+  /** A frame that follows its content: its scale. */
+  scale?: number;
 }
 
 function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handles?: Record<string, string>; running?: string[]; sources?: SourcePanel[]; startSizes?: { overlay?: { width: number; height: number }; panel?: { width: number; height: number } }; monitors?: { id: number; width: number; height: number }[]; capture?: Buffer | null | "throws"; choose?: Buffer | "cancelled" | "bad"; enabled?: boolean } = {}) {
@@ -100,6 +102,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
       locked: item.locked ?? false,
       z: item.z ?? null,
       ...(item.legacy ? { legacy: item.legacy } : {}),
+      ...(item.scale === undefined ? {} : { scale: item.scale }),
       hotkey: null,
       toggledOn: item.toggledOn ?? false,
       source: item.page === false ? null : SOURCE,
@@ -145,11 +148,12 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
       item.setup = to;
       return "added";
     },
-    setRect: (setupId, ref, rect) => {
+    setRect: (setupId, ref, rect, scale) => {
       const item = find(setupId, ref);
       if (item) {
         item.rect = rect;
         delete item.legacy;
+        if (scale !== undefined) item.scale = scale;
       }
       return item !== undefined;
     },
@@ -183,7 +187,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     state: (setupId, ref) => {
       const item = find(setupId, ref);
       if (!item) return null;
-      const settings = { mode: item.mode ?? "always", opacity: item.opacity ?? 100, hideFromCapture: item.hideFromCapture ?? false, rect: { ...item.rect }, ...(item.locked ? { locked: true } : {}), ...(item.z !== undefined ? { z: item.z } : {}), ...(item.legacy ? { legacy: { ...item.legacy } } : {}) };
+      const settings = { mode: item.mode ?? "always", opacity: item.opacity ?? 100, hideFromCapture: item.hideFromCapture ?? false, rect: { ...item.rect }, ...(item.locked ? { locked: true } : {}), ...(item.z !== undefined ? { z: item.z } : {}), ...(item.legacy ? { legacy: { ...item.legacy } } : {}), ...(item.scale === undefined ? {} : { scale: item.scale }) };
       const who = { owner: "official", moduleId: "tavora.clock-counter", workspaceId: item.gameId };
       return { item: item.panel ? { ...who, instanceId: item.key, ...settings } : { ...who, key: item.key, ...settings }, index: world.items.indexOf(item), key: null };
     },
@@ -195,10 +199,11 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
         return true;
       }
       if (world.refusePut) return false;
-      const { mode, opacity, hideFromCapture, rect, legacy, locked, z } = state.item;
-      const settings = { mode, opacity, hideFromCapture, rect: { ...rect }, ...(legacy ? { legacy: { ...legacy } } : {}) };
+      const { mode, opacity, hideFromCapture, rect, legacy, locked, z, scale } = state.item;
+      const settings = { mode, opacity, hideFromCapture, rect: { ...rect }, ...(legacy ? { legacy: { ...legacy } } : {}), ...(scale === undefined ? {} : { scale }) };
       if (item) {
         delete item.legacy;
+        delete item.scale;
         item.locked = locked === true;
         if (z === undefined) delete item.z;
         else item.z = z;
@@ -1659,6 +1664,20 @@ describe("several frames at once", () => {
     expect(layout.view().items.map((item) => item.mode)).toEqual(["always", "always", "always"]);
   });
 
+  it("sets Opacity on locked frames too: lock only keeps a frame in place", () => {
+    const items = three();
+    items[0]!.locked = true;
+    items[0]!.opacity = 50;
+    const { layout, world } = setup(items, { seen: SEEN });
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "set", ids, change: { opacity: 25 } }, true);
+    expect(layout.view().items.map((item) => [item.opacity, item.locked])).toEqual([[25, true], [25, false], [25, false]]);
+    layout.handle({ type: "undo" }, true);
+    expect(world.items.map((item) => item.opacity ?? 100)).toEqual([50, 100, 100]);
+    expect(layout.view().canUndo).toBe(false);
+  });
+
   it("sets Opacity on a group whose values differ, for toggle and always frames alike, as one undo step", () => {
     const items = three();
     items[0]!.opacity = 50;
@@ -1960,5 +1979,60 @@ describe("the frame menu", () => {
     expect(layout.view().toolbar).toEqual({ show: false, buttons: ["lock", "remove"] });
     expect(world.toolbar.show).toBe(false);
     expect(layout.view().canUndo).toBe(false);
+  });
+});
+
+describe("frames that follow their content", () => {
+  const SEEN = { elden: { width: 1920, height: 1080 } };
+  const growing = (size = { width: 200, height: 50 }) => panel("cc", "elden", { moduleId: "tavora.clock-counter", sources: [{ key: "a", name: "Deaths", size, grows: true }] });
+  const framed = (scale: number, x = 100, y = 100) => ({ ...clock("a"), rect: placeRect(x, y, 200 * scale + 16, 50 * scale + 16), scale });
+  const placeRect = (x: number, y: number, width: number, height: number): AnchoredRect => at(x / 1080, y / 1080, width / 1080, height / 1080);
+
+  it("tells the canvas the content's size and the frame's scale, and nothing for other frames", () => {
+    const { layout } = setup([framed(2), clock("b")], { seen: SEEN, sources: [growing()] });
+    layout.open("elden");
+    const [a, b] = layout.view().items;
+    expect(a).toMatchObject({ natural: { width: 200, height: 50 }, scale: 2 });
+    expect(b).toMatchObject({ natural: null, scale: 1 });
+  });
+
+  it("starts a new frame at exactly the content's size at 100 %, off the grid", () => {
+    const { layout, world } = setup([], { sources: [panel("cc", "personal", { moduleId: "tavora.clock-counter", sources: [{ key: "a", name: "Deaths", size: { width: 203, height: 51 }, grows: true }] })] });
+    layout.open(LAYOUT_EVERYWHERE);
+    layout.handle({ type: "add-source", id: "cc", key: "a" }, true);
+    expect(world.items[0]!.scale).toBe(1);
+    expect(layout.view().items[0]!.placed).toMatchObject({ width: 219, height: 67 });
+  });
+
+  it("scales with a corner drag, in the content's shape, as one step to undo", () => {
+    const { layout, world } = setup([framed(1)], { seen: SEEN, sources: [growing()] });
+    layout.open("elden");
+    const id = layout.view().items[0]!.id;
+    layout.handle({ type: "commit", id, rect: { x: 100, y: 100, width: 416, height: 90 } }, false);
+    expect(world.items[0]!.scale).toBeCloseTo(2);
+    expect(layout.view().items[0]!.placed).toMatchObject({ x: 100, y: 100, width: 416, height: 116 });
+    layout.handle({ type: "undo" }, true);
+    expect(world.items[0]!.scale).toBe(1);
+    expect(layout.view().items[0]!.placed).toMatchObject({ width: 216, height: 66 });
+  });
+
+  it("keeps the scale when the frame is only moved", () => {
+    const { layout, world } = setup([framed(1.5)], { seen: SEEN, sources: [growing()] });
+    layout.open("elden");
+    const item = layout.view().items[0]!;
+    layout.handle({ type: "commit", id: item.id, rect: { ...item.placed, x: 500 } }, false);
+    expect(world.items[0]!.scale).toBe(1.5);
+    expect(layout.view().items[0]!.placed).toMatchObject({ x: 500, width: item.placed.width, height: item.placed.height });
+  });
+
+  it("puts the scale back to 100 % with Reset size, where the frame is", () => {
+    const { layout, world } = setup([framed(3)], { seen: SEEN, sources: [growing()] });
+    layout.open("elden");
+    const id = layout.view().items[0]!.id;
+    layout.handle({ type: "reset-size", id }, true);
+    expect(world.items[0]!.scale).toBe(1);
+    expect(layout.view().items[0]!.placed).toEqual({ x: 100, y: 100, width: 216, height: 66 });
+    layout.handle({ type: "undo" }, true);
+    expect(world.items[0]!.scale).toBe(3);
   });
 });

@@ -318,6 +318,196 @@ describe("publishing a built-in module from a dev build", () => {
   });
 });
 
+describe("the run, as the host window sees it", () => {
+  /** A publisher that notes each change of its run as `phase` or `phase:step`. */
+  function watched(overrides: Partial<ConstructorParameters<typeof OfficialPublisher>[0]> = {}) {
+    const phases: string[] = [];
+    const one: OfficialPublisher = publisher({
+      onChange: () => {
+        const run = one.view();
+        phases.push("step" in run ? `${run.phase}:${run.step}` : run.phase);
+      },
+      ...overrides,
+    });
+    return { one, phases };
+  }
+  const gated = <T>() => {
+    let open!: (value: T) => void;
+    const gate = new Promise<T>((resolve) => (open = resolve));
+    return { gate, open };
+  };
+  const until = async (check: () => boolean) => {
+    while (!check()) await new Promise((resolve) => setTimeout(resolve, 5));
+  };
+
+  it("goes idle, building at each step, preview, confirming, uploading at each step, idle", async () => {
+    const { one, phases } = watched();
+    expect(one.view()).toEqual({ phase: "idle" });
+    await one.prepare("tavora.notes", undefined, "Notes from the list");
+    const preview = one.preview!;
+    expect(one.view()).toEqual({ phase: "preview", moduleId: "tavora.notes", name: "Notes from the list", preview });
+    const published = await one.confirm(async () => {
+      expect(one.view()).toEqual({ phase: "confirming", moduleId: "tavora.notes", name: "Notes from the list", preview });
+      return key;
+    });
+    expect(published).toMatchObject({ id: "tavora.notes", version: "0.7.0" });
+    expect(phases).toEqual([
+      "building:fetch",
+      "building:check",
+      "building:worktree",
+      "building:install",
+      "building:build",
+      "building:pack",
+      "preview",
+      "confirming",
+      "uploading:sign",
+      "uploading:upload",
+      "idle",
+    ]);
+    expect(one.view()).toEqual({ phase: "idle" });
+  });
+
+  it("shows the module's name from the start while building", async () => {
+    const build = gated<void>();
+    world.buildGate = build.gate;
+    const { one, phases } = watched();
+    const running = one.prepare("tavora.notes", undefined, "Notes from the list");
+    await until(() => phases.includes("building:build"));
+    expect(one.view()).toEqual({ phase: "building", moduleId: "tavora.notes", name: "Notes from the list", step: "build" });
+    build.open();
+    await running;
+  });
+
+  it("cancel: nothing when idle; stops a build; throws a preview away; waits while the key is loaded or the upload runs", async () => {
+    // Idle.
+    const idle = watched();
+    await idle.one.cancel();
+    expect(idle.one.view()).toEqual({ phase: "idle" });
+    expect(idle.phases).toEqual([]);
+
+    // Building: the step running now stops, and the run ends.
+    const build = gated<void>();
+    world.buildGate = build.gate;
+    const building = watched();
+    const running = building.one.prepare("tavora.notes");
+    await until(() => building.phases.includes("building:build"));
+    await building.one.cancel();
+    await expect(running).rejects.toBeInstanceOf(PublishCancelled);
+    build.open();
+    expect(building.one.view()).toEqual({ phase: "idle" });
+    world.buildGate = null;
+
+    // Preview: thrown away, worktree and all.
+    const preview = watched();
+    await preview.one.prepare("tavora.notes");
+    await preview.one.cancel();
+    expect(preview.one.view()).toEqual({ phase: "idle" });
+    expect(await readdir(temp)).toEqual([]);
+
+    // Confirming: the key picker is open; cancel waits for it.
+    const confirming = watched();
+    await confirming.one.prepare("tavora.notes");
+    const picked = gated<KeyObject | null>();
+    const confirmed = confirming.one.confirm(() => picked.gate);
+    expect(confirming.one.view().phase).toBe("confirming");
+    await confirming.one.cancel();
+    expect(confirming.one.view().phase).toBe("confirming");
+    picked.open(key);
+    await confirmed;
+    expect(confirming.one.view()).toEqual({ phase: "idle" });
+    expect(world.uploads).toHaveLength(1);
+
+    // Uploading: nothing can stop it.
+    const upload = gated<void>();
+    const uploading = watched({
+      upload: async (_key, zip) => {
+        await upload.gate;
+        world.uploads.push(zip);
+        return { id: "tavora.notes", version: world.version, sha256: "b".repeat(64), status: "published", reasons: [] };
+      },
+    });
+    await uploading.one.prepare("tavora.notes");
+    const finishing = uploading.one.finish(key);
+    await until(() => uploading.phases.includes("uploading:upload"));
+    await uploading.one.cancel();
+    expect(uploading.one.view().phase).toBe("uploading");
+    upload.open();
+    await finishing;
+    expect(uploading.one.view()).toEqual({ phase: "idle" });
+    expect(world.uploads).toHaveLength(2);
+  });
+
+  it("a failure while building ends the run", async () => {
+    const failing: Run = async (command, args, options) => {
+      if (command.startsWith("pnpm") && args[0] === "--filter") throw new Error("pnpm failed");
+      return run(command, args, options);
+    };
+    const { one, phases } = watched({ run: failing });
+    await expect(one.prepare("tavora.notes")).rejects.toMatchObject({ key: "officialPublish.error.build" });
+    expect(phases.at(-2)).toBe("building:build");
+    expect(phases.at(-1)).toBe("idle");
+    expect(one.view()).toEqual({ phase: "idle" });
+  });
+
+  it("no key picked, or one that can't be loaded, goes back to the preview", async () => {
+    const { one, phases } = watched();
+    await one.prepare("tavora.notes");
+    expect(await one.confirm(async () => null)).toBeNull();
+    expect(one.view().phase).toBe("preview");
+    await expect(
+      one.confirm(async () => {
+        throw new Error("not a key file");
+      }),
+    ).rejects.toThrow("not a key file");
+    expect(one.view().phase).toBe("preview");
+    expect(phases.slice(-4)).toEqual(["confirming", "preview", "confirming", "preview"]);
+    expect(world.uploads).toEqual([]);
+  });
+
+  it("a wrong key or a failed upload keeps the preview; a build that changed or a catalogue that moved on ends the run", async () => {
+    const other = (await createKeyFile(path.join(userData, "other.key"))).key;
+    let offline = true;
+    const { one, phases } = watched({
+      upload: async (_key, zip) => {
+        if (offline) throw new Error("offline");
+        world.uploads.push(zip);
+        return { id: "tavora.notes", version: world.version, sha256: "b".repeat(64), status: "published", reasons: [] };
+      },
+    });
+    await one.prepare("tavora.notes");
+    await expect(one.confirm(async () => other)).rejects.toMatchObject({ key: "officialPublish.error.wrongKey" });
+    expect(phases.slice(-3)).toEqual(["confirming", "uploading:sign", "preview"]);
+    await expect(one.finish(key)).rejects.toThrow("offline");
+    expect(phases.slice(-3)).toEqual(["uploading:sign", "uploading:upload", "preview"]);
+    offline = false;
+
+    await writeFile(path.join(world.worktrees[0]!, "modules", "notes", "dist", "index.html"), "<p>changed</p>");
+    await expect(one.finish(key)).rejects.toMatchObject({ key: "officialPublish.error.changed" });
+    expect(one.view()).toEqual({ phase: "idle" });
+
+    await one.prepare("tavora.notes");
+    world.listed = { version: "0.7.0" };
+    await expect(one.finish(key)).rejects.toMatchObject({ key: "officialPublish.error.notNewer" });
+    expect(one.view()).toEqual({ phase: "idle" });
+    expect(world.uploads).toEqual([]);
+  });
+
+  it("Sign and upload only from the preview: busy while it runs, nothing to sign without one", async () => {
+    const { one } = watched();
+    await expect(one.confirm(async () => key)).rejects.toMatchObject({ key: "officialPublish.error.notPrepared" });
+    await one.prepare("tavora.notes");
+    const picked = gated<KeyObject | null>();
+    const confirmed = one.confirm(() => picked.gate);
+    await expect(one.confirm(async () => key)).rejects.toMatchObject({ key: "officialPublish.error.busy" });
+    await expect(one.finish(key)).rejects.toMatchObject({ key: "officialPublish.error.notPrepared" });
+    await expect(one.prepare("tavora.notes")).rejects.toMatchObject({ key: "officialPublish.error.busy" });
+    picked.open(null);
+    await confirmed;
+    expect(one.view().phase).toBe("preview");
+    await one.cancel();
+  });
+});
+
 describe("the list of built-in modules to publish", () => {
   it("lists only modules newer on main than in the last release, never the Playground, each with its status", async () => {
     expect(await publisher().check()).toEqual({ commit: SHA, release: "v0.23.0", rows: [{ id: "tavora.notes", name: "Notes", version: "0.7.0", shipped: "0.6.1", listed: "0.6.1", status: "ready" }], hostChanges: [] });

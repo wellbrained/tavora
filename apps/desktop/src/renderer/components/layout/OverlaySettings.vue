@@ -95,12 +95,13 @@ const opacity = computed({
         <span class="text-muted-foreground w-28 flex-none text-sm">{{ t("overlays.opacity.label") }}</span>
         <Select v-model="opacity">
           <SelectTrigger size="sm" class="w-28" :aria-label="t('overlays.opacity.label')" :data-testid="item ? `layout-opacity-${item.id}` : 'layout-opacity-many'">
-            <SelectValue :placeholder="t('overlays.layout.mixed')" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem v-for="value in ['100', '75', '50', '25']" :key="value" :value="value">{{ value }}%</SelectItem>
           </SelectContent>
         </Select>
+        <Badge v-if="opacity === MIXED" variant="secondary" data-testid="layout-opacity-mixed">{{ t("overlays.layout.mixed") }}</Badge>
       </div>
       <div class="flex flex-col gap-1.5">
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1">

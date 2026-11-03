@@ -18,6 +18,7 @@ import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import { boundsOf, snapMove, snapResize, touches, type Edges, type Guide } from "../../../shared/layout-math";
 import type { LayoutItemView } from "../../../shared/layout-view";
 import type { Rect } from "../../../shared/overlay-anchor";
+import { resizeContentRect } from "../../../shared/overlay-content";
 import { state } from "../../host";
 import { t } from "../../i18n";
 import { isGroupAction } from "../../../shared/layout-toolbar";
@@ -102,6 +103,13 @@ const HANDLES = [
   { edge: "l", edges: { left: true }, cursor: "ew-resize", at: "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2" },
 ] as const satisfies readonly { edge: string; edges: Edges; cursor: string; at: string }[];
 
+/** A rectangle moved back onto the canvas where it ran past an edge (its size stays, as far as the canvas allows). */
+function onCanvas(rect: Rect, canvas: { width: number; height: number }): Rect {
+  const width = Math.min(rect.width, canvas.width);
+  const height = Math.min(rect.height, canvas.height);
+  return { x: Math.min(canvas.width - width, Math.max(0, rect.x)), y: Math.min(canvas.height - height, Math.max(0, rect.y)), width, height };
+}
+
 /** Ctrl or Cmd, or Shift: a click adds to the selection or takes away from it. */
 const adds = (event: PointerEvent | MouseEvent) => event.shiftKey || (mac ? event.metaKey : event.ctrlKey);
 
@@ -148,21 +156,22 @@ function move(event: PointerEvent) {
   let rects: Record<string, Rect>;
   if (current.edges) {
     const origin = current.origins[current.id]!;
-    const result = snapResize(
-      {
-        x: origin.x + (current.edges.left ? dx : 0),
-        y: origin.y + (current.edges.top ? dy : 0),
-        width: origin.width + (current.edges.right ? dx : 0) - (current.edges.left ? dx : 0),
-        height: origin.height + (current.edges.bottom ? dy : 0) - (current.edges.top ? dy : 0),
-      },
-      current.edges,
-      now.canvas,
-      others,
-      options,
-      now.minSize,
-    );
-    rects = { [current.id]: result.rect };
-    guides.value = result.guides;
+    const pulled = {
+      x: origin.x + (current.edges.left ? dx : 0),
+      y: origin.y + (current.edges.top ? dy : 0),
+      width: origin.width + (current.edges.right ? dx : 0) - (current.edges.left ? dx : 0),
+      height: origin.height + (current.edges.bottom ? dy : 0) - (current.edges.top ? dy : 0),
+    };
+    const item = shown.value.find((one) => one.id === current.id);
+    if (item?.natural) {
+      // A frame that follows its content scales in the content's shape, so it doesn't snap to the grid or to other frames.
+      rects = { [current.id]: onCanvas(resizeContentRect(origin, pulled, item.natural, item.scale, 1, now.minSize).rect, now.canvas) };
+      guides.value = [];
+    } else {
+      const result = snapResize(pulled, current.edges, now.canvas, others, options, now.minSize);
+      rects = { [current.id]: result.rect };
+      guides.value = result.guides;
+    }
   } else {
     // The box around the frames snaps (and stays on the canvas); each frame moves by as much, so they keep their places to each other.
     const box = boundsOf(Object.values(current.origins))!;

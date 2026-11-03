@@ -15,7 +15,8 @@
 import type { GameOverlayResult, JsonValue, OverlaySource } from "@tavora/sdk/protocol";
 import type { GameOverlaysView } from "../shared/host-api";
 import { translate, type Language } from "../shared/i18n";
-import { DEFAULT_RECT, anchorOf, contentScale, type AnchoredRect, type LegacyRect } from "../shared/overlay-anchor";
+import { DEFAULT_RECT, REFERENCE_HEIGHT, anchorOf, contentScale, type AnchoredRect, type LegacyRect } from "../shared/overlay-anchor";
+import { adoptRect, followRect, resizeContentRect } from "../shared/overlay-content";
 import type { GridSetting } from "../shared/layout-math";
 import type { ToolbarSetting } from "../shared/layout-toolbar";
 import { HostError } from "./errors";
@@ -76,6 +77,9 @@ export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "se
 /** Which overlay or panel an item of the Overlay layout is. */
 export type LayoutItemRef = ItemRef;
 
+/** Whether two saved rectangles have the same size. */
+const sameSize = (a: AnchoredRect, b: AnchoredRect) => a.width === b.width && a.height === b.height;
+
 /** One overlay or panel of a setup as the Overlay layout sees it. */
 export interface LayoutItemInfo {
   /** Stable text for the item (overlayId, or panelWindowId). */
@@ -95,6 +99,8 @@ export interface LayoutItemInfo {
   z: number | null;
   /** Set while the position is not converted yet (the fractions of the window): the layout places it on its canvas the old way. */
   legacy?: LegacyRect;
+  /** The scale of an overlay whose frame follows its content (`OverlaySource.grows`), once it has one. */
+  scale?: number;
   hotkey: { accelerator: string; taken: boolean } | null;
   /** Toggled on by its key right now (matters for mode toggle). */
   toggledOn: boolean;
@@ -131,7 +137,8 @@ export interface LayoutSource {
   addOverlay(setupId: string, overlay: { owner: string; moduleId: string; workspaceId: string; key: string }): AddResult;
   /** An item of a personal workspace moves between Everywhere and All games with its place and settings. */
   move(ref: LayoutItemRef, from: string, to: string): AddResult | "missing";
-  setRect(setupId: string, ref: LayoutItemRef, rect: AnchoredRect): boolean;
+  /** `scale`: the new scale of a frame that follows its content; left out, it stays. */
+  setRect(setupId: string, ref: LayoutItemRef, rect: AnchoredRect, scale?: number): boolean;
   /** Copies the items of a setup into a game's setup, replacing what it has or adding to it; see GameOverlayStore.copySetup. */
   copy(from: string, to: string, mode: "replace" | "add"): CopyOutcome | null;
   /** The size a new item of this kind starts with in a window of this size (Reset size), in units of the window's height. */
@@ -334,7 +341,7 @@ export class GameOverlays {
   private liveTick: ReturnType<typeof setTimeout> | undefined;
   private readonly liveWatchers = new Map<string, Set<(state: JsonValue | null | undefined) => void>>();
   /** What each panel passes to overlay.setSources (its own list, last call wins); kept while the panel exists, in memory only. */
-  private readonly sourceLists = new Map<string, { owner: string; sources: OverlaySource[] }>();
+  private readonly sourceLists = new Map<string, { owner: string; moduleId?: string; workspaceId?: string; sources: OverlaySource[] }>();
 
   private constructor(
     private readonly options: GameOverlayServiceOptions,
@@ -415,6 +422,8 @@ export class GameOverlays {
       if (made) this.store.removeSetup(setup);
       throw error;
     }
+    // A new frame for content that grows is as big as its content, at 100 %.
+    if (added === "added") this.followContent((overlay) => sameOverlay(overlay, subject), true);
     // The user asked for it: a page that crashed too often gets another chance.
     this.revive(overlayId(subject));
     this.options.changed();
@@ -489,10 +498,58 @@ export class GameOverlays {
   }
 
   /** overlay.setSources: what the panel can show over the game on its own (already checked); the Overlay page lists it under the panel. */
-  setSources(instanceId: string, owner: string, sources: OverlaySource[]): void {
+  setSources(instanceId: string, owner: string, sources: OverlaySource[], panel?: { moduleId: string; workspaceId: string }): void {
     // An empty list still says the panel lists its things (it has none right now), so it isn't offered as a whole either.
-    this.sourceLists.set(instanceId, { owner, sources: sources.map((source) => ({ ...source, ...(source.size ? { size: { ...source.size } } : {}) })) });
+    this.sourceLists.set(instanceId, { owner, ...panel, sources: sources.map((source) => ({ ...source, ...(source.size ? { size: { ...source.size } } : {}) })) });
+    // Frames whose content grows take its new size at once, over the game and on the Overlay page.
+    if (panel && this.followContent((overlay) => overlay.owner === owner && overlay.moduleId === panel.moduleId && overlay.workspaceId === panel.workspaceId)) {
+      this.options.changed();
+      this.tick();
+    }
     this.layoutPort?.refresh();
+  }
+
+  /** What the panel behind an overlay lists for its key, with how big its content is; null when it lists nothing for it. */
+  private listedSource(subject: GameOverlaySubject): (OverlaySource & { size: { width: number; height: number } }) | null {
+    for (const entry of this.sourceLists.values()) {
+      if (entry.owner !== subject.owner || entry.moduleId !== subject.moduleId || entry.workspaceId !== subject.workspaceId) continue;
+      const source = entry.sources.find((one) => one.key === subject.key);
+      return source?.size ? (source as OverlaySource & { size: { width: number; height: number } }) : null;
+    }
+    return null;
+  }
+
+  /** The same, only when its content grows (`grows`): the frame follows it. */
+  private growingSource(subject: GameOverlaySubject): (OverlaySource & { size: { width: number; height: number } }) | null {
+    const source = this.listedSource(subject);
+    return source?.grows ? source : null;
+  }
+
+  /**
+   * Frames of the overlays matching `test` whose content grows get its size times their scale (overlay-content.ts). One
+   * without a scale yet (from before) keeps how big its content looked: `fresh` frames start at 100 % instead. A frame
+   * whose content says it doesn't grow (`grows: false`, a box the user sizes) is left as it is, and is given 100 % to start
+   * from, so its text keeps its size when it grows later. A frame not converted from the old fractions yet waits. Whether
+   * any changed.
+   */
+  private followContent(test: (overlay: GameOverlay) => boolean, fresh = false): boolean {
+    let changed = false;
+    for (const setupId of this.store.setupIds()) {
+      for (const overlay of this.store.overlaysIn(setupId)) {
+        if (!test(overlay) || overlay.legacy) continue;
+        const source = this.listedSource(overlay);
+        if (!source || source.grows === undefined) continue;
+        const subject = { owner: overlay.owner, moduleId: overlay.moduleId, workspaceId: overlay.workspaceId, key: overlay.key };
+        if (!source.grows) {
+          if (overlay.scale === undefined) changed = this.store.setRect(setupId, { kind: "overlay", subject }, overlay.rect, 1) || changed;
+          continue;
+        }
+        const next = overlay.scale !== undefined || fresh ? { scale: overlay.scale ?? 1, rect: followRect(overlay.rect, source.size, overlay.scale ?? 1) } : adoptRect(overlay.rect, source.size);
+        if (next.scale === overlay.scale && sameSize(next.rect, overlay.rect) && next.rect.x === overlay.rect.x && next.rect.y === overlay.rect.y) continue;
+        changed = this.store.setRect(setupId, { kind: "overlay", subject }, next.rect, next.scale) || changed;
+      }
+    }
+    return changed;
   }
 
   /** What a panel told overlay.setSources, if it did and its module is still its publisher's; null when it never did. */
@@ -1140,7 +1197,22 @@ export class GameOverlays {
   private movedIn(id: string, ref: ItemRef, rect: Rect): void {
     const setup = this.open.get(id)?.setup;
     const area = setup !== undefined ? this.areaOf(setup) : null;
-    if (setup !== undefined && area && this.store.setRect(setup, ref, anchorOf(rect, area))) this.options.changed();
+    if (setup === undefined || !area) return;
+    // A frame that follows its content scales with the drag and keeps the content's shape (overlay-content.ts).
+    const overlay = ref.kind === "overlay" ? this.store.find(ref.subject, setup) : undefined;
+    const source = overlay && !overlay.legacy ? this.growingSource(overlay) : null;
+    if (overlay && source) {
+      const before = placeItem(overlay, area);
+      const scale = overlay.scale ?? adoptRect(overlay.rect, source.size).scale;
+      const next = resizeContentRect(before, rect, source.size, scale, area.height / REFERENCE_HEIGHT);
+      if (this.store.setRect(setup, ref, anchorOf(next.rect, area), next.scale)) {
+        this.options.changed();
+        // The window takes the content's shape at once, not only when it is let go.
+        this.tick();
+      }
+      return;
+    }
+    if (this.store.setRect(setup, ref, anchorOf(rect, area))) this.options.changed();
   }
 
   private create(overlay: GameOverlay, id: string, setup: string): Open | null {
@@ -1293,8 +1365,8 @@ export class GameOverlays {
         return module && module.owner === overlay.owner ? this.addOverlayTo(setupId, module, overlay.workspaceId, overlay.key) : "refused";
       },
       move: (ref, from, to) => this.moveItem(ref, from, to),
-      setRect: (setupId, ref, rect) => {
-        const done = this.store.setRect(setupId, ref, rect);
+      setRect: (setupId, ref, rect, scale) => {
+        const done = this.store.setRect(setupId, ref, rect, scale);
         // On screen at once: the windows take their new place on this look.
         if (done) this.tick();
         return done;
@@ -1499,6 +1571,7 @@ export class GameOverlays {
         locked: overlay.locked === true,
         z: overlay.z ?? null,
         ...(overlay.legacy ? { legacy: overlay.legacy } : {}),
+        ...(overlay.scale === undefined ? {} : { scale: overlay.scale }),
         hotkey: this.options.streaming.keyOf(toggleBinding(overlay)),
         toggledOn: this.toggled.has(id),
         source: module?.manifest.overlay && module.owner === overlay.owner ? this.overlaySource(subject) : null,

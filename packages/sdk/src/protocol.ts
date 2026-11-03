@@ -767,6 +767,14 @@ export interface OverlaySource {
    * is. A new frame starts at this size (with a little room around it); without it, at the manifest's `overlaySize`.
    */
   size?: { width: number; height: number };
+  /**
+   * The frame follows the content, like an OBS text source without a bounding box: it is as big as `size` (with the
+   * room around it) times the scale the user drags it to, and grows or shrinks with `size` whenever the panel lists a
+   * new one. Reset size puts the scale back to 100 %. The page takes the scale from its height (`inTavoraFrame`).
+   * `false` (or left out): the user sizes the frame and the page fits itself in; with `false` Tavora also knows that the
+   * content is drawn at 100 % in it, so it keeps its size if it grows later. Tavora 0.23.94 and newer; older ones ignore it.
+   */
+  grows?: boolean;
 }
 
 /** A hotkey the user set for this module in the current workspace: which action, for what. Never the key itself. */
@@ -1234,6 +1242,13 @@ export const OVERLAY_KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
  * message is `{ "state": <JSON or null> }`, the first one straight away (see watchOverlay).
  */
 export const OVERLAY_STATE_PATH = "_state";
+
+/**
+ * Tavora's own frames for an overlay page (over the game, on the Overlay page) load it with this query parameter set to
+ * 1: such a frame keeps the size a `grows` source lists, times its scale. OBS, the preview window and older Tavoras
+ * don't set it. Read it with `inTavoraFrame()`.
+ */
+export const OVERLAY_FRAME_PARAM = "tavoraFrame";
 
 /**
  * One entry of a menu drawn by Tavora (ui.showMenu). Text only; Tavora draws it in the current theme.

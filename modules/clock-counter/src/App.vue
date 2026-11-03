@@ -429,19 +429,49 @@ const measure = canvasMeasure();
 let sourcesTimer: ReturnType<typeof setTimeout> | undefined;
 /** An older Tavora has no Overlay page to list them on: its first answer ends the sending. */
 let sourcesUnknown = false;
-/** Tells Tavora what this panel can show over the game on its own, a moment after the list changed (a count changes a group's line). */
+/** What was sent last, and when: the same list isn't sent again. */
+let sentSources = "";
+let sentAt = 0;
+/** How long a burst of changes waits for the next list; the first change of a burst goes at once, so a frame that grows with its text follows it. */
+const SOURCES_GAP = 300;
+
+/** Tells Tavora what this panel can show over the game on its own when it changed (a count changes a group's line and its size). */
 function sendSources(): void {
   clearTimeout(sourcesTimer);
-  sourcesTimer = setTimeout(() => {
-    const connected = sdk.value;
-    if (!connected || !store.value || sourcesUnknown) return;
-    connected.overlay.setSources(buildSources(list.value, measure, (item) => item.label || t(`kind.${item.kind}`))).catch((reason: { code?: string }) => {
-      if (reason?.code === "UNKNOWN_METHOD") sourcesUnknown = true;
-      else console.warn("[clock-counter] sources", errorMessage(reason));
-    });
-  }, 300);
+  const wait = SOURCES_GAP - (Date.now() - sentAt);
+  if (wait <= 0) flushSources();
+  else sourcesTimer = setTimeout(flushSources, wait);
+}
+
+function flushSources(): void {
+  const connected = sdk.value;
+  if (!connected || !store.value || sourcesUnknown) return;
+  const sources = buildSources(list.value, measure, (item) => item.label || t(`kind.${item.kind}`));
+  const text = JSON.stringify(sources);
+  if (text === sentSources) return;
+  sentSources = text;
+  sentAt = Date.now();
+  connected.overlay.setSources(sources).catch((reason: { code?: string }) => {
+    sentSources = "";
+    if (reason?.code === "UNKNOWN_METHOD") sourcesUnknown = true;
+    else console.warn("[clock-counter] sources", errorMessage(reason));
+  });
 }
 watch([list, sdk], () => store.value && sendSources());
+
+// A running stopwatch gets wider by itself (9:59 to 10:00), with nothing in the list changing: its size is looked at every second,
+// also while the panel is hidden, since its frame over the game follows it. Only a list that changed is sent.
+const stopwatchRunning = computed(() => list.value.items.some((item) => item.kind === "stopwatch" && item.since !== null));
+let sizeTimer: ReturnType<typeof setInterval> | undefined;
+watch(
+  stopwatchRunning,
+  (on) => {
+    clearInterval(sizeTimer);
+    if (on) sizeTimer = setInterval(sendSources, 1000);
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => clearInterval(sizeTimer));
 
 /** The Overlay page added or removed overlays: the switches follow, and what is over the game now shows its state from the start. */
 function overGameChanged(keys: string[]): void {
