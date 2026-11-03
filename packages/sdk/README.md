@@ -81,6 +81,11 @@ plain-data description, never HTML or CSS. Use a new id for each hover session,
 the source data, and use `onClose` to clear your local pin state. Escape and the
 host close button dismiss the current tooltip from anywhere in Tavora.
 
+A card shows "Click to pin item details" in its footer. If your module doesn't pin on click, send
+`pinnable: false`: the hint goes away and `pinned: true` is refused. It needs Tavora 0.23.91; the SDK
+leaves it out on an older one (check `sdk.supports("ui.tooltip.pinnable")`), where the card still
+shows, with the old hint.
+
 Tooltips are neutral (Tavora's own colours) unless `content.look` is `'poe'`, the Path of Exile 2 item look
 (Tavora 0.23.53 and newer; an older Tavora rejects a tooltip with `look`, so catch the failure).
 

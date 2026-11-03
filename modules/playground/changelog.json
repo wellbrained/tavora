@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.24",
+    "version": "0.1.25",
     "date": "2026-11-03",
     "notes": [
       "A new page shows the overlay text: grows with its frame, or a fixed box where long text scrolls."
+    ]
+  },
+  {
+    "version": "0.1.24",
+    "date": "2026-11-03",
+    "notes": [
+      "New specimen: rows you drag to reorder."
     ]
   },
   {

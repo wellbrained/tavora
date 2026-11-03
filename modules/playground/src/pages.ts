@@ -39,7 +39,7 @@ export const PAGES = [
   { id: "status", group: "display", keywords: "badge chip tag status dot kbd shortcut keys", examples: ["Badges", "StatusDot", "Keys"] },
   { id: "loading", group: "display", keywords: "progress spinner skeleton loading sparkline chart graph line count picture image fade", examples: ["ProgressBar", "CountingNumbers", "Sparkline", "Spinner", "SkeletonCard", "LatePicture"] },
   { id: "notices", group: "display", keywords: "notice alert callout info warning error success inline message empty state nothing placeholder no items action list start", examples: ["Notices", "Empty", "EmptyActions"] },
-  { id: "lists", group: "display", keywords: "table rows columns grid data cells header list stats compare row hover selected settings divider card add remove animated", examples: ["Table", "SelectableList", "AnimatedRows", "SettingRows", "Card"] },
+  { id: "lists", group: "display", keywords: "table rows columns grid data cells header list stats compare row hover selected settings divider card add remove animated reorder drag", examples: ["Table", "SelectableList", "AnimatedRows", "ReorderRows", "SettingRows", "Card"] },
   { id: "folding", group: "display", keywords: "expand collapse more less long text read clamp collapsible disclosure accordion details summary open close fold section force-mount height", examples: ["ShowMoreLong", "ShowMoreShort", "Collapsible", "CollapsibleDivider"] },
   // Navigation
   { id: "tabs", group: "navigation", keywords: "tabs views strip close closable reorder drag rename middle-click scroll overflow add", examples: ["Tabs", "TabStrip", "TabIcon", "TabsCrowded"] },

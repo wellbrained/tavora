@@ -99,6 +99,9 @@ export class OverlayCanvas implements LayoutWindow {
     if (!this.layer.webContents.isDestroyed()) this.layer.webContents.send("host:state", state);
   }
 
+  /** The pages back to front as they were put, to see when the stacking changed. */
+  private stackOrder = "";
+
   place(frames: LayoutFrame[], layer: Rect | null, covered: boolean): void {
     if (this.isDestroyed) return;
     const wanted = new Set(frames.map((frame) => frame.id));
@@ -128,8 +131,13 @@ export class OverlayCanvas implements LayoutWindow {
     this.layerWanted = layer !== null;
     this.layer.setVisible(this.layerWanted && !this.frozen);
     this.cover(covered);
+    // The frames come back to front; a page added again goes to the top, so the order is made again when it changed.
+    const order = frames.map((frame) => frame.id).join("\n");
+    const restacked = order !== this.stackOrder;
+    if (restacked) for (const frame of frames) this.window.contentView.addChildView(this.items.get(frame.id)!.view);
+    this.stackOrder = order;
     // Added again, the layer is the topmost: it takes the mouse over every page.
-    if (added) this.window.contentView.addChildView(this.layer);
+    if (added || restacked) this.window.contentView.addChildView(this.layer);
   }
 
   /**

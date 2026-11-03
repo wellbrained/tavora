@@ -72,6 +72,34 @@ test('a pinned tooltip stays on app focus loss and closes with a hidden source',
  }finally{await app.close();}
 });
 
+test('a card that says pinnable: false has no pin hint, and one without the field keeps it', async () => {
+    const { app, page } = await launch(undefined, [await fixture()]);
+    try {
+        await openModule(page, ID);
+        await waitForShown(app, ID);
+        await expect.poll(() => inModule(app, ID, "document.querySelector('#result').textContent")).toBe('ready');
+        const footer = async (id: string, extra: string) => {
+            await input(app, 'mouseMove');
+            await inModule(app, ID, `call('ui.tooltip.show',{id:${JSON.stringify(id)},at:{x:110,y:130},content:{title:'Gear'}${extra}})`);
+            await expect.poll(async () => (await tooltip(app))?.visible).toBe(true);
+            const spans = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('data:text/html'))!.webContents.executeJavaScript('[...document.querySelectorAll(".footer span")].map(s=>s.textContent)'));
+            await inModule(app, ID, `call('ui.tooltip.close',{id:${JSON.stringify(id)}})`);
+            await expect.poll(async () => (await tooltip(app))?.visible).toBe(false);
+            return spans as string[];
+        };
+        expect((await footer('pin:default', '')).join(' ')).toContain('Click to pin item details');
+        expect((await footer('pin:yes', ',pinnable:true')).join(' ')).toContain('Click to pin item details');
+        const none = await footer('pin:no', ',pinnable:false');
+        expect(none).toHaveLength(1);
+        expect(none.join(' ')).not.toMatch(/pin/i);
+        // Pinning a card that can't pin is refused.
+        expect(await inModule(app, ID, `call('ui.tooltip.show',{id:'pin:both',at:{x:110,y:130},content:{title:'x'},pinnable:false,pinned:true}).then(String,e=>e.code)`)).toBe('INVALID_PARAMS');
+    }
+    finally {
+        await app.close();
+    }
+});
+
 test('the shared tooltip is neutral unless the content asks for the poe look', async () => {
     const { app, page } = await launch(undefined, [await fixture()]);
     try {

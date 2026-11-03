@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { GridSetting } from "../shared/layout-math";
+import { normalizeToolbar, type ToolbarSetting } from "../shared/layout-toolbar";
 import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, type LayoutMessage, type LayoutView } from "../shared/layout-view";
 import { DEFAULT_PANEL_ANCHORED, DEFAULT_RECT, placeAnchored, placeLegacy, type AnchoredRect, type LegacyRect } from "../shared/overlay-anchor";
 import type { LayoutItemInfo, LayoutItemRef, LayoutSource } from "./game-overlay-service";
@@ -43,6 +44,8 @@ interface Item {
   page?: boolean;
   opacity?: 100 | 75 | 50 | 25;
   hideFromCapture?: boolean;
+  locked?: boolean;
+  z?: number;
 }
 
 function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handles?: Record<string, string>; running?: string[]; sources?: SourcePanel[]; startSizes?: { overlay?: { width: number; height: number }; panel?: { width: number; height: number } }; monitors?: { id: number; width: number; height: number }[]; capture?: Buffer | null | "throws"; choose?: Buffer | "cancelled" | "bad"; enabled?: boolean } = {}) {
@@ -53,6 +56,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     /** The text scales Reset size gave (a text that grows with its frame). */
     textScales: [] as number[],
     grid: "normal" as GridSetting,
+    toolbar: { show: true, buttons: ["settings", "hide", "reset", "reset-size", "remove"] } as ToolbarSetting,
     /** The games that have a setup; one stays when its last item goes. */
     gameSetups: [...new Set(items.map((item) => setupOf(item)).filter((id) => id !== LAYOUT_ALL_GAMES && id !== LAYOUT_EVERYWHERE))],
     seen: { ...options.seen },
@@ -95,6 +99,8 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
       opacity: item.opacity ?? 100,
       hideFromCapture: item.hideFromCapture ?? false,
       rect: item.rect,
+      locked: item.locked ?? false,
+      z: item.z ?? null,
       ...(item.legacy ? { legacy: item.legacy } : {}),
       hotkey: null,
       toggledOn: item.toggledOn ?? false,
@@ -113,6 +119,15 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     gameWindow: () => null,
     grid: () => world.grid,
     setGrid: (grid) => void (world.grid = grid),
+    toolbar: () => world.toolbar,
+    setToolbar: (change) => void (world.toolbar = normalizeToolbar({ ...world.toolbar, ...change })),
+    setFlags: (setupId, ref, change) => {
+      const item = find(setupId, ref);
+      if (!item) return false;
+      if (change.locked !== undefined) item.locked = change.locked;
+      if (change.z !== undefined) item.z = change.z;
+      return true;
+    },
     running: () => [...world.running],
     addOverlay: (setupId, overlay) => {
       world.overlaysAdded.push({ setup: setupId, key: overlay.key });
@@ -171,7 +186,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
     state: (setupId, ref) => {
       const item = find(setupId, ref);
       if (!item) return null;
-      const settings = { mode: item.mode ?? "always", opacity: item.opacity ?? 100, hideFromCapture: item.hideFromCapture ?? false, rect: { ...item.rect }, ...(item.legacy ? { legacy: { ...item.legacy } } : {}) };
+      const settings = { mode: item.mode ?? "always", opacity: item.opacity ?? 100, hideFromCapture: item.hideFromCapture ?? false, rect: { ...item.rect }, ...(item.locked ? { locked: true } : {}), ...(item.z !== undefined ? { z: item.z } : {}), ...(item.legacy ? { legacy: { ...item.legacy } } : {}) };
       const who = { owner: "official", moduleId: "tavora.clock-counter", workspaceId: item.gameId };
       return { item: item.panel ? { ...who, instanceId: item.key, ...settings } : { ...who, key: item.key, ...settings }, index: world.items.indexOf(item), key: null };
     },
@@ -183,10 +198,13 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
         return true;
       }
       if (world.refusePut) return false;
-      const { mode, opacity, hideFromCapture, rect, legacy } = state.item;
+      const { mode, opacity, hideFromCapture, rect, legacy, locked, z } = state.item;
       const settings = { mode, opacity, hideFromCapture, rect: { ...rect }, ...(legacy ? { legacy: { ...legacy } } : {}) };
       if (item) {
         delete item.legacy;
+        item.locked = locked === true;
+        if (z === undefined) delete item.z;
+        else item.z = z;
         Object.assign(item, settings);
         return true;
       }
@@ -1807,5 +1825,165 @@ describe("copying a setup to a game", () => {
     layout.handle({ type: "copy-setup", to: "valheim", mode: "replace" }, true);
     layout.handle({ type: "game", gameId: "valheim" }, true);
     expect(layout.view().copied).toBeNull();
+  });
+});
+
+describe("the frame menu", () => {
+  const SEEN = { elden: { width: 1920, height: 1080 } };
+  const three = () => {
+    const made = setup([clock("a"), clock("b", "elden", at(0.4, 0.4, 0.2, 0.2)), clock("c", "elden", at(0.7, 0.1, 0.2, 0.2))], { seen: SEEN });
+    made.layout.open("elden");
+    const ids = made.layout.view().items.map((item) => item.id);
+    /** The frames back to front, by key. */
+    const stack = () => [...made.layout.view().items].sort((x, y) => x.z - y.z).map((item) => item.name);
+    return { ...made, ids, stack };
+  };
+
+  it("stacks frames in the order they were added until one is arranged", () => {
+    const { stack } = three();
+    expect(stack()).toEqual(["a", "b", "c"]);
+  });
+
+  it("brings a frame to the front and sends it to the back, each one undo step", () => {
+    const { layout, ids, stack } = three();
+    layout.handle({ type: "arrange", id: ids[0]!, to: "front" }, false);
+    expect(stack()).toEqual(["b", "c", "a"]);
+    layout.handle({ type: "arrange", id: ids[2]!, to: "back" }, false);
+    expect(stack()).toEqual(["c", "b", "a"]);
+    layout.handle({ type: "undo" }, false);
+    expect(stack()).toEqual(["b", "c", "a"]);
+    layout.handle({ type: "undo" }, false);
+    expect(stack()).toEqual(["a", "b", "c"]);
+    layout.handle({ type: "redo" }, false);
+    expect(stack()).toEqual(["b", "c", "a"]);
+  });
+
+  it("moves a frame one step forward or backward", () => {
+    const { layout, ids, stack } = three();
+    layout.handle({ type: "arrange", id: ids[0]!, to: "forward" }, false);
+    expect(stack()).toEqual(["b", "a", "c"]);
+    layout.handle({ type: "arrange", id: ids[2]!, to: "backward" }, false);
+    expect(stack()).toEqual(["b", "c", "a"]);
+  });
+
+  it("keeps the order of frames arranged together, and makes no step where nothing moves", () => {
+    const { layout, ids, stack } = three();
+    layout.handle({ type: "arrange", ids: [ids[0]!, ids[1]!], to: "front" }, false);
+    expect(stack()).toEqual(["c", "a", "b"]);
+    layout.handle({ type: "undo" }, false);
+    layout.handle({ type: "arrange", id: ids[2]!, to: "front" }, false);
+    expect(layout.view().canUndo).toBe(false);
+    layout.handle({ type: "arrange", id: ids[0]!, to: "back" }, false);
+    expect(layout.view().canUndo).toBe(false);
+  });
+
+  it("puts a new frame on top of an arranged setup", () => {
+    const { layout, world, ids, stack } = three();
+    layout.handle({ type: "arrange", id: ids[0]!, to: "front" }, false);
+    world.items.push(clock("d"));
+    expect(stack()).toEqual(["b", "c", "a", "d"]);
+  });
+
+  it("aligns frames on the screen, each one undo step, and leaves the size", () => {
+    const { layout, world, ids } = three();
+    const before = layout.view().items[1]!.placed;
+    layout.handle({ type: "align", id: ids[1]!, edge: "left" }, false);
+    expect(layout.view().items[1]!.placed).toEqual({ ...before, x: 0 });
+    layout.handle({ type: "align", id: ids[1]!, edge: "center" }, false);
+    expect(layout.view().items[1]!.placed.x).toBe(Math.round((1920 - before.width) / 2));
+    layout.handle({ type: "align", id: ids[1]!, edge: "bottom" }, false);
+    expect(layout.view().items[1]!.placed.y + before.height).toBe(1080);
+    layout.handle({ type: "undo" }, false);
+    layout.handle({ type: "undo" }, false);
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().items[1]!.placed).toEqual(before);
+    // Already there: no step.
+    layout.handle({ type: "align", id: ids[0]!, edge: "top" }, false);
+    layout.handle({ type: "align", id: ids[0]!, edge: "top" }, false);
+    expect(world.items).toHaveLength(3);
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().canUndo).toBe(false);
+  });
+
+  it("aligns several frames at once as one step", () => {
+    const { layout, ids } = three();
+    layout.handle({ type: "align", ids, edge: "right" }, false);
+    for (const item of layout.view().items) expect(item.placed.x + item.placed.width).toBe(1920);
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().canUndo).toBe(false);
+  });
+
+  it("locks a frame: it stays when dropped, reset or aligned, and unlocking is an undo step", () => {
+    const { layout, ids } = three();
+    const before = layout.view().items[1]!.placed;
+    layout.handle({ type: "lock", id: ids[1]!, locked: true }, false);
+    expect(layout.view().items[1]!.locked).toBe(true);
+    layout.handle({ type: "commit", id: ids[1]!, rect: { x: 5, y: 5, width: 300, height: 200 } }, false);
+    layout.handle({ type: "reset", id: ids[1]! }, false);
+    layout.handle({ type: "reset-size", id: ids[1]! }, false);
+    layout.handle({ type: "align", id: ids[1]!, edge: "left" }, false);
+    expect(layout.view().items[1]!.placed).toEqual(before);
+    // Locking again changes nothing.
+    layout.handle({ type: "lock", id: ids[1]!, locked: true }, false);
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().items[1]!.locked).toBe(false);
+    expect(layout.view().canUndo).toBe(false);
+    layout.handle({ type: "redo" }, false);
+    expect(layout.view().items[1]!.locked).toBe(true);
+  });
+
+  it("moves the others of a selection and leaves a locked one", () => {
+    const { layout, ids } = three();
+    layout.handle({ type: "lock", id: ids[0]!, locked: true }, false);
+    const [a, b] = layout.view().items;
+    layout.handle({ type: "commit", rects: [{ id: ids[0]!, rect: { ...a!.placed, x: a!.placed.x + 100 } }, { id: ids[1]!, rect: { ...b!.placed, x: b!.placed.x + 100 } }] }, false);
+    expect(layout.view().items[0]!.placed).toEqual(a!.placed);
+    expect(layout.view().items[1]!.placed.x).toBe(b!.placed.x + 100);
+  });
+
+  it("skips a locked frame when several are reset or aligned, and acts on the rest", () => {
+    const { layout, ids } = three();
+    layout.handle({ type: "lock", id: ids[0]!, locked: true }, false);
+    const [a, b, c] = layout.view().items.map((item) => item.placed);
+    layout.handle({ type: "align", ids, edge: "right" }, false);
+    const after = layout.view().items;
+    expect(after[0]!.placed).toEqual(a);
+    expect(after[1]!.placed.x + b!.width).toBe(1920);
+    expect(after[2]!.placed.x + c!.width).toBe(1920);
+    layout.handle({ type: "reset", ids }, false);
+    expect(layout.view().items[0]!.placed).toEqual(a);
+    expect(layout.view().items[1]!.placed.x).not.toBe(after[1]!.placed.x);
+    // One undo step for the rest.
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().items[1]!.placed.x + b!.width).toBe(1920);
+  });
+
+  it("still arranges, hides and removes a locked frame", () => {
+    const { layout, ids, stack } = three();
+    layout.handle({ type: "lock", id: ids[0]!, locked: true }, false);
+    layout.handle({ type: "arrange", id: ids[0]!, to: "front" }, false);
+    expect(stack()).toEqual(["b", "c", "a"]);
+    layout.handle({ type: "canvas-hidden", id: ids[0]!, hidden: true }, false);
+    expect(layout.view().items[0]!.hiddenOnCanvas).toBe(true);
+    layout.handle({ type: "remove", id: ids[0]!, }, false);
+    expect(layout.view().items).toHaveLength(2);
+  });
+
+  it("puts the live pages on the canvas back to front", () => {
+    const { layout, ids, bounds, lastPlace } = three();
+    bounds();
+    layout.handle({ type: "arrange", id: ids[0]!, to: "front" }, false);
+    expect(lastPlace().frames.map((frame) => frame.id)).toEqual([ids[1], ids[2], ids[0]]);
+  });
+
+  it("keeps the toolbar setting for every frame and setup, without an undo step", () => {
+    const { layout, world } = three();
+    expect(layout.view().toolbar).toEqual({ show: true, buttons: ["settings", "hide", "reset", "reset-size", "remove"] });
+    layout.handle({ type: "toolbar", buttons: ["remove", "lock", "front", "bogus"] as never }, false);
+    expect(layout.view().toolbar.buttons).toEqual(["lock", "remove"]);
+    layout.handle({ type: "toolbar", show: false }, false);
+    expect(layout.view().toolbar).toEqual({ show: false, buttons: ["lock", "remove"] });
+    expect(world.toolbar.show).toBe(false);
+    expect(layout.view().canUndo).toBe(false);
   });
 });

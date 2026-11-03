@@ -169,6 +169,31 @@ export function nudge(rect: Rect, direction: "left" | "right" | "up" | "down", c
   };
 }
 
+export type AlignEdge = "left" | "center" | "right" | "top" | "middle" | "bottom";
+
+export const ALIGN_EDGES: readonly AlignEdge[] = ["left", "center", "right", "top", "middle", "bottom"];
+
+export const isAlignEdge = (value: unknown): value is AlignEdge => typeof value === "string" && (ALIGN_EDGES as readonly string[]).includes(value);
+
+/** A frame set against one side (or the middle) of the canvas, on one axis; the size and the other axis stay. */
+export function alignRect(rect: Rect, canvas: Canvas, edge: AlignEdge): Rect {
+  const room = { x: canvas.width - rect.width, y: canvas.height - rect.height };
+  switch (edge) {
+    case "left":
+      return { ...rect, x: 0 };
+    case "center":
+      return { ...rect, x: Math.max(0, Math.round(room.x / 2)) };
+    case "right":
+      return { ...rect, x: Math.max(0, room.x) };
+    case "top":
+      return { ...rect, y: 0 };
+    case "middle":
+      return { ...rect, y: Math.max(0, Math.round(room.y / 2)) };
+    case "bottom":
+      return { ...rect, y: Math.max(0, room.y) };
+  }
+}
+
 /** The box around several rectangles (frames selected together); null for none. */
 export function boundsOf(rects: readonly Rect[]): Rect | null {
   if (rects.length === 0) return null;

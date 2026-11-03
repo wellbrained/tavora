@@ -1,6 +1,6 @@
 // @tavora/sdk: thin typed client for modules running inside Tavora Desktop.
 // The host enforces every check; this package only marshals typed calls.
-import { menuParams, tooltipParams, type MenuOptions, type TooltipMoveOptions, type TooltipShowOptions } from "./anchor.js";
+import { menuParams, tooltipParams, tooltipShowParams, type MenuOptions, type TooltipMoveOptions, type TooltipShowOptions } from "./anchor.js";
 export type { TooltipAnchor, TooltipRequest, TooltipContent } from "./tooltip-types.js";
 export type { AnchorTarget, MenuOptions, TooltipMoveOptions, TooltipShowOptions } from "./anchor.js";
 // Protocol reference: apps/docs/reference/protocol.md.
@@ -175,7 +175,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.11";
+export const SDK_VERSION = "0.3.12";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -963,7 +963,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       // The user may take their time choosing.
       showMenu: async (request) => call("ui.showMenu", menuParams(request), MENU_TIMEOUT_MS),
       tooltip: {
-        show: async request => call("ui.tooltip.show",tooltipParams(request)),
+        show: async request => call("ui.tooltip.show",tooltipShowParams(request,host.host.version)),
         move: async anchor => { await call("ui.tooltip.move",tooltipParams(anchor)); },
         hide: async id => { await call("ui.tooltip.hide",{id}); },
         close: async id => { await call("ui.tooltip.close",{id}); },

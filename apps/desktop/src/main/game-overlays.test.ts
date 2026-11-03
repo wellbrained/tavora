@@ -356,6 +356,63 @@ describe("setups", () => {
   });
 });
 
+describe("lock, stacking and the toolbar", () => {
+  it("keep a frame locked and its stacking place across a restart, and undo puts both back exactly", async () => {
+    const store = await loadStore(dir);
+    store.add("poe2", subject("a"));
+    store.add("poe2", subject("b"));
+    const ref = { kind: "overlay", subject: subject("a") } as const;
+    expect(store.setFlags("poe2", ref, { locked: true, z: 3 })).toBe(true);
+    expect(store.setFlags("poe2", { kind: "overlay", subject: subject("nothing") }, { locked: true })).toBe(false);
+    const before = store.itemIn("poe2", ref)!.item;
+    expect(before).toMatchObject({ locked: true, z: 3 });
+    await store.save();
+    const again = await loadStore(dir);
+    expect(again.itemIn("poe2", ref)!.item).toMatchObject({ locked: true, z: 3 });
+    expect(again.itemIn("poe2", { kind: "overlay", subject: subject("b") })!.item).not.toHaveProperty("locked");
+    // Unlocked and unarranged again, as a step back does.
+    again.setFlags("poe2", ref, { locked: false });
+    expect(again.itemIn("poe2", ref)!.item).not.toHaveProperty("locked");
+    const plain = { ...again.itemIn("poe2", { kind: "overlay", subject: subject("b") })!.item };
+    expect(again.replace("poe2", ref, plain)).toBe(true);
+    expect(again.itemIn("poe2", ref)!.item).not.toHaveProperty("z");
+    expect(again.replace("poe2", ref, before)).toBe(true);
+    expect(again.itemIn("poe2", ref)!.item).toMatchObject({ locked: true, z: 3 });
+  });
+
+  it("refuses to move a locked frame, whoever asks", async () => {
+    const store = await loadStore(dir);
+    store.add("poe2", subject("a"));
+    const ref = { kind: "overlay", subject: subject("a") } as const;
+    store.setFlags("poe2", ref, { locked: true });
+    const rect = store.itemIn("poe2", ref)!.item.rect;
+    expect(store.setRect("poe2", ref, at(0.5, 0.5, 0.2, 0.2))).toBe(false);
+    expect(store.itemIn("poe2", ref)!.item.rect).toEqual(rect);
+    store.setFlags("poe2", ref, { locked: false });
+    expect(store.setRect("poe2", ref, at(0.5, 0.5, 0.2, 0.2))).toBe(true);
+  });
+
+  it("ignore a stacking place that is not a small whole number", async () => {
+    const store = await loadStore(dir);
+    store.add("poe2", subject("a"));
+    const ref = { kind: "overlay", subject: subject("a") } as const;
+    store.setFlags("poe2", ref, { z: -1 });
+    store.setFlags("poe2", ref, { z: 1.5 });
+    expect(store.itemIn("poe2", ref)!.item).not.toHaveProperty("z");
+  });
+
+  it("keep the toolbar setting with the grid, and fall back to the default for what is not understood", async () => {
+    const store = await loadStore(dir);
+    expect(store.toolbar).toEqual({ show: true, buttons: ["settings", "hide", "reset", "reset-size", "remove"] });
+    store.setToolbar({ buttons: ["remove", "lock", "bogus" as never] });
+    store.setToolbar({ show: false });
+    await store.save();
+    const again = await loadStore(dir);
+    expect(again.toolbar).toEqual({ show: false, buttons: ["lock", "remove"] });
+    expect(again.grid).toBe("normal");
+  });
+});
+
 // ── The move to setups ─────────────────────────────────────────────────
 
 const anchor = at(0.05, 0.05, 0.2, 0.1);

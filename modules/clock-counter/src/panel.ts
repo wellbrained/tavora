@@ -31,6 +31,8 @@ export interface PanelContext {
   preview(item: Item): Promise<void>;
   resetLink(item: Item): Promise<void>;
   remove(item: Item): void;
+  /** Moves a row one place up or down, as Alt+arrows do, and keeps the focus on its ··· button. */
+  move(itemId: string, by: -1 | 1): void;
   /** Tavora can open its Overlay page for the panel (`overlay.openPage`). */
   canArrange: boolean;
   /** Opens Tavora's Overlay page; needs the click that asked for it. */

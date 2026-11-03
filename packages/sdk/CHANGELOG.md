@@ -1,8 +1,16 @@
+## 0.3.12
+
+A text overlay that grows with its frame. The new fields come with Tavora 0.23.94 (`later`: the number is given when it merges); an older Tavora ignores them, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- An `OverlaySource` may say `fit: "text"` and `align`: its frame on the Overlay page is kept as big as `size` times the scale the user gave it by dragging a corner (saved with the frame), and follows `size` when it changes; the aligned side stays put. Its corners keep its shape and it has no edge handles. Without `fit` the frame keeps the size the user gave it.
+
 ## 0.3.11
 
-A text overlay that grows with its frame. The new fields come with Tavora 0.23.91 (`later`: the number is given when it merges); an older Tavora ignores them, so `MIN_TAVORA` stays (Tavora 0.19.32).
+Hover-only item cards. The new field comes with Tavora 0.23.91 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
 
-- An `OverlaySource` may say `fit: "text"` and `align`: its frame on the Overlay page is kept as big as `size` times the scale the user gave it by dragging a corner, and follows `size` when it changes; the aligned side stays put. Its corners keep its shape and it has no edge handles. Without `fit` the frame keeps the size the user gave it.
+- `ui.tooltip.show` takes `pinnable?: boolean`. `false` says the card can't be pinned: its footer drops "Click to pin item details", and `pinned: true` with it is refused (`INVALID_PARAMS`, in the SDK too). Left out, nothing changes.
+- A Tavora older than 0.23.91 rejects the unknown key, so the SDK leaves `pinnable` out there and the card shows with the old hint. `sdk.supports("ui.tooltip.pinnable")` tells which case you are in.
+- The memory host (`@tavora/sdk/testing`) defaults to Tavora 0.23.91.
 
 ## 0.3.10
 
