@@ -74,6 +74,7 @@
       "de"
     ],
     "npmRebuild": false,
+    "afterPack": "scripts/after-pack.cjs",
     "extraResources": [
       {
         "from": "../../examples",
