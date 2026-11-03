@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.97",
+    date: "2026-11-03",
+    title: "Maps keep their view",
+    notes: [
+      "Maps keep their view when you switch tabs or close a dialog.",
+    ],
+    prs: [
+      { number: 663, title: "Maps keep their view when the pane is hidden" },
+    ],
+    tags: ["pdf-viewer", "ui-kit"],
+  },
+  {
     version: "0.23.96",
     date: "2026-11-03",
     title: "Smaller install",
