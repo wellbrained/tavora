@@ -8,7 +8,7 @@
 // glides to its new place (a FLIP), in step with the layer, instead of animating the height.
 import { ArrowRight } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { act, state } from "../host";
 import { t } from "../i18n";
 import RailTooltip from "./RailTooltip.vue";

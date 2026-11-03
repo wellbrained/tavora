@@ -3,7 +3,7 @@
 // app (workspace, panel, module), 2) what to try first, 3) the start (a game, or a personal space), 4) the
 // optional account. Skip is on every screen and counts as done. Settings > General can show it again.
 import { nextTick, ref, watch } from "vue";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { act, openPanels, openProfile, profileOpen, trialWelcome } from "../host";
 import { t } from "../i18n";
 import OnboardingAccount from "../components/onboarding/OnboardingAccount.vue";

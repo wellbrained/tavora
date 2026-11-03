@@ -2,7 +2,7 @@
 // The user's avatar in the rail footer, with their name and what they are up to when the rail is wide. A click opens
 // the profile dialog (ProfileDialog.vue): the picture, name, initials and ranks, and the account behind them.
 import { computed } from "vue";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { account, openProfile, profileOpen, state } from "../../host";
 import { t } from "../../i18n";
 import ProfileAvatar from "./ProfileAvatar.vue";

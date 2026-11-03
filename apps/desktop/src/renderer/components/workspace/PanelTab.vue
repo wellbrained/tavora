@@ -8,7 +8,7 @@ import type { IDockviewPanelHeaderProps } from "dockview-vue";
 import { computed, inject } from "vue";
 import type { InstanceStatus } from "../../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { act, state } from "../../host";
 import { t } from "../../i18n";
 import MenuArea from "../menus/MenuArea.vue";

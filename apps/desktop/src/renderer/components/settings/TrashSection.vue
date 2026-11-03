@@ -4,7 +4,7 @@ import { computed, ref, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { act, confirmAction, state, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import WorkspaceIcon from "../WorkspaceIcon.vue";

@@ -5,7 +5,7 @@ import { Plus } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { state } from "../../host";
 import { t } from "../../i18n";
 import LayoutsMenu from "./LayoutsMenu.vue";

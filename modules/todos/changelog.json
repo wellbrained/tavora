@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.15",
+    "date": "2026-11-02",
+    "notes": [
+      "Loads a little lighter: the app keeps only the Latin letters of its fonts."
+    ]
+  },
+  {
     "version": "0.2.14",
     "date": "2026-11-02",
     "notes": [

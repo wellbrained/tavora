@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@tavora/offici
 import { t } from "../i18n";
 import { formatSize } from "../catalog-size";
 import { PLACEHOLDER_MODULES } from "../catalog-placeholder";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { CircleCheck, Gamepad2, ShieldCheck, WifiOff } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
 import CatalogModuleDialog from "./CatalogModuleDialog.vue";

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Check } from "@lucide/vue";
 import type { ProfileRankBoard, ProfileRankPeriod, ProfileRankStanding, ProfileRanksView } from "../../../shared/host-api";
-import { intlLocale } from "../../../shared/i18n";
+import { intlLocale } from "../../../shared/i18n-core";
 import { act, api, state } from "../../host";
 import { language, t } from "../../i18n";
 import SettingGroup from "../settings/SettingGroup.vue";
