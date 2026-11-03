@@ -772,7 +772,7 @@ export interface OverlaySource {
    * room around it) times the scale the user drags it to, and grows or shrinks with `size` whenever the panel lists a
    * new one. Reset size puts the scale back to 100 %. The page takes the scale from its height (`inTavoraFrame`).
    * `false` (or left out): the user sizes the frame and the page fits itself in; with `false` Tavora also knows that the
-   * content is drawn at 100 % in it, so it keeps its size if it grows later. Tavora 0.23.91 and newer; older ones ignore it.
+   * content is drawn at 100 % in it, so it keeps its size if it grows later. Tavora 0.23.94 and newer; older ones ignore it.
    */
   grows?: boolean;
 }

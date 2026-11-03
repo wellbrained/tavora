@@ -36,7 +36,7 @@ const pause = computed({ get: () => String(props.value.pause), set: (pause: stri
 </script>
 
 <template>
-  <SettingsSection :title="title ?? text.otBox" :class="cn(props.class)" data-slot="overlay-text-settings">
+  <SettingsSection :title="title ?? text.otBox" :class="cn(props.class)" data-overlay-text-settings>
     <SettingsRow :label="text.otSize" :hint="value.box === 'grow' ? text.otGrowHint : text.otFixedHint">
       <SegmentedControl v-model="box" :label="text.otSize" :options="options(OVERLAY_TEXT_BOXES, 'box')" :class="fill" />
     </SettingsRow>

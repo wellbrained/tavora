@@ -1965,6 +1965,8 @@ describe("the frame menu", () => {
     expect(layout.view().toolbar).toEqual({ show: false, buttons: ["lock", "remove"] });
     expect(world.toolbar.show).toBe(false);
     expect(layout.view().canUndo).toBe(false);
+  });
+});
 
 describe("frames that follow their content", () => {
   const SEEN = { elden: { width: 1920, height: 1080 } };

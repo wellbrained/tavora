@@ -176,7 +176,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.11";
+export const SDK_VERSION = "0.3.12";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -716,7 +716,7 @@ export function connect(options: ConnectOptions = {}): Promise<TavoraSDK> {
 /**
  * For the manifest's `overlay` page: whether it is drawn in one of Tavora's own frames (over the game, on the Overlay
  * page), which keep the size a `grows` source lists times the scale the user gave it, so a text takes its scale from the
- * frame's height. False in OBS, in the preview window and in Tavoras before 0.23.91: the page then fits itself into
+ * frame's height. False in OBS, in the preview window and in Tavoras before 0.23.94: the page then fits itself into
  * whatever window it gets.
  */
 export function inTavoraFrame(): boolean {
