@@ -43,4 +43,11 @@ export interface TooltipAnchor {
 export interface TooltipRequest extends TooltipAnchor {
     content: TooltipContent;
     pinned?: boolean;
+    /**
+     * `false` says this card can't be pinned (a module whose cards are hover-only): the footer then leaves out "Click to
+     * pin item details", and `pinned: true` together with it is refused (INVALID_PARAMS). Left out, the card shows the hint
+     * as before. Needs Tavora 0.23.91 or newer: an older one rejects the unknown key, so the SDK leaves it out there
+     * (`sdk.supports("ui.tooltip.pinnable")` tells) and the card shows with the old hint.
+     */
+    pinnable?: boolean;
 }

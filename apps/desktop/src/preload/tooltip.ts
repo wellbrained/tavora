@@ -1,9 +1,11 @@
 import { ipcRenderer } from "electron";
 import type { TooltipContent, TavoraTheme } from "@tavora/sdk/protocol";
+import { footerTexts } from "../shared/tooltip-footer";
 interface Data {
     serial: number;
     content: TooltipContent;
     pinned: boolean;
+    pinnable: boolean;
     source: string;
     theme: TavoraTheme;
     language: string;
@@ -96,7 +98,7 @@ function render(data: Data) {
         details.append(section);
     }
     const footer = node("div", undefined, "footer");
-    footer.append(node("span", data.source), node("span", data.pinned ? (de ? "Angeheftet \u00b7 Esc zum Schlie\u00dfen" : "Pinned \u00b7 Escape to close") : (de ? "Klicken zum Anheften" : "Click to pin item details")));
+    footer.append(...footerTexts(data.source, data, de).map(t => node("span", t)));
     card.append(footer);
     measure();
 }

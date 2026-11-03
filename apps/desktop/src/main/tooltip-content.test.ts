@@ -14,5 +14,17 @@ describe("tooltip boundary", () => {
         expect("look" in checkTooltip(base).content).toBe(false);
     });
     it("rejects any other look", () => { for (const look of ["gold", "", "POE", 1, null]) expect(() => checkTooltip({ ...base, content: { ...base.content, look } })).toThrow(); });
+    it("takes pinnable: false, and leaves it out otherwise", () => {
+        expect(checkTooltip({ ...base, pinnable: false })).toEqual({ ...base, pinned: false, pinnable: false });
+        expect("pinnable" in checkTooltip({ ...base, pinnable: true })).toBe(false);
+        expect("pinnable" in checkTooltip(base)).toBe(false);
+    });
+    it("rejects pinnable that is not a boolean, and a pin on a card that can't be pinned", () => {
+        for (const pinnable of ["no", 0, null])
+            expect(() => checkTooltip({ ...base, pinnable })).toThrow();
+        expect(() => checkTooltip({ ...base, pinnable: false, pinned: true })).toThrow();
+        expect(checkTooltip({ ...base, pinnable: false, pinned: false }).pinned).toBe(false);
+        expect(checkTooltip({ ...base, pinnable: true, pinned: true }).pinned).toBe(true);
+    });
     it("never interprets text as HTML", () => { expect(checkTooltip({ ...base, content: { title: "<b>literal</b>" } }).content.title).toBe("<b>literal</b>"); });
 });

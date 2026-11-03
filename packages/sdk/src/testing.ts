@@ -1,7 +1,7 @@
 // @tavora/sdk/testing: a test adapter for module tests. It implements the whole `TavoraSDK` and keeps its state in
 // memory, so a module can be tested without Tavora; it follows the real host's rules (limits, revisions, errors).
 // Not for use in a module's shipped code.
-import { menuParams, tooltipParams } from "./anchor.js";
+import { menuParams, tooltipParams, tooltipShowParams } from "./anchor.js";
 import { SDK_VERSION, TavoraError, type KeyValueStore, type TavoraSDK } from "./index.js";
 import {
   BLOB_PATH,
@@ -178,7 +178,7 @@ export interface MemoryHost {
 }
 
 /** Newest Tavora the SDK knows, and the default version of a memory host. */
-export const LATEST_TAVORA = "0.23.82";
+export const LATEST_TAVORA = "0.23.91";
 /** Most panel types one call may name: as many as a manifest may declare (MAX_PANEL_TYPES in @tavora/module-schema). */
 const MAX_PANEL_TYPES = 16;
 
@@ -897,7 +897,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       onLanguageChange: (fn) => on("ui.language", fn),
       showMenu: async (request) => call("ui.showMenu", menuParams(request)),
       tooltip: {
-        show: async (request) => call("ui.tooltip.show", tooltipParams(request)),
+        show: async (request) => call("ui.tooltip.show", tooltipShowParams(request, shared.version)),
         move: async (anchor) => void (await call("ui.tooltip.move", tooltipParams(anchor))),
         hide: async (id) => void (await call("ui.tooltip.hide", { id })),
         close: async (id) => void (await call("ui.tooltip.close", { id })),
