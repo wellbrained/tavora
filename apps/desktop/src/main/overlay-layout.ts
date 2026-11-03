@@ -7,9 +7,11 @@
 import { LIMITS, type OverlaySource } from "@tavora/sdk/protocol";
 import { translate, type Language, type MessageKey } from "../shared/i18n";
 import { LayoutHistory, type Part } from "../shared/layout-history";
-import { canvasFor, gridCell, type Canvas } from "../shared/layout-math";
+import { alignRect, canvasFor, gridCell, type AlignEdge, type Canvas } from "../shared/layout-math";
+import { arrange, stackOrder, type ArrangeTo } from "../shared/layout-stack";
 import { PREVIEW_DEFAULT, PREVIEW_MONITOR, PREVIEW_RATIOS, previewAspect, ratioLabel, type Monitor } from "../shared/layout-preview";
 import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, idsOf, rectsOf, type LayoutItemChange, type LayoutItemView, type LayoutMessage, type LayoutSourceChild, type LayoutSourceView, type LayoutView, type PlacedRect, type SourceBlock } from "../shared/layout-view";
+import type { ToolbarSetting } from "../shared/layout-toolbar";
 import { DEFAULT_RECT, MIN_OVERLAY_SIZE, REFERENCE_HEIGHT, anchorIn, anchorOf, contentScale, placeAnchored, placeLegacy, type AnchoredRect, type Rect } from "../shared/overlay-anchor";
 import type { GameOverlaySource } from "./game-overlay-page";
 import type { LayoutItemInfo, LayoutItemRef, LayoutItemState, LayoutSource } from "./game-overlay-service";
@@ -145,7 +147,7 @@ interface ItemSnapshot {
 
 /** Whether an item's settings and place are the same (where it is in the list, and its key, don't count: they change by themselves). */
 const sameItem = (a: LayoutItemState["item"], b: LayoutItemState["item"]) =>
-  a.mode === b.mode && a.opacity === b.opacity && a.hideFromCapture === b.hideFromCapture && sameRect(a.rect, b.rect) && JSON.stringify(a.legacy ?? null) === JSON.stringify(b.legacy ?? null);
+  a.mode === b.mode && a.opacity === b.opacity && a.hideFromCapture === b.hideFromCapture && (a.locked === true) === (b.locked === true) && (a.z ?? null) === (b.z ?? null) && sameRect(a.rect, b.rect) && JSON.stringify(a.legacy ?? null) === JSON.stringify(b.legacy ?? null);
 
 const sameSnapshot = (a: ItemSnapshot, b: ItemSnapshot) => a.hidden === b.hidden && sameItem(a.state.item, b.state.item);
 
@@ -384,6 +386,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     const grid = this.options.source.grid();
     // The game runs and its window was seen (the window in front at some look since it started), whichever window is in front now.
     const canTakePicture = isGameSetup(gameId) && this.options.source.handleOf(gameId) !== null;
+    const rank = new Map(stackOrder(infos).map((info, index) => [info.id, index]));
     const items: LayoutItemView[] = infos.map((info) => ({
       id: info.id,
       target: info.ref.kind === "panel" ? { kind: "panel", instanceId: info.ref.instanceId } : { kind: "overlay", ...info.ref.subject },
@@ -404,6 +407,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       idle: info.source === null || info.source.state() !== null ? null : this.running.get(info.id) === false ? "stopped" : "empty",
       off: info.mode === "toggle" && !info.toggledOn,
       hiddenOnCanvas: this.hiddenIn(gameId).has(info.id),
+      locked: info.locked,
+      z: rank.get(info.id) ?? 0,
     }));
     const present = new Set(items.map((item) => item.id));
     const selected = this.selection.filter((id) => present.has(id));
@@ -423,6 +428,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       selection: selected.length === 1 ? selected[0]! : null,
       selected,
       items,
+      toolbar: this.options.source.toolbar(),
       picture: this.pictureFor === gameId ? this.picture : null,
       canTakePicture,
       pictureHint: canTakePicture ? null : isGameSetup(gameId) && this.options.source.gameRunning(gameId) ? "switch" : "start",
@@ -442,7 +448,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     const shape = this.shape(view.gameId);
     const infos = new Map(this.itemsOf(view.gameId).map((info) => [info.id, info]));
     const frames: LayoutFrame[] = [];
-    for (const item of view.items) {
+    // Back to front: the canvas stacks the live pages in this order.
+    for (const item of [...view.items].sort((a, b) => a.z - b.z)) {
       const info = infos.get(item.id);
       if (!info?.source || !item.live) continue;
       frames.push({
@@ -561,7 +568,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         this.covered = message.covered;
         break;
       case "drag":
-        for (const { id, rect } of rectsOf(message)) this.dragging.set(id, this.fit(rect));
+        for (const { id, rect } of rectsOf(message)) if (!this.info(id)?.locked) this.dragging.set(id, this.fit(rect));
         // Only the live pages follow; the pages draw the drag themselves.
         this.placeOnly();
         return;
@@ -595,6 +602,18 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         break;
       case "remove":
         this.removeItems(idsOf(message));
+        break;
+      case "arrange":
+        this.arrangeItems(idsOf(message), message.to);
+        break;
+      case "align":
+        this.alignItems(idsOf(message), message.edge);
+        break;
+      case "lock":
+        this.lockItems(idsOf(message), message.locked);
+        break;
+      case "toolbar":
+        this.options.source.setToolbar({ ...(message.show !== undefined ? { show: message.show } : {}), ...(message.buttons !== undefined ? { buttons: message.buttons as ToolbarSetting["buttons"] } : {}) });
         break;
       case "set":
         this.setItems(message.ids, message.change);
@@ -955,7 +974,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     const moves: { info: LayoutItemInfo; next: AnchoredRect }[] = [];
     for (const { id, rect } of rects) {
       const info = this.info(id);
-      if (!info) continue;
+      // A locked frame stays where it is.
+      if (!info || info.locked) continue;
       const fitted = this.fit(rect);
       // Dropped where it already is: nothing to keep, and no rounding of its place.
       const now = this.placed(info, shape);
@@ -971,7 +991,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   private resetPosition(ids: readonly string[]): void {
     const shape = this.shape(this.current(this.games()));
     this.change(
-      this.infos(ids).map((info) => {
+      this.infos(ids).filter((info) => !info.locked).map((info) => {
         const before = this.rectOf(info, shape);
         return { info, next: { ...before, h: DEFAULT_RECT.h, v: DEFAULT_RECT.v, x: DEFAULT_RECT.x, y: DEFAULT_RECT.y } };
       }),
@@ -984,7 +1004,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     const shape = this.shape(gameId);
     const panels = this.options.sources();
     this.change(
-      this.infos(ids).map((info) => {
+      this.infos(ids).filter((info) => !info.locked).map((info) => {
         const before = this.rectOf(info, shape);
         // An overlay whose panel said what it needs goes back to that, where it is.
         const need = this.fitSize(this.sourceOf(info, panels), shape);
@@ -996,6 +1016,54 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         const size = this.options.source.seenSize(gameId) ?? this.screenSize();
         return { info, next: { ...before, ...this.options.source.startSize(info.ref, size) } };
       }),
+    );
+  }
+
+  /** Arrange: the frames move in the stacking order of the setup shown, one undo step; nothing is kept when the order stays. */
+  private arrangeItems(ids: readonly string[], to: ArrangeTo): void {
+    const setupId = this.current(this.games());
+    const infos = this.itemsOf(setupId);
+    const moving = this.infos(ids).map((info) => info.id);
+    if (!moving.length) return;
+    const order = stackOrder(infos).map((info) => info.id);
+    const next = arrange(order, moving, to);
+    if (next.every((id, index) => id === order[index])) return;
+    this.record(
+      infos.map((info) => info.id),
+      () => {
+        next.forEach((id, index) => {
+          const info = infos.find((one) => one.id === id)!;
+          if (info.z !== index) this.options.source.setFlags(setupId, info.ref, { z: index });
+        });
+      },
+    );
+  }
+
+  /** Align on screen: each frame goes against that side (or the middle) of the canvas; locked ones stay. */
+  private alignItems(ids: readonly string[], edge: AlignEdge): void {
+    const shape = this.shape(this.current(this.games()));
+    const canvas = { x: 0, y: 0, ...shape.canvas };
+    this.change(
+      this.infos(ids)
+        .filter((info) => !info.locked)
+        .flatMap((info) => {
+          const now = this.placed(info, shape);
+          const fitted = this.fit(alignRect(now, shape.canvas, edge));
+          return fitted.x === now.x && fitted.y === now.y ? [] : [{ info, next: anchorOf(fitted, canvas) }];
+        }),
+    );
+  }
+
+  /** Lock position on or off, one undo step. */
+  private lockItems(ids: readonly string[], locked: boolean): void {
+    const infos = this.infos(ids).filter((info) => info.locked !== locked);
+    if (!infos.length) return;
+    const setupId = this.current(this.games());
+    this.record(
+      infos.map((info) => info.id),
+      () => {
+        for (const info of infos) this.options.source.setFlags(setupId, info.ref, { locked });
+      },
     );
   }
 

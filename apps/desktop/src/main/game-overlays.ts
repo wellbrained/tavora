@@ -9,6 +9,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { LIMITS, OVERLAY_KEY } from "@tavora/sdk/protocol";
 import { DEFAULT_GRID, isGridSetting, type GridSetting } from "../shared/layout-math";
+import { DEFAULT_TOOLBAR, normalizeToolbar, type ToolbarSetting } from "../shared/layout-toolbar";
 import {
   DEFAULT_PANEL_ANCHORED,
   DEFAULT_RECT,
@@ -107,6 +108,10 @@ export interface ItemSettings {
   /** Whether the window is hidden from screen capture (opt-in; off by default, as some anti-cheats flag it). */
   hideFromCapture: boolean;
   rect: AnchoredRect;
+  /** Lock position (Overlay page): the frame can't be moved or resized there; it can still be opened and removed. Absent: not locked. */
+  locked?: boolean;
+  /** Where the frame is in the setup's stacking order (0 at the back). Absent: never arranged, above those that were, in the order added. */
+  z?: number;
   /**
    * Set while the position is not converted yet: the fractions of the window an older Tavora saved. The item is placed
    * the old way (placeItem) until the game's real window size is seen; `rect` is only a stand-in then.
@@ -190,7 +195,7 @@ type GameOverlayFile = {
   formerVersion?: number;
   exclusiveHintShown?: boolean;
   /** The Overlay page: the grid setting and the last window size seen per game. Versions 4 and before also had `games`. */
-  layout?: { grid?: GridSetting; seen?: Record<string, SeenSize>; games?: unknown };
+  layout?: { grid?: GridSetting; seen?: Record<string, SeenSize>; toolbar?: ToolbarSetting; games?: unknown };
   setups?: StoredSetup[];
   /** Versions 4 and before. */
   overlays?: unknown[];
@@ -357,6 +362,9 @@ function settingsOf(entry: Record<string, unknown>): Omit<ItemSettings, "rect" |
     mode: entry.mode === "toggle" ? "toggle" : "always",
     opacity: OPACITIES.find((value) => value === entry.opacity) ?? 100,
     hideFromCapture: entry.hideFromCapture === true,
+    // Older files have neither; a copy of Tavora that doesn't know them keeps them out of what it understands.
+    ...(entry.locked === true ? { locked: true } : {}),
+    ...(typeof entry.z === "number" && Number.isSafeInteger(entry.z) && entry.z >= 0 && entry.z < 10_000 ? { z: entry.z } : {}),
   };
 }
 
@@ -421,6 +429,7 @@ export class GameOverlayStore {
   moved = false;
   /** The Overlay layout's grid, its window's place and the last window size seen per game. */
   private gridSetting: GridSetting = DEFAULT_GRID;
+  private toolbarSetting: ToolbarSetting = { ...DEFAULT_TOOLBAR, buttons: [...DEFAULT_TOOLBAR.buttons] };
   private seen = new Map<string, SeenSize>();
   private readonly queue = new SerialQueue();
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -460,6 +469,7 @@ export class GameOverlayStore {
     store.moved = old;
     const layout = isObject(raw?.layout) ? raw.layout : {};
     if (isGridSetting(layout.grid)) store.gridSetting = layout.grid;
+    if (layout.toolbar !== undefined) store.toolbarSetting = normalizeToolbar(layout.toolbar);
     for (const [gameId, size] of Object.entries(isObject(layout.seen) ? layout.seen : {}).slice(0, MAX_SEEN)) {
       const valid = validSize(size);
       if (valid && validField(gameId)) store.seen.set(gameId, valid);
@@ -785,8 +795,23 @@ export class GameOverlayStore {
     const target = ref.kind === "panel" ? this.panelOf(ref.instanceId, setupId) : this.find(ref.subject, setupId);
     const next = normalizeAnchored(rect);
     if (!target || !next) return false;
+    // A locked frame stays where it is, whoever asks (the canvas, the layer over the game).
+    if (target.locked) return false;
     target.rect = next;
     delete target.legacy;
+    this.saveSoon();
+    return true;
+  }
+
+  /** Lock position or the stacking order of an item in one setup (the Overlay page's menu); false when the setup hasn't it. */
+  setFlags(setupId: string, ref: ItemRef, change: { locked?: boolean; z?: number }): boolean {
+    const target = ref.kind === "panel" ? this.panelOf(ref.instanceId, setupId) : this.find(ref.subject, setupId);
+    if (!target) return false;
+    if (change.locked !== undefined) {
+      if (change.locked) target.locked = true;
+      else delete target.locked;
+    }
+    if (change.z !== undefined && Number.isSafeInteger(change.z) && change.z >= 0 && change.z < 10_000) target.z = change.z;
     this.saveSoon();
     return true;
   }
@@ -823,6 +848,11 @@ export class GameOverlayStore {
     const rect = normalizeAnchored(item.rect);
     if (!target || !rect) return false;
     applySettings(target, item);
+    // Lock and stacking come back as they were, absent included.
+    if (item.locked) target.locked = true;
+    else delete target.locked;
+    if (item.z !== undefined) target.z = item.z;
+    else delete target.z;
     target.rect = rect;
     if (item.legacy) target.legacy = { ...item.legacy };
     else delete target.legacy;
@@ -870,6 +900,18 @@ export class GameOverlayStore {
 
   get grid(): GridSetting {
     return this.gridSetting;
+  }
+
+  /** The frame toolbar's setting: shown or not, and the actions that are buttons in it. */
+  get toolbar(): ToolbarSetting {
+    return { show: this.toolbarSetting.show, buttons: [...this.toolbarSetting.buttons] };
+  }
+
+  setToolbar(change: Partial<ToolbarSetting>): void {
+    const next = normalizeToolbar({ ...this.toolbarSetting, ...change });
+    if (next.show === this.toolbarSetting.show && next.buttons.join() === this.toolbarSetting.buttons.join()) return;
+    this.toolbarSetting = next;
+    this.saveSoon();
   }
 
   setGrid(setting: GridSetting): void {
@@ -932,7 +974,7 @@ export class GameOverlayStore {
     const body: GameOverlayFile = {
       version: FILE_VERSION,
       exclusiveHintShown: this.hintShown,
-      layout: { grid: this.gridSetting, seen: Object.fromEntries(this.seen) },
+      layout: { grid: this.gridSetting, seen: Object.fromEntries(this.seen), toolbar: this.toolbarSetting },
       setups: this.setupList.map((setup) => ({
         id: setup.id,
         overlays: setup.overlays.map(({ rect, legacy, ...item }) => ({ ...item, ...stored({ rect, ...(legacy ? { legacy } : {}) }) })),
