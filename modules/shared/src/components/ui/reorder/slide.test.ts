@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { placeAt, placeNextTo, slideOffsets, type Slot } from "./slide"
+import { placeAt, placeNextTo, pointerAtGrab, slideOffsets, type Slot } from "./slide"
 
 const rows: Slot[] = [
   { id: "a", start: 0, size: 20 },
@@ -67,5 +67,26 @@ describe("placeAt", () => {
   it("only counts the places it is given", () => {
     expect(placeAt(rows, "a", 200, ["a", "b", "c"])).toEqual({ id: "c", after: true });
     expect(placeAt(rows, "a", 200, ["a"])).toBeNull();
+  })
+})
+
+describe("pointerAtGrab", () => {
+  it("is the pointer itself while nothing has scrolled", () => {
+    expect(pointerAtGrab(100, 20, 20, 0, 0)).toBe(100)
+  })
+  it("takes an ancestor's scroll into account: the list moved up on screen by 50, so the pointer is 50 further down the list", () => {
+    expect(pointerAtGrab(100, 20, -30, 0, 0)).toBe(150)
+  })
+  it("takes the list's own scroll into account", () => {
+    expect(pointerAtGrab(100, 20, 20, 10, 60)).toBe(150)
+  })
+  it("a drag that autoscrolls an ancestor mid-drag picks the row now under the pointer, not the one that was", () => {
+    // Rows of 40 with gaps of 4 start at 20 in the viewport. The pointer rests at 70 (over b) while the panel scrolls 44 down.
+    const slots: Slot[] = [0, 1, 2, 3].map((n) => ({ id: "abcd"[n]!, start: 20 + n * 44, size: 40 }))
+    expect(placeAt(slots, "a", pointerAtGrab(70, 20, 20, 0, 0))).toBeNull() // before b's middle (84): stays first
+    // After the scroll the list's top is 44 higher; the pointer still rests at 70, now over c's place in the layout.
+    expect(placeAt(slots, "a", pointerAtGrab(70, 20, -24, 0, 0))).toEqual({ id: "c", after: false })
+    // Without the correction the stale pointer would still say "stay first".
+    expect(placeAt(slots, "a", 70)).toBeNull()
   })
 })

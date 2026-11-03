@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { WorkspaceView } from "../../shared/host-api";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import type { MenuItem } from "@/host";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import WorkspaceIcon from "./WorkspaceIcon.vue";

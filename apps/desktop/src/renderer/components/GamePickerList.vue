@@ -3,7 +3,7 @@
 // played or installed. Presentational: the dialog owns the rows, the highlighted row and what a pick does.
 // Built to be reused, e.g. by the first-run welcome.
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { t } from "../i18n";
 import type { PickerRow } from "../lib/game-picker";
 import GameTile from "./GameTile.vue";

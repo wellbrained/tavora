@@ -1,9 +1,16 @@
 [
   {
+    "version": "0.6.15",
+    "date": "2026-11-03",
+    "notes": [
+      "Dragging notes no longer swaps them back and forth under the pointer."
+    ]
+  },
+  {
     "version": "0.6.14",
     "date": "2026-11-02",
     "notes": [
-      "Dragging notes no longer swaps them back and forth under the pointer."
+      "Loads a little lighter: the app keeps only the Latin letters of its fonts."
     ]
   },
   {

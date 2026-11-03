@@ -9,7 +9,7 @@
 // position, Reset size, Remove) over the box around them.
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import { boundsOf, snapMove, snapResize, touches, type Edges, type Guide } from "../../../shared/layout-math";
 import type { LayoutItemView } from "../../../shared/layout-view";

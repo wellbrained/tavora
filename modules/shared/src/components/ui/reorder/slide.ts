@@ -54,3 +54,12 @@ export function placeAt(slots: readonly Slot[], id: string, pointer: number, amo
   const order = slots.map((slot) => slot.id)
   return placeNextTo(order, id, place.id, place.after).join("\n") === order.join("\n") ? null : place
 }
+
+/**
+ * Where the pointer is in the coordinates the slots were measured in at the grab. The list may have moved on the screen
+ * since (an ancestor scrolled, the window did), and its own content may have scrolled: `originNow - origin0` is the first,
+ * `scrollNow - scroll0` the second.
+ */
+export function pointerAtGrab(pointer: number, origin0: number, originNow: number, scroll0: number, scrollNow: number): number {
+  return pointer + (origin0 - originNow) + (scrollNow - scroll0)
+}

@@ -2,7 +2,7 @@
 // In the rail above the profile, only while the inbox is due: an open conversation, or a published module that takes
 // messages. The badge counts conversations with messages not read yet.
 import { Mail } from "@lucide/vue";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { inbox, openInbox } from "../host";
 import { t } from "../i18n";
 import RailFooterTile from "./RailFooterTile.vue";

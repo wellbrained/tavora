@@ -6,7 +6,7 @@ import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-co
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Picker } from "@tavora/official-ui/components/ui/picker";
 import type { Startup } from "../../../shared/host-api";
-import { LANGUAGES, type LanguageSetting } from "../../../shared/i18n";
+import { LANGUAGES, type LanguageSetting } from "../../../shared/i18n-core";
 import { act, settingsOpen, state, trialWelcome, useFloating } from "../../host";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";

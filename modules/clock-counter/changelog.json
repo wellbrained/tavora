@@ -1,9 +1,16 @@
 [
   {
+    "version": "0.1.25",
+    "date": "2026-11-03",
+    "notes": [
+      "Each row has one ··· menu with Settings, Move up, Move down and Delete; dragging rows works again."
+    ]
+  },
+  {
     "version": "0.1.24",
     "date": "2026-11-02",
     "notes": [
-      "Each row has one ··· menu with Settings, Move up, Move down and Delete; dragging rows works again."
+      "Loads a little lighter: the app keeps only the Latin letters of its fonts."
     ]
   },
   {

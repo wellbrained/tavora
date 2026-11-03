@@ -11,7 +11,7 @@ import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Input } from "@tavora/official-ui/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import type { SourceBlock } from "../../../shared/layout-view";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";

@@ -5,14 +5,14 @@
 // and Messages. The menu shows only what this run has: Account once accounts are on, Cloud copy and Messages once they
 // are there. On the right: the chosen part, under Profile / its name, like a Settings page.
 import { Camera, Cloud, Mail, UserRound, UserRoundPen, X } from "@lucide/vue";
-import { computed, provide, ref, watch } from "vue";
+import { computed, defineAsyncComponent, provide, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { account, act, cloudCopy, inbox, profileOpen, profileTarget, state, type ProfileSection } from "../../host";
 import { t } from "../../i18n";
-import ImageCropDialog from "../ImageCropDialog.vue";
+import { everWanted } from "../../lib/ever-wanted";
 import AccountSection from "../settings/AccountSection.vue";
 import CloudCopySettings from "../settings/CloudCopySettings.vue";
 import MessagesSettings from "../settings/MessagesSettings.vue";
@@ -69,7 +69,10 @@ function pick(id: string) {
 
 // The picture: picked from a file, cropped round in its own dialog over this one.
 const fileInput = ref<HTMLInputElement | null>(null);
+// The cropper loads the first time a picture is picked, and stays after that.
+const ImageCropDialog = defineAsyncComponent(() => import("../ImageCropDialog.vue"));
 const cropping = ref<string | null>(null);
+const croppingWanted = everWanted(cropping);
 async function onFile(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -163,5 +166,5 @@ async function savePicture(png: string) {
     </DialogContent>
   </Dialog>
 
-  <ImageCropDialog :src="cropping" :title="t('onboarding.crop')" round @save="savePicture" @cancel="cropping = null" />
+  <ImageCropDialog v-if="croppingWanted" :src="cropping" :title="t('onboarding.crop')" round @save="savePicture" @cancel="cropping = null" />
 </template>

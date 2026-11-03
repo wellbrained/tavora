@@ -27,10 +27,11 @@ function onContextMenu(event: MouseEvent): void {
   menuOpen.value = true;
 }
 
-/** Del on the row deletes it at once, as in the menu (Undo is in the toast). */
+/** Del deletes the row at once, as in the menu (Undo is in the toast), but only from the row itself or its ··· button: on Start or + it is not meant for the row. */
 function onKey(event: KeyboardEvent): void {
   if (event.key !== "Delete" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) return;
-  if ((event.target as Element | null)?.closest?.("input, textarea, [contenteditable=true]")) return;
+  const target = event.target as Element | null;
+  if (target !== event.currentTarget && !target?.closest?.(`[data-testid="more-${props.item.id}"]`)) return;
   event.preventDefault();
   panel.remove(props.item);
 }
@@ -86,7 +87,7 @@ const startLabel = computed(() => {
 </script>
 
 <template>
-  <article class="bg-card rounded-lg border" :data-testid="`item-${item.id}`" @contextmenu="onContextMenu" @keydown="onKey">
+  <article class="bg-card rounded-lg border outline-none" tabindex="-1" :data-testid="`item-${item.id}`" @contextmenu="onContextMenu" @keydown="onKey">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 pr-1.5 pl-3">
       <!-- Name and type. A small marker for linked counters ("also adds to") goes at the end of this block. -->
       <div class="flex min-w-24 flex-[1_1_6rem] items-center gap-2" data-testid="item-name">

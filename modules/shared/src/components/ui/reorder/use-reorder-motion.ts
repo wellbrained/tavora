@@ -1,5 +1,5 @@
 import { nextTick, onBeforeUnmount, type Ref } from "vue"
-import { placeAt, slideOffsets, type Slot } from "./slide"
+import { placeAt, pointerAtGrab, slideOffsets, type Slot } from "./slide"
 import { commitAndWait } from "./settle"
 import "./reorder.css"
 
@@ -36,6 +36,8 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
   let dragId: string | null = null
   let slots: Slot[] = []
   let scroll0 = { left: 0, top: 0 }
+  /** Where the list's own box was on screen at the grab: it moves when an ancestor scrolls, which the list's scroll position doesn't show. */
+  let origin0 = { left: 0, top: 0 }
   let lifted: HTMLElement | null = null
   let cleanup: ReturnType<typeof setTimeout> | undefined
   let settling = false
@@ -74,6 +76,8 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
     dragId = id
     const el = container.value
     scroll0 = { left: el.scrollLeft, top: el.scrollTop }
+    const box0 = el.getBoundingClientRect()
+    origin0 = { left: box0.left, top: box0.top }
     slots = items().map((item) => {
       const box = item.getBoundingClientRect()
       return { id: idOf(item), start: axis === "x" ? box.left : box.top, size: axis === "x" ? box.width : box.height }
@@ -102,8 +106,12 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
   /** The pointer is at `x`, `y` (viewport) in a native drag: the place it means, measured against the layout at the grab, and previewed. `among` limits the places to some ids. */
   function over(x: number, y: number, among?: readonly string[]): { id: string; after: boolean } | null {
     if (!dragId || !container.value) return null
-    // The list may have scrolled since the grab: the pointer is taken back to where the layout was measured.
-    const pointer = axis === "x" ? x + (container.value.scrollLeft - scroll0.left) : y + (container.value.scrollTop - scroll0.top)
+    // The list, or something around it (the panel's scroller), may have scrolled since the grab: the pointer is taken back to where the layout was measured.
+    const now = container.value.getBoundingClientRect()
+    const pointer =
+      axis === "x"
+        ? pointerAtGrab(x, origin0.left, now.left, scroll0.left, container.value.scrollLeft)
+        : pointerAtGrab(y, origin0.top, now.top, scroll0.top, container.value.scrollTop)
     const place = placeAt(slots, dragId, pointer, among)
     preview(place)
     return place

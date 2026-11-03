@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 
 // The tile every item at the bottom of the rail sits on: one size, one shape, and a status dot
 // in the same corner. The 48 px slot keeps it on the same centre line as the workspace tiles.

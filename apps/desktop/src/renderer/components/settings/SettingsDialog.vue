@@ -4,7 +4,7 @@
 // row (SUB_PAGES) has a way back in its title; the developer pages are tabs under one entry. Each page is its own
 // component; settings-index.ts lists them and every setting the search can find.
 import { Info, RotateCw, Search, X } from "@lucide/vue";
-import { computed, nextTick, provide, ref, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, provide, ref, watch } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
@@ -13,7 +13,7 @@ import { usePageMotion } from "@tavora/official-ui/components/ui/motion";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Tabs, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import { rank } from "@/lib/search";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { act, hiddenSettingIds, hiddenSettings, makesModules, openSettings, refreshReleaseStatuses, releasePendingCount, settingsOpen, settingsTarget, state } from "../../host";
 import { formatDate, t } from "../../i18n";
 import AboutSection from "./AboutSection.vue";
@@ -28,7 +28,6 @@ import GamesSection from "./GamesSection.vue";
 import GeneralSection from "./GeneralSection.vue";
 import ModulesSection from "./ModulesSection.vue";
 import OverlaysSection from "./OverlaysSection.vue";
-import PatchNotesSection from "./PatchNotesSection.vue";
 import ShortcutsSection from "./ShortcutsSection.vue";
 import TrashSection from "./TrashSection.vue";
 import WorkspacesSection from "./WorkspacesSection.vue";
@@ -48,6 +47,9 @@ import {
 } from "./settings-index";
 import { SETTINGS_PAGE_TITLE } from "./settings-page";
 import { scrollToCentered, stopScroll } from "../../lib/smooth-scroll";
+
+// The patch notes are the largest text in the app and only read here, so they load when the page opens.
+const PatchNotesSection = defineAsyncComponent(() => import("./PatchNotesSection.vue"));
 
 const section = ref<SettingsSection>("general");
 const query = ref("");

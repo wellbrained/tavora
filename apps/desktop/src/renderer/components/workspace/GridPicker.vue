@@ -4,7 +4,7 @@
 // Layouts menu; its cells are menu items.
 import { computed, ref } from "vue";
 import { DropdownMenuItem } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { GRID_LIMITS } from "../../../shared/layout-templates";
 import { act } from "../../host";
 import { gridLabel, t } from "../../i18n";

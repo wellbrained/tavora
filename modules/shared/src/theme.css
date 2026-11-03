@@ -5,9 +5,8 @@
    reaches the modules without rebuilding them. */
 @import "tailwindcss";
 @import "tw-animate-css";
-/* Fonts are bundled; modules cannot load anything from the web. */
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/jetbrains-mono";
+/* Fonts are bundled (latin and latin-extended only); modules cannot load anything from the web. */
+@import "./fonts.css";
 /* The curves and durations every animation uses. */
 @import "./motion.css";
 
