@@ -3,12 +3,15 @@
 // overlay's link does (overlays.ts), so the page, which uses `watchOverlay` from the SDK, can't tell them apart: the
 // state comes as server-sent events from `_state`. Nothing here needs the Stream overlays server, a port or a grant.
 import { readFile } from "node:fs/promises";
-import { OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
+import { OVERLAY_FRAME_PARAM, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
 import { GAME_OVERLAY_SCHEME, contentTypeFor } from "./assets";
 import { OVERLAY_CSP, resolveOverlayFile, type OverlayPage } from "./overlays";
 
 /** The only address the window may load anything from. */
 export const GAME_OVERLAY_ORIGIN = `${GAME_OVERLAY_SCHEME}://overlay`;
+
+/** What Tavora's own frames load (over the game, on the Overlay page): the page, told it is in a frame that follows a growing source (`inTavoraFrame` in the SDK). */
+export const GAME_OVERLAY_FRAME_URL = `${GAME_OVERLAY_ORIGIN}/?${OVERLAY_FRAME_PARAM}=1`;
 
 const HEADERS = {
   "X-Content-Type-Options": "nosniff",

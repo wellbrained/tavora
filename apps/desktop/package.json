@@ -1,6 +1,6 @@
 {
   "name": "@tavora/desktop",
-  "version": "0.23.94",
+  "version": "0.23.96",
   "private": true,
   "type": "module",
   "scripts": {
@@ -74,6 +74,7 @@
       "de"
     ],
     "npmRebuild": false,
+    "afterPack": "scripts/after-pack.cjs",
     "extraResources": [
       {
         "from": "../../examples",

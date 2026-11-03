@@ -1,4 +1,4 @@
-import { watchOverlay } from "@tavora/sdk";
+import { inTavoraFrame, watchOverlay } from "@tavora/sdk";
 import type { OverlayState } from "./items";
 import { isLive, rowText, type LiveState } from "./live";
 import { mountOverlayView } from "./overlay-view";
@@ -7,8 +7,9 @@ import "./overlay.css";
 
 const root = document.getElementById("overlay")!;
 const live = document.getElementById("live")!;
-// A little room around the text, as a new frame is sized with (sources.ts); the text fills the rest of the window.
-const view = mountOverlayView(root, { box: () => ({ width: innerWidth, height: innerHeight }), padding: FIT_PADDING, grow: true });
+// A little room around the text, as a new frame is sized with (sources.ts). A text that grows with its box takes its scale from
+// the height in Tavora's frames, which follow the text; in OBS (and an older Tavora) it fills the window it gets.
+const view = mountOverlayView(root, { padding: FIT_PADDING, scaleBy: inTavoraFrame() ? "height" : "fill" });
 
 /** The state of one item (OBS, or one item over the game), or of all a panel's items (its live view over the game). */
 let state: OverlayState | LiveState | null = null;

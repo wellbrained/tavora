@@ -28,6 +28,30 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.96",
+    date: "2026-11-03",
+    title: "Smaller install",
+    notes: [
+      "Tavora takes less space on your PC.",
+    ],
+    prs: [
+      { number: 666, title: "Smaller install: no WebGPU compiler, compressed Chromium licences" },
+    ],
+  },
+  {
+    version: "0.23.95",
+    date: "2026-11-03",
+    title: "Overlay text keeps its size",
+    notes: [
+      "Overlay text keeps its size: drag a corner to scale it, or give it a fixed box where long text scrolls.",
+      "A fixed box can also shrink long text or cut it off, with your speed, pause and soft edges.",
+    ],
+    prs: [
+      { number: 661, title: "Overlay text box: grows with the text or a fixed box (OBS-style)" },
+    ],
+    tags: ["clock-counter", "overlays", "privacy", "publishing", "sdk", "ui-kit", "website"],
+  },
+  {
     version: "0.23.94",
     date: "2026-11-03",
     title: "Overlay opacity for several frames",

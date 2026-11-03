@@ -227,7 +227,7 @@ test("an item's settings use Tavora's settings layout: the panel, the overlay an
 
     // Look: font, alignment and outline for everything, then Words and Number, one under the other.
     await click(app, "page-look");
-    await expect.poll(() => texts('[data-slot="settings-section"] h3')).toEqual(["Everything", "Words", "Number"]);
+    await expect.poll(() => texts('[data-slot="settings-section"] h3')).toEqual(["Everything", "Words", "Number", "Box"]);
     // Words and Number have the same sizes, the kit's: XS S M L XL.
     const sizes = (kind: string) => texts(`[data-testid^="${kind}-size-"]`);
     expect(await sizes("words")).toEqual(["XS", "S", "M", "L", "XL"]);

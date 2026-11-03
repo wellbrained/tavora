@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  boxOf,
   count,
   defaultLook,
   defaultStored,
@@ -503,5 +504,39 @@ describe("the one size scale", () => {
     const first1 = again(old);
     expect([first1.wordsStep, first1.numberStep, first1.wordsSize, first1.numberSize]).toEqual(["xs", "xl", "l", "xl"]);
     expect(again(first1)).toEqual(first1);
+  });
+});
+
+describe("the box of an overlay", () => {
+  const raw = (look: Record<string, unknown>) => ({ items: [{ id: "d", kind: "counter", label: "Deaths", look: { showLabel: true, color: "#ffffff", outline: true, font: "inter", align: "center", ...look } }] });
+  const lookOf = (look: Record<string, unknown>) => parseList(raw(look)).items[0]!.look;
+
+  it("grows with the text for data saved before the box, and keeps that data as it was saved", () => {
+    const look = lookOf({});
+    expect(boxOf(look)).toEqual({ box: "grow", tooLong: "scroll", speed: "normal", pause: 2, softEdges: true });
+    for (const key of ["box", "tooLong", "speed", "pause", "softEdges"]) expect(key in look).toBe(false);
+    expect(boxOf(defaultLook()).box).toBe("grow");
+  });
+
+  it("keeps a fixed box and its settings, and drops what it can't read", () => {
+    expect(lookOf({ box: "fixed", tooLong: "cut", speed: "fast", pause: 0.5, softEdges: false })).toMatchObject({ box: "fixed", tooLong: "cut", speed: "fast", pause: 0.5, softEdges: false });
+    expect(boxOf(lookOf({ pause: 0 })).pause).toBe(0);
+    const bad = lookOf({ box: "huge", tooLong: "wrap", speed: 9, pause: 0.7, softEdges: "yes" });
+    for (const key of ["box", "tooLong", "speed", "pause", "softEdges"]) expect(key in bad).toBe(false);
+    expect(boxOf({ pause: 7 }).pause).toBe(2);
+  });
+
+  it("is written so the previous version still reads it: the box only adds fields, and the old ones stay", () => {
+    const look = lookOf({ box: "fixed", tooLong: "shrink" });
+    const saved = JSON.parse(JSON.stringify({ items: [{ id: "d", kind: "counter", label: "Deaths", look }] }));
+    expect(Object.keys(saved.items[0].look)).toEqual(expect.arrayContaining(["showLabel", "color", "outline", "font", "align", "wordsSize", "numberSize"]));
+    // The previous version drops what it doesn't know when it saves; this version then reads a box that grows, as before.
+    const { box: _box, tooLong: _tooLong, ...older } = saved.items[0].look;
+    expect(boxOf(lookOf(older)).box).toBe("grow");
+  });
+
+  it("goes out with what the overlay publishes, so the page can draw the box", () => {
+    const item = parseList(raw({ box: "fixed", speed: "slow" })).items[0]!;
+    expect(overlayState(item).look).toMatchObject({ box: "fixed", speed: "slow" });
   });
 });

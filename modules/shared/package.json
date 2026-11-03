@@ -12,6 +12,7 @@
     "./i18n": "./src/i18n.ts",
     "./testing": "./src/testing.ts",
     "./optimistic": "./src/optimistic.ts",
+    "./overlay-text": "./src/components/ui/overlay-text/plan.ts",
     "./theme.css": "./src/theme.css",
     "./components/*": "./src/components/*/index.ts",
     "./tooltip-typography": "./src/components/tooltip/typography.ts",

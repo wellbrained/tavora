@@ -2,6 +2,7 @@ import type { KeyObject } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import { apiReason, type ApiReason } from "@tavora/module-schema";
 import { linkRequest, publishSignature, publishZip, type Published } from "@tavora/pack";
+import { assertNever } from "../shared/assert-never";
 import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken, AccountView, DeviceOs, KeyRequestView, PrefixState } from "../shared/host-api";
 import type { Language, MessageKey } from "../shared/i18n";
 import { isIdPrefix } from "../shared/id-prefix";
@@ -231,6 +232,37 @@ function device(value: unknown): AccountDevice | null {
     : null;
 }
 
+/**
+ * What a code (or a question) waits for, as the main process keeps it: the view's AccountPending, plus what never leaves
+ * the main process. A new address's checked code is kept until the user says yes or no, and so is the service's ticket
+ * for a checked Discord login with no account yet; each exists only in the step that needs it.
+ */
+type Pending =
+  | Exclude<AccountPending, { kind: "sign-in" } | { kind: "discord-create" }>
+  | { kind: "sign-in"; email: string; step: "code" }
+  | { kind: "sign-in"; email: string; step: "create"; code: string }
+  | { kind: "discord-create"; name: string; ticket: string };
+
+/** The pending step as the host UI sees it: without the code or the ticket. */
+function pendingView(pending: Pending | null): AccountPending | null {
+  if (!pending) return null;
+  switch (pending.kind) {
+    case "sign-in":
+      return { kind: pending.kind, email: pending.email, step: pending.step };
+    case "discord-create":
+      return { kind: pending.kind, name: pending.name };
+    case "change-email":
+      return { kind: pending.kind, email: pending.email };
+    case "remove-email":
+    case "connect-discord":
+    case "remove-discord":
+    case "delete":
+      return { kind: pending.kind };
+    default:
+      return assertNever(pending);
+  }
+}
+
 export class AccountClient {
   private get saved(): SavedAccount | null {
     return this.options.signIn.current;
@@ -239,11 +271,7 @@ export class AccountClient {
     this.options.signIn.current = account;
   }
   private devices: AccountDevice[] | null = null;
-  private pending: AccountPending | null = null;
-  /** The right code for an address with no account yet, kept until the user says yes or no. */
-  private pendingCode: string | null = null;
-  /** The service's ticket for a checked Discord login with no account yet, kept until the user says yes or no. */
-  private pendingTicket: string | null = null;
+  private pending: Pending | null = null;
   /** The account's profile when it differs from this PC's on the first sign-in here: the user chooses once. */
   private profileChoice: (ProfileData & { updatedAt: string }) | null = null;
   /** The developer side as last read: the public name and the linked publisher keys. */
@@ -308,7 +336,7 @@ export class AccountClient {
       account: this.saved ? { email: this.saved.email, discord: this.saved.discord ? { name: this.saved.discord } : null, createdAt: this.saved.createdAt } : null,
       discordLogin: Boolean(this.options.discordLogin),
       devices: this.saved ? this.devices : null,
-      pending: this.pending,
+      pending: pendingView(this.pending),
       profileChoice: this.saved && this.profileChoice ? { name: this.profileChoice.name, initials: this.profileChoice.initials, picture: this.profileChoice.picture !== null } : null,
       developer: this.saved ? this.developer : null,
       publisherKeys: this.saved ? this.publisherKeys : null,
@@ -328,7 +356,6 @@ export class AccountClient {
     const address = email.trim();
     await this.call("POST", "/code", { email: address, language: this.options.language() });
     this.pending = { kind: "sign-in", email: address, step: "code" };
-    this.pendingCode = null;
     this.changed();
   }
 
@@ -338,8 +365,7 @@ export class AccountClient {
     if (pending?.kind !== "sign-in") throw new UserError("account.error.noCode");
     const answer = await this.call("POST", "/verify", { email: pending.email, code, ...this.device() });
     if (answer.status === "no-account") {
-      this.pending = { ...pending, step: "create" };
-      this.pendingCode = code;
+      this.pending = { kind: "sign-in", email: pending.email, step: "create", code };
       this.changed();
       return;
     }
@@ -349,20 +375,18 @@ export class AccountClient {
   /** Makes the account, only once the user confirmed the minimum age (13, and 16 or a parent's permission; decided 2026-10-16). Nothing about the age is kept. */
   async create(ageConfirmed: boolean): Promise<void> {
     const pending = this.pending;
-    if (pending?.kind === "discord-create" && this.pendingTicket) {
+    if (pending?.kind === "discord-create") {
       if (!ageConfirmed) throw new UserError("account.error.ageRequired");
-      await this.signedIn(await this.call("POST", "/discord/create", { ticket: this.pendingTicket, ...this.device() }));
+      await this.signedIn(await this.call("POST", "/discord/create", { ticket: pending.ticket, ...this.device() }));
       return;
     }
-    if (pending?.kind !== "sign-in" || pending.step !== "create" || !this.pendingCode) throw new UserError("account.error.noCode");
+    if (pending?.kind !== "sign-in" || pending.step !== "create") throw new UserError("account.error.noCode");
     if (!ageConfirmed) throw new UserError("account.error.ageRequired");
-    await this.signedIn(await this.call("POST", "/verify", { email: pending.email, code: this.pendingCode, ...this.device(), create: true }));
+    await this.signedIn(await this.call("POST", "/verify", { email: pending.email, code: pending.code, ...this.device(), create: true }));
   }
 
   cancel(): void {
     this.pending = null;
-    this.pendingCode = null;
-    this.pendingTicket = null;
     this.changed();
   }
 
@@ -374,9 +398,7 @@ export class AccountClient {
     const answer = await this.call("POST", "/discord/sign-in", { ...(await this.discord()), ...this.device() });
     if (answer.status === "no-account" && typeof answer.ticket === "string") {
       const name = (answer.discord as Record<string, unknown> | undefined)?.name;
-      this.pending = { kind: "discord-create", name: isText(name, 32) ? name : "" };
-      this.pendingTicket = answer.ticket;
-      this.pendingCode = null;
+      this.pending = { kind: "discord-create", name: isText(name, 32) ? name : "", ticket: answer.ticket };
       this.changed();
       return;
     }
@@ -776,8 +798,6 @@ export class AccountClient {
     if (!saved) throw new UserError("error.generic");
     this.saved = saved;
     this.pending = null;
-    this.pendingCode = null;
-    this.pendingTicket = null;
     this.devices = null;
     await this.keep();
     this.changed();
@@ -793,8 +813,6 @@ export class AccountClient {
     this.saved = null;
     this.devices = null;
     this.pending = null;
-    this.pendingCode = null;
-    this.pendingTicket = null;
     this.profileChoice = null;
     this.developer = null;
     this.publisherKeys = null;

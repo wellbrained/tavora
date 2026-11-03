@@ -1,15 +1,13 @@
-/* The text of one overlay: what OBS shows as a Browser Source, and the preview in the settings. Like the rest of the overlay it is drawn over
-   game art, not in the app, so its colours are the item's own text colours with a dark outline instead of theme colours. */
+/* The text of one overlay: what OBS shows as a Browser Source, what Tavora's frames show, and the preview in the settings. Like
+   the rest of the overlay it is drawn over game art, not in the app, so its colours are the item's own text colours with a dark
+   outline instead of theme colours. The box around the lines (size, alignment, scrolling) is the kit's OverlayText. */
 @import "@fontsource-variable/inter/wght.css";
 @import "@fontsource-variable/jetbrains-mono/wght.css";
 
+/* The box is the whole window (OBS, a frame) or the whole preview. */
 .cc-ov {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  width: 100%;
   height: 100%;
-  padding: 0; /* the view sets the room around the text */
   background: transparent;
   color: var(--color, #fff);
   font-family: "Inter Variable", system-ui, sans-serif;
@@ -29,19 +27,6 @@
 
 .cc-ov[data-font="system"] {
   font-family: "Segoe UI", system-ui, sans-serif;
-}
-
-.cc-ov[data-align="left"] {
-  align-items: flex-start;
-  text-align: left;
-}
-.cc-ov[data-align="center"] {
-  align-items: center;
-  text-align: center;
-}
-.cc-ov[data-align="right"] {
-  align-items: flex-end;
-  text-align: right;
 }
 
 .cc-ov[data-outline="true"] {

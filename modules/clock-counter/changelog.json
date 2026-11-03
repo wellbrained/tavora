@@ -1,9 +1,17 @@
 [
   {
-    "version": "0.1.26",
+    "version": "0.1.27",
     "date": "2026-11-03",
     "notes": [
       "Under the hood: newer libraries."
+    ]
+  },
+  {
+    "version": "0.1.26",
+    "date": "2026-11-03",
+    "notes": [
+      "Overlay text keeps its size: drag a corner of its frame to scale it, or give it a fixed box where long text scrolls.",
+      "A fixed box can shrink long text or cut it off instead, and you pick the scroll speed, a pause and soft edges under Look."
     ]
   },
   {

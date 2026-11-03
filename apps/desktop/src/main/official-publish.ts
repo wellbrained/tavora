@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { isModuleId, validateChangelog, validateManifest } from "@tavora/module-schema";
 import { collectFiles, fingerprint, packModule, PackError, readZip, SIGNATURE_FILE, type Published } from "@tavora/pack";
-import type { OfficialPublishOverview, OfficialPublishPreview, OfficialPublishRow, OfficialPublishStep } from "../shared/host-api";
+import { assertNever } from "../shared/assert-never";
+import type { OfficialBuildStep, OfficialPublishOverview, OfficialPublishPreview, OfficialPublishRow, OfficialPublishRun, OfficialUploadStep } from "../shared/host-api";
 import { compareModuleVersions } from "../shared/module-version";
 import { UserError } from "./messages";
 import { BROWSER_MODULE_ID, OFFICIAL_PREFIX } from "./registry";
@@ -241,6 +242,8 @@ export interface OfficialPublisherOptions {
   trusted: (fingerprint: string, sha256: string) => boolean;
   /** Uploads a signed zip with the account's sign-in (never a publish token). */
   upload: (key: KeyObject, zip: Buffer) => Promise<Published>;
+  /** The run changed (see `run`). */
+  onChange?: () => void;
   now?: () => number;
   /** Where temporary worktrees go (the system's temp folder). */
   temp?: string;
@@ -270,6 +273,8 @@ interface Head {
 }
 
 interface Prepared {
+  /** The module's name as the run showed it from the start. */
+  name: string;
   worktree: string;
   moduleDir: string;
   commit: string;
@@ -280,16 +285,52 @@ interface Prepared {
 
 type Git = (...args: string[]) => Promise<string>;
 
+/** The run as the publisher keeps it: OfficialPublishRun, with what stays here (the build in its worktree, the way to stop it). */
+type RunState =
+  | { phase: "idle" }
+  | { phase: "building"; moduleId: string; name: string; step: OfficialBuildStep; abort: AbortController }
+  | { phase: "preview"; prepared: Prepared }
+  | { phase: "confirming"; prepared: Prepared }
+  /** Signing or uploading: nothing can stop it now. */
+  | { phase: "uploading"; prepared: Prepared; step: OfficialUploadStep };
+
+const noStep = () => undefined;
+
 export class OfficialPublisher {
   private readonly run: Run;
-  private busy = false;
-  /** Signing or uploading: nothing can stop it now. */
-  private finishing = false;
-  private prepared: Prepared | null = null;
-  private abort: AbortController | null = null;
+  private state: RunState = { phase: "idle" };
 
   constructor(private readonly options: OfficialPublisherOptions) {
     this.run = options.run ?? runCommand;
+  }
+
+  /** The run as the host window shows it. */
+  view(): OfficialPublishRun {
+    const state = this.state;
+    switch (state.phase) {
+      case "idle":
+        return { phase: "idle" };
+      case "building":
+        return { phase: "building", moduleId: state.moduleId, name: state.name, step: state.step };
+      case "preview":
+      case "confirming":
+        return { phase: state.phase, moduleId: state.prepared.preview.id, name: state.prepared.name, preview: state.prepared.preview };
+      case "uploading":
+        return { phase: "uploading", moduleId: state.prepared.preview.id, name: state.prepared.name, preview: state.prepared.preview, step: state.step };
+      default:
+        return assertNever(state);
+    }
+  }
+
+  private set(state: RunState): void {
+    this.state = state;
+    this.options.onChange?.();
+  }
+
+  /** The build a preview was made of, while there is one. */
+  private get prepared(): Prepared | null {
+    const state = this.state;
+    return state.phase === "preview" || state.phase === "confirming" || state.phase === "uploading" ? state.prepared : null;
   }
 
   /** The built-in modules with a newer version on main than in the last release, each with what stands in its way. */
@@ -313,16 +354,17 @@ export class OfficialPublisher {
 
   /**
    * Builds `moduleId` from origin/main in a temporary worktree and packs it, without a key: the preview of what finish
-   * signs and uploads. Every refusal is a UserError; cancel() ends it with PublishCancelled.
+   * signs and uploads. Every refusal is a UserError; cancel() ends it with PublishCancelled. `name` is what the run
+   * shows until the preview is there.
    */
-  async prepare(moduleId: string, onStep: (step: OfficialPublishStep) => void = () => undefined): Promise<OfficialPublishPreview> {
-    if (this.busy || this.prepared) throw new UserError("officialPublish.error.busy");
+  async prepare(moduleId: string, onStep: (step: OfficialBuildStep) => void = noStep, name = moduleId): Promise<OfficialPublishPreview> {
+    if (this.state.phase !== "idle") throw new UserError("officialPublish.error.busy");
     if (!isModuleId(moduleId) || !moduleId.startsWith(OFFICIAL_PREFIX) || NEVER_PUBLISHED.has(moduleId)) throw new UserError("officialPublish.error.notBuiltIn");
-    this.busy = true;
-    const abort = (this.abort = new AbortController());
-    const step = (name: OfficialPublishStep) => {
+    const abort = new AbortController();
+    const step = (next: OfficialBuildStep) => {
       if (abort.signal.aborted) throw new PublishCancelled();
-      onStep(name);
+      this.set({ phase: "building", moduleId, name, step: next, abort });
+      onStep(next);
     };
     let worktree: string | undefined;
     try {
@@ -376,15 +418,14 @@ export class OfficialPublisher {
         size: files.reduce((sum, file) => sum + file.data.length, 0),
       };
       if (abort.signal.aborted) throw new PublishCancelled();
-      this.prepared = { worktree, moduleDir, commit: head.commit, preview, hashes: new Map(files.map((file) => [file.name, sha256Of(file.data)])) };
+      this.set({ phase: "preview", prepared: { name, worktree, moduleDir, commit: head.commit, preview, hashes: new Map(files.map((file) => [file.name, sha256Of(file.data)])) } });
       worktree = undefined;
       return preview;
     } catch (error) {
+      this.set({ phase: "idle" });
       if (abort.signal.aborted) throw new PublishCancelled();
       throw error;
     } finally {
-      this.busy = false;
-      this.abort = null;
       if (worktree) await this.removeWorktree(worktree);
     }
   }
@@ -398,14 +439,45 @@ export class OfficialPublisher {
    * Signs the prepared build with `key` and uploads it. The zip must hold exactly the files the preview showed. A key
    * that may not sign Tavora's modules is refused and the build stays prepared, so another key can be tried.
    */
-  async finish(key: KeyObject, onStep: (step: OfficialPublishStep) => void = () => undefined): Promise<OfficialPublished> {
-    const prepared = this.prepared;
-    if (!prepared || this.busy) throw new UserError("officialPublish.error.notPrepared");
-    this.busy = true;
-    this.finishing = true;
+  async finish(key: KeyObject, onStep: (step: OfficialUploadStep) => void = noStep): Promise<OfficialPublished> {
+    const state = this.state;
+    if (state.phase !== "preview") throw new UserError("officialPublish.error.notPrepared");
+    return this.signAndUpload(state.prepared, key, onStep);
+  }
+
+  /**
+   * Sign and upload, pressed on the preview: `loadKey` gets the key (the saved one, or a key file the developer picks),
+   * then finish signs and uploads with it. Null when no key was picked; the preview stays then, as it does when loading
+   * the key fails. Cancel waits until this is over.
+   */
+  async confirm(loadKey: () => Promise<KeyObject | null>, onStep: (step: OfficialUploadStep) => void = noStep): Promise<OfficialPublished | null> {
+    const state = this.state;
+    if (state.phase === "confirming" || state.phase === "uploading") throw new UserError("officialPublish.error.busy");
+    if (state.phase !== "preview") throw new UserError("officialPublish.error.notPrepared");
+    const { prepared } = state;
+    this.set({ phase: "confirming", prepared });
+    let key: KeyObject | null;
+    try {
+      key = await loadKey();
+    } catch (error) {
+      this.set({ phase: "preview", prepared });
+      throw error;
+    }
+    if (!key) {
+      this.set({ phase: "preview", prepared });
+      return null;
+    }
+    return this.signAndUpload(prepared, key, onStep);
+  }
+
+  private async signAndUpload(prepared: Prepared, key: KeyObject, onStep: (step: OfficialUploadStep) => void): Promise<OfficialPublished> {
+    const step = (next: OfficialUploadStep) => {
+      this.set({ phase: "uploading", prepared, step: next });
+      onStep(next);
+    };
     let done = false;
     try {
-      onStep("sign");
+      step("sign");
       const { zip } = await packModule(prepared.moduleDir, key).catch((error: unknown) => {
         if (error instanceof PackError) throw new UserError("officialPublish.error.pack", { message: error.message });
         throw error;
@@ -426,35 +498,47 @@ export class OfficialPublisher {
         throw new UserError("officialPublish.error.notNewer", { version: prepared.preview.version, other: listed });
       }
 
-      onStep("upload");
+      step("upload");
       const published = await this.options.upload(key, zip);
       done = true;
       const result = { id: published.id, version: published.version, sha256: published.sha256, commit: prepared.commit };
       await appendFile(path.join(this.options.userData, "official-publishes.log"), `${JSON.stringify({ ...result, at: new Date(this.options.now?.() ?? Date.now()).toISOString() })}\n`).catch(() => undefined);
       return result;
     } finally {
-      this.busy = false;
-      this.finishing = false;
-      if (done) await this.discard();
+      // Done (published, or the build can't go out any more) ends the run; anything else keeps the preview, to try again.
+      if (done) await this.discard(prepared);
+      else this.set({ phase: "preview", prepared });
     }
   }
 
   /** Signing or uploading right now: Cancel can't stop that. */
   get uploading(): boolean {
-    return this.finishing;
+    return this.state.phase === "uploading";
   }
 
-  /** Stops a prepare in progress, or throws away a prepared build. */
+  /** Stops a prepare in progress, or throws away a prepared build. Sign and upload, once pressed, isn't stopped. */
   async cancel(): Promise<void> {
-    if (this.finishing) return;
-    this.abort?.abort();
-    if (!this.busy) await this.discard();
+    const state = this.state;
+    switch (state.phase) {
+      case "idle":
+      case "confirming":
+      case "uploading":
+        return;
+      case "building":
+        // Its own catch ends the run, once the step running now stops.
+        state.abort.abort();
+        return;
+      case "preview":
+        await this.discard(state.prepared);
+        return;
+      default:
+        assertNever(state);
+    }
   }
 
-  private async discard(): Promise<void> {
-    const prepared = this.prepared;
-    this.prepared = null;
-    if (prepared) await this.removeWorktree(prepared.worktree);
+  private async discard(prepared: Prepared): Promise<void> {
+    this.set({ phase: "idle" });
+    await this.removeWorktree(prepared.worktree);
   }
 
   /** Removes worktrees an earlier run left behind (a crash, a quit with a preview open), and git's note of them. */
@@ -579,7 +663,7 @@ export class OfficialPublisher {
   }
 
   /** A clean install from the lockfile and a build of the module, in the temporary worktree. */
-  private async build(worktree: string, moduleDir: string, step: (name: OfficialPublishStep) => void, signal: AbortSignal): Promise<void> {
+  private async build(worktree: string, moduleDir: string, step: (name: OfficialBuildStep) => void, signal: AbortSignal): Promise<void> {
     const pkg = JSON.parse(await readFile(path.join(moduleDir, "package.json"), "utf8")) as { name?: unknown };
     // The name goes to a command line; only the characters of a package name pass.
     if (typeof pkg.name !== "string" || !/^@?[a-z0-9][a-z0-9._/-]*$/.test(pkg.name)) throw new UserError("officialPublish.error.notBuiltIn");

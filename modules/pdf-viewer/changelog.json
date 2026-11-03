@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.15",
+    "version": "0.1.16",
     "date": "2026-11-03",
     "notes": [
       "Under the hood: newer libraries."
+    ]
+  },
+  {
+    "version": "0.1.15",
+    "date": "2026-11-03",
+    "notes": [
+      "Pictures keep their view when you switch tabs or close a dialog."
     ]
   },
   {

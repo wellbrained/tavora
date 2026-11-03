@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
-import { placeLegacy } from "../shared/overlay-anchor";
+import { DEFAULT_RECT, placeLegacy } from "../shared/overlay-anchor";
+import { fillScale } from "../shared/overlay-content";
 import type { Foreground, ForegroundProbe } from "./foreground";
 import { GameOverlays, isOverlayAction, layerBinding, toggleBinding, type OverlayWindow, type OverlayWindowRequest, type PanelLoan } from "./game-overlay-service";
 import type { OverlayPanel } from "./game-overlay-window";
@@ -2383,5 +2384,91 @@ describe("what a panel lists", () => {
     // Another setup may have it too; a module that isn't installed has no overlay to add.
     expect(service.layout.addOverlay("$all", subject)).toBe("added");
     expect(service.layout.addOverlay("$all", { ...subject, moduleId: "nobody.nothing" })).toBe("refused");
+  });
+});
+
+describe("frames that follow their content", () => {
+  const where = { moduleId: CLOCK.manifest.id, workspaceId: "elden" };
+  const text = (width: number, grows = true) => [{ key: "item-1", name: "Deaths", size: { width, height: 50 }, ...(grows ? { grows } : {}) }];
+  const frame = (service: GameOverlays) => service.layout.items("elden")[0]!;
+
+  it("takes over a frame from before at the size its text looked, then grows and shrinks with the text and keeps that scale", async () => {
+    const { service, live, world } = await setup();
+    show(service);
+    expect(frame(service).scale).toBeUndefined();
+    const changes = world.changes;
+    service.setSources("p1", "official", text(200), where);
+    const scale = fillScale({ width: DEFAULT_RECT.width * 1080, height: DEFAULT_RECT.height * 1080 }, { width: 200, height: 50 });
+    expect(frame(service).scale).toBeCloseTo(scale);
+    expect(frame(service).rect.width * 1080).toBeCloseTo(200 * scale + 16);
+    expect(frame(service).rect.height * 1080).toBeCloseTo(50 * scale + 16);
+    expect(world.changes).toBeGreaterThan(changes);
+    // Over the game at once, on a 1080 p window.
+    expect(live()[0]!.rect!.width).toBe(Math.round(200 * scale + 16));
+    // The counter got longer: the frame grows, from its left edge, at the same scale.
+    const left = frame(service).rect.x;
+    service.setSources("p1", "official", text(260), where);
+    expect(frame(service).scale).toBeCloseTo(scale);
+    expect(frame(service).rect.width * 1080).toBeCloseTo(260 * scale + 16);
+    expect(frame(service).rect.x).toBe(left);
+    expect(live()[0]!.rect!.width).toBe(Math.round(260 * scale + 16));
+  });
+
+  it("leaves a frame alone whose content doesn't grow, and frames of other workspaces", async () => {
+    const { service } = await setup();
+    show(service);
+    const before = { ...frame(service).rect };
+    service.setSources("p1", "official", text(200, false), where);
+    service.setSources("p2", "official", text(200), { ...where, workspaceId: "personal" });
+    service.setSources("p3", "someone-else", text(200), where);
+    expect(frame(service).rect).toEqual(before);
+    expect(frame(service).scale).toBeUndefined();
+  });
+
+  it("remembers 100 % for a fixed box, so its text keeps its size when it is switched to grow", async () => {
+    const { service } = await setup();
+    show(service);
+    const box = { ...frame(service).rect };
+    service.setSources("p1", "official", [{ key: "item-1", name: "Deaths", size: { width: 200, height: 50 }, grows: false }], where);
+    // The box stays as the user made it.
+    expect(frame(service).rect).toEqual(box);
+    expect(frame(service).scale).toBe(1);
+    service.setSources("p1", "official", text(200), where);
+    expect(frame(service).scale).toBe(1);
+    expect(frame(service).rect.width * 1080).toBeCloseTo(216);
+  });
+
+  it("starts a new frame for growing content at 100 %", async () => {
+    const { service } = await setup();
+    service.setSources("p1", "official", text(200), where);
+    show(service);
+    expect(frame(service).scale).toBe(1);
+    expect(frame(service).rect.width * 1080).toBeCloseTo(216);
+    expect(frame(service).rect.height * 1080).toBeCloseTo(66);
+  });
+
+  it("scales with a drag in the game layer and keeps the text's shape", async () => {
+    const { service, live } = await setup();
+    service.setSources("p1", "official", text(200), where);
+    show(service);
+    const start = live()[0]!.rect!;
+    // The bottom right corner pulled out: twice as wide, not quite twice as high.
+    live()[0]!.request.moved({ x: start.x, y: start.y, width: 416, height: 90 });
+    expect(frame(service).scale).toBeCloseTo(2);
+    expect(live()[0]!.rect).toEqual({ x: start.x, y: start.y, width: 416, height: 116 });
+    // A move keeps the scale.
+    live()[0]!.request.moved({ x: start.x + 100, y: start.y, width: 416, height: 116 });
+    expect(frame(service).scale).toBeCloseTo(2);
+  });
+
+  it("saves the scale with the frame and reads it back", async () => {
+    const { service } = await setup();
+    service.setSources("p1", "official", text(200), where);
+    show(service);
+    service.layout.setRect("elden", frame(service).ref, frame(service).rect, 2.5);
+    await service.shutdown();
+    const again = await GameOverlayStore.load(dir);
+    expect(again.overlaysIn("elden")[0]!.scale).toBe(2.5);
+    expect(again.overlaysIn("elden")[0]!.rect).toEqual(frame(service).rect);
   });
 });
