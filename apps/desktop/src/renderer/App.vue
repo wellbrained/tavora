@@ -20,9 +20,10 @@ import SearchDialog from "./components/SearchDialog.vue";
 import ShareIconsDialog from "./components/ShareIconsDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
 import InboxDialogs from "./components/messages/InboxDialogs.vue";
-import { defineAsyncComponent, onMounted } from "vue";
-import { api, dialog, pairing, publish, state, trialWelcome } from "./host";
-import { bridgeToasts } from "./toast-bridge";
+import { computed, defineAsyncComponent, onMounted } from "vue";
+import { api, dialog, pairing, publish, settingsOpen, state, trialWelcome } from "./host";
+import { Toaster } from "@tavora/official-ui/components/ui/toast";
+import { bridgeToasts, toastsFallback } from "./toast-bridge";
 import OverlayPage from "./pages/OverlayPage.vue";
 import WorkspacePage from "./pages/WorkspacePage.vue";
 import OnboardingPage from "./pages/OnboardingPage.vue";
@@ -49,6 +50,9 @@ onMounted(() => setTimeout(() => void findInstalledGames(), FIRST_SEARCH_DELAY_M
 
 // Tavora's own toasts are drawn by a page above the panels, where the user put them (main/toast-view.ts).
 bridgeToasts(api.toasts);
+// Only if that page is down for good (main/toast-view.ts): then this page draws them, as it did before. Module panels are native
+// views above this page, so at the top, over the toolbar, is where they stay in sight; while Settings covers the panels, where the user put them.
+const fallbackPosition = computed(() => (settingsOpen.value && state.value ? state.value.library.toasts : "top-center"));
 </script>
 
 <template>
@@ -94,5 +98,7 @@ bridgeToasts(api.toasts);
     <PublishDialog v-if="publishWanted" />
     <OfficialPublishDialog v-if="officialPublishWanted" />
     <PairingDialog v-if="pairingWanted" />
+
+    <Toaster v-if="toastsFallback" :position="fallbackPosition" :class="settingsOpen ? 'z-[60]!' : 'top-1! z-[60]!'" />
   </div>
 </template>
