@@ -1,13 +1,13 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
 import { AccountKey } from "./account-key";
 import { CloudCopy, ServiceStorage } from "./cloud-copy";
 import { FOLDER_NAME } from "./copy-folder";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
-import { CopySync } from "./cloud-copy-sync";
+import { CLOSE_QUIET_MS, CopySync } from "./cloud-copy-sync";
 import { FolderPairing, Pairing } from "./pairing";
 
 afterEach(cleanUp);
@@ -366,5 +366,144 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(atB.sync.view()).toMatchObject({ on: true, askKey: false, conflict: true, folder: onedrive });
     fromA.dispose();
     toB.dispose();
+  });
+});
+
+/** The service behind a switch: offline throws like a dropped connection, and `hold` keeps every request waiting until released. */
+function flaky(cloud: Service) {
+  const net = { offline: false, held: null as Promise<void> | null };
+  let release = () => undefined as void;
+  const fetchImpl = (async (input: string, init?: RequestInit) => {
+    if (net.offline) throw new TypeError("fetch failed");
+    if (net.held) await net.held;
+    return cloud.fetch(input, init);
+  }) as typeof fetch;
+  return {
+    cloud: { ...cloud, fetch: fetchImpl },
+    net,
+    hold: () => void (net.held = new Promise<void>((resolve) => (release = resolve))),
+    release: () => {
+      net.held = null;
+      release();
+    },
+  };
+}
+
+/** Lets promises and real I/O go on, without timers (some tests fake them), for up to ten seconds. */
+async function settle(check: () => boolean): Promise<void> {
+  const until = Date.now() + 10_000;
+  while (!check() && Date.now() < until) await new Promise((resolve) => setImmediate(resolve));
+  expect(check()).toBe(true);
+}
+
+describe("the cloud copy's phases", () => {
+  it("goes start → progress → done, and Settings sees each", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { sync, views } = await startCopy(cloud, a);
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+    views.length = 0;
+    await sync.sync(true);
+    const busy = views.map((view) => view.busy);
+    expect(busy[0]).toBe("uploading");
+    expect(views[0]!.progress).toBeNull();
+    expect(views.some((view) => view.busy === "uploading" && view.progress !== null && view.progress.total > 0)).toBe(true);
+    expect(views.at(-1)).toMatchObject({ busy: null, progress: null, problem: null });
+    // Progress never shows without an upload running.
+    expect(views.filter((view) => view.progress !== null).every((view) => view.busy === "uploading")).toBe(true);
+  });
+
+  it("goes start → error → retry: offline it says so and is idle again, then the retry uploads", async () => {
+    const service0 = await service();
+    const a = await pc({ "library.json": "a1" });
+    await startCopy(service0, a);
+    const net = flaky(service0);
+    const { sync } = tavora(net.cloud, a);
+    await sync.beforeLoad();
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+    net.net.offline = true;
+    await expect(sync.sync(true)).rejects.toMatchObject({ key: "cloudCopy.error.offline" });
+    expect(sync.view()).toMatchObject({ on: true, busy: null, progress: null, problem: "offline" });
+    net.net.offline = false;
+    await sync.sync(true);
+    expect(sync.view()).toMatchObject({ busy: null, problem: null });
+    expect((await service0.client().remote())?.version).toBe(2);
+  });
+
+  it("runs a second start after the one running, never both at once", async () => {
+    const service0 = await service();
+    const a = await pc({ "library.json": "a1" });
+    await startCopy(service0, a);
+    const net = flaky(service0);
+    const { sync, views } = tavora(net.cloud, a);
+    await sync.beforeLoad();
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+    views.length = 0;
+    net.hold();
+    const first = sync.sync(true);
+    await settle(() => sync.view().busy === "uploading");
+    const second = sync.sync(true);
+    // Still the first one.
+    expect(views.filter((view) => view.busy === "uploading" && view.progress === null)).toHaveLength(1);
+    net.release();
+    await Promise.all([first, second]);
+    // uploading … idle, then uploading … idle: each start began after the one before ended.
+    const starts = views.map((view, index) => (view.busy === "uploading" && view.progress === null ? index : -1)).filter((index) => index >= 0);
+    expect(starts).toHaveLength(2);
+    expect(views.slice(starts[0]!, starts[1]!).some((view) => view.busy === null)).toBe(true);
+    expect(sync.view()).toMatchObject({ busy: null, problem: null });
+  });
+
+  describe("quitting mid-sync", () => {
+    afterEach(() => void vi.useRealTimers());
+
+    it("waits for the upload, shows it after a moment, and closes once when the user closes anyway", async () => {
+      const service0 = await service();
+      const a = await pc({ "library.json": "a1" });
+      await startCopy(service0, a);
+      const net = flaky(service0);
+      const { sync } = tavora(net.cloud, a);
+      await sync.beforeLoad();
+      await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      net.hold();
+      let closed = 0;
+      expect(sync.holdClose(() => void closed++)).toBe(true);
+      await settle(() => sync.view().busy === "uploading");
+      expect(sync.view().closing).toBe(false);
+      vi.advanceTimersByTime(CLOSE_QUIET_MS);
+      expect(sync.view().closing).toBe(true);
+      sync.closeAnyway(() => void closed++);
+      expect(closed).toBe(1);
+      expect(sync.view().closing).toBe(false);
+      // The upload ends later: the window is not closed a second time.
+      net.release();
+      await settle(() => sync.view().busy === null);
+      expect(closed).toBe(1);
+      expect(sync.holdClose(() => void closed++)).toBe(false);
+    });
+
+    it("never shows the wait after the close went on, even when its timer fires late (a fixed bug)", async () => {
+      const service0 = await service();
+      const a = await pc({ "library.json": "a1" });
+      await startCopy(service0, a);
+      const net = flaky(service0);
+      const { sync, views } = tavora(net.cloud, a);
+      await sync.beforeLoad();
+      await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      net.hold();
+      let closed = 0;
+      expect(sync.holdClose(() => void closed++)).toBe(true);
+      await settle(() => sync.view().busy === "uploading");
+      // Closed anyway before the moment passed (or Tavora restarts): the timer must not bring the note back.
+      sync.closeAnyway(() => void closed++);
+      vi.advanceTimersByTime(CLOSE_QUIET_MS);
+      expect(sync.view().closing).toBe(false);
+      expect(views.some((view) => view.closing)).toBe(false);
+      net.release();
+      await settle(() => sync.view().busy === null);
+      expect(closed).toBe(1);
+    });
   });
 });

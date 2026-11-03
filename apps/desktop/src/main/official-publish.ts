@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { isModuleId, validateChangelog, validateManifest } from "@tavora/module-schema";
 import { collectFiles, fingerprint, packModule, PackError, readZip, SIGNATURE_FILE, type Published } from "@tavora/pack";
-import type { OfficialPublishOverview, OfficialPublishPreview, OfficialPublishRow, OfficialPublishStep } from "../shared/host-api";
+import type { OfficialBuildStep, OfficialPublishOverview, OfficialPublishPreview, OfficialPublishRow, OfficialUploadStep } from "../shared/host-api";
+import { assertNever } from "../shared/assert-never";
 import { compareModuleVersions } from "../shared/module-version";
 import { UserError } from "./messages";
 import { BROWSER_MODULE_ID, OFFICIAL_PREFIX } from "./registry";
@@ -78,6 +79,7 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/example-copy.ts",
     "main/cloud-copy.ts",
     "main/cloud-copy-sync.ts",
+    "main/cloud-copy-phase.ts",
     "main/copy-crypto.ts",
     "main/copy-folder.ts",
     // The publish tooling itself (this file, its key store and the module publish button).
@@ -280,13 +282,19 @@ interface Prepared {
 
 type Git = (...args: string[]) => Promise<string>;
 
+/**
+ * Where the publisher stands: nothing going on, a build being prepared (cancel aborts it), a prepared build waiting for
+ * Sign and upload, or that build being signed and uploaded (nothing can stop it now).
+ */
+export type PublisherState =
+  | { phase: "idle" }
+  | { phase: "preparing"; abort: AbortController }
+  | { phase: "prepared"; prepared: Prepared }
+  | { phase: "finishing"; prepared: Prepared };
+
 export class OfficialPublisher {
   private readonly run: Run;
-  private busy = false;
-  /** Signing or uploading: nothing can stop it now. */
-  private finishing = false;
-  private prepared: Prepared | null = null;
-  private abort: AbortController | null = null;
+  private state: PublisherState = { phase: "idle" };
 
   constructor(private readonly options: OfficialPublisherOptions) {
     this.run = options.run ?? runCommand;
@@ -315,12 +323,13 @@ export class OfficialPublisher {
    * Builds `moduleId` from origin/main in a temporary worktree and packs it, without a key: the preview of what finish
    * signs and uploads. Every refusal is a UserError; cancel() ends it with PublishCancelled.
    */
-  async prepare(moduleId: string, onStep: (step: OfficialPublishStep) => void = () => undefined): Promise<OfficialPublishPreview> {
-    if (this.busy || this.prepared) throw new UserError("officialPublish.error.busy");
+  async prepare(moduleId: string, onStep: (step: OfficialBuildStep) => void = () => undefined): Promise<OfficialPublishPreview> {
+    if (this.state.phase !== "idle") throw new UserError("officialPublish.error.busy");
     if (!isModuleId(moduleId) || !moduleId.startsWith(OFFICIAL_PREFIX) || NEVER_PUBLISHED.has(moduleId)) throw new UserError("officialPublish.error.notBuiltIn");
-    this.busy = true;
-    const abort = (this.abort = new AbortController());
-    const step = (name: OfficialPublishStep) => {
+    const abort = new AbortController();
+    this.state = { phase: "preparing", abort };
+    let prepared: Prepared | null = null;
+    const step = (name: OfficialBuildStep) => {
       if (abort.signal.aborted) throw new PublishCancelled();
       onStep(name);
     };
@@ -376,33 +385,46 @@ export class OfficialPublisher {
         size: files.reduce((sum, file) => sum + file.data.length, 0),
       };
       if (abort.signal.aborted) throw new PublishCancelled();
-      this.prepared = { worktree, moduleDir, commit: head.commit, preview, hashes: new Map(files.map((file) => [file.name, sha256Of(file.data)])) };
+      prepared = { worktree, moduleDir, commit: head.commit, preview, hashes: new Map(files.map((file) => [file.name, sha256Of(file.data)])) };
       worktree = undefined;
       return preview;
     } catch (error) {
       if (abort.signal.aborted) throw new PublishCancelled();
       throw error;
     } finally {
-      this.busy = false;
-      this.abort = null;
+      this.state = prepared ? { phase: "prepared", prepared } : { phase: "idle" };
       if (worktree) await this.removeWorktree(worktree);
+    }
+  }
+
+  /** The build prepared (or being signed and uploaded), or null. */
+  private get held(): Prepared | null {
+    const state = this.state;
+    switch (state.phase) {
+      case "idle":
+      case "preparing":
+        return null;
+      case "prepared":
+      case "finishing":
+        return state.prepared;
+      default:
+        return assertNever(state);
     }
   }
 
   /** The prepared build's preview, or null. */
   get preview(): OfficialPublishPreview | null {
-    return this.prepared?.preview ?? null;
+    return this.held?.preview ?? null;
   }
 
   /**
    * Signs the prepared build with `key` and uploads it. The zip must hold exactly the files the preview showed. A key
    * that may not sign Tavora's modules is refused and the build stays prepared, so another key can be tried.
    */
-  async finish(key: KeyObject, onStep: (step: OfficialPublishStep) => void = () => undefined): Promise<OfficialPublished> {
-    const prepared = this.prepared;
-    if (!prepared || this.busy) throw new UserError("officialPublish.error.notPrepared");
-    this.busy = true;
-    this.finishing = true;
+  async finish(key: KeyObject, onStep: (step: OfficialUploadStep) => void = () => undefined): Promise<OfficialPublished> {
+    if (this.state.phase !== "prepared") throw new UserError("officialPublish.error.notPrepared");
+    const prepared = this.state.prepared;
+    this.state = { phase: "finishing", prepared };
     let done = false;
     try {
       onStep("sign");
@@ -433,27 +455,38 @@ export class OfficialPublisher {
       await appendFile(path.join(this.options.userData, "official-publishes.log"), `${JSON.stringify({ ...result, at: new Date(this.options.now?.() ?? Date.now()).toISOString() })}\n`).catch(() => undefined);
       return result;
     } finally {
-      this.busy = false;
-      this.finishing = false;
+      this.state = { phase: "prepared", prepared };
       if (done) await this.discard();
     }
   }
 
   /** Signing or uploading right now: Cancel can't stop that. */
   get uploading(): boolean {
-    return this.finishing;
+    return this.state.phase === "finishing";
   }
 
   /** Stops a prepare in progress, or throws away a prepared build. */
   async cancel(): Promise<void> {
-    if (this.finishing) return;
-    this.abort?.abort();
-    if (!this.busy) await this.discard();
+    const state = this.state;
+    switch (state.phase) {
+      case "idle":
+      case "finishing":
+        return;
+      case "preparing":
+        // prepare() itself ends with PublishCancelled and goes back to idle.
+        state.abort.abort();
+        return;
+      case "prepared":
+        await this.discard();
+        return;
+      default:
+        assertNever(state);
+    }
   }
 
   private async discard(): Promise<void> {
-    const prepared = this.prepared;
-    this.prepared = null;
+    const prepared = this.held;
+    this.state = { phase: "idle" };
     if (prepared) await this.removeWorktree(prepared.worktree);
   }
 
@@ -465,7 +498,7 @@ export class OfficialPublisher {
     for (const name of entries) {
       if (!name.startsWith(WORKTREE_PREFIX)) continue;
       const full = path.join(temp, name);
-      if (full === this.prepared?.worktree) continue;
+      if (full === this.held?.worktree) continue;
       const info = await stat(full).catch(() => null);
       if (info && now - info.mtimeMs > STALE_WORKTREE_MS) await removeFolder(full);
     }
@@ -579,7 +612,7 @@ export class OfficialPublisher {
   }
 
   /** A clean install from the lockfile and a build of the module, in the temporary worktree. */
-  private async build(worktree: string, moduleDir: string, step: (name: OfficialPublishStep) => void, signal: AbortSignal): Promise<void> {
+  private async build(worktree: string, moduleDir: string, step: (name: OfficialBuildStep) => void, signal: AbortSignal): Promise<void> {
     const pkg = JSON.parse(await readFile(path.join(moduleDir, "package.json"), "utf8")) as { name?: unknown };
     // The name goes to a command line; only the characters of a package name pass.
     if (typeof pkg.name !== "string" || !/^@?[a-z0-9][a-z0-9._/-]*$/.test(pkg.name)) throw new UserError("officialPublish.error.notBuiltIn");

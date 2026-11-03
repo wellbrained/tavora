@@ -12,6 +12,7 @@ import { isLanguageReady, loadLanguage, setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 import { developerSetup } from "./developer-setup";
 import { createDialogQueue } from "./dialog-queue";
+import { hidesViews, NO_GESTURE, type DockGesture } from "./dock-gesture";
 
 export const api = window.tavoraHost;
 export const state = shallowRef<HostViewState | null>(null);
@@ -795,8 +796,10 @@ export function notSaved(error: unknown, text: string = t("common.notSaved")): v
 // images of them stand in meanwhile.
 const openMenus = ref(0);
 
+/** What the pointer does to the dock: a panel or group dragged, or a split resized (WorkspacePage.vue sets it). */
+export const dockGesture = ref<DockGesture>(NO_GESTURE);
 /** True while a panel or group is dragged, or a split is being resized. */
-export const dragging = ref(false);
+export const dragging = computed(() => hidesViews(dockGesture.value));
 
 /** The empty slot (a dock group id) the next panel to open goes into, if any. */
 export const nextPanelSlot = ref<string | null>(null);

@@ -5,7 +5,7 @@ import path from "node:path";
 import { fingerprint as packFingerprint, LINK_STATEMENT, packModule, PUBLISH_STATEMENT } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import type { AccountView } from "../shared/host-api";
-import { AccountClient, deviceOs, loadAccount, saveAccount, type ProfileData, type SavedAccount } from "./account";
+import { AccountClient, deviceOs, loadAccount, pendingView, saveAccount, type PendingState, type ProfileData, type SavedAccount } from "./account";
 import type { Encryptor } from "./discord-store";
 import { UserError } from "./messages";
 import { SignIn } from "./sign-in";
@@ -750,5 +750,115 @@ describe("the developer side", () => {
     await account.init();
     await account.refresh();
     expect(account.view()).toMatchObject({ developer: null, publisherKeys: [{ fingerprint: FINGERPRINT }] });
+  });
+});
+
+describe("the pending step, as one state", () => {
+  /** The pending state as the main process keeps it, code and ticket included. */
+  const pendingOf = (account: AccountClient) => (account as unknown as { pending: PendingState | null }).pending;
+
+  it("goes code requested → code entered → create, keeping the right code only in the main process", async () => {
+    const { calls, fetchImpl } = service({
+      "POST /code": () => json({ status: "sent" }, 202),
+      "POST /verify": (body) => (body?.create ? signedInAnswer("created")() : json({ status: "no-account" })),
+      "GET /": () => json({ account: { email: "me@example.com" }, devices: [] }),
+    });
+    const { account, views } = client(fetchImpl);
+    await account.sendCode("me@example.com");
+    expect(pendingOf(account)).toEqual({ kind: "sign-in", email: "me@example.com", step: "code" });
+    await account.verify("654321");
+    expect(pendingOf(account)).toEqual({ kind: "sign-in", email: "me@example.com", step: "create", code: "654321" });
+    // The host UI never gets the code.
+    expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "create" });
+    expect(views.some((view) => JSON.stringify(view).includes("654321"))).toBe(false);
+    await account.create(true);
+    expect(calls.at(-2)!.body).toMatchObject({ code: "654321", create: true });
+    expect(pendingOf(account)).toBeNull();
+  });
+
+  it("keeps a Discord login's ticket only in the main process, and forgets it on cancel", async () => {
+    const TICKET = "k".repeat(43);
+    const { fetchImpl } = service({ "POST /discord/sign-in": () => json({ status: "no-account", ticket: TICKET, discord: { name: "alex" } }) });
+    const { account, views } = client(fetchImpl, { discordLogin: async () => ({ code: "c", verifier: "v".repeat(43) }) });
+    await account.discordSignIn();
+    expect(pendingOf(account)).toEqual({ kind: "discord-create", name: "alex", ticket: TICKET });
+    expect(views.some((view) => JSON.stringify(view).includes(TICKET))).toBe(false);
+    account.cancel();
+    expect(pendingOf(account)).toBeNull();
+    await expect(account.create(true)).rejects.toMatchObject({ key: "account.error.noCode" });
+  });
+
+  it("drops a Discord ticket when the user asks for an email code instead", async () => {
+    const { fetchImpl } = service({
+      "POST /discord/sign-in": () => json({ status: "no-account", ticket: "k".repeat(43), discord: { name: "alex" } }),
+      "POST /code": () => json({ status: "sent" }, 202),
+    });
+    const { account } = client(fetchImpl, { discordLogin: async () => ({ code: "c", verifier: "v".repeat(43) }) });
+    await account.discordSignIn();
+    await account.sendCode("me@example.com");
+    expect(pendingOf(account)).toEqual({ kind: "sign-in", email: "me@example.com", step: "code" });
+  });
+
+  it("stays at the code when a code is wrong or expired, and goes back to it when the code expired before Create (a fixed bug)", async () => {
+    let expired = true;
+    const { fetchImpl } = service({
+      "POST /code": () => json({ status: "sent" }, 202),
+      "POST /verify": (body) => (body?.create && expired ? json({ reason: "wrong-code" }, 400) : body?.code === "000000" ? json({ reason: "wrong-code" }, 400) : body?.create ? signedInAnswer("created")() : json({ status: "no-account" })),
+      "GET /": () => json({ account: { email: "me@example.com" }, devices: [] }),
+    });
+    const { account } = client(fetchImpl);
+    await account.sendCode("me@example.com");
+    await expect(account.verify("000000")).rejects.toMatchObject({ key: "account.error.wrongCode" });
+    expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "code" });
+    await account.verify("654321");
+    // The code ran out while the user read the age question: Create can't work with it any more.
+    await expect(account.create(true)).rejects.toMatchObject({ key: "account.error.wrongCode" });
+    expect(pendingOf(account)).toEqual({ kind: "sign-in", email: "me@example.com", step: "code" });
+    expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "code" });
+    // A new code, then Create works.
+    expired = false;
+    await account.sendCode("me@example.com");
+    await account.verify("123123");
+    await account.create(true);
+    expect(account.view()).toMatchObject({ account: { email: "me@example.com" }, pending: null });
+  });
+
+  it("keeps the step when Create fails for another reason, so it can be tried again", async () => {
+    const { fetchImpl } = service({
+      "POST /code": () => json({ status: "sent" }, 202),
+      "POST /verify": (body) => (body?.create ? json({ error: "down" }, 503) : json({ status: "no-account" })),
+    });
+    const { account } = client(fetchImpl);
+    await account.sendCode("me@example.com");
+    await account.verify("654321");
+    await expect(account.create(true)).rejects.toMatchObject({ key: "account.error.unavailable" });
+    expect(pendingOf(account)).toEqual({ kind: "sign-in", email: "me@example.com", step: "create", code: "654321" });
+  });
+
+  it("forgets a pending code when signing out", async () => {
+    const { fetchImpl } = service({ "POST /email/code": () => json({ status: "sent" }, 202), "POST /sign-out": () => new Response(null, { status: 204 }) });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.sendEmailCode("new@example.com");
+    expect(pendingOf(account)).toEqual({ kind: "change-email", email: "new@example.com" });
+    await account.signOut();
+    expect(pendingOf(account)).toBeNull();
+    expect(account.view()).toMatchObject({ account: null, pending: null });
+    await expect(account.changeEmail("111111")).rejects.toMatchObject({ key: "account.error.noCode" });
+  });
+
+  it("shows every kind of pending step without what only the main process keeps", () => {
+    const cases: [PendingState, unknown][] = [
+      [{ kind: "sign-in", email: "a@b.c", step: "code" }, { kind: "sign-in", email: "a@b.c", step: "code" }],
+      [{ kind: "sign-in", email: "a@b.c", step: "create", code: "123456" }, { kind: "sign-in", email: "a@b.c", step: "create" }],
+      [{ kind: "discord-create", name: "alex", ticket: "secret" }, { kind: "discord-create", name: "alex" }],
+      [{ kind: "change-email", email: "n@b.c" }, { kind: "change-email", email: "n@b.c" }],
+      [{ kind: "remove-email" }, { kind: "remove-email" }],
+      [{ kind: "connect-discord" }, { kind: "connect-discord" }],
+      [{ kind: "remove-discord" }, { kind: "remove-discord" }],
+      [{ kind: "delete" }, { kind: "delete" }],
+    ];
+    for (const [state, view] of cases) expect(pendingView(state)).toEqual(view);
+    expect(pendingView(null)).toBeNull();
   });
 });

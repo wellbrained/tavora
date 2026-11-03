@@ -15,10 +15,11 @@ import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds, SavedLayout } from "../../shared/host-api";
 import { keepSlots } from "../../shared/panel-layout";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { act, api as host, dialog, dragging, nextPanelSlot, panelsToFront, panelToMaximize, panelToShow, state, tabStep } from "../host";
+import { act, api as host, dialog, dockGesture, nextPanelSlot, panelsToFront, panelToMaximize, panelToShow, state, tabStep } from "../host";
 import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { fromDockview, groupConstraints, guardDrop, layoutAround, maximizedPanel, panelInfo, placePanel, placeTab, toDockview, type PanelInfo } from "../dock";
+import { nextGesture, type GestureEvent } from "../dock-gesture";
 import { DockPreview } from "../dock-preview";
 import DockPreviewLayer from "../components/workspace/DockPreview.vue";
 import WorkspaceIcon from "../components/WorkspaceIcon.vue";
@@ -339,12 +340,15 @@ watch(
 // While something is dragged or a split is resized, module views are
 // hidden: they are drawn above this page and would swallow the pointer.
 // A drag ends with dragend or drop; a resize with pointerup. Chromium sends
-// pointercancel when a drag starts, so that only ends a resize.
-let resizing = false;
-
+// pointercancel when a drag starts, so that only ends a resize (dock-gesture.ts).
+function gesture(event: GestureEvent) {
+  dockGesture.value = nextGesture(dockGesture.value, event);
+}
 function endDrag() {
-  resizing = false;
-  dragging.value = false;
+  gesture("drag-end");
+}
+function endPointer() {
+  gesture("pointerup");
 }
 
 // ── The drop preview ───────────────────────────────────────────────────
@@ -359,19 +363,21 @@ const preview = new DockPreview(
   () => !!state.value?.devBuild,
 );
 function endResize() {
-  if (resizing) endDrag();
+  gesture("pointercancel");
+}
+function dropped() {
+  gesture("drop");
 }
 addEventListener("dragend", endDrag, true);
-addEventListener("drop", endDrag, true);
-addEventListener("pointerup", endDrag, true);
+addEventListener("drop", dropped, true);
+addEventListener("pointerup", endPointer, true);
 addEventListener("pointercancel", endResize, true);
 addEventListener("resize", reportSoon);
 preview.attach();
 
 function onPointerDown(event: PointerEvent) {
   if (!(event.target as Element | null)?.closest(".dv-sash")) return;
-  resizing = true;
-  dragging.value = true;
+  gesture("sash-down");
 }
 
 function onReady({ api }: DockviewReadyEvent) {
@@ -403,10 +409,10 @@ function onReady({ api }: DockviewReadyEvent) {
     reportSoon();
     if (!applying) saveSoon();
   });
-  api.onWillDragPanel(() => (dragging.value = true));
-  api.onWillDragGroup(() => (dragging.value = true));
+  api.onWillDragPanel(() => gesture("drag-start"));
+  api.onWillDragGroup(() => gesture("drag-start"));
   api.onWillDrop((event) => guardDrop(event, api, info));
-  api.onDidDrop(() => endDrag());
+  api.onDidDrop(() => dropped());
 }
 
 const root = ref<HTMLElement | null>(null);
@@ -422,12 +428,12 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(reportFrame);
   resizes.disconnect();
   removeEventListener("dragend", endDrag, true);
-  removeEventListener("drop", endDrag, true);
-  removeEventListener("pointerup", endDrag, true);
+  removeEventListener("drop", dropped, true);
+  removeEventListener("pointerup", endPointer, true);
   removeEventListener("pointercancel", endResize, true);
   removeEventListener("resize", reportSoon);
   preview.detach();
-  endDrag();
+  gesture("unmount");
   host.setPanelBounds([]);
   host.setWorkspaceBounds(null);
 });

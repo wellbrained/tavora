@@ -9,34 +9,26 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
-import type { OfficialPublishStep } from "../../../shared/host-api";
+import { runDisplay } from "../../../shared/official-publish-run";
 import { act, showToast, state } from "../../host";
 import { t } from "../../i18n";
 import ModalDialog from "../ModalDialog.vue";
 
-const BUILD_STEPS: OfficialPublishStep[] = ["fetch", "check", "worktree", "install", "build", "pack"];
-const UPLOAD_STEPS: OfficialPublishStep[] = ["sign", "upload"];
-
 const view = computed(() => state.value?.officialPublish ?? null);
 const run = computed(() => view.value?.run ?? null);
-const preview = computed(() => run.value?.preview ?? null);
+/** What each phase shows (shared/official-publish-run.ts). */
+const display = computed(() => (run.value ? runDisplay(run.value) : null));
+const preview = computed(() => display.value?.preview ?? null);
 const key = computed(() => view.value?.key ?? { saved: false, canRemember: false });
 /** Signing or uploading: nothing can be cancelled then. */
-const uploading = computed(() => preview.value !== null && UPLOAD_STEPS.includes(run.value!.step));
+const uploading = computed(() => display.value?.uploading ?? false);
 const busy = ref(false);
 const remember = ref(false);
 const filesOpen = ref(false);
 
-const steps = computed(() => {
-  const list = preview.value ? UPLOAD_STEPS : BUILD_STEPS;
-  const at = run.value ? list.indexOf(run.value.step) : -1;
-  return list.map((step, index) => ({ step, state: index < at ? "done" : index === at ? "now" : "todo" }));
-});
+const steps = computed(() => display.value?.steps ?? []);
 
-const title = computed(() => {
-  if (!run.value) return "";
-  return preview.value && !uploading.value ? t("officialPublish.preview.title", { name: preview.value.name, version: preview.value.version }) : t("officialPublish.dialog.title", { name: run.value.name });
-});
+const title = computed(() => (display.value ? t(display.value.title.key, display.value.title.params) : ""));
 
 function size(bytes: number): string {
   return bytes < 1024 * 1024 ? t("catalog.sizeKb", { size: Math.max(1, Math.round(bytes / 1024)) }) : t("catalog.sizeMb", { size: (bytes / 1024 / 1024).toFixed(1) });
@@ -61,7 +53,7 @@ function cancel() {
 <template>
   <ModalDialog v-if="run" :title="title" :icon="Upload" class="sm:max-w-[520px]" testid="official-publish-dialog" @close="cancel">
     <!-- Building, signing or uploading: the steps, with the current one marked. -->
-    <template v-if="!preview || uploading">
+    <template v-if="display?.showSteps">
       <ol class="flex flex-col gap-2 text-sm" :aria-label="title" data-testid="official-publish-steps">
         <li v-for="item in steps" :key="item.step" class="flex items-center gap-2" :data-step="item.step" :data-state="item.state" :aria-current="item.state === 'now' ? 'step' : undefined">
           <Check v-if="item.state === 'done'" class="text-success size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
@@ -77,7 +69,7 @@ function cancel() {
     </template>
 
     <!-- The preview: exactly what Sign and upload sends. -->
-    <template v-else>
+    <template v-else-if="preview">
       <ul class="text-muted-foreground flex flex-col gap-1 text-sm" data-testid="official-publish-preview">
         <li>
           <span class="text-foreground">{{ t("officialPublish.preview.version") }}</span>

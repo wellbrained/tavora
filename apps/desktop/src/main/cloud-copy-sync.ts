@@ -18,6 +18,7 @@ import {
   type SyncedFile,
 } from "./cloud-copy";
 import { AccountKey } from "./account-key";
+import { activityView, ask, begin, closeShown, closeView, IDLE, progressed, questionView, type CopyActivity, type CopyClose, type CopyQuestion, type CopyWork } from "./cloud-copy-phase";
 import type { Encryptor } from "./discord-store";
 import { checkFolder, FolderStorage } from "./copy-folder";
 import { writeFileAtomic } from "./fsutil";
@@ -92,21 +93,19 @@ export class CopySync {
   private folder: string | null = null;
   private cloud: CloudCopy;
   private state: CopyState = EMPTY_STATE;
-  private busy: CloudCopyView["busy"] = null;
-  private progress: CloudCopyView["progress"] = null;
+  /** What it is doing right now (cloud-copy-phase.ts). */
+  private activity: CopyActivity = IDLE;
   private copy: CloudCopyView["copy"] = null;
   private shownKey: string | null = null;
-  private askKey = false;
-  private conflict = false;
-  private restartToTake = false;
-  private closing = false;
+  /** What syncing waits on the user for. */
+  private question: CopyQuestion = null;
   private problem: CloudCopyProblem | null = null;
   /** One thing at a time: an upload, a download, a check. */
   private running: Promise<unknown> = Promise.resolve();
   private timer: ReturnType<typeof setInterval> | undefined;
-  /** Closing may go on: the last upload is done, or the user closed anyway. */
-  private mayClose = false;
-  private closeStarted = false;
+  /** How far the window's close has come; `closed`: it may go on (the last upload is done, or the user closed anyway). */
+  private close: CopyClose = { phase: "open" };
+  private closeTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** The copy on Tavora's service. */
   private readonly service: CopyStorage;
@@ -196,17 +195,14 @@ export class CopySync {
       canKeepKey: this.accountKeys.canKeep,
       devData: this.options.devData === true,
       on: this.on,
-      busy: this.busy,
-      progress: this.progress,
+      ...activityView(this.activity),
       copy: this.copy,
       folder: this.folder,
       limit: this.cloud.storage.limit,
       pictures: this.state.pictures,
       recoveryKey: this.shownKey,
-      askKey: this.askKey,
-      conflict: this.conflict,
-      restartToTake: this.restartToTake,
-      closing: this.closing,
+      ...questionView(this.question),
+      ...closeView(this.close),
       problem: this.problem,
     };
   }
@@ -216,20 +212,34 @@ export class CopySync {
   }
 
   /** Runs one thing after the one before it, showing what it does. */
-  private exclusive<T>(busy: NonNullable<CloudCopyView["busy"]>, work: () => Promise<T>): Promise<T> {
+  private exclusive<T>(busy: CopyWork, work: () => Promise<T>): Promise<T> {
     const next = this.running.then(async () => {
-      this.busy = busy;
+      this.activity = begin(busy);
       this.changed();
       try {
         return await work();
       } finally {
-        this.busy = null;
-        this.progress = null;
+        this.activity = IDLE;
         this.changed();
       }
     });
     this.running = next.catch(() => undefined);
     return next;
+  }
+
+  private progressed(done: number, total: number): void {
+    this.activity = progressed(this.activity, { done, total });
+    this.changed();
+  }
+
+  /** Asks the user something; syncing waits for the answer. */
+  private ask(question: Exclude<CopyQuestion, null>): void {
+    this.question = ask(this.question, question);
+  }
+
+  /** These questions are answered (or no longer stand); another one stays. */
+  private answered(...questions: Exclude<CopyQuestion, null>[]): void {
+    if (this.question !== null && questions.includes(this.question)) this.question = null;
   }
 
   /** What went wrong, for the settings page; a quiet run (in the background) keeps it there instead of throwing. */
@@ -275,7 +285,7 @@ export class CopySync {
         if (!staged) return;
         if (!late && (await this.takeStaged())) return;
         // Finished after the workspaces loaded: it waits for a restart.
-        this.restartToTake = true;
+        this.ask("restart");
         this.changed();
       });
       const timer = new Promise<"late">((resolve) => setTimeout(() => resolve("late"), budgetMs).unref?.());
@@ -303,7 +313,7 @@ export class CopySync {
     if (remote.version === this.state.version) return false;
     // Changed here, or this PC's last save lost against another PC's (in a synced folder): the user chooses.
     if (remote.follows === false || (await hasLocalChanges(this.roots(), this.state))) {
-      this.conflict = true;
+      this.ask("conflict");
       this.changed();
       return false;
     }
@@ -358,7 +368,7 @@ export class CopySync {
       return false;
     }
     if (!staged.take && (await hasLocalChanges(this.roots(), this.state))) {
-      this.conflict = true;
+      this.ask("conflict");
       return false;
     }
     const library = libraryFile(this.options.userData);
@@ -416,22 +426,19 @@ export class CopySync {
 
   /** Whether syncing waits on the user (a question, or a restart). */
   private get waiting(): boolean {
-    return this.conflict || this.restartToTake || this.askKey;
+    return this.question !== null;
   }
 
   /** Uploads what changed. Quiet: problems show in Settings. `loud` throws them for a button. */
   async sync(loud = false): Promise<void> {
     if (!this.on || (this.waiting && !loud)) return;
-    if (this.conflict) throw new UserError("cloudCopy.error.conflict");
+    if (this.question === "conflict") throw new UserError("cloudCopy.error.conflict");
     await this.exclusive("uploading", async () => {
       // What ran before (a download at start) may have left a question.
       if (!this.on || (this.waiting && !loud)) return;
       await this.hooks?.flush();
       try {
-        const result = await this.cloud.upload(this.key!, this.roots(), this.state, (done, total) => {
-          this.progress = { done, total };
-          this.changed();
-        });
+        const result = await this.cloud.upload(this.key!, this.roots(), this.state, (done, total) => this.progressed(done, total));
         if (result.status === "uploaded") {
           this.state = result.state;
           await saveCopyState(this.stateFile, this.state);
@@ -444,7 +451,7 @@ export class CopySync {
         } else if (result.version === 0) {
           await this.forget("deleted");
         } else {
-          this.conflict = true;
+          this.ask("conflict");
         }
       } catch (error) {
         const problem = this.noteProblem(error);
@@ -476,7 +483,7 @@ export class CopySync {
       throw CopySync.userError(this.noteProblem(error));
     });
     if (setUp.status === "ask") {
-      this.askKey = true;
+      this.ask("key");
       this.changed();
       return;
     }
@@ -496,18 +503,18 @@ export class CopySync {
 
   /** Another PC sent the account's key (pairing.ts), and it is kept: a copy that waited for it goes on. */
   async keyArrived(): Promise<void> {
-    if (this.askKey) await this.goOnWithKey(this.keyHere);
+    if (this.question === "key") await this.goOnWithKey(this.keyHere);
   }
 
   private async goOnWithKey(here: boolean): Promise<void> {
-    this.askKey = false;
+    this.answered("key");
     try {
       await this.startCopy();
     } catch (error) {
       // Signed out, the folder's copy is the only check: a key that doesn't open it is not kept.
       if (here && error instanceof UserError && error.key === "cloudCopy.error.wrongKey") {
         await this.accountKeys.forget();
-        this.askKey = true;
+        this.ask("key");
         this.changed();
       }
       throw error;
@@ -563,7 +570,7 @@ export class CopySync {
     this.problem = null;
     if (staged) {
       // This PC has its own data too: the user keeps one side.
-      this.conflict = true;
+      this.ask("conflict");
       this.changed();
       return;
     }
@@ -573,7 +580,7 @@ export class CopySync {
   }
 
   cancelKey(): void {
-    this.askKey = false;
+    this.answered("key");
     this.use(null);
     this.copy = null;
     this.changed();
@@ -605,10 +612,7 @@ export class CopySync {
         if (folder !== null) await checkFolder(folder);
         const to = new CloudCopy(this.storageFor(folder));
         if (await to.remote()) throw new UserError("cloudCopy.error.moveTaken");
-        const result = await to.upload(this.key!, this.roots(), EMPTY_STATE, (done, total) => {
-          this.progress = { done, total };
-          this.changed();
-        });
+        const result = await to.upload(this.key!, this.roots(), EMPTY_STATE, (done, total) => this.progressed(done, total));
         if (result.status === "too-big") throw new UserError("cloudCopy.error.too-big");
         if (result.status !== "uploaded") throw new UserError("cloudCopy.error.moveTaken");
         await savePlace(this.placeFile, folder);
@@ -654,8 +658,7 @@ export class CopySync {
         throw CopySync.userError(this.noteProblem(error));
       }
     });
-    this.conflict = false;
-    this.restartToTake = false;
+    this.answered("conflict", "restart");
     await this.sync(true);
   }
 
@@ -674,7 +677,7 @@ export class CopySync {
 
   /** Restarts Tavora without uploading first: the staged copy is taken at the start. */
   restart(): void {
-    this.mayClose = true;
+    this.closed();
     this.options.restart();
   }
 
@@ -699,8 +702,8 @@ export class CopySync {
    */
   async signedOut(): Promise<void> {
     // A copy in the user's own folder needs no account: it stays on, with its key.
-    if (this.folder !== null && (this.copyOn || this.askKey)) return;
-    if (this.copyOn || this.askKey) await this.forget(null);
+    if (this.folder !== null && (this.copyOn || this.question === "key")) return;
+    if (this.copyOn || this.question === "key") await this.forget(null);
     await this.accountKeys.forget();
     this.changed();
   }
@@ -709,9 +712,7 @@ export class CopySync {
     this.copyOn = false;
     this.state = EMPTY_STATE;
     this.shownKey = null;
-    this.askKey = false;
-    this.conflict = false;
-    this.restartToTake = false;
+    this.question = null;
     this.problem = problem;
     await rm(this.stateFile, { force: true });
     await rm(this.placeFile, { force: true });
@@ -727,27 +728,29 @@ export class CopySync {
    * `close` is called once it is done (or the user closes anyway).
    */
   holdClose(close: () => void): boolean {
-    if (this.mayClose || !this.on || this.waiting) return false;
-    if (this.closeStarted) return true;
-    this.closeStarted = true;
-    const shown = setTimeout(() => {
-      this.closing = true;
+    if (this.close.phase === "closed" || !this.on || this.waiting) return false;
+    if (this.close.phase === "holding") return true;
+    this.close = { phase: "holding", shown: false };
+    this.closeTimer = setTimeout(() => {
+      this.close = closeShown(this.close);
       this.changed();
     }, CLOSE_QUIET_MS);
     void this.sync()
       .catch(() => undefined)
-      .finally(() => {
-        clearTimeout(shown);
-        this.closeAnyway(close);
-      });
+      .finally(() => this.closeAnyway(close));
     return true;
   }
 
   closeAnyway(close: () => void): void {
-    if (this.mayClose) return;
-    this.mayClose = true;
-    this.closing = false;
+    if (this.close.phase === "closed") return;
+    this.closed();
     close();
+  }
+
+  /** The close may go on; the note that it waits never shows after this. */
+  private closed(): void {
+    clearTimeout(this.closeTimer);
+    this.close = { phase: "closed" };
   }
 }
 

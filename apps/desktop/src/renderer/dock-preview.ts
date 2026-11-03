@@ -4,7 +4,8 @@
 // that make room). DockPreview.vue draws the rest.
 import { getPanelData, type DockviewApi, type DockviewGroupPanel } from "dockview-vue";
 import { shallowRef } from "vue";
-import { aimAt, sameTarget, type Slot } from "./dock-aim";
+import { aimAt, type Slot } from "./dock-aim";
+import { aimDrag, dropDrag, NO_DRAG, startDrag, type DragSession, type Drop } from "./dock-drag";
 import { applyDrop } from "./dock-drop";
 import { diffLayouts, planDrop, type Dragged, type DropPlan, type DropTarget, type Rect } from "./dock-model";
 import type { PanelInfo } from "./dock";
@@ -42,21 +43,30 @@ const BAR = 4;
 /** A drag image nobody can see: our preview is the only picture of what is dragged. */
 const NO_IMAGE = Object.assign(new Image(1, 1), { src: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" });
 
+/** What the dock looked like when the drag started; read once, kept for that drag only. */
+interface Measured {
+  /** The dock's box in the window. */
+  box: DOMRect;
+  /** Where the dock sits inside the preview's layer. */
+  origin: { x: number; y: number };
+  title: string;
+  tabs: Map<string, Tab[]>;
+  slots: Record<string, Slot[]>;
+  /** Where each group's tab row ends (its tabs are clipped there), in the dock's coordinates. */
+  stripEnd: Record<string, number>;
+  stripStart: Record<string, number>;
+  rects: Record<string, Rect>;
+  tabWidth: number;
+  /** The dragged panel's group, faded. */
+  lifted: HTMLElement | null;
+}
+
+type Aiming = Extract<DragSession<Measured>, { phase: "aiming" }>;
+
 export class DockPreview {
   readonly view = shallowRef<PreviewView | null>(null);
-  private dragged: Dragged | null = null;
-  private layout: ReturnType<DockviewApi["toJSON"]> | null = null;
-  private box: DOMRect | null = null;
-  private tabs = new Map<string, Tab[]>();
-  private slots: Record<string, Slot[]> = {};
-  /** Where each group's tab row ends (its tabs are clipped there), in the dock's coordinates. */
-  private stripEnd: Record<string, number> = {};
-  private stripStart: Record<string, number> = {};
-  private rects: Record<string, Rect> = {};
-  private tabWidth = 140;
-  private target: DropTarget | null = null;
-  private plan: DropPlan | null = null;
-  private lifted: HTMLElement | null = null;
+  /** The drag being aimed, with everything that belongs to it (dock-drag.ts). */
+  private session: DragSession<Measured> = NO_DRAG;
 
   constructor(
     private readonly dock: () => DockviewApi | null,
@@ -67,7 +77,7 @@ export class DockPreview {
   ) {}
 
   get active(): boolean {
-    return this.dragged !== null;
+    return this.session.phase === "aiming";
   }
 
   /** Dragover and drop go through here first; true when this is the dock's drop and dockview must not see it. */
@@ -79,7 +89,8 @@ export class DockPreview {
     this.aim(event.clientX, event.clientY);
     // A refused drop, or a place with no target at all (a gap, a sash), shows the not-allowed cursor; a drop on the same
     // spot does nothing but is still a place to let go, so it keeps the move cursor (and says "Same place").
-    if (event.dataTransfer) event.dataTransfer.dropEffect = this.plan && (this.plan.ok || this.plan.reason === "same-spot") ? "move" : "none";
+    const plan = this.session.phase === "aiming" ? this.session.plan : null;
+    if (event.dataTransfer) event.dataTransfer.dropEffect = plan && (plan.ok || plan.reason === "same-spot") ? "move" : "none";
   };
   private readonly onEnter = (event: DragEvent) => {
     if (!this.take(event)) return;
@@ -92,11 +103,12 @@ export class DockPreview {
     event.stopPropagation();
     this.aim(event.clientX, event.clientY);
     const dock = this.dock();
-    const { plan, target, dragged } = this;
-    if (dock && plan?.ok && target && dragged) this.commit(dock, dragged, target, plan);
+    const drop = dropDrag(this.session);
+    if (dock && drop) this.commit(dock, drop);
     this.stop();
     this.onDone();
   };
+  /** The drag ended without a drop on the dock: Escape, or let go somewhere else (outside the window too). */
   private readonly onEnd = () => {
     if (!this.active) return;
     this.stop();
@@ -132,29 +144,28 @@ export class DockPreview {
     const dockEl = root?.querySelector<HTMLElement>(".dv-dockview");
     if (!data || !dock || !root || !dockEl) return false;
     if (!this.active) this.start(dock, root, dockEl, { groupId: data.groupId, panelId: data.panelId });
-    const box = this.box;
-    return !!box && event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
+    if (this.session.phase !== "aiming") return false;
+    const box = this.session.measured.box;
+    return event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
   }
 
   private start(dock: DockviewApi, root: HTMLElement, dockEl: HTMLElement, dragged: Dragged): void {
-    this.dragged = dragged;
-    this.layout = dock.toJSON();
-    this.box = dockEl.getBoundingClientRect();
+    const box = dockEl.getBoundingClientRect();
     const rootBox = root.getBoundingClientRect();
-    this.rects = {};
-    this.tabs.clear();
-    this.slots = {};
-    this.stripEnd = {};
-    this.stripStart = {};
+    const rects: Record<string, Rect> = {};
+    const allTabs = new Map<string, Tab[]>();
+    const allSlots: Record<string, Slot[]> = {};
+    const stripEnd: Record<string, number> = {};
+    const stripStart: Record<string, number> = {};
     for (const group of dock.groups as DockviewGroupPanel[]) {
       if (!group.api.isVisible) continue;
       const r = group.element.getBoundingClientRect();
-      this.rects[group.id] = { x: r.left - this.box.left, y: r.top - this.box.top, width: r.width, height: r.height };
+      rects[group.id] = { x: r.left - box.left, y: r.top - box.top, width: r.width, height: r.height };
       const tabs: Tab[] = [...group.element.querySelectorAll<HTMLElement>(".dv-tab")].map((el) => {
         const t = el.getBoundingClientRect();
-        return { el, left: t.left - this.box!.left, width: t.width, dragged: !!dragged.panelId && !!el.querySelector(`[data-testid="panel-${dragged.panelId}"]`) };
+        return { el, left: t.left - box.left, width: t.width, dragged: !!dragged.panelId && !!el.querySelector(`[data-testid="panel-${dragged.panelId}"]`) };
       });
-      this.tabs.set(group.id, tabs);
+      allTabs.set(group.id, tabs);
       // The tabs that stay, where they sit once the dragged one is gone.
       let shift = 0;
       const slots: Slot[] = [];
@@ -162,47 +173,52 @@ export class DockPreview {
         if (tab.dragged) shift = tab.width;
         else slots.push({ left: tab.left - shift, width: tab.width });
       }
-      this.slots[group.id] = slots;
+      allSlots[group.id] = slots;
       const row = group.element.querySelector<HTMLElement>(".dv-tabs-container");
-      this.stripStart[group.id] = row ? row.getBoundingClientRect().left - this.box.left : r.left - this.box.left;
+      stripStart[group.id] = row ? row.getBoundingClientRect().left - box.left : r.left - box.left;
       // The tabs may use all the room up to the group's header buttons: the row's own box is only part of it (the empty
       // space after the tabs is a separate, growing element), and the tab row grows over it while aiming (dock.css), so tabs that slide into that space stay in sight.
       const header = group.element.querySelector<HTMLElement>(".dv-tabs-and-actions-container");
       const actions = group.element.querySelector<HTMLElement>(".dv-right-actions-container");
       const actionsBox = actions?.getBoundingClientRect();
       const end = actionsBox && actionsBox.width > 0 ? actionsBox.left : (header?.getBoundingClientRect().right ?? r.right);
-      this.stripEnd[group.id] = end - this.box.left;
+      stripEnd[group.id] = end - box.left;
     }
     const source = dock.getGroup(dragged.groupId) as DockviewGroupPanel | undefined;
-    const own = this.tabs.get(dragged.groupId)?.find((tab) => tab.dragged);
-    this.tabWidth = own?.width ?? this.tabs.get(dragged.groupId)?.[0]?.width ?? 140;
-    this.lifted = source?.element ?? null;
-    this.lifted?.classList.add(LIFTED);
+    const own = allTabs.get(dragged.groupId)?.find((tab) => tab.dragged);
+    const lifted = source?.element ?? null;
+    lifted?.classList.add(LIFTED);
     if (own) own.el.style.visibility = "hidden";
     root.setAttribute(AIMING, "");
     const panel = dragged.panelId ?? source?.activePanel?.id ?? source?.panels[0]?.id;
-    this.title = (panel && this.info(panel)?.title) || "";
-    this.origin = { x: this.box.left - rootBox.left, y: this.box.top - rootBox.top };
-    this.target = null;
-    this.plan = null;
-    this.publish(null);
+    const session = startDrag(dragged, dock.toJSON(), {
+      box,
+      origin: { x: box.left - rootBox.left, y: box.top - rootBox.top },
+      title: (panel && this.info(panel)?.title) || "",
+      tabs: allTabs,
+      slots: allSlots,
+      stripEnd,
+      stripStart,
+      rects,
+      tabWidth: own?.width ?? allTabs.get(dragged.groupId)?.[0]?.width ?? 140,
+      lifted,
+    });
+    this.session = session;
+    this.publish(session);
   }
-  private title = "";
-  private origin = { x: 0, y: 0 };
 
   private aim(clientX: number, clientY: number): void {
-    const box = this.box;
-    if (!box || !this.layout || !this.dragged) return;
-    const target = aimAt({ width: box.width, height: box.height, rects: this.rects, slots: this.slots }, clientX - box.left, clientY - box.top);
-    this.setTarget(target);
+    if (this.session.phase !== "aiming") return;
+    const { box, rects, slots } = this.session.measured;
+    this.setTarget(aimAt({ width: box.width, height: box.height, rects, slots }, clientX - box.left, clientY - box.top));
   }
 
   private setTarget(target: DropTarget | null): void {
-    if (sameTarget(target, this.target) || !this.layout || !this.dragged) return;
-    this.target = target;
-    this.plan = target ? planDrop(this.layout, this.dragged, target, this.info) : null;
-    this.slide(target);
-    this.publish(target);
+    const next = aimDrag(this.session, target, (layout, dragged, aimed) => planDrop(layout, dragged, aimed, this.info));
+    if (next === this.session || next.phase !== "aiming") return;
+    this.session = next;
+    this.slide(next);
+    this.publish(next);
   }
 
   /**
@@ -210,23 +226,23 @@ export class DockPreview {
    * clips its tabs, so the gap is only as wide as the room left at its end; with less than a small tab's worth the
    * ghost is a bar and nothing moves, so no tab is ever pushed out of sight.
    */
-  private gap(group: string, index: number): { width: number; shift: number; bar: boolean } {
-    const slots = this.slots[group] ?? [];
+  private gap(measured: Measured, group: string, index: number): { width: number; shift: number; bar: boolean } {
+    const slots = measured.slots[group] ?? [];
     const last = slots.at(-1);
-    const end = last ? last.left + last.width : (this.rects[group]?.x ?? 0);
-    const room = (this.stripEnd[group] ?? Infinity) - end - GHOST_GAP;
-    const width = Math.min(this.tabWidth, room);
+    const end = last ? last.left + last.width : (measured.rects[group]?.x ?? 0);
+    const room = (measured.stripEnd[group] ?? Infinity) - end - GHOST_GAP;
+    const width = Math.min(measured.tabWidth, room);
     if (width < MIN_GHOST) return { width: BAR, shift: 0, bar: true };
     void index;
     return { width, shift: width + GHOST_GAP, bar: false };
   }
 
   /** The tabs of the group aimed at make room for the dashed one. */
-  private slide(target: DropTarget | null): void {
-    const into = target?.kind === "tab" && this.plan?.ok ? target.group : null;
-    const index = into && target?.kind === "tab" ? (target.index ?? this.slots[into]?.length ?? 0) : 0;
-    const open = into ? this.gap(into, index).shift : 0;
-    for (const [group, tabs] of this.tabs) {
+  private slide({ target, plan, measured }: Aiming): void {
+    const into = target?.kind === "tab" && plan?.ok ? target.group : null;
+    const index = into && target?.kind === "tab" ? (target.index ?? measured.slots[into]?.length ?? 0) : 0;
+    const open = into ? this.gap(measured, into, index).shift : 0;
+    for (const [group, tabs] of measured.tabs) {
       if (group !== into && !tabs.some((tab) => tab.el.style.transform)) continue;
       let remaining = 0;
       let shift = 0;
@@ -241,20 +257,19 @@ export class DockPreview {
     }
   }
 
-  private publish(target: DropTarget | null): void {
-    const box = this.box;
-    if (!box) return;
+  private publish({ target, plan, measured }: Aiming): void {
+    const { box } = measured;
     let ghost: Rect | null = null;
     let bar = false;
-    if (target?.kind === "tab" && this.plan?.ok) {
-      const rect = this.rects[target.group];
-      const slots = this.slots[target.group] ?? [];
+    if (target?.kind === "tab" && plan?.ok) {
+      const rect = measured.rects[target.group];
+      const slots = measured.slots[target.group] ?? [];
       const index = target.index ?? slots.length;
       const last = slots.at(-1);
       const slotX = index < slots.length ? slots[index]!.left : last ? last.left + last.width + GHOST_GAP : (rect?.x ?? 0) + 6;
       // A tab row that scrolls can have its slot out of sight: the ghost stays inside the visible part of the row.
-      const x = Math.max(slotX, this.stripStart[target.group] ?? slotX);
-      const gap = this.gap(target.group, index);
+      const x = Math.max(slotX, measured.stripStart[target.group] ?? slotX);
+      const gap = this.gap(measured, target.group, index);
       bar = gap.bar;
       if (rect) {
         // A bar sits on the line between two tabs, and inside the first or last tab at the ends, clear of the group's outline.
@@ -262,11 +277,11 @@ export class DockPreview {
         ghost = bar ? { x: at, y: rect.y + 3, width: BAR, height: 30 } : { x, y: rect.y + 4, width: gap.width, height: 28 };
       }
     }
-    this.view.value = { origin: this.origin, width: box.width, height: box.height, title: this.title, target, plan: this.plan, rects: this.rects, ghost, bar };
+    this.view.value = { origin: measured.origin, width: box.width, height: box.height, title: measured.title, target, plan, rects: measured.rects, ghost, bar };
   }
 
   /** The drop, on the real dock; in development the result is checked against the model. */
-  private commit(dock: DockviewApi, dragged: Dragged, target: DropTarget, plan: Extract<DropPlan, { ok: true }>): void {
+  private commit(dock: DockviewApi, { dragged, target, plan }: Drop): void {
     this.reset();
     if (!applyDrop(dock, dragged, target)) return;
     if (this.isDev()) {
@@ -275,11 +290,13 @@ export class DockPreview {
     }
   }
 
+  /** Puts back what the drag changed in dockview's own elements. */
   private reset(): void {
-    this.lifted?.classList.remove(LIFTED);
-    this.lifted = null;
     this.root()?.removeAttribute(AIMING);
-    for (const tabs of this.tabs.values()) {
+    if (this.session.phase !== "aiming") return;
+    const { measured } = this.session;
+    measured.lifted?.classList.remove(LIFTED);
+    for (const tabs of measured.tabs.values()) {
       for (const tab of tabs) {
         tab.el.style.transform = "";
         tab.el.style.visibility = "";
@@ -289,12 +306,7 @@ export class DockPreview {
 
   stop(): void {
     this.reset();
-    this.tabs.clear();
-    this.dragged = null;
-    this.layout = null;
-    this.box = null;
-    this.target = null;
-    this.plan = null;
+    this.session = NO_DRAG;
     this.view.value = null;
   }
 }

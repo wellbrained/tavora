@@ -30,10 +30,11 @@ import {
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishStep, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishRun, OfficialPublishStep, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
+import { backToPreview, canCancel, confirmRun, previewRun, startRun, stepRun } from "../shared/official-publish-run";
 import { UserError } from "./messages";
 import { UndoGoneError, UndoShelf } from "./undo-shelf";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -487,8 +488,6 @@ export class Host {
   private readonly officialKeys: OfficialKeyStore;
   /** Settings > Development's Built-in modules list and the publish in progress (state.officialPublish). */
   private officialPublish: Omit<OfficialPublishView, "available" | "key"> = { checking: false, overview: null, checkError: null, run: null };
-  /** Sign and upload was pressed and hasn't finished (picking the key, signing, uploading): Cancel waits for it. */
-  private officialConfirming = false;
   /** Stream overlays and hotkeys for module actions (streaming.ts); made by Host.create once the Host is there, before any module panel opens. */
   private streaming!: Streaming;
   /** Module overlay pages shown over the game in front (game-overlay-service.ts). */
@@ -2110,7 +2109,7 @@ export class Host {
   private async checkOfficialPublish(): Promise<void> {
     const trust = this.officialPublishTrust();
     // Not while a build runs: both fetch in the same checkout.
-    if (!trust || this.officialPublish.checking || (this.officialPublish.run && !this.officialPublish.run.preview)) return;
+    if (!trust || this.officialPublish.checking || this.officialPublish.run?.phase === "building") return;
     this.officialPublish = { ...this.officialPublish, checking: true, checkError: null };
     this.pushState();
     try {
@@ -2134,11 +2133,12 @@ export class Host {
     if (this.officialPublish.run || this.officialPublish.checking) throw new UserError("officialPublish.error.busy");
     const name = this.officialPublish.overview?.rows.find((row) => row.id === moduleId)?.name ?? moduleId;
     const publisher = this.officialPublisherFor(trust);
-    this.officialPublish = { ...this.officialPublish, run: { moduleId, name, step: "fetch", preview: null } };
+    const run = startRun(moduleId, name);
+    this.officialPublish = { ...this.officialPublish, run };
     this.pushState();
     try {
       const preview = await publisher.prepare(moduleId, (step) => this.setOfficialStep(step));
-      this.officialPublish = { ...this.officialPublish, run: { moduleId, name, step: "pack", preview } };
+      this.officialPublish = { ...this.officialPublish, run: previewRun(run, preview) };
     } catch (error) {
       this.officialPublish = { ...this.officialPublish, run: null };
       if (error instanceof PublishCancelled) return;
@@ -2157,17 +2157,20 @@ export class Host {
     const trust = this.officialPublishTrust();
     const run = this.officialPublish.run;
     const publisher = this.officialPublisher;
-    if (!trust || !run?.preview || !publisher?.preview) throw new UserError("officialPublish.error.notPrepared");
-    if (this.officialConfirming) throw new UserError("officialPublish.error.busy");
-    this.officialConfirming = true;
+    if (!trust || !run || run.phase === "building" || !publisher?.preview) throw new UserError("officialPublish.error.notPrepared");
+    // Sign and upload was pressed and hasn't finished (picking the key, signing, uploading).
+    if (run.phase !== "preview") throw new UserError("officialPublish.error.busy");
+    this.officialPublish = { ...this.officialPublish, run: confirmRun(run) };
     try {
       return await this.signAndUpload(trust, publisher, run, remember);
     } finally {
-      this.officialConfirming = false;
+      // No key was picked, or it was refused before anything was signed: the preview stays.
+      const now = this.officialPublish.run;
+      if (now?.phase === "confirming") this.officialPublish = { ...this.officialPublish, run: backToPreview(now) };
     }
   }
 
-  private async signAndUpload(trust: OfficialUpdates, publisher: OfficialPublisher, run: NonNullable<OfficialPublishView["run"]>, remember: boolean): Promise<string | void> {
+  private async signAndUpload(trust: OfficialUpdates, publisher: OfficialPublisher, run: OfficialPublishRun, remember: boolean): Promise<string | void> {
     let key = await this.officialKeys.load();
     // A saved key that may no longer sign (revoked, or the pins moved on) is not kept.
     if (key && !trust.keyTrusted(fingerprint(key))) {
@@ -2199,7 +2202,7 @@ export class Host {
       return `${published.id} ${published.version}`;
     } catch (error) {
       // A wrong key keeps the preview, to try another; anything else ends the run.
-      this.officialPublish = { ...this.officialPublish, run: publisher.preview && this.officialPublish.run ? { ...run, step: "pack" } : null };
+      this.officialPublish = { ...this.officialPublish, run: publisher.preview && this.officialPublish.run ? backToPreview(this.officialPublish.run) : null };
       throw error;
     } finally {
       this.pushState();
@@ -2209,16 +2212,17 @@ export class Host {
   private setOfficialStep(step: OfficialPublishStep): void {
     const run = this.officialPublish.run;
     if (!run) return;
-    this.officialPublish = { ...this.officialPublish, run: { ...run, step } };
+    this.officialPublish = { ...this.officialPublish, run: stepRun(run, step) };
     this.pushState();
   }
 
   /** Stops the build in progress (its own catch ends the run) or throws the preview away. */
   private async cancelOfficialPublish(): Promise<void> {
     // Signing or uploading can't be stopped; the dialog stays until it is done.
-    if (!this.officialPublisher || this.officialConfirming || this.officialPublisher.uploading) return;
+    const run = this.officialPublish.run;
+    if (!this.officialPublisher || (run && !canCancel(run)) || this.officialPublisher.uploading) return;
     await this.officialPublisher.cancel();
-    if (this.officialPublish.run?.preview) this.officialPublish = { ...this.officialPublish, run: null };
+    if (this.officialPublish.run?.phase === "preview") this.officialPublish = { ...this.officialPublish, run: null };
     this.pushState();
   }
 

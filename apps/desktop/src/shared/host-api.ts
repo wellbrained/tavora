@@ -328,8 +328,22 @@ export interface DeveloperKeysView {
  * folder as it is, signed with a kept publisher key, and shows what would be published. Its Publish uploads
  * exactly that zip; the click is the approval. Sent on its own channel; null while no review is open.
  */
+/** A step of building a built-in module's update from origin/main, shown while it runs. */
+export type OfficialBuildStep = "fetch" | "check" | "worktree" | "install" | "build" | "pack";
+/** A step of signing and uploading the prepared build. */
+export type OfficialUploadStep = "sign" | "upload";
 /** A step of publishing a built-in module, shown while it runs. */
-export type OfficialPublishStep = "fetch" | "check" | "worktree" | "install" | "build" | "pack" | "sign" | "upload";
+export type OfficialPublishStep = OfficialBuildStep | OfficialUploadStep;
+
+/**
+ * The publish in progress: the update being built (its step), its preview, Sign and upload pressed (the key is being
+ * loaded or picked; nothing is signed yet), then signing and uploading (its step; nothing can stop it now).
+ */
+export type OfficialPublishRun =
+  | { phase: "building"; moduleId: string; name: string; step: OfficialBuildStep }
+  | { phase: "preview"; moduleId: string; name: string; preview: OfficialPublishPreview }
+  | { phase: "confirming"; moduleId: string; name: string; preview: OfficialPublishPreview }
+  | { phase: "uploading"; moduleId: string; name: string; preview: OfficialPublishPreview; step: OfficialUploadStep };
 
 /**
  * Where a built-in module's newer version on main stands: `ready` to publish, already `published`, the catalogue has a
@@ -384,8 +398,8 @@ export interface OfficialPublishView {
   overview: OfficialPublishOverview | null;
   /** Why the last check failed (a message for the user), or null. */
   checkError: string | null;
-  /** The publish in progress: its step, and the preview once it is built. */
-  run: { moduleId: string; name: string; step: OfficialPublishStep; preview: OfficialPublishPreview | null } | null;
+  /** The publish in progress, or null. */
+  run: OfficialPublishRun | null;
   /** The Tavora key: saved on this PC (sealed by the system), and whether this PC can save it at all. */
   key: { saved: boolean; canRemember: boolean };
 }

@@ -5,7 +5,7 @@ import path from "node:path";
 import { createKeyFile, fingerprint, readZip, verifyFiles } from "@tavora/pack";
 import type { KeyObject } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { blockingChanges, HOST_ONLY, isTestFile, moduleFacingFiles, OfficialPublisher, PublishCancelled, WORKTREE_PREFIX, type Run } from "./official-publish";
+import { blockingChanges, HOST_ONLY, isTestFile, moduleFacingFiles, OfficialPublisher, PublishCancelled, WORKTREE_PREFIX, type PublisherState, type Run } from "./official-publish";
 
 const SHA = "a".repeat(40);
 const manifest = (version: string, extra: object = {}) => ({ id: "tavora.notes", name: "Notes", version, apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] }, changelog: "CHANGELOG.json", ...extra });
@@ -450,5 +450,88 @@ describe("which changes make a module update wait for the next app release", () 
     expect(blockingChanges(changed, reached)).toEqual([]);
     // Nothing module-facing loads the tooling.
     for (const file of ["main/official-publish.ts", "main/official-key-store.ts", "main/module-publish.ts"]) expect(reached.has(`${A}/${file}`)).toBe(false);
+  });
+});
+
+describe("the publisher's state", () => {
+  const phaseOf = (one: OfficialPublisher) => (one as unknown as { state: PublisherState }).state.phase;
+  const waitFor = async (check: () => boolean) => {
+    for (let tries = 0; tries < 400 && !check(); tries++) await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(check()).toBe(true);
+  };
+
+  it("goes idle → preparing → prepared → finishing → idle", async () => {
+    let releaseBuild!: () => void;
+    world.buildGate = new Promise((resolve) => (releaseBuild = resolve));
+    let releaseUpload!: () => void;
+    const gate = new Promise<void>((resolve) => (releaseUpload = resolve));
+    const one = publisher({
+      upload: async (_key, zip) => {
+        await gate;
+        world.uploads.push(zip);
+        return { id: "tavora.notes", version: world.version, sha256: "b".repeat(64), status: "published", reasons: [] };
+      },
+    });
+    expect(phaseOf(one)).toBe("idle");
+    const steps: string[] = [];
+    const preparing = one.prepare("tavora.notes", (step) => steps.push(step));
+    await waitFor(() => steps.includes("build"));
+    expect(phaseOf(one)).toBe("preparing");
+    expect(one.preview).toBeNull();
+    releaseBuild();
+    await preparing;
+    expect(phaseOf(one)).toBe("prepared");
+    const finishing = one.finish(key, (step) => steps.push(step));
+    await waitFor(() => steps.includes("upload"));
+    expect(phaseOf(one)).toBe("finishing");
+    expect(one.uploading).toBe(true);
+    expect(one.preview).not.toBeNull();
+    releaseUpload();
+    await finishing;
+    expect(phaseOf(one)).toBe("idle");
+    expect(one.preview).toBeNull();
+  });
+
+  it("cancels at each phase: nothing when idle, the build while preparing, the preview when prepared, never while finishing", async () => {
+    const one = publisher();
+    await one.cancel();
+    expect(phaseOf(one)).toBe("idle");
+
+    let release!: () => void;
+    world.buildGate = new Promise((resolve) => (release = resolve));
+    const steps: string[] = [];
+    const preparing = one.prepare("tavora.notes", (step) => steps.push(step));
+    await waitFor(() => steps.includes("build"));
+    await one.cancel();
+    await expect(preparing).rejects.toBeInstanceOf(PublishCancelled);
+    release();
+    expect(phaseOf(one)).toBe("idle");
+
+    world.buildGate = null;
+    await one.prepare("tavora.notes");
+    await one.cancel();
+    expect(phaseOf(one)).toBe("idle");
+    expect(await readdir(temp)).toEqual([]);
+  });
+
+  it("fails back to where it can go on: idle after a failed build, prepared after a refused key or a failed upload", async () => {
+    world.checks = [{ status: "completed", conclusion: "failure" }];
+    const one = publisher({
+      upload: async () => {
+        throw new Error("service down");
+      },
+    });
+    await expect(one.prepare("tavora.notes")).rejects.toMatchObject({ key: "officialPublish.error.ciNotGreen" });
+    expect(phaseOf(one)).toBe("idle");
+
+    world.checks = [{ status: "completed", conclusion: "success" }];
+    await one.prepare("tavora.notes");
+    const { key: otherKey } = await createKeyFile(path.join(userData, "other.key"));
+    await expect(one.finish(otherKey)).rejects.toMatchObject({ key: "officialPublish.error.wrongKey" });
+    expect(phaseOf(one)).toBe("prepared");
+    await expect(one.finish(key)).rejects.toThrow("service down");
+    expect(phaseOf(one)).toBe("prepared");
+    await expect(one.prepare("tavora.notes")).rejects.toMatchObject({ key: "officialPublish.error.busy" });
+    await one.cancel();
   });
 });
