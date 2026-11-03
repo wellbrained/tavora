@@ -384,6 +384,12 @@ class Grid {
     return node!;
   }
 
+  /** Sizes a group again within its (new) constraints; its neighbours give or take the difference. */
+  reclamp(leaf: Leaf) {
+    const parent = leaf.parent;
+    if (parent) this.resizeChild(parent, parent.children.indexOf(leaf), leaf.size);
+  }
+
   private resizeChild(b: Branch, index: number, size: number) {
     const item = b.children[index];
     if (!item) return;
@@ -677,6 +683,12 @@ function plan(layout: SerializedDockview, dragged: Dragged, target: DropTarget, 
     fresh.views = [dragged.panelId!];
     fresh.state = { ...fresh.state, views: fresh.views };
     grid.addView(fresh, dropSplit(ref), grid.relative(grid.locate(ref)!, side));
+    // dockview 8.8 re-clamps a group once its panel's constraints are set, taking the room it lacks from its neighbours.
+    const room = grid.rects(margin)[fresh.id];
+    if (room) {
+      fresh.c = { ...fresh.c, ...groupConstraints({ width: room.width, height: room.height, panels: [{ id: dragged.panelId! }] }, info) };
+      grid.reclamp(fresh);
+    }
     landing = fresh;
     newGroup = true;
     return "done" as const;
