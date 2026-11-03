@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.91",
+    date: "2026-11-03",
+    title: "Item cards that don't pin",
+    notes: [
+      "Item cards from modules that don't pin no longer say Click to pin.",
+    ],
+    prs: [
+      { number: 659, title: "Item cards can say they don't pin (ui.tooltip.show pinnable: false)" },
+    ],
+    tags: ["publishing", "sdk", "website"],
+  },
+  {
     version: "0.23.90",
     date: "2026-11-03",
     title: "Tavora starts with less to load",
