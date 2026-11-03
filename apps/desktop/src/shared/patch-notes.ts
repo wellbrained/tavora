@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.99",
+    date: "2026-11-03",
+    title: "Clock & Counter rows",
+    notes: [
+      "Clock & Counter: you can now see which row is active.",
+    ],
+    prs: [
+      { number: 664, title: "Clock & Counter: the active row is tinted with an accent edge (0.1.26)" },
+    ],
+    tags: ["clock-counter"],
+  },
+  {
     version: "0.23.98",
     date: "2026-11-03",
     title: "Sign-in code ran out",
