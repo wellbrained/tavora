@@ -989,10 +989,12 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       this.infos(ids).map((info) => {
         const before = this.rectOf(info, shape);
         // An overlay whose panel said what it needs goes back to that, where it is.
-        const need = this.fitSize(this.sourceOf(info, panels), shape);
+        const source = this.sourceOf(info, panels);
+        const need = this.fitSize(source, shape);
         if (need) {
           const placed = this.placed(info, shape);
-          return { info, next: anchorOf(this.fit({ x: placed.x, y: placed.y, ...need }), { x: 0, y: 0, ...shape.canvas }) };
+          // A text that grows with its frame goes back to 100 %, saved as such (not worked out again from the frame).
+          return { info, next: anchorOf(this.fit({ x: placed.x, y: placed.y, ...need }), { x: 0, y: 0, ...shape.canvas }), ...(source?.fit === "text" ? { textScale: 1 } : {}) };
         }
         // The size is in units of the window's height: it is worked out on the game's window, else the main screen.
         const size = this.options.source.seenSize(gameId) ?? this.screenSize();
@@ -1002,7 +1004,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   }
 
   /** Keeps the new positions of the items in the setup shown, where they differ, as one undo step. */
-  private change(moves: readonly { info: LayoutItemInfo; next: AnchoredRect }[]): void {
+  private change(moves: readonly { info: LayoutItemInfo; next: AnchoredRect; textScale?: number }[]): void {
     const shape = this.shape(this.current(this.games()));
     const changed = moves.filter((move) => !sameRect(this.rectOf(move.info, shape), move.next));
     if (!changed.length) return;
@@ -1010,7 +1012,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     this.record(
       changed.map((move) => move.info.id),
       () => {
-        for (const move of changed) this.options.source.setRect(setupId, move.info.ref, move.next);
+        for (const move of changed) this.options.source.setRect(setupId, move.info.ref, move.next, move.textScale);
       },
     );
   }

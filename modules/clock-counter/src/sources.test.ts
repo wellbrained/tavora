@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { insert, newItem, setStream, startPause, type Clock, type Counter, type ItemList } from "./items";
-import { buildSources, itemForKey, itemSize, overlayKey, VALUE_PX, type Measure } from "./sources";
+import { buildSources, itemForKey, itemSize, LOOK_AHEAD_MS, nextSizeChange, overlayKey, VALUE_PX, type Measure } from "./sources";
 
 /** Every character is as wide as half its size, so the numbers are easy to work out. */
 const measure: Measure = (text, px) => text.length * px * 0.5;
@@ -136,5 +136,47 @@ describe("sources of a text that grows with its frame", () => {
     const big = at("xl");
     expect(big.width / small.width).toBeCloseTo(20 / 13, 1);
     expect(big.height).toBeGreaterThan(small.height);
+  });
+});
+
+describe("ticking text the frame has to follow", () => {
+  it("lists a running stopwatch as wide as it is in a moment, so the frame is wider before the digit comes", () => {
+    const run = newItem("stopwatch", "r", "Run") as Clock;
+    run.since = NOW - 598_500; // 9:58.5
+    const running = itemSize(run, measure, NOW);
+    const stopped = itemSize({ ...run, since: null, counted: 598_500 }, measure, NOW);
+    // "10:00" is a digit more than "9:58".
+    expect(running.width).toBeGreaterThan(stopped.width);
+  });
+
+  it("wakes the panel up just before a running stopwatch gets a digit more, and not for one standing still", () => {
+    const run = newItem("stopwatch", "r", "Run") as Clock;
+    const since = NOW - 100_000;
+    run.since = since;
+    // m:ss: 1:40 now; 10:00 (600 s) is the next width, LOOK_AHEAD_MS before it.
+    expect(nextSizeChange(list(run), NOW)).toBe(since + 600_000 - LOOK_AHEAD_MS);
+    // Counted before it was started again: that counts too.
+    const resumed = { ...run, counted: 50_000 };
+    expect(nextSizeChange(list(resumed), NOW)).toBe(since + 600_000 - 50_000 - LOOK_AHEAD_MS);
+    // Past 10:00, the next is 100:00 (the default m:ss has no hours).
+    const later = { ...run, since: NOW - 700_000 };
+    expect(nextSizeChange(list(later), NOW)).toBe(NOW - 700_000 + 6_000_000 - LOOK_AHEAD_MS);
+    // With hours in the format: 1:00:00 after 59:59.
+    const hours = { ...later, format: "h:mm:ss" };
+    expect(nextSizeChange(list(hours), NOW)).toBe(NOW - 700_000 + 36_000_000 - LOOK_AHEAD_MS);
+    expect(nextSizeChange(list({ ...run, since: null }), NOW)).toBeNull();
+    expect(nextSizeChange(list(newItem("counter", "c", "Deaths")), NOW)).toBeNull();
+  });
+
+  it("lists a counter as wide as the value one step up or down, so 99 has the room 100 needs", () => {
+    const deaths = newItem("counter", "c", "Deaths") as Counter;
+    deaths.value = 99;
+    const at99 = itemSize(deaths, measure, NOW);
+    deaths.value = 100;
+    expect(itemSize(deaths, measure, NOW).width).toBe(at99.width);
+    // Never below 0 when it can't go there.
+    deaths.value = 0;
+    deaths.step = 10;
+    expect(itemSize(deaths, measure, NOW).width).toBe(itemSize({ ...deaths, value: 10 }, measure, NOW).width);
   });
 });

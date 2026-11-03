@@ -39,7 +39,8 @@ const pauseLabel = (seconds: number) => (seconds === 0 ? uiText.value.textPauseO
     />
   </SettingsRow>
   <template v-if="settings.mode === 'fixed'">
-    <SettingsRow :label="uiText.textTooLong" :hint="uiText.textTooLongHint">
+    <!-- Stacked: three choices with longer words (German) need more room than the control column. -->
+    <SettingsRow :label="uiText.textTooLong" :hint="uiText.textTooLongHint" stacked>
       <SegmentedControl
         v-model="overflow"
         :class="fill"

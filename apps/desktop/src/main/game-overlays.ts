@@ -115,7 +115,18 @@ export interface ItemSettings {
 }
 
 /** A module's overlay page in one setup. */
-export interface GameOverlay extends GameOverlaySubject, ItemSettings {}
+export interface GameOverlay extends GameOverlaySubject, ItemSettings {
+  /**
+   * For a text that grows with its frame (OverlaySource `fit: "text"`): the scale the user gave it, 1 for 100 %. The frame
+   * is fitted around the text at this scale whenever the text's size changes. Absent: not known yet (a frame from before,
+   * or one never fitted), then the scale that fills the frame. An older Tavora ignores it.
+   */
+  textScale?: number;
+}
+
+/** The smallest and biggest text scale a frame keeps (as overlay-text-frame.ts clamps it). */
+const TEXT_SCALES = { min: 0.1, max: 20 } as const;
+const textScaleOf = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) && value >= TEXT_SCALES.min && value <= TEXT_SCALES.max ? value : undefined);
 
 /** A panel the user chose to show in a setup (by its instance id): the panel itself, never a copy. It is over the game only while the layer is open. */
 export interface InGamePanel extends ItemSettings {
@@ -368,7 +379,8 @@ function readOverlay(entry: unknown, oldKeys = false): GameOverlay | null {
   if (typeof key !== "string" || !OVERLAY_KEY.test(key) || (oldKeys && key.startsWith(RESERVED_KEY_PREFIX))) return null;
   const position = positionOf(entry);
   if (!position) return null;
-  return { owner: owner as string, moduleId: moduleId as string, workspaceId: workspaceId as string, key, ...settingsOf(entry), ...position };
+  const textScale = textScaleOf(entry.textScale);
+  return { owner: owner as string, moduleId: moduleId as string, workspaceId: workspaceId as string, key, ...settingsOf(entry), ...position, ...(textScale !== undefined ? { textScale } : {}) };
 }
 
 function readPanel(entry: unknown): InGamePanel | null {
@@ -787,6 +799,16 @@ export class GameOverlayStore {
     if (!target || !next) return false;
     target.rect = next;
     delete target.legacy;
+    this.saveSoon();
+    return true;
+  }
+
+  /** The scale of an overlay text that grows with its frame, in one setup (see GameOverlay.textScale). */
+  setTextScale(setupId: string, subject: GameOverlaySubject, scale: number): boolean {
+    const target = this.find(subject, setupId);
+    const next = textScaleOf(scale);
+    if (!target || next === undefined || target.textScale === next) return false;
+    target.textScale = next;
     this.saveSoon();
     return true;
   }

@@ -1,9 +1,9 @@
 // The overlay text without Vue: for an overlay page that is plain DOM (`@tavora/official-ui/overlay-text`). Saved settings
 // alone, with no page part or CSS, are `@tavora/official-ui/overlay-text/plan`. The Vue parts are in index.ts.
-export { HOLD_MS, mountOverlayText, SCALE_VAR, type OverlayText as OverlayTextView, type OverlayTextOptions } from "./overlay-text"
+export { mountOverlayText, SCALE_VAR, type OverlayText as OverlayTextView, type OverlayTextOptions } from "./overlay-text"
 export {
   carryOn,
-  holdScale,
+  GROW_SLACK,
   OVERLAY_TEXT_DEFAULTS,
   OVERLAY_TEXT_MODES,
   OVERLAY_TEXT_OVERFLOWS,

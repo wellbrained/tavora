@@ -182,3 +182,66 @@ describe("a fixed box", () => {
     expect(sizes[1]! / sizes[0]!).toBeCloseTo(16 / 13);
   });
 });
+
+describe("drawing again", () => {
+  /** Counts how often the view measures its text (each fit measures once). */
+  const counted = (preview = false) => {
+    const made = mount(preview);
+    const content = made.root.querySelector<HTMLElement>(".tavora-overlay-text-content")!;
+    const measure = content.getBoundingClientRect;
+    let measured = 0;
+    content.getBoundingClientRect = () => (measured++, measure());
+    return { ...made, measured: () => measured };
+  };
+
+  it("measures nothing for the same text again: a clock draws four times a second", () => {
+    const { view, measured } = counted();
+    const run = newItem("stopwatch", "r", "Run") as Clock;
+    run.since = 0;
+    view.draw(overlayState(run), 1000);
+    const first = measured();
+    for (const at of [1100, 1350, 1600, 1850]) view.draw(overlayState(run), at);
+    expect(measured()).toBe(first);
+  });
+
+  it("only takes the new digits of a tick of the same size, and the scrolling copy shows them", () => {
+    const { root, view, measured, running } = counted();
+    const run = newItem("stopwatch", "r", "Run through the very long dark cave") as Clock;
+    run.since = 0;
+    run.look = fixed(run.look);
+    view.draw(overlayState(run), 1000);
+    expect(root.dataset.plan).toBe("scroll");
+    const animation = running()[0]!;
+    animation.currentTime = 3000;
+    const first = measured();
+    view.draw(overlayState(run), 2000);
+    expect(measured()).toBe(first);
+    expect(running()[0]).toBe(animation);
+    expect(animation.currentTime).toBe(3000);
+    expect(root.querySelector(".tavora-overlay-text-copy .cc-n")!.textContent).toBe("0:02");
+  });
+
+  it("measures again when the text changes size (9:59 to 10:00) or its settings change", () => {
+    const { view, measured } = counted();
+    const run = newItem("stopwatch", "r", "Run") as Clock;
+    run.since = 0;
+    view.draw(overlayState(run), 599_000);
+    const first = measured();
+    view.draw(overlayState(run), 600_000);
+    expect(measured()).toBe(first + 1);
+    run.look = { ...run.look, numberStep: "xl" };
+    view.draw(overlayState(run), 600_000);
+    expect(measured()).toBe(first + 2);
+  });
+
+  it("draws everything again after it was hidden", () => {
+    const { root, view, measured } = counted();
+    const deaths = newItem("counter", "d", "Deaths") as Counter;
+    view.draw(overlayState(deaths), 0);
+    view.draw(null);
+    const before = measured();
+    view.draw(overlayState(deaths), 0);
+    expect(root.hidden).toBe(false);
+    expect(measured()).toBeGreaterThan(before);
+  });
+});

@@ -773,8 +773,8 @@ export const de: Record<TextKey, string> = {
   "ex.map.TileMap.note": "Pins nah beieinander werden zu einer Gruppe mit Anzahl; Punkte nur untereinander. Gib der Tastatur dieselben Orte als Liste neben der Karte.",
 
   "ex.overlay-text.FixedBox": "Fester Rahmen",
-  "ex.overlay-text.FixedBox.note": "Der Text behält seine Größe und wird nie größer, um den Rahmen zu füllen. Ist er zu lang, läuft er, wird kleiner oder gekürzt.",
-  "ex.overlay-text.FixedBox.rule": "Beim Laufen bewegt sich nur ein Transform, es pausiert, solange nichts zu sehen ist, und bei weniger Bewegung wird gekürzt.",
+  "ex.overlay-text.FixedBox.note": "Der Text behält seine Größe und wird nie größer, um den Rahmen zu füllen. Ist er zu lang, läuft er durch, wird verkleinert oder abgeschnitten.",
+  "ex.overlay-text.FixedBox.rule": "Beim Laufen bewegt sich nur ein Transform, es pausiert, solange nichts zu sehen ist, und bei weniger Bewegung wird abgeschnitten.",
   "ex.overlay-text.GrowsWithText": "Wächst mit dem Text",
   "ex.overlay-text.GrowsWithText.note": "Der Rahmen ist so groß wie der Text. Ziehst du an einer Ecke, skalierst du beides; der Text bleibt scharf.",
   "ex.overlay-text.TextSettings": "Einstellungen",

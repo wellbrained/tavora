@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HOLD_MS, mountOverlayText, SCALE_VAR, type OverlayText, type OverlayTextOptions } from "./overlay-text";
+import { mountOverlayText, SCALE_VAR, type OverlayText, type OverlayTextOptions } from "./overlay-text";
 
 // jsdom lays nothing out and has no Web Animations: the box and the text get their sizes here, and the animation is a fake.
 class FakeAnimation {
@@ -79,7 +79,7 @@ describe("grows with the text", () => {
     expect(running()).toHaveLength(0);
   });
 
-  it("keeps its scale a moment while the frame catches up with a wider text, then shrinks", () => {
+  it("keeps its size when the text gets wider before the frame does, with no timer to run out", () => {
     vi.useFakeTimers();
     room = { width: 216, height: 116 };
     mount({ mode: "grow", padding: 8 });
@@ -87,8 +87,14 @@ describe("grows with the text", () => {
     natural = { width: 120, height: 50 };
     text.changed();
     expect(scale()).toBe(2);
-    vi.advanceTimersByTime(HOLD_MS + 50);
-    expect(scale()).toBeCloseTo(200 / 120);
+    // However late the frame comes, it stays: nothing shrinks it in between.
+    vi.advanceTimersByTime(5000);
+    expect(scale()).toBe(2);
+    expect(vi.getTimerCount()).toBe(0);
+    // The frame follows: still 2.
+    room = { width: 256, height: 116 };
+    text.fit();
+    expect(scale()).toBe(2);
   });
 
   it("follows the frame at once when it is resized", () => {
@@ -193,6 +199,23 @@ describe("a fixed box", () => {
     room = { width: 700, height: 50 };
     text.fit();
     expect(running()).toHaveLength(0);
+  });
+
+  it("gives the copy the new text without measuring or starting over, for a tick of the same size", () => {
+    natural = { width: 600, height: 50 };
+    mount({ mode: "fixed" });
+    text.content.textContent = "12:00";
+    text.fit();
+    const animation = running()[0]!;
+    animation.currentTime = 2000;
+    let measured = 0;
+    text.content.getBoundingClientRect = () => (measured++, { width: natural.width, height: natural.height }) as DOMRect;
+    text.content.textContent = "12:01";
+    text.mirror();
+    expect(root.querySelector(".tavora-overlay-text-copy")!.textContent).toBe("12:01");
+    expect(measured).toBe(0);
+    expect(running()[0]).toBe(animation);
+    expect(animation.currentTime).toBe(2000);
   });
 
   it("starts a new round when the speed or the pause changes", () => {

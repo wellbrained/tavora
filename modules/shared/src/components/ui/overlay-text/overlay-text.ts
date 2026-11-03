@@ -4,7 +4,7 @@
 //
 // The scroll is cheap enough to run over a game: one transform animation on the compositor (no layout per frame), set up
 // again only when the text, the box or a setting changes, and paused while the page is hidden.
-import { carryOn, holdScale, OVERLAY_TEXT_DEFAULTS, planText, scrollRound, type OverlayTextAlign, type OverlayTextSettings, type TextPlan } from "./plan";
+import { carryOn, OVERLAY_TEXT_DEFAULTS, planText, scrollRound, type OverlayTextAlign, type OverlayTextSettings, type TextPlan } from "./plan";
 import "./overlay-text.css";
 
 /** The CSS variable the content's sizes multiply with. */
@@ -32,11 +32,13 @@ export interface OverlayText {
   changed(restart?: boolean): void;
   /** Measures and fits again, such as once the fonts have loaded. */
   fit(): void;
+  /**
+   * Call after the content changed in place without changing its size (a clock ticks with tabular digits): the scrolling
+   * copy takes the new text, with nothing measured or fitted.
+   */
+  mirror(): void;
   destroy(): void;
 }
-
-/** How long a growing text keeps its scale while the box catches up with a wider text. */
-export const HOLD_MS = 400;
 
 const DEFAULTS: OverlayTextOptions = { ...OVERLAY_TEXT_DEFAULTS, align: "center", padding: 0, gap: 48 };
 
@@ -57,9 +59,6 @@ export function mountOverlayText(root: HTMLElement, initial: Partial<OverlayText
   }
 
   let plan: TextPlan = { kind: "fit", scale: 1 };
-  let scale: number | null = null;
-  let holdUntil = 0;
-  let holdTimer: ReturnType<typeof setTimeout> | undefined;
   let restart = false;
   let copy: HTMLElement | null = null;
   let animation: Animation | null = null;
@@ -77,9 +76,8 @@ export function mountOverlayText(root: HTMLElement, initial: Partial<OverlayText
     copy = null;
   }
 
-  function startScroll(distance: number): void {
-    // The copy follows the text, a gap behind it: when the text has run its whole width and the gap, the copy stands where
-    // the text started, and the round begins again without a jump.
+  /** The copy that follows a scrolling text, made again from the text as it is now. */
+  function makeCopy(): void {
     const next = content.cloneNode(true) as HTMLElement;
     next.className = "tavora-overlay-text-copy";
     next.setAttribute("aria-hidden", "true");
@@ -91,6 +89,12 @@ export function mountOverlayText(root: HTMLElement, initial: Partial<OverlayText
     if (copy) copy.replaceWith(next);
     else track.append(next);
     copy = next;
+  }
+
+  function startScroll(distance: number): void {
+    // The copy follows the text, a gap behind it: when the text has run its whole width and the gap, the copy stands where
+    // the text started, and the round begins again without a jump.
+    makeCopy();
     const { duration, still } = scrollRound(distance, options.speed, options.pause);
     const same = round && round.distance === distance && round.duration === duration && round.still === still;
     if (same && animation && !restart) return;
@@ -117,17 +121,7 @@ export function mountOverlayText(root: HTMLElement, initial: Partial<OverlayText
     const natural = { width: box.width || content.offsetWidth, height: box.height || content.offsetHeight };
     const room = { width: root.clientWidth - 2 * options.padding, height: root.clientHeight - 2 * options.padding };
     plan = planText({ mode: options.mode, overflow: options.overflow, room, natural, reducedMotion: motion?.matches ?? false });
-
-    let shown = plan.scale;
-    if (options.mode === "grow" && plan.kind === "fit") {
-      const held = Date.now() < holdUntil;
-      shown = holdScale(plan.scale, scale, natural.height > 0 ? Math.max(room.height, 1) / natural.height : plan.scale, held);
-      clearTimeout(holdTimer);
-      // Still too narrow when the moment is over: shrink then.
-      if (shown !== plan.scale) holdTimer = setTimeout(fit, Math.max(0, holdUntil - Date.now()) + 16);
-    }
-    scale = shown;
-    root.style.setProperty(SCALE_VAR, String(shown));
+    root.style.setProperty(SCALE_VAR, String(plan.scale));
     root.dataset.plan = plan.kind;
     root.dataset.fade = String(plan.kind === "scroll" && options.softEdges);
     root.style.setProperty("--overlay-text-fade", `${Math.round(Math.min(24, Math.max(room.width, 0) * 0.1))}px`);
@@ -169,12 +163,13 @@ export function mountOverlayText(root: HTMLElement, initial: Partial<OverlayText
     },
     changed(again = false) {
       if (again) restart = true;
-      holdUntil = Date.now() + HOLD_MS;
       fit();
     },
     fit,
+    mirror() {
+      if (copy) makeCopy();
+    },
     destroy() {
-      clearTimeout(holdTimer);
       stopScroll();
       observer?.disconnect();
       motion?.removeEventListener?.("change", fit);

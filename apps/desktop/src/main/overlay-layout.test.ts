@@ -50,6 +50,8 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
   const placed: { frames: LayoutFrame[]; layer: { x: number; y: number; width: number; height: number } | null; covered: boolean }[] = [];
   const world = {
     items,
+    /** The text scales Reset size gave (a text that grows with its frame). */
+    textScales: [] as number[],
     grid: "normal" as GridSetting,
     /** The games that have a setup; one stays when its last item goes. */
     gameSetups: [...new Set(items.map((item) => setupOf(item)).filter((id) => id !== LAYOUT_ALL_GAMES && id !== LAYOUT_EVERYWHERE))],
@@ -130,8 +132,9 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
       item.setup = to;
       return "added";
     },
-    setRect: (setupId, ref, rect) => {
+    setRect: (setupId, ref, rect, textScale) => {
       const item = find(setupId, ref);
+      if (textScale !== undefined) world.textScales.push(textScale);
       if (item) {
         item.rect = rect;
         delete item.legacy;
@@ -1431,6 +1434,28 @@ describe("what a panel lists", () => {
     layout.open(LAYOUT_EVERYWHERE);
     layout.handle({ type: "add-source", id: "cc", key: "d-1" }, true);
     expect(layout.view().items[0]!.placed.width).toBeGreaterThan(300);
+  });
+
+  it("gives a text that grows with its frame 100 % on Reset size, not on the grid, and nothing for a fixed box", () => {
+    const text = panel("cc", "personal", { moduleId: "tavora.clock-counter", sources: [{ key: "d-1", name: "Deaths", size: { width: 121, height: 49 }, fit: "text", align: "left" }] });
+    const { layout, world } = setup([], { sources: [text] });
+    layout.open(LAYOUT_EVERYWHERE);
+    layout.handle({ type: "add-source", id: "cc", key: "d-1" }, true);
+    const item = layout.view().items[0]!;
+    expect(item.fitText).toBe(true);
+    // Exactly the text with its room, off the grid.
+    expect(item.placed).toMatchObject({ width: 121 + 16, height: 49 + 16 });
+    layout.handle({ type: "commit", id: item.id, rect: { x: 400, y: 300, width: 274, height: 130 } }, false);
+    layout.handle({ type: "reset-size", id: item.id }, false);
+    expect(world.textScales).toEqual([1]);
+    const fixed = setup([], { sources: [counter()] });
+    fixed.layout.open(LAYOUT_EVERYWHERE);
+    fixed.layout.handle({ type: "add-source", id: "cc", key: "d-1" }, true);
+    const box = fixed.layout.view().items[0]!;
+    expect(box.fitText).toBe(false);
+    fixed.layout.handle({ type: "commit", id: box.id, rect: { x: 400, y: 300, width: 500, height: 400 } }, false);
+    fixed.layout.handle({ type: "reset-size", id: box.id }, false);
+    expect(fixed.world.textScales).toEqual([]);
   });
 
   it("puts Reset size back to what the content needs, where the frame is", () => {

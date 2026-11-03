@@ -2447,6 +2447,39 @@ describe("a text that grows with its frame", () => {
     expect(px(service)).toEqual({ x: 100, y: 100, width: 500, height: 66 });
   });
 
+  it("saves the scale with the frame, so a restart and Reset size can't drift", async () => {
+    const { service } = await withFrame({ x: 100, y: 100, width: 2 * 200 + 16, height: 2 * 50 + 16 });
+    service.setSources("p1", "official", source(200, 50), place);
+    await service.shutdown();
+    expect((await GameOverlayStore.load(dir)).find(subject, "$everywhere")?.textScale).toBeCloseTo(2);
+
+    // Started again: the panel lists an odd size first; the frame keeps the saved scale, not one worked out from its rounded size.
+    const again = (await setup()).service;
+    again.setSources("p1", "official", source(203, 51), place);
+    expect(px(again)).toMatchObject({ width: 2 * 203 + 16, height: 2 * 51 + 16 });
+    again.setSources("p1", "official", source(200, 50), place);
+    expect(px(again)).toMatchObject({ width: 416, height: 116 });
+
+    // Reset size: 100 %, saved as such, and the next size change keeps it.
+    again.layout.setRect("$everywhere", ref, { h: "left", v: "top", x: 100 / 1080, y: 100 / 1080, width: 216 / 1080, height: 66 / 1080 }, 1);
+    expect(px(again)).toMatchObject({ width: 216, height: 66 });
+    again.setSources("p1", "official", source(300, 50), place);
+    expect(px(again)).toMatchObject({ width: 316, height: 66 });
+    await again.shutdown();
+    expect((await GameOverlayStore.load(dir)).find(subject, "$everywhere")?.textScale).toBe(1);
+  });
+
+  it("keeps the scale a user's resize gives, and reads a frame saved without one as it was", async () => {
+    const { service } = await withFrame({ x: 100, y: 100, width: 216, height: 66 });
+    service.setSources("p1", "official", source(200, 50), place);
+    // Three times as big by a corner drag.
+    service.layout.setRect("$everywhere", ref, { h: "left", v: "top", x: 100 / 1080, y: 100 / 1080, width: 616 / 1080, height: 166 / 1080 });
+    service.setSources("p1", "official", source(100, 50), place);
+    expect(px(service)).toMatchObject({ width: 316, height: 166 });
+    await service.shutdown();
+    expect((await GameOverlayStore.load(dir)).find(subject, "$everywhere")?.textScale).toBeCloseTo(3);
+  });
+
   it("fits the frame in every setup that has it", async () => {
     const { service } = await withFrame({ x: 100, y: 100, width: 500, height: 66 });
     expect(service.layout.addOverlay("$all", subject)).toBe("added");

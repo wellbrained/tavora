@@ -26,11 +26,6 @@ export function fillScale(rect: AnchoredRect, need: Size): number {
   return clamp(Math.min(width, height));
 }
 
-/** The scale from the frame's height alone: what a text that only got wider or narrower keeps, whatever its width did. */
-export function heightScale(rect: AnchoredRect, need: Size): number {
-  return clamp((rect.height - 2 * PAD) / (need.height / REFERENCE_HEIGHT));
-}
-
 /**
  * The frame around a text of `need` (pixels at 1080p) at `scale`, where `rect` is. The aligned side stays put (the middle for
  * centre), and the middle of its height: a frame anchored to the right edge with right-aligned text grows to the left.

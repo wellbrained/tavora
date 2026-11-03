@@ -20,7 +20,7 @@ import { count, find, groupOf, insert, lap, linkedGroups, MAX, move, moveTo, new
 import { buildLiveState } from "./live";
 import { de, en } from "./locales";
 import { PANEL, UNDO_MS } from "./panel";
-import { buildSources, canvasMeasure, itemForKey, overlayKey } from "./sources";
+import { buildSources, canvasMeasure, itemForKey, nextSizeChange, overlayKey } from "./sources";
 import { createItemStore, type ItemStore } from "./store";
 
 const EMPTY = parseList(null);
@@ -414,6 +414,10 @@ watch([list, sdk], () => store.value && sendLive());
 
 const measure = canvasMeasure();
 let sourcesTimer: ReturnType<typeof setTimeout> | undefined;
+/** Wakes the list up again when a running stopwatch is about to get wider, so its frame follows without a list change. */
+let widthTimer: ReturnType<typeof setTimeout> | undefined;
+/** How long the list waits for more changes before it is sent, so a burst of clicks sends once. */
+const SOURCES_DELAY_MS = 300;
 /** An older Tavora has no Overlay page to list them on: its first answer ends the sending. */
 let sourcesUnknown = false;
 /** Tells Tavora what this panel can show over the game on its own, a moment after the list changed (a count changes a group's line). */
@@ -422,11 +426,15 @@ function sendSources(): void {
   sourcesTimer = setTimeout(() => {
     const connected = sdk.value;
     if (!connected || !store.value || sourcesUnknown) return;
-    connected.overlay.setSources(buildSources(list.value, measure, (item) => item.label || t(`kind.${item.kind}`))).catch((reason: { code?: string }) => {
+    const now = Date.now();
+    clearTimeout(widthTimer);
+    const wake = nextSizeChange(list.value, now);
+    if (wake !== null) widthTimer = setTimeout(sendSources, Math.max(0, wake - now - SOURCES_DELAY_MS));
+    connected.overlay.setSources(buildSources(list.value, measure, (item) => item.label || t(`kind.${item.kind}`), now)).catch((reason: { code?: string }) => {
       if (reason?.code === "UNKNOWN_METHOD") sourcesUnknown = true;
       else console.warn("[clock-counter] sources", errorMessage(reason));
     });
-  }, 300);
+  }, SOURCES_DELAY_MS);
 }
 watch([list, sdk], () => store.value && sendSources());
 
@@ -507,6 +515,7 @@ onBeforeUnmount(() => {
   clearInterval(ticker);
   clearTimeout(liveTimer);
   clearTimeout(sourcesTimer);
+  clearTimeout(widthTimer);
   clearTimeout(noticeTimer);
   if (undo.value) clearTimeout(undo.value.timer);
 });

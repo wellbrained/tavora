@@ -31,6 +31,12 @@ const FAMILY: Record<Font, string> = {
   system: '"Segoe UI", system-ui, sans-serif',
 };
 
+/**
+ * How far ahead the size of a ticking text looks, in ms: a running stopwatch is listed as wide as it will be by then, so
+ * Tavora makes its frame wider just before the text needs it (9:59 to 10:00), never just after.
+ */
+export const LOOK_AHEAD_MS = 2000;
+
 /** A measure that asks the browser's canvas (the page's fonts are loaded by then); a guess where there is none. */
 export function canvasMeasure(): Measure {
   let context: CanvasRenderingContext2D | null = null;
@@ -50,8 +56,9 @@ export function canvasMeasure(): Measure {
 function valueText(item: Extract<Item, { kind: "countdown" | "stopwatch" }>, now: number): string {
   const reading = readClock(item, now);
   if (reading.done && item.doneText) return item.doneText;
-  // A countdown that has not run yet is as wide as its whole time; a running one only shrinks.
-  const seconds = item.kind === "countdown" ? Math.max(reading.seconds, Math.floor(item.duration / 1000)) : reading.seconds;
+  // A countdown that has not run yet is as wide as its whole time; a running one only shrinks. A running stopwatch only
+  // grows: as wide as it is in a moment.
+  const seconds = item.kind === "countdown" ? Math.max(reading.seconds, Math.floor(item.duration / 1000)) : reading.running ? readClock(item, now + LOOK_AHEAD_MS).seconds : reading.seconds;
   return formatSeconds(seconds, item.format);
 }
 
@@ -68,9 +75,40 @@ function lineSize(line: Segment[], look: OverlayLook, measure: Measure, lap: { t
 
 /** How big one clock or counter needs to be, as the overlay draws its text (words and value on one baseline). */
 export function itemSize(item: Item, measure: Measure, now: number): { width: number; height: number } {
-  const value = item.kind === "counter" ? counterShown(item.value, item.goal) : valueText(item, now);
   const lap = item.kind === "stopwatch" && item.laps && item.showLastLap && item.lapTimes.length > 0 ? { text: formatSeconds(Math.floor((item.lapTimes.at(-1) ?? 0) / 1000), item.format) } : null;
-  return lineSize(itemSegments(item, value), item.look, measure, lap);
+  if (item.kind !== "counter") return lineSize(itemSegments(item, valueText(item, now)), item.look, measure, lap);
+  // A counter is as wide as the widest of its value and the values one step away (99 next to 100), so the frame has the
+  // room before the click that needs it, instead of the panel's update coming a moment after the text.
+  const values = [item.value, item.value + item.step, item.value - item.step].filter((value) => item.negative || value >= 0);
+  const sizes = values.map((value) => lineSize(itemSegments(item, counterShown(value, item.goal)), item.look, measure, lap));
+  return sizes.reduce((widest, size) => (size.width > widest.width ? size : widest));
+}
+
+/**
+ * When the panel should list its sources again although nothing in the list changed: a running stopwatch is about to get a
+ * digit more (9:59 to 10:00, 59:59 to 1:00:00), LOOK_AHEAD_MS before it does. Null while none is running. A timer at that
+ * moment is all it costs, not a look on every tick.
+ */
+export function nextSizeChange(list: ItemList, now: number): number | null {
+  let soonest: number | null = null;
+  for (const item of list.items) {
+    if (item.kind !== "stopwatch" || item.since === null) continue;
+    const seconds = readClock(item, now + LOOK_AHEAD_MS).seconds;
+    const length = formatSeconds(seconds, item.format).length;
+    // A unit gets a digit more at a power of ten of seconds, minutes or hours.
+    let next: number | null = null;
+    for (const unit of [1, 60, 3600]) {
+      for (let tens = 10; tens * unit <= 100 * 3600 * 10; tens *= 10) {
+        const at = tens * unit;
+        if (at > seconds && (next === null || at < next) && formatSeconds(at, item.format).length !== length) next = at;
+      }
+    }
+    if (next === null) continue;
+    // The stopwatch reads `next` seconds once it has counted that long: since + (next s - what it had counted before).
+    const when = Math.max(now, item.since + next * 1000 - item.counted - LOOK_AHEAD_MS);
+    if (soonest === null || when < soonest) soonest = when;
+  }
+  return soonest;
 }
 
 /** A text that grows with its frame says so, with its alignment: Tavora keeps the frame around it as the text changes size. */

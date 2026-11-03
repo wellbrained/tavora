@@ -66,6 +66,14 @@ export type TextPlan =
   /** It is cut off at the box's end with "…". */
   | { kind: "clip"; scale: 1 };
 
+/**
+ * A growing text takes its scale from the box's height, the side that doesn't change with the text: when a line gets wider,
+ * it keeps its size and runs a little past the box until Tavora has made the frame wider, instead of shrinking for that
+ * moment and growing back. Only a box far too narrow for that scale (a frame drawn by hand, a Browser Source in OBS, an old
+ * frame not fitted yet) shows it at the scale that fits both sides, as it always did.
+ */
+export const GROW_SLACK = 1.25;
+
 /** A little slack, so a text exactly as wide as its box (after rounding) counts as fitting. */
 const SLACK = 0.5;
 
@@ -78,7 +86,7 @@ export function planText(input: { mode: OverlayTextMode; overflow: OverlayTextOv
   if (!(natural.width > 0) || !(natural.height > 0)) return { kind: "fit", scale: 1 };
   const width = Math.max(room.width, 1) / natural.width;
   const height = Math.max(room.height, 1) / natural.height;
-  if (input.mode === "grow") return { kind: "fit", scale: Math.min(width, height) };
+  if (input.mode === "grow") return { kind: "fit", scale: natural.width * height > Math.max(room.width, 1) * GROW_SLACK ? Math.min(width, height) : height };
   // A box lower than the text only shrinks it when the user chose Shrink; otherwise the text keeps its size.
   if (natural.width <= room.width + SLACK) return { kind: "fit", scale: input.overflow === "shrink" ? Math.min(1, height) : 1 };
   if (input.overflow === "shrink") return { kind: "fit", scale: Math.min(1, width, height) };
@@ -102,15 +110,4 @@ export function carryOn(previous: { time: number; duration: number } | null, dur
   if (restart || !previous || !(previous.duration > 0) || !(duration > 0)) return 0;
   const share = (previous.time % previous.duration) / previous.duration;
   return share * duration;
-}
-
-/**
- * The scale of a growing text while its box catches up: when the text got wider but the box hasn't followed yet (Tavora
- * resizes the frame a moment later), it keeps the scale it had instead of shrinking for that moment. `held` says whether
- * it is still in that moment.
- */
-export function holdScale(plan: number, previous: number | null, heightScale: number, held: boolean): number {
-  if (!held || previous === null) return plan;
-  // Only a box that is too narrow for the same height waits; a box that got smaller or bigger shows it at once.
-  return plan < previous && Math.abs(heightScale - previous) < 1e-3 ? previous : plan;
 }

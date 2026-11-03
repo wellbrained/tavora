@@ -31,6 +31,15 @@ const element = (tag: string, className: string): HTMLElement => Object.assign(d
 /** What tells one text from the next: the words. A value that changes (a counter ticks) is the same text, so a scroll runs on. */
 const wordsOf = (state: OverlayState, segments: { text: string; value: boolean }[]) => `${state.kind}:${segments.filter((part) => !part.value).map((part) => part.text).join("")}`;
 
+/**
+ * What decides the line's size: the runs with their sizes, the words as they are and every digit as a 0 (the digits are
+ * tabular, so all as wide). Two texts of the same shape are as big, and the second needs no measuring.
+ */
+function shapeOf(runs: { className: string; text: string; size: string }[], lap: string, lineSize: string, lapSize: string): string {
+  const digits = (text: string) => text.replace(/\d/g, "0");
+  return JSON.stringify([runs.map((run) => [run.className, run.className === "cc-n" ? digits(run.text) : run.text, run.size]), digits(lap), lineSize, lapSize]);
+}
+
 export function mountOverlayView(root: HTMLElement, options: OverlayViewOptions): OverlayView {
   root.classList.add("cc-ov");
   const text = mountOverlayText(root, { padding: options.padding });
@@ -39,10 +48,14 @@ export function mountOverlayView(root: HTMLElement, options: OverlayViewOptions)
   text.content.replaceChildren(line, lap);
   let key: string | null = null;
   let applied = "";
+  /** What was drawn last, exactly and as a shape (see shapeOf). */
+  let drawn = "";
+  let drawnShape = "";
 
   function draw(state: OverlayState | null, now = Date.now()): void {
     root.hidden = state === null;
     if (!state) {
+      drawn = drawnShape = "";
       text.fit();
       return;
     }
@@ -61,29 +74,49 @@ export function mountOverlayView(root: HTMLElement, options: OverlayViewOptions)
     const hasNumber = shown.segments.some((part) => part.value);
     const hasWords = shown.segments.some((part) => !part.value);
     // The line box takes the biggest run, so the height is the same however the runs are mixed.
-    line.style.setProperty("--size", px(Math.max(hasNumber ? sizes.number : 0, hasWords ? sizes.words : 0)));
-    line.replaceChildren(
-      ...shown.segments.map((part) => {
-        const run = element("span", part.value ? "cc-n" : "cc-w");
-        run.textContent = part.text;
-        run.style.setProperty("--size", px(part.value ? sizes.number : sizes.words));
-        return run;
-      }),
-    );
-    lap.style.setProperty("--size", px(sizes.number * LAP_SHARE));
-    lap.textContent = shown.lap;
+    const lineSize = px(Math.max(hasNumber ? sizes.number : 0, hasWords ? sizes.words : 0));
+    const runs = shown.segments.map((part) => ({ className: part.value ? "cc-n" : "cc-w", text: part.text, size: px(part.value ? sizes.number : sizes.words) }));
+    const lapSize = px(sizes.number * LAP_SHARE);
 
     const box = boxOf(look);
     const settings: Partial<OverlayTextOptions> =
       options.preview && box.mode === "grow" ? { ...box, mode: "fixed", overflow: "shrink", align: look.align } : { ...box, align: look.align, gap: VALUE_PX * sizes.number };
-    // Set only when they changed: a clock draws four times a second.
-    if (JSON.stringify(settings) !== applied) {
-      applied = JSON.stringify(settings);
-      text.set(settings);
+    const settingsKey = JSON.stringify(settings);
+    const exact = JSON.stringify([runs, shown.lap, lineSize, lapSize]);
+    // A clock draws four times a second, and its time changes once a second: the same text again changes nothing, and a
+    // new time of the same shape (tabular digits are all as wide) only takes the new digits, with nothing measured.
+    const shape = shapeOf(runs, shown.lap, lineSize, lapSize);
+    if (settingsKey === applied && exact === drawn) return;
+    if (settingsKey === applied && shape === drawnShape) {
+      runs.forEach((run, index) => (line.children[index]!.textContent = run.text));
+      lap.textContent = shown.lap;
+      drawn = exact;
+      text.mirror();
+      return;
     }
+    line.style.setProperty("--size", lineSize);
+    line.replaceChildren(
+      ...runs.map((part) => {
+        const run = element("span", part.className);
+        run.textContent = part.text;
+        run.style.setProperty("--size", part.size);
+        return run;
+      }),
+    );
+    lap.style.setProperty("--size", lapSize);
+    lap.textContent = shown.lap;
+    drawn = exact;
+    drawnShape = shape;
+
     const next = wordsOf(state, shown.segments);
-    text.changed(key !== null && next !== key);
+    const restart = key !== null && next !== key;
     key = next;
+    // New settings fit it themselves (once); otherwise the new text does.
+    if (settingsKey !== applied) {
+      applied = settingsKey;
+      text.set(settings);
+      if (restart) text.changed(true);
+    } else text.changed(restart);
   }
 
   return { draw, fit: () => text.fit(), destroy: () => text.destroy() };

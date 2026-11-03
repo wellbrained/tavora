@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { placeAnchored, REFERENCE_HEIGHT, type AnchoredRect } from "./overlay-anchor";
-import { fillScale, fitTextFrame, heightScale, sameFrame, TEXT_FRAME_PADDING } from "./overlay-text-frame";
+import { fillScale, fitTextFrame, sameFrame, TEXT_FRAME_PADDING } from "./overlay-text-frame";
 
 const U = REFERENCE_HEIGHT;
 const P = TEXT_FRAME_PADDING;
@@ -18,7 +18,7 @@ describe("a frame that grows with its text", () => {
     const at = frame(100, 100, 2 * 200 + 2 * P, 2 * 50 + 2 * P);
     expect(fillScale(at, { width: 200, height: 50 })).toBeCloseTo(2);
     // A step bigger: the text is 25 % bigger, the frame keeps the scale of 2.
-    const next = fitTextFrame(at, { width: 250, height: 62.5 }, heightScale(at, { width: 200, height: 50 }), "left");
+    const next = fitTextFrame(at, { width: 250, height: 62.5 }, 2, "left");
     expect(px(next).width).toBe(500 + 2 * P);
     expect(px(next).height).toBe(125 + 2 * P);
   });

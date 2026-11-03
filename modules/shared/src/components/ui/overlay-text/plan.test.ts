@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { carryOn, holdScale, OVERLAY_TEXT_DEFAULTS, OVERLAY_TEXT_PAUSES, pauseStep, planText, readOverlayTextSettings, SCROLL_SPEED, scrollRound } from "./plan";
+import { carryOn, GROW_SLACK, OVERLAY_TEXT_DEFAULTS, OVERLAY_TEXT_PAUSES, pauseStep, planText, readOverlayTextSettings, SCROLL_SPEED, scrollRound } from "./plan";
 
 const box = (width: number, height: number) => ({ width, height });
 const plan = (mode: "grow" | "fixed", overflow: "scroll" | "shrink" | "clip", room: { width: number; height: number }, natural: { width: number; height: number }, reducedMotion = false) =>
@@ -11,9 +11,18 @@ describe("planText: grows with the text", () => {
     expect(plan("grow", "scroll", box(50, 25), box(100, 50))).toEqual({ kind: "fit", scale: 0.5 });
   });
 
-  it("takes the side with less room when the box is another shape (a frame from before)", () => {
+  it("takes its scale from the box's height, so a line that got wider keeps its size while the frame catches up", () => {
+    // Fitted to "99" at scale 2, now "100": a little too wide, but no smaller for that moment.
+    expect(plan("grow", "scroll", box(200, 100), box(110, 50))).toEqual({ kind: "fit", scale: 2 });
+    // A wide frame (from before) with a short text: the height says how big it is.
     expect(plan("grow", "scroll", box(500, 50), box(20, 50))).toEqual({ kind: "fit", scale: 1 });
+  });
+
+  it("takes the side with less room when the box is far too narrow for that (a frame drawn by hand, OBS)", () => {
     expect(plan("grow", "clip", box(100, 400), box(100, 50))).toEqual({ kind: "fit", scale: 1 });
+    // Just past the slack: both sides; just under it: the height.
+    expect(plan("grow", "scroll", box(100, 50), box(100 * GROW_SLACK + 1, 50)).scale).toBeLessThan(1);
+    expect(plan("grow", "scroll", box(100, 50), box(100 * GROW_SLACK - 1, 50)).scale).toBe(1);
   });
 
   it("never scrolls or cuts a growing text", () => {
@@ -87,19 +96,6 @@ describe("carryOn", () => {
   it("starts from the beginning for a new text, or a first round", () => {
     expect(carryOn({ time: 3000, duration: 10_000 }, 10_000, true)).toBe(0);
     expect(carryOn(null, 10_000, false)).toBe(0);
-  });
-});
-
-describe("holdScale", () => {
-  it("keeps the scale a moment while the box catches up with a wider text", () => {
-    expect(holdScale(0.8, 1, 1, true)).toBe(1);
-  });
-
-  it("shows the new scale at once once the moment is over, or when the box itself changed", () => {
-    expect(holdScale(0.8, 1, 1, false)).toBe(0.8);
-    expect(holdScale(0.8, 1, 0.8, true)).toBe(0.8);
-    expect(holdScale(1.2, 1, 1.2, true)).toBe(1.2);
-    expect(holdScale(0.8, null, 1, true)).toBe(0.8);
   });
 });
 
