@@ -42,6 +42,8 @@ describe("OverlayTextSettings", () => {
   it("shows only the Size row while the box grows with the text, with a hint about scaling", () => {
     const { root, testid } = mount()
     expect(root.querySelector("h3")?.textContent).toBe("Box")
+    // A section like the others of the page (its own data-slot), so a settings page lists it among them.
+    expect(root.querySelector('[data-slot="settings-section"] h3')?.textContent).toBe("Box")
     expect(testid("box-grow")).not.toBeNull()
     expect(testid("too-long-scroll")).toBeNull()
     expect(root.textContent).toContain("Drag a corner on the Overlays page to scale it.")
