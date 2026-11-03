@@ -214,6 +214,46 @@ describe("OverlayText: a fixed box", () => {
     expect(live()).toHaveLength(1)
   })
 
+  it("goes on where it is when the motion setting changes but still allows scrolling (the listener's event is no restart)", () => {
+    const { view, sizes, live } = mount({ box: "fixed" })
+    sizes.text = { width: 900, height: 40 }
+    view.refresh("a")
+    const running = live()[0]!
+    running.currentTime = 5000
+    // The browser hands the listener a MediaQueryListEvent; it must not be read as "start the round again".
+    motionListeners.forEach((fn) => (fn as (event: Event) => void)(new Event("change")))
+    expect(live()).toEqual([running])
+    expect(running.currentTime).toBe(5000)
+  })
+
+  it("cuts off and scrolls again from the start as reduced motion goes on and off", () => {
+    const { view, sizes, host, live } = mount({ box: "fixed" })
+    sizes.text = { width: 900, height: 40 }
+    view.refresh("a")
+    live()[0]!.currentTime = 5000
+    reduced = true
+    motionListeners.forEach((fn) => fn())
+    expect(host.dataset.mode).toBe("cut")
+    expect(live()).toHaveLength(0)
+    reduced = false
+    motionListeners.forEach((fn) => fn())
+    expect(host.dataset.mode).toBe("scroll")
+    expect(live()).toHaveLength(1)
+    expect(live()[0]!.currentTime).toBe(0)
+  })
+
+  it("reads the motion setting again at every fit, also when no change event came (a page that isn't drawn gets none)", () => {
+    const { view, sizes, host } = mount({ box: "fixed" })
+    sizes.text = { width: 900, height: 40 }
+    view.refresh("a")
+    reduced = true
+    view.fit()
+    expect(host.dataset.mode).toBe("cut")
+    reduced = false
+    view.refresh("a")
+    expect(host.dataset.mode).toBe("scroll")
+  })
+
   it("stands still while the overlay is hidden or the page is not visible", () => {
     const { view, sizes, live } = mount({ box: "fixed" })
     sizes.text = { width: 900, height: 40 }

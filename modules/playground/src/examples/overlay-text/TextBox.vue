@@ -1,41 +1,25 @@
 <script setup lang="ts">
-// OverlayText: the text of an overlay in its box, the same piece every text overlay uses (Clock & Counter first). A fixed box
-// keeps the text at its size and alignment; only a text too long for it scrolls, shrinks or is cut off. A box that grows with
-// the text draws it bigger with the box (in Tavora's frames the box follows the text).
-import { SegmentedControl } from "@tavora/official-ui";
-import { OVERLAY_TEXT_PAUSES, OverlayText, type OverlayTextSpeed } from "@tavora/official-ui/components/ui/overlay-text";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
-import { Switch } from "@tavora/official-ui/components/ui/switch";
+// OverlayText: the text of an overlay in its box, the same piece every text overlay uses (Clock & Counter first), and
+// OverlayTextSettings, the section of a module's settings that sets it up. A fixed box keeps the text at its size and alignment;
+// only a text too long for it scrolls, shrinks or is cut off. A box that grows with the text draws it bigger with the box (in
+// Tavora's frames the box follows the text).
+import { DEFAULT_OVERLAY_TEXT_BOX, OverlayText, OverlayTextSettings, type OverlayTextBoxSettings } from "@tavora/official-ui/components/ui/overlay-text";
 import { ref } from "vue";
 
-const speed = ref<OverlayTextSpeed>("normal");
-const pause = ref("2");
-const soft = ref(true);
-const SPEEDS = [
-  { value: "slow", label: "Slow" },
-  { value: "normal", label: "Normal" },
-  { value: "fast", label: "Fast" },
-];
+// The settings say only what changed; a module saves that field.
+const settings = ref<OverlayTextBoxSettings>({ ...DEFAULT_OVERLAY_TEXT_BOX, box: "fixed" });
 const LONG = "Now playing: a very long song title by a band with an even longer name";
 const box = "bg-muted h-12 w-72 rounded-md";
 </script>
 
 <template>
   <div class="flex flex-col gap-4">
-    <div class="flex flex-wrap items-center gap-4">
-      <SegmentedControl v-model="speed" label="Scroll speed" :options="SPEEDS" />
-      <label class="flex items-center gap-2 text-sm">
-        Pause, in seconds
-        <Select v-model="pause">
-          <SelectTrigger size="sm" class="w-20" aria-label="Pause, in seconds">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem v-for="value in OVERLAY_TEXT_PAUSES" :key="value" :value="String(value)">{{ value === 0 ? "Off" : value }}</SelectItem>
-          </SelectContent>
-        </Select>
-      </label>
-      <label class="flex items-center gap-2 text-sm"><Switch v-model="soft" /> Soft edges</label>
+    <div class="max-w-xl">
+      <OverlayTextSettings :value="settings" @change="(change) => (settings = { ...settings, ...change })" />
+    </div>
+    <div class="flex flex-col gap-1 text-xl font-semibold">
+      <span class="text-muted-foreground text-xs font-normal">With these settings</span>
+      <OverlayText :class="settings.box === 'fixed' ? box : 'bg-muted h-12 w-auto self-start rounded-md'" v-bind="settings" scale-by="down" :padding="8" :font-size="20"><div>{{ LONG }}</div></OverlayText>
     </div>
 
     <div class="flex flex-col gap-3 text-xl font-semibold">
@@ -49,7 +33,7 @@ const box = "bg-muted h-12 w-72 rounded-md";
       </div>
       <div class="flex flex-col gap-1">
         <span class="text-muted-foreground text-xs font-normal">Too long → Scroll: pause, run through, loop</span>
-        <OverlayText :class="box" box="fixed" too-long="scroll" :speed="speed" :pause="Number(pause)" :soft-edges="soft" :padding="8" :font-size="20"><div>{{ LONG }}</div></OverlayText>
+        <OverlayText :class="box" box="fixed" too-long="scroll" :padding="8" :font-size="20"><div>{{ LONG }}</div></OverlayText>
       </div>
       <div class="flex flex-col gap-1">
         <span class="text-muted-foreground text-xs font-normal">Too long → Shrink</span>

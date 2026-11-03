@@ -11,7 +11,7 @@ import { Combobox, ComboboxAnchor, ComboboxInput, ComboboxItem, ComboboxList, Co
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { ModuleSettings, SettingsMainBar, SettingsPage, SettingsPreview, SettingsRow, SettingsSection, settingsMenu } from "@tavora/official-ui/components/ui/module-settings";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
+import { OverlayTextSettings } from "@tavora/official-ui/components/ui/overlay-text";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { TemplateInput } from "@tavora/official-ui/components/ui/template-input";
 import { TavoraError } from "@tavora/sdk";
@@ -19,8 +19,6 @@ import { computed, inject, onBeforeUnmount, reactive, ref, useTemplateRef, watch
 import { t } from "./i18n";
 import {
   ALIGNS,
-  BOX_PAUSES,
-  BOXES,
   boxOf,
   COLORS,
   defaultLook,
@@ -37,10 +35,7 @@ import {
   setStream,
   SIZES,
   sizesOf,
-  SPEEDS,
-  TOO_LONG,
   type Align,
-  type Box,
   type Clock,
   type Counter,
   type Font,
@@ -49,8 +44,6 @@ import {
   type OverlayLook,
   type OverlayState,
   type Size,
-  type Speed,
-  type TooLong,
 } from "./items";
 import OverlayPreview from "./OverlayPreview.vue";
 import { ACTIONS, PANEL } from "./panel";
@@ -235,14 +228,9 @@ const wordsSize = computed({ get: () => look.value.wordsStep, set: (next: Size) 
 const numberSize = computed({ get: () => look.value.numberStep, set: (next: Size) => updateLook((value) => Object.assign(value, sizesOf(value.wordsStep, next))) });
 const sizeOptions = (kind: string) => SIZES.map((value) => ({ value, label: value.toUpperCase(), testid: `${kind}-size-${value}` }));
 
-// The frame: it grows with the text, or it is a fixed box where a long text scrolls, shrinks or is cut off (the kit's OverlayText).
+// The frame: it grows with the text, or it is a fixed box where a long text scrolls, shrinks or is cut off. The kit's
+// OverlayTextSettings shows it and says what changed; only that field is saved.
 const boxed = computed(() => boxOf(look.value));
-const box = computed({ get: () => boxed.value.box, set: (next: Box) => updateLook((value) => (value.box = next)) });
-const tooLong = computed({ get: () => boxed.value.tooLong, set: (next: TooLong) => updateLook((value) => (value.tooLong = next)) });
-const speed = computed({ get: () => boxed.value.speed, set: (next: Speed) => updateLook((value) => (value.speed = next)) });
-const pause = computed({ get: () => String(boxed.value.pause), set: (next: string) => updateLook((value) => (value.pause = Number(next))) });
-const seconds = computed(() => new Intl.NumberFormat(document.documentElement.lang || undefined, { maximumFractionDigits: 1 }));
-const pauseLabel = (value: number) => (value === 0 ? t("edit.pause.off") : seconds.value.format(value));
 
 // ── Fields that save when they lose focus ────────────────────────────
 
@@ -687,34 +675,7 @@ onBeforeUnmount(saveFields);
               <SegmentedControl v-model="numberSize" :label="`${t('edit.number')}: ${t('edit.size')}`" :options="sizeOptions('number')" :class="fill" />
             </SettingsRow>
           </SettingsSection>
-          <SettingsSection :title="t('edit.frame')">
-            <SettingsRow :label="t('edit.box')" :hint="t(box === 'grow' ? 'edit.boxHint.grow' : 'edit.boxHint.fixed')">
-              <SegmentedControl v-model="box" :label="t('edit.box')" :options="BOXES.map((value) => ({ value, label: t(`edit.box.${value}`), testid: `box-${value}` }))" :class="fill" />
-            </SettingsRow>
-            <template v-if="box === 'fixed'">
-              <SettingsRow :label="t('edit.tooLong')" :hint="t('edit.tooLongHint')">
-                <SegmentedControl v-model="tooLong" :label="t('edit.tooLong')" :options="TOO_LONG.map((value) => ({ value, label: t(`edit.tooLong.${value}`), testid: `too-long-${value}` }))" :class="fill" />
-              </SettingsRow>
-              <template v-if="tooLong === 'scroll'">
-                <SettingsRow :label="t('edit.speed')" :hint="t('edit.speedHint')">
-                  <SegmentedControl v-model="speed" :label="t('edit.speed')" :options="SPEEDS.map((value) => ({ value, label: t(`edit.speed.${value}`), testid: `speed-${value}` }))" :class="fill" />
-                </SettingsRow>
-                <SettingsRow :label="t('edit.pause')" :hint="t('edit.pauseHint')">
-                  <Select v-model="pause">
-                    <SelectTrigger class="w-24" :aria-label="t('edit.pause')" data-testid="pause">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="value in BOX_PAUSES" :key="value" :value="String(value)" :data-testid="`pause-${value}`">{{ pauseLabel(value) }}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </SettingsRow>
-                <SettingsRow :label="t('edit.softEdges')" :hint="t('edit.softEdgesHint')">
-                  <Switch :model-value="boxed.softEdges" :aria-label="t('edit.softEdges')" data-testid="soft-edges" @update:model-value="(on: boolean) => updateLook((value) => (value.softEdges = on))" />
-                </SettingsRow>
-              </template>
-            </template>
-          </SettingsSection>
+          <OverlayTextSettings :value="boxed" @change="(change) => updateLook((value) => Object.assign(value, change))" />
         </SettingsPage>
 
         <!-- Where it shows: in game -->

@@ -2,6 +2,8 @@
 // real time: a running clock stores when it started (`since`, epoch ms) and what it had counted before (`counted`, ms),
 // so it goes on through restarts and needs no saving while it runs. Every change here is a plain function of the
 // list, so a change made twice (after a save conflict) gives the same result.
+// The kit's plain entry for the overlay text box (no Vue), so this file stays plain data wherever it is read.
+import { keepOverlayTextBox, readOverlayTextBox, type OverlayTextBoxSettings } from "@tavora/official-ui/overlay-text";
 import type { JsonValue } from "@tavora/sdk";
 import { compile, COUNT, defaultText, legacyText, segments, TIME, type Member, type Segment } from "./template";
 import { DEFAULT_FORMAT, formatSeconds, isFormat } from "./time";
@@ -89,45 +91,13 @@ export type OverlayLook = {
   /** The same sizes as the version before knows them (S to XL, see OLD_STEPS); kept for it, and read when there are no steps. */
   wordsSize: OldStep;
   numberSize: OldStep;
-  /**
-   * The frame on the Overlay page: it grows with the text and is scaled by dragging a corner, or it is a fixed box. The
-   * fields below are for a fixed box; all are left out until they are set (read them through `boxOf`), and the version
-   * before ignores them.
-   */
-  box?: Box;
-  /** A text too long for a fixed box: scroll (left out), shrink or cut off. */
-  tooLong?: TooLong;
-  speed?: Speed;
-  /** Seconds at the start of each round of a scroll, 0 for none (one of BOX_PAUSES); left out: DEFAULT_PAUSE. */
-  pause?: number;
-  /** A scrolling text fades out at the sides; left out: on. */
-  softEdges?: boolean;
-};
-
-/**
- * The choices of the box, as the look saves them: the module's own format, with the values of the kit's OverlayText (a test
- * keeps them the same). Written out here, as this file is plain data that is read where the kit isn't (the app's tests).
- */
-export const BOXES = ["grow", "fixed"] as const;
-export type Box = (typeof BOXES)[number];
-export const TOO_LONG = ["scroll", "shrink", "cut"] as const;
-export type TooLong = (typeof TOO_LONG)[number];
-export const SPEEDS = ["slow", "normal", "fast"] as const;
-export type Speed = (typeof SPEEDS)[number];
-/** The pause at the start of each round, in seconds: off, or 0.5 to 5 in half seconds. */
-export const BOX_PAUSES = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5] as const;
-export const DEFAULT_PAUSE = 2;
+} & Partial<OverlayTextBoxSettings>;
+// The box (the kit's OverlayText): the frame on the Overlay page grows with the text and is scaled by dragging a corner, or it is
+// a fixed box, with what a long text does in it. Each field is left out until it is set (read them through `boxOf`), and the
+// version before ignores them.
 
 /** How a look's frame is sized and what a long text does, with the defaults for what it leaves out (data from before, or a state an older panel published). */
-export function boxOf(look: Partial<Pick<OverlayLook, "box" | "tooLong" | "speed" | "pause" | "softEdges">>): { box: Box; tooLong: TooLong; speed: Speed; pause: number; softEdges: boolean } {
-  return {
-    box: oneOf(BOXES, look.box, "grow"),
-    tooLong: oneOf(TOO_LONG, look.tooLong, "scroll"),
-    speed: oneOf(SPEEDS, look.speed, "normal"),
-    pause: (BOX_PAUSES as readonly number[]).includes(look.pause as number) ? (look.pause as number) : DEFAULT_PAUSE,
-    softEdges: bool(look.softEdges, true),
-  };
-}
+export const boxOf = (look: Partial<Record<keyof OverlayTextBoxSettings, unknown>>): OverlayTextBoxSettings => readOverlayTextBox(look);
 
 type Base = {
   id: string;
@@ -236,11 +206,7 @@ function parseLook(raw: unknown): OverlayLook {
   if (typeof look.text === "string") parsed.text = look.text.slice(0, MAX.text);
   if (typeof look.wordsColor === "string" && HEX.test(look.wordsColor)) parsed.wordsColor = look.wordsColor;
   // The box: only what was set is kept, so data from before stays as it was saved.
-  if ((BOXES as readonly unknown[]).includes(look.box)) parsed.box = look.box as Box;
-  if ((TOO_LONG as readonly unknown[]).includes(look.tooLong)) parsed.tooLong = look.tooLong as TooLong;
-  if ((SPEEDS as readonly unknown[]).includes(look.speed)) parsed.speed = look.speed as Speed;
-  if ((BOX_PAUSES as readonly unknown[]).includes(look.pause)) parsed.pause = look.pause as number;
-  if (typeof look.softEdges === "boolean") parsed.softEdges = look.softEdges;
+  Object.assign(parsed, keepOverlayTextBox(look));
   return parsed;
 }
 

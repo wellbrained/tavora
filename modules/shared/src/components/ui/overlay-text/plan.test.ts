@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { continueAt, fadeWidth, offsetAt, planOverlayText, sameTiming, SCROLL_GAP, scrollTiming, type PlanOptions } from "./plan"
+import { DEFAULT_OVERLAY_TEXT_BOX, keepOverlayTextBox, readOverlayTextBox, continueAt, fadeWidth, offsetAt, planOverlayText, sameTiming, SCROLL_GAP, scrollTiming, type PlanOptions } from "./plan"
 
 const grow = (scaleBy: PlanOptions["scaleBy"]): PlanOptions => ({ box: "grow", scaleBy, tooLong: "scroll", reducedMotion: false })
 const fixed = (tooLong: PlanOptions["tooLong"], reducedMotion = false): PlanOptions => ({ box: "fixed", scaleBy: "fill", tooLong, reducedMotion })
@@ -98,5 +98,18 @@ describe("scroll rounds", () => {
   it("keeps the soft edge to the font size, and narrow in a narrow box", () => {
     expect(fadeWidth(40, 1000)).toBe(40)
     expect(fadeWidth(40, 100)).toBeCloseTo(12)
+  })
+})
+
+describe("saved box settings", () => {
+  it("reads the defaults for what was never saved: grows, scroll, normal, 2 s, soft edges", () => {
+    expect(readOverlayTextBox({})).toEqual({ box: "grow", tooLong: "scroll", speed: "normal", pause: 2, softEdges: true })
+    expect(readOverlayTextBox({})).toEqual(DEFAULT_OVERLAY_TEXT_BOX)
+  })
+
+  it("keeps only what was set and makes sense, so data stays as it was saved", () => {
+    expect(keepOverlayTextBox({ box: "fixed", pause: 0 })).toEqual({ box: "fixed", pause: 0 })
+    expect(keepOverlayTextBox({ box: "huge", tooLong: "wrap", speed: 9, pause: 0.7, softEdges: "yes" })).toEqual({})
+    expect(readOverlayTextBox({ tooLong: "cut", softEdges: false, pause: 4.5 })).toMatchObject({ box: "grow", tooLong: "cut", softEdges: false, pause: 4.5 })
   })
 })

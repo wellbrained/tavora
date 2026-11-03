@@ -36,6 +36,18 @@ async function inFrame<T>(app: ElectronApplication, script: string): Promise<T> 
     return frame.executeJavaScript(script);
   }, script);
 }
+/**
+ * Sets the frame page's prefers-reduced-motion. The session stays attached until the app closes: detaching it clears every media
+ * emulation of the page, which then follows the PC's own setting (the CI runners prefer reduced motion), not the one asked for.
+ */
+async function reducedMotion(app: ElectronApplication, on: boolean): Promise<void> {
+  await app.evaluate(async ({ webContents }, on) => {
+    const frame = webContents.getAllWebContents().find((contents) => !contents.isDestroyed() && contents.getURL().includes("tavoraFrame=1"));
+    if (!frame) throw new Error("no overlay frame");
+    if (!frame.debugger.isAttached()) frame.debugger.attach();
+    await frame.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: on ? "reduce" : "no-preference" }] });
+  }, on);
+}
 /** The box as the frame's page draws it: the font size of 100 % and what it does with the text. */
 const box = (app: ElectronApplication) =>
   inFrame<{ font: number; mode: string; box: string; soft: string; copy: string; moving: number }>(
@@ -160,6 +172,8 @@ test("a fixed box keeps the text at its step: a long text scrolls in a loop, goe
     const placed = (await itemOf(page)).placed;
     await send(page, { type: "commit", id, rect: { x: placed.x, y: placed.y, width: 400, height: 80 } });
     await expect.poll(async () => (await itemOf(page)).placed.width).toBe(400);
+    // Whatever the PC prefers: this test says when there is less motion.
+    await reducedMotion(app, false);
 
     // Too long for 400: it scrolls at its step (48 px at M), with its copy after a gap and soft edges, on the compositor.
     await expect.poll(async () => (await box(app)).mode).toBe("scroll");
@@ -184,20 +198,13 @@ test("a fixed box keeps the text at its step: a long text scrolls in a loop, goe
     await send(page, { type: "commit", id, rect: { x: placed.x, y: placed.y, width: 400, height: 80 } });
     await expect.poll(async () => (await box(app)).mode).toBe("scroll");
 
-    // With reduced motion it is cut off instead.
-    await app.evaluate(async ({ webContents }) => {
-      const frame = webContents.getAllWebContents().find((contents) => !contents.isDestroyed() && contents.getURL().includes("tavoraFrame=1"))!;
-      frame.debugger.attach();
-      await frame.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
-    });
+    // With reduced motion it is cut off instead, and it scrolls again once motion is back, from the start of a round.
+    await reducedMotion(app, true);
     await expect.poll(async () => (await box(app)).mode).toBe("cut");
     expect((await box(app)).moving).toBe(0);
-    await app.evaluate(async ({ webContents }) => {
-      const frame = webContents.getAllWebContents().find((contents) => !contents.isDestroyed() && contents.getURL().includes("tavoraFrame=1"))!;
-      await frame.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "no-preference" }] });
-      frame.debugger.detach();
-    });
+    await reducedMotion(app, false);
     await expect.poll(async () => (await box(app)).mode).toBe("scroll");
+    expect((await box(app)).moving).toBe(1);
 
     // Shrink: smaller until it fits, never bigger than its step. Cut off: ends with "…" at its step.
     await page.getByTestId(`layout-gear-${id}`).click();

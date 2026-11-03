@@ -1,12 +1,6 @@
-import { DEFAULT_PAUSE as KIT_PAUSE, OVERLAY_TEXT_BOXES, OVERLAY_TEXT_PAUSES, OVERLAY_TEXT_SPEEDS, OVERLAY_TEXT_TOO_LONG } from "@tavora/official-ui/components/ui/overlay-text";
 import { describe, expect, it } from "vitest";
 import {
-  BOX_PAUSES,
-  BOXES,
   boxOf,
-  DEFAULT_PAUSE,
-  SPEEDS,
-  TOO_LONG,
   count,
   defaultLook,
   defaultStored,
@@ -516,14 +510,6 @@ describe("the one size scale", () => {
 describe("the box of an overlay", () => {
   const raw = (look: Record<string, unknown>) => ({ items: [{ id: "d", kind: "counter", label: "Deaths", look: { showLabel: true, color: "#ffffff", outline: true, font: "inter", align: "center", ...look } }] });
   const lookOf = (look: Record<string, unknown>) => parseList(raw(look)).items[0]!.look;
-
-  it("offers exactly the choices of the kit's OverlayText", () => {
-    expect(BOXES).toEqual(OVERLAY_TEXT_BOXES);
-    expect(TOO_LONG).toEqual(OVERLAY_TEXT_TOO_LONG);
-    expect(SPEEDS).toEqual(OVERLAY_TEXT_SPEEDS);
-    expect(BOX_PAUSES).toEqual(OVERLAY_TEXT_PAUSES);
-    expect(DEFAULT_PAUSE).toBe(KIT_PAUSE);
-  });
 
   it("grows with the text for data saved before the box, and keeps that data as it was saved", () => {
     const look = lookOf({});

@@ -111,3 +111,27 @@ export const sameTiming = (a: ScrollTiming, b: ScrollTiming): boolean =>
 
 /** The soft edge of a scrolling text, in pixels: its font size, but at most 12 % of the room, so a narrow box still shows text. */
 export const fadeWidth = (fontPx: number, roomWidth: number): number => Math.max(0, Math.min(fontPx, roomWidth * 0.12))
+
+/** What a module saves for an overlay text's box (OverlayTextSettings edits it). */
+export type OverlayTextBoxSettings = { box: OverlayTextBox; tooLong: OverlayTextTooLong; speed: OverlayTextSpeed; pause: number; softEdges: boolean }
+
+export const DEFAULT_OVERLAY_TEXT_BOX: OverlayTextBoxSettings = { box: "grow", tooLong: "scroll", speed: "normal", pause: DEFAULT_PAUSE, softEdges: true }
+
+type Saved = Partial<Record<keyof OverlayTextBoxSettings, unknown>>
+const known = <T>(values: readonly T[], value: unknown): value is T => values.includes(value as T)
+
+/** Only the settings in `saved` that make sense, so data keeps what was set and leaves out the rest (a module reads it with `readOverlayTextBox`). */
+export function keepOverlayTextBox(saved: Saved): Partial<OverlayTextBoxSettings> {
+  const kept: Partial<OverlayTextBoxSettings> = {}
+  if (known(OVERLAY_TEXT_BOXES, saved.box)) kept.box = saved.box
+  if (known(OVERLAY_TEXT_TOO_LONG, saved.tooLong)) kept.tooLong = saved.tooLong
+  if (known(OVERLAY_TEXT_SPEEDS, saved.speed)) kept.speed = saved.speed
+  if (known(OVERLAY_TEXT_PAUSES, saved.pause)) kept.pause = saved.pause
+  if (typeof saved.softEdges === "boolean") kept.softEdges = saved.softEdges
+  return kept
+}
+
+/** The box's settings, with the defaults for what `saved` leaves out or doesn't make sense (data from before, an older panel's state). */
+export function readOverlayTextBox(saved: Saved): OverlayTextBoxSettings {
+  return { ...DEFAULT_OVERLAY_TEXT_BOX, ...keepOverlayTextBox(saved) }
+}

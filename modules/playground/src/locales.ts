@@ -391,7 +391,7 @@ export const en = {
   "ex.settings.SettingsMenu.note": "The module's own pages have no heading. Overlays sits in a divider line; the dot is green when it shows there, hollow when it doesn't. Build it with settingsMenu.",
   "ex.settings.SettingsMenu.rule": "Overlay pages come last: first how it looks (Text, Look), then where it shows (In game, On stream).",
   "ex.overlay-text.TextBox": "Overlay text box",
-  "ex.overlay-text.TextBox.note": "One piece for every text over the game and on stream, also for a page without Vue (mountOverlayText). Give the lines sizes in em; the box sets the font size.",
+  "ex.overlay-text.TextBox.note": "One piece for every text over the game and on stream, also for a page without Vue (mountOverlayText), and OverlayTextSettings for the module's settings. Give the lines sizes in em; the box sets the font size.",
   "ex.overlay-text.TextBox.rule": "Text is never stretched, and in a fixed box never bigger than its step. It scrolls only when it doesn't fit; with reduced motion it is cut off instead.",
 };
 
@@ -787,6 +787,6 @@ export const de: Record<TextKey, string> = {
   "ex.settings.SettingsMenu.note": "Die eigenen Seiten haben keine Überschrift. Overlays steht in einer Trennlinie; der Punkt ist grün, wenn es dort läuft, sonst hohl. Mit settingsMenu bauen.",
   "ex.settings.SettingsMenu.rule": "Overlay-Seiten kommen zuletzt: erst wie es aussieht (Text, Aussehen), dann wo es läuft (Im Spiel, Im Stream).",
   "ex.overlay-text.TextBox": "Rahmen für Overlay-Text",
-  "ex.overlay-text.TextBox.note": "Ein Stück für jeden Text über dem Spiel und im Stream, auch für eine Seite ohne Vue (mountOverlayText). Gib den Zeilen Größen in em; die Box setzt die Schriftgröße.",
+  "ex.overlay-text.TextBox.note": "Ein Stück für jeden Text über dem Spiel und im Stream, auch für eine Seite ohne Vue (mountOverlayText), und OverlayTextSettings für die Einstellungen des Moduls. Gib den Zeilen Größen in em; die Box setzt die Schriftgröße.",
   "ex.overlay-text.TextBox.rule": "Text wird nie gestreckt und in einem festen Rahmen nie größer als seine Stufe. Er läuft nur, wenn er nicht passt; bei weniger Bewegung wird er abgeschnitten.",
 };
