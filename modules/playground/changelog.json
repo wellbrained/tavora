@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.25",
+    "date": "2026-11-03",
+    "notes": [
+      "The zoom specimens now include one that hides and shows the pane, and maps keep their view when you switch tabs or close a dialog."
+    ]
+  },
+  {
     "version": "0.1.24",
     "date": "2026-11-03",
     "notes": [

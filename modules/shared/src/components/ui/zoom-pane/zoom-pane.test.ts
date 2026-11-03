@@ -9,6 +9,15 @@ import type { Size, ZoomView } from "./view"
 // The pane measures itself with a ResizeObserver and the sizes of its elements; jsdom has neither, so both are made up:
 // a pane of 400 x 300 and (for a pane that moves its content) content of 1000 x 1000.
 const PANE: Size = { width: 400, height: 300 }
+/** The size the pane has right now; a test changes it and calls resize(). */
+const box: Size = { ...PANE }
+const observers = new Set<() => void>()
+/** Gives the pane a new box (0 x 0 = display: none) and lets its ResizeObserver fire. */
+function resize(width: number, height: number) {
+  box.width = width
+  box.height = height
+  for (const callback of observers) callback()
+}
 const WORLD: Size = { width: 1000, height: 1000 }
 
 let app: App | undefined
@@ -22,16 +31,20 @@ beforeEach(() => {
   // Not the clock itself: Vue ignores a click whose time is before its handler was attached, and a faked clock says so.
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame"] })
   reduced = false
+  box.width = PANE.width
+  box.height = PANE.height
+  observers.clear()
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: reduced && query.includes("reduce") }))
   vi.stubGlobal("ResizeObserver", class {
     constructor(private callback: () => void) {}
     observe() {
+      observers.add(this.callback)
       this.callback()
     }
     disconnect() {}
   })
-  Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => PANE.width })
-  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => PANE.height })
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => box.width })
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => box.height })
   Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => WORLD.width })
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => WORLD.height })
 })
@@ -723,5 +736,93 @@ describe("ZoomTip when the view moves", () => {
     api.setView({ x: 5, y: 5, zoom: 1 })
     await flush()
     expect(dismissed).toHaveBeenCalled()
+  })
+})
+
+describe("a hidden pane (display: none)", () => {
+  it("keeps its view when it is hidden and shown again, and sends nothing while hidden", async () => {
+    const { api, views } = mount()
+    await flush()
+    api().setView({ x: -120, y: -80, zoom: 1.5 })
+    await flush()
+    const before = views.length
+    resize(0, 0)
+    await flush()
+    expect(views.length).toBe(before)
+    expect(api().view).toEqual({ x: -120, y: -80, zoom: 1.5 })
+    resize(PANE.width, PANE.height)
+    await flush()
+    expect(api().view).toEqual({ x: -120, y: -80, zoom: 1.5 })
+  })
+
+  it("a box with no width or no height is hidden too", async () => {
+    const { api } = mount()
+    await flush()
+    api().setView({ x: -120, y: -80, zoom: 1.5 })
+    await flush()
+    resize(0, 300)
+    resize(400, 0)
+    await flush()
+    expect(api().view).toEqual({ x: -120, y: -80, zoom: 1.5 })
+    expect(api().percent).toBe(150)
+  })
+
+  it("a jump asked for while hidden lands when it shows again; the newest one wins", async () => {
+    const { api } = mount()
+    await flush()
+    resize(0, 0)
+    api().setView({ x: -10, y: -10, zoom: 1 })
+    api().setView({ x: -200, y: -100, zoom: 2 })
+    await flush()
+    expect(api().zoom).not.toBe(2)
+    resize(PANE.width, PANE.height)
+    await flush()
+    expect(api().view).toEqual({ x: -200, y: -100, zoom: 2 })
+  })
+
+  it("a real resize still re-clamps the view", async () => {
+    const { api, last } = mount()
+    await flush()
+    api().setView({ x: 200, y: 150, zoom: 1 })
+    await flush()
+    resize(100, 100)
+    await flush()
+    expect(last().pane).toEqual({ width: 100, height: 100 })
+    // Loose bounds: an edge may reach the middle of the pane, no further.
+    expect(api().view.x).toBe(50)
+    expect(api().view.y).toBe(50)
+  })
+
+  it("a smaller box after being hidden re-clamps, a view that still fits is kept", async () => {
+    const { api } = mount()
+    await flush()
+    api().setView({ x: 200, y: 150, zoom: 1 })
+    await flush()
+    resize(0, 0)
+    resize(100, 100)
+    await flush()
+    expect(api().view).toEqual({ x: 50, y: 50, zoom: 1 })
+  })
+
+  it("a first measure at 0 x 0 does not fit to 0; the first real size fits", async () => {
+    resize(0, 0)
+    const { api, last, views } = mount()
+    await flush()
+    expect(views.length).toBe(0)
+    expect(api().percent).toBe(100)
+    resize(PANE.width, PANE.height)
+    await flush()
+    expect(last().pane).toEqual(PANE)
+    expect(last().view.zoom).toBeCloseTo(0.268, 2)
+  })
+
+  it("a view asked for before the first real size is used instead of the first fit", async () => {
+    resize(0, 0)
+    const { api } = mount()
+    await flush()
+    api().setView({ x: -50, y: -50, zoom: 1 })
+    resize(PANE.width, PANE.height)
+    await flush()
+    expect(api().view).toEqual({ x: -50, y: -50, zoom: 1 })
   })
 })
