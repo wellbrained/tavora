@@ -1,0 +1,71 @@
+/* An overlay text in its box (overlay-text.ts). The box is the element it is mounted on; the text sits in the middle of its
+   height and to the side its alignment says. Only the track moves while a text scrolls, by transform. */
+.tavora-overlay-text {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  white-space: pre;
+}
+
+.tavora-overlay-text[data-align="left"] {
+  align-items: flex-start;
+  text-align: left;
+}
+.tavora-overlay-text[data-align="center"] {
+  align-items: center;
+  text-align: center;
+}
+.tavora-overlay-text[data-align="right"] {
+  align-items: flex-end;
+  text-align: right;
+}
+
+/* A fixed box keeps what is too long inside it. A growing one doesn't cut: its box follows the text. */
+.tavora-overlay-text[data-mode="fixed"] {
+  overflow: hidden;
+}
+
+.tavora-overlay-text-track {
+  display: flex;
+  max-width: 100%;
+}
+
+.tavora-overlay-text-content,
+.tavora-overlay-text-copy {
+  flex: none;
+  width: max-content;
+}
+
+/* Scrolling: the text starts at the box's left whatever its alignment, and the track may run past the box. */
+.tavora-overlay-text[data-plan="scroll"] {
+  align-items: flex-start;
+  text-align: left;
+}
+.tavora-overlay-text[data-plan="scroll"] .tavora-overlay-text-track {
+  max-width: none;
+  will-change: transform;
+}
+
+/* Soft edges: the text fades out at both ends of the box. It starts a fade's width in, so it stands fully readable in its
+   pause. The mask only uses the colours' alpha, so these are not colours shown to anyone. */
+.tavora-overlay-text[data-fade="true"] {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black var(--overlay-text-fade), black calc(100% - var(--overlay-text-fade)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, black var(--overlay-text-fade), black calc(100% - var(--overlay-text-fade)), transparent 100%);
+}
+.tavora-overlay-text[data-fade="true"] .tavora-overlay-text-track {
+  padding-left: var(--overlay-text-fade);
+}
+
+/* Cut off: each line ends with "…" at the box's end. */
+.tavora-overlay-text[data-plan="clip"] .tavora-overlay-text-track,
+.tavora-overlay-text[data-plan="clip"] .tavora-overlay-text-content {
+  width: 100%;
+  min-width: 0;
+}
+.tavora-overlay-text[data-plan="clip"] .tavora-overlay-text-content > * {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -21,6 +21,8 @@ export interface LayoutItemView {
   keyTarget: { owner: string; moduleId: string; workspaceId: string; key: string };
   /** The module's name with the key, or the panel's name. */
   name: string;
+  /** A text that grows with its frame (OverlaySource `fit`): its corners scale it, keeping its shape, and it has no edge handles. */
+  fitText: boolean;
   /** The workspace it comes from ("Notes · Satisfactory" is the name and this). */
   from: string;
   moduleId: string;

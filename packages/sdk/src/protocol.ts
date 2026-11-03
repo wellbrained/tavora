@@ -767,6 +767,14 @@ export interface OverlaySource {
    * is. A new frame starts at this size (with a little room around it); without it, at the manifest's `overlaySize`.
    */
   size?: { width: number; height: number };
+  /**
+   * `"text"`: the overlay is a text that grows with its frame (the kit's overlay text, "grows with the text"). Tavora keeps
+   * its frame as big as `size` times the scale the user gave it by dragging a corner, and resizes the frame when `size`
+   * changes. Without it the frame keeps the size the user gave it. Tavora 0.23.91 and newer; older ones ignore it.
+   */
+  fit?: "text";
+  /** With `fit`: the side the text is aligned to. It stays where it is when the frame grows or shrinks (centre: the middle). */
+  align?: "left" | "center" | "right";
 }
 
 /** A hotkey the user set for this module in the current workspace: which action, for what. Never the key itself. */

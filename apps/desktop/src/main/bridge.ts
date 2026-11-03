@@ -286,6 +286,12 @@ function overlaySources(value: unknown): OverlaySource[] {
       if (width === null || height === null) throw new HostError("INVALID_PARAMS", "a source's size must be a width and a height of 1 to 4000 pixels");
       source.size = { width, height };
     }
+    if (entry.fit !== undefined && entry.fit !== "text") throw new HostError("INVALID_PARAMS", "a source's fit must be \"text\"");
+    if (entry.align !== undefined && entry.align !== "left" && entry.align !== "center" && entry.align !== "right") throw new HostError("INVALID_PARAMS", "a source's align must be left, center or right");
+    if (entry.fit === "text") {
+      source.fit = "text";
+      source.align = (entry.align as OverlaySource["align"]) ?? "center";
+    }
     return source;
   });
 }

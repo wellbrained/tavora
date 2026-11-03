@@ -11,7 +11,7 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vu
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
-import { boundsOf, snapMove, snapResize, touches, type Edges, type Guide } from "../../../shared/layout-math";
+import { boundsOf, keepShape, snapMove, snapResize, touches, type Edges, type Guide } from "../../../shared/layout-math";
 import type { LayoutItemView } from "../../../shared/layout-view";
 import type { Rect } from "../../../shared/overlay-anchor";
 import { state } from "../../host";
@@ -93,6 +93,10 @@ const HANDLES = [
   { edge: "l", edges: { left: true }, cursor: "ew-resize", at: "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2" },
 ] as const satisfies readonly { edge: string; edges: Edges; cursor: string; at: string }[];
 
+/** A text that grows with its frame is scaled from its corners only (OBS-style); an edge would stretch it out of shape. */
+const CORNERS = HANDLES.filter((handle) => handle.edge.length === 2);
+const handlesOf = (item: LayoutItemView) => (item.fitText ? CORNERS : HANDLES);
+
 /** Ctrl or Cmd, or Shift: a click adds to the selection or takes away from it. */
 const adds = (event: PointerEvent | MouseEvent) => event.shiftKey || (mac ? event.metaKey : event.ctrlKey);
 
@@ -151,8 +155,9 @@ function move(event: PointerEvent) {
       options,
       now.minSize,
     );
-    rects = { [current.id]: result.rect };
-    guides.value = result.guides;
+    const grabbed = shown.value.find((item) => item.id === current.id);
+    rects = { [current.id]: grabbed?.fitText ? keepShape(origin, result.rect, current.edges, now.canvas, now.minSize) : result.rect };
+    guides.value = grabbed?.fitText ? [] : result.guides;
   } else {
     // The box around the frames snaps (and stays on the canvas); each frame moves by as much, so they keep their places to each other.
     const box = boundsOf(Object.values(current.origins))!;
@@ -355,7 +360,7 @@ const keyOf = (item: LayoutItemView) => (item.mode === "toggle" && item.hotkey ?
       </span>
       <template v-if="single === item.id">
         <span
-          v-for="handle in HANDLES"
+          v-for="handle in handlesOf(item)"
           :key="handle.edge"
           :class="cn('bg-primary border-background absolute size-3 rounded-sm border', handle.at)"
           :style="{ cursor: handle.cursor }"

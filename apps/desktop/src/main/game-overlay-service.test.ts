@@ -2385,3 +2385,74 @@ describe("what a panel lists", () => {
     expect(service.layout.addOverlay("$all", { ...subject, moduleId: "nobody.nothing" })).toBe("refused");
   });
 });
+
+describe("a text that grows with its frame", () => {
+  const place = { moduleId: CLOCK.manifest.id, workspaceId: "personal" };
+  const subject = { owner: "official", ...place, key: "item-1" };
+  const ref = { kind: "overlay" as const, subject };
+  /** The frame in canvas px of a 1080 high window. */
+  const px = (service: Awaited<ReturnType<typeof setup>>["service"], setupId = "$everywhere") => {
+    const rect = service.layout.items(setupId).find((info) => info.ref.kind === "overlay")!.rect;
+    return { x: Math.round(rect.x * 1080), y: Math.round(rect.y * 1080), width: Math.round(rect.width * 1080), height: Math.round(rect.height * 1080) };
+  };
+  const source = (width: number, height: number, align: "left" | "center" | "right" = "left") => [{ key: "item-1", name: "Deaths", size: { width, height }, fit: "text" as const, align }];
+
+  async function withFrame(frame: { x: number; y: number; width: number; height: number }) {
+    const made = await setup();
+    expect(made.service.layout.addOverlay("$everywhere", subject)).toBe("added");
+    made.service.layout.setRect("$everywhere", ref, { h: "left", v: "top", x: frame.x / 1080, y: frame.y / 1080, width: frame.width / 1080, height: frame.height / 1080 });
+    return made;
+  }
+
+  it("keeps a frame saved before looking the same: the text keeps its size, the frame fits around it", async () => {
+    // Today a "." was stretched over 500 × 66; the page drew it 50 high, so it stays 50 high.
+    const { service } = await withFrame({ x: 100, y: 100, width: 500, height: 66 });
+    service.setSources("p1", "official", source(14, 50, "center"), place);
+    expect(px(service)).toEqual({ x: 335, y: 100, width: 30, height: 66 });
+  });
+
+  it("follows a bigger step and keeps the scale the user gave it", async () => {
+    const { service } = await withFrame({ x: 100, y: 100, width: 2 * 200 + 16, height: 2 * 50 + 16 });
+    service.setSources("p1", "official", source(200, 50), place);
+    expect(px(service)).toEqual({ x: 100, y: 100, width: 416, height: 116 });
+    // XL instead of M: the text is 20/14 as big, at the same scale of 2.
+    service.setSources("p1", "official", source(Math.round((200 * 20) / 14), Math.round((50 * 20) / 14)), place);
+    expect(px(service).width).toBe(2 * 286 + 16);
+    expect(px(service).height).toBe(2 * 71 + 16);
+  });
+
+  it("grows to the left for right-aligned text, and does nothing for an unchanged size", async () => {
+    const { service, world } = await withFrame({ x: 500, y: 100, width: 216, height: 66 });
+    service.setSources("p1", "official", source(200, 50, "right"), place);
+    service.setSources("p1", "official", source(300, 50, "right"), place);
+    expect(px(service)).toMatchObject({ x: 400, width: 316 });
+    const changes = world.changes;
+    service.setSources("p1", "official", source(300, 50, "right"), place);
+    expect(world.changes).toBe(changes);
+  });
+
+  it("fits around the text again after the user resized it, at the scale that now fills it", async () => {
+    const { service } = await withFrame({ x: 100, y: 100, width: 216, height: 66 });
+    service.setSources("p1", "official", source(200, 50), place);
+    // Made twice as high, but not wider: the width says how big it can be.
+    service.layout.setRect("$everywhere", ref, { h: "left", v: "top", x: 100 / 1080, y: 100 / 1080, width: 416 / 1080, height: 300 / 1080 });
+    expect(px(service)).toMatchObject({ width: 416, height: 116 });
+  });
+
+  it("leaves a fixed box and other modules' frames as they are", async () => {
+    const { service } = await withFrame({ x: 100, y: 100, width: 500, height: 66 });
+    service.setSources("p1", "official", [{ key: "item-1", name: "Deaths", size: { width: 14, height: 50 } }], place);
+    expect(px(service)).toEqual({ x: 100, y: 100, width: 500, height: 66 });
+    service.setSources("p1", "official", source(14, 50), { ...place, moduleId: "tavora.other" });
+    expect(px(service)).toEqual({ x: 100, y: 100, width: 500, height: 66 });
+  });
+
+  it("fits the frame in every setup that has it", async () => {
+    const { service } = await withFrame({ x: 100, y: 100, width: 500, height: 66 });
+    expect(service.layout.addOverlay("$all", subject)).toBe("added");
+    service.layout.setRect("$all", ref, { h: "left", v: "top", x: 0, y: 0, width: 1000 / 1080, height: 116 / 1080 });
+    service.setSources("p1", "official", source(14, 50), place);
+    expect(px(service).width).toBe(30);
+    expect(px(service, "$all")).toEqual({ x: 0, y: 0, width: 2 * 14 + 16, height: 116 });
+  });
+});

@@ -390,6 +390,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       keyTarget: { owner: info.keyTarget.owner, moduleId: info.keyTarget.moduleId, workspaceId: info.keyTarget.workspaceId, key: info.keyTarget.key },
       // A thing its panel listed goes by the name the panel gave it.
       name: this.sourceOf(info, panels)?.name ?? info.name,
+      fitText: this.sourceOf(info, panels)?.fit === "text",
       from: this.options.workspaces.name(info.keyTarget.workspaceId) ?? "",
       moduleId: info.moduleId,
       kind: info.ref.kind,
@@ -687,7 +688,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   /** The size an overlay needs on the canvas (what its panel said, with room around it), on the grid and never below the smallest size; null when the panel said nothing. */
   private fitSize(source: OverlaySource | undefined, shape: Shape): { width: number; height: number } | null {
     if (!source?.size) return null;
-    const cell = gridCell(this.options.source.grid(), REFERENCE_HEIGHT);
+    // A text that grows with its frame is fitted exactly (the service keeps it so); on the grid it would come out a little bigger.
+    const cell = source.fit === "text" ? 0 : gridCell(this.options.source.grid(), REFERENCE_HEIGHT);
     const snap = (value: number) => (cell > 0 ? Math.ceil(value / cell) * cell : Math.round(value));
     const min = this.minimum(shape);
     return {

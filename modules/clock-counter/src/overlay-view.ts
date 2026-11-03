@@ -1,7 +1,9 @@
 // Draws one item's overlay text into an element: the page OBS shows uses it with the whole window as its box, and the settings
 // use it for their live preview, so what is previewed is what is drawn. The line is runs of words and values (template.ts); each
-// has its own colour and size, the number keeps its tabular digits, and the whole line is scaled to fill the box.
-import { sizeScales, type OverlayState } from "./items";
+// has its own colour and size, the number keeps its tabular digits. The kit's overlay text (OverlayText) sizes it in its box:
+// grown with the frame, or at its own size in a fixed box where a line too long scrolls, shrinks or is cut off.
+import { mountOverlayText, type OverlayTextOptions } from "@tavora/official-ui/overlay-text";
+import { boxOf, sizeScales, type OverlayState } from "./items";
 import { lineOf } from "./line";
 import { LAP_SHARE, VALUE_PX } from "./sources";
 import "./overlay-view.css";
@@ -11,73 +13,78 @@ export type OverlayView = {
   draw(state: OverlayState | null, now?: number): void;
   /** Sizes the text again, once the box or the fonts changed. */
   fit(): void;
+  destroy(): void;
 };
 
 export type OverlayViewOptions = {
-  /** The room the text may fill. */
-  box: () => { width: number; height: number };
   /** The room kept around the text, in pixels of the box. */
   padding: number;
-  /** The text grows to fill the box (a source in OBS), or only shrinks to fit it (a preview). */
-  grow: boolean;
+  /**
+   * The preview in the settings: a text that grows with its frame is shown at its natural size and only shrinks to fit the
+   * preview, since the preview is not its frame.
+   */
+  preview?: boolean;
 };
 
 const element = (tag: string, className: string): HTMLElement => Object.assign(document.createElement(tag), { className });
 
+/** What tells one text from the next: the words. A value that changes (a counter ticks) is the same text, so a scroll runs on. */
+const wordsOf = (state: OverlayState, segments: { text: string; value: boolean }[]) => `${state.kind}:${segments.filter((part) => !part.value).map((part) => part.text).join("")}`;
+
 export function mountOverlayView(root: HTMLElement, options: OverlayViewOptions): OverlayView {
   root.classList.add("cc-ov");
-  root.style.padding = `${options.padding}px`;
+  const text = mountOverlayText(root, { padding: options.padding });
   const line = element("div", "cc-line");
   const lap = element("div", "cc-lap");
-  root.replaceChildren(line, lap);
-  let sizes = { words: 1, number: 1 };
-
-  /** Every size at `scale` times its natural one. */
-  function size(scale: number): void {
-    const px = (share: number) => `${VALUE_PX * share * scale}px`;
-    const hasNumber = line.querySelector(".cc-n") !== null;
-    const hasWords = line.querySelector(".cc-w") !== null;
-    // The line box takes the biggest run, so the height is the same however the runs are mixed.
-    line.style.fontSize = px(Math.max(hasNumber ? sizes.number : 0, hasWords ? sizes.words : 0));
-    for (const run of line.children) (run as HTMLElement).style.fontSize = px(run.classList.contains("cc-n") ? sizes.number : sizes.words);
-    lap.style.fontSize = px(sizes.number * LAP_SHARE);
-  }
-
-  function fit(): void {
-    if (root.hidden) return;
-    const box = options.box();
-    const room = { width: Math.max(box.width - 2 * options.padding, 1), height: Math.max(box.height - 2 * options.padding, 1) };
-    size(1);
-    const lapShown = lap.textContent !== "";
-    const natural = { width: Math.max(line.offsetWidth, lapShown ? lap.offsetWidth : 0), height: line.offsetHeight + (lapShown ? lap.offsetHeight : 0) };
-    if (!natural.width || !natural.height) return;
-    const scale = Math.min(room.width / natural.width, room.height / natural.height);
-    size(options.grow ? scale : Math.min(scale, 1));
-  }
+  text.content.replaceChildren(line, lap);
+  let key: string | null = null;
+  let applied = "";
 
   function draw(state: OverlayState | null, now = Date.now()): void {
     root.hidden = state === null;
-    if (!state) return;
+    if (!state) {
+      text.fit();
+      return;
+    }
     const { look } = state;
     const shown = lineOf(state, now);
     root.style.setProperty("--color", look.color);
     root.style.setProperty("--words", look.wordsColor ?? look.color);
     root.dataset.font = look.font;
-    root.dataset.align = look.align;
     root.dataset.outline = String(look.outline);
     if (shown.flashing) root.dataset.done = "flash";
     else delete root.dataset.done;
-    sizes = sizeScales(look);
+
+    // Each run's size at the natural size, in px; the kit multiplies it with the scale of the box.
+    const sizes = sizeScales(look);
+    const px = (share: number) => `${VALUE_PX * share}px`;
+    const hasNumber = shown.segments.some((part) => part.value);
+    const hasWords = shown.segments.some((part) => !part.value);
+    // The line box takes the biggest run, so the height is the same however the runs are mixed.
+    line.style.setProperty("--size", px(Math.max(hasNumber ? sizes.number : 0, hasWords ? sizes.words : 0)));
     line.replaceChildren(
       ...shown.segments.map((part) => {
         const run = element("span", part.value ? "cc-n" : "cc-w");
         run.textContent = part.text;
+        run.style.setProperty("--size", px(part.value ? sizes.number : sizes.words));
         return run;
       }),
     );
+    lap.style.setProperty("--size", px(sizes.number * LAP_SHARE));
     lap.textContent = shown.lap;
-    fit();
+
+    const box = boxOf(look);
+    const settings: Partial<OverlayTextOptions> =
+      options.preview && box.mode === "grow" ? { ...box, mode: "fixed", overflow: "shrink", align: look.align } : { ...box, align: look.align, gap: VALUE_PX * sizes.number };
+    // Set only when they changed: a clock draws four times a second.
+    if (JSON.stringify(settings) !== applied) {
+      applied = JSON.stringify(settings);
+      text.set(settings);
+    }
+    const next = wordsOf(state, shown.segments);
+    text.changed(key !== null && next !== key);
+    key = next;
   }
 
-  return { draw, fit };
+  return { draw, fit: () => text.fit(), destroy: () => text.destroy() };
 }

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.25",
+    "date": "2026-11-03",
+    "notes": [
+      "Overlay text keeps its size: drag a corner to scale it, or give it a fixed box where long text scrolls, shrinks or is cut off."
+    ]
+  },
+  {
     "version": "0.1.24",
     "date": "2026-11-02",
     "notes": [

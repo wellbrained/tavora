@@ -2,6 +2,8 @@
 // real time: a running clock stores when it started (`since`, epoch ms) and what it had counted before (`counted`, ms),
 // so it goes on through restarts and needs no saving while it runs. Every change here is a plain function of the
 // list, so a change made twice (after a save conflict) gives the same result.
+// The rules alone, without the page part (and its CSS): this file is read by tests and tools outside a page too.
+import { readOverlayTextSettings, type OverlayTextSettings as OverlayTextSettingsValue } from "@tavora/official-ui/overlay-text/plan";
 import type { JsonValue } from "@tavora/sdk";
 import { compile, COUNT, defaultText, legacyText, segments, TIME, type Member, type Segment } from "./template";
 import { DEFAULT_FORMAT, formatSeconds, isFormat } from "./time";
@@ -89,7 +91,15 @@ export type OverlayLook = {
   /** The same sizes as the version before knows them (S to XL, see OLD_STEPS); kept for it, and read when there are no steps. */
   wordsSize: OldStep;
   numberSize: OldStep;
+  /**
+   * How the text sits in its frame (the kit's overlay text): grows with the text, or a fixed box where a text too long
+   * scrolls, shrinks or is cut off. Absent (saved before it, or never changed): grows with the text, as every frame did.
+   */
+  textBox?: OverlayTextSettingsValue;
 };
+
+/** How the text sits in its frame: what is saved, or the defaults. */
+export const boxOf = (look: Pick<OverlayLook, "textBox">): OverlayTextSettingsValue => readOverlayTextSettings(look.textBox);
 
 type Base = {
   id: string;
@@ -197,6 +207,7 @@ function parseLook(raw: unknown): OverlayLook {
   // Fields of the text settings: left out of data that was saved before them, which reads the old way (see itemText).
   if (typeof look.text === "string") parsed.text = look.text.slice(0, MAX.text);
   if (typeof look.wordsColor === "string" && HEX.test(look.wordsColor)) parsed.wordsColor = look.wordsColor;
+  if (isRecord(look.textBox)) parsed.textBox = readOverlayTextSettings(look.textBox);
   return parsed;
 }
 

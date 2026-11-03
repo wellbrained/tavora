@@ -16,6 +16,7 @@ import type { GameOverlayResult, JsonValue, OverlaySource } from "@tavora/sdk/pr
 import type { GameOverlaysView } from "../shared/host-api";
 import { translate, type Language } from "../shared/i18n";
 import { DEFAULT_RECT, anchorOf, contentScale, type AnchoredRect, type LegacyRect } from "../shared/overlay-anchor";
+import { fillScale, fitTextFrame, heightScale, sameFrame, type TextAlign } from "../shared/overlay-text-frame";
 import type { GridSetting } from "../shared/layout-math";
 import { HostError } from "./errors";
 import type { Foreground, ForegroundProbe } from "./foreground";
@@ -324,6 +325,12 @@ export class GameOverlays {
   private readonly liveWatchers = new Map<string, Set<(state: JsonValue | null | undefined) => void>>();
   /** What each panel passes to overlay.setSources (its own list, last call wins); kept while the panel exists, in memory only. */
   private readonly sourceLists = new Map<string, { owner: string; sources: OverlaySource[] }>();
+  /**
+   * The size each overlay text that grows with its frame said it needs last (overlayId), and its alignment: when it says a new
+   * size, its frames keep the scale they had with the old one. In memory only; after a start the first size fits the frame
+   * as it was.
+   */
+  private readonly textNeeds = new Map<string, { size: { width: number; height: number }; align: TextAlign }>();
 
   private constructor(
     private readonly options: GameOverlayServiceOptions,
@@ -478,10 +485,54 @@ export class GameOverlays {
   }
 
   /** overlay.setSources: what the panel can show over the game on its own (already checked); the Overlay page lists it under the panel. */
-  setSources(instanceId: string, owner: string, sources: OverlaySource[]): void {
+  setSources(instanceId: string, owner: string, sources: OverlaySource[], place?: { moduleId: string; workspaceId: string }): void {
     // An empty list still says the panel lists its things (it has none right now), so it isn't offered as a whole either.
     this.sourceLists.set(instanceId, { owner, sources: sources.map((source) => ({ ...source, ...(source.size ? { size: { ...source.size } } : {}) })) });
+    if (place && this.fitTexts(owner, place, sources)) {
+      this.options.changed();
+      this.tick();
+    }
     this.layoutPort?.refresh();
+  }
+
+  /**
+   * The frames of every overlay text that grows with its frame and said a new size: each keeps its scale and fits around the
+   * text again, in every setup that has it. Whether any frame changed.
+   */
+  private fitTexts(owner: string, place: { moduleId: string; workspaceId: string }, sources: readonly OverlaySource[]): boolean {
+    let changed = false;
+    for (const source of sources) {
+      const subject = { owner, moduleId: place.moduleId, workspaceId: place.workspaceId, key: source.key };
+      const id = overlayId(subject);
+      if (source.fit !== "text" || !source.size) {
+        this.textNeeds.delete(id);
+        continue;
+      }
+      const before = this.textNeeds.get(id);
+      const align = source.align ?? "center";
+      if (before && before.size.width === source.size.width && before.size.height === source.size.height && before.align === align) continue;
+      this.textNeeds.set(id, { size: { ...source.size }, align });
+      for (const setupId of this.store.setupsWith({ kind: "overlay", subject })) {
+        const overlay = this.store.find(subject, setupId);
+        // A frame not converted from the old fractions yet waits until it is (its size in window heights isn't known).
+        if (!overlay || overlay.legacy) continue;
+        // The scale it had: from its height with the size before (a text that got wider keeps it), or, the first time, the one that fills it.
+        const scale = before ? heightScale(overlay.rect, before.size) : fillScale(overlay.rect, source.size);
+        const next = fitTextFrame(overlay.rect, source.size, scale, align);
+        if (!sameFrame(next, overlay.rect) && this.store.setRect(setupId, { kind: "overlay", subject }, next)) changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /** A frame the user resized: one that grows with its text fits around it again at the scale that now fills it. */
+  private fitTextAfterResize(setupId: string, ref: ItemRef): void {
+    if (ref.kind !== "overlay") return;
+    const need = this.textNeeds.get(overlayId(ref.subject));
+    const overlay = need ? this.store.find(ref.subject, setupId) : undefined;
+    if (!need || !overlay) return;
+    const next = fitTextFrame(overlay.rect, need.size, fillScale(overlay.rect, need.size), need.align);
+    if (!sameFrame(next, overlay.rect)) this.store.setRect(setupId, ref, next);
   }
 
   /** What a panel told overlay.setSources, if it did and its module is still its publisher's; null when it never did. */
@@ -1123,7 +1174,10 @@ export class GameOverlays {
   private movedIn(id: string, ref: ItemRef, rect: Rect): void {
     const setup = this.open.get(id)?.setup;
     const area = setup !== undefined ? this.areaOf(setup) : null;
-    if (setup !== undefined && area && this.store.setRect(setup, ref, anchorOf(rect, area))) this.options.changed();
+    if (setup !== undefined && area && this.store.setRect(setup, ref, anchorOf(rect, area))) {
+      this.fitTextAfterResize(setup, ref);
+      this.options.changed();
+    }
   }
 
   private create(overlay: GameOverlay, id: string, setup: string): Open | null {
@@ -1267,6 +1321,7 @@ export class GameOverlays {
       move: (ref, from, to) => this.moveItem(ref, from, to),
       setRect: (setupId, ref, rect) => {
         const done = this.store.setRect(setupId, ref, rect);
+        if (done) this.fitTextAfterResize(setupId, ref);
         // On screen at once: the windows take their new place on this look.
         if (done) this.tick();
         return done;

@@ -107,3 +107,34 @@ describe("overlayKey and itemForKey", () => {
     expect(overlayKey(linked(false), linked(false).items[0]!)).toBe("d");
   });
 });
+
+describe("sources of a text that grows with its frame", () => {
+  it("say so, with the alignment, so Tavora keeps the frame around the text", () => {
+    const boss = newItem("countdown", "b", "Boss");
+    boss.look.align = "right";
+    const fixed = newItem("counter", "c", "Deaths");
+    fixed.look.textBox = { mode: "fixed", overflow: "scroll", speed: "normal", pause: 2, softEdges: true };
+    const [grows, box] = buildSources(list(boss, fixed), measure, name, NOW);
+    expect(grows).toMatchObject({ key: "b", fit: "text", align: "right" });
+    // A fixed box keeps the size the user gave it.
+    expect(box!.fit).toBeUndefined();
+    expect(box!.align).toBeUndefined();
+  });
+
+  it("say so for a group shown as one line too", () => {
+    const [group] = buildSources(linked(true), measure, name, NOW);
+    expect(group).toMatchObject({ group: true, fit: "text", align: "center" });
+  });
+
+  it("grow with a bigger step: the size Tavora fits the frame to follows the step", () => {
+    const deaths = newItem("counter", "c", "Deaths") as Counter;
+    const at = (step: "s" | "xl") => {
+      deaths.look = { ...deaths.look, wordsStep: step, numberStep: step };
+      return itemSize(deaths, measure, NOW);
+    };
+    const small = at("s");
+    const big = at("xl");
+    expect(big.width / small.width).toBeCloseTo(20 / 13, 1);
+    expect(big.height).toBeGreaterThan(small.height);
+  });
+});

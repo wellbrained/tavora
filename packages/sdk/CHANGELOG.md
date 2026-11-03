@@ -1,3 +1,9 @@
+## 0.3.11
+
+A text overlay that grows with its frame. The new fields come with Tavora 0.23.91 (`later`: the number is given when it merges); an older Tavora ignores them, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- An `OverlaySource` may say `fit: "text"` and `align`: its frame on the Overlay page is kept as big as `size` times the scale the user gave it by dragging a corner, and follows `size` when it changes; the aligned side stays put. Its corners keep its shape and it has no edge handles. Without `fit` the frame keeps the size the user gave it.
+
 ## 0.3.10
 
 A signal for "the user is in the game". The new event comes with Tavora 0.23.82 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).

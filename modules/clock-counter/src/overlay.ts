@@ -7,8 +7,9 @@ import "./overlay.css";
 
 const root = document.getElementById("overlay")!;
 const live = document.getElementById("live")!;
-// A little room around the text, as a new frame is sized with (sources.ts); the text fills the rest of the window.
-const view = mountOverlayView(root, { box: () => ({ width: innerWidth, height: innerHeight }), padding: FIT_PADDING, grow: true });
+// A little room around the text, as a new frame is sized with (sources.ts). The kit sizes the text in the rest of the window:
+// grown with the frame, or at its own size in a fixed box.
+const view = mountOverlayView(root, { padding: FIT_PADDING });
 
 /** The state of one item (OBS, or one item over the game), or of all a panel's items (its live view over the game). */
 let state: OverlayState | LiveState | null = null;
@@ -64,5 +65,4 @@ watchOverlay((next) => {
   draw();
 });
 
-addEventListener("resize", () => view.fit());
 void document.fonts.ready.then(() => view.fit());

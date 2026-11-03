@@ -55,6 +55,7 @@ export const en = {
   "page.zoom": "Pan & Zoom",
   "page.map": "Tile map",
   "page.settings": "Settings page",
+  "page.overlay-text": "Overlay text",
 
   "intro.colours": "Every colour comes from the theme, so switch the theme in Tavora and these follow.",
   "intro.text": "Inter for the interface, JetBrains Mono for code and ids. Five sizes, three weights.",
@@ -83,6 +84,7 @@ export const en = {
   "intro.zoom": "Drag to move, Ctrl + scroll or pinch to zoom, double-click to zoom in. The group in the corner zooms, shows the whole thing and holds your own buttons.",
   "intro.map": "A map made of picture tiles with pins that keep their size.",
   "intro.settings": "A module's settings in its dialog: pages left, one column right. Changes apply at once.",
+  "intro.overlay-text": "Text over a game or on stream: it grows with its frame, or keeps its size in a fixed box.",
 
   "ex.colours.Tokens": "Theme tokens",
   "ex.colours.Tokens.note": "Each token with the class you write for it and its value in the current theme.",
@@ -373,6 +375,13 @@ export const en = {
   "ex.map.TileMap": "Tile map",
   "ex.map.TileMap.note": "Pins close together merge into a group with a count; dots merge only among themselves. Give keyboards the same places as a list next to the map.",
 
+  "ex.overlay-text.FixedBox": "Fixed box",
+  "ex.overlay-text.FixedBox.note": "The text keeps its size and never grows to fill the box. Too long, it scrolls, shrinks or is cut off.",
+  "ex.overlay-text.FixedBox.rule": "Scrolling moves only a transform, pauses while hidden, and is cut off instead with reduced motion.",
+  "ex.overlay-text.GrowsWithText": "Grows with the text",
+  "ex.overlay-text.GrowsWithText.note": "The frame is as big as the text. Dragging a corner scales both; the text stays sharp.",
+  "ex.overlay-text.TextSettings": "Settings",
+  "ex.overlay-text.TextSettings.note": "Put these rows on the Look page. Rows that don't apply are left out.",
   "ex.settings.OnePage": "One page",
   "ex.settings.OnePage.note": "Narrower than the usual 960 by the menu (760), and at least six rows tall. Ask for that size with settingsDialogSize({ pages: 1, rows }).",
   "ex.settings.OnePage.rule": "One page has no menu: the rows sit straight on the dialog. Every row in a section has a description or none does, and units go in the description (\"In minutes.\"), never next to the last option.",
@@ -443,6 +452,7 @@ export const de: Record<TextKey, string> = {
   "page.zoom": "Schieben & Zoomen",
   "page.map": "Kachelkarte",
   "page.settings": "Einstellungsseite",
+  "page.overlay-text": "Overlay-Text",
 
   "intro.colours": "Jede Farbe kommt aus dem Theme: Wechsle das Theme in Tavora, und diese folgen.",
   "intro.text": "Inter für die Oberfläche, JetBrains Mono für Code und IDs. Fünf Größen, drei Stärken.",
@@ -471,6 +481,7 @@ export const de: Record<TextKey, string> = {
   "intro.zoom": "Ziehen zum Verschieben, Strg + Mausrad oder zwei Finger zum Zoomen, Doppelklick zum Hineinzoomen. Die Gruppe in der Ecke zoomt, zeigt alles und nimmt eigene Buttons auf.",
   "intro.map": "Eine Karte aus Bildkacheln mit Pins, die ihre Größe behalten.",
   "intro.settings": "Die Einstellungen eines Moduls in seinem Dialog: Seiten links, eine Spalte rechts. Änderungen gelten sofort.",
+  "intro.overlay-text": "Text über einem Spiel oder im Stream: Er wächst mit seinem Rahmen oder behält seine Größe in einem festen Rahmen.",
 
   "ex.colours.Tokens": "Theme-Farben",
   "ex.colours.Tokens.note": "Jede Farbe mit der Klasse, die du dafür schreibst, und ihrem Wert im aktuellen Theme.",
@@ -761,6 +772,13 @@ export const de: Record<TextKey, string> = {
   "ex.map.TileMap": "Kachelkarte",
   "ex.map.TileMap.note": "Pins nah beieinander werden zu einer Gruppe mit Anzahl; Punkte nur untereinander. Gib der Tastatur dieselben Orte als Liste neben der Karte.",
 
+  "ex.overlay-text.FixedBox": "Fester Rahmen",
+  "ex.overlay-text.FixedBox.note": "Der Text behält seine Größe und wird nie größer, um den Rahmen zu füllen. Ist er zu lang, läuft er, wird kleiner oder gekürzt.",
+  "ex.overlay-text.FixedBox.rule": "Beim Laufen bewegt sich nur ein Transform, es pausiert, solange nichts zu sehen ist, und bei weniger Bewegung wird gekürzt.",
+  "ex.overlay-text.GrowsWithText": "Wächst mit dem Text",
+  "ex.overlay-text.GrowsWithText.note": "Der Rahmen ist so groß wie der Text. Ziehst du an einer Ecke, skalierst du beides; der Text bleibt scharf.",
+  "ex.overlay-text.TextSettings": "Einstellungen",
+  "ex.overlay-text.TextSettings.note": "Diese Zeilen gehören auf die Seite Aussehen. Zeilen, die nicht passen, fallen weg.",
   "ex.settings.OnePage": "Eine Seite",
   "ex.settings.OnePage.note": "Um das Menü schmaler als die üblichen 960 (760) und mindestens sechs Zeilen hoch. Diese Größe fragst du mit settingsDialogSize({ pages: 1, rows }) an.",
   "ex.settings.OnePage.rule": "Eine Seite hat kein Menü: Die Zeilen liegen direkt auf dem Dialog. In einem Abschnitt haben alle Zeilen eine Beschreibung oder keine, und Einheiten stehen in der Beschreibung (\"In Minuten.\"), nie neben der letzten Option.",

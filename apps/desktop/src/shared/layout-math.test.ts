@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundsOf, canvasFor, gridCell, isGridSetting, moveGroup, nudge, snapMove, snapResize, touches, type SnapOptions } from "./layout-math";
+import { boundsOf, canvasFor, gridCell, isGridSetting, keepShape, moveGroup, nudge, snapMove, snapResize, touches, type SnapOptions } from "./layout-math";
 
 const canvas = { width: 1920, height: 1080 };
 const rect = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
@@ -184,5 +184,23 @@ describe("frames together", () => {
   it("tells which frames a box touches", () => {
     expect(touches({ x: 0, y: 0, width: 100, height: 100 }, a)).toBe(true);
     expect(touches({ x: 0, y: 0, width: 99, height: 99 }, a)).toBe(false);
+  });
+});
+
+describe("keepShape (a text that grows with its frame)", () => {
+  const canvas = { width: 1920, height: 1080 };
+  const origin = { x: 100, y: 100, width: 200, height: 50 };
+
+  it("scales by the side that changed more, from the opposite corner", () => {
+    expect(keepShape(origin, { x: 100, y: 100, width: 400, height: 60 }, { right: true, bottom: true }, canvas, 10)).toEqual({ x: 100, y: 100, width: 400, height: 100 });
+    // The top left corner dragged up: the bottom right stays.
+    expect(keepShape({ ...origin, x: 500 }, { x: 490, y: 50, width: 210, height: 100 }, { left: true, top: true }, canvas, 10)).toEqual({ x: 300, y: 50, width: 400, height: 100 });
+    // Up to the canvas edge only.
+    expect(keepShape(origin, { x: 90, y: 50, width: 210, height: 100 }, { left: true, top: true }, canvas, 10)).toEqual({ x: 0, y: 75, width: 300, height: 75 });
+  });
+
+  it("stays on the canvas and not below the smallest size", () => {
+    expect(keepShape(origin, { x: 100, y: 100, width: 5000, height: 50 }, { right: true, bottom: true }, canvas, 10).width).toBeLessThanOrEqual(1820);
+    expect(keepShape(origin, { x: 100, y: 100, width: 20, height: 5 }, { right: true, bottom: true }, canvas, 48)).toEqual({ x: 100, y: 100, width: 192, height: 48 });
   });
 });

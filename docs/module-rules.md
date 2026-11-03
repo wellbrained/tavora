@@ -70,6 +70,7 @@ classes where you use a control; never copy it.
 | Small chart | `Sparkline` | |
 | Rating | `StarRating` | |
 | Module settings page | `ModuleSettings` and its parts; the menu with `settingsMenu` (own pages, then Overlays: Text, Look, In game, On stream) | own settings layout, own menu order or icons |
+| Text on an overlay page (OBS or over the game) | `OverlayText` (Vue) or `mountOverlayText` from `@tavora/official-ui/overlay-text` (plain DOM), with `OverlayTextSettings` rows on the Look page; sizes in the text multiply with `var(--overlay-text-scale)`. In "grow" say `fit: "text"` and `align` in `overlay.setSources`, so Tavora keeps the frame around it | text stretched to fill its frame, an own marquee or `scale()` on text |
 | A one-line text with `{placeholders}` | `TemplateInput` (marks the placeholders it knows; `insert` adds one at the cursor) | an `Input` with a hint about braces |
 | Welcome on first add (optional) | kit parts as in [module-welcome.md](../apps/docs/guide/module-welcome.md) (Palworld is the reference) | a tour, popups over the panel, own frame |
 

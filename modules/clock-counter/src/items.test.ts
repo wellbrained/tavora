@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  boxOf,
   count,
   defaultLook,
   defaultStored,
@@ -470,5 +471,33 @@ describe("the one size scale", () => {
     const first1 = again(old);
     expect([first1.wordsStep, first1.numberStep, first1.wordsSize, first1.numberSize]).toEqual(["xs", "xl", "l", "xl"]);
     expect(again(first1)).toEqual(first1);
+  });
+});
+
+describe("the box of an overlay text", () => {
+  it("reads an item saved before it as growing with the text, and adds nothing to it", () => {
+    const saved = JSON.parse(JSON.stringify({ items: [newItem("counter", "c", "Deaths")] }));
+    delete saved.items[0].look.textBox;
+    const item = parseList(saved).items[0]!;
+    expect(item.look.textBox).toBeUndefined();
+    expect(boxOf(item.look)).toEqual({ mode: "grow", overflow: "scroll", speed: "normal", pause: 2, softEdges: true });
+  });
+
+  it("keeps what was set, and fixes what can't be used", () => {
+    const saved = JSON.parse(JSON.stringify({ items: [newItem("counter", "c", "Deaths")] }));
+    saved.items[0].look.textBox = { mode: "fixed", overflow: "clip", speed: "fast", pause: 1.4, softEdges: false };
+    expect(parseList(saved).items[0]!.look.textBox).toEqual({ mode: "fixed", overflow: "clip", speed: "fast", pause: 1.5, softEdges: false });
+    saved.items[0].look.textBox = { mode: "wide" };
+    expect(parseList(saved).items[0]!.look.textBox).toEqual({ mode: "grow", overflow: "scroll", speed: "normal", pause: 2, softEdges: true });
+  });
+
+  it("is a field of its own next to the old ones, so the version before still reads the look as it did", () => {
+    const item = newItem("counter", "c", "Deaths");
+    item.look.textBox = { mode: "fixed", overflow: "scroll", speed: "slow", pause: 0, softEdges: true };
+    const saved = JSON.parse(JSON.stringify({ items: [item] }));
+    const { textBox, ...rest } = saved.items[0].look;
+    expect(textBox).toBeDefined();
+    // Every field the version before reads is there with the same value as without the box.
+    expect(rest).toEqual(JSON.parse(JSON.stringify(newItem("counter", "c", "Deaths").look)));
   });
 });

@@ -10,14 +10,16 @@ import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
 import { Combobox, ComboboxAnchor, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from "@tavora/official-ui/components/ui/combobox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { OverlayTextSettings, type OverlayTextSettingsValue } from "@tavora/official-ui/components/ui/overlay-text";
 import { ModuleSettings, SettingsMainBar, SettingsPage, SettingsPreview, SettingsRow, SettingsSection, settingsMenu } from "@tavora/official-ui/components/ui/module-settings";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { TemplateInput } from "@tavora/official-ui/components/ui/template-input";
 import { TavoraError } from "@tavora/sdk";
 import { computed, inject, onBeforeUnmount, reactive, ref, useTemplateRef, watch, type Ref } from "vue";
-import { t } from "./i18n";
+import { locale, t } from "./i18n";
 import {
   ALIGNS,
+  boxOf,
   COLORS,
   defaultLook,
   defaultStored,
@@ -224,6 +226,8 @@ const numberColor = computed({ get: () => look.value.color, set: (next: string) 
 // The step is saved with the old step nearest to it, for the version before.
 const wordsSize = computed({ get: () => look.value.wordsStep, set: (next: Size) => updateLook((value) => Object.assign(value, sizesOf(next, value.numberStep))) });
 const numberSize = computed({ get: () => look.value.numberStep, set: (next: Size) => updateLook((value) => Object.assign(value, sizesOf(value.wordsStep, next))) });
+// The box: grows with the text, or a fixed size where a text too long scrolls, shrinks or is cut off.
+const textBox = computed({ get: () => boxOf(look.value), set: (next: OverlayTextSettingsValue) => updateLook((value) => (value.textBox = { ...next })) });
 const sizeOptions = (kind: string) => SIZES.map((value) => ({ value, label: value.toUpperCase(), testid: `${kind}-size-${value}` }));
 
 // ── Fields that save when they lose focus ────────────────────────────
@@ -436,6 +440,8 @@ function reset(page: string): () => void {
     Object.assign(value, { font: from.font, align: from.align, outline: from.outline, color: from.color, wordsStep: from.wordsStep, numberStep: from.numberStep, wordsSize: from.wordsSize, numberSize: from.numberSize });
     if (from.wordsColor === undefined) delete value.wordsColor;
     else value.wordsColor = from.wordsColor;
+    if (from.textBox === undefined) delete value.textBox;
+    else value.textBox = { ...from.textBox };
   };
   updateLook((value) => put(value, defaults));
   return () => updateLook((value) => put(value, before));
@@ -649,6 +655,9 @@ onBeforeUnmount(saveFields);
             <SettingsRow :label="t('edit.outline')">
               <Switch :model-value="look.outline" :aria-label="t('edit.outline')" @update:model-value="(on: boolean) => updateLook((value) => (value.outline = on))" />
             </SettingsRow>
+          </SettingsSection>
+          <SettingsSection :title="t('edit.box')">
+            <OverlayTextSettings v-model="textBox" :locale="locale()" testid="box" />
           </SettingsSection>
           <SettingsSection :title="t('edit.words')">
             <SettingsRow :label="t('edit.color')">

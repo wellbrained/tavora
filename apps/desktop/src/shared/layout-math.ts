@@ -135,6 +135,28 @@ export function snapResize(rect: Rect, edges: Edges, canvas: Canvas, others: rea
   return { rect: { x: left, y: top, width: right - left, height: bottom - top }, guides };
 }
 
+/**
+ * A corner drag of a frame that keeps its shape (a text that grows with its frame): the corner the user drags sets the scale,
+ * by whichever side grew or shrank more, and the opposite corner stays put. It stays on the canvas and at least `min` on its
+ * shorter side.
+ */
+export function keepShape(origin: Rect, dragged: Rect, edges: Edges, canvas: Canvas, min = MIN_OVERLAY_SIZE): Rect {
+  if (origin.width <= 0 || origin.height <= 0) return dragged;
+  const byWidth = dragged.width / origin.width;
+  const byHeight = dragged.height / origin.height;
+  let scale = Math.abs(byWidth - 1) >= Math.abs(byHeight - 1) ? byWidth : byHeight;
+  // The room up to the canvas edges on the sides that move, and the smallest size.
+  const right = origin.x + origin.width;
+  const bottom = origin.y + origin.height;
+  const roomX = edges.left ? right : canvas.width - origin.x;
+  const roomY = edges.top ? bottom : canvas.height - origin.y;
+  scale = Math.min(scale, roomX / origin.width, roomY / origin.height);
+  scale = Math.max(scale, min / Math.min(origin.width, origin.height));
+  const width = Math.round(origin.width * scale);
+  const height = Math.round(origin.height * scale);
+  return { x: edges.left ? right - width : origin.x, y: edges.top ? bottom - height : origin.y, width, height };
+}
+
 /** An arrow key moves the item by one cell (one unit with the grid off), five with Shift; it stays on the canvas. */
 export function nudge(rect: Rect, direction: "left" | "right" | "up" | "down", canvas: Canvas, cell: number, big: boolean): Rect {
   const step = (cell > 0 ? cell : 1) * (big ? 5 : 1);
