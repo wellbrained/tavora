@@ -39,14 +39,22 @@ async function inFrame<T>(app: ElectronApplication, script: string): Promise<T> 
 /**
  * Sets the frame page's prefers-reduced-motion. The session stays attached until the app closes: detaching it clears every media
  * emulation of the page, which then follows the PC's own setting (the CI runners prefer reduced motion), not the one asked for.
+ * The frame's page may not be there yet (a slower PC): it waits for it, as the other looks into the frame do.
  */
 async function reducedMotion(app: ElectronApplication, on: boolean): Promise<void> {
-  await app.evaluate(async ({ webContents }, on) => {
-    const frame = webContents.getAllWebContents().find((contents) => !contents.isDestroyed() && contents.getURL().includes("tavoraFrame=1"));
-    if (!frame) throw new Error("no overlay frame");
-    if (!frame.debugger.isAttached()) frame.debugger.attach();
-    await frame.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: on ? "reduce" : "no-preference" }] });
-  }, on);
+  await expect
+    .poll(
+      () =>
+        app.evaluate(async ({ webContents }, on) => {
+          const frame = webContents.getAllWebContents().find((contents) => !contents.isDestroyed() && contents.getURL().includes("tavoraFrame=1"));
+          if (!frame) return false;
+          if (!frame.debugger.isAttached()) frame.debugger.attach();
+          await frame.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: on ? "reduce" : "no-preference" }] });
+          return true;
+        }, on),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
 }
 /** The box as the frame's page draws it: the font size of 100 % and what it does with the text. */
 const box = (app: ElectronApplication) =>

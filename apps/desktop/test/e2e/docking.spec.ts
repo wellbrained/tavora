@@ -479,7 +479,9 @@ test("a group with one tab and a long empty header shows the dashed ghost tab af
   for (const id of [NOTES, TODOS]) await openModule(page, id);
   const target = page.locator(".dv-groupview", { has: page.locator(`[data-module-id="${TODOS}"]`) }).first();
   await expect(target.locator(".dv-tab")).toHaveCount(1);
-  // A tab is wider while its panel says "Loading": measure once it has settled.
+  // A tab is wider while its panel says "Loading": measure once the panel is ready and the tab has settled. Two reads that agree
+  // alone are not enough: both can still catch the loading tab, which then gets narrower under the ghost.
+  await expect(target.locator(`[data-panel-tab][data-module-id="${TODOS}"]`)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
   let tab = (await target.locator(".dv-tab").boundingBox())!;
   await expect
     .poll(async () => {
