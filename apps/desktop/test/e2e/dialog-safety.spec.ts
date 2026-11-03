@@ -94,7 +94,7 @@ const SHELLS: { name: string; testid: string; open(app: ElectronApplication, pag
   {
     name: "the official Publish dialog",
     testid: "official-publish-dialog",
-    open: (app, page) => holdState(app, page, (state) => ({ officialPublish: { ...state.officialPublish, run: { moduleId: "tavora.notes", name: "Notes", step: "build", preview: null } } })),
+    open: (app, page) => holdState(app, page, (state) => ({ officialPublish: { ...state.officialPublish, run: { phase: "building", moduleId: "tavora.notes", name: "Notes", step: "build" } } })),
     close: (app, page) => release(app, page, "officialPublish"),
   },
   {

@@ -328,8 +328,27 @@ export interface DeveloperKeysView {
  * folder as it is, signed with a kept publisher key, and shows what would be published. Its Publish uploads
  * exactly that zip; the click is the approval. Sent on its own channel; null while no review is open.
  */
+/** A step of building a built-in module's update, shown while it runs. */
+export type OfficialBuildStep = "fetch" | "check" | "worktree" | "install" | "build" | "pack";
+/** A step of signing and uploading the previewed build. */
+export type OfficialUploadStep = "sign" | "upload";
 /** A step of publishing a built-in module, shown while it runs. */
-export type OfficialPublishStep = "fetch" | "check" | "worktree" | "install" | "build" | "pack" | "sign" | "upload";
+export type OfficialPublishStep = OfficialBuildStep | OfficialUploadStep;
+
+/**
+ * A publish of a built-in module (main/official-publish.ts), from Publish to the end: nothing running; the update being
+ * built (at `step`); its preview, waiting for Sign and upload; Sign and upload pressed, the key being loaded or picked;
+ * signing and uploading (at `step`), which nothing can stop.
+ */
+export type OfficialPublishRun =
+  | { phase: "idle" }
+  | { phase: "building"; moduleId: string; name: string; step: OfficialBuildStep }
+  | { phase: "preview"; moduleId: string; name: string; preview: OfficialPublishPreview }
+  | { phase: "confirming"; moduleId: string; name: string; preview: OfficialPublishPreview }
+  | { phase: "uploading"; moduleId: string; name: string; preview: OfficialPublishPreview; step: OfficialUploadStep };
+
+/** Working out the Built-in modules list: not now, running (git fetch, catalogue, CI), or failed with a message for the user. */
+export type OfficialPublishCheck = { phase: "idle" } | { phase: "checking" } | { phase: "failed"; error: string };
 
 /**
  * Where a built-in module's newer version on main stands: `ready` to publish, already `published`, the catalogue has a
@@ -379,13 +398,12 @@ export interface OfficialPublishPreview {
 
 export interface OfficialPublishView {
   available: boolean;
-  /** The overview is being worked out (git fetch, catalogue, CI). */
-  checking: boolean;
+  /** Working out the overview, or why that failed last time. */
+  check: OfficialPublishCheck;
+  /** The last overview worked out; it stays while a new check runs. */
   overview: OfficialPublishOverview | null;
-  /** Why the last check failed (a message for the user), or null. */
-  checkError: string | null;
-  /** The publish in progress: its step, and the preview once it is built. */
-  run: { moduleId: string; name: string; step: OfficialPublishStep; preview: OfficialPublishPreview | null } | null;
+  /** The publish in progress. */
+  run: OfficialPublishRun;
   /** The Tavora key: saved on this PC (sealed by the system), and whether this PC can save it at all. */
   key: { saved: boolean; canRemember: boolean };
 }
@@ -452,6 +470,13 @@ export interface PairingView {
 /** Why the cloud copy could not sync last time, worded by the host UI. */
 export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key" | "no-folder" | "folder-locked" | "not-arrived";
 
+/** What the cloud copy is doing right now: one thing at a time, with how far an upload got (bytes read and sent of what changed). */
+export type CloudCopyActivity =
+  | { phase: "idle" }
+  | { phase: "checking" }
+  | { phase: "downloading" }
+  | { phase: "uploading"; progress: { done: number; total: number } | null };
+
 /**
  * Settings > Account > Cloud copy, and the questions it asks over the app. Sent on its own channel;
  * the copy key stays in the main process, except as the recovery key the user asks to see.
@@ -462,10 +487,10 @@ export interface CloudCopyView {
   /** A development run in its own desktop-dev folder: turning on asks first, as the copy belongs in the installed app. */
   devData: boolean;
   on: boolean;
-  /** What it is doing right now. */
-  busy: "checking" | "uploading" | "downloading" | null;
+  /** What it is doing right now (CloudCopyActivity's phase). */
+  busy: Exclude<CloudCopyActivity["phase"], "idle"> | null;
   /** Bytes read and sent of what changed, while uploading. */
-  progress: { done: number; total: number } | null;
+  progress: Extract<CloudCopyActivity, { phase: "uploading" }>["progress"];
   /** The copy as it was last seen; null when there is none or it was not read yet. */
   copy: { size: number; savedAt: string } | null;
   /** The folder the copy is kept in, or null for Tavora's service. */

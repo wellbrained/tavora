@@ -14,6 +14,7 @@ import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-co
 import type { SettingsSection } from "./settings-index";
 import { account, act, developerKeys, developerState, dialog, inbox, makesModules, releaseStatus, showToast, state } from "../../host";
 import { t } from "../../i18n";
+import { officialSettings } from "../../official-publish";
 import DevModuleRow from "../developer/DevModuleRow.vue";
 import { devModules, waitsForPublish } from "../developer/dev-modules";
 import ModuleIcon from "../ModuleIcon.vue";
@@ -81,6 +82,7 @@ watch(
 // the page opens; Publish opens OfficialPublishDialog, which shows the steps and the preview.
 const official = computed(() => state.value!.officialPublish);
 const officialRows = computed(() => official.value.overview?.rows ?? []);
+const officialShows = computed(() => officialSettings(official.value));
 const STATUS_BADGE = { ready: "success", published: "outline", catalogueNewer: "outline", waitForRelease: "warning", ciPending: "info", ciFailed: "destructive" } as const;
 const hostChanges = computed(() => {
   const overview = official.value.overview;
@@ -185,13 +187,13 @@ onMounted(() => {
 
     <SettingGroup v-if="official.available" :title="t('officialPublish.title')" :description="t('officialPublish.description')">
       <template #actions>
-        <Button variant="ghost" size="sm" :disabled="official.checking || (official.run !== null && !official.run.preview)" data-testid="official-publish-refresh" @click="checkOfficial">
-          <Loader v-if="official.checking" class="animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
+        <Button variant="ghost" size="sm" :disabled="officialShows.refreshDisabled" data-testid="official-publish-refresh" @click="checkOfficial">
+          <Loader v-if="officialShows.checking" class="animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
           <RefreshCw v-else :stroke-width="1.5" aria-hidden="true" />
-          {{ official.checking ? t("officialPublish.checking") : t("officialPublish.refresh") }}
+          {{ officialShows.checking ? t("officialPublish.checking") : t("officialPublish.refresh") }}
         </Button>
       </template>
-      <p v-if="official.checkError" class="text-destructive py-4 text-sm" role="alert" data-testid="official-publish-error">{{ official.checkError }}</p>
+      <p v-if="officialShows.error" class="text-destructive py-4 text-sm" role="alert" data-testid="official-publish-error">{{ officialShows.error }}</p>
       <p v-else-if="!official.overview" class="text-muted-foreground py-4 text-sm" role="status">{{ t("officialPublish.checking") }}</p>
       <p v-else-if="!officialRows.length" class="text-muted-foreground py-4 text-sm" data-testid="official-publish-none">{{ t("officialPublish.none") }}</p>
       <ul v-if="officialRows.length" class="flex flex-col" :aria-label="t('officialPublish.title')" data-testid="official-publish">
@@ -207,7 +209,7 @@ onMounted(() => {
           <Button
             v-if="row.status === 'ready'"
             variant="secondary"
-            :disabled="official.run !== null || official.checking"
+            :disabled="officialShows.publishDisabled"
             :data-testid="`publish-official-${row.id}`"
             @click="publishOfficial(row.id)"
           >
@@ -219,7 +221,7 @@ onMounted(() => {
       <div v-if="official.key.saved" class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-4" data-testid="official-publish-key">
         <KeyRound class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
         <span class="min-w-0 flex-1 text-sm">{{ t("officialPublish.keySaved") }}</span>
-        <Button variant="ghost" size="sm" :disabled="official.run !== null" data-testid="official-publish-forget-key" @click="forgetKey">{{ t("officialPublish.forgetKey") }}</Button>
+        <Button variant="ghost" size="sm" :disabled="officialShows.forgetKeyDisabled" data-testid="official-publish-forget-key" @click="forgetKey">{{ t("officialPublish.forgetKey") }}</Button>
       </div>
     </SettingGroup>
   </template>
