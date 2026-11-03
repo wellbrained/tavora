@@ -504,7 +504,9 @@ describe("what the copy is doing, and closing while it uploads", () => {
       vi.useRealTimers();
     }
     release();
-    await until(() => sync.view().busy === null);
+    // The held upload is queued already; this one runs after it, so nothing writes once the test ends.
+    await sync.sync();
+    expect(sync.view().busy).toBeNull();
     expect(closed).toBe(1);
   });
 
