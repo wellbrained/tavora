@@ -5,6 +5,7 @@
 // with a short hint, Ctrl + wheel or a pinch zooms, a double-click zooms one step in toward that point (doubleClick "off"
 // keeps it for the content). With focus: + and - zoom, 0 shows the whole content, 1 goes back to 100 %, arrow keys pan.
 // The steps and the % count from `hundred`, the internal zoom that counts as 100 % (default 1, the content's real size).
+// While the pane is hidden (display: none) it keeps its last size and view and shows them again as they were.
 // The content is fitted when it first shows and whenever its size changes. With autoFit off
 // only when it first shows, so content that grows (a box dragged past the edge) keeps the view.
 // With fit "width" the content fills the width and is read top to bottom like a page: a
@@ -161,6 +162,10 @@ function centred(point: { x: number, y: number }, zoom?: number): ZoomView {
 }
 /** The view a parent asked for before the pane was measured, worked out once it is; it replaces the first fit. */
 let pendingView: (() => ZoomView) | undefined
+/** The waiting view is a saved one coming back, not something the user or the parent asked for: it is not written back. */
+let pendingRestore = false
+/** The pane has no box right now (display: none somewhere above it): its last real size and view are kept as they were. */
+let hidden = false
 
 // What the pane remembers (props.persistKey): written once the view has been still for a moment.
 let memory: ViewMemory | undefined
@@ -217,8 +222,12 @@ function show(next: ZoomView, options: ViewOptions & { remember?: boolean } = {}
 }
 function whenMeasured(next: () => ZoomView, options: ViewOptions & { remember?: boolean, restore?: boolean } = {}) {
   if (!options.restore) parentAsked = true
-  if (measured()) show(next(), options)
-  else pendingView = next
+  // Hidden: the newest ask waits and lands, re-clamped to the size it comes back with, when the pane shows again.
+  if (measured() && !hidden) show(next(), options)
+  else {
+    pendingView = next
+    pendingRestore = Boolean(options.restore)
+  }
 }
 
 // ── For the parent, and the buttons ──
@@ -431,6 +440,13 @@ watch([view, paneSize], () => emit("viewChange", view.value, paneSize.value))
 function measure() {
   if (!pane.value || !content.value) return
   const nextPane = { width: pane.value.clientWidth, height: pane.value.clientHeight }
+  // 0 x 0 (or no width, or no height) means "not visible", not a size: nothing is clamped, fitted or sent.
+  hidden = nextPane.width <= 0 || nextPane.height <= 0
+  if (hidden) {
+    // A glide on its way stops where it is: no frames (and no view changes) while nobody can see them.
+    stopGlide()
+    return
+  }
   // offsetWidth is the size before the transform, so zooming does not change it. A view-only pane has no content to measure: the parent says (`world`).
   const nextContent = props.viewOnly ? { width: props.world?.width ?? 0, height: props.world?.height ?? 0 } : { width: content.value.offsetWidth, height: content.value.offsetHeight }
   const contentChanged = nextContent.width !== contentSize.value.width || nextContent.height !== contentSize.value.height
@@ -441,9 +457,12 @@ function measure() {
   if (pendingView && measured()) {
     // The first show, or a restored view: it never glides.
     const asked = pendingView()
+    const wasRestore = pendingRestore
     pendingView = undefined
     stopGlide()
     view.value = clampPan({ ...asked, zoom: clampZoom(asked.zoom, limits.value) }, nextPane, nextContent, props.bounds)
+    // A jump asked for while hidden is the user's spot now: remember it, so closing the panel does not lose it.
+    if (!wasRestore) remember(view.value)
   }
   // A view that was put back from storage is the user's: content that grows later does not fit it again.
   else if ((contentChanged && props.autoFit && !restored) || paneWasEmpty || widthChanged) {
