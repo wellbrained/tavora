@@ -5,8 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const made = vi.hoisted(() => {
   type Listener = (...args: unknown[]) => void;
   const state = {
-    contents: null as null | { id: number; handlers: Map<string, Listener>; loads: number; failLoads: boolean; destroyed: boolean },
+    contents: null as null | { id: number; handlers: Map<string, Listener>; loads: number; destroyed: boolean },
     ipc: new Map<string, Listener[]>(),
+    /** What loadURL does: loads, rejects at once, or waits until a test rejects it. */
+    mode: "ok" as "ok" | "reject" | "defer",
+    deferred: [] as ((error: Error) => void)[],
   };
   return state;
 });
@@ -17,15 +20,16 @@ vi.mock("electron", () => {
       id: 7,
       handlers: new Map<string, (...args: unknown[]) => void>(),
       loads: 0,
-      failLoads: false,
       destroyed: false,
       setWindowOpenHandler: () => undefined,
       on(event: string, listener: (...args: unknown[]) => void) {
         this.handlers.set(event, listener);
       },
-      loadURL(this: { loads: number; failLoads: boolean }) {
+      loadURL(this: { loads: number }) {
         this.loads++;
-        return this.failLoads ? Promise.reject(new Error("ERR_FILE_NOT_FOUND")) : Promise.resolve();
+        if (made.mode === "reject") return Promise.reject(new Error("ERR_FILE_NOT_FOUND"));
+        if (made.mode === "defer") return new Promise<void>((_resolve, reject) => void made.deferred.push(reject));
+        return Promise.resolve();
       },
       isDestroyed() {
         return this.destroyed;
@@ -94,6 +98,8 @@ const errorText = () => errors.mock.calls.map((call: unknown[]) => String(call[0
 beforeEach(() => {
   vi.useFakeTimers();
   made.ipc.clear();
+  made.mode = "ok";
+  made.deferred = [];
   events = [];
   fallback = [];
   views = [];
@@ -125,7 +131,6 @@ describe("a toast page that does not load", () => {
     expect(errorText()).toContain("the toast page did not load (ERR_FILE_NOT_FOUND)");
     expect(page().loads).toBe(2);
     // The reload fails too.
-    page().failLoads = true;
     fire("did-fail-load", {}, -6, "ERR_FILE_NOT_FOUND", "tavora://app/toasts.html", true);
     expect(fallback).toEqual([true]);
     expect(errorText()).toContain("toasts show in the main window instead");
@@ -154,11 +159,67 @@ describe("a toast page that does not load", () => {
   it("takes a page that never says it is ready for a failure", () => {
     const view = create();
     view.sync(items({ id: 1, duration: 3000 }));
+    fire("did-finish-load");
     vi.advanceTimersByTime(READY_MS);
     expect(errorText()).toContain("sent no ready signal");
     expect(page().loads).toBe(2);
+    fire("did-finish-load");
     vi.advanceTimersByTime(READY_MS);
     expect(fallback).toEqual([true]);
+  });
+
+  it("does not count a slow load, only a page that loaded and never got ready", () => {
+    create();
+    vi.advanceTimersByTime(READY_MS * 6);
+    expect(errors).not.toHaveBeenCalled();
+    expect(page().loads).toBe(1);
+  });
+
+  it("does not count a page that said it is ready before the load event", () => {
+    create();
+    pageSays("toasts:ready");
+    fire("did-finish-load");
+    vi.advanceTimersByTime(READY_MS * 2);
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  it("logs a rejected load, loads once more, and hands over when that is rejected too", async () => {
+    made.mode = "reject";
+    create();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(errorText()).toContain("the toast page did not load");
+    expect(page().loads).toBe(2);
+    expect(fallback).toEqual([true]);
+  });
+
+  it("ignores the rejection of a load that has been replaced", async () => {
+    made.mode = "defer";
+    create();
+    fire("did-fail-load", {}, -6, "x", "u", true);
+    expect(page().loads).toBe(2);
+    // The first load answers late, after the second one has started.
+    made.deferred[0]!(new Error("late"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fallback).toEqual([]);
+    expect(page().loads).toBe(2);
+    made.deferred[1]!(new Error("second"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fallback).toEqual([true]);
+  });
+
+  it("dismisses a toast once, even when the clocks are updated before the host page's list changes", () => {
+    const view = create();
+    view.sync(items({ id: 1, duration: 3000 }));
+    fire("did-fail-load", {}, -6, "x", "u", true);
+    vi.advanceTimersByTime(3000);
+    view.setHidden(true);
+    view.setHidden(false);
+    vi.advanceTimersByTime(10_000);
+    expect(events).toEqual([{ type: "dismiss", id: 1 }]);
+    view.sync([]);
+    view.sync(items({ id: 1, duration: 3000 }));
+    vi.advanceTimersByTime(3000);
+    expect(events).toHaveLength(2);
   });
 
   it("is not a failure when a load is only replaced", () => {
@@ -197,6 +258,23 @@ describe("a toast page that crashes", () => {
     vi.advanceTimersByTime(2999);
     expect(events).toEqual([]);
     vi.advanceTimersByTime(1);
+    expect(events).toEqual([{ type: "dismiss", id: 1 }]);
+  });
+
+  it("still notices a crash after a late recovery (the second load was slow, then the page came, then it crashed)", () => {
+    const view = create();
+    fire("did-fail-load", {}, -6, "x", "u", true);
+    fire("did-finish-load");
+    vi.advanceTimersByTime(READY_MS);
+    expect(fallback).toEqual([true]);
+    pageSays("toasts:ready");
+    expect(fallback).toEqual([true, false]);
+    errors.mockClear();
+    view.sync(items({ id: 1, duration: 3000, action: "Undo" }));
+    fire("render-process-gone", {}, { reason: "crashed" });
+    expect(errorText()).toContain("the toast page crashed (crashed)");
+    expect(page().loads).toBe(3);
+    vi.advanceTimersByTime(3000);
     expect(events).toEqual([{ type: "dismiss", id: 1 }]);
   });
 

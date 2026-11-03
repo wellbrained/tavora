@@ -47,7 +47,7 @@ export class ToastView {
   private fallback = false;
   private readyTimer: ReturnType<typeof setTimeout> | undefined;
   /** The toasts' own clocks while the page is down. */
-  private readonly expiry = new Map<number, { revision: number; left: number; since: number | null; timer: ReturnType<typeof setTimeout> | undefined }>();
+  private readonly expiry = new Map<number, { revision: number; left: number; since: number | null; timer: ReturnType<typeof setTimeout> | undefined; fired: boolean }>();
   private readonly listeners: [string, (event: IpcMainEvent, ...args: unknown[]) => void][] = [];
   private readonly onResize = () => {
     this.layout.windowResized();
@@ -70,6 +70,12 @@ export class ToastView {
       // -3 is a load that was replaced by another one, not a failure.
       if (isMainFrame && code !== -3) this.fail(`did not load (${description || code})`);
     });
+    contents.on("did-finish-load", () => {
+      // Loaded but not ready (the page may have said so already, before the load event): only that is worth a countdown.
+      if (this.disposed || this.ready || this.failedAttempt === this.attempt) return;
+      this.clearReadyTimer();
+      this.readyTimer = setTimeout(() => this.fail("sent no ready signal"), this.options.readyAfterMs ?? READY_AFTER_MS);
+    });
     contents.on("render-process-gone", (_event, details) => {
       this.ready = false;
       if (this.disposed || details.reason === "clean-exit" || contents.isDestroyed()) return;
@@ -88,6 +94,9 @@ export class ToastView {
       if (!this.fromPage(event)) return;
       this.ready = true;
       this.retried = false;
+      // A new attempt for whatever happens next: a crash after a late recovery must count, not be taken for the failure
+      // already seen in this attempt (and a late answer of the old load is stale).
+      this.attempt++;
       this.clearReadyTimer();
       if (this.broken) {
         console.error("[tavora] the toast page is back; toasts show above the panels again");
@@ -115,8 +124,8 @@ export class ToastView {
     const contents = this.view.webContents;
     const attempt = ++this.attempt;
     this.clearReadyTimer();
-    this.readyTimer = setTimeout(() => this.fail("sent no ready signal"), this.options.readyAfterMs ?? READY_AFTER_MS);
-    // The failure is also told by did-fail-load; fail() counts each attempt once.
+    // The failure is also told by did-fail-load; fail() counts each attempt once. A slow load is not a failure: the countdown
+    // for the ready signal starts when the page has loaded (did-finish-load).
     void contents.loadURL(this.options.address).catch((error: unknown) => {
       if (attempt === this.attempt) this.fail("did not load", error);
     });
@@ -183,17 +192,20 @@ export class ToastView {
       if (!Number.isFinite(duration)) continue;
       let entry = this.expiry.get(item.id);
       if (!entry) {
-        entry = { revision: item.revision, left: duration, since: null, timer: undefined };
+        entry = { revision: item.revision, left: duration, since: null, timer: undefined, fired: false };
         this.expiry.set(item.id, entry);
       }
+      if (entry.fired) continue;
       if (paused && entry.since !== null) {
         clearTimeout(entry.timer);
         entry.left = Math.max(0, entry.left - (Date.now() - entry.since));
         entry.since = null;
       } else if (!paused && entry.since === null) {
         entry.since = Date.now();
+        const own = entry;
         entry.timer = setTimeout(() => {
-          this.expiry.delete(item.id);
+          // The entry stays (fired) until the host page's list no longer has the toast, so it is dismissed once, never twice.
+          own.fired = true;
           this.options.event({ type: "dismiss", id: item.id });
         }, entry.left);
       }
