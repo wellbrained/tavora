@@ -45,7 +45,7 @@ export const PAGES = [
   { id: "tabs", group: "navigation", keywords: "tabs views strip close closable reorder drag rename middle-click scroll overflow add", examples: ["Tabs", "TabStrip", "TabIcon", "TabsCrowded"] },
   { id: "navlist", group: "navigation", keywords: "nav list categories settings sidebar sections menu plates", examples: ["Grouped", "Plates"] },
   // Canvas
-  { id: "zoom", group: "canvas", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport double-click percent 100 whole extras view-only remember persist glide tooltip", examples: ["WideContent", "AutoFitOff", "RememberView", "HundredExtras", "PersistView", "ViewOnly", "BoxTooltip", "FitWidth"] },
+  { id: "zoom", group: "canvas", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport double-click percent 100 whole extras view-only remember persist glide tooltip hide show hidden ausblenden einblenden", examples: ["WideContent", "AutoFitOff", "RememberView", "HideAndShow", "HundredExtras", "PersistView", "ViewOnly", "BoxTooltip", "FitWidth"] },
   { id: "map", group: "canvas", keywords: "map tiles pins markers cluster group dots spawns highlight world game zoom fog layer", examples: ["TileMap"] },
   // Tavora features
   { id: "settings", group: "features", keywords: "module settings dialog overlay preview page reset saved control column row menu divider heading in game on stream dot status danger delete one single narrow description unit size", examples: ["OnePage", "SeveralPages", "ModuleSettings", "SettingsMenu"] },
