@@ -643,9 +643,12 @@ test("a linked group lights up as one block, not row by row, and a row outside i
     await click(app, "add");
     await click(app, "pick-stopwatch");
     await expect.poll(() => names(app)).toEqual(["Counter", "Counter 2", "Stopwatch"]);
-    await inModule(app, ID, `document.querySelectorAll('[data-testid^="more-"]')[0].click()`);
-    await click(app, "menu-settings-" + (await inModule<string>(app, ID, `document.querySelector('article[data-testid^="item-"]').dataset.testid.slice(5)`)));
+    // The second counter's settings: the first one's stay the "being edited" item after its dialog closed, so its gear would close them.
+    await inModule(app, ID, `document.querySelectorAll('[data-testid^="more-"]')[1].click()`);
+    await click(app, "menu-settings-" + (await inModule<string>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]')[1].dataset.testid.slice(5)`)));
+    await expect.poll(() => inModule<string>(app, ID, `document.body.innerText.slice(0, 400)`)).toContain("Add a counter");
     await click(app, "link-add");
+    await expect.poll(() => inModule<boolean>(app, ID, `!!document.querySelector('[data-testid^="link-pick-"]')`)).toBe(true);
     await inModule(app, ID, `document.querySelector('[data-testid^="link-pick-"]').click()`);
     await closeSettings(page);
     await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('[data-testid="linked-group"] article').length`)).toBe(2);
