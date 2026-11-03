@@ -3,7 +3,7 @@
 // the same LayoutView and answer with LayoutMessages, which the main process checks (parseLayoutMessage) before it acts.
 import { GRID_SETTINGS, isAlignEdge, isGridSetting, type AlignEdge, type Canvas, type GridSetting } from "./layout-math";
 import { isArrangeTo, type ArrangeTo } from "./layout-stack";
-import { normalizePins, type ToolbarSetting } from "./layout-toolbar";
+import { normalizeButtons, type ToolbarSetting } from "./layout-toolbar";
 import type { AnchoredRect, Rect } from "./overlay-anchor";
 
 /** The picker entries of the All games and Everywhere setups (the others are games, by their workspace id). */
@@ -209,7 +209,7 @@ export type LayoutMessage =
   /** Lock position on or off. */
   | ({ locked: boolean } & OneOrMany<"lock">)
   /** The toolbar setting: show or hide it, and/or which actions it holds (a preference, not an undo step). */
-  | { type: "toolbar"; show?: boolean; pins?: string[] }
+  | { type: "toolbar"; show?: boolean; buttons?: string[] }
   /** The Settings box: Show, Opacity and Hide from capture for the selected items, as one undo step. */
   | { type: "set"; ids: string[]; change: LayoutItemChange }
   /** The toolbar's Settings: the settings of what the item shows (its panel, until a module can be asked for more). */
@@ -350,17 +350,17 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
       return target && typeof raw.locked === "boolean" ? { type: "lock", locked: raw.locked, ...target } : null;
     }
     case "toolbar": {
-      const message: { type: "toolbar"; show?: boolean; pins?: string[] } = { type: "toolbar" };
+      const message: { type: "toolbar"; show?: boolean; buttons?: string[] } = { type: "toolbar" };
       if (raw.show !== undefined) {
         if (typeof raw.show !== "boolean") return null;
         message.show = raw.show;
       }
-      if (raw.pins !== undefined) {
-        const pins = normalizePins(raw.pins);
-        if (!pins) return null;
-        message.pins = pins;
+      if (raw.buttons !== undefined) {
+        const buttons = normalizeButtons(raw.buttons);
+        if (!buttons) return null;
+        message.buttons = buttons;
       }
-      return message.show === undefined && message.pins === undefined ? null : message;
+      return message.show === undefined && message.buttons === undefined ? null : message;
     }
     case "reset":
     case "reset-size":

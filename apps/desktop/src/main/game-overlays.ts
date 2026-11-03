@@ -429,7 +429,7 @@ export class GameOverlayStore {
   moved = false;
   /** The Overlay layout's grid, its window's place and the last window size seen per game. */
   private gridSetting: GridSetting = DEFAULT_GRID;
-  private toolbarSetting: ToolbarSetting = { ...DEFAULT_TOOLBAR, pins: [...DEFAULT_TOOLBAR.pins] };
+  private toolbarSetting: ToolbarSetting = { ...DEFAULT_TOOLBAR, buttons: [...DEFAULT_TOOLBAR.buttons] };
   private seen = new Map<string, SeenSize>();
   private readonly queue = new SerialQueue();
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -902,14 +902,14 @@ export class GameOverlayStore {
     return this.gridSetting;
   }
 
-  /** The frame toolbar's setting: shown or not, and the actions pinned to it. */
+  /** The frame toolbar's setting: shown or not, and the actions that are buttons in it. */
   get toolbar(): ToolbarSetting {
-    return { show: this.toolbarSetting.show, pins: [...this.toolbarSetting.pins] };
+    return { show: this.toolbarSetting.show, buttons: [...this.toolbarSetting.buttons] };
   }
 
   setToolbar(change: Partial<ToolbarSetting>): void {
     const next = normalizeToolbar({ ...this.toolbarSetting, ...change });
-    if (next.show === this.toolbarSetting.show && next.pins.join() === this.toolbarSetting.pins.join()) return;
+    if (next.show === this.toolbarSetting.show && next.buttons.join() === this.toolbarSetting.buttons.join()) return;
     this.toolbarSetting = next;
     this.saveSoon();
   }

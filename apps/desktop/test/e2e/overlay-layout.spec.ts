@@ -948,7 +948,7 @@ test("A frame has a right-click menu next to it: arrange, align, lock, a customi
     const customize = layer.getByTestId("layout-customize");
     await expect(customize).toBeVisible();
     await layer.getByTestId("layout-customize-lock").click();
-    await expect.poll(async () => (await state(page)).toolbar.pins).toContain("lock");
+    await expect.poll(async () => (await state(page)).toolbar.buttons).toContain("lock");
     await expect(bar.getByTestId("layout-frame-lock")).toBeVisible();
     await layer.getByTestId("layout-customize-arrange").click();
     await expect(bar.getByTestId("layout-frame-arrange")).toBeVisible();
@@ -958,7 +958,7 @@ test("A frame has a right-click menu next to it: arrange, align, lock, a customi
     await send({ type: "select", id: second!.id });
     await expect(bar.getByTestId("layout-frame-lock")).toBeVisible();
     await send({ type: "select", id: first!.id });
-    // A pinned submenu opens from its button.
+    // A submenu that is a button opens from it.
     await bar.getByTestId("layout-frame-arrange").click();
     await layer.getByTestId("layout-frame-front").click();
     await expect.poll(async () => (await byId(first!.id)).z).toBe(1);
@@ -973,7 +973,7 @@ test("A frame has a right-click menu next to it: arrange, align, lock, a customi
     await expect(customize).toBeVisible();
     await expect(layer.getByTestId("layout-customize-lock")).toHaveAttribute("aria-checked", "true");
     await layer.getByTestId("layout-customize-default").click();
-    await expect.poll(async () => (await state(page)).toolbar.pins).toEqual(["settings", "hide", "reset", "reset-size", "remove"]);
+    await expect.poll(async () => (await state(page)).toolbar.buttons).toEqual(["settings", "hide", "reset", "reset-size", "remove"]);
     await expect(bar.getByRole("button")).toHaveCount(5);
     await layer.keyboard.press("Escape");
     await expect(customize).toHaveCount(0);

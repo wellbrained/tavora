@@ -27,7 +27,7 @@ const emit = defineEmits<{ closed: []; customize: [] }>();
 
 const actions = computed(() => frameActions(props.items));
 const selection = computed(() => selectionOf(props.items));
-const toolbar = computed(() => view.value?.toolbar ?? { show: true, pins: [] });
+const toolbar = computed(() => view.value?.toolbar ?? { show: true, buttons: [] });
 const copyTargets = computed(() => view.value?.copyTargets ?? []);
 
 const row = (id: FrameActionId): FrameAction => actions.value[id];

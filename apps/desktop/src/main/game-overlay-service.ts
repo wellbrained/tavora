@@ -120,7 +120,7 @@ export interface LayoutSource {
   running(): string[];
   grid(): GridSetting;
   setGrid(grid: GridSetting): void;
-  /** The frame toolbar's setting (shown or not, the pinned actions), kept with the grid. */
+  /** The frame toolbar's setting (shown or not, the buttons in it), kept with the grid. */
   toolbar(): ToolbarSetting;
   setToolbar(change: Partial<ToolbarSetting>): void;
   /** Lock position or stacking place of an item in a setup. */

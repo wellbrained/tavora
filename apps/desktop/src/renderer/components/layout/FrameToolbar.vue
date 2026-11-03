@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The small toolbar next to the selected frame on the canvas, at its top right: the actions the user pinned in the frame
-// menu (by default Settings, Hide on canvas, Reset position, Reset size, and Remove after a thin divider). A pinned submenu
+// The small toolbar next to the selected frame on the canvas, at its top right: the actions the user picked in Customize toolbar
+// (by default Settings, Hide on canvas, Reset position, Reset size, and Remove after a thin divider). A submenu button
 // (Arrange, Align on screen) is one button with a small arrow that opens that submenu. With several frames selected it keeps
 // what works on all of them, each one undo step. It lives in the layer over the canvas, which takes the mouse; LayoutCanvas.vue
 // decides where it sits. Each button has a kit tooltip that opens on the side away from the frame, so it never covers what
@@ -25,7 +25,7 @@ const copyTargets = computed(() => view.value?.copyTargets ?? []);
 const all = computed(() => frameActions(props.items));
 const actions = computed<FrameAction[]>(() => {
   const selection = selectionOf(props.items);
-  return (view.value?.toolbar.pins ?? []).filter((id: ToolbarActionId) => offered(id, selection)).map((id: ToolbarActionId) => all.value[id]);
+  return (view.value?.toolbar.buttons ?? []).filter((id: ToolbarActionId) => offered(id, selection)).map((id: ToolbarActionId) => all.value[id]);
 });
 
 const tip = ref<{ text: string; anchor: { left: number; top: number; right: number; bottom: number } } | null>(null);

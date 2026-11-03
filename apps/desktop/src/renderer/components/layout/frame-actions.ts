@@ -1,6 +1,6 @@
 // What can be done to the selected frames, once, for both the right-click menu (FrameMenu.vue) and the toolbar
 // (FrameToolbar.vue): the label, the icon, what it sends and whether it is switched off. Which of them the toolbar shows is the
-// user's pins (shared/layout-toolbar.ts).
+// user's choice of buttons (shared/layout-toolbar.ts).
 import {
   AlignCenterHorizontal,
   AlignCenterVertical,

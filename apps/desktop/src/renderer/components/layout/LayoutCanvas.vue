@@ -3,7 +3,7 @@
 // draws what the user works with: each item's outline, the selection with its eight handles, the key of a toggle
 // item, and the guide lines while something snaps. Dragging works in canvas units (the game window at 1080 high); the
 // main process moves the live pages and keeps the result. Holding Alt places freely. A double-click opens the item's settings. The selected item gets a small
-// toolbar (what the user pinned in the frame menu) at its top right, above it, or below it where there is no room above. A right-click or the menu key opens the frame menu next to the frame.
+// toolbar (what the user picked in Customize toolbar) at its top right, above it, or below it where there is no room above. A right-click or the menu key opens the frame menu next to the frame.
 // Several can be selected: Ctrl (Cmd on a Mac) or Shift and a click adds or takes one away, and a box drawn on the empty
 // canvas selects every frame it touches. They move together (drag or the arrow keys) and share one toolbar (Hide, Reset
 // position, Reset size, Remove) over the box around them.
@@ -295,12 +295,12 @@ const BUTTON = { width: 30, group: 42, padding: 10, height: 38, gap: 12 } as con
 const toolbar = computed(() => {
   if (drag.value || band.value) return null;
   const setting = view.value?.toolbar;
-  if (!setting?.show || !setting.pins.length) return null;
+  if (!setting?.show || !setting.buttons.length) return null;
   const items = selectedItems(view.value).filter((item) => !item.hiddenOnCanvas);
   const rect = boundsOf(items.map(rectOf));
   if (!rect) return null;
   const k = scale.value;
-  const bar = BUTTON.padding + setting.pins.reduce((sum, id) => sum + (isGroupAction(id) ? BUTTON.group : BUTTON.width), 0);
+  const bar = BUTTON.padding + setting.buttons.reduce((sum, id) => sum + (isGroupAction(id) ? BUTTON.group : BUTTON.width), 0);
   let side: "top" | "bottom" = "top";
   let y = rect.y * k - BUTTON.height - BUTTON.gap;
   if (y < 0) {
@@ -365,7 +365,7 @@ function menuClosed() {
 
 // The toolbar comes and goes while its buttons are ticked: the popover follows whatever is there.
 watch(
-  () => [view.value?.toolbar.show, view.value?.toolbar.pins.length === 0, toolbar.value === null],
+  () => [view.value?.toolbar.show, view.value?.toolbar.buttons.length === 0, toolbar.value === null],
   async () => {
     if (!customizing.value) return;
     await nextTick();

@@ -613,7 +613,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         this.lockItems(idsOf(message), message.locked);
         break;
       case "toolbar":
-        this.options.source.setToolbar({ ...(message.show !== undefined ? { show: message.show } : {}), ...(message.pins !== undefined ? { pins: message.pins as ToolbarSetting["pins"] } : {}) });
+        this.options.source.setToolbar({ ...(message.show !== undefined ? { show: message.show } : {}), ...(message.buttons !== undefined ? { buttons: message.buttons as ToolbarSetting["buttons"] } : {}) });
         break;
       case "set":
         this.setItems(message.ids, message.change);

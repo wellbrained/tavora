@@ -403,12 +403,12 @@ describe("lock, stacking and the toolbar", () => {
 
   it("keep the toolbar setting with the grid, and fall back to the default for what is not understood", async () => {
     const store = await loadStore(dir);
-    expect(store.toolbar).toEqual({ show: true, pins: ["settings", "hide", "reset", "reset-size", "remove"] });
-    store.setToolbar({ pins: ["remove", "lock", "bogus" as never] });
+    expect(store.toolbar).toEqual({ show: true, buttons: ["settings", "hide", "reset", "reset-size", "remove"] });
+    store.setToolbar({ buttons: ["remove", "lock", "bogus" as never] });
     store.setToolbar({ show: false });
     await store.save();
     const again = await loadStore(dir);
-    expect(again.toolbar).toEqual({ show: false, pins: ["lock", "remove"] });
+    expect(again.toolbar).toEqual({ show: false, buttons: ["lock", "remove"] });
     expect(again.grid).toBe("normal");
   });
 });

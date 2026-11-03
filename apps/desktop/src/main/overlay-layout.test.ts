@@ -54,7 +54,7 @@ function setup(items: Item[], options: { seen?: Record<string, SeenSize>; handle
   const world = {
     items,
     grid: "normal" as GridSetting,
-    toolbar: { show: true, pins: ["settings", "hide", "reset", "reset-size", "remove"] } as ToolbarSetting,
+    toolbar: { show: true, buttons: ["settings", "hide", "reset", "reset-size", "remove"] } as ToolbarSetting,
     /** The games that have a setup; one stays when its last item goes. */
     gameSetups: [...new Set(items.map((item) => setupOf(item)).filter((id) => id !== LAYOUT_ALL_GAMES && id !== LAYOUT_EVERYWHERE))],
     seen: { ...options.seen },
@@ -1916,6 +1916,23 @@ describe("the frame menu", () => {
     expect(layout.view().items[1]!.placed.x).toBe(b!.placed.x + 100);
   });
 
+  it("skips a locked frame when several are reset or aligned, and acts on the rest", () => {
+    const { layout, ids } = three();
+    layout.handle({ type: "lock", id: ids[0]!, locked: true }, false);
+    const [a, b, c] = layout.view().items.map((item) => item.placed);
+    layout.handle({ type: "align", ids, edge: "right" }, false);
+    const after = layout.view().items;
+    expect(after[0]!.placed).toEqual(a);
+    expect(after[1]!.placed.x + b!.width).toBe(1920);
+    expect(after[2]!.placed.x + c!.width).toBe(1920);
+    layout.handle({ type: "reset", ids }, false);
+    expect(layout.view().items[0]!.placed).toEqual(a);
+    expect(layout.view().items[1]!.placed.x).not.toBe(after[1]!.placed.x);
+    // One undo step for the rest.
+    layout.handle({ type: "undo" }, false);
+    expect(layout.view().items[1]!.placed.x + b!.width).toBe(1920);
+  });
+
   it("still arranges, hides and removes a locked frame", () => {
     const { layout, ids, stack } = three();
     layout.handle({ type: "lock", id: ids[0]!, locked: true }, false);
@@ -1936,11 +1953,11 @@ describe("the frame menu", () => {
 
   it("keeps the toolbar setting for every frame and setup, without an undo step", () => {
     const { layout, world } = three();
-    expect(layout.view().toolbar).toEqual({ show: true, pins: ["settings", "hide", "reset", "reset-size", "remove"] });
-    layout.handle({ type: "toolbar", pins: ["remove", "lock", "front", "bogus"] as never }, false);
-    expect(layout.view().toolbar.pins).toEqual(["lock", "remove"]);
+    expect(layout.view().toolbar).toEqual({ show: true, buttons: ["settings", "hide", "reset", "reset-size", "remove"] });
+    layout.handle({ type: "toolbar", buttons: ["remove", "lock", "front", "bogus"] as never }, false);
+    expect(layout.view().toolbar.buttons).toEqual(["lock", "remove"]);
     layout.handle({ type: "toolbar", show: false }, false);
-    expect(layout.view().toolbar).toEqual({ show: false, pins: ["lock", "remove"] });
+    expect(layout.view().toolbar).toEqual({ show: false, buttons: ["lock", "remove"] });
     expect(world.toolbar.show).toBe(false);
     expect(layout.view().canUndo).toBe(false);
   });
