@@ -643,9 +643,26 @@ test("a linked group lights up as one block, not row by row, and a row outside i
     await click(app, "add");
     await click(app, "pick-stopwatch");
     await expect.poll(() => names(app)).toEqual(["Counter", "Counter 2", "Stopwatch"]);
-    // The second counter's settings: the first one's stay the "being edited" item after its dialog closed, so its gear would close them.
-    await inModule(app, ID, `document.querySelectorAll('[data-testid^="more-"]')[1].click()`);
-    await click(app, "menu-settings-" + (await inModule<string>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]')[1].dataset.testid.slice(5)`)));
+    // The second counter's settings. Tavora opens the dialog only for a real click (a script's click gets "Couldn't open the settings"),
+    // so the ··· button and Settings are pressed with real mouse events.
+    const press = async (selector: string) => {
+      await app.evaluate(
+        async ({ webContents }, { moduleId, selector }) => {
+          const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`))!;
+          const at = (await target.executeJavaScript(
+            `(() => { const b = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }; })()`,
+          )) as { x: number; y: number };
+          target.sendInputEvent({ type: "mouseMove", ...at });
+          target.sendInputEvent({ type: "mouseDown", ...at, button: "left", clickCount: 1 });
+          target.sendInputEvent({ type: "mouseUp", ...at, button: "left", clickCount: 1 });
+        },
+        { moduleId: ID, selector },
+      );
+    };
+    const second = await inModule<string>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]')[1].dataset.testid.slice(5)`);
+    await press(`[data-testid="more-${second}"]`);
+    await expect.poll(() => inModule<boolean>(app, ID, `!!document.querySelector('[data-testid="menu-settings-${second}"]')`)).toBe(true);
+    await press(`[data-testid="menu-settings-${second}"]`);
     await expect.poll(() => inModule<string>(app, ID, `document.body.innerText.slice(0, 400)`)).toContain("Add a counter");
     await click(app, "link-add");
     await expect.poll(() => inModule<boolean>(app, ID, `!!document.querySelector('[data-testid^="link-pick-"]')`)).toBe(true);
