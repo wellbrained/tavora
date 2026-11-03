@@ -660,7 +660,8 @@ test("a linked group lights up as one block, not row by row, and a row outside i
       );
     };
     const second = await inModule<string>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]')[1].dataset.testid.slice(5)`);
-    await press(`[data-testid="more-${second}"]`);
+    // The menu opens from a right-click on the row (a script can send that), Settings in it from a real click.
+    await inModule(app, ID, `document.querySelector('[data-testid="item-${second}"] h2').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }))`);
     await expect.poll(() => inModule<boolean>(app, ID, `!!document.querySelector('[data-testid="menu-settings-${second}"]')`)).toBe(true);
     await press(`[data-testid="menu-settings-${second}"]`);
     await expect.poll(() => inModule<string>(app, ID, `document.body.innerText.slice(0, 400)`)).toContain("Add a counter");
