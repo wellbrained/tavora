@@ -117,7 +117,7 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
     </form>
 
     <template v-else>
-      <p v-if="games.length === 0" class="text-muted-foreground text-sm" data-testid="steam-import-empty">
+      <p v-if="games?.length === 0" class="text-muted-foreground text-sm" data-testid="steam-import-empty">
         {{ t("steamImport.empty") }}
       </p>
       <template v-else>
