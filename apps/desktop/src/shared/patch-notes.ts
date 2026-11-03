@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.90",
+    date: "2026-11-03",
+    title: "Tavora starts with less to load",
+    notes: [
+      "Tavora loads only your language and the patch notes when you open them.",
+      "Dialogs most people never open load when you first need them.",
+      "Fonts keep just the Latin letters, so every window and module is smaller.",
+    ],
+    prs: [
+      { number: 648, title: "Load less up front: locales, patch notes and rare dialogs on demand, latin-only fonts" },
+    ],
+    tags: ["accounts", "calculator", "catalog", "clock-counter", "games", "modules", "notes", "onboarding", "overlays", "pdf-viewer", "publishing", "rail", "settings", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
+  },
+  {
     version: "0.23.89",
     date: "2026-11-02",
     title: "Undo, one settings layout and smoother motion",
