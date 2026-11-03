@@ -1,0 +1,97 @@
+/* OverlayText (overlay-text.ts): the box around an overlay's lines. Only the box: the lines bring their own colour, font
+   and outline, since an overlay is drawn over game art and not in the app's theme. The script sets data-box, data-align,
+   data-mode (static, scroll, cut, or measure while it measures) and data-soft, and the font size on the track. */
+
+/* The host is the box: whoever uses it gives it its size (a frame's whole window, a preview, a class). */
+.tv-otext {
+  box-sizing: border-box;
+  display: block;
+}
+
+.tv-otext__clip {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  /* The room around the text: the outline and its shadow are drawn here, and a scrolling text runs out through it. */
+  padding: var(--tv-otext-pad, 0);
+}
+
+.tv-otext[data-align="left"] .tv-otext__clip {
+  justify-content: flex-start;
+}
+.tv-otext[data-align="right"] .tv-otext__clip {
+  justify-content: flex-end;
+}
+
+/* A fixed box shows nothing past its edges. A growing one is as big as its text anyway. */
+.tv-otext[data-box="fixed"] .tv-otext__clip {
+  overflow: hidden;
+}
+
+.tv-otext__track {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: max-content;
+  white-space: pre;
+}
+
+.tv-otext__content,
+.tv-otext__copy {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+}
+
+.tv-otext[data-align="left"] :is(.tv-otext__content, .tv-otext__copy) {
+  align-items: flex-start;
+}
+.tv-otext[data-align="right"] :is(.tv-otext__content, .tv-otext__copy) {
+  align-items: flex-end;
+}
+
+.tv-otext__copy {
+  /* SCROLL_GAP in plan.ts: the room before the text comes round again. */
+  margin-inline-start: 2em;
+}
+
+.tv-otext:not([data-mode="scroll"]) .tv-otext__copy {
+  display: none;
+}
+
+/* Scrolling starts from the left, past the soft edge, so the first letters read clearly during the pause. */
+.tv-otext[data-mode="scroll"] .tv-otext__clip {
+  justify-content: flex-start;
+}
+.tv-otext[data-mode="scroll"] .tv-otext__track {
+  margin-inline-start: var(--tv-otext-fade, 0);
+  will-change: transform;
+}
+.tv-otext[data-mode="scroll"] :is(.tv-otext__content, .tv-otext__copy) {
+  align-items: flex-start;
+}
+
+/* Soft edges: a mask, so it works over any game art. Only its alpha counts, so the colour in it is no colour of the theme. */
+.tv-otext[data-mode="scroll"][data-soft="true"] .tv-otext__clip {
+  --tv-otext-edge: calc(var(--tv-otext-pad, 0px) + var(--tv-otext-fade, 0px));
+  mask-image: linear-gradient(to right, transparent, black var(--tv-otext-edge), black calc(100% - var(--tv-otext-edge)), transparent);
+}
+
+/* Cut off: each line keeps to the box and ends with "…". */
+.tv-otext[data-mode="cut"] .tv-otext__track,
+.tv-otext[data-mode="cut"] .tv-otext__content {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+.tv-otext[data-mode="cut"] .tv-otext__content > :not([data-overlay-text-lines]),
+.tv-otext[data-mode="cut"] .tv-otext__content > [data-overlay-text-lines] > * {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

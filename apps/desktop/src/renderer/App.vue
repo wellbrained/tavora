@@ -40,7 +40,7 @@ const PublishDialog = defineAsyncComponent(() => import("./components/developer/
 const SteamImportDialog = defineAsyncComponent(() => import("./components/SteamImportDialog.vue"));
 // These three are always in the page; they are drawn from the first time they have something to show.
 const publishWanted = everWanted(publish);
-const officialPublishWanted = everWanted(() => state.value?.officialPublish?.run);
+const officialPublishWanted = everWanted(() => (state.value?.officialPublish?.run.phase ?? "idle") !== "idle");
 const pairingWanted = everWanted(() => pairing.value?.approve);
 
 // Finding the games on this PC takes a while the first time, so it starts quietly a few seconds after launch

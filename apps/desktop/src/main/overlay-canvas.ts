@@ -10,7 +10,7 @@
 import { BrowserWindow, WebContentsView } from "electron";
 import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
-import { GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
+import { GAME_OVERLAY_FRAME_URL, GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
 import { lockedSession } from "./game-overlay-window";
 import type { LayoutFrame, LayoutWindow } from "./overlay-layout";
 import type { Rect } from "./game-overlays";
@@ -241,7 +241,7 @@ export class OverlayCanvas implements LayoutWindow {
       entry.css = undefined;
       this.applyFade(entry);
     });
-    void contents.loadURL(`${GAME_OVERLAY_ORIGIN}/`).catch(() => {});
+    void contents.loadURL(GAME_OVERLAY_FRAME_URL).catch(() => {});
     return entry;
   }
 

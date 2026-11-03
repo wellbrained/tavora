@@ -55,6 +55,7 @@ export const en = {
   "page.zoom": "Pan & Zoom",
   "page.map": "Tile map",
   "page.settings": "Settings page",
+  "page.overlay-text": "Overlay text",
 
   "intro.colours": "Every colour comes from the theme, so switch the theme in Tavora and these follow.",
   "intro.text": "Inter for the interface, JetBrains Mono for code and ids. Five sizes, three weights.",
@@ -83,6 +84,7 @@ export const en = {
   "intro.zoom": "Drag to move, Ctrl + scroll or pinch to zoom, double-click to zoom in. The group in the corner zooms, shows the whole thing and holds your own buttons.",
   "intro.map": "A map made of picture tiles with pins that keep their size.",
   "intro.settings": "A module's settings in its dialog: pages left, one column right. Changes apply at once.",
+  "intro.overlay-text": "The text of an overlay in its box: it grows with the text, or a fixed box where long text scrolls, shrinks or is cut off.",
 
   "ex.colours.Tokens": "Theme tokens",
   "ex.colours.Tokens.note": "Each token with the class you write for it and its value in the current theme.",
@@ -390,6 +392,9 @@ export const en = {
   "ex.settings.SettingsMenu": "Settings menu with Overlays",
   "ex.settings.SettingsMenu.note": "The module's own pages have no heading. Overlays sits in a divider line; the dot is green when it shows there, hollow when it doesn't. Build it with settingsMenu.",
   "ex.settings.SettingsMenu.rule": "Overlay pages come last: first how it looks (Text, Look), then where it shows (In game, On stream).",
+  "ex.overlay-text.TextBox": "Overlay text box",
+  "ex.overlay-text.TextBox.note": "One piece for every text over the game and on stream, also for a page without Vue (mountOverlayText), and OverlayTextSettings for the module's settings. Give the lines sizes in em; the box sets the font size.",
+  "ex.overlay-text.TextBox.rule": "Text is never stretched, and in a fixed box never bigger than its step. It scrolls only when it doesn't fit; with reduced motion it is cut off instead.",
 };
 
 export type TextKey = keyof typeof en;
@@ -448,6 +453,7 @@ export const de: Record<TextKey, string> = {
   "page.zoom": "Schieben & Zoomen",
   "page.map": "Kachelkarte",
   "page.settings": "Einstellungsseite",
+  "page.overlay-text": "Overlay-Text",
 
   "intro.colours": "Jede Farbe kommt aus dem Theme: Wechsle das Theme in Tavora, und diese folgen.",
   "intro.text": "Inter für die Oberfläche, JetBrains Mono für Code und IDs. Fünf Größen, drei Stärken.",
@@ -476,6 +482,7 @@ export const de: Record<TextKey, string> = {
   "intro.zoom": "Ziehen zum Verschieben, Strg + Mausrad oder zwei Finger zum Zoomen, Doppelklick zum Hineinzoomen. Die Gruppe in der Ecke zoomt, zeigt alles und nimmt eigene Buttons auf.",
   "intro.map": "Eine Karte aus Bildkacheln mit Pins, die ihre Größe behalten.",
   "intro.settings": "Die Einstellungen eines Moduls in seinem Dialog: Seiten links, eine Spalte rechts. Änderungen gelten sofort.",
+  "intro.overlay-text": "Der Text eines Overlays in seinem Rahmen: wächst mit dem Text, oder ein fester Rahmen, in dem langer Text läuft, kleiner wird oder abgeschnitten wird.",
 
   "ex.colours.Tokens": "Theme-Farben",
   "ex.colours.Tokens.note": "Jede Farbe mit der Klasse, die du dafür schreibst, und ihrem Wert im aktuellen Theme.",
@@ -783,4 +790,7 @@ export const de: Record<TextKey, string> = {
   "ex.settings.SettingsMenu": "Einstellungsmenü mit Overlays",
   "ex.settings.SettingsMenu.note": "Die eigenen Seiten haben keine Überschrift. Overlays steht in einer Trennlinie; der Punkt ist grün, wenn es dort läuft, sonst hohl. Mit settingsMenu bauen.",
   "ex.settings.SettingsMenu.rule": "Overlay-Seiten kommen zuletzt: erst wie es aussieht (Text, Aussehen), dann wo es läuft (Im Spiel, Im Stream).",
+  "ex.overlay-text.TextBox": "Rahmen für Overlay-Text",
+  "ex.overlay-text.TextBox.note": "Ein Stück für jeden Text über dem Spiel und im Stream, auch für eine Seite ohne Vue (mountOverlayText), und OverlayTextSettings für die Einstellungen des Moduls. Gib den Zeilen Größen in em; die Box setzt die Schriftgröße.",
+  "ex.overlay-text.TextBox.rule": "Text wird nie gestreckt und in einem festen Rahmen nie größer als seine Stufe. Er läuft nur, wenn er nicht passt; bei weniger Bewegung wird er abgeschnitten.",
 };

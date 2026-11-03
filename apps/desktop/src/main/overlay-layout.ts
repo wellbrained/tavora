@@ -13,6 +13,7 @@ import { PREVIEW_DEFAULT, PREVIEW_MONITOR, PREVIEW_RATIOS, previewAspect, ratioL
 import { LAYOUT_ALL_GAMES, LAYOUT_EVERYWHERE, idsOf, rectsOf, type LayoutItemChange, type LayoutItemView, type LayoutMessage, type LayoutSourceChild, type LayoutSourceView, type LayoutView, type PlacedRect, type SourceBlock } from "../shared/layout-view";
 import type { ToolbarSetting } from "../shared/layout-toolbar";
 import { DEFAULT_RECT, MIN_OVERLAY_SIZE, REFERENCE_HEIGHT, anchorIn, anchorOf, contentScale, placeAnchored, placeLegacy, type AnchoredRect, type Rect } from "../shared/overlay-anchor";
+import { contentFrameSize, resizeContentRect, type Size } from "../shared/overlay-content";
 import type { GameOverlaySource } from "./game-overlay-page";
 import type { LayoutItemInfo, LayoutItemRef, LayoutItemState, LayoutSource } from "./game-overlay-service";
 import { DEFAULT_GAME_SIZE, allowedIn, isGameSetup, panelWindowId, placeItem, type OverlayScope } from "./game-overlays";
@@ -147,7 +148,14 @@ interface ItemSnapshot {
 
 /** Whether an item's settings and place are the same (where it is in the list, and its key, don't count: they change by themselves). */
 const sameItem = (a: LayoutItemState["item"], b: LayoutItemState["item"]) =>
-  a.mode === b.mode && a.opacity === b.opacity && a.hideFromCapture === b.hideFromCapture && (a.locked === true) === (b.locked === true) && (a.z ?? null) === (b.z ?? null) && sameRect(a.rect, b.rect) && JSON.stringify(a.legacy ?? null) === JSON.stringify(b.legacy ?? null);
+  a.mode === b.mode && a.opacity === b.opacity && a.hideFromCapture === b.hideFromCapture && (a.locked === true) === (b.locked === true) && (a.z ?? null) === (b.z ?? null) && a.scale === b.scale && sameRect(a.rect, b.rect) && JSON.stringify(a.legacy ?? null) === JSON.stringify(b.legacy ?? null);
+
+/** A move of an item: its new place, and the new scale of a frame that follows its content. */
+interface Move {
+  info: LayoutItemInfo;
+  next: AnchoredRect;
+  scale?: number;
+}
 
 const sameSnapshot = (a: ItemSnapshot, b: ItemSnapshot) => a.hidden === b.hidden && sameItem(a.state.item, b.state.item);
 
@@ -309,6 +317,13 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     return undefined;
   }
 
+  /** The size of an overlay's content at 100 % when its frame follows it (its panel lists it with `grows`); null for any other frame. */
+  private naturalOf(info: LayoutItemInfo, panels: readonly SourcePanel[]): Size | null {
+    if (info.legacy) return null;
+    const source = this.sourceOf(info, panels);
+    return source?.grows && source.size ? { ...source.size } : null;
+  }
+
   private text(key: MessageKey, params?: Record<string, string | number>): string {
     return translate(this.options.language(), key, params);
   }
@@ -399,6 +414,8 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       moveTargets: this.moveTargets(info, gameId, games),
       rect: this.rectOf(info, shape),
       placed: this.dragging.get(info.id) ?? this.placed(info, shape),
+      natural: this.naturalOf(info, panels),
+      scale: info.scale ?? 1,
       mode: info.mode,
       opacity: info.opacity,
       hideFromCapture: info.hideFromCapture,
@@ -706,6 +723,11 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   /** The size an overlay needs on the canvas (what its panel said, with room around it), on the grid and never below the smallest size; null when the panel said nothing. */
   private fitSize(source: OverlaySource | undefined, shape: Shape): { width: number; height: number } | null {
     if (!source?.size) return null;
+    // A frame that follows its content is exactly as big as it at 100 %: off the grid, or the content would be drawn bigger.
+    if (source.grows) {
+      const size = contentFrameSize(source.size, 1, this.minimum(shape));
+      return { width: Math.min(shape.canvas.width, size.width), height: Math.min(shape.canvas.height, size.height) };
+    }
     const cell = gridCell(this.options.source.grid(), REFERENCE_HEIGHT);
     const snap = (value: number) => (cell > 0 ? Math.ceil(value / cell) * cell : Math.round(value));
     const min = this.minimum(shape);
@@ -725,7 +747,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
       .filter((one) => one.id !== info.id)
       .map((one) => this.placed(one, shape));
     const at = freeSpot(size, shape.canvas, others, gridCell(this.options.source.grid(), REFERENCE_HEIGHT));
-    this.options.source.setRect(setupId, info.ref, anchorOf({ ...at, ...size }, { x: 0, y: 0, ...shape.canvas }));
+    this.options.source.setRect(setupId, info.ref, anchorOf({ ...at, ...size }, { x: 0, y: 0, ...shape.canvas }), source?.grows === undefined ? undefined : 1);
   }
 
   // ── Undo ────────────────────────────────────────────────────────────
@@ -971,16 +993,25 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   private commit(rects: readonly PlacedRect[]): void {
     const shape = this.shape(this.current(this.games()));
     const canvas = { x: 0, y: 0, ...shape.canvas };
-    const moves: { info: LayoutItemInfo; next: AnchoredRect }[] = [];
+    const moves: Move[] = [];
+    const panels = this.options.sources();
     for (const { id, rect } of rects) {
       const info = this.info(id);
       // A locked frame stays where it is.
       if (!info || info.locked) continue;
-      const fitted = this.fit(rect);
+      let fitted = this.fit(rect);
       // Dropped where it already is: nothing to keep, and no rounding of its place.
       const now = this.placed(info, shape);
       if (fitted.x === now.x && fitted.y === now.y && fitted.width === now.width && fitted.height === now.height) continue;
       const before = this.rectOf(info, shape);
+      // A frame that follows its content: the drag sets its scale, and it keeps the content's shape.
+      const natural = this.naturalOf(info, panels);
+      if (natural && (fitted.width !== now.width || fitted.height !== now.height)) {
+        const resized = resizeContentRect(now, fitted, natural, info.scale ?? 1, 1, this.minimum(shape));
+        fitted = this.fit(resized.rect);
+        moves.push({ info, next: anchorOf(fitted, canvas), scale: resized.scale });
+        continue;
+      }
       const next = rects.length > 1 ? anchorIn(fitted, canvas, before.h, before.v) : anchorOf(fitted, canvas);
       if (!sameRect(next, before)) moves.push({ info, next });
     }
@@ -1006,11 +1037,13 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     this.change(
       this.infos(ids).filter((info) => !info.locked).map((info) => {
         const before = this.rectOf(info, shape);
-        // An overlay whose panel said what it needs goes back to that, where it is.
-        const need = this.fitSize(this.sourceOf(info, panels), shape);
+        // An overlay whose panel said what it needs goes back to that, where it is; one that follows its content to 100 %.
+        const source = this.sourceOf(info, panels);
+        const need = this.fitSize(source, shape);
         if (need) {
           const placed = this.placed(info, shape);
-          return { info, next: anchorOf(this.fit({ x: placed.x, y: placed.y, ...need }), { x: 0, y: 0, ...shape.canvas }) };
+          const next = anchorOf(this.fit({ x: placed.x, y: placed.y, ...need }), { x: 0, y: 0, ...shape.canvas });
+          return source?.grows && !info.legacy ? { info, next, scale: 1 } : { info, next };
         }
         // The size is in units of the window's height: it is worked out on the game's window, else the main screen.
         const size = this.options.source.seenSize(gameId) ?? this.screenSize();
@@ -1068,15 +1101,15 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
   }
 
   /** Keeps the new positions of the items in the setup shown, where they differ, as one undo step. */
-  private change(moves: readonly { info: LayoutItemInfo; next: AnchoredRect }[]): void {
+  private change(moves: readonly Move[]): void {
     const shape = this.shape(this.current(this.games()));
-    const changed = moves.filter((move) => !sameRect(this.rectOf(move.info, shape), move.next));
+    const changed = moves.filter((move) => !sameRect(this.rectOf(move.info, shape), move.next) || (move.scale !== undefined && move.scale !== (move.info.scale ?? 1)));
     if (!changed.length) return;
     const setupId = this.current(this.games());
     this.record(
       changed.map((move) => move.info.id),
       () => {
-        for (const move of changed) this.options.source.setRect(setupId, move.info.ref, move.next);
+        for (const move of changed) this.options.source.setRect(setupId, move.info.ref, move.next, move.scale);
       },
     );
   }

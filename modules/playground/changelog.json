@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.25",
+    "version": "0.1.26",
     "date": "2026-11-03",
     "notes": [
       "The zoom specimens now include one that hides and shows the pane, and maps keep their view when you switch tabs or close a dialog."
+    ]
+  },
+  {
+    "version": "0.1.25",
+    "date": "2026-11-03",
+    "notes": [
+      "New page: Overlay text, the box every overlay text uses, with scrolling, shrinking and cutting off, and its settings."
     ]
   },
   {

@@ -276,8 +276,10 @@ function overlaySources(value: unknown): OverlaySource[] {
     const name = entry.name;
     if (typeof name !== "string" || name.trim().length === 0 || name.length > LIMITS.maxOverlaySourceName) throw new HostError("INVALID_PARAMS", `each source needs a name of 1 to ${LIMITS.maxOverlaySourceName} characters`);
     if (entry.group !== undefined && typeof entry.group !== "boolean") throw new HostError("INVALID_PARAMS", "a source's group must be true or false");
+    if (entry.grows !== undefined && typeof entry.grows !== "boolean") throw new HostError("INVALID_PARAMS", "a source's grows must be true or false");
     const source: OverlaySource = { key, name: name.replace(/[ -]+/g, " ").trim() };
     if (entry.group === true) source.group = true;
+    if (typeof entry.grows === "boolean") source.grows = entry.grows;
     if (entry.size !== undefined) {
       const size = object(entry.size);
       const side = (number: unknown) => (typeof number === "number" && Number.isFinite(number) && number > 0 && number <= 4000 ? Math.round(number) : null);

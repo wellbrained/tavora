@@ -49,6 +49,7 @@ export const PAGES = [
   { id: "map", group: "canvas", keywords: "map tiles pins markers cluster group dots spawns highlight world game zoom fog layer", examples: ["TileMap"] },
   // Tavora features
   { id: "settings", group: "features", keywords: "module settings dialog overlay preview page reset saved control column row menu divider heading in game on stream dot status danger delete one single narrow description unit size", examples: ["OnePage", "SeveralPages", "ModuleSettings", "SettingsMenu"] },
+  { id: "overlay-text", group: "features", keywords: "overlay stream obs game text box scroll marquee ticker loop shrink cut ellipsis fixed grows scale song now playing soft edges fade pause", examples: ["TextBox"] },
 ] as const satisfies readonly PageDef[];
 
 export type PageId = (typeof PAGES)[number]["id"];

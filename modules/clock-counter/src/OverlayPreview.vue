@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // The overlay of an item as it is drawn for OBS and over the game, in the settings: the same view (overlay-view.ts) that the overlay
-// page uses, at its natural size (it shrinks to fit, never grows). A running clock goes on ticking. Put it in a SettingsPreview.
+// page uses. A text that grows with its box is shown at its natural size (it shrinks to fit, never grows); a fixed box is the
+// preview itself, so a long text scrolls, shrinks or is cut off as it will on stream. A running clock goes on ticking. Put it
+// in a SettingsPreview.
 import { computed, onBeforeUnmount, onMounted, useTemplateRef, watch } from "vue";
 import type { OverlayState } from "./items";
 import { mountOverlayView, type OverlayView } from "./overlay-view";
@@ -16,7 +18,7 @@ const ticking = computed(() => props.state.kind === "clock" && props.state.clock
 
 onMounted(() => {
   const element = host.value!;
-  view = mountOverlayView(element, { box: () => ({ width: element.clientWidth, height: element.clientHeight }), padding: 0, grow: false });
+  view = mountOverlayView(element, { padding: 0, scaleBy: "down" });
   draw();
   observer = new ResizeObserver(() => view?.fit());
   observer.observe(element);

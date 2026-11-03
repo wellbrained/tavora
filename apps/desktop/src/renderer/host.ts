@@ -795,8 +795,8 @@ export function notSaved(error: unknown, text: string = t("common.notSaved")): v
 // images of them stand in meanwhile.
 const openMenus = ref(0);
 
-/** True while a panel or group is dragged, or a split is being resized. */
-export const dragging = ref(false);
+/** What the pointer holds in the workspace: a panel or group being dragged, or a split being resized; null for nothing. */
+export const dragging = ref<"panel" | "resize" | null>(null);
 
 /** The empty slot (a dock group id) the next panel to open goes into, if any. */
 export const nextPanelSlot = ref<string | null>(null);
@@ -878,7 +878,7 @@ export const noteShown = computed(() => (inbox.value.note !== null || inbox.valu
 
 // Module panels step aside for a menu, a drag and every dialog on the page (openDialogs: the slot, Settings, the profile,
 // the inbox, search, the panel dialog, Pairing, Publish ... whatever is built on the kit's Dialog).
-export const overlayOpen = computed(() => openMenus.value > 0 || openDialogs.value > 0 || dragging.value);
+export const overlayOpen = computed(() => openMenus.value > 0 || openDialogs.value > 0 || dragging.value !== null);
 
 // A page dialog above the panel dialog: the panel's view is native and would draw over it, so it steps aside meanwhile.
 watch(
