@@ -7,7 +7,7 @@ import { AccountKey } from "./account-key";
 import { CloudCopy, ServiceStorage } from "./cloud-copy";
 import { FOLDER_NAME } from "./copy-folder";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
-import { CLOSE_QUIET_MS, CopySync } from "./cloud-copy-sync";
+import { CLOSE_QUIET_MS, CopySync, questionsView, type Question } from "./cloud-copy-sync";
 import { FolderPairing, Pairing } from "./pairing";
 
 afterEach(cleanUp);
@@ -504,7 +504,9 @@ describe("what the copy is doing, and closing while it uploads", () => {
       vi.useRealTimers();
     }
     release();
-    await until(() => sync.view().busy === null);
+    // The held upload is queued already; this one runs after it, so nothing writes once the test ends.
+    await sync.sync();
+    expect(sync.view().busy).toBeNull();
     expect(closed).toBe(1);
   });
 
@@ -526,5 +528,58 @@ describe("what the copy is doing, and closing while it uploads", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     // The window closed by itself (holdClose said false); before, the upload's end called close a second time.
     expect(closed).toBe(0);
+  });
+});
+
+describe("the questions syncing waits on", () => {
+  const ALL: Question[] = ["askKey", "conflict", "restartToTake"];
+  /** Every mix of the three questions, from none to all (2³ = 8). */
+  const mixes: Question[][] = Array.from({ length: 8 }, (_, bits) => ALL.filter((_, index) => bits & (1 << index)));
+
+  /** Opens `questions` on a copy that is on, the way the sync would. */
+  async function withQuestions(questions: Question[]) {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const started = await startCopy(cloud, a);
+    for (const question of questions) (started.sync as unknown as { ask(question: Question): void }).ask(question);
+    return { ...started, a, cloud };
+  }
+
+  it.each(mixes.map((mix) => [mix.join("+") || "none", mix] as const))("Settings reads %s as one flag per open question, the same as three booleans", (_name, mix) => {
+    expect(questionsView(new Set(mix))).toEqual({ askKey: mix.includes("askKey"), conflict: mix.includes("conflict"), restartToTake: mix.includes("restartToTake") });
+  });
+
+  it.each(mixes.filter((mix) => mix.length > 0).map((mix) => [mix.join("+"), mix] as const))("while %s is open the quiet sync waits and a pressed one stops at a conflict only", async (_name, mix) => {
+    const { sync, a, cloud } = await withQuestions(mix);
+    expect(sync.view()).toMatchObject(questionsView(new Set(mix)));
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+    // Quiet: nothing goes up.
+    await sync.sync();
+    expect((await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote())?.version).toBe(1);
+    // Pressed: a conflict refuses; the other questions let the button through.
+    if (mix.includes("conflict")) await expect(sync.sync(true)).rejects.toMatchObject({ key: "cloudCopy.error.conflict" });
+    else {
+      await sync.sync(true);
+      expect((await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote())?.version).toBe(2);
+    }
+    // Moving the copy waits on any of them.
+    await expect(sync.move("/elsewhere")).rejects.toMatchObject({ key: "cloudCopy.error.conflict" });
+  });
+
+  it("keeping a side answers the conflict and the restart together and leaves the key question", async () => {
+    const { sync } = await withQuestions(ALL);
+    await sync.keep("pc");
+    expect(sync.view()).toMatchObject({ askKey: true, conflict: false, restartToTake: false });
+  });
+
+  it.each(mixes.map((mix) => [mix.join("+") || "none", mix] as const))("turning the copy off with %s open closes every question", async (_name, mix) => {
+    const { sync } = await withQuestions(mix);
+    await sync.turnOff();
+    expect(sync.view()).toMatchObject({ on: false, askKey: false, conflict: false, restartToTake: false });
+  });
+
+  it.each(mixes.filter((mix) => mix.length > 0).map((mix) => [mix.join("+"), mix] as const))("closing the window does not hold for an upload while %s is open", async (_name, mix) => {
+    const { sync } = await withQuestions(mix);
+    expect(sync.holdClose(() => undefined)).toBe(false);
   });
 });

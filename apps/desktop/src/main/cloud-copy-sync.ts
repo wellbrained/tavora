@@ -86,6 +86,33 @@ export interface CopySyncOptions {
  */
 type Closing = { phase: "open" } | { phase: "holding"; shown: boolean; timer: ReturnType<typeof setTimeout> } | { phase: "released" };
 
+/**
+ * What syncing can wait on the user for: the recovery key (another PC made the account's key), which side to keep (both
+ * changed), or a restart (a newer copy finished downloading after the workspaces loaded). Any mix can be open at once.
+ */
+export type Question = "askKey" | "conflict" | "restartToTake";
+
+/** The questions as Settings reads them: one flag each. */
+export function questionsView(questions: ReadonlySet<Question>): Pick<CloudCopyView, Question> {
+  const view = { askKey: false, conflict: false, restartToTake: false };
+  for (const question of questions) {
+    switch (question) {
+      case "askKey":
+        view.askKey = true;
+        break;
+      case "conflict":
+        view.conflict = true;
+        break;
+      case "restartToTake":
+        view.restartToTake = true;
+        break;
+      default:
+        assertNever(question);
+    }
+  }
+  return view;
+}
+
 /** What the window around the copy answers to; given once it exists (the copy starts before it does). */
 export interface CopyHooks {
   /** Writes what Tavora still holds in memory (library, layout) to disk. */
@@ -103,9 +130,8 @@ export class CopySync {
   private activity: CloudCopyActivity = { phase: "idle" };
   private copy: CloudCopyView["copy"] = null;
   private shownKey: string | null = null;
-  private askKey = false;
-  private conflict = false;
-  private restartToTake = false;
+  /** The questions syncing waits on. They can be open together (a key asked for while a conflict stands), so it is a set. */
+  private questions: ReadonlySet<Question> = new Set();
   private closing: Closing = { phase: "open" };
   private problem: CloudCopyProblem | null = null;
   /** One thing at a time: an upload, a download, a check. */
@@ -206,9 +232,7 @@ export class CopySync {
       limit: this.cloud.storage.limit,
       pictures: this.state.pictures,
       recoveryKey: this.shownKey,
-      askKey: this.askKey,
-      conflict: this.conflict,
-      restartToTake: this.restartToTake,
+      ...questionsView(this.questions),
       closing: this.closing.phase === "holding" && this.closing.shown,
       problem: this.problem,
     };
@@ -216,6 +240,20 @@ export class CopySync {
 
   private changed(): void {
     this.hooks?.onChange(this.view());
+  }
+
+  private asked(question: Question): boolean {
+    return this.questions.has(question);
+  }
+
+  private ask(question: Question): void {
+    this.questions = new Set(this.questions).add(question);
+  }
+
+  private clear(question: Question): void {
+    const next = new Set(this.questions);
+    next.delete(question);
+    this.questions = next;
   }
 
   /** Runs one thing after the one before it, showing what it does. */
@@ -284,7 +322,7 @@ export class CopySync {
         if (!staged) return;
         if (!late && (await this.takeStaged())) return;
         // Finished after the workspaces loaded: it waits for a restart.
-        this.restartToTake = true;
+        this.ask("restartToTake");
         this.changed();
       });
       const timer = new Promise<"late">((resolve) => setTimeout(() => resolve("late"), budgetMs).unref?.());
@@ -312,7 +350,7 @@ export class CopySync {
     if (remote.version === this.state.version) return false;
     // Changed here, or this PC's last save lost against another PC's (in a synced folder): the user chooses.
     if (remote.follows === false || (await hasLocalChanges(this.roots(), this.state))) {
-      this.conflict = true;
+      this.ask("conflict");
       this.changed();
       return false;
     }
@@ -367,7 +405,7 @@ export class CopySync {
       return false;
     }
     if (!staged.take && (await hasLocalChanges(this.roots(), this.state))) {
-      this.conflict = true;
+      this.ask("conflict");
       return false;
     }
     const library = libraryFile(this.options.userData);
@@ -425,13 +463,13 @@ export class CopySync {
 
   /** Whether syncing waits on the user (a question, or a restart). */
   private get waiting(): boolean {
-    return this.conflict || this.restartToTake || this.askKey;
+    return this.questions.size > 0;
   }
 
   /** Uploads what changed. Quiet: problems show in Settings. `loud` throws them for a button. */
   async sync(loud = false): Promise<void> {
     if (!this.on || (this.waiting && !loud)) return;
-    if (this.conflict) throw new UserError("cloudCopy.error.conflict");
+    if (this.asked("conflict")) throw new UserError("cloudCopy.error.conflict");
     await this.exclusive("uploading", async () => {
       // What ran before (a download at start) may have left a question.
       if (!this.on || (this.waiting && !loud)) return;
@@ -450,7 +488,7 @@ export class CopySync {
         } else if (result.version === 0) {
           await this.forget("deleted");
         } else {
-          this.conflict = true;
+          this.ask("conflict");
         }
       } catch (error) {
         const problem = this.noteProblem(error);
@@ -482,7 +520,7 @@ export class CopySync {
       throw CopySync.userError(this.noteProblem(error));
     });
     if (setUp.status === "ask") {
-      this.askKey = true;
+      this.ask("askKey");
       this.changed();
       return;
     }
@@ -502,18 +540,18 @@ export class CopySync {
 
   /** Another PC sent the account's key (pairing.ts), and it is kept: a copy that waited for it goes on. */
   async keyArrived(): Promise<void> {
-    if (this.askKey) await this.goOnWithKey(this.keyHere);
+    if (this.asked("askKey")) await this.goOnWithKey(this.keyHere);
   }
 
   private async goOnWithKey(here: boolean): Promise<void> {
-    this.askKey = false;
+    this.clear("askKey");
     try {
       await this.startCopy();
     } catch (error) {
       // Signed out, the folder's copy is the only check: a key that doesn't open it is not kept.
       if (here && error instanceof UserError && error.key === "cloudCopy.error.wrongKey") {
         await this.accountKeys.forget();
-        this.askKey = true;
+        this.ask("askKey");
         this.changed();
       }
       throw error;
@@ -569,7 +607,7 @@ export class CopySync {
     this.problem = null;
     if (staged) {
       // This PC has its own data too: the user keeps one side.
-      this.conflict = true;
+      this.ask("conflict");
       this.changed();
       return;
     }
@@ -579,7 +617,7 @@ export class CopySync {
   }
 
   cancelKey(): void {
-    this.askKey = false;
+    this.clear("askKey");
     this.use(null);
     this.copy = null;
     this.changed();
@@ -657,8 +695,8 @@ export class CopySync {
         throw CopySync.userError(this.noteProblem(error));
       }
     });
-    this.conflict = false;
-    this.restartToTake = false;
+    this.clear("conflict");
+    this.clear("restartToTake");
     await this.sync(true);
   }
 
@@ -702,8 +740,8 @@ export class CopySync {
    */
   async signedOut(): Promise<void> {
     // A copy in the user's own folder needs no account: it stays on, with its key.
-    if (this.folder !== null && (this.copyOn || this.askKey)) return;
-    if (this.copyOn || this.askKey) await this.forget(null);
+    if (this.folder !== null && (this.copyOn || this.asked("askKey"))) return;
+    if (this.copyOn || this.asked("askKey")) await this.forget(null);
     await this.accountKeys.forget();
     this.changed();
   }
@@ -712,9 +750,9 @@ export class CopySync {
     this.copyOn = false;
     this.state = EMPTY_STATE;
     this.shownKey = null;
-    this.askKey = false;
-    this.conflict = false;
-    this.restartToTake = false;
+    this.clear("askKey");
+    this.clear("conflict");
+    this.clear("restartToTake");
     this.problem = problem;
     await rm(this.stateFile, { force: true });
     await rm(this.placeFile, { force: true });

@@ -604,6 +604,7 @@ export const en = {
   "cloudCopy.error.noCopy": "There's no cloud copy yet.",
   "account.error.badEmail": "That is not an email address.",
   "account.error.wrongCode": "That code is wrong or has expired. Check the email, or send a new code.",
+  "account.error.codeExpired": "That code expired. Get a new one.",
   "account.error.mailFailed": "Tavora could not send the email. Please try again later.",
   "account.error.unavailable": "Accounts aren't working right now. Try again in a bit.",
   "account.error.unreachable": "Can't reach Tavora's service. Check your connection and try again.",

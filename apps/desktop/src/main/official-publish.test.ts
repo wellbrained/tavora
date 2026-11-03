@@ -506,6 +506,36 @@ describe("the run, as the host window sees it", () => {
     expect(one.view().phase).toBe("preview");
     await one.cancel();
   });
+
+  it("a prepare started while a thrown-away build is still being removed waits for the removal", async () => {
+    const removal = gated<void>();
+    const removing: string[] = [];
+    const slowRemoval: Run = async (command, args, options) => {
+      if (command === "git" && args[0] === "worktree" && args[1] === "remove") {
+        removing.push("start");
+        await removal.gate;
+        removing.push("end");
+      }
+      return run(command, args, options);
+    };
+    const { one } = watched({ run: slowRemoval });
+    await one.prepare("tavora.notes");
+    const cancelling = one.cancel();
+    await until(() => removing.includes("start"));
+    // The window already reads idle, but the old worktree is not gone yet.
+    expect(one.view()).toEqual({ phase: "idle" });
+    const second = one.prepare("tavora.notes");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(world.worktrees).toHaveLength(1);
+    expect(removing).toEqual(["start"]);
+    removal.open();
+    await cancelling;
+    await second;
+    expect(removing).toEqual(["start", "end"]);
+    expect(world.worktrees).toHaveLength(2);
+    expect(one.view().phase).toBe("preview");
+    await one.cancel();
+  });
 });
 
 describe("the list of built-in modules to publish", () => {
