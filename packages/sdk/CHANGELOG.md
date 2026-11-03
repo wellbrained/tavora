@@ -1,3 +1,11 @@
+## 0.3.11
+
+Hover-only item cards. The new field comes with Tavora 0.23.91 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `ui.tooltip.show` takes `pinnable?: boolean`. `false` says the card can't be pinned: its footer drops "Click to pin item details", and `pinned: true` with it is refused (`INVALID_PARAMS`, in the SDK too). Left out, nothing changes.
+- A Tavora older than 0.23.91 rejects the unknown key, so the SDK leaves `pinnable` out there and the card shows with the old hint. `sdk.supports("ui.tooltip.pinnable")` tells which case you are in.
+- The memory host (`@tavora/sdk/testing`) defaults to Tavora 0.23.91.
+
 ## 0.3.10
 
 A signal for "the user is in the game". The new event comes with Tavora 0.23.82 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).

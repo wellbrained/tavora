@@ -1531,11 +1531,18 @@ export const MIN_TAVORA: string = [...Object.values(METHOD_INFO).filter((info) =
 /** SDK calls whose protocol call has another name. */
 const SDK_CALLS = { "panel.openDialog": "panel.setDialog", "panel.closeDialog": "panel.setDialog" } as const;
 
-/** A protocol call, or one of the SDK calls named differently on the wire (`panel.openDialog`). */
-export type SupportedCall = CallName | keyof typeof SDK_CALLS;
+/**
+ * Params of an existing call that only a newer Tavora knows. An older one rejects the unknown key (INVALID_PARAMS) for the
+ * whole call, so the SDK leaves the key out there. They never raise `MIN_TAVORA`.
+ */
+export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91" } as const;
+
+/** A protocol call, a param only newer Tavoras know (`ui.tooltip.pinnable`), or one of the SDK calls named differently on the wire (`panel.openDialog`). */
+export type SupportedCall = CallName | keyof typeof SDK_CALLS | keyof typeof FIELD_SINCE;
 
 /** Whether a Tavora of this version answers the call. */
 export function supportsCall(version: string, call: SupportedCall): boolean {
+  if (call in FIELD_SINCE) return versionAtLeast(version, FIELD_SINCE[call as keyof typeof FIELD_SINCE]);
   const method = call in SDK_CALLS ? SDK_CALLS[call as keyof typeof SDK_CALLS] : (call as CallName);
   return versionAtLeast(version, METHOD_INFO[method].since);
 }

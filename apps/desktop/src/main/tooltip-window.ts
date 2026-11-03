@@ -141,7 +141,7 @@ export class TooltipWindow {
             return;
         }
         this.place();
-        this.window!.webContents.send("tooltip:render", { serial: open.serial, content: open.request.content, pinned: !!open.request.pinned, source: source.name, theme: this.options.theme(), language: this.options.language() });
+        this.window!.webContents.send("tooltip:render", { serial: open.serial, content: open.request.content, pinned: !!open.request.pinned, pinnable: open.request.pinnable !== false, source: source.name, theme: this.options.theme(), language: this.options.language() });
     }
     private place() {
         const c = this.state.current, w = this.window;

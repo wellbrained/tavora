@@ -19,8 +19,13 @@ export function checkTooltipAnchor(v: unknown): TooltipAnchor {
     return { id, at: { x: p.x as number, y: p.y as number } };
 }
 export function checkTooltip(v: unknown): TooltipRequest {
-    const o = obj(v, ["id", "at", "content", "pinned"]), anchor = checkTooltipAnchor({ id: o.id, at: o.at });
+    const o = obj(v, ["id", "at", "content", "pinned", "pinnable"]), anchor = checkTooltipAnchor({ id: o.id, at: o.at });
     if (o.pinned !== undefined && typeof o.pinned !== "boolean")
+        fail();
+    if (o.pinnable !== undefined && typeof o.pinnable !== "boolean")
+        fail();
+    // A card that says it can't be pinned never pins: asking for both is a mistake, not something to guess at.
+    if (o.pinnable === false && o.pinned === true)
         fail();
     const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "badges", "requirements", "properties", "sections"]);
     const content: TooltipContent = { title: text(c.title, 200) };
@@ -56,5 +61,5 @@ export function checkTooltip(v: unknown): TooltipRequest {
                 fail(); return { text: text(r.text, 2000), ...(r.badges === undefined ? {} : { badges: list(r.badges, 5, v => text(v, 40)) }), ...(r.status === undefined ? {} : { status: text(r.status, 60) }), ...(r.connected === undefined ? {} : { connected: r.connected as boolean }) }; }) }; });
     if (JSON.stringify(content).length > 40000)
         fail();
-    return { ...anchor, content, pinned: o.pinned === true };
+    return { ...anchor, content, pinned: o.pinned === true, ...(o.pinnable === false ? { pinnable: false } : {}) };
 }

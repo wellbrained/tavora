@@ -594,8 +594,12 @@ Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain
 
 ## Shared rich tooltips (Tavora 0.18.18+)
 
-- `ui.tooltip.show({ id, at: { x, y }, content, pinned? })` returns whether it was
-  accepted. Coordinates are CSS pixels relative to the source panel. Pinning needs
+- `ui.tooltip.show({ id, at: { x, y }, content, pinned?, pinnable? })` returns whether it was
+  accepted. `pinnable: false` says the card can't be pinned (hover only): its footer leaves out
+  "Click to pin item details", and `pinned: true` together with it is refused with `INVALID_PARAMS`.
+  Left out, the card says it can be pinned. `pinnable` needs Tavora 0.23.91; an older one rejects
+  the unknown key, so the SDK leaves it out there (`sdk.supports("ui.tooltip.pinnable")` tells) and
+  a raw caller checks the version itself. Coordinates are CSS pixels relative to the source panel. Pinning needs
   a genuine click/key press; hover must follow trusted source input. A current pin
   rejects ordinary hover. The host prefers the right side, then left, bounded to
   the application window.

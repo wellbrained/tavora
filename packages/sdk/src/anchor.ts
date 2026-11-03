@@ -1,5 +1,5 @@
 import { TavoraError } from "./index.js";
-import type { MenuRequest, TooltipAnchor, TooltipRequest } from "./protocol.js";
+import { supportsCall, type MenuRequest, type TooltipAnchor, type TooltipRequest } from "./protocol.js";
 
 /** What a menu or tooltip is for: an element (its box is read when you call) or a box you measured yourself. */
 export type AnchorTarget = Element | { x: number; y: number; width?: number; height?: number };
@@ -37,6 +37,18 @@ export function menuParams(request: MenuOptions): MenuRequest {
 function point(target: AnchorTarget): TooltipAnchor["at"] {
   const b = box(target);
   return { x: b.x + b.width, y: b.y + b.height / 2 };
+}
+
+/**
+ * The wire form of `ui.tooltip.show`. `pinnable: false` together with `pinned: true` is a mistake in every Tavora; an
+ * older Tavora than `ui.tooltip.pinnable` would reject the unknown key, so it is left out there (the card still shows,
+ * with the old hint).
+ */
+export function tooltipShowParams(request: TooltipShowOptions, hostVersion: string): Omit<TooltipShowOptions, "anchor" | "at"> & { at: TooltipAnchor["at"] } {
+  if (request.pinnable === false && request.pinned === true) throw new TavoraError({ code: "INVALID_PARAMS", message: "A card that is not pinnable can't be pinned" });
+  const params = tooltipParams(request);
+  if (params.pinnable !== undefined && !supportsCall(hostVersion, "ui.tooltip.pinnable")) delete params.pinnable;
+  return params;
 }
 
 export function tooltipParams<T extends TooltipMoveOptions | TooltipShowOptions>(request: T): Omit<T, "anchor" | "at"> & { at: TooltipAnchor["at"] } {
