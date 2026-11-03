@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import type { CloudCopyProblem, CloudCopyView } from "../shared/host-api";
+import { assertNever } from "../shared/assert-never";
+import type { CloudCopyActivity, CloudCopyProblem, CloudCopyView } from "../shared/host-api";
 import { backupsDir } from "./backup";
 import {
   CloudCopy,
@@ -78,6 +79,13 @@ export interface CopySyncOptions {
   log?: (line: string) => void;
 }
 
+/**
+ * Where closing the window stands: open; held while the last upload runs (`shown` once it took long enough to tell the
+ * user, `timer` until then); or released, when the window may close (the upload is done, the user closed anyway, or a
+ * restart takes a downloaded copy).
+ */
+type Closing = { phase: "open" } | { phase: "holding"; shown: boolean; timer: ReturnType<typeof setTimeout> } | { phase: "released" };
+
 /** What the window around the copy answers to; given once it exists (the copy starts before it does). */
 export interface CopyHooks {
   /** Writes what Tavora still holds in memory (library, layout) to disk. */
@@ -92,21 +100,17 @@ export class CopySync {
   private folder: string | null = null;
   private cloud: CloudCopy;
   private state: CopyState = EMPTY_STATE;
-  private busy: CloudCopyView["busy"] = null;
-  private progress: CloudCopyView["progress"] = null;
+  private activity: CloudCopyActivity = { phase: "idle" };
   private copy: CloudCopyView["copy"] = null;
   private shownKey: string | null = null;
   private askKey = false;
   private conflict = false;
   private restartToTake = false;
-  private closing = false;
+  private closing: Closing = { phase: "open" };
   private problem: CloudCopyProblem | null = null;
   /** One thing at a time: an upload, a download, a check. */
   private running: Promise<unknown> = Promise.resolve();
   private timer: ReturnType<typeof setInterval> | undefined;
-  /** Closing may go on: the last upload is done, or the user closed anyway. */
-  private mayClose = false;
-  private closeStarted = false;
 
   /** The copy on Tavora's service. */
   private readonly service: CopyStorage;
@@ -196,8 +200,7 @@ export class CopySync {
       canKeepKey: this.accountKeys.canKeep,
       devData: this.options.devData === true,
       on: this.on,
-      busy: this.busy,
-      progress: this.progress,
+      ...activityView(this.activity),
       copy: this.copy,
       folder: this.folder,
       limit: this.cloud.storage.limit,
@@ -206,7 +209,7 @@ export class CopySync {
       askKey: this.askKey,
       conflict: this.conflict,
       restartToTake: this.restartToTake,
-      closing: this.closing,
+      closing: this.closing.phase === "holding" && this.closing.shown,
       problem: this.problem,
     };
   }
@@ -216,20 +219,26 @@ export class CopySync {
   }
 
   /** Runs one thing after the one before it, showing what it does. */
-  private exclusive<T>(busy: NonNullable<CloudCopyView["busy"]>, work: () => Promise<T>): Promise<T> {
+  private exclusive<T>(phase: Exclude<CloudCopyActivity["phase"], "idle">, work: () => Promise<T>): Promise<T> {
     const next = this.running.then(async () => {
-      this.busy = busy;
+      this.activity = phase === "uploading" ? { phase, progress: null } : { phase };
       this.changed();
       try {
         return await work();
       } finally {
-        this.busy = null;
-        this.progress = null;
+        this.activity = { phase: "idle" };
         this.changed();
       }
     });
     this.running = next.catch(() => undefined);
     return next;
+  }
+
+  /** How far the upload running now got. */
+  private uploaded(done: number, total: number): void {
+    if (this.activity.phase !== "uploading") return;
+    this.activity = { phase: "uploading", progress: { done, total } };
+    this.changed();
   }
 
   /** What went wrong, for the settings page; a quiet run (in the background) keeps it there instead of throwing. */
@@ -428,10 +437,7 @@ export class CopySync {
       if (!this.on || (this.waiting && !loud)) return;
       await this.hooks?.flush();
       try {
-        const result = await this.cloud.upload(this.key!, this.roots(), this.state, (done, total) => {
-          this.progress = { done, total };
-          this.changed();
-        });
+        const result = await this.cloud.upload(this.key!, this.roots(), this.state, (done, total) => this.uploaded(done, total));
         if (result.status === "uploaded") {
           this.state = result.state;
           await saveCopyState(this.stateFile, this.state);
@@ -605,10 +611,7 @@ export class CopySync {
         if (folder !== null) await checkFolder(folder);
         const to = new CloudCopy(this.storageFor(folder));
         if (await to.remote()) throw new UserError("cloudCopy.error.moveTaken");
-        const result = await to.upload(this.key!, this.roots(), EMPTY_STATE, (done, total) => {
-          this.progress = { done, total };
-          this.changed();
-        });
+        const result = await to.upload(this.key!, this.roots(), EMPTY_STATE, (done, total) => this.uploaded(done, total));
         if (result.status === "too-big") throw new UserError("cloudCopy.error.too-big");
         if (result.status !== "uploaded") throw new UserError("cloudCopy.error.moveTaken");
         await savePlace(this.placeFile, folder);
@@ -674,7 +677,7 @@ export class CopySync {
 
   /** Restarts Tavora without uploading first: the staged copy is taken at the start. */
   restart(): void {
-    this.mayClose = true;
+    this.release();
     this.options.restart();
   }
 
@@ -727,27 +730,61 @@ export class CopySync {
    * `close` is called once it is done (or the user closes anyway).
    */
   holdClose(close: () => void): boolean {
-    if (this.mayClose || !this.on || this.waiting) return false;
-    if (this.closeStarted) return true;
-    this.closeStarted = true;
-    const shown = setTimeout(() => {
-      this.closing = true;
+    const phase = this.closing.phase;
+    switch (phase) {
+      case "released":
+        return false;
+      case "holding":
+        // The copy stopped waiting to go up meanwhile (turned off, or a question came up): this close goes on, and the
+        // upload ending later doesn't close the window a second time.
+        if (!this.on || this.waiting) {
+          this.release();
+          return false;
+        }
+        return true;
+      case "open":
+        break;
+      default:
+        assertNever(phase);
+    }
+    if (!this.on || this.waiting) return false;
+    const timer = setTimeout(() => {
+      if (this.closing.phase !== "holding") return;
+      this.closing = { ...this.closing, shown: true };
       this.changed();
     }, CLOSE_QUIET_MS);
+    this.closing = { phase: "holding", shown: false, timer };
     void this.sync()
       .catch(() => undefined)
-      .finally(() => {
-        clearTimeout(shown);
-        this.closeAnyway(close);
-      });
+      .finally(() => this.closeAnyway(close));
     return true;
   }
 
   closeAnyway(close: () => void): void {
-    if (this.mayClose) return;
-    this.mayClose = true;
-    this.closing = false;
+    if (this.closing.phase === "released") return;
+    this.release();
     close();
+  }
+
+  /** The window may close from now on; a close held so far stops waiting (and its notice never shows). */
+  private release(): void {
+    if (this.closing.phase === "holding") clearTimeout(this.closing.timer);
+    this.closing = { phase: "released" };
+  }
+}
+
+/** The activity as Settings reads it. */
+function activityView(activity: CloudCopyActivity): Pick<CloudCopyView, "busy" | "progress"> {
+  switch (activity.phase) {
+    case "idle":
+      return { busy: null, progress: null };
+    case "checking":
+    case "downloading":
+      return { busy: activity.phase, progress: null };
+    case "uploading":
+      return { busy: activity.phase, progress: activity.progress };
+    default:
+      return assertNever(activity);
   }
 }
 

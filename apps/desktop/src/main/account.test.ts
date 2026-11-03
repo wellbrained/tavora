@@ -191,6 +191,117 @@ describe("signing in", () => {
   });
 });
 
+describe("what a code waits for", () => {
+  const CODE = "654321";
+  const TICKET = "k".repeat(43);
+
+  it("goes code requested, code entered, then create with that same code; the code never reaches the host UI", async () => {
+    const { calls, fetchImpl } = service({
+      "POST /code": () => json({ status: "sent" }, 202),
+      "POST /verify": (body) => (body?.create ? signedInAnswer("created")() : json({ status: "no-account" })),
+      "GET /": () => json({ account: { email: "me@example.com" }, devices: [] }),
+    });
+    const { account, views } = client(fetchImpl);
+    await account.sendCode("me@example.com");
+    expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "code" });
+    await account.verify(CODE);
+    expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "create" });
+    await account.create(true);
+    expect(calls.find((call) => call.body?.create)!.body).toMatchObject({ email: "me@example.com", code: CODE, create: true });
+    expect(account.view().pending).toBeNull();
+    expect(views.length).toBeGreaterThan(2);
+    for (const view of views) expect(JSON.stringify(view)).not.toContain(CODE);
+  });
+
+  it("an expired code is refused and the step stays, so a new code can be asked for and entered", async () => {
+    let expired = true;
+    const { fetchImpl } = service({
+      "POST /code": () => {
+        expired = false;
+        return json({ status: "sent" }, 202);
+      },
+      "POST /verify": () => (expired ? json({ error: "That code is wrong or has expired.", reason: "wrong-code" }, 400) : signedInAnswer("signed-in")()),
+      "GET /": () => json({ account: { email: "me@example.com" }, devices: [] }),
+    });
+    const { account } = client(fetchImpl);
+    await account.sendCode("me@example.com");
+    expired = true;
+    await expect(account.verify("111111")).rejects.toMatchObject({ key: "account.error.wrongCode" });
+    expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "code" });
+    await account.sendCode("me@example.com");
+    await account.verify("222222");
+    expect(account.view().account?.email).toBe("me@example.com");
+    expect(account.view().pending).toBeNull();
+  });
+
+  it("a code that expired before Create is refused there; the question stays until it is cancelled", async () => {
+    let expired = false;
+    const { fetchImpl } = service({
+      "POST /code": () => json({ status: "sent" }, 202),
+      "POST /verify": (body) => (body?.create && expired ? json({ reason: "wrong-code" }, 400) : json({ status: "no-account" })),
+    });
+    const { account } = client(fetchImpl);
+    await account.sendCode("me@example.com");
+    await account.verify(CODE);
+    expired = true;
+    await expect(account.create(true)).rejects.toMatchObject({ key: "account.error.wrongCode" });
+    expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "create" });
+    account.cancel();
+    expect(account.view().pending).toBeNull();
+    // Nothing is left to create with.
+    await expect(account.create(true)).rejects.toMatchObject({ key: "account.error.noCode" });
+  });
+
+  it("signing out while a code is pending forgets it, and the code can't be used after", async () => {
+    const { calls, fetchImpl } = service({
+      "POST /email/code": () => json({ status: "sent" }, 202),
+      "POST /delete/code": () => json({ status: "sent" }, 202),
+      "POST /sign-out": () => new Response(null, { status: 204 }),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.sendEmailCode("new@example.com");
+    expect(account.view().pending).toEqual({ kind: "change-email", email: "new@example.com" });
+    await account.signOut();
+    expect(account.view().pending).toBeNull();
+    expect(account.view().account).toBeNull();
+    await expect(account.changeEmail(CODE)).rejects.toMatchObject({ key: "account.error.noCode" });
+    expect(calls.some((call) => call.url.endsWith("/email"))).toBe(false);
+  });
+
+  it("a sign-in the service no longer knows forgets a pending code too", async () => {
+    const { fetchImpl } = service({
+      "POST /delete/code": () => json({ status: "sent" }, 202),
+      "POST /delete": () => json({ error: "Signed out." }, 401),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.sendDeleteCode();
+    expect(account.view().pending).toEqual({ kind: "delete" });
+    await expect(account.deleteAccount(CODE)).rejects.toMatchObject({ key: "account.error.signedOut" });
+    expect(account.view().pending).toBeNull();
+  });
+
+  it("a Discord ticket lives only in its question: asking for an email code instead drops it", async () => {
+    const { calls, fetchImpl } = service({
+      "POST /discord/sign-in": () => json({ status: "no-account", ticket: TICKET, discord: { name: "alex" } }),
+      "POST /code": () => json({ status: "sent" }, 202),
+      "POST /verify": (body) => (body?.create ? signedInAnswer("created")() : json({ status: "no-account" })),
+      "GET /": () => json({ account: { email: "me@example.com" }, devices: [] }),
+    });
+    const { account, views } = client(fetchImpl, { discordLogin: async () => ({ code: "c", verifier: "v" }) });
+    await account.discordSignIn();
+    expect(account.view().pending).toEqual({ kind: "discord-create", name: "alex" });
+    await account.sendCode("me@example.com");
+    expect(account.view().pending).toEqual({ kind: "sign-in", email: "me@example.com", step: "code" });
+    await expect(account.create(true)).rejects.toMatchObject({ key: "account.error.noCode" });
+    await account.verify(CODE);
+    await account.create(true);
+    expect(calls.some((call) => call.url.endsWith("/discord/create"))).toBe(false);
+    for (const view of views) expect(JSON.stringify(view)).not.toContain(TICKET);
+  });
+});
+
 describe("signed in", () => {
   it("forgets a sign-in the service no longer knows", async () => {
     const { fetchImpl } = service({ "GET /": () => json({ reason: "signed-out" }, 401) });

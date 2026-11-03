@@ -340,11 +340,8 @@ watch(
 // hidden: they are drawn above this page and would swallow the pointer.
 // A drag ends with dragend or drop; a resize with pointerup. Chromium sends
 // pointercancel when a drag starts, so that only ends a resize.
-let resizing = false;
-
 function endDrag() {
-  resizing = false;
-  dragging.value = false;
+  dragging.value = null;
 }
 
 // ── The drop preview ───────────────────────────────────────────────────
@@ -359,7 +356,7 @@ const preview = new DockPreview(
   () => !!state.value?.devBuild,
 );
 function endResize() {
-  if (resizing) endDrag();
+  if (dragging.value === "resize") endDrag();
 }
 addEventListener("dragend", endDrag, true);
 addEventListener("drop", endDrag, true);
@@ -370,8 +367,7 @@ preview.attach();
 
 function onPointerDown(event: PointerEvent) {
   if (!(event.target as Element | null)?.closest(".dv-sash")) return;
-  resizing = true;
-  dragging.value = true;
+  dragging.value = "resize";
 }
 
 function onReady({ api }: DockviewReadyEvent) {
@@ -403,8 +399,8 @@ function onReady({ api }: DockviewReadyEvent) {
     reportSoon();
     if (!applying) saveSoon();
   });
-  api.onWillDragPanel(() => (dragging.value = true));
-  api.onWillDragGroup(() => (dragging.value = true));
+  api.onWillDragPanel(() => (dragging.value = "panel"));
+  api.onWillDragGroup(() => (dragging.value = "panel"));
   api.onWillDrop((event) => guardDrop(event, api, info));
   api.onDidDrop(() => endDrag());
 }

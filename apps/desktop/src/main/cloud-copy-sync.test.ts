@@ -1,13 +1,13 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
 import { AccountKey } from "./account-key";
 import { CloudCopy, ServiceStorage } from "./cloud-copy";
 import { FOLDER_NAME } from "./copy-folder";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
-import { CopySync } from "./cloud-copy-sync";
+import { CLOSE_QUIET_MS, CopySync } from "./cloud-copy-sync";
 import { FolderPairing, Pairing } from "./pairing";
 
 afterEach(cleanUp);
@@ -366,5 +366,165 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(atB.sync.view()).toMatchObject({ on: true, askKey: false, conflict: true, folder: onedrive });
     fromA.dispose();
     toB.dispose();
+  });
+});
+
+describe("what the copy is doing, and closing while it uploads", () => {
+  /** Tavora at PC `at` again, with the copy on: its network and its flush (the start of every upload) in the test's hands. */
+  async function running(cloud: Service, at: Pc) {
+    const net = { offline: false };
+    let gate: Promise<void> | null = null;
+    const views: CloudCopyView[] = [];
+    const sync = new CopySync({
+      userData: at.userData,
+      enabled: true,
+      files: { root: () => at.moduleFiles },
+      account: { token: () => cloud.token },
+      serviceUrl: "http://tavora.test/v1/account",
+      fetch: ((input, init) => (net.offline ? Promise.reject(new TypeError("fetch failed")) : cloud.fetch(input, init))) as typeof fetch,
+      encryptor,
+      restart: () => undefined,
+    });
+    sync.attach({ flush: () => gate ?? Promise.resolve(), onChange: (view) => views.push(view) });
+    await sync.beforeLoad();
+    expect(sync.view().on).toBe(true);
+    /** Holds the next uploads at their start until the answer is called. */
+    const hold = () => {
+      let open!: () => void;
+      gate = new Promise((resolve) => (open = resolve));
+      return () => {
+        gate = null;
+        open();
+      };
+    };
+    return { sync, views, net, hold };
+  }
+  const remoteVersion = (cloud: Service) => cloud.client().remote().then((remote) => remote?.version);
+  /** Progress only ever shows while uploading. */
+  const consistent = (views: CloudCopyView[]) => views.every((view) => view.progress === null || view.busy === "uploading");
+
+  it("start, progress, done: uploading with how far it got, then idle again", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    await startCopy(cloud, a);
+    const { sync, views } = await running(cloud, a);
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+    views.length = 0;
+    await sync.sync(true);
+    expect(views[0]).toMatchObject({ busy: "uploading", progress: null });
+    expect(views.some((view) => view.busy === "uploading" && view.progress !== null && view.progress.total > 0)).toBe(true);
+    expect(views.at(-1)).toMatchObject({ busy: null, progress: null, problem: null });
+    expect(consistent(views)).toBe(true);
+    expect(await remoteVersion(cloud)).toBe(2);
+  });
+
+  it("start, error, retry: offline says so and ends idle; the retry goes up", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    await startCopy(cloud, a);
+    const { sync, views, net } = await running(cloud, a);
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+    net.offline = true;
+    await expect(sync.sync(true)).rejects.toMatchObject({ key: "cloudCopy.error.offline" });
+    expect(sync.view()).toMatchObject({ busy: null, progress: null, problem: "offline" });
+    net.offline = false;
+    await sync.sync(true);
+    expect(sync.view()).toMatchObject({ busy: null, progress: null, problem: null });
+    expect(await remoteVersion(cloud)).toBe(2);
+    expect(consistent(views)).toBe(true);
+  });
+
+  it("a second start while one runs waits for it, then runs on its own", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    await startCopy(cloud, a);
+    const { sync, views, hold } = await running(cloud, a);
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+    const release = hold();
+    views.length = 0;
+    const first = sync.sync(true);
+    const second = sync.sync(true);
+    await until(() => sync.view().busy === "uploading");
+    // Only the first one runs, held at its start.
+    expect(views.filter((view) => view.busy === "uploading")).toHaveLength(1);
+    release();
+    await Promise.all([first, second]);
+    // Each ran in turn: uploading, idle, uploading, idle.
+    const turns = views.map((view) => view.busy).filter((busy, index, all) => busy !== all[index - 1]);
+    expect(turns).toEqual(["uploading", null, "uploading", null]);
+    expect(sync.view()).toMatchObject({ busy: null, progress: null, problem: null });
+    expect(consistent(views)).toBe(true);
+    expect(await remoteVersion(cloud)).toBe(2);
+  });
+
+  it("quit mid-sync: the close waits, says so after a few seconds, and closes once the upload is done", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    await startCopy(cloud, a);
+    const { sync, hold } = await running(cloud, a);
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+    const release = hold();
+    let closed = 0;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      expect(sync.holdClose(() => void closed++)).toBe(true);
+      expect(sync.view().closing).toBe(false);
+      vi.advanceTimersByTime(CLOSE_QUIET_MS);
+      expect(sync.view().closing).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+    release();
+    await until(() => closed === 1);
+    expect(sync.view().closing).toBe(false);
+    expect(sync.holdClose(() => void closed++)).toBe(false);
+    expect(closed).toBe(1);
+    expect(await remoteVersion(cloud)).toBe(2);
+  });
+
+  it("quit mid-sync, then Close anyway: closes once, and the notice never shows after", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    await startCopy(cloud, a);
+    const { sync, views, hold } = await running(cloud, a);
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+    const release = hold();
+    let closed = 0;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      expect(sync.holdClose(() => void closed++)).toBe(true);
+      sync.closeAnyway(() => void closed++);
+      expect(closed).toBe(1);
+      views.length = 0;
+      // Before, the notice's timer still ran and said it was uploading on a window that was closing.
+      vi.advanceTimersByTime(CLOSE_QUIET_MS);
+      expect(views.some((view) => view.closing)).toBe(false);
+      expect(sync.view().closing).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+    release();
+    await until(() => sync.view().busy === null);
+    expect(closed).toBe(1);
+  });
+
+  it("quit mid-sync, and the copy turns off meanwhile: the next close goes on, and the upload ending doesn't close again", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    await startCopy(cloud, a);
+    const { sync, hold } = await running(cloud, a);
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+    const release = hold();
+    let closed = 0;
+    expect(sync.holdClose(() => void closed++)).toBe(true);
+    await until(() => sync.view().busy === "uploading");
+    // Signed out on another device: the copy on the service is off here.
+    await sync.signedOut();
+    expect(sync.holdClose(() => void closed++)).toBe(false);
+    release();
+    await until(() => sync.view().busy === null);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The window closed by itself (holdClose said false); before, the upload's end called close a second time.
+    expect(closed).toBe(0);
   });
 });

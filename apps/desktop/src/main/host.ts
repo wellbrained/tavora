@@ -1,7 +1,7 @@
 import { ReadOnlyFiles } from './read-only-files';
 import { showInBackground, windowLook, type WindowStart } from "./background-window";
 import { saveDialogDirectory } from './save-dialog-folder';
-import { randomUUID } from "node:crypto";
+import { randomUUID, type KeyObject } from "node:crypto";
 import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
@@ -30,7 +30,7 @@ import {
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishStep, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -485,10 +485,8 @@ export class Host {
   private officialPublisher: OfficialPublisher | null = null;
   /** The Tavora key when the developer chose to keep it on this PC (dev builds only). */
   private readonly officialKeys: OfficialKeyStore;
-  /** Settings > Development's Built-in modules list and the publish in progress (state.officialPublish). */
-  private officialPublish: Omit<OfficialPublishView, "available" | "key"> = { checking: false, overview: null, checkError: null, run: null };
-  /** Sign and upload was pressed and hasn't finished (picking the key, signing, uploading): Cancel waits for it. */
-  private officialConfirming = false;
+  /** Settings > Development's Built-in modules list (state.officialPublish); the publish in progress is the publisher's. */
+  private officialPublish: Pick<OfficialPublishView, "check" | "overview"> = { check: { phase: "idle" }, overview: null };
   /** Stream overlays and hotkeys for module actions (streaming.ts); made by Host.create once the Host is there, before any module panel opens. */
   private streaming!: Streaming;
   /** Module overlay pages shown over the game in front (game-overlay-service.ts). */
@@ -2111,24 +2109,32 @@ export class Host {
       },
       trusted: (fingerprint, sha256) => trust.signerTrusted(fingerprint, sha256),
       upload: (key, zip) => this.account.uploadModule(key, zip),
+      // A run that ends while the app quits (its cancel there) has no window left to tell.
+      onChange: () => {
+        if (!this.window.isDestroyed()) this.pushState();
+      },
     });
     return this.officialPublisher;
+  }
+
+  /** The publish of a built-in module in progress, as state.officialPublish shows it. */
+  private officialRun(): OfficialPublishRun {
+    return this.officialPublisher?.view() ?? { phase: "idle" };
   }
 
   /** Dev builds only: works out which built-in modules have something to publish (Settings > Development). */
   private async checkOfficialPublish(): Promise<void> {
     const trust = this.officialPublishTrust();
     // Not while a build runs: both fetch in the same checkout.
-    if (!trust || this.officialPublish.checking || (this.officialPublish.run && !this.officialPublish.run.preview)) return;
-    this.officialPublish = { ...this.officialPublish, checking: true, checkError: null };
+    if (!trust || this.officialPublish.check.phase === "checking" || this.officialRun().phase === "building") return;
+    this.officialPublish = { ...this.officialPublish, check: { phase: "checking" } };
     this.pushState();
     try {
-      this.officialPublish = { ...this.officialPublish, overview: await this.officialPublisherFor(trust).check() };
+      this.officialPublish = { check: { phase: "idle" }, overview: await this.officialPublisherFor(trust).check() };
     } catch (error) {
       const message = error instanceof UserError ? translate(this.language, error.key, error.params) : (error as Error).message;
-      this.officialPublish = { ...this.officialPublish, checkError: message };
+      this.officialPublish = { ...this.officialPublish, check: { phase: "failed", error: message } };
     } finally {
-      this.officialPublish = { ...this.officialPublish, checking: false };
       this.pushState();
     }
   }
@@ -2140,20 +2146,13 @@ export class Host {
   private async publishOfficialModule(moduleId: string): Promise<void> {
     const trust = this.officialPublishTrust();
     if (!trust) throw new UserError("officialPublish.error.notBuiltIn");
-    if (this.officialPublish.run || this.officialPublish.checking) throw new UserError("officialPublish.error.busy");
+    if (this.officialRun().phase !== "idle" || this.officialPublish.check.phase === "checking") throw new UserError("officialPublish.error.busy");
     const name = this.officialPublish.overview?.rows.find((row) => row.id === moduleId)?.name ?? moduleId;
-    const publisher = this.officialPublisherFor(trust);
-    this.officialPublish = { ...this.officialPublish, run: { moduleId, name, step: "fetch", preview: null } };
-    this.pushState();
     try {
-      const preview = await publisher.prepare(moduleId, (step) => this.setOfficialStep(step));
-      this.officialPublish = { ...this.officialPublish, run: { moduleId, name, step: "pack", preview } };
+      await this.officialPublisherFor(trust).prepare(moduleId, undefined, name);
     } catch (error) {
-      this.officialPublish = { ...this.officialPublish, run: null };
       if (error instanceof PublishCancelled) return;
       throw error;
-    } finally {
-      this.pushState();
     }
   }
 
@@ -2164,19 +2163,16 @@ export class Host {
    */
   private async confirmOfficialPublish(remember: boolean): Promise<string | void> {
     const trust = this.officialPublishTrust();
-    const run = this.officialPublish.run;
     const publisher = this.officialPublisher;
-    if (!trust || !run?.preview || !publisher?.preview) throw new UserError("officialPublish.error.notPrepared");
-    if (this.officialConfirming) throw new UserError("officialPublish.error.busy");
-    this.officialConfirming = true;
-    try {
-      return await this.signAndUpload(trust, publisher, run, remember);
-    } finally {
-      this.officialConfirming = false;
-    }
+    if (!trust || !publisher) throw new UserError("officialPublish.error.notPrepared");
+    const published = await publisher.confirm(() => this.officialKey(trust, remember));
+    if (!published) return;
+    void this.checkOfficialPublish();
+    return `${published.id} ${published.version}`;
   }
 
-  private async signAndUpload(trust: OfficialUpdates, publisher: OfficialPublisher, run: NonNullable<OfficialPublishView["run"]>, remember: boolean): Promise<string | void> {
+  /** The key for Sign and upload: the saved one, or a key file picked now (null when none is picked). */
+  private async officialKey(trust: OfficialUpdates, remember: boolean): Promise<KeyObject | null> {
     let key = await this.officialKeys.load();
     // A saved key that may no longer sign (revoked, or the pins moved on) is not kept.
     if (key && !trust.keyTrusted(fingerprint(key))) {
@@ -2187,7 +2183,7 @@ export class Host {
     if (!key) {
       const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.tavoraKey"), properties: ["openFile"] });
       const keyFile = picked.filePaths[0];
-      if (picked.canceled || !keyFile) return;
+      if (picked.canceled || !keyFile) return null;
       key = await loadExistingKey(path.resolve(keyFile)).then(
         ({ key: loaded }) => loaded,
         (error: unknown) => {
@@ -2201,33 +2197,13 @@ export class Host {
         });
       }
     }
-    try {
-      const published = await publisher.finish(key, (step) => this.setOfficialStep(step));
-      this.officialPublish = { ...this.officialPublish, run: null };
-      void this.checkOfficialPublish();
-      return `${published.id} ${published.version}`;
-    } catch (error) {
-      // A wrong key keeps the preview, to try another; anything else ends the run.
-      this.officialPublish = { ...this.officialPublish, run: publisher.preview && this.officialPublish.run ? { ...run, step: "pack" } : null };
-      throw error;
-    } finally {
-      this.pushState();
-    }
-  }
-
-  private setOfficialStep(step: OfficialPublishStep): void {
-    const run = this.officialPublish.run;
-    if (!run) return;
-    this.officialPublish = { ...this.officialPublish, run: { ...run, step } };
-    this.pushState();
+    return key;
   }
 
   /** Stops the build in progress (its own catch ends the run) or throws the preview away. */
   private async cancelOfficialPublish(): Promise<void> {
-    // Signing or uploading can't be stopped; the dialog stays until it is done.
-    if (!this.officialPublisher || this.officialConfirming || this.officialPublisher.uploading) return;
-    await this.officialPublisher.cancel();
-    if (this.officialPublish.run?.preview) this.officialPublish = { ...this.officialPublish, run: null };
+    // Sign and upload, once pressed, can't be stopped; the dialog stays until it is done (OfficialPublisher.cancel).
+    await this.officialPublisher?.cancel();
     this.pushState();
   }
 
@@ -4647,6 +4623,7 @@ export class Host {
       officialPublish: ((available) => ({
         available,
         ...this.officialPublish,
+        run: this.officialRun(),
         key: { saved: available && this.officialKeys.hasKey(), canRemember: available && this.officialKeys.canRemember() },
       }))(!app.isPackaged && officialOn(OFFICIAL_PINS)),
       developmentFolders: this.library.developmentFolders.map((folder) => {
