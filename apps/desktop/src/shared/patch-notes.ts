@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.98",
+    date: "2026-11-03",
+    title: "Sign-in code ran out",
+    notes: [
+      "If your sign-in code runs out before you press Create, you land back on the code step and can get a new one.",
+    ],
+    prs: [
+      { number: 669, title: "Typed state unions follow-up: cloud copy questions, publish discard, expired sign-in code" },
+    ],
+    tags: ["accounts", "cloud-copy"],
+  },
+  {
     version: "0.23.97",
     date: "2026-11-03",
     title: "Maps keep their view",
