@@ -13,6 +13,7 @@ import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/offici
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { plural, setLanguage, t } from "./i18n";
+import { ACTIVE_GROUP, ROW_FADE } from "./active";
 import ItemCard from "./ItemCard.vue";
 import ItemEditor from "./ItemEditor.vue";
 import SettingsSkeleton from "./SettingsSkeleton.vue";
@@ -604,9 +605,9 @@ onBeforeUnmount(() => {
           @keydown="onRowKey"
         >
           <ItemCard v-if="row.type === 'item'" :item="row.item" @toggle-edit="toggleEdit(row.item.id)" />
-          <section v-else class="border-border flex flex-col gap-1 rounded-lg border p-1" :aria-label="t('app.linked')" data-testid="linked-group">
+          <section v-else class="border-border flex flex-col gap-1 rounded-lg border p-1" :class="[ROW_FADE, ACTIVE_GROUP]" :aria-label="t('app.linked')" data-testid="linked-group">
             <Badge variant="secondary" class="gap-1 self-start" :title="t('app.linkedHint')"><Link class="size-3" :stroke-width="1.5" aria-hidden="true" />{{ t("app.linked") }}</Badge>
-            <ItemCard v-for="item in row.items" :key="item.id" :item="item" @toggle-edit="toggleEdit(item.id)" />
+            <ItemCard v-for="item in row.items" :key="item.id" :item="item" grouped @toggle-edit="toggleEdit(item.id)" />
           </section>
         </div>
       </div>

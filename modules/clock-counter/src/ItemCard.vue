@@ -9,12 +9,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { computed, inject, ref } from "vue";
 import { t } from "./i18n";
 import { canMove, goalReached, lapSplits, readClock, sourcesOf, type Item } from "./items";
+import { ACTIVE_ROW, ROW_FADE } from "./active";
 import { PANEL } from "./panel";
 import { formatSeconds } from "./time";
 
 // One ··· button ends the row; it opens the row's menu. A right-click (or Shift+F10) opens the same menu, which the kit
 // places next to the button at the row's end, never at the pointer.
-const props = defineProps<{ item: Item }>();
+const props = defineProps<{ item: Item; grouped?: boolean }>();
 const emit = defineEmits<{ toggleEdit: [] }>();
 const panel = inject(PANEL)!;
 
@@ -87,7 +88,16 @@ const startLabel = computed(() => {
 </script>
 
 <template>
-  <article class="bg-card rounded-lg border outline-none" tabindex="-1" :data-testid="`item-${item.id}`" @contextmenu="onContextMenu" @keydown="onKey">
+  <!-- The active row (the keyboard is in it, or its menu is open) gets the accent tint and edge, never on hover. In a linked group the group block wears it instead. -->
+  <article
+    class="bg-card rounded-lg border outline-none"
+    :class="[ROW_FADE, !grouped && ACTIVE_ROW]"
+    tabindex="-1"
+    :data-testid="`item-${item.id}`"
+    :data-menu-open="menuOpen || undefined"
+    @contextmenu="onContextMenu"
+    @keydown="onKey"
+  >
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 pr-1.5 pl-3">
       <!-- Name and type. A small marker for linked counters ("also adds to") goes at the end of this block. -->
       <div class="flex min-w-24 flex-[1_1_6rem] items-center gap-2" data-testid="item-name">

@@ -59,11 +59,11 @@ async function closeSettings(page: Page): Promise<void> {
   await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
 }
 
-async function inPersonalWorkspace(): Promise<{ app: ElectronApplication; page: Page }> {
+async function inPersonalWorkspace(systemTheme?: "dark" | "light"): Promise<{ app: ElectronApplication; page: Page }> {
   const userData = await newUserData();
   await mkdir(userData, { recursive: true });
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), gameOverlays: true }));
-  const { app, page } = await launch(userData, [MODULES], { seed: false });
+  const { app, page } = await launch(userData, [MODULES], { seed: false, ...(systemTheme ? { systemTheme } : {}) });
   await page.getByTestId("rail-add-personal").click();
   await page.getByTestId("personal-name").fill("Personal");
   await page.getByTestId("create-personal").click();
@@ -571,5 +571,141 @@ test("the live view lists every clock and counter and counts a running clock its
   } finally {
     await app.close();
     server.close();
+  }
+});
+
+for (const theme of ["dark", "light"] as const) {
+  test(`the active row is tinted with an accent edge while the keyboard is in it or its menu is open, never on hover (${theme})`, async () => {
+    const { app, page } = await inPersonalWorkspace(theme);
+    try {
+      await threeRows(app, page);
+      const look = (index: number) =>
+        inModule<{ background: string; border: string }>(
+          app,
+          ID,
+          `(() => { const style = getComputedStyle(document.querySelectorAll('article[data-testid^="item-"]')[${index}]); return { background: style.backgroundColor, border: style.borderTopColor }; })()`,
+        );
+      const settled = () => new Promise((resolve) => setTimeout(resolve, 400));
+      await inModule(app, ID, `document.activeElement?.blur()`);
+      await settled();
+      const idle = await look(1);
+
+      // Hover alone marks nothing: a real mouse move over the second row.
+      await app.evaluate(async ({ webContents }, moduleId) => {
+        const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`))!;
+        const box = (await target.executeJavaScript(`(() => { const b = document.querySelectorAll('article[data-testid^="item-"]')[1].querySelector("h2").getBoundingClientRect(); return { x: b.left + 4, y: b.top + 4 }; })()`)) as { x: number; y: number };
+        target.sendInputEvent({ type: "mouseMove", x: Math.round(box.x), y: Math.round(box.y) });
+      }, ID);
+      await settled();
+      expect(await look(1)).toEqual(idle);
+      await shotOfPanel(app, `active-${theme}-idle.png`);
+
+      // The keyboard in the row (its ··· button) marks that row and only that row.
+      await inModule(app, ID, `document.querySelectorAll('[data-testid^="more-"]')[1].focus()`);
+      await settled();
+      const focused = await look(1);
+      expect(focused.background).not.toBe(idle.background);
+      expect(focused.border).not.toBe(idle.border);
+      expect(await look(0)).toEqual(idle);
+      await shotOfPanel(app, `active-${theme}-focused.png`);
+
+      // Its menu open keeps it marked, also with the pointer elsewhere and the focus in the menu.
+      await inModule(app, ID, `document.querySelectorAll('[data-testid^="more-"]')[1].click()`);
+      await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('[role=menuitem]').length`)).toBeGreaterThan(0);
+      await inModule(app, ID, `document.activeElement?.blur()`);
+      await settled();
+      expect(await look(1)).toEqual(focused);
+      await shotOfPanel(app, `active-${theme}-menu.png`);
+
+      // Closing the menu from the keyboard leaves the focus on the button, which still marks the row; blurring clears it.
+      await app.evaluate(({ webContents }, moduleId) => {
+        const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`))!;
+        for (const type of ["keyDown", "keyUp"] as const) target.sendInputEvent({ type, keyCode: "Escape" });
+      }, ID);
+      await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('[role=menuitem]').length`)).toBe(0);
+      await inModule(app, ID, `document.activeElement?.blur()`);
+      await settled();
+      expect(await look(1)).toEqual(idle);
+    } finally {
+      await app.close();
+    }
+  });
+}
+
+test("a linked group lights up as one block, not row by row, and a row outside it stays plain", async () => {
+  const { app, page } = await inPersonalWorkspace();
+  try {
+    // Two counters and a stopwatch; the first counter adds to the second, so they are drawn as one linked group.
+    await click(app, "add-counter");
+    await closeSettings(page);
+    await click(app, "add");
+    await click(app, "pick-counter");
+    await click(app, "add");
+    await click(app, "pick-stopwatch");
+    await expect.poll(() => names(app)).toEqual(["Counter", "Counter 2", "Stopwatch"]);
+    // The second counter's settings. Tavora opens the dialog only for a real click (a script's click gets "Couldn't open the settings"),
+    // so the ··· button and Settings are pressed with real mouse events.
+    const press = async (selector: string) => {
+      await app.evaluate(
+        async ({ webContents }, { moduleId, selector }) => {
+          const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`))!;
+          const at = (await target.executeJavaScript(
+            `(() => { const b = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }; })()`,
+          )) as { x: number; y: number };
+          target.sendInputEvent({ type: "mouseMove", ...at });
+          target.sendInputEvent({ type: "mouseDown", ...at, button: "left", clickCount: 1 });
+          target.sendInputEvent({ type: "mouseUp", ...at, button: "left", clickCount: 1 });
+        },
+        { moduleId: ID, selector },
+      );
+    };
+    const second = await inModule<string>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]')[1].dataset.testid.slice(5)`);
+    // The menu opens from a right-click on the row (a script can send that), Settings in it from a real click.
+    await inModule(app, ID, `document.querySelector('[data-testid="item-${second}"] h2').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }))`);
+    await expect.poll(() => inModule<boolean>(app, ID, `!!document.querySelector('[data-testid="menu-settings-${second}"]')`)).toBe(true);
+    await press(`[data-testid="menu-settings-${second}"]`);
+    await expect.poll(() => inModule<string>(app, ID, `document.body.innerText.slice(0, 400)`)).toContain("Add a counter");
+    await click(app, "link-add");
+    await expect.poll(() => inModule<boolean>(app, ID, `!!document.querySelector('[data-testid^="link-pick-"]')`)).toBe(true);
+    await inModule(app, ID, `document.querySelector('[data-testid^="link-pick-"]').click()`);
+    await closeSettings(page);
+    await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('[data-testid="linked-group"] article').length`)).toBe(2);
+
+    const look = (selector: string) =>
+      inModule<{ background: string; border: string }>(
+        app,
+        ID,
+        `(() => { const style = getComputedStyle(document.querySelector(${JSON.stringify(selector)})); return { background: style.backgroundColor, border: style.borderTopColor }; })()`,
+      );
+    const group = '[data-testid="linked-group"]';
+    const inner = (index: number) => `${group} article:nth-of-type(${index})`;
+    const settled = () => new Promise((resolve) => setTimeout(resolve, 400));
+    await inModule(app, ID, `document.activeElement?.blur()`);
+    await settled();
+    const idleGroup = await look(group);
+    const idleInner = await look(inner(1));
+    const idleAlone = await look(`[data-testid^="row-"]:last-child article`);
+
+    // The keyboard in one row of the group marks the whole group block; the rows inside keep their plain look.
+    await inModule(app, ID, `document.querySelectorAll('${group} [data-testid^="more-"]')[1].focus()`);
+    await settled();
+    const lit = await look(group);
+    expect(lit.background).not.toBe(idleGroup.background);
+    expect(lit.border).not.toBe(idleGroup.border);
+    expect(await look(inner(1))).toEqual(idleInner);
+    expect(await look(inner(2))).toEqual(idleInner);
+    expect(await look(`[data-testid^="row-"]:last-child article`)).toEqual(idleAlone);
+
+    // The same from the other row, and while a row's menu is open.
+    await inModule(app, ID, `document.querySelectorAll('${group} [data-testid^="more-"]')[0].focus()`);
+    await settled();
+    expect(await look(group)).toEqual(lit);
+    await inModule(app, ID, `document.querySelectorAll('${group} [data-testid^="more-"]')[1].click()`);
+    await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('[role=menuitem]').length`)).toBeGreaterThan(0);
+    await inModule(app, ID, `document.activeElement?.blur()`);
+    await settled();
+    expect(await look(group)).toEqual(lit);
+  } finally {
+    await app.close();
   }
 });
