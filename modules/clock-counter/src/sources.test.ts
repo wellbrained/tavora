@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { insert, newItem, setStream, startPause, type Clock, type Counter, type ItemList } from "./items";
+import { insert, newItem, setStream, sizesOf, startPause, type Clock, type Counter, type ItemList } from "./items";
 import { buildSources, itemForKey, itemSize, overlayKey, VALUE_PX, type Measure } from "./sources";
 
 /** Every character is as wide as half its size, so the numbers are easy to work out. */
@@ -46,6 +46,29 @@ describe("buildSources", () => {
 
   it("lists the counters of a linked group that is not shown as a whole one by one", () => {
     expect(buildSources(linked(false), measure, name, NOW).map((source) => source.key)).toEqual(["d", "s", "b"]);
+  });
+
+  it("says a source grows with its text unless its look is a fixed box, for items and for a group shown as one line", () => {
+    const fixed = newItem("counter", "f", "Fixed") as Counter;
+    fixed.look = { ...fixed.look, box: "fixed" };
+    const sources = buildSources(list(newItem("counter", "c", "Deaths"), fixed), measure, name, NOW);
+    expect(sources.map((source) => [source.key, source.grows ?? false])).toEqual([
+      ["c", true],
+      ["f", false],
+    ]);
+    const groups = linked(true);
+    expect(buildSources(groups, measure, name, NOW)[0]!.grows).toBe(true);
+    setStream(groups, "d", { look: { ...groups.items[0]!.look, box: "fixed" } });
+    expect(buildSources(groups, measure, name, NOW)[0]!.grows).toBe(false);
+  });
+
+  it("lists a bigger size for a bigger step, so a frame that grows follows it", () => {
+    const small = newItem("counter", "c", "Deaths") as Counter;
+    const big = { ...small, look: { ...small.look, ...sizesOf("xl", "xl") } };
+    const [before] = buildSources(list(small), measure, name, NOW);
+    const [after] = buildSources(list(big), measure, name, NOW);
+    expect(after!.size!.height).toBeGreaterThan(before!.size!.height);
+    expect(after!.size!.width).toBeGreaterThan(before!.size!.width);
   });
 
   it("stops at the most Tavora takes", () => {

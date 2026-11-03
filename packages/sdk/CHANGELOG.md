@@ -1,3 +1,10 @@
+## 0.3.12
+
+Frames that grow with their content. The new field comes with Tavora 0.23.94 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `OverlaySource.grows`: the frame of that source follows its `size`, like an OBS text source without a bounding box. It is as big as the content times a scale the user drags it to, grows and shrinks when the panel lists a new size, and Reset size puts it back to 100 %. An older Tavora ignores it.
+- `inTavoraFrame()` tells an overlay page that it is drawn in one of Tavora's own frames (they load it with `?tavoraFrame=1`, `OVERLAY_FRAME_PARAM`), which keep that size. In OBS, the preview window and an older Tavora it is false.
+
 ## 0.3.11
 
 Hover-only item cards. The new field comes with Tavora 0.23.91 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).

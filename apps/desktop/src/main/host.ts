@@ -3898,7 +3898,7 @@ export class Host {
         showOverGame: (key) => this.gameOverlays.show(module, workspace.id, key),
         hideOverGame: (key) => this.gameOverlays.hide(module, workspace.id, key),
         overGame: () => this.gameOverlays.keysOf(module, workspace.id),
-        setSources: (sources) => this.gameOverlays.setSources(record.instanceId, module.owner, sources),
+        setSources: (sources) => this.gameOverlays.setSources(record.instanceId, module.owner, sources, { moduleId: module.manifest.id, workspaceId: workspace.id }),
         preview: async (key) => this.previews.show({ owner: module.owner, moduleId: module.manifest.id, workspaceId: workspace.id, key }),
         openPage: () => {
           this.closePanelDialog(record.instanceId);

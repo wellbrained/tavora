@@ -2,6 +2,8 @@
 // real time: a running clock stores when it started (`since`, epoch ms) and what it had counted before (`counted`, ms),
 // so it goes on through restarts and needs no saving while it runs. Every change here is a plain function of the
 // list, so a change made twice (after a save conflict) gives the same result.
+// The kit's plain entry for the overlay text box (no Vue), so this file stays plain data wherever it is read.
+import { keepOverlayTextBox, readOverlayTextBox, type OverlayTextBoxSettings } from "@tavora/official-ui/overlay-text";
 import type { JsonValue } from "@tavora/sdk";
 import { compile, COUNT, defaultText, legacyText, segments, TIME, type Member, type Segment } from "./template";
 import { DEFAULT_FORMAT, formatSeconds, isFormat } from "./time";
@@ -89,7 +91,13 @@ export type OverlayLook = {
   /** The same sizes as the version before knows them (S to XL, see OLD_STEPS); kept for it, and read when there are no steps. */
   wordsSize: OldStep;
   numberSize: OldStep;
-};
+} & Partial<OverlayTextBoxSettings>;
+// The box (the kit's OverlayText): the frame on the Overlay page grows with the text and is scaled by dragging a corner, or it is
+// a fixed box, with what a long text does in it. Each field is left out until it is set (read them through `boxOf`), and the
+// version before ignores them.
+
+/** How a look's frame is sized and what a long text does, with the defaults for what it leaves out (data from before, or a state an older panel published). */
+export const boxOf = (look: Partial<Record<keyof OverlayTextBoxSettings, unknown>>): OverlayTextBoxSettings => readOverlayTextBox(look);
 
 type Base = {
   id: string;
@@ -197,6 +205,8 @@ function parseLook(raw: unknown): OverlayLook {
   // Fields of the text settings: left out of data that was saved before them, which reads the old way (see itemText).
   if (typeof look.text === "string") parsed.text = look.text.slice(0, MAX.text);
   if (typeof look.wordsColor === "string" && HEX.test(look.wordsColor)) parsed.wordsColor = look.wordsColor;
+  // The box: only what was set is kept, so data from before stays as it was saved.
+  Object.assign(parsed, keepOverlayTextBox(look));
   return parsed;
 }
 
