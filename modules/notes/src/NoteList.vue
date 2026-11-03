@@ -51,14 +51,16 @@ function onDragStart(event: DragEvent, entry: NoteEntry) {
 
 function onDragOver(event: DragEvent, entry: NoteEntry) {
   const from = dragId.value ? props.entries.get(dragId.value) : undefined;
-  // Over itself or the other group (a note stays in its own): nothing opens a gap.
-  if (from && (from.id === entry.id || from.pinned !== entry.pinned)) reorder.preview(null);
-  if (!from || from.id === entry.id || from.pinned !== entry.pinned) return;
+  // Over the other group (a note stays in its own): nothing opens a gap.
+  if (!from || from.pinned !== entry.pinned) {
+    if (from) reorder.preview(null);
+    return;
+  }
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  drop.value = { id: entry.id, after: event.clientY > rect.top + rect.height / 2 };
-  reorder.preview({ id: entry.id, after: drop.value.after });
+  // The place comes from the pointer and the layout at the grab, not from the row under it, which slides aside and would be swapped back.
+  const among = [...props.entries.values()].filter((other) => other.pinned === from.pinned).map((other) => other.id);
+  drop.value = reorder.over(event.clientX, event.clientY, among);
 }
 
 function onDrop(event: DragEvent) {

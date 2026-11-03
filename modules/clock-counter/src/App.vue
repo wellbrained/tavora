@@ -167,10 +167,12 @@ function addItem(kind: ItemKind, settings = true): void {
   if (settings) openEditing(id);
 }
 
-// ── Order: drag a row, or Alt+Up and Alt+Down on one of its buttons ───
+// ── Order: drag a row, Move up and Move down in its menu, or Alt+Up and Alt+Down on one of its buttons ───
 
 // The rows slide aside for the dragged one and settle into place when it is dropped; Alt+arrows move them at once.
 const listEl = ref<HTMLElement | null>(null);
+/** The panel's scroller: it holds the focus when the last row is deleted. */
+const scroller = ref<HTMLElement | null>(null);
 const reorder = useReorderMotion(listEl);
 const dragId = ref<string | null>(null);
 const drop = ref<{ id: string; after: boolean } | null>(null);
@@ -185,21 +187,20 @@ function onDragStart(event: DragEvent, id: string): void {
   }
 }
 
-function onDragOver(event: DragEvent, id: string): void {
+/**
+ * Over the list the place comes from the pointer and the layout at the grab, not from the row under the pointer: the rows
+ * slide aside as the gap opens, and a row that slid under the pointer would ask for the swap back, over and over.
+ */
+function onDragOver(event: DragEvent): void {
   if (!dragId.value) return;
-  if (dragId.value === id) {
-    reorder.preview(null);
-    return;
-  }
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  drop.value = { id, after: event.clientY > box.top + box.height / 2 };
-  reorder.preview({ id, after: drop.value.after });
+  drop.value = reorder.over(event.clientX, event.clientY);
 }
 
 function onDrop(event: DragEvent): void {
   event.preventDefault();
+  if (!dragId.value) return;
   const from = dragId.value;
   const place = drop.value;
   clearDrag();
@@ -223,16 +224,21 @@ function dropLine(row: Row): string | false {
   return drop.value?.id === rowId(row) && (drop.value.after ? "shadow-[0_2px_0_0_var(--primary)]" : "shadow-[0_-2px_0_0_var(--primary)]");
 }
 
-async function onRowKey(event: KeyboardEvent): Promise<void> {
+/** Moves a row one place, at once (a key or the menu never animates). */
+async function moveRow(id: string, by: -1 | 1, focus: string): Promise<void> {
+  void store.value?.apply([], (data) => move(data, id, by));
+  // The row is moved in the list, which drops the keyboard focus; give it back.
+  await nextTick();
+  setTimeout(() => document.querySelector<HTMLElement>(focus)?.focus(), 60);
+}
+
+function onRowKey(event: KeyboardEvent): void {
   if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
   const card = (event.target as Element | null)?.closest<HTMLElement>('article[data-testid^="item-"]');
   const id = card?.dataset.testid?.slice("item-".length);
   if (!id) return;
   event.preventDefault();
-  void store.value?.apply([], (data) => move(data, id, event.key === "ArrowUp" ? -1 : 1));
-  // The row is moved in the list, which drops the keyboard focus; give it back.
-  await nextTick();
-  setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="item-${id}"] button`)?.focus(), 60);
+  void moveRow(id, event.key === "ArrowUp" ? -1 : 1, `[data-testid="item-${id}"] button`);
 }
 
 // ── The frame of the dialog names what the settings are about ───────
@@ -280,6 +286,9 @@ function forget(item: Item): void {
 }
 
 function removeItem(item: Item): void {
+  // The focus goes to the next row's ··· button (or the one before), or to the list when it was the last one.
+  const at = order.value.findIndex((other) => other.id === item.id);
+  const neighbour = order.value[at + 1] ?? order.value[at - 1];
   const index = list.value.items.findIndex((other) => other.id === item.id);
   if (undo.value) {
     clearTimeout(undo.value.timer);
@@ -291,6 +300,8 @@ function removeItem(item: Item): void {
   void store.value?.apply([item.id, ...(group?.members.map((member) => member.id) ?? [])], (data) => remove(data, item.id));
   void hideOverGame(item.id).catch(() => undefined);
   if (editing.value === item.id) closeEditing();
+  // The row is gone and the menu that held the focus closes: give it back once both have happened.
+  setTimeout(() => (neighbour ? document.querySelector<HTMLElement>(`[data-testid="more-${neighbour.id}"]`) : scroller.value)?.focus(), 60);
   const shown = toast({
     title: t("app.deleted", { label: item.label || t(`kind.${item.kind}`) }),
     duration: UNDO_MS,
@@ -394,6 +405,7 @@ provide(PANEL, {
   preview,
   resetLink,
   remove: removeItem,
+  move: (id, by) => void moveRow(id, by, `[data-testid="more-${id}"]`),
   get canArrange() {
     return sdk.value?.supports("overlay.openPage") ?? false;
   },
@@ -539,7 +551,7 @@ onBeforeUnmount(() => {
       </DropdownMenu>
     </header>
 
-    <div class="min-h-0 flex-1 overflow-y-auto p-2">
+    <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto p-2 outline-none" tabindex="-1">
       <div v-if="!list.items.length" class="flex h-full flex-col items-center justify-center gap-3 px-4 py-10 text-center" data-testid="empty">
         <p class="text-muted-foreground text-sm">{{ t("app.empty") }}</p>
         <div class="flex flex-wrap justify-center gap-2">
@@ -548,7 +560,7 @@ onBeforeUnmount(() => {
           </Button>
         </div>
       </div>
-      <div ref="listEl" class="flex flex-col gap-2">
+      <div ref="listEl" class="flex flex-col gap-2" @dragover="onDragOver" @drop="onDrop">
         <div
           v-for="row in rows"
           :key="row.type === 'item' ? row.item.id : `group-${row.key}`"
@@ -558,8 +570,6 @@ onBeforeUnmount(() => {
           :class="dropLine(row)"
           :data-testid="`row-${rowId(row)}`"
           @dragstart="onDragStart($event, rowId(row))"
-          @dragover="onDragOver($event, rowId(row))"
-          @drop="onDrop"
           @dragend="endDrag"
           @keydown="onRowKey"
         >

@@ -260,13 +260,15 @@ test("an item's settings use Tavora's settings layout: the panel, the overlay an
     );
     await expect(frame.getByRole("heading").first()).toHaveText("Boss · Counter");
 
-    // Delete is not in the settings: it is a button on the item's row in the list.
+    // Delete is not in the settings: it is in the menu of the item's row in the list.
     expect(await everything()).not.toContain("Delete");
     await closeSettings(page);
-    // It shows when the row is pointed at, says what it does, and deletes at once; Undo brings the item back.
-    const trash = `document.querySelector('[data-testid^="delete-"]')`;
-    await expect.poll(() => inModule<string>(app, ID, `${trash}.title`)).toBe("Delete");
-    await inModule(app, ID, `${trash}.click()`);
+    // The ··· button opens the row's menu; Delete deletes at once and Undo brings the item back.
+    const more = `document.querySelector('[data-testid^="more-"]')`;
+    await expect.poll(() => inModule<string>(app, ID, `${more}.title`)).toBe("More for Boss");
+    await inModule(app, ID, `${more}.click()`);
+    await expect.poll(() => inModule<string>(app, ID, `document.querySelector('[data-testid^="delete-"]').textContent.trim()`)).toBe("DeleteDel");
+    await inModule(app, ID, `document.querySelector('[data-testid^="delete-"]').click()`);
     await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]').length`)).toBe(0);
     await click(app, "undo");
     await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]').length`)).toBe(1);
@@ -344,6 +346,140 @@ test("rows change places with Alt and the arrows, and Add keeps the new one last
     await expect.poll(names).toEqual(["Stopwatch", "Counter"]);
     await press("ArrowDown");
     await expect.poll(names).toEqual(["Counter", "Stopwatch"]);
+  } finally {
+    await app.close();
+  }
+});
+
+/** Adds three clocks and counters and names their rows, in the order they were added. */
+async function threeRows(app: ElectronApplication, page: Page): Promise<void> {
+  await click(app, "add-counter");
+  await closeSettings(page);
+  await click(app, "add");
+  await click(app, "pick-stopwatch");
+  await click(app, "add");
+  await click(app, "pick-countdown");
+  await expect.poll(() => names(app)).toEqual(["Counter", "Stopwatch", "Countdown"]);
+}
+const names = (app: ElectronApplication) => inModule<string[]>(app, ID, `[...document.querySelectorAll('[data-testid="item-name"] h2')].map((node) => node.textContent.trim())`);
+
+test("a row's ··· menu moves it up and down (off at the ends), and a right-click opens the same menu next to the row", async () => {
+  const { app, page } = await inPersonalWorkspace();
+  try {
+    await threeRows(app, page);
+    const menuOf = (index: number) => `document.querySelectorAll('[data-testid^="more-"]')[${index}]`;
+    // The first row can't go up; the last can't go down.
+    await inModule(app, ID, `${menuOf(0)}.click()`);
+    await expect.poll(() => inModule<string[]>(app, ID, `[...document.querySelectorAll('[role=menuitem]')].map((item) => item.textContent.trim() + (item.hasAttribute("data-disabled") ? " (off)" : ""))`)).toEqual([
+      "Settings…",
+      "Move up (off)",
+      "Move down",
+      "DeleteDel",
+    ]);
+    await inModule(app, ID, `document.querySelector('[data-testid^="menu-down-"]').click()`);
+    await expect.poll(() => names(app)).toEqual(["Stopwatch", "Counter", "Countdown"]);
+    // The focus comes back to the row's button, so the menu can be opened again from the keyboard.
+    await expect.poll(() => inModule<string>(app, ID, `document.activeElement?.getAttribute("data-testid") ?? ""`)).toMatch(/^more-/);
+    await inModule(app, ID, `${menuOf(2)}.click()`);
+    await expect.poll(() => inModule<boolean>(app, ID, `document.querySelector('[data-testid^="menu-down-"]').hasAttribute("data-disabled")`)).toBe(true);
+    await inModule(app, ID, `document.querySelector('[data-testid^="menu-up-"]').click()`);
+    await expect.poll(() => names(app)).toEqual(["Stopwatch", "Countdown", "Counter"]);
+
+    // A right-click on a row opens the menu beside the row's button, not at the pointer.
+    const placed = await inModule<{ over: boolean; flush: boolean; items: number }>(
+      app,
+      ID,
+      `(async () => {
+        const row = document.querySelectorAll('article[data-testid^="item-"]')[1];
+        const box = row.getBoundingClientRect();
+        const x = box.left + 40, y = box.top + box.height / 2;
+        row.querySelector("h2").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 2 }));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const menu = document.querySelector('[role=menu]').getBoundingClientRect();
+        const button = row.querySelector('[data-testid^="more-"]').getBoundingClientRect();
+        return {
+          over: x >= menu.left && x <= menu.right && y >= menu.top && y <= menu.bottom,
+          flush: Math.abs(menu.right - button.right) <= 2,
+          items: document.querySelectorAll('[role=menuitem]').length,
+        };
+      })()`,
+    );
+    expect(placed).toEqual({ over: false, flush: true, items: 4 });
+  } finally {
+    await app.close();
+  }
+});
+
+test("Del deletes from a row's ··· button, not from its other buttons, and the focus moves to a neighbour or the list", async () => {
+  const { app, page } = await inPersonalWorkspace();
+  try {
+    await threeRows(app, page);
+    const count = () => inModule<number>(app, ID, `document.querySelectorAll('article[data-testid^="item-"]').length`);
+    const del = (target: string) =>
+      inModule(app, ID, `(() => { const el = ${target}; el.focus(); el.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true })); })()`);
+    const active = () => inModule<string>(app, ID, `document.activeElement?.getAttribute("data-testid") ?? document.activeElement?.className ?? ""`);
+    // On the + button Del does nothing.
+    await del(`document.querySelector('[data-testid="up"]')`);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(await count()).toBe(3);
+    // On the ··· button it deletes, and the focus goes to the next row's ··· button.
+    await del(`document.querySelector('[data-testid^="more-"]')`);
+    await expect.poll(count).toBe(2);
+    await expect.poll(active).toMatch(/^more-/);
+    expect(await inModule<boolean>(app, ID, `document.activeElement === document.querySelector('[data-testid^="more-"]')`)).toBe(true);
+    // From the menu too; the last row's neighbour is the one before it, and with no row left the list holds the focus.
+    await inModule(app, ID, `document.querySelectorAll('[data-testid^="more-"]')[1].click()`);
+    await inModule(app, ID, `document.querySelector('[data-testid^="delete-"]').click()`);
+    await expect.poll(count).toBe(1);
+    await expect.poll(active).toMatch(/^more-/);
+    await inModule(app, ID, `document.querySelector('[data-testid^="more-"]').click()`);
+    await inModule(app, ID, `document.querySelector('[data-testid^="delete-"]').click()`);
+    await expect.poll(count).toBe(0);
+    await expect.poll(active).toContain("overflow-y-auto");
+  } finally {
+    await app.close();
+  }
+});
+
+test("dragging a row below the next one and holding it there settles once, and dropping it keeps that order", async () => {
+  const { app, page } = await inPersonalWorkspace();
+  try {
+    await threeRows(app, page);
+    const result = await inModule<{ shifts: string[][]; order: string[] }>(
+      app,
+      ID,
+      `(async () => {
+        const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const list = document.querySelector('[data-testid="row-' + document.querySelector('article').dataset.testid.slice(5) + '"]').parentElement;
+        const rows = () => [...list.querySelectorAll("[data-reorder-id]")];
+        const transfer = new DataTransfer();
+        const fire = (target, type, x, y) => target.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: x, clientY: y }));
+        const first = rows()[0];
+        const under = () => { const at = document.elementFromPoint(x, y); return at && list.contains(at) ? at : list; };
+        const second = rows()[1].getBoundingClientRect();
+        const start = first.getBoundingClientRect();
+        const x = second.left + 40, y = second.top + second.height * 0.8;
+        fire(first, "dragstart", start.left + 40, start.top + 10);
+        // Hold the pointer low in the second row, the way a hand does, and let the rows slide for a while, as the browser targets
+        // whatever is under the pointer at that moment.
+        const shifts = [];
+        for (let i = 0; i < 8; i++) {
+          fire(under(), "dragover", x, y);
+          await pause(70);
+          shifts.push(rows().map((row) => row.style.translate));
+        }
+        fire(under(), "drop", x, y);
+        fire(first, "dragend", x, y);
+        await pause(400);
+        return { shifts, order: [...document.querySelectorAll('[data-testid="item-name"] h2')].map((node) => node.textContent.trim()) };
+      })()`,
+    );
+    // Every look at the rows while the pointer rested has the same offsets: nothing swapped back and forth.
+    expect(new Set(result.shifts.map((one) => one.join("|"))).size).toBe(1);
+    expect(result.shifts[0]!.some((one) => one !== "")).toBe(true);
+    // Counter was dragged below Stopwatch.
+    expect(result.order).toEqual(["Stopwatch", "Counter", "Countdown"]);
+    await expect.poll(() => names(app)).toEqual(["Stopwatch", "Counter", "Countdown"]);
   } finally {
     await app.close();
   }
