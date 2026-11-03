@@ -33,6 +33,13 @@ export interface LayoutItemView {
   rect: AnchoredRect;
   /** Where it sits on the canvas, in canvas units (1080 high). */
   placed: Rect;
+  /**
+   * An overlay whose frame follows its content (its panel lists it with `grows`): the content's size at 100 %, in canvas
+   * units. Dragging a corner scales the frame in its shape (overlay-content.ts). Null for any other frame.
+   */
+  natural: { width: number; height: number } | null;
+  /** The scale of a frame that follows its content; 1 for 100 % (and for any other frame). */
+  scale: number;
   mode: "always" | "toggle";
   opacity: 100 | 75 | 50 | 25;
   hideFromCapture: boolean;

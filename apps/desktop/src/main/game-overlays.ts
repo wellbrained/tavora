@@ -23,6 +23,7 @@ import {
   type LegacyRect,
   type Rect,
 } from "../shared/overlay-anchor";
+import { MAX_CONTENT_SCALE, MIN_CONTENT_SCALE } from "../shared/overlay-content";
 import { backupsDir } from "./backup";
 import { SerialQueue, keepCopy, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside, setAside } from "./json";
@@ -117,6 +118,12 @@ export interface ItemSettings {
    * the old way (placeItem) until the game's real window size is seen; `rect` is only a stand-in then.
    */
   legacy?: LegacyRect;
+  /**
+   * An overlay whose content says it grows (`OverlaySource.grows`): the scale the user dragged it to, 1 for 100 %. Its
+   * frame is the content's size times this (overlay-content.ts). Left out until the frame first follows its content. An
+   * older Tavora reads the frame from `anchor` alone, which always holds the size it has.
+   */
+  scale?: number;
 }
 
 /** A module's overlay page in one setup. */
@@ -358,6 +365,7 @@ function positionOf(entry: Record<string, unknown>): Pick<ItemSettings, "rect" |
 
 /** What the user set for an item, with the defaults for what is missing or not understood. */
 function settingsOf(entry: Record<string, unknown>): Omit<ItemSettings, "rect" | "legacy"> {
+  const scale = validScale(entry.scale);
   return {
     mode: entry.mode === "toggle" ? "toggle" : "always",
     opacity: OPACITIES.find((value) => value === entry.opacity) ?? 100,
@@ -365,7 +373,13 @@ function settingsOf(entry: Record<string, unknown>): Omit<ItemSettings, "rect" |
     // Older files have neither; a copy of Tavora that doesn't know them keeps them out of what it understands.
     ...(entry.locked === true ? { locked: true } : {}),
     ...(typeof entry.z === "number" && Number.isSafeInteger(entry.z) && entry.z >= 0 && entry.z < 10_000 ? { z: entry.z } : {}),
+    ...(scale === null ? {} : { scale }),
   };
+}
+
+/** A saved scale of a frame that follows its content, or null when there is none that makes sense. */
+function validScale(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= MIN_CONTENT_SCALE && value <= MAX_CONTENT_SCALE ? value : null;
 }
 
 /** A saved overlay, or null when it can't be used. `oldKeys`: a file of version 1, whose `panel-` keys are not kept. */
@@ -790,8 +804,11 @@ export class GameOverlayStore {
     return true;
   }
 
-  /** Puts the position of an item in one setup to `rect` (a move in the layer or on the canvas, Reset position); false when the setup hasn't it. */
-  setRect(setupId: string, ref: ItemRef, rect: AnchoredRect): boolean {
+  /**
+   * Puts the position of an item in one setup to `rect` (a move in the layer or on the canvas, Reset position); false when
+   * the setup hasn't it. `scale`: the new scale of a frame that follows its content; left out, it stays as it is.
+   */
+  setRect(setupId: string, ref: ItemRef, rect: AnchoredRect, scale?: number): boolean {
     const target = ref.kind === "panel" ? this.panelOf(ref.instanceId, setupId) : this.find(ref.subject, setupId);
     const next = normalizeAnchored(rect);
     if (!target || !next) return false;
@@ -799,6 +816,8 @@ export class GameOverlayStore {
     if (target.locked) return false;
     target.rect = next;
     delete target.legacy;
+    const kept = scale === undefined ? null : validScale(scale);
+    if (kept !== null) target.scale = kept;
     this.saveSoon();
     return true;
   }
@@ -856,6 +875,9 @@ export class GameOverlayStore {
     target.rect = rect;
     if (item.legacy) target.legacy = { ...item.legacy };
     else delete target.legacy;
+    const scale = validScale(item.scale);
+    if (scale === null) delete target.scale;
+    else target.scale = scale;
     this.saveSoon();
     return true;
   }

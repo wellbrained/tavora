@@ -508,7 +508,7 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   const pageTitle = () => inModule<string>(app, PLAYGROUND, `${q("page-title")}.textContent.trim()`);
 
   // Every page is in the menu, Colours is open first, and the header names its group and title.
-  await expect.poll(menu).toHaveLength(27);
+  await expect.poll(menu).toHaveLength(28);
   expect((await menu()).slice(0, 6)).toEqual(["colours", "text", "spacing", "motion", "writing", "buttons"]);
   expect(await pageTitle()).toBe("Colours");
   await openPage(app, "tabs");
@@ -525,7 +525,7 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   await expect.poll(menu).toEqual(["pick"]);
   await inModule(app, PLAYGROUND, `${q("page-search")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }))`);
   await ready(app, PLAYGROUND, "page-pick");
-  await expect.poll(menu).toHaveLength(27);
+  await expect.poll(menu).toHaveLength(28);
 
   // Show code shows the example's own file, and hides it again.
   const box = `document.querySelector('[data-testid="example-Combobox"]')`;

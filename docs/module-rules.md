@@ -70,6 +70,7 @@ classes where you use a control; never copy it.
 | Small chart | `Sparkline` | |
 | Rating | `StarRating` | |
 | Module settings page | `ModuleSettings` and its parts; the menu with `settingsMenu` (own pages, then Overlays: Text, Look, In game, On stream) | own settings layout, own menu order or icons |
+| The text of an overlay (over the game, on stream) | `OverlayText`, or `mountOverlayText` on a page without Vue (from `ui/overlay-text`): the box grows with the text or is fixed, and a long text scrolls, shrinks or is cut off. Sizes inside in `em`; in the module's source list, `grows` for a box that grows | a text scaled to fill its box, a marquee of your own, `transform: scale` on text |
 | A one-line text with `{placeholders}` | `TemplateInput` (marks the placeholders it knows; `insert` adds one at the cursor) | an `Input` with a hint about braces |
 | Welcome on first add (optional) | kit parts as in [module-welcome.md](../apps/docs/guide/module-welcome.md) (Palworld is the reference) | a tour, popups over the panel, own frame |
 

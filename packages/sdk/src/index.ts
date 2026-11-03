@@ -21,6 +21,7 @@ import {
   type ReadOnlyFileState,
   HELLO_MESSAGE,
   LIMITS,
+  OVERLAY_FRAME_PARAM,
   OVERLAY_STATE_PATH,
   PORT_MESSAGE,
   PROTOCOL_VERSION,
@@ -710,6 +711,16 @@ export function connect(options: ConnectOptions = {}): Promise<TavoraSDK> {
       throw error;
     });
   return connection;
+}
+
+/**
+ * For the manifest's `overlay` page: whether it is drawn in one of Tavora's own frames (over the game, on the Overlay
+ * page), which keep the size a `grows` source lists times the scale the user gave it, so a text takes its scale from the
+ * frame's height. False in OBS, in the preview window and in Tavoras before 0.23.91: the page then fits itself into
+ * whatever window it gets.
+ */
+export function inTavoraFrame(): boolean {
+  return typeof location !== "undefined" && new URLSearchParams(location.search).get(OVERLAY_FRAME_PARAM) === "1";
 }
 
 /**
