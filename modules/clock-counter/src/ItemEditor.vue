@@ -11,6 +11,7 @@ import { Combobox, ComboboxAnchor, ComboboxInput, ComboboxItem, ComboboxList, Co
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { ModuleSettings, SettingsMainBar, SettingsPage, SettingsPreview, SettingsRow, SettingsSection, settingsMenu } from "@tavora/official-ui/components/ui/module-settings";
+import { OverlayTextSettings } from "@tavora/official-ui/components/ui/overlay-text";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { TemplateInput } from "@tavora/official-ui/components/ui/template-input";
 import { TavoraError } from "@tavora/sdk";
@@ -18,6 +19,7 @@ import { computed, inject, onBeforeUnmount, reactive, ref, useTemplateRef, watch
 import { t } from "./i18n";
 import {
   ALIGNS,
+  boxOf,
   COLORS,
   defaultLook,
   defaultStored,
@@ -225,6 +227,10 @@ const numberColor = computed({ get: () => look.value.color, set: (next: string) 
 const wordsSize = computed({ get: () => look.value.wordsStep, set: (next: Size) => updateLook((value) => Object.assign(value, sizesOf(next, value.numberStep))) });
 const numberSize = computed({ get: () => look.value.numberStep, set: (next: Size) => updateLook((value) => Object.assign(value, sizesOf(value.wordsStep, next))) });
 const sizeOptions = (kind: string) => SIZES.map((value) => ({ value, label: value.toUpperCase(), testid: `${kind}-size-${value}` }));
+
+// The frame: it grows with the text, or it is a fixed box where a long text scrolls, shrinks or is cut off. The kit's
+// OverlayTextSettings shows it and says what changed; only that field is saved.
+const boxed = computed(() => boxOf(look.value));
 
 // ── Fields that save when they lose focus ────────────────────────────
 
@@ -434,8 +440,11 @@ function reset(page: string): () => void {
   const defaults = defaultLook();
   const put = (value: OverlayLook, from: OverlayLook) => {
     Object.assign(value, { font: from.font, align: from.align, outline: from.outline, color: from.color, wordsStep: from.wordsStep, numberStep: from.numberStep, wordsSize: from.wordsSize, numberSize: from.numberSize });
-    if (from.wordsColor === undefined) delete value.wordsColor;
-    else value.wordsColor = from.wordsColor;
+    // Left out where they are left out (the defaults), as the look was before.
+    for (const key of ["wordsColor", "box", "tooLong", "speed", "pause", "softEdges"] as const) {
+      if (from[key] === undefined) delete value[key];
+      else Object.assign(value, { [key]: from[key] });
+    }
   };
   updateLook((value) => put(value, defaults));
   return () => updateLook((value) => put(value, before));
@@ -666,6 +675,7 @@ onBeforeUnmount(saveFields);
               <SegmentedControl v-model="numberSize" :label="`${t('edit.number')}: ${t('edit.size')}`" :options="sizeOptions('number')" :class="fill" />
             </SettingsRow>
           </SettingsSection>
+          <OverlayTextSettings :value="boxed" @change="(change) => updateLook((value) => Object.assign(value, change))" />
         </SettingsPage>
 
         <!-- Where it shows: in game -->

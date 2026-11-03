@@ -28,6 +28,31 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.95",
+    date: "2026-11-03",
+    title: "Overlay text keeps its size",
+    notes: [
+      "Overlay text keeps its size: drag a corner to scale it, or give it a fixed box where long text scrolls.",
+      "A fixed box can also shrink long text or cut it off, with your speed, pause and soft edges.",
+    ],
+    prs: [
+      { number: 661, title: "Overlay text box: grows with the text or a fixed box (OBS-style)" },
+    ],
+    tags: ["clock-counter", "overlays", "privacy", "publishing", "sdk", "ui-kit", "website"],
+  },
+  {
+    version: "0.23.94",
+    date: "2026-11-03",
+    title: "Overlay opacity for several frames",
+    notes: [
+      "Change the opacity of several overlay frames at once.",
+    ],
+    prs: [
+      { number: 662, title: "Overlay: Mixed badge on Opacity, locked frames covered by tests, change note" },
+    ],
+    tags: ["overlays"],
+  },
+  {
     version: "0.23.93",
     date: "2026-11-03",
     title: "Overlay frames have a menu",

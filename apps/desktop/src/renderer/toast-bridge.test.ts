@@ -16,6 +16,7 @@ beforeEach(() => {
   stop = bridgeToasts({
     sync: (items) => sent.push(items),
     onEvent: (listener) => (events = listener),
+    onFallback: () => undefined,
   });
 });
 afterEach(() => {

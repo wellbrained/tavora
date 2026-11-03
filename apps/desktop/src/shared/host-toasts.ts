@@ -38,6 +38,15 @@ export interface ToastsPageState extends ToastsLook {
   paused: boolean;
 }
 
+/** How long a toast stays when it has no duration of its own (the kit's TOAST_DURATION). */
+const HOST_TOAST_DURATION = 5000;
+
+/** How long a toast stays, as the kit works it out: its own duration, else errors, warnings and loading until dismissed. */
+export function hostToastDuration(item: Pick<HostToast, "duration" | "variant">): number {
+  if (item.duration !== undefined) return item.duration;
+  return item.variant === "error" || item.variant === "warning" || item.variant === "loading" ? Infinity : HOST_TOAST_DURATION;
+}
+
 /** A press on a toast, on its way back to the host page. */
 export interface ToastsEvent {
   type: "action" | "dismiss";
