@@ -59,11 +59,11 @@ async function closeSettings(page: Page): Promise<void> {
   await expect(page.getByTestId("panel-dialog")).toHaveCount(0);
 }
 
-async function inPersonalWorkspace(): Promise<{ app: ElectronApplication; page: Page }> {
+async function inPersonalWorkspace(systemTheme?: "dark" | "light"): Promise<{ app: ElectronApplication; page: Page }> {
   const userData = await newUserData();
   await mkdir(userData, { recursive: true });
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), gameOverlays: true }));
-  const { app, page } = await launch(userData, [MODULES], { seed: false });
+  const { app, page } = await launch(userData, [MODULES], { seed: false, ...(systemTheme ? { systemTheme } : {}) });
   await page.getByTestId("rail-add-personal").click();
   await page.getByTestId("personal-name").fill("Personal");
   await page.getByTestId("create-personal").click();
@@ -573,3 +573,61 @@ test("the live view lists every clock and counter and counts a running clock its
     server.close();
   }
 });
+
+for (const theme of ["dark", "light"] as const) {
+  test(`the active row is tinted with an accent edge while the keyboard is in it or its menu is open, never on hover (${theme})`, async () => {
+    const { app, page } = await inPersonalWorkspace(theme);
+    try {
+      await threeRows(app, page);
+      const look = (index: number) =>
+        inModule<{ background: string; border: string }>(
+          app,
+          ID,
+          `(() => { const style = getComputedStyle(document.querySelectorAll('article[data-testid^="item-"]')[${index}]); return { background: style.backgroundColor, border: style.borderTopColor }; })()`,
+        );
+      const settled = () => new Promise((resolve) => setTimeout(resolve, 400));
+      await inModule(app, ID, `document.activeElement?.blur()`);
+      await settled();
+      const idle = await look(1);
+
+      // Hover alone marks nothing: a real mouse move over the second row.
+      await app.evaluate(async ({ webContents }, moduleId) => {
+        const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`))!;
+        const box = (await target.executeJavaScript(`(() => { const b = document.querySelectorAll('article[data-testid^="item-"]')[1].querySelector("h2").getBoundingClientRect(); return { x: b.left + 4, y: b.top + 4 }; })()`)) as { x: number; y: number };
+        target.sendInputEvent({ type: "mouseMove", x: Math.round(box.x), y: Math.round(box.y) });
+      }, ID);
+      await settled();
+      expect(await look(1)).toEqual(idle);
+      await shotOfPanel(app, `active-${theme}-idle.png`);
+
+      // The keyboard in the row (its ··· button) marks that row and only that row.
+      await inModule(app, ID, `document.querySelectorAll('[data-testid^="more-"]')[1].focus()`);
+      await settled();
+      const focused = await look(1);
+      expect(focused.background).not.toBe(idle.background);
+      expect(focused.border).not.toBe(idle.border);
+      expect(await look(0)).toEqual(idle);
+      await shotOfPanel(app, `active-${theme}-focused.png`);
+
+      // Its menu open keeps it marked, also with the pointer elsewhere and the focus in the menu.
+      await inModule(app, ID, `document.querySelectorAll('[data-testid^="more-"]')[1].click()`);
+      await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('[role=menuitem]').length`)).toBeGreaterThan(0);
+      await inModule(app, ID, `document.activeElement?.blur()`);
+      await settled();
+      expect(await look(1)).toEqual(focused);
+      await shotOfPanel(app, `active-${theme}-menu.png`);
+
+      // Closing the menu from the keyboard leaves the focus on the button, which still marks the row; blurring clears it.
+      await app.evaluate(({ webContents }, moduleId) => {
+        const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`))!;
+        for (const type of ["keyDown", "keyUp"] as const) target.sendInputEvent({ type, keyCode: "Escape" });
+      }, ID);
+      await expect.poll(() => inModule<number>(app, ID, `document.querySelectorAll('[role=menuitem]').length`)).toBe(0);
+      await inModule(app, ID, `document.activeElement?.blur()`);
+      await settled();
+      expect(await look(1)).toEqual(idle);
+    } finally {
+      await app.close();
+    }
+  });
+}
