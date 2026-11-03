@@ -573,6 +573,8 @@ export class Host {
   private tooltips:TooltipWindow;
   /** Tavora's own toasts, drawn above the panels (toast-view.ts). */
   private readonly toastView: ToastView;
+  /** The toast page is down for good: the host page draws the toasts itself. */
+  private toastsFallback = false;
 
   private constructor(
     private readonly options: HostOptions,
@@ -750,6 +752,10 @@ export class Host {
       language: () => this.language,
       event: (event) => {
         if (!this.window.isDestroyed()) this.window.webContents.send("host:toast-event", event);
+      },
+      fallback: (on) => {
+        this.toastsFallback = on;
+        if (!this.window.isDestroyed()) this.window.webContents.send("host:toasts-fallback", on);
       },
     });
     this.developerKeys = new DeveloperKeys({
@@ -1954,7 +1960,10 @@ export class Host {
       if (fromHost(event)) this.cover.setBounds(this.windowRect(bounds));
     });
     ipcMain.on("host:toasts", (event, items: unknown) => {
-      if (fromHost(event)) this.toastView.sync(items);
+      if (!fromHost(event)) return;
+      this.toastView.sync(items);
+      // A host page that was loaded again learns here that it still has to show the toasts itself.
+      if (this.toastsFallback) event.sender.send("host:toasts-fallback", true);
     });
     ipcMain.on("host:overlay", (event, open: unknown) => {
       if (fromHost(event) && typeof open === "boolean") void this.panels.freeze(open);

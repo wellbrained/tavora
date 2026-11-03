@@ -1160,6 +1160,8 @@ export interface TavoraHostApi {
     sync(items: HostToast[]): void;
     /** A button or close button on a toast was pressed. */
     onEvent(listener: (event: ToastsEvent) => void): void;
+    /** The toast page is down for good (true) or back (false): while it is down, this page draws the toasts itself. */
+    onFallback(listener: (on: boolean) => void): void;
   };
   setPanelBounds(bounds: PanelBounds[]): void;
   /** Where the workspace is (the card that covers it while a workspace opens), or null when it is not on screen. */
