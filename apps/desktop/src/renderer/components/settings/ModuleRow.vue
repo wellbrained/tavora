@@ -6,7 +6,7 @@
 import { FileArchive, FolderCode, Hourglass, Package, Store, Upload } from "@lucide/vue";
 import { computed } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { releaseStatus, state } from "../../host";
 import { t } from "../../i18n";
 import { MODULE_TAG_TEXT, moduleTag } from "../../../shared/module-tag";

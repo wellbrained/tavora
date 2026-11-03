@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Ellipsis } from "@lucide/vue";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { useFloating, type MenuItem } from "@/host";
 import MenuEntries from "./MenuEntries.vue";

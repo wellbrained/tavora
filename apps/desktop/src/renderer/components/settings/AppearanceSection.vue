@@ -11,7 +11,7 @@ import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@tavora/official-ui/components/ui/select";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import type { HostViewState, ThemeVariationView, ThemeView } from "../../../shared/host-api";
 import { act, state, tryToasts } from "../../host";
 import { t } from "../../i18n";
@@ -71,7 +71,7 @@ const tabOverflowOptions = computed(() =>
 
 type ToastPosition = HostViewState["library"]["toasts"];
 
-// Where toasts show in every panel; the app's own messages stay at the top, over the toolbar.
+// Where toasts show: in every panel, and Tavora's own messages too (they sit above the panels, see main/toast-view.ts).
 const toasts = computed({
   get: () => state.value!.library.toasts,
   set: (position: ToastPosition) => void act({ type: "set-toasts", position }),

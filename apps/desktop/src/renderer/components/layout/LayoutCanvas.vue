@@ -13,7 +13,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { ContextMenu, ContextMenuTrigger } from "@tavora/official-ui/components/ui/context-menu";
 import { Popover, PopoverAnchor, PopoverContent } from "@tavora/official-ui/components/ui/popover";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import { boundsOf, snapMove, snapResize, touches, type Edges, type Guide } from "../../../shared/layout-math";
 import type { LayoutItemView } from "../../../shared/layout-view";

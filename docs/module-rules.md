@@ -132,7 +132,8 @@ themes; anything hard-coded breaks in one of them.
   kit decides this itself, so use the kit's dialogs and don't add motion of your own. A dialog that must never animate
   takes the `instant` prop on `DialogContent`.
   Toasts slide 12 px in from the screen edge the stack sits on (up from the bottom, down from the top) and leave the
-  same way, with no blur; their timers wait while the panel is hidden (the kit follows the page and `lifecycle`).
+  same way, with no blur; a new front toast starts at the size of the one it covers and springs to its own (the kit does it,
+  nothing to add); their timers wait while the panel is hidden (the kit follows the page and `lifecycle`).
   Rows the user adds or removes in a vertical list use `AnimatedList`, and a page that replaces another in the same
   frame uses `usePageMotion`; don't hand-roll either. Neither moves for a key press or when a whole list is replaced.
   Waiting is the one thing that may repeat: a skeleton's slow pulse (`--duration-pulse`), off for reduced motion.

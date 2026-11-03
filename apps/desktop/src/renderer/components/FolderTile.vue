@@ -5,7 +5,7 @@
 // outlined shape in the accent colour.
 import { computed } from "vue";
 import type { WorkspaceView } from "../../shared/host-api";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import WorkspaceIcon from "./WorkspaceIcon.vue";
 
 const props = defineProps<{

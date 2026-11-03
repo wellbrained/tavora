@@ -4,13 +4,8 @@ import AddGameDialog from "./components/AddGameDialog.vue";
 import AddPersonalDialog from "./components/AddPersonalDialog.vue";
 import AddModuleDialog from "./components/AddModuleDialog.vue";
 import CloudCopyDialog from "./components/CloudCopyDialog.vue";
-import PairingDialog from "./components/PairingDialog.vue";
 import ProfileDialog from "./components/profile/ProfileDialog.vue";
-import CopyExampleDialog from "./components/developer/CopyExampleDialog.vue";
-import DeveloperStartDialog from "./components/developer/DeveloperStartDialog.vue";
 import RecoveryAskDialog from "./components/settings/RecoveryAskDialog.vue";
-import OfficialPublishDialog from "./components/developer/OfficialPublishDialog.vue";
-import PublishDialog from "./components/developer/PublishDialog.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import GrantDialog from "./components/GrantDialog.vue";
 import HotkeyDialog from "./components/HotkeyDialog.vue";
@@ -23,25 +18,37 @@ import PanelDialog from "./components/PanelDialog.vue";
 import PromptDialog from "./components/PromptDialog.vue";
 import SearchDialog from "./components/SearchDialog.vue";
 import ShareIconsDialog from "./components/ShareIconsDialog.vue";
-import SteamImportDialog from "./components/SteamImportDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
 import InboxDialogs from "./components/messages/InboxDialogs.vue";
-import { Toaster } from "@tavora/official-ui/components/ui/toast";
-import { computed, onMounted } from "vue";
-import { dialog, settingsOpen, state, trialWelcome } from "./host";
+import { defineAsyncComponent, onMounted } from "vue";
+import { api, dialog, pairing, publish, state, trialWelcome } from "./host";
+import { bridgeToasts } from "./toast-bridge";
 import OverlayPage from "./pages/OverlayPage.vue";
 import WorkspacePage from "./pages/WorkspacePage.vue";
 import OnboardingPage from "./pages/OnboardingPage.vue";
 import WelcomePage from "./pages/WelcomePage.vue";
+import { everWanted } from "./lib/ever-wanted";
 import { findInstalledGames } from "./lib/installed-games";
 
-// Settings covers the panels, so while it is open toasts show where the user wants them, as Try it shows.
+// Dialogs most people never open load the first time they are wanted, not with the window.
+const PairingDialog = defineAsyncComponent(() => import("./components/PairingDialog.vue"));
+const CopyExampleDialog = defineAsyncComponent(() => import("./components/developer/CopyExampleDialog.vue"));
+const DeveloperStartDialog = defineAsyncComponent(() => import("./components/developer/DeveloperStartDialog.vue"));
+const OfficialPublishDialog = defineAsyncComponent(() => import("./components/developer/OfficialPublishDialog.vue"));
+const PublishDialog = defineAsyncComponent(() => import("./components/developer/PublishDialog.vue"));
+const SteamImportDialog = defineAsyncComponent(() => import("./components/SteamImportDialog.vue"));
+// These three are always in the page; they are drawn from the first time they have something to show.
+const publishWanted = everWanted(publish);
+const officialPublishWanted = everWanted(() => state.value?.officialPublish?.run);
+const pairingWanted = everWanted(() => pairing.value?.approve);
+
 // Finding the games on this PC takes a while the first time, so it starts quietly a few seconds after launch
 // (once the app has drawn and loaded what it needs) and the Add a game dialog finds the list ready.
 const FIRST_SEARCH_DELAY_MS = 4000;
 onMounted(() => setTimeout(() => void findInstalledGames(), FIRST_SEARCH_DELAY_MS));
 
-const toastPosition = computed(() => (settingsOpen.value && state.value ? state.value.library.toasts : "top-center"));
+// Tavora's own toasts are drawn by a page above the panels, where the user put them (main/toast-view.ts).
+bridgeToasts(api.toasts);
 </script>
 
 <template>
@@ -84,12 +91,8 @@ const toastPosition = computed(() => (settingsOpen.value && state.value ? state.
     <PanelDialog />
     <CloudCopyDialog />
     <HotkeyDialog />
-    <PublishDialog />
-    <OfficialPublishDialog />
-    <PairingDialog />
-
-    <!-- At the top, over the toolbar: module panels are native views drawn
-         above this page, so anything lower would be hidden behind them. -->
-    <Toaster :position="toastPosition" :class="settingsOpen ? 'z-[60]!' : 'top-1! z-[60]!'" />
+    <PublishDialog v-if="publishWanted" />
+    <OfficialPublishDialog v-if="officialPublishWanted" />
+    <PairingDialog v-if="pairingWanted" />
   </div>
 </template>

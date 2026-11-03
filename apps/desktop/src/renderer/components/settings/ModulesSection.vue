@@ -18,7 +18,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { act, confirmAction, dialog, workspacesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
 import { problemText } from "../../../shared/module-problem";
 import { asksMore } from "../../../shared/module-updates";

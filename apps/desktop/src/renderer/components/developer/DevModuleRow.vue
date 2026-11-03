@@ -8,7 +8,7 @@ import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import type { Contact, ModuleContact } from "../../../shared/conversations";
 import { act, publishModule, saveModuleZip, showToast } from "../../host";
 import { t } from "../../i18n";

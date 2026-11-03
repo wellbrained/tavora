@@ -160,6 +160,7 @@ import { BROWSER_MODULE_ID, developmentProjects, isExampleModule, buildFolderNam
 import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
+import { ToastView } from "./toast-view";
 import { AiUsageConnector } from "./ai-usage";
 import { ConnectionFile, ConnectionWatcher, SYSTEM_MONITOR_ID } from "./connection";
 import { connectionProbe } from "./connection-windows";
@@ -570,6 +571,8 @@ export class Host {
   private windowSaveTimer: ReturnType<typeof setTimeout> | undefined;
   readonly window: BrowserWindow;
   private tooltips:TooltipWindow;
+  /** Tavora's own toasts, drawn above the panels (toast-view.ts). */
+  private readonly toastView: ToastView;
 
   private constructor(
     private readonly options: HostOptions,
@@ -737,6 +740,18 @@ export class Host {
       }});
     this.watchShortcuts(this.window.webContents);
     this.cover = new PanelCover({ parent: this.window.contentView, emblem: () => this.emblem });
+    // Whatever is added to the window later (panels, the opening cover, the Overlay page) goes below the toasts.
+    this.toastView = new ToastView({
+      window: this.window,
+      preload: path.join(path.dirname(options.hostPreload), "toasts.cjs"),
+      address: options.devServer ? new URL("toasts.html", options.devServer).href : `${HOST_SCHEME}://app/toasts.html`,
+      devTools: options.devTools,
+      theme: () => this.currentTheme,
+      language: () => this.language,
+      event: (event) => {
+        if (!this.window.isDestroyed()) this.window.webContents.send("host:toast-event", event);
+      },
+    });
     this.developerKeys = new DeveloperKeys({
       accountKey: this.copySync.accountKey,
       account: {
@@ -1703,6 +1718,7 @@ export class Host {
     this.syncNativeTheme();
     this.window.setBackgroundColor(next.colors.background);
     this.applyTitleBarOverlay();
+    this.toastView.refresh();
     for (const view of this.nativePanels()) view.applyTheme(next);
   }
 
@@ -1937,6 +1953,9 @@ export class Host {
     ipcMain.on("host:workspace-bounds", (event, bounds: unknown) => {
       if (fromHost(event)) this.cover.setBounds(this.windowRect(bounds));
     });
+    ipcMain.on("host:toasts", (event, items: unknown) => {
+      if (fromHost(event)) this.toastView.sync(items);
+    });
     ipcMain.on("host:overlay", (event, open: unknown) => {
       if (fromHost(event) && typeof open === "boolean") void this.panels.freeze(open);
     });
@@ -1977,6 +1996,7 @@ export class Host {
     if (this.window.isDestroyed() || behind === this.windowBehind) return;
     this.windowBehind = behind;
     this.window.webContents.send("host:window-behind", behind);
+    this.toastView.setBehind(behind);
     for (const view of this.moduleViews()) view.setWindowBehind(behind);
   }
 
@@ -1990,6 +2010,7 @@ export class Host {
     });
     const hidden = (value: boolean) => () => {
       this.windowHidden = value;
+      this.toastView.setHidden(value);
       this.panels.applyBounds();
     };
     // The host page crashed or ran out of memory: it loads again once. A second crash within a minute loads
@@ -2020,6 +2041,7 @@ export class Host {
       void this.gameOverlays.shutdown().catch((error: unknown) => console.error("[tavora]", error));
       this.panels.disposeAll();
       this.cover.dispose();
+      this.toastView.dispose();
       this.discord.dispose();
       this.systemInfo.dispose();
       this.connection.dispose();
@@ -2495,6 +2517,7 @@ export class Host {
       "leaderboard-answer": (action) => this.answerLeaderboard(action.id, action.allow),
       "set-language": saved((action) => {
         this.library.language = action.language;
+        this.toastView.refresh();
         for (const view of this.nativePanels()) view.applyLanguage(this.language);
       }),
       "set-profile-ranks": saved((action) => {

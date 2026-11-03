@@ -4,7 +4,7 @@
 import { Check } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { t } from "../../i18n";
 import AppSkeleton, { type SkeletonPart } from "./AppSkeleton.vue";
 

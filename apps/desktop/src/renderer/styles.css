@@ -1,8 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-/* Fonts are bundled; Tavora never loads them from the web. */
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/jetbrains-mono";
+/* Fonts are bundled (latin and latin-extended only); Tavora never loads them from the web. */
+@import "../../../../modules/shared/src/fonts.css";
 /* The curves and durations every animation uses (shared with the modules). */
 @import "../../../../modules/shared/src/motion.css";
 /* The shared controls (@tavora/official-ui) use Tailwind classes too. */
@@ -153,12 +152,6 @@
 
 /* While a menu or dialog is open, the drag areas let clicks through, so a click on the header closes it. */
 html.floating-open .app-drag {
-  -webkit-app-region: no-drag;
-}
-
-/* Toasts at the top sit over the title bar, which drags the window and would swallow every click on Undo or ×.
-   Only the pill itself opts out, so the rest of the title bar still moves the window. */
-.tavora-toast-layer {
   -webkit-app-region: no-drag;
 }
 

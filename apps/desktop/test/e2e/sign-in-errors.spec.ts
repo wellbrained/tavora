@@ -1,7 +1,7 @@
 // Sign-in problems show in the form, next to the address the user typed, not as a toast at the top.
 import { createServer } from "node:http";
 import { expect, test } from "@playwright/test";
-import { launch } from "./harness";
+import { hostToast, launch } from "./harness";
 
 test("sign-in errors show under the email field, offline and when the service fails", async () => {
   const server = createServer((request, response) => {
@@ -22,7 +22,7 @@ test("sign-in errors show under the email field, offline and when the service fa
   try {
     await sendCode(failing.page);
     await expect(failing.page.getByTestId("account-error")).toHaveText("Accounts aren't working right now. Try again in a bit.");
-    await expect(failing.page.getByTestId("toast")).toHaveCount(0);
+    await expect(hostToast(failing.page)).toHaveCount(0);
   } finally {
     await failing.app.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));

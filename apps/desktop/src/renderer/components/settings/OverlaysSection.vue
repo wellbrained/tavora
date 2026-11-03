@@ -12,7 +12,7 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import type { HotkeyView } from "../../../shared/host-api";
 import { act, confirmAction, state, submitAction } from "../../host";

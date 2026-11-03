@@ -17,7 +17,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Input } from "@tavora/official-ui/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { t } from "../i18n";
 import { Activity, Blocks, ChevronDown, CloudDownload, Code, FileArchive, Globe, LayoutGrid, NotebookPen, Search, Settings2, Upload, X } from "@lucide/vue";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";

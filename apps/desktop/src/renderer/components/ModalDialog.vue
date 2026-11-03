@@ -4,7 +4,7 @@
 // buttons (an action may have an icon, a Cancel/Close/Done button never does). In a form, make the form `contents`
 // so the footer's Save button still submits it.
 import type { Component } from "vue";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { Dialog, DialogContent, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 
 defineProps<{ title: string; description?: string; icon?: Component; testid?: string; class?: string }>();

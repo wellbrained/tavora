@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createApp, h, nextTick, type App } from "vue";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createApp, h, nextTick, ref, type App } from "vue";
 import { dismissToast, toast, toasts } from "./toast";
 import Toaster from "./Toaster.vue";
 
@@ -65,5 +65,119 @@ describe("Toaster live region", () => {
     shown.update({ title: "Saved", variant: "success" });
     await nextTick();
     expect(status()).toBe("Saved");
+  });
+});
+
+describe("Toaster in a page of its own", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("keeps every toast's time while it is paused, and starts it when it is not", async () => {
+    vi.useFakeTimers();
+    const paused = ref(true);
+    const root = document.createElement("div");
+    document.body.append(root);
+    app = createApp({ render: () => h(Toaster, { paused: paused.value }) });
+    app.mount(root);
+    toast({ title: "Saved" });
+    await nextTick();
+    vi.advanceTimersByTime(60_000);
+    expect(toasts.value).toHaveLength(1);
+    paused.value = false;
+    await nextTick();
+    vi.advanceTimersByTime(5_100);
+    expect(toasts.value).toHaveLength(0);
+  });
+
+  it("says how much room the spread-out stack needs", async () => {
+    const extents: { width: number; height: number }[] = [];
+    const root = document.createElement("div");
+    document.body.append(root);
+    app = createApp({ render: () => h(Toaster, { onExtent: (value: { width: number; height: number }) => extents.push(value) }) });
+    app.mount(root);
+    await nextTick();
+    expect(extents.at(-1)).toEqual({ width: 0, height: 0 });
+    toast({ title: "One" });
+    toast({ title: "Two" });
+    await nextTick();
+    // Neither is measured here (no layout in jsdom): the default height counts, with the gap between.
+    expect(extents.at(-1)!.height).toBe(44 * 2 + 8);
+    toasts.value = [];
+    await nextTick();
+    expect(extents.at(-1)).toEqual({ width: 0, height: 0 });
+  });
+});
+
+describe("Toaster morph", () => {
+  const observed = new Map<Element, (entries: unknown[]) => void>();
+  const original = globalThis.ResizeObserver;
+  beforeEach(() => {
+    observed.clear();
+    globalThis.ResizeObserver = class {
+      constructor(private callback: (entries: unknown[]) => void) {}
+      observe(target: Element) {
+        observed.set(target, this.callback);
+      }
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  });
+  afterEach(() => {
+    globalThis.ResizeObserver = original;
+  });
+
+  const mountIn = () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    app = createApp({ render: () => h(Toaster) });
+    app.mount(root);
+    return root;
+  };
+  const pill = (root: HTMLElement, id: number) => root.querySelector<HTMLElement>(`[data-id="${id}"] .tavora-toast`)!;
+  /** What the browser would say about a toast's content once it laid it out. */
+  const measure = (root: HTMLElement, id: number, width: number, height: number) => {
+    const content = root.querySelector(`[data-id="${id}"] .tavora-toast-content`)!;
+    observed.get(content)!([{ borderBoxSize: [{ inlineSize: width, blockSize: height }] }]);
+  };
+
+  it("brings a new front toast in at the size of the one in front, then at its own", async () => {
+    const root = mountIn();
+    const first = toast({ title: "Saving…" });
+    await nextTick();
+    // Nothing in front before it: it comes in at its own size.
+    expect(pill(root, first.id).style.width).toBe("");
+    measure(root, first.id, 200, 44);
+    await nextTick();
+    expect(pill(root, first.id).style.width).toBe("200px");
+
+    const second = toast({ title: "Layout deleted", action: { label: "Undo", onClick: () => undefined } });
+    await nextTick();
+    // The first frame is the old size, so the width/height transition has something to spring from.
+    expect([pill(root, second.id).style.width, pill(root, second.id).style.height]).toEqual(["200px", "44px"]);
+    // The one behind keeps its size too; it does not snap to a size the new toast does not have yet.
+    expect(pill(root, first.id).style.width).toBe("200px");
+
+    measure(root, second.id, 320, 56);
+    await nextTick();
+    expect([pill(root, second.id).style.width, pill(root, second.id).style.height]).toEqual(["320px", "56px"]);
+    // The collapsed one behind follows it (its own width/height transition runs along).
+    expect([pill(root, first.id).style.width, pill(root, first.id).style.height]).toEqual(["320px", "56px"]);
+  });
+
+  it("starts a third toast from the second, and a toast after an empty stack at its own size", async () => {
+    const root = mountIn();
+    const first = toast({ title: "One" });
+    await nextTick();
+    measure(root, first.id, 180, 44);
+    const second = toast({ title: "Two" });
+    await nextTick();
+    measure(root, second.id, 260, 44);
+    const third = toast({ title: "Three" });
+    await nextTick();
+    expect(pill(root, third.id).style.width).toBe("260px");
+
+    toasts.value = [];
+    await nextTick();
+    const fresh = toast({ title: "Fresh" });
+    await nextTick();
+    expect(pill(root, fresh.id).style.width).toBe("");
   });
 });

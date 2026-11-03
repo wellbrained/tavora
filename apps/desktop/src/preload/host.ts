@@ -1,6 +1,7 @@
 // Preload for the trusted host UI. Exposes a small, fixed API; the main
 // process still checks that every call comes from the host window.
 import { contextBridge, ipcRenderer } from "electron";
+import type { ToastsEvent } from "../shared/host-toasts";
 import type { LayoutStills, LayoutView } from "../shared/layout-view";
 import type { ContactDraft, ConversationDetailResult, InboxView } from "../shared/conversations";
 import type { AccountView, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, PairingView, PublishView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, TavoraHostApi } from "../shared/host-api";
@@ -22,6 +23,12 @@ const api: TavoraHostApi = {
   catalogIcon: (moduleId) => ipcRenderer.invoke("host:catalog-icon", moduleId),
   catalogReviews: (moduleId) => ipcRenderer.invoke("host:catalog-reviews", moduleId),
   releaseStatuses: (copies) => ipcRenderer.invoke("host:release-statuses", copies),
+  toasts: {
+    sync: (items) => ipcRenderer.send("host:toasts", items),
+    onEvent: (listener) => {
+      ipcRenderer.on("host:toast-event", (_event, event: ToastsEvent) => listener(event));
+    },
+  },
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setWorkspaceBounds: (bounds) => ipcRenderer.send("host:workspace-bounds", bounds),
   setOverlay: (open) => ipcRenderer.send("host:overlay", open),

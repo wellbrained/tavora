@@ -4,7 +4,7 @@
 // row (SUB_PAGES) has a way back in its title; the developer pages are tabs under one entry. Each page is its own
 // component; settings-index.ts lists them and every setting the search can find.
 import { Info, RotateCw, Search, X } from "@lucide/vue";
-import { computed, nextTick, provide, ref, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, provide, ref, watch } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
@@ -13,7 +13,7 @@ import { usePageMotion } from "@tavora/official-ui/components/ui/motion";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Tabs, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import { rank } from "@/lib/search";
-import { cn } from "@/lib/utils";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { act, hiddenSettingIds, hiddenSettings, makesModules, openSettings, refreshReleaseStatuses, releasePendingCount, settingsOpen, settingsTarget, state } from "../../host";
 import { formatDate, t } from "../../i18n";
 import AboutSection from "./AboutSection.vue";
@@ -28,7 +28,6 @@ import GamesSection from "./GamesSection.vue";
 import GeneralSection from "./GeneralSection.vue";
 import ModulesSection from "./ModulesSection.vue";
 import OverlaysSection from "./OverlaysSection.vue";
-import PatchNotesSection from "./PatchNotesSection.vue";
 import ShortcutsSection from "./ShortcutsSection.vue";
 import TrashSection from "./TrashSection.vue";
 import WorkspacesSection from "./WorkspacesSection.vue";
@@ -48,6 +47,9 @@ import {
 } from "./settings-index";
 import { SETTINGS_PAGE_TITLE } from "./settings-page";
 import { scrollToCentered, stopScroll } from "../../lib/smooth-scroll";
+
+// The patch notes are the largest text in the app and only read here, so they load when the page opens.
+const PatchNotesSection = defineAsyncComponent(() => import("./PatchNotesSection.vue"));
 
 const section = ref<SettingsSection>("general");
 const query = ref("");
@@ -219,7 +221,7 @@ function onSearchKey(event: KeyboardEvent) {
       :show-close-button="false"
       :aria-describedby="undefined"
     >
-      <div class="thin-scroll settings-menu bg-background flex w-56 flex-none flex-col gap-3 overflow-y-auto border-r px-4 pb-4 lg:w-64">
+      <div class="thin-scroll settings-menu bg-background flex w-60 flex-none flex-col gap-3 overflow-y-auto border-r px-4 pb-4 lg:w-72">
         <div class="relative flex h-16 flex-none items-center">
           <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
           <Input
@@ -246,12 +248,13 @@ function onSearchKey(event: KeyboardEvent) {
           heading-class="pt-1"
           @select="(id: string) => show(id as SettingsSection)"
         />
-        <!-- Updates & About, with the version: rarely needed, so it sits at the foot. -->
+        <!-- Updates & About, with the version: rarely needed, so it sits at the foot. As wide as a plate, border included;
+             px-4 + its 1px border = a plate row (1px border + p-1 + px-3), so icon, text and version line up with the plates. -->
         <button
           type="button"
           :class="
             cn(
-              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mt-auto flex h-9 flex-none items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
+              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mt-auto flex h-9 flex-none items-center gap-3 rounded-xl border border-transparent px-4 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
               !query && entry === 'about' && 'bg-primary/10 text-foreground',
             )
           "
@@ -261,8 +264,11 @@ function onSearchKey(event: KeyboardEvent) {
           @click="show('about')"
         >
           <Info class="size-4 flex-none" :stroke-width="2" aria-hidden="true" />
-          <span class="min-w-0 flex-1 truncate">{{ t("settings.section.about") }}</span>
-          <span class="text-xs tabular-nums" data-testid="settings-version">{{ version }}</span>
+          <!-- The name and the smaller version share one baseline, so they read as one line. -->
+          <span class="flex min-w-0 flex-1 items-baseline gap-3">
+            <span class="min-w-0 flex-1 truncate">{{ t("settings.section.about") }}</span>
+            <span class="text-xs tabular-nums" data-testid="settings-version">{{ version }}</span>
+          </span>
         </button>
       </div>
 

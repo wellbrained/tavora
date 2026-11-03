@@ -19,6 +19,9 @@ export const targets = [
     target: "node22",
     // koffi loads its native file from node_modules (src/main/program-list.ts).
     external: ["electron", "koffi"],
+    // The ad blocker asks for tldts-experimental (same API, a second copy of the public suffix list);
+    // the browser code uses tldts, so main carries one.
+    alias: { "tldts-experimental": "tldts" },
     // The module font is embedded in main (src/main/module-fonts.ts).
     loader: { ".woff2": "base64" },
   },
@@ -34,7 +37,7 @@ export const targets = [
   },
   // Sandboxed preloads can only require a few electron modules, so they are
   // bundled for the browser with everything inlined.
-  ...["module", "host", "tooltip", "game-overlay"].map((name) => ({
+  ...["module", "host", "tooltip", "toasts", "game-overlay"].map((name) => ({
     ...common,
     entryPoints: [`src/preload/${name}.ts`],
     outfile: `out/preload/${name}.cjs`,

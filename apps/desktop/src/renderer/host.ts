@@ -8,7 +8,7 @@ import { shortcutForKey } from "../shared/shortcut-keys";
 import { noteShortcut } from "./shortcut-origin";
 import { SETTING_SECTIONS, type SettingsPlace, type SettingsSection } from "./components/settings/settings-index";
 import { numberedWorkspaces } from "./shortcuts";
-import { setLanguage, t } from "./i18n";
+import { isLanguageReady, loadLanguage, setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 import { developerSetup } from "./developer-setup";
 import { createDialogQueue } from "./dialog-queue";
@@ -16,10 +16,22 @@ import { createDialogQueue } from "./dialog-queue";
 export const api = window.tavoraHost;
 export const state = shallowRef<HostViewState | null>(null);
 
-api.onState((next) => (state.value = next));
+/** A state that waits for its language's texts to load, and the ones behind it, so they land in order. */
+let waiting: Promise<void> | null = null;
+api.onState((next) => {
+  const wanted = next.language.resolved;
+  if (!waiting && isLanguageReady(wanted)) return void (state.value = next);
+  const mine = (waiting = (waiting ?? Promise.resolve()).then(() => loadLanguage(wanted)).then(() => void (state.value = next)));
+  void mine.then(() => {
+    if (waiting === mine) waiting = null;
+  });
+});
 /** The first state; rejects when the main process fails to give one, so start.ts can show why. */
-export const firstState = api.getState().then((initial) => {
-  if (initial && !state.value) state.value = initial;
+export const firstState = api.getState().then(async (initial) => {
+  if (!initial) return;
+  // Its language comes first, so the window draws once in the right one.
+  await loadLanguage(initial.language.resolved);
+  if (!state.value) state.value = initial;
 });
 watch(state, (next) => {
   if (!next) return;
@@ -213,8 +225,8 @@ export function showToast(message: string): void {
 }
 
 /**
- * Settings > Appearance > Notifications > Try it: a few toasts where the user put them. Settings covers the
- * panels, so the host window shows them in the chosen place while it is open (see App.vue).
+ * Settings > Appearance > Notifications > Try it: a few toasts where the user put them, like every toast of Tavora's own
+ * (they are drawn above the panels, see toast-bridge.ts).
  */
 export function tryToasts(): void {
   void toast.promise(new Promise((resolve) => setTimeout(resolve, 1200)), {
@@ -368,6 +380,8 @@ export type DialogRequest =
 // covered without being listed anywhere. The module panels (native views above this page) step aside for them, and the
 // queue of dialogs (below) looks at them.
 const DIALOG_OPEN = '[data-slot="dialog-content"][data-state="open"]';
+/** What a dialog is made of on the page that has an open/closed state: the box and the backdrop behind it. */
+const DIALOG_PART = '[data-slot="dialog-content"], [data-slot="dialog-overlay"]';
 /** The panel shown big in a dialog. It is open on purpose and its view stays in sight, so it is not one that covers it. */
 const PANEL_DIALOG = '[data-testid="panel-dialog"]';
 /** Settings and the profile are places to work in: a question the host asks may open on top of them, as a confirmation does. */
@@ -376,7 +390,7 @@ const STACKABLE = `${PANEL_DIALOG}, [data-testid="settings"], [data-testid="prof
 const openDialogs = ref(0);
 const pageDialogs = ref(0);
 let dimmed = false;
-new MutationObserver(() => {
+function countDialogs(): void {
   const open = [...document.querySelectorAll(DIALOG_OPEN)];
   openDialogs.value = open.length;
   pageDialogs.value = open.filter((element) => !element.matches(PANEL_DIALOG)).length;
@@ -386,7 +400,21 @@ new MutationObserver(() => {
   if (now === dimmed) return;
   dimmed = now;
   api.setDimmed(now);
-}).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state"] });
+}
+// A dialog's parts are teleported to the body (DialogPortal), so the body's own children say when one comes or goes,
+// and each part is watched for its open/closed state while it is there. Nothing else in the page is looked at: a
+// whole-page watch would run for every menu, tab and tooltip that changes its data-state.
+const dialogParts = new MutationObserver(countDialogs);
+function watchDialogParts(root: Element | Document): void {
+  for (const part of [...(root instanceof Element && root.matches(DIALOG_PART) ? [root] : []), ...root.querySelectorAll(DIALOG_PART)]) {
+    dialogParts.observe(part, { attributes: true, attributeFilter: ["data-state"] });
+  }
+}
+new MutationObserver((records) => {
+  for (const record of records) for (const node of record.addedNodes) if (node instanceof Element) watchDialogParts(node);
+  countDialogs();
+}).observe(document.body, { childList: true });
+watchDialogParts(document);
 
 /** Dialogs open that a question the host asks on its own must not stack on: all but its own slot, Settings, the profile and the panel dialog. */
 function blockingDialogs(): number {
