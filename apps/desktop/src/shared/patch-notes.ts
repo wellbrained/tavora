@@ -28,6 +28,30 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.93",
+    date: "2026-11-03",
+    title: "Overlay frames have a menu",
+    notes: [
+      "Overlay frames have a right-click menu (arrange, align, lock) and a toolbar you can customize.",
+    ],
+    prs: [
+      { number: 652, title: "Overlay frames have a right-click menu" },
+    ],
+    tags: ["overlays"],
+  },
+  {
+    version: "0.23.92",
+    date: "2026-11-03",
+    title: "Clock & Counter rows",
+    notes: [
+      "Clock & Counter: one ··· menu per row with Move up and Move down; dragging rows works again.",
+    ],
+    prs: [
+      { number: 657, title: "Clock & Counter: one ··· menu per row with Move up and Move down; dragging rows works again (0.1.24)" },
+    ],
+    tags: ["clock-counter", "notes", "ui-kit"],
+  },
+  {
     version: "0.23.91",
     date: "2026-11-03",
     title: "Item cards that don't pin",
