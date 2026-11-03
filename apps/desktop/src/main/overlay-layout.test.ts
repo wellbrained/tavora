@@ -1659,6 +1659,20 @@ describe("several frames at once", () => {
     expect(layout.view().items.map((item) => item.mode)).toEqual(["always", "always", "always"]);
   });
 
+  it("sets Opacity on locked frames too: lock only keeps a frame in place", () => {
+    const items = three();
+    items[0]!.locked = true;
+    items[0]!.opacity = 50;
+    const { layout, world } = setup(items, { seen: SEEN });
+    layout.open("elden");
+    const ids = layout.view().items.map((item) => item.id);
+    layout.handle({ type: "set", ids, change: { opacity: 25 } }, true);
+    expect(layout.view().items.map((item) => [item.opacity, item.locked])).toEqual([[25, true], [25, false], [25, false]]);
+    layout.handle({ type: "undo" }, true);
+    expect(world.items.map((item) => item.opacity ?? 100)).toEqual([50, 100, 100]);
+    expect(layout.view().canUndo).toBe(false);
+  });
+
   it("sets Opacity on a group whose values differ, for toggle and always frames alike, as one undo step", () => {
     const items = three();
     items[0]!.opacity = 50;
