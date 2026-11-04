@@ -10,7 +10,7 @@ import { modulePartition } from "./module-data";
 import { gestureCounts, type Opacity } from "./game-overlays";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
-import { BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH } from "@tavora/sdk/protocol";
+import { APP_BLOB_PATH, BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, type BridgeContext, type PanelDialogSize } from "./bridge";
 import { moduleReadPage } from "./page-import";
 import type { CheckedMenu } from "./module-menu";
@@ -111,6 +111,8 @@ export interface ModuleViewOptions {
   connectors(): ReadonlySet<string>;
   /** The module's settings shared by every workspace (storage.app). */
   appSettings: ModuleStore;
+  /** The module's files shared by every workspace (blobs.app). */
+  appBlobs: BlobStore;
   /** The ai-usage connector, for a module granted it. */
   aiUsage: BridgeContext["aiUsage"];
   /** The leaderboards connector for this module (leaderboards.ts); `show` asks the user in this panel. */
@@ -230,7 +232,7 @@ export function documentsFolder(): string {
  * Every module gets its own session per workspace: separate cookies, web storage,
  * cache and a separate renderer process from the host and other modules.
  */
-function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blobs: BlobStore, files: Pick<ModuleViewOptions, "savePicture" | "saveJson" | "openJson">): Session {
+function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blobs: BlobStore, appBlobs: BlobStore, files: Pick<ModuleViewOptions, "savePicture" | "saveJson" | "openJson">): Session {
   const ses = session.fromPartition(modulePartition(module.owner, module.manifest.id, workspace.id));
   // The folder a session serves from follows the module as installed now: a built-in module's downloaded copy lives elsewhere than the shipped one.
   serving.set(ses, module);
@@ -248,6 +250,7 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
     if (url.host !== module.manifest.id) return new Response("Not found", { status: 404 });
     if (url.pathname.startsWith(READ_ONLY_FILE_PATH)) return serveReadOnlyFile(request,url.pathname.slice(READ_ONLY_FILE_PATH.length),new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id));
     if (url.pathname.startsWith(BLOB_PATH)) return serveBlobs(blobs, request, url);
+    if (url.pathname.startsWith(APP_BLOB_PATH)) return serveBlobs(appBlobs, request, url, APP_BLOB_PATH);
     if (url.pathname === CLIPBOARD_PATH) return serveClipboard(request, { ...pressCheck(gestureOf(ses)), write: writeClipboardPicture });
     if (url.pathname === JSON_EXPORT_PATH) {
       const downloads = !app.isPackaged && process.env.TAVORA_EXPORTS_DIR ? path.resolve(process.env.TAVORA_EXPORTS_DIR) : path.join(app.getPath('downloads'), 'Tavora');
@@ -362,7 +365,7 @@ export class ModuleView {
     const { module, workspace } = options;
     this.view = new WebContentsView({
       webPreferences: {
-        session: moduleSession(module, workspace, options.data.blobs, {
+        session: moduleSession(module, workspace, options.data.blobs, options.appBlobs, {
           savePicture: (png, name) => options.savePicture(png, name),
           saveJson: (data, name) => options.saveJson(data, name),
           openJson: () => options.openJson(),
@@ -674,6 +677,7 @@ export class ModuleView {
         data,
         panelState,
         appSettings: this.options.appSettings,
+        appBlobs: this.options.appBlobs,
         aiUsage: this.options.aiUsage,
         leaderboards: {
           status: () => this.options.leaderboards.status(),

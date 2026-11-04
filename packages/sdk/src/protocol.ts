@@ -896,6 +896,10 @@ export interface Methods {
   "blobs.list": { params: undefined; result: BlobInfo[] };
   "blobs.usage": { params: undefined; result: BlobUsage };
   "blobs.delete": { params: { id: string }; result: null };
+  /** The same three for the module's files shared by every workspace (blobs.app). */
+  "blobs.app.list": { params: undefined; result: BlobInfo[] };
+  "blobs.app.usage": { params: undefined; result: BlobUsage };
+  "blobs.app.delete": { params: { id: string }; result: null };
   /** A web request to a granted host (capability `network`). */
   "network.fetch": { params: NetworkRequest; result: NetworkResponse };
   "network.readPage": { params: { url: string }; result: PageResponse };
@@ -1306,8 +1310,12 @@ export interface MenuRequest {
 export const PICTURE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
 export type PictureType = (typeof PICTURE_TYPES)[number];
 
-/** The kinds of file a module can keep with blobs.put (pictures and PDFs), found by looking at the file itself. */
-export const BLOB_TYPES = [...PICTURE_TYPES, "application/pdf"] as const;
+/** The kinds of sound a module can keep with blobs.put (MP3, Ogg and WAV). Tavora 0.23.101 and newer. */
+export const AUDIO_TYPES = ["audio/mpeg", "audio/ogg", "audio/wav"] as const;
+export type AudioType = (typeof AUDIO_TYPES)[number];
+
+/** The kinds of file a module can keep with blobs.put (pictures, PDFs and sounds), found by looking at the file itself. */
+export const BLOB_TYPES = [...PICTURE_TYPES, "application/pdf", ...AUDIO_TYPES] as const;
 export type BlobType = (typeof BLOB_TYPES)[number];
 
 /** A stored file. */
@@ -1335,6 +1343,8 @@ export interface BlobUsage {
  * GET /_blobs/<id> serves a file. Both only work from the module's own page.
  */
 export const BLOB_PATH = "/_blobs/";
+/** The same for the module's files shared by every workspace (blobs.app). Tavora 0.23.101 and newer. */
+export const APP_BLOB_PATH = "/_app-blobs/";
 export const BLOB_ID = /^[a-f0-9]{32}$/;
 
 /** POST a PNG here, from the module's own page, to put it on the clipboard (see clipboard.writeImage). */
@@ -1372,6 +1382,7 @@ export const JSON_EXPORT_PATH = "/_exports/json/";
  */
 export interface HttpCalls {
   "blobs.put": { params: { file: Blob }; result: BlobInfo };
+  "blobs.app.put": { params: { file: Blob }; result: BlobInfo };
   "clipboard.writeImage": { params: { png: Blob }; result: null };
   "files.read": { params: { id: string }; result: Uint8Array };
   "files.exportJson": { params: { value: JsonValue; name?: string }; result: { fileName: string } };
@@ -1455,6 +1466,9 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "blobs.list": call("0.12.0"),
   "blobs.usage": call("0.12.0"),
   "blobs.delete": call("0.12.0"),
+  "blobs.app.list": later("0.23.101"),
+  "blobs.app.usage": later("0.23.101"),
+  "blobs.app.delete": later("0.23.101"),
   "network.fetch": call("0.16.8", "network"),
   "network.readPage": call("0.19.3", "network"),
   "aiUsage.accounts": call("0.16.10", "aiUsage"),
@@ -1502,6 +1516,7 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "hotkeys.set": call("0.19.26", null, true),
   "hotkeys.remove": call("0.19.26"),
   "blobs.put": call("0.12.0"),
+  "blobs.app.put": later("0.23.101"),
   "clipboard.writeImage": call("0.14.1", null, true),
   "files.pickReadOnly": later("0.21.13", null, true),
   "files.forget": later("0.21.13"),

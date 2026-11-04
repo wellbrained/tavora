@@ -206,6 +206,7 @@ export const APP_DATA_DIR = "_app";
 export class DataRegistry {
   private readonly data = new Map<string, ModuleData>();
   private readonly app = new Map<string, ModuleStore>();
+  private readonly appFiles = new Map<string, BlobStore>();
   readonly panelState: PanelStateStore;
 
   constructor(
@@ -244,6 +245,18 @@ export class DataRegistry {
     return store;
   }
 
+  /**
+   * The files one owner's module shares across every workspace (blobs.app): `<owner>/<module>/_app` in the files
+   * folder, with the same limits as a workspace's files.
+   */
+  appBlobs(owner: string, moduleId: string): BlobStore {
+    if (!isOwnerId(owner) || !isModuleId(moduleId)) throw new Error("invalid owner or module id");
+    const key = `${owner}/${moduleId}`;
+    let store = this.appFiles.get(key);
+    if (!store) this.appFiles.set(key, (store = new BlobStore(() => path.join(this.blobRoot(), owner, moduleId, APP_DATA_DIR), undefined, this.blobsLocked, "app")));
+    return store;
+  }
+
   /** Drops cached stores of one owner's module whose data is being deleted. */
   forgetModule(owner: string, moduleId: string): void {
     const prefix = path.join(this.dataDir, "module-data", owner, moduleId) + path.sep;
@@ -253,6 +266,7 @@ export class DataRegistry {
     for (const key of [...this.app.keys()]) {
       if (key.startsWith(prefix)) this.app.delete(key);
     }
+    this.appFiles.delete(`${owner}/${moduleId}`);
   }
 
   /** Drops cached stores for a workspace whose data is being deleted. */

@@ -14,6 +14,8 @@ const OLD_FOLDER_NAME = "Tavora module files";
 
 /** The files folder's name inside the app's data folder. */
 export const FILES_DIR = "module-blobs";
+/** The folder next to a module's workspace folders for its files shared by every workspace; the same name as storage.app's. */
+const APP_FILES_DIR = "_app";
 
 /**
  * The files folder inside the app's data folder: the default until the user's Pictures folder took
@@ -70,7 +72,10 @@ export interface StoredFile {
   bytes: number;
 }
 
-/** The pictures under a files folder: `<owner>/<module>/<workspace>/<id>.<ext>`, nothing else. */
+/**
+ * The files under a files folder: `<owner>/<module>/<workspace>/<id>.<ext>`, and `<owner>/<module>/_app/<id>.<ext>` for
+ * the ones a module shares across every workspace (blobs.app). Nothing else.
+ */
 export async function listStoredFiles(root: string): Promise<StoredFile[]> {
   const files: StoredFile[] = [];
   const names = async (dir: string) => readdir(dir).catch(() => [] as string[]);
@@ -79,7 +84,7 @@ export async function listStoredFiles(root: string): Promise<StoredFile[]> {
     for (const module of await names(path.join(root, owner))) {
       if (!isModuleId(module)) continue;
       for (const game of await names(path.join(root, owner, module))) {
-        if (!isGameId(game)) continue;
+        if (!isGameId(game) && game !== APP_FILES_DIR) continue;
         for (const name of await names(path.join(root, owner, module, game))) {
           if (!parseBlobFileName(name)) continue;
           try {

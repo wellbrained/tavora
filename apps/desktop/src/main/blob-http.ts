@@ -1,6 +1,7 @@
-// The module address for stored files (see blobs.ts): POST /_blobs/ stores a picture and answers
+// The module address for stored files (see blobs.ts): POST /_blobs/ stores a picture, PDF or sound and answers
 // with its description, GET /_blobs/<id> serves it. Answered inside the module's own session, so
-// a page can only reach the files of its own module and workspace.
+// a page can only reach the files of its own module and workspace (and, at /_app-blobs/, its own module's
+// files shared by every workspace).
 
 import { createReadStream } from "node:fs";
 import { Readable } from "node:stream";
@@ -23,8 +24,9 @@ function failure(error: unknown): Response {
   return json(500, { error: { code: "INTERNAL", message: "internal error" } });
 }
 
-export async function serveBlobs(store: BlobStore, request: Request, url: URL): Promise<Response> {
-  const rest = url.pathname.slice(BLOB_PATH.length);
+/** `prefix` is the address the store answers at: BLOB_PATH for the workspace's files, APP_BLOB_PATH for blobs.app. */
+export async function serveBlobs(store: BlobStore, request: Request, url: URL, prefix: string = BLOB_PATH): Promise<Response> {
+  const rest = url.pathname.slice(prefix.length);
 
   if (rest === "") {
     if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
@@ -49,7 +51,7 @@ export async function serveBlobs(store: BlobStore, request: Request, url: URL): 
       "X-Content-Type-Options": "nosniff",
       // A PDF is data for the module to read, never a page the host shows.
       ...(found.type === "application/pdf" ? { "Content-Disposition": "attachment" } : {}),
-      // A picture is shown, never run: nothing in it can load or script anything.
+      // A picture or sound is shown or played, never run: nothing in it can load or script anything.
       "Content-Security-Policy": "default-src 'none'; sandbox",
       "Cross-Origin-Resource-Policy": "same-origin",
       // An id never points at different bytes, so the page may keep what it fetched.
