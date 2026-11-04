@@ -26,6 +26,7 @@ const emit = defineEmits<{ select: [id: string] }>()
       :key="entry.id"
       type="button"
       variant="ghost"
+      press="dip"
       class="h-auto w-full justify-start gap-3 p-2.5 font-normal"
       :disabled="entry.disabled"
       :data-testid="entry.testid"

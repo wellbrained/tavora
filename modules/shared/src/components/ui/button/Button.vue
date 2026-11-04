@@ -10,6 +10,8 @@ import { buttonVariants } from "."
 interface Props extends PrimitiveProps {
   variant?: ButtonVariants["variant"]
   size?: ButtonVariants["size"]
+  /** `dip` (wide controls) only dips 1px when pressed; the default `scale` also shrinks to 97% and turns itself to `dip` when stretched. */
+  press?: ButtonVariants["press"]
   class?: HTMLAttributes["class"]
   disabled?: boolean
   /**
@@ -53,7 +55,7 @@ function stopKey(event: KeyboardEvent) {
     :data-size="size"
     :as="as"
     :as-child="asChild"
-    :class="cn(buttonVariants({ variant, size, soft: soft() }), props.class)"
+    :class="cn(buttonVariants({ variant, size, press, soft: soft() }), props.class)"
     :disabled="soft() ? undefined : props.disabled || undefined"
     :aria-disabled="soft() ? 'true' : undefined"
     :data-disabled="soft() ? '' : undefined"

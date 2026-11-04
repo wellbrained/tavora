@@ -109,8 +109,8 @@ themes; anything hard-coded breaks in one of them.
   `--ease-in-out-strong`, `--duration-press|tooltip|menu|panel|move|reorder`), never a hand-typed `cubic-bezier` or `ease-in`.
   Animate `transform` and `opacity` only (in Tailwind v4, `translate-*` and `scale-*` set the `translate` and `scale`
   properties, so name those in the transition), never `transition-all`, and nothing in the interface runs longer than
-  `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed button dips to
-  0.97 and 1 px down on a fine pointer (Primary, Secondary and Destructive also turn their shadow softly inward). Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
+  `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed small button dips to
+  0.97 and 1 px down on a fine pointer, a wide one (a full-width button, `Picker`, `ActionList` rows) only 1 px down: the kit's `press="dip"`, which `w-full`, `block`, `flex`, `flex-1` and `grow` buttons get on their own, so never put your own scale on a button (Primary, Secondary and Destructive also turn their shadow softly inward). Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
   anything shown all day. Reduced motion keeps a short fade and drops the movement.
   How often decides how much: what people use many times a day stays instant or gets at most a quick fade (150 ms or
   less); playful motion (springs, drawing) is only for rare moments or as direct feedback to a click.
