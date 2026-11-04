@@ -3,18 +3,26 @@
 // close button is drawn here; its body stays empty and its place is sent to the host, which moves the panel's own page
 // into it. The rail and header stay in sight, dimmed and not clickable. The close button puts the panel back, and so
 // does a click beside the frame for a dialog opened by a click (not for a welcome a panel just added opened on its own);
-// Esc too while the frame, not the page, has the keys.
+// Esc too while the frame, not the page, has the keys. The frame stays invisible (but is placed) until the page has drawn
+// in it, or a moment has passed, so no empty box shows first.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { X } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
-import { api, panelDialog, panelDialogTitle } from "../host";
+import { api, panelDialog, panelDialogDrawn, panelDialogTitle } from "../host";
 import { t } from "../i18n";
 import { dialogPlace, type Room } from "../panel-dialog-place";
 
 const body = ref<HTMLElement | null>(null);
 let observer: ResizeObserver | undefined;
 let roomObserver: ResizeObserver | undefined;
+let showTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** The longest the frame stays invisible waiting for the page to draw. */
+const SHOW_AFTER_MS = 700;
+/** False while the page has not drawn in the frame: an empty frame would show as a blank box before it. */
+const shown = ref(false);
+watch(panelDialogDrawn, (drawn) => drawn && (shown.value = true));
 
 /** The workspace area the frame centres over, while a dialog is open. */
 const room = shallowRef<Room | null>(null);
@@ -49,7 +57,10 @@ watch(
   panelDialog,
   async (dialog) => {
     stop();
+    clearTimeout(showTimer);
+    shown.value = false;
     if (!dialog) return;
+    showTimer = setTimeout(() => (shown.value = true), SHOW_AFTER_MS);
     measureRoom();
     const area = document.querySelector<HTMLElement>("[data-workspace-area]");
     if (area) {
@@ -76,7 +87,10 @@ watch(place, () => {
   if (observer) void nextTick(placePage);
 });
 
-onBeforeUnmount(stop);
+onBeforeUnmount(() => {
+  stop();
+  clearTimeout(showTimer);
+});
 
 function close(): void {
   panelDialog.value = null;
@@ -94,12 +108,14 @@ function onPointerDownOutside(event: Event): void {
     <DialogContent
       v-if="panelDialog"
       class="bg-card top-[calc(50%+env(titlebar-area-height,0px)/2)] flex max-h-[calc(100vh-env(titlebar-area-height,0px)-48px)] max-w-[calc(100vw-48px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-48px)]"
+      :class="{ 'opacity-0': !shown }"
       :style="{ width: `${panelDialog.width}px`, height: `${panelDialog.height + 49}px`, ...(place ?? {}) }"
       data-testid="panel-dialog"
       :data-closes-on-click-beside="panelDialog.closesOnClickBeside ? '' : undefined"
       :show-close-button="false"
       :aria-describedby="undefined"
       @pointer-down-outside="onPointerDownOutside"
+      @open-auto-focus.prevent
     >
       <header class="flex h-12 flex-none items-center gap-2.5 border-b pr-2 pl-4">
         <img v-if="panelDialog.icon" :src="panelDialog.icon" alt="" class="size-5 flex-none rounded" />

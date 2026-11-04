@@ -17,6 +17,7 @@ export class MemoryPanelView implements PanelViewAdapter {
   suspended = false;
   inDialog = false;
   maximized = false;
+  focused = 0;
   disposed = false;
   image: string | null = "data:image/jpeg;base64,AAAA";
 
@@ -36,6 +37,9 @@ export class MemoryPanelView implements PanelViewAdapter {
   }
   setInDialog(open: boolean): void {
     this.inDialog = open;
+  }
+  focus(): void {
+    this.focused++;
   }
   setMaximized(maximized: boolean): void {
     this.maximized = maximized;
@@ -86,6 +90,7 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
     shownHere: (id) => !world.away.has(id),
     returned: (id) => void calls.push(`returned ${id}`),
     dialogClosed: () => void calls.push("dialogClosed"),
+    dialogDrawn: (id) => void calls.push(`dialogDrawn ${id}`),
     openingEnded: ({ show, tag }) => void ended.push({ show, tag }),
     overlayOpening: () => void calls.push("overlayOpening"),
     frozen: (images) => void frozen.push(images),

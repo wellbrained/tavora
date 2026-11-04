@@ -809,6 +809,8 @@ api.onModuleMenu((menu) => (moduleMenu.value = menu));
 export const panelDialog = shallowRef<PanelDialog | null>(null);
 /** The title the open dialog's panel gave itself (panel.setDialogTitle), or null for the module's name. */
 export const panelDialogTitle = shallowRef<string | null>(null);
+/** Whether the open dialog's page has drawn in its frame; the frame stays invisible until then (PanelDialog.vue). */
+export const panelDialogDrawn = ref(false);
 let panelDialogChanges = 0;
 api.onPanelDialog(async (shown) => {
   const change = ++panelDialogChanges;
@@ -820,7 +822,11 @@ api.onPanelDialog(async (shown) => {
     if (change !== panelDialogChanges) return;
   }
   panelDialogTitle.value = null;
+  panelDialogDrawn.value = false;
   panelDialog.value = shown;
+});
+api.onPanelDialogDrawn((instanceId) => {
+  if (panelDialog.value?.instanceId === instanceId) panelDialogDrawn.value = true;
 });
 api.onPanelDialogTitle((instanceId, title) => {
   if (panelDialog.value?.instanceId === instanceId) panelDialogTitle.value = title;
