@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.103",
+    date: "2026-11-04",
+    title: "Dialogs from modules open cleanly",
+    notes: [
+      "A module's dialog, like Add a clock, now lets you type right away without a click first.",
+      "A module's dialog no longer shows an empty box before its page appears.",
+    ],
+    prs: [
+      { number: 676, title: "Focus a module's dialog page when it opens" },
+    ],
+    tags: ["modules", "workspace"],
+  },
+  {
     version: "0.23.102",
     date: "2026-11-04",
     title: "Updates you can see and overlay text that keeps its size",
