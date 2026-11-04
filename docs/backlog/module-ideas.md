@@ -16,7 +16,14 @@ An overlay that shows a keyboard, a controller or both, with the keys you press 
 
 - **Soundboard**: short clips on hotkeys, also on stream.
 - **Screenshots**: your latest shots of the game, ready to look at or drop onto the Whiteboard.
+- **Dice** (working name, needs a better one: Dice Tray, Roll, Lucky Roll): for tabletop RPGs and board games.
+  - Every die games use: d4, d6, d8, d10, d12, d20, d100 (two d10), Fate dice, and custom dice with your own faces.
+  - Coin flip. No spin-the-wheel.
+  - An overlay (over the game and in OBS) that shows the roll and the result.
+  - An extremely smooth, good-looking dice animation.
+  - Suggestions: roll text like `2d6+3`, advantage and disadvantage, saved rolls ("Fireball: 8d6"), a roll history, a hotkey to roll.
+  - Tech notes: pick the result first with `crypto.getRandomValues`, then play an animation that lands on it, so it's fair and the panel and overlay can replay the same roll from one small message. WebAssembly is only for Tavora's own modules, so a catalogue module needs a pure-JS physics engine (for example three.js with cannon-es), not a WASM one.
 
 ## Dropped
 
-- Now Playing (Soundtrack exists), Quick Links and Patch Notes (browser panels cover them), Session Log (just Notes without a game started/stopped event), Keybinds, Converter, Dice & Picker, Shopping List, Map Pins, Loadouts, Squad (not wanted).
+- Now Playing (Soundtrack exists), Quick Links and Patch Notes (browser panels cover them), Session Log (just Notes without a game started/stopped event), Keybinds, Converter, Shopping List, Map Pins, Loadouts, Squad (not wanted).
