@@ -1,13 +1,21 @@
 import type { UpdateState } from "../shared/host-api";
 
+/** What electron-updater tells about a version it found or downloaded. */
+export interface UpdateInfoLike {
+  version: string;
+  /** The notes the release put into the feed: one string (one change per line), or one per version, or none. */
+  releaseNotes?: string | { version: string; note: string | null }[] | null;
+}
+
 /** The part of electron-updater's `autoUpdater` this module uses, so tests can stand in for it. */
 export interface UpdaterLike {
   autoDownload: boolean;
   autoInstallOnAppQuit: boolean;
   /** Sent with every request to the update feed. */
   requestHeaders?: Record<string, string> | null;
-  on(event: "update-available" | "update-downloaded", listener: (info: { version: string }) => void): unknown;
+  on(event: "update-available" | "update-downloaded", listener: (info: UpdateInfoLike) => void): unknown;
   on(event: "update-not-available" | "checking-for-update", listener: () => void): unknown;
+  on(event: "download-progress", listener: (progress: { percent: number }) => void): unknown;
   on(event: "error", listener: (error: Error) => void): unknown;
   checkForUpdates(): Promise<unknown>;
   downloadUpdate(): Promise<unknown>;
@@ -28,7 +36,27 @@ export interface Timers {
 export const UPDATER_HEADER = "X-Tavora-Update";
 
 export const FIRST_CHECK_MS = 60 * 1000;
-export const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
+export const CHECK_EVERY_MS = 60 * 60 * 1000;
+/** The progress goes to the window at most this often: each change sends the whole state. */
+export const PROGRESS_EVERY_MS = 250;
+/** The most notes a found version carries; the release's own list is short anyway. */
+const MAX_NOTES = 12;
+
+/**
+ * The notes of a found version as one line per change. The release writes them as a Markdown list
+ * (scripts/release-notes.mjs); a feed with HTML or per-version notes still gives plain lines.
+ */
+export function readReleaseNotes(notes: UpdateInfoLike["releaseNotes"]): string[] {
+  if (!notes) return [];
+  const text = typeof notes === "string" ? notes : notes.map((entry) => entry.note ?? "").join("\n");
+  return text
+    .replace(/<\/(li|p|h\d)>|<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*(?:[-*+]|\d+\.)\s+/, "").trim())
+    .filter((line) => line && !line.startsWith("#"))
+    .slice(0, MAX_NOTES);
+}
 
 export interface UpdateManagerOptions {
   updater: UpdaterLike;
@@ -45,10 +73,9 @@ export interface UpdateManagerOptions {
 }
 
 /**
- * Looks for a new Tavora version shortly after start and every few hours,
- * downloads it in the background and installs it when Tavora quits or the
- * user presses "Restart now" - never in the middle of a session. Errors
- * (offline, server down) are logged and ignored; the next check tries again.
+ * Looks for a new Tavora version shortly after start and every hour, downloads it (by itself or when
+ * the user asks) and installs it when Tavora quits or the user presses "Restart now" - never in the
+ * middle of a session. Errors (offline, server down) are logged; the next check tries again.
  */
 export class UpdateManager {
   private current: UpdateState = { status: "idle", checkedAt: null, failed: false };
@@ -62,6 +89,7 @@ export class UpdateManager {
   private readonly now: () => Date;
   private first: unknown;
   private every: unknown;
+  private progressSentAt = 0;
 
   constructor(options: UpdateManagerOptions) {
     this.updater = options.updater;
@@ -84,11 +112,22 @@ export class UpdateManager {
     this.updater.requestHeaders = { ...this.updater.requestHeaders, [UPDATER_HEADER]: "1" };
     this.updater.on("update-available", (info) => {
       this.log(`update ${info.version} available`);
-      this.set(this.updater.autoDownload ? { status: "downloading", version: info.version } : { status: "available", version: info.version });
+      const notes = readReleaseNotes(info.releaseNotes);
+      this.set(this.updater.autoDownload ? this.downloading(info.version, notes) : { status: "available", version: info.version, notes, failed: false });
+    });
+    this.updater.on("download-progress", (progress) => {
+      const u = this.current;
+      if (u.status !== "downloading") return;
+      const percent = Math.min(100, Math.max(0, Math.floor(progress.percent)));
+      const at = this.now().getTime();
+      if (percent <= u.percent || at - this.progressSentAt < PROGRESS_EVERY_MS) return;
+      this.progressSentAt = at;
+      this.set({ ...u, percent });
     });
     this.updater.on("update-downloaded", (info) => {
       this.log(`update ${info.version} downloaded`);
-      this.set({ status: "ready", version: info.version });
+      const notes = readReleaseNotes(info.releaseNotes);
+      this.set({ status: "ready", version: info.version, notes: notes.length ? notes : this.notes() });
       this.onDownloaded(info.version);
     });
     this.updater.on("update-not-available", () => {
@@ -97,8 +136,9 @@ export class UpdateManager {
     });
     this.updater.on("error", (error) => {
       this.log(`update error: ${error.message}`);
-      // A failed check or download goes back to idle; the next check starts again.
-      if (this.current.status === "downloading" || this.current.status === "checking") this.set(this.idle(true));
+      // A failed check goes back to idle; a failed download keeps the version so it can be tried again.
+      if (this.current.status === "checking") this.set(this.idle(true));
+      else if (this.current.status === "downloading") this.set(this.downloadFailed(this.current));
     });
   }
 
@@ -106,7 +146,7 @@ export class UpdateManager {
     return this.current;
   }
 
-  /** Starts the schedule: one check shortly after start, then one every few hours. */
+  /** Starts the schedule: one check shortly after start, then one every hour. */
   start(): void {
     this.first = this.timers.setTimeout(() => void this.check(), this.firstCheckMs);
     this.every = this.timers.setInterval(() => void this.check(), this.everyMs);
@@ -118,10 +158,15 @@ export class UpdateManager {
     this.first = this.every = undefined;
   }
 
-  /** Asks the server whether there is a newer version. Does nothing while one is already on its way. */
+  /**
+   * Asks the server whether there is a newer version. Does nothing while one is downloading or ready.
+   * A version that waits (or whose download failed) is asked about again: a newer one may be out, and
+   * with automatic download on, the download starts over.
+   */
   async check(): Promise<void> {
-    if (this.current.status !== "idle") return;
-    this.set({ status: "checking" });
+    const waiting = this.current.status === "available";
+    if (this.current.status !== "idle" && !waiting) return;
+    if (!waiting) this.set({ status: "checking" });
     try {
       await this.updater.checkForUpdates();
     } catch (error) {
@@ -138,15 +183,16 @@ export class UpdateManager {
     if (enabled && this.current.status === "available") void this.download();
   }
 
-  /** Starts the download of a version that was found while automatic download was off. */
+  /** Starts the download of a found version: one found while automatic download was off, or one whose download failed. */
   async download(): Promise<void> {
-    if (this.current.status !== "available") return;
-    this.set({ status: "downloading", version: this.current.version });
+    const u = this.current;
+    if (u.status !== "available") return;
+    this.set(this.downloading(u.version, u.notes));
     try {
       await this.updater.downloadUpdate();
     } catch (error) {
       this.log(`update download failed: ${error instanceof Error ? error.message : String(error)}`);
-      this.set(this.idle(true));
+      if (this.current.status === "downloading") this.set(this.downloadFailed(this.current));
     }
   }
 
@@ -161,6 +207,20 @@ export class UpdateManager {
     return this.current.status === status;
   }
 
+  /** The notes of the version on its way, kept when a later event comes without them. */
+  private notes(): string[] {
+    return "notes" in this.current ? this.current.notes : [];
+  }
+
+  private downloading(version: string, notes: string[]): UpdateState {
+    this.progressSentAt = 0;
+    return { status: "downloading", version, notes, percent: 0 };
+  }
+
+  private downloadFailed(u: { version: string; notes: string[] }): UpdateState {
+    return { status: "available", version: u.version, notes: u.notes, failed: true };
+  }
+
   private idle(failed: boolean): UpdateState {
     return { status: "idle", checkedAt: this.now().toISOString(), failed };
   }
@@ -168,5 +228,72 @@ export class UpdateManager {
   private set(state: UpdateState): void {
     this.current = state;
     this.onChange(state);
+  }
+}
+
+/** Notes the preview's made-up version shows. */
+const PREVIEW_NOTES = ["This is a preview of an update.", "Nothing is downloaded or installed.", "Restart now just ends the preview."];
+
+/**
+ * Dev builds only: stands in for electron-updater, so the update marker and Settings can be tried in
+ * `pnpm dev` (which never looks for real updates). A check always finds the next patch version, a
+ * download takes a few seconds, and "Restart now" ends the preview without restarting.
+ * TAVORA_FAKE_UPDATE_FAIL=1 makes every download fail halfway.
+ */
+export class PreviewUpdater implements UpdaterLike {
+  autoDownload = true;
+  autoInstallOnAppQuit = false;
+  requestHeaders: Record<string, string> | null = null;
+  private readonly listeners = new Map<string, ((value?: unknown) => void)[]>();
+  private readonly version: string;
+  private readonly fail: boolean;
+  private readonly stepMs: number;
+
+  constructor(currentVersion: string, options: { fail?: boolean; stepMs?: number } = {}) {
+    const [major = 0, minor = 0, patch = 0] = currentVersion.split(".").map(Number);
+    this.version = `${major}.${minor}.${patch + 1}`;
+    this.fail = options.fail ?? false;
+    this.stepMs = options.stepMs ?? 150;
+  }
+
+  // One list of listeners for every event UpdaterLike knows; each event sends its own kind of value.
+  on(event: string, listener: (value: any) => void): this {
+    this.listeners.set(event, [...(this.listeners.get(event) ?? []), listener as (value?: unknown) => void]);
+    return this;
+  }
+
+  async checkForUpdates(): Promise<void> {
+    await this.wait(600);
+    this.emit("update-available", this.info());
+    if (this.autoDownload) void this.downloadUpdate().catch(() => undefined);
+  }
+
+  async downloadUpdate(): Promise<void> {
+    for (let percent = 2; percent <= 100; percent += 2) {
+      await this.wait(this.stepMs);
+      if (this.fail && percent > 50) {
+        const error = new Error("preview: the download failed on purpose");
+        this.emit("error", error);
+        throw error;
+      }
+      this.emit("download-progress", { percent });
+    }
+    this.emit("update-downloaded", this.info());
+  }
+
+  quitAndInstall(): void {
+    this.emit("update-not-available");
+  }
+
+  private info(): UpdateInfoLike {
+    return { version: this.version, releaseNotes: PREVIEW_NOTES.map((note) => `- ${note}`).join("\n") };
+  }
+
+  private emit(event: string, value?: unknown): void {
+    for (const listener of this.listeners.get(event) ?? []) listener(value);
+  }
+
+  private wait(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
