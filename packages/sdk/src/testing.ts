@@ -155,7 +155,7 @@ export interface MemoryHost {
   /** Panels `panels.open` had to open new, in order. */
   readonly opened: readonly { type: string; content: PanelContent | null }[];
   /** Files and pictures the module saved, in order. */
-  readonly saved: readonly { kind: "json" | "picture"; fileName: string; value: JsonValue | Blob }[];
+  readonly saved: readonly { kind: "json" | "picture" | "csv" | "xlsx"; fileName: string; value: JsonValue | Blob | string | Uint8Array }[];
   /** What the module published, by overlay key. */
   readonly overlays: Readonly<Record<string, JsonValue>>;
   readonly storage: StoreView;
@@ -180,7 +180,7 @@ export interface MemoryHost {
 }
 
 /** Newest Tavora the SDK knows, and the default version of a memory host. */
-export const LATEST_TAVORA = "0.23.91";
+export const LATEST_TAVORA = "0.23.101";
 /** Most panel types one call may name: as many as a manifest may declare (MAX_PANEL_TYPES in @tavora/module-schema). */
 const MAX_PANEL_TYPES = 16;
 
@@ -189,7 +189,7 @@ const SILENT = new Set<CallName>([
   "files.forget", "files.showInFolder", "files.check", "links.open", "ui.tooltip.show", "ui.tooltip.move", "ui.tooltip.hide", "ui.tooltip.close", "ui.showMenu",
   "systemInfo.watch", "systemInfo.clearConnectionLog", "media.watch", "media.control", "discord.connect", "discord.allowControl",
   "discord.subscribe", "discord.unsubscribe", "overlay.resetLink", "overlay.preview", "clipboard.writeImage", "files.pickReadOnly",
-  "files.openJson", "discord.image", "hotkeys.set", "overlay.copyLink", "overlay.showOverGame", "overlay.openPage", "panel.navigated",
+  "files.openJson", "files.open", "discord.image", "hotkeys.set", "overlay.copyLink", "overlay.showOverGame", "overlay.openPage", "panel.navigated",
 ]);
 const SILENT_ANSWER: Partial<Record<CallName, unknown>> = {
   "files.check": { found: false, reason: "unlinked" },
@@ -325,7 +325,7 @@ interface Panel {
   scripts: Map<CallName, (params: never) => unknown>;
   calls: Record<string, unknown[]>;
   log: CallRecord[];
-  saved: { kind: "json" | "picture"; fileName: string; value: JsonValue | Blob }[];
+  saved: { kind: "json" | "picture" | "csv" | "xlsx"; fileName: string; value: JsonValue | Blob | string | Uint8Array }[];
   navigations: number;
 }
 
@@ -624,6 +624,19 @@ const handlers: Handlers = {
     const fileName = `${(name || "Untitled").replace(/\.json$/i, "")}.json`;
     panel.saved.push({ kind: "json", fileName, value: parse(body) });
     return { fileName };
+  },
+  "files.save": (panel, { data, type, name = "" }) => {
+    if (type !== "csv" && type !== "xlsx") fail("INVALID_PARAMS", "only a csv or xlsx file can be saved");
+    if (type === "csv" ? typeof data !== "string" : !(data instanceof Uint8Array)) fail("INVALID_PARAMS", type === "csv" ? "a csv file is saved from text" : "an xlsx file is saved from bytes");
+    if ((typeof data === "string" ? byteLength(data) : data.byteLength) > 8 * 1024 * 1024) fail("QUOTA_EXCEEDED", "files may be at most 8 MiB");
+    const fileName = `${(name || "Untitled").replace(new RegExp(`\\.${type}$`, "i"), "")}.${type}`;
+    panel.saved.push({ kind: type, fileName, value: data });
+    return { fileName };
+  },
+  "files.open": (_panel, params) => {
+    const types = params?.types;
+    if (types !== undefined && (!Array.isArray(types) || !types.length || !types.every((kind) => kind === "csv" || kind === "xlsx"))) fail("INVALID_PARAMS", "only csv and xlsx files can be opened");
+    return null;
   },
   "files.exportJson": (panel, { value, name = "Build" }) => {
     if (byteLength(JSON.stringify(value)) > 8 * 1024 * 1024) fail("QUOTA_EXCEEDED", "JSON exports may be at most 8 MiB");
@@ -947,6 +960,8 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       exportJson: (value, name = "Build") => call("files.exportJson", { value, name }),
       saveJson: (value, name = "") => call("files.saveJson", { value, ...(name ? { name } : {}) }),
       openJson: () => call("files.openJson"),
+      save: (data, options) => call("files.save", { data, type: options.type, ...(options.name ? { name: options.name } : {}) }),
+      open: (options) => call("files.open", options?.types ? { types: options.types } : undefined),
     },
     pictures: { save: (png, name = "") => call("pictures.save", { png, ...(name ? { name } : {}) }) },
     links: { open: async (url) => void (await call("links.open", { url })) },

@@ -461,6 +461,8 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `files.exportJson` | 0.19.17 |  | always |
 | `files.saveJson` | 0.21.13 |  | always |
 | `files.openJson` | 0.21.13 |  | always |
+| `files.save` | 0.23.101 |  | always |
+| `files.open` | 0.23.101 |  | always |
 | `pictures.save` | 0.17.19 |  | always |
 
 <!-- protocol-index:end -->
@@ -550,7 +552,6 @@ Some methods need a capability the user grants. A module asks for it in its mani
 | `discord.*` | `discord` | granted for the `discord` connector, see [Connectors](#connectors) |
 | `leaderboards.*` | `leaderboards` | granted for the `leaderboards` connector, see [Connectors](#connectors) |
 | `overlay.copyLink`, `overlay.resetLink` | `overlay` | granted for the `stream-overlay` connector, see [Stream overlays](#stream-overlays). `overlay.publish`, `overlay.remove`, `overlay.showOverGame`, `overlay.preview` and `overlay.openPage` need none |
-| `files.open`, `files.save` | `files` | reserved |
 | `clipboard.writeText`, `clipboard.readText` | `clipboard` | reserved |
 | `sharedData.publish`, `sharedData.read`, `sharedData.subscribe` | `sharedData` | reserved |
 
@@ -575,6 +576,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | `clipboard.writeImage` | one PNG per click or key press, at most 20 MB, 16384 pixels on a side and 100 million pixels |
 | `pictures.save` | the same as `clipboard.writeImage`; names up to 80 characters |
 | `files.saveJson`, `files.openJson` | one file per click or key press, JSON up to 8 MiB; names up to 80 characters |
+| `files.save`, `files.open` | one file per click or key press, `.csv` or `.xlsx` up to 8 MiB; names up to 80 characters |
 | Panel state | 256 KiB |
 | JSON nesting depth | 64 |
 | `network.fetch` answer | 5 MB of body, 15 s, 5 redirects, 6 requests at once per panel |
@@ -643,6 +645,16 @@ source data or destroying the triggering UI. Underlying panels remain live.
 
 They go through module addresses rather than bridge calls so a document up to 8 MiB does not hit the bridge's message limit, like `pictures.save`.
 
+## Saving and opening CSV and Excel files (Tavora 0.23.101+)
+
+`sdk.files.save(data, { type, name? })` saves a `.csv` (`data` is the text) or an `.xlsx` (`data` is the bytes) where the user says, and `sdk.files.open({ types? })` opens one they pick. They use the same dialogs and the same remembered folder per module as `saveJson` and `openJson` (at first `DocumentsTavora`). Only these two extensions can be chosen.
+
+- `save` POSTs the bytes to the module's own address, `/_files/save/?type=csv|xlsx&name=…`. `type` is required; `name` is filled in (cleaned, up to 80 characters, numbered `name (2).csv` when taken) and the extension is added when missing. A `.csv` must be UTF-8 text and an `.xlsx` must be a zip archive, otherwise `INVALID_PARAMS`; more than 8 MiB is `QUOTA_EXCEEDED`. The answer is `{ fileName }`, or `null` when the user closed the dialog. Replacing a file needs the user's OK in the dialog.
+- `open` POSTs to `/_files/open/?types=csv,xlsx` (both when left out). The answer is the file's bytes, with its name (URI-encoded) in `X-Tavora-File-Name` and its kind in `X-Tavora-File-Kind`; the SDK gives `{ fileName, type: "csv", text }` (UTF-8, or Windows-1252 when it is not UTF-8) or `{ fileName, type: "xlsx", bytes }`. A file over 8 MiB is `QUOTA_EXCEEDED`, another extension is `INVALID_PARAMS`. When the user closed the dialog the answer is `null`.
+- Both work only right after a real click or key press (one file per press, shared with the clipboard and picture calls), otherwise `PERMISSION_DENIED`. The module never learns a path. No extra permission grant. A Tavora older than 0.23.101 has neither address: the SDK throws `UNKNOWN_METHOD` (`sdk.supports("files.save")`).
+
+`files.open` and `files.save` used to be reserved bridge methods that always failed with `PERMISSION_DENIED`. They are module addresses now, so on the bridge they are unknown methods, like `files.saveJson`.
+
 ## JSON exports (Tavora 0.19.17+)
 
 `files.exportJson(value, name?)` (deprecated: use `files.saveJson`, which asks the user where to save) in SDK 0.2.10 POSTs JSON to `/_exports/json/?name=...` in the module origin. Maximum 8 MiB before and after host formatting (1 MiB in Tavora 0.20.7 and older). A trusted click/key press is consumed once, shared with picture operations. Saves a new sanitized `.json` in Downloads/Tavora; no arbitrary paths or overwrite. Returns `{ fileName }`. No extra permission grant.
@@ -652,6 +664,6 @@ They go through module addresses rather than bridge calls so a document up to 8 
 
 The native picker is opened with `files.pickReadOnly({ extensions: ["ksd"] })` after a real click/key press. Cancellation returns null; selection returns `{ id, name, size }`. With `multiple: true` (Tavora 0.23.6 and newer) the user can pick several files, and the answer is a list of them, empty when cancelled. With `near: { file, up }` (Tavora 0.23.30 and newer; older ones ignore it) the picker starts in the folder of a file the module linked, `up` folders higher (0 to 3), for a second file that lies next to the first; it only chooses where the dialog opens and grants nothing. File names are basenames; references are opaque 128-bit values scoped by publisher, module and workspace. No path or folder is accepted from module code. The SDK allows time for the user to use the dialog.
 
-`files.read(id)` POSTs to `/_read-only-files/<id>` in the module origin and returns a Uint8Array, up to 50 MiB (32 MiB before Tavora 0.23.6). The selected file can be reread after restart without another picker. Two concurrent reads are allowed per scope, four across the host, including reference lookups; errors use the protocol error envelope. `files.forget(id)` revokes access without deleting the selected file. `files.check(id)` (Tavora 0.23.6 and newer) looks at the file without reading it: `{ found: true, size, modifiedAt }` while it is the file that was picked, `{ found: false, reason: "gone" }` when it was deleted, moved or now points elsewhere, and `{ found: false, reason: "unlinked" }` when this PC has no link for the id (one made on another PC, or forgotten). `files.showInFolder(id)` (Tavora 0.23.6 and newer, after a real click/key press) opens the file's folder with the file selected; a file that is gone fails with `BAD_REQUEST`. These calls do not enable the reserved `files.open` or `files.save` methods.
+`files.read(id)` POSTs to `/_read-only-files/<id>` in the module origin and returns a Uint8Array, up to 50 MiB (32 MiB before Tavora 0.23.6). The selected file can be reread after restart without another picker. Two concurrent reads are allowed per scope, four across the host, including reference lookups; errors use the protocol error envelope. `files.forget(id)` revokes access without deleting the selected file. `files.check(id)` (Tavora 0.23.6 and newer) looks at the file without reading it: `{ found: true, size, modifiedAt }` while it is the file that was picked, `{ found: false, reason: "gone" }` when it was deleted, moved or now points elsewhere, and `{ found: false, reason: "unlinked" }` when this PC has no link for the id (one made on another PC, or forgotten). `files.showInFolder(id)` (Tavora 0.23.6 and newer, after a real click/key press) opens the file's folder with the file selected; a file that is gone fails with `BAD_REQUEST`. These calls are separate from `files.open` and `files.save`, which open and save a CSV or Excel file through Tavora's own dialogs.
 
 References stay on the current PC outside backups/cloud copies and are cleared with module/workspace data. Data copied to another PC may contain an inert reference and must relink files. The page receives no arbitrary filesystem or write access. See [Security](../guide/security.md#remembered-read-only-files).

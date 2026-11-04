@@ -149,6 +149,7 @@ import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSte
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
 import { documentsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
 import { readJsonText } from "./json-file-http";
+import { kindOfName, readTableFile } from "./table-file-http";
 import { freeFileName } from "./picture-save-http";
 import { HostError } from "./errors";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
@@ -215,7 +216,7 @@ import {
   type WorkspaceState,
 } from "./workspace";
 import type { PanelContent, PanelLaunch } from "./panel-content";
-import type { PanelOpenManyResult, PanelOpenResult } from "@tavora/sdk/protocol";
+import type { FileKind, PanelOpenManyResult, PanelOpenResult } from "@tavora/sdk/protocol";
 import { openManySlots } from "../shared/panel-layout";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
 import { layoutKey, OpenTimes, PanelCover } from "./panel-cover";
@@ -3849,6 +3850,8 @@ export class Host {
       savePicture: (png, name) => this.savePictureAs(png, name),
       saveJson: (data, name) => this.saveJsonAs(module, data, name),
       openJson: () => this.openJsonFrom(module),
+      saveFile: (data, name, kind) => this.saveFileAs(module, data, name, kind),
+      openFile: (kinds) => this.openFileFrom(module, kinds),
       pickReadOnlyFile: async (extensions, multiple, near) => {
         const files=new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id);
         const defaultPath=(near ? await files.directoryNear(near.file,near.up ?? 0) : undefined) ?? await saveDialogDirectory(files,this.library.workspaces[workspace.id]?.catalogId ?? workspace.id);
@@ -4906,6 +4909,58 @@ export class Host {
     const text = await readJsonText(file);
     this.rememberFileFolder(module, file);
     return { fileName: path.basename(file), text };
+  }
+
+  /**
+   * files.save: the same dialog as files.saveJson for a .csv or .xlsx; only that extension can be chosen. The data was
+   * checked already. Answers with the name the file was saved under, or null when the user closed the dialog.
+   */
+  private async saveFileAs(module: InstalledModule, data: Buffer, name: string, kind: FileKind): Promise<string | null> {
+    const folder = await this.fileFolderOf(module);
+    const german = this.language.startsWith("de");
+    const label = kind === "csv" ? (german ? "CSV-Dateien" : "CSV files") : german ? "Excel-Dateien" : "Excel files";
+    const picked = await dialog.showSaveDialog(this.window, {
+      title: german ? "Datei speichern" : "Save file",
+      defaultPath: path.join(folder, freeFileName(name, (fileName) => existsSync(path.join(folder, fileName)), kind)),
+      filters: [{ name: label, extensions: [kind] }],
+      properties: ["showOverwriteConfirmation"],
+    });
+    if (picked.canceled || !picked.filePath) return null;
+    const chosen = path.resolve(picked.filePath);
+    const file = new RegExp(`\\.${kind}$`, "i").test(chosen) ? chosen : `${chosen}.${kind}`;
+    // The dialog asked before replacing the file the user chose; with the extension added, it was never asked about.
+    try {
+      await writeFile(file, data, { flag: file === chosen ? "w" : "wx" });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new HostError("CONFLICT", `${path.basename(file)} already exists`);
+      throw error;
+    }
+    this.rememberFileFolder(module, file);
+    return path.basename(file);
+  }
+
+  /**
+   * files.open: the open dialog in the module's remembered folder, else Documents\Tavora, offering only the asked
+   * kinds. Answers with the file's name, kind and bytes (at most 8 MiB), or null when the user closed the dialog.
+   */
+  private async openFileFrom(module: InstalledModule, kinds: FileKind[]): Promise<{ fileName: string; kind: FileKind; bytes: Buffer } | null> {
+    const folder = await this.fileFolderOf(module);
+    const german = this.language.startsWith("de");
+    const names: Record<FileKind, string> = { csv: german ? "CSV-Dateien" : "CSV files", xlsx: german ? "Excel-Dateien" : "Excel files" };
+    const picked = await dialog.showOpenDialog(this.window, {
+      title: german ? "Datei öffnen" : "Open file",
+      defaultPath: folder,
+      filters: kinds.map((kind) => ({ name: names[kind], extensions: [kind] })),
+      properties: ["openFile"],
+    });
+    const file = picked.filePaths[0];
+    if (picked.canceled || !file) return null;
+    // The dialog's filter can be set to all files by the user; only these extensions go on.
+    const kind = kindOfName(file);
+    if (!kind || !kinds.includes(kind)) throw new HostError("INVALID_PARAMS", "only a .csv or .xlsx file can be opened");
+    const bytes = await readTableFile(file);
+    this.rememberFileFolder(module, file);
+    return { fileName: path.basename(file), kind, bytes };
   }
 
   /** Where the dialog for one of Tavora's own files (a module zip, a key file) opens: the folder last used for `place` while it is still there, else Documents\Tavora. */

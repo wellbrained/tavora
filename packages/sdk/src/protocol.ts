@@ -1047,8 +1047,6 @@ export type MethodName = keyof Methods;
 
 /** Methods reserved for later milestones, and the capability each needs. */
 export const RESERVED_METHODS: Readonly<Record<string, Capability>> = {
-  "files.open": "files",
-  "files.save": "files",
   "clipboard.writeText": "clipboard",
   "clipboard.readText": "clipboard",
   "sharedData.publish": "sharedData",
@@ -1376,6 +1374,34 @@ export const JSON_OPEN_PATH = "/_files/json/open/";
 /** POST a bounded JSON document after a gesture; saves a new .json in Downloads/Tavora. */
 export const JSON_EXPORT_PATH = "/_exports/json/";
 
+/** The kinds of file `files.save` and `files.open` handle: a CSV text file or an Excel workbook, nothing else. */
+export type FileKind = "csv" | "xlsx";
+export const FILE_KINDS: readonly FileKind[] = ["csv", "xlsx"];
+
+/** The most a file for `files.save` or `files.open` may hold: 8 MiB, like a JSON file. */
+export const MAX_FILE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * POST the file's bytes here, from the module's own page, to save them as a .csv or .xlsx where the user picks in
+ * Tavora's save dialog (see files.save). `?type=csv|xlsx` is required, `?name=` suggests the file name; the answer is
+ * `{ fileName }`, or `{ fileName: null }` when the user closed the dialog.
+ */
+export const FILE_SAVE_PATH = "/_files/save/";
+
+/**
+ * POST here, from the module's own page, to open a .csv or .xlsx the user picks in Tavora's open dialog (see
+ * files.open). `?types=csv,xlsx` says which are offered (both when left out). The answer is the file's bytes, with its
+ * name and kind in the `X-Tavora-File-Name` (URI-encoded) and `X-Tavora-File-Kind` headers, or `null` (JSON) when the
+ * user closed the dialog.
+ */
+export const FILE_OPEN_PATH = "/_files/open/";
+/** The headers of FILE_OPEN_PATH's answer. */
+export const FILE_NAME_HEADER = "X-Tavora-File-Name";
+export const FILE_KIND_HEADER = "X-Tavora-File-Kind";
+
+/** What `files.open` resolves with: a CSV as text, a workbook as bytes. */
+export type OpenedFile = { fileName: string; type: "csv"; text: string } | { fileName: string; type: "xlsx"; bytes: Uint8Array };
+
 /**
  * Calls the real client makes over plain HTTP from the module's own page, not over the message port. They answer
  * to the same rules as `Methods`, so they have an entry in `METHOD_INFO` too.
@@ -1388,6 +1414,8 @@ export interface HttpCalls {
   "files.exportJson": { params: { value: JsonValue; name?: string }; result: { fileName: string } };
   "files.saveJson": { params: { value: JsonValue; name?: string }; result: { fileName: string } | null };
   "files.openJson": { params: undefined; result: { fileName: string; value: JsonValue } | null };
+  "files.save": { params: { data: string | Uint8Array; type: FileKind; name?: string }; result: { fileName: string } | null };
+  "files.open": { params: { types?: FileKind[] } | undefined; result: OpenedFile | null };
   "pictures.save": { params: { png: Blob; name?: string }; result: { fileName: string } | null };
 }
 
@@ -1526,6 +1554,8 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "files.exportJson": call("0.19.17", null, true),
   "files.saveJson": later("0.21.13", null, true),
   "files.openJson": later("0.21.13", null, true),
+  "files.save": later("0.23.101", null, true),
+  "files.open": later("0.23.101", null, true),
   "pictures.save": call("0.17.19", null, true),
 };
 
