@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.107",
+    date: "2026-11-04",
+    title: "Spreadsheets",
+    notes: [
+      "New official module: spreadsheets for each game, with sheets, formulas, checkboxes, dropdowns and dates. Start blank or from a farming list, a drop log or a gear comparison.",
+      "Paste from Excel or Google Sheets and copy back, and import or export CSV and Excel files.",
+      "Sort, filter and freeze rows, and show part of a sheet over your game.",
+    ],
+    prs: [
+      { number: 680, title: "Spreadsheets: a new built-in module (Spreadsheets part 2)" },
+    ],
+    tags: ["modules", "spreadsheets"],
+  },
+  {
     version: "0.23.106",
     date: "2026-11-04",
     title: "Data grid for modules",
