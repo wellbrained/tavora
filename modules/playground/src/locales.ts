@@ -196,6 +196,8 @@ export const en = {
   "ex.buttons.ToggleButtons": "Toggle buttons",
   "ex.buttons.SplitButtons": "Split buttons",
   "ex.buttons.SplitButtons.note": "An action with its ▾ menu.",
+  "ex.buttons.WideButtons": "Wide buttons",
+  "ex.buttons.WideButtons.note": "Wide ones only dip 1px when pressed.",
 
   "ex.menus.DescribedMenu": "Dropdown menu with a line under each entry",
   "ex.menus.DescribedMenu.note": "Icons go on every entry or on none.",
@@ -594,6 +596,8 @@ export const de: Record<TextKey, string> = {
   "ex.buttons.ToggleButtons": "Umschalt-Buttons",
   "ex.buttons.SplitButtons": "Geteilte Buttons",
   "ex.buttons.SplitButtons.note": "Eine Aktion mit ihrem ▾-Menü.",
+  "ex.buttons.WideButtons": "Breite Buttons",
+  "ex.buttons.WideButtons.note": "Breite gehen beim Drücken nur 1 px runter.",
 
   "ex.menus.DescribedMenu": "Menü mit einer Zeile unter jedem Eintrag",
   "ex.menus.DescribedMenu.note": "Icons an jedem Eintrag oder an keinem.",

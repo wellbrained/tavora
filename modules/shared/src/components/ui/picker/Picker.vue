@@ -54,6 +54,7 @@ function pick(value: unknown) {
       <Button
         v-bind="$attrs"
         variant="secondary"
+        press="dip"
         :disabled="disabled"
         :class="cn('max-w-56 min-w-44 justify-between', props.class)"
         :aria-label="label"
