@@ -100,6 +100,7 @@ function onPointerDownOutside(event: Event): void {
       :show-close-button="false"
       :aria-describedby="undefined"
       @pointer-down-outside="onPointerDownOutside"
+      @open-auto-focus.prevent
     >
       <header class="flex h-12 flex-none items-center gap-2.5 border-b pr-2 pl-4">
         <img v-if="panelDialog.icon" :src="panelDialog.icon" alt="" class="size-5 flex-none rounded" />

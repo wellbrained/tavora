@@ -17,6 +17,7 @@ export class MemoryPanelView implements PanelViewAdapter {
   suspended = false;
   inDialog = false;
   maximized = false;
+  focused = 0;
   disposed = false;
   image: string | null = "data:image/jpeg;base64,AAAA";
 
@@ -36,6 +37,9 @@ export class MemoryPanelView implements PanelViewAdapter {
   }
   setInDialog(open: boolean): void {
     this.inDialog = open;
+  }
+  focus(): void {
+    this.focused++;
   }
   setMaximized(maximized: boolean): void {
     this.maximized = maximized;

@@ -504,6 +504,33 @@ describe("panel dialog", () => {
     expect(rig.views.snapshot().dialog?.placed).toBe(true);
   });
 
+  it("focuses the panel's page once it is placed in its frame, and only the first time", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.focused).toBe(0);
+    rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    expect(a.focused).toBe(1);
+    rig.views.placeDialog({ x: 100, y: 60, width: 600, height: 400 });
+    expect(a.focused).toBe(1);
+  });
+
+  it("does not focus the page of a dialog that closed, or one a question or page dialog covers", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    rig.views.closeDialog();
+    rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    expect(a.focused).toBe(0);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    rig.views.coverDialog(true);
+    rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    expect(a.focused).toBe(0);
+  });
+
   it("hides the panel's view while a page dialog is above its dialog, and shows it again after", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);

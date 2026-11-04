@@ -1169,6 +1169,12 @@ export class ModuleView {
     this.bridge?.emit("panel.dialog", { open });
   }
 
+  /** Gives the page the keyboard focus. */
+  focus(): void {
+    const contents = this.view.webContents;
+    if (!contents.isDestroyed()) contents.focus();
+  }
+
   /** The host UI reported whether the panel fills the workspace; the module hears a change. */
   setMaximized(maximized: boolean): void {
     if (maximized === this.maximized) return;

@@ -73,6 +73,8 @@ export interface PanelViewAdapter {
   suspend(): void;
   resume(): void;
   setInDialog(open: boolean): void;
+  /** Gives the page the keyboard focus (a panel dialog's page, once placed). */
+  focus(): void;
   setMaximized(maximized: boolean): void;
   /** A still image of the page as a data: URL, or null when there is none. */
   capture(): Promise<string | null>;
@@ -665,9 +667,12 @@ export class PanelViews {
     if (!isRectLike(raw)) return;
     const rect = { x: Math.round(raw.x), y: Math.round(raw.y), width: Math.round(raw.width), height: Math.round(raw.height) };
     if (rect.width < 1 || rect.height < 1) return;
-    if (open.bounds === null) this.deps.mount(adapter);
+    const first = open.bounds === null;
+    if (first) this.deps.mount(adapter);
     open.bounds = rect;
     this.layOut(open.instanceId, adapter);
+    // The frame's own focus trap took the keys when it opened; the page, once in the frame, takes them over.
+    if (first && adapter.revealed && !this.dialogCovered && !this.deps.asking(open.instanceId)) adapter.focus();
   }
 
   /** A page dialog opened above the panel dialog, or the last one closed: the panel's view steps aside or comes back. */

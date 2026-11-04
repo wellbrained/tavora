@@ -423,7 +423,10 @@ export class Host {
       this.openPendingDialog();
     },
     dialogClosed: () => {
-      if (!this.window.isDestroyed()) this.window.webContents.send("host:panel-dialog", null);
+      if (this.window.isDestroyed()) return;
+      this.window.webContents.send("host:panel-dialog", null);
+      // The dialog's page may have held the keys; they go back to the host page (which returns focus to where it was).
+      if (this.window.isFocused()) this.window.webContents.focus();
     },
     openingEnded: (ended) => this.openingEnded(ended),
     placing: () => this.tooltips?.ensureVisible(),
