@@ -16,7 +16,7 @@ An overlay that shows a keyboard, a controller or both, with the keys you press 
 
 - **Soundboard**: short clips on hotkeys, also on stream.
 - **Screenshots**: your latest shots of the game, ready to look at or drop onto the Whiteboard.
-- **Dice** (working name, needs a better one: Dice Tray, Roll, Lucky Roll): for tabletop RPGs and board games.
+- **Dice Tray**: dice and a coin for tabletop RPGs and board games.
   - Every die games use: d4, d6, d8, d10, d12, d20, d100 (two d10), Fate dice, and custom dice with your own faces.
   - Coin flip. No spin-the-wheel.
   - An overlay (over the game and in OBS) that shows the roll and the result.
