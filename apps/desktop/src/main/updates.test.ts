@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import type { UpdateState } from "../shared/host-api";
-import { CHECK_EVERY_MS, FIRST_CHECK_MS, UPDATER_HEADER, UpdateManager, type Timers, type UpdaterLike } from "./updates";
+import { CHECK_EVERY_MS, FIRST_CHECK_MS, PreviewUpdater, PROGRESS_EVERY_MS, readReleaseNotes, UPDATER_HEADER, UpdateManager, type Timers, type UpdaterLike } from "./updates";
 
 class FakeUpdater extends EventEmitter {
   autoDownload = true;
@@ -43,6 +43,7 @@ function make(autoDownload = true, onDownloaded?: (version: string) => void) {
   const states: UpdateState[] = [];
   const logs: string[] = [];
   const { timers, pending } = fakeTimers();
+  const clock = { ms: Date.parse("2026-10-16T09:30:00.000Z") };
   const manager = new UpdateManager({
     updater: updater as unknown as UpdaterLike,
     autoDownload,
@@ -50,9 +51,9 @@ function make(autoDownload = true, onDownloaded?: (version: string) => void) {
     ...(onDownloaded ? { onDownloaded } : {}),
     log: (l) => logs.push(l),
     timers,
-    now: () => new Date("2026-10-16T09:30:00.000Z"),
+    now: () => new Date(clock.ms),
   });
-  return { updater, manager, states, logs, pending };
+  return { updater, manager, states, logs, pending, clock };
 }
 
 describe("UpdateManager", () => {
@@ -76,7 +77,7 @@ describe("UpdateManager", () => {
     expect(seen).toEqual(["0.3.0"]);
   });
 
-  it("checks once shortly after start and then every six hours", async () => {
+  it("checks once shortly after start and then every hour", async () => {
     const { manager, pending, updater } = make();
     manager.start();
     expect(pending.map((t) => [t.ms, t.repeat])).toEqual([
@@ -95,9 +96,9 @@ describe("UpdateManager", () => {
   it("goes found -> downloading -> ready, and restarts into the new version", () => {
     const { manager, updater, states } = make();
     updater.emit("update-available", { version: "0.3.0" });
-    expect(manager.state).toEqual({ status: "downloading", version: "0.3.0" });
+    expect(manager.state).toEqual({ status: "downloading", version: "0.3.0", notes: [], percent: 0 });
     updater.emit("update-downloaded", { version: "0.3.0" });
-    expect(manager.state).toEqual({ status: "ready", version: "0.3.0" });
+    expect(manager.state).toEqual({ status: "ready", version: "0.3.0", notes: [] });
     manager.restartNow();
     expect(updater.installs).toEqual([[true, true]]);
     expect(states.map((s) => s.status)).toEqual(["downloading", "ready"]);
@@ -114,11 +115,11 @@ describe("UpdateManager", () => {
   it("with automatic download off waits for the user, then downloads on request", async () => {
     const { manager, updater } = make(false);
     updater.emit("update-available", { version: "0.3.0" });
-    expect(manager.state).toEqual({ status: "available", version: "0.3.0" });
+    expect(manager.state).toEqual({ status: "available", version: "0.3.0", notes: [], failed: false });
     expect(updater.downloads).toBe(0);
     await manager.download();
     expect(updater.downloads).toBe(1);
-    expect(manager.state).toEqual({ status: "downloading", version: "0.3.0" });
+    expect(manager.state).toEqual({ status: "downloading", version: "0.3.0", notes: [], percent: 0 });
   });
 
   it("turning automatic download on starts a version that was waiting", async () => {
@@ -130,16 +131,57 @@ describe("UpdateManager", () => {
     expect(updater.downloads).toBe(1);
   });
 
-  it("ignores errors: offline checks are logged, a failed download goes back to idle for the next check", async () => {
+  it("logs errors: an offline check goes back to idle, a failed download keeps the version to try again", async () => {
     const { manager, updater, logs } = make();
     updater.failCheck = true;
     await manager.check();
     expect(manager.state).toMatchObject({ status: "idle" });
     expect(logs.some((l) => l.includes("offline"))).toBe(true);
 
+    updater.emit("update-available", { version: "0.3.0", releaseNotes: "- One" });
+    updater.emit("error", new Error("connection lost"));
+    expect(manager.state).toEqual({ status: "available", version: "0.3.0", notes: ["One"], failed: true });
+  });
+
+  it("asks again about a version whose download failed, so the next check starts it over", async () => {
+    const { manager, updater } = make();
     updater.emit("update-available", { version: "0.3.0" });
     updater.emit("error", new Error("connection lost"));
-    expect(manager.state).toMatchObject({ status: "idle" });
+    updater.failCheck = false;
+    updater.checkForUpdates = async () => {
+      updater.checks += 1;
+      // Never shows checking in between: the marker stays.
+      expect(manager.state).toMatchObject({ status: "available" });
+      updater.emit("update-available", { version: "0.3.0" });
+    };
+    await manager.check();
+    expect(updater.checks).toBe(1);
+    expect(manager.state).toMatchObject({ status: "downloading", version: "0.3.0" });
+  });
+
+  it("carries the release's notes, and keeps them when the download event has none", () => {
+    const { manager, updater } = make();
+    updater.emit("update-available", { version: "0.3.0", releaseNotes: "- Faster start\n- Fixed the eraser\n" });
+    expect(manager.state).toMatchObject({ notes: ["Faster start", "Fixed the eraser"] });
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    expect(manager.state).toEqual({ status: "ready", version: "0.3.0", notes: ["Faster start", "Fixed the eraser"] });
+  });
+
+  it("shows the download's progress in whole percent, at most a few times a second", () => {
+    const { manager, updater, states, clock } = make();
+    updater.emit("update-available", { version: "0.3.0" });
+    clock.ms += PROGRESS_EVERY_MS;
+    updater.emit("download-progress", { percent: 10.7 });
+    expect(manager.state).toMatchObject({ percent: 10 });
+    updater.emit("download-progress", { percent: 20 });
+    expect(manager.state).toMatchObject({ percent: 10 });
+    clock.ms += PROGRESS_EVERY_MS;
+    updater.emit("download-progress", { percent: 30 });
+    expect(manager.state).toMatchObject({ percent: 30 });
+    clock.ms += PROGRESS_EVERY_MS;
+    updater.emit("download-progress", { percent: 25 });
+    expect(manager.state).toMatchObject({ percent: 30 });
+    expect(states.filter((s) => s.status === "downloading")).toHaveLength(3);
   });
 
   it("does not check again while a version is downloading or ready", async () => {
@@ -152,12 +194,16 @@ describe("UpdateManager", () => {
     expect(updater.checks).toBe(1);
   });
 
-  it("goes back to idle when a manual download fails", async () => {
+  it("keeps the version, marked as failed, when a manual download fails, and can try again", async () => {
     const { manager, updater } = make(false);
     updater.emit("update-available", { version: "0.3.0" });
     updater.failDownload = true;
     await manager.download();
-    expect(manager.state).toMatchObject({ status: "idle" });
+    expect(manager.state).toEqual({ status: "available", version: "0.3.0", notes: [], failed: true });
+    updater.failDownload = false;
+    await manager.download();
+    expect(updater.downloads).toBe(2);
+    expect(manager.state).toMatchObject({ status: "downloading" });
   });
 
   it("shows checking while it asks, then idle with the time of the check", async () => {
@@ -197,5 +243,36 @@ describe("UpdateManager", () => {
     release();
     await first;
     expect(updater.checks).toBe(1);
+  });
+});
+
+describe("readReleaseNotes", () => {
+  it("reads a Markdown list, HTML and per-version notes as plain lines", () => {
+    expect(readReleaseNotes("- One\n* Two\n\n3. Three\n")).toEqual(["One", "Two", "Three"]);
+    expect(readReleaseNotes("<ul><li>One</li><li>Two</li></ul>")).toEqual(["One", "Two"]);
+    expect(readReleaseNotes([{ version: "0.3.0", note: "- One" }, { version: "0.2.9", note: null }])).toEqual(["One"]);
+    expect(readReleaseNotes("### In 0.3.0\n- One")).toEqual(["One"]);
+    expect(readReleaseNotes(null)).toEqual([]);
+  });
+});
+
+describe("PreviewUpdater", () => {
+  it("finds the next patch version, downloads it step by step, and ends the preview on restart", async () => {
+    const updater = new PreviewUpdater("0.23.99", { stepMs: 0 });
+    const manager = new UpdateManager({ updater, autoDownload: false, onChange: () => {}, timers: fakeTimers().timers });
+    await manager.check();
+    expect(manager.state).toMatchObject({ status: "available", version: "0.23.100" });
+    await manager.download();
+    expect(manager.state).toMatchObject({ status: "ready", version: "0.23.100" });
+    manager.restartNow();
+    expect(manager.state).toMatchObject({ status: "idle" });
+  });
+
+  it("fails the download halfway when asked to, so the failed step can be seen", async () => {
+    const updater = new PreviewUpdater("0.23.99", { stepMs: 0, fail: true });
+    const manager = new UpdateManager({ updater, autoDownload: false, onChange: () => {}, timers: fakeTimers().timers });
+    await manager.check();
+    await manager.download();
+    expect(manager.state).toMatchObject({ status: "available", failed: true });
   });
 });

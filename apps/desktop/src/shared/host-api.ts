@@ -604,14 +604,16 @@ export interface PanelBounds {
 /** What the host UI renders. Contains no module data. */
 /**
  * Idle: nothing new (when it was last checked, and whether that check failed). Available: found,
- * waiting for the user (automatic download off).
+ * waiting for the user (automatic download off, or its download failed). Every found version carries
+ * what is new in it, from the update feed (empty when the feed has no notes).
  */
 export type UpdateState =
   | { status: "idle"; checkedAt: string | null; failed: boolean }
   | { status: "checking" }
-  | { status: "available"; version: string }
-  | { status: "downloading"; version: string }
-  | { status: "ready"; version: string };
+  | { status: "available"; version: string; notes: string[]; failed: boolean }
+  /** How far along, 0 to 100. */
+  | { status: "downloading"; version: string; notes: string[]; percent: number }
+  | { status: "ready"; version: string; notes: string[] };
 
 /** One variation of an installed theme, with its full palette for the preview. */
 export interface ThemeVariationView {

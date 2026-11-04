@@ -223,6 +223,24 @@ html.overlay-pending :is(
   }
 }
 
+/* The update marker (UpdateMarker.vue) breathes out twice when a new version first shows up, then keeps still. */
+@keyframes update-arrive {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 10px color-mix(in oklab, var(--primary) 0%, transparent);
+  }
+}
+.update-arrive {
+  animation: update-arrive var(--duration-pulse) var(--ease-out-strong) 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-arrive {
+    animation: none;
+  }
+}
+
 /* The arrow that says the list of games goes on below. */
 @keyframes rail-nudge {
   0%,

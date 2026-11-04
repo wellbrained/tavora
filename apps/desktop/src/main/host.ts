@@ -17,6 +17,7 @@ import {
   Notification,
   nativeImage,
   nativeTheme,
+  powerMonitor,
   protocol,
   screen,
   session,
@@ -116,7 +117,7 @@ import { countAppUpdate } from "./usage-counts";
 import { newInstallId, sendModuleRequest } from "./module-request";
 import { askKey, type AskedGame } from "../shared/module-request";
 import { PublisherNames } from "./publisher-names";
-import { UpdateManager, type UpdaterLike } from "./updates";
+import { PreviewUpdater, UpdateManager, type UpdaterLike } from "./updates";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
 import { OfficialPublisher, PublishCancelled } from "./official-publish";
 import { OfficialKeyStore } from "./official-key-store";
@@ -982,24 +983,28 @@ export class Host {
   }
 
   /**
-   * Starts looking for new versions of Tavora. Only an installed app does this:
-   * pnpm dev and other unpackaged runs never check. Updates come from the feed
-   * address built into the installer.
+   * Starts looking for new versions of Tavora: shortly after start, every hour, and when the computer
+   * wakes up. Only an installed app does this; updates come from the feed address built into the
+   * installer. pnpm dev and other unpackaged runs never look on their own: there "Check now" in
+   * Settings runs a made-up update (PreviewUpdater), so the marker and its steps can be tried.
    */
   private async startUpdates(): Promise<void> {
-    if (!app.isPackaged) return;
     try {
-      const { autoUpdater } = await import("electron-updater");
+      const updater: UpdaterLike = app.isPackaged
+        ? ((await import("electron-updater")).autoUpdater as unknown as UpdaterLike)
+        : new PreviewUpdater(app.getVersion(), { fail: process.env.TAVORA_FAKE_UPDATE_FAIL === "1" });
       this.updates = new UpdateManager({
-        updater: autoUpdater as unknown as UpdaterLike,
+        updater,
         autoDownload: this.library.autoUpdate,
         onChange: () => this.pushState(),
         onDownloaded: (version) => {
-          if (this.library.onlineSearch) void countAppUpdate({ baseUrl: serviceUrl(this.options.apiUrl) }, version);
+          if (app.isPackaged && this.library.onlineSearch) void countAppUpdate({ baseUrl: serviceUrl(this.options.apiUrl) }, version);
         },
         log: (line) => this.logUpdate(line),
       });
+      if (!app.isPackaged) return;
       this.updates.start();
+      powerMonitor.on("resume", () => void this.updates?.check());
     } catch (error) {
       this.logUpdate(`updates are not available: ${error instanceof Error ? error.message : String(error)}`);
     }
