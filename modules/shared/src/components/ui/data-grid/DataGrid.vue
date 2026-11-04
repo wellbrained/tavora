@@ -598,7 +598,11 @@ function onKeyDown(event: KeyboardEvent) {
   } else if (event.key === "Delete" || event.key === "Backspace") {
     event.preventDefault()
     emit("clear", { ...range.value })
-  } else if (event.key.length === 1 && !ctrl && !event.altKey && !event.isComposing) {
+  } else if (event.key === "Process" || event.keyCode === 229 || event.isComposing) {
+    // An input method (Japanese, Chinese, Korean…) starts composing: open the editor empty and let the key go on,
+    // so the composition lands in the cell.
+    startComposing()
+  } else if (event.key.length === 1 && !ctrl && !event.altKey) {
     // Typing replaces the cell with what was typed.
     event.preventDefault()
     startEditing(event.key, "enter")
@@ -606,6 +610,16 @@ function onKeyDown(event: KeyboardEvent) {
 }
 
 // ── Editing
+
+/** An input method begins on the idle grid: an empty edit, whose editor takes the focus right away. */
+function startComposing() {
+  if (props.readonly || editing.value) return
+  startEditing("", "enter")
+}
+
+function onCompositionStart(event: CompositionEvent) {
+  if (event.target === root.value) startComposing()
+}
 
 /**
  * An edit the grid started takes the focus into the cell. One the caller started (typing in a formula bar, say)
@@ -775,6 +789,7 @@ defineExpose({
     @copy="onCopy"
     @cut="onCut"
     @paste="onPaste"
+    @compositionstart="onCompositionStart"
   >
     <div :style="contentStyle">
       <div

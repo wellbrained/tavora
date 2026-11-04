@@ -115,6 +115,20 @@ describe("DataGrid", () => {
     expect(grid.selection.value.active).toEqual(cell(1, 0))
   })
 
+  it("opens an empty editor when an input method starts composing", async () => {
+    const grid = await mount();
+    await press(grid.root, "Process", { keyCode: 229 } as KeyboardEventInit)
+    expect(grid.editing.value).toMatchObject({ row: 0, col: 0, text: "", mode: "enter" })
+    expect(grid.root.querySelector("[data-grid-editor]")).not.toBeNull()
+  })
+
+  it("opens it on compositionstart too", async () => {
+    const other = await mount()
+    other.root.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }))
+    await flush()
+    expect(other.editing.value).toMatchObject({ text: "" })
+  })
+
   it("drops the edit on Escape", async () => {
     const grid = await mount()
     await press(grid.root, "F2")
