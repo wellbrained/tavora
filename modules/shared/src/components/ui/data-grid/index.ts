@@ -1,0 +1,30 @@
+export { default as DataGrid } from "./DataGrid.vue"
+export { columnIndex, columnName, hitIndex, isShown, makeAxis, scrollToShow, visibleRange, type Axis } from "./geometry"
+export {
+  cell,
+  clampSelection,
+  extendTo,
+  fillPlan,
+  fillShortcut,
+  inRange,
+  isSingle,
+  jump,
+  moveByKey,
+  rangeCols,
+  rangeOf,
+  rangeRows,
+  sameCell,
+  selectAll,
+  selectCols,
+  selectRows,
+  single,
+  unionRange,
+  type CellPos,
+  type FillDirection,
+  type FillPlan,
+  type GridRange,
+  type GridSelection,
+  type KeyInput,
+  type MoveContext,
+} from "./selection"
+export type { GridEdit, GridScroll, HeaderKind } from "./types"

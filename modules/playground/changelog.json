@@ -3,7 +3,11 @@
     "version": "0.1.28",
     "date": "2026-11-04",
     "notes": [
+<<<<<<< HEAD
       "Wide buttons and pickers only dip 1px when pressed."
+=======
+      "New specimens: a data grid you can type into like a spreadsheet, and a read-only one with 5,000 rows."
+>>>>>>> d9eecdc4 (Kit: DataGrid, a virtual grid of cells for spreadsheets and big tables)
     ]
   },
   {
