@@ -14,6 +14,8 @@
 // - Fill: drag the square at the selection's corner, or Ctrl+D / Ctrl+R (`fill` with source and target ranges).
 // - Size: drag a header's edge (`resize-column`, `resize-row`). Frozen rows and columns stay put while the rest scrolls.
 // - `readonly`: select and copy only.
+// - The cell editor keeps its edit when the focus moves into an element marked `data-grid-keep-edit` (a formula bar,
+//   a list of suggestions); clicking anywhere else keeps the edit and ends it.
 // - Before the grid acts on a key it emits `keydown` (and `editor-keydown` while editing): call `preventDefault()` to
 //   take the key over (bold, undo, a checkbox's Space).
 // - The `cell` slot draws a cell (`{ row, col, text, active, selected }`); without it the text is shown.
@@ -605,18 +607,26 @@ function onKeyDown(event: KeyboardEvent) {
 
 // ── Editing
 
+/**
+ * An edit the grid started takes the focus into the cell. One the caller started (typing in a formula bar, say)
+ * shows in the cell too but leaves the focus where it is.
+ */
+let focusEditor = false
+
 /** Starts editing the active cell with a text (its edit text when left out). */
 function startEditing(text?: string, mode: GridEdit["mode"] = "edit") {
   if (props.readonly) return
   const { row, col } = selection.value.active
   scrollToCell(selection.value.active)
+  focusEditor = true
   editing.value = { row, col, text: text ?? (props.editText ?? props.text)(row, col), mode }
 }
 
 watch(
   () => editing.value && `${editing.value.row}:${editing.value.col}`,
   (now, before) => {
-    if (!now || now === before) return
+    if (!now || now === before || !focusEditor) return
+    focusEditor = false
     nextTick(() => {
       const el = editor.value
       if (!el) return
@@ -626,7 +636,7 @@ watch(
   },
 )
 
-/** Keeps the edit and moves the active cell with a key (or not at all). */
+/** Keeps the edit and moves the active cell with a key (or not at all), then gives the grid the focus back. */
 function commitEdit(move: { key: string; shift: boolean } | null) {
   const current = editing.value
   if (!current) return
@@ -682,8 +692,10 @@ function onEditorKeyDown(event: KeyboardEvent) {
   }
 }
 
-function onEditorBlur() {
-  // Clicking elsewhere keeps the edit.
+function onEditorBlur(event: FocusEvent) {
+  // Clicking elsewhere keeps the edit; a caller's own part of it (its formula bar, its suggestions) doesn't count.
+  const next = event.relatedTarget
+  if (next instanceof HTMLElement && next.closest("[data-grid-keep-edit]")) return
   if (editing.value) commitEdit(null)
 }
 
@@ -731,7 +743,8 @@ defineExpose({
   focus: () => root.value?.focus({ preventScroll: true }),
   scrollToCell,
   startEditing,
-  commitEdit: () => commitEdit(null),
+  /** Keeps the edit (from a formula bar, say), moving on like Enter or Tab would when given that key. */
+  commitEdit: (move?: { key: "Enter" | "Tab"; shift?: boolean }) => commitEdit(move ? { key: move.key, shift: !!move.shift } : null),
   cancelEdit,
   cellElement,
   editorElement: () => editor.value,

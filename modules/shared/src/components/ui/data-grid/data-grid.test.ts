@@ -165,6 +165,25 @@ describe("DataGrid", () => {
     expect(grid.selection.value.active).toEqual(cell(1, 0))
   })
 
+  it("shows an edit the caller started in the cell, but leaves the focus where it was", async () => {
+    const grid = await mount();
+    const bar = document.createElement("input");
+    bar.dataset.gridKeepEdit = "";
+    document.body.append(bar);
+    bar.focus();
+    grid.editing.value = { row: 0, col: 0, text: "=SU", mode: "edit" };
+    await flush();
+    const editor = grid.root.querySelector<HTMLTextAreaElement>("[data-grid-editor]")!;
+    expect(editor.value).toBe("=SU");
+    expect(document.activeElement).toBe(bar);
+    // Moving from the cell editor into a part marked data-grid-keep-edit keeps the edit going.
+    editor.dispatchEvent(new FocusEvent("blur", { relatedTarget: bar }));
+    await flush();
+    expect(grid.commits).toEqual([]);
+    expect(grid.editing.value?.text).toBe("=SU");
+    bar.remove();
+  });
+
   it("draws frozen rows on their own", async () => {
     const { root } = await mount({ frozenRows: 2 })
     expect(root.querySelector("[data-area=frozen-body] [data-cell='0:0']")).not.toBeNull()
