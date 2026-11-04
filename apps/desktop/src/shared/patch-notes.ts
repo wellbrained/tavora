@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.101",
+    date: "2026-11-04",
+    title: "Sounds for modules",
+    notes: [
+      "Modules can now keep your MP3, Ogg and WAV sounds.",
+      "A module can keep files for all your games at once, like a sound library you set up only once.",
+    ],
+    prs: [
+      { number: 671, title: "Let modules keep sounds and files for every workspace, plus module ideas backlog" },
+    ],
+    tags: ["modules", "privacy", "sdk", "website"],
+  },
+  {
     version: "0.23.100",
     date: "2026-11-04",
     title: "Updates you can see",
