@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.109",
+    date: "2026-11-04",
+    title: "Evener panel tabs",
+    notes: [
+      "A panel tab now has the same space left of its icon as right of its ✕.",
+    ],
+    prs: [
+      { number: 682, title: "Panel tabs: same space left of the icon as right of the close button" },
+    ],
+    tags: ["workspace"],
+  },
+  {
     version: "0.23.108",
     date: "2026-11-04",
     title: "Tidier panel tabs",
