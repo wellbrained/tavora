@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.105",
+    date: "2026-11-04",
+    title: "Dialogs from modules appear in one piece",
+    notes: [
+      "A module's dialog now shows its frame and its content together, with no flicker.",
+    ],
+    prs: [
+      { number: 678, title: "Show a module dialog's frame and page in one step" },
+    ],
+    tags: ["workspace"],
+  },
+  {
     version: "0.23.104",
     date: "2026-11-04",
     title: "Calmer wide buttons",
