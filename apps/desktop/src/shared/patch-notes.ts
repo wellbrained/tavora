@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.106",
+    date: "2026-11-04",
+    title: "Data grid for modules",
+    notes: [
+      "Modules can show a grid of cells you edit like a spreadsheet: type, F2, Delete, Ctrl+D and Ctrl+R, the fill handle, resizable columns and rows, frozen rows and columns.",
+      "It also comes read-only for big tables, and only draws what you can see, so thousands of rows scroll smoothly.",
+      "The UI Playground shows both.",
+    ],
+    prs: [
+      { number: 679, title: "Kit: DataGrid, a virtual grid with cell and range selection (Spreadsheets part 1)" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.23.105",
     date: "2026-11-04",
     title: "Dialogs from modules appear in one piece",
