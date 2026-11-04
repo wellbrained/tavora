@@ -214,7 +214,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
   size: fixed side columns fold away or become a view switch below it. A separate wide layout uses `viewport.wide` and
   `@media (orientation: landscape)` (each panel is its own page, so media queries measure the panel).
 - **Overlays and drop targets** inside a panel use token colours and the kit's radius like everything else.
-- **Data**: bundled with the module, loaded once and shared between panels. Modules have no network.
+- **Data**: bundled with the module, loaded once and shared between panels. Modules reach the network only through the hosts the user granted (`permissions.network`, `network.fetch`).
 - **Accessibility**: icon-only buttons have a label, everything works by keyboard, a tree or list with a role also has
   its arrow keys, state is never shown by colour alone.
 
