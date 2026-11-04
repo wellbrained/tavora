@@ -433,7 +433,6 @@ export const TODOS = "tavora.todos";
 export const PLAYGROUND = "tavora.playground";
 export const WHITEBOARD = "tavora.whiteboard";
 export const PDF_VIEWER = "tavora.pdf-viewer";
-export const SPREADSHEETS = "tavora.spreadsheets";
 
 /** Types text into whatever has focus in the nth panel of a module, as a user would. */
 export async function typeInModule(app: ElectronApplication, moduleId: string, text: string, index = 0): Promise<void> {
