@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.102",
+    date: "2026-11-04",
+    title: "Modules can save and open CSV and Excel files",
+    notes: [
+      "A module can now save a table as a .csv or .xlsx and open one, through Tavora's own save and open windows.",
+      "They start in the folder you used last for that module, and nothing is saved or opened without your pick.",
+    ],
+    prs: [
+      { number: 673, title: "SDK: files.save and files.open for .csv and .xlsx" },
+    ],
+    tags: ["modules", "privacy", "publishing", "sdk", "website"],
+  },
+  {
     version: "0.23.101",
     date: "2026-11-04",
     title: "Sounds for modules",
