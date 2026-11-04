@@ -50,6 +50,7 @@ classes where you use a control; never copy it.
 | Show and hide a part | `Collapsible`, `Expandable` | native `<details>` |
 | List of items to choose or open | `NavList`, `ActionList`, `ActionRow` | a hand-built `ul` of buttons |
 | Table of data | `Table` and its parts (`TableHeader`, `TableRow`, `TableCell`, `TableCaption`) | raw `<table>` with own CSS |
+| Cells to edit like a spreadsheet, or a big table to scroll, select and copy | `DataGrid` (virtual rows and columns, A/B/C and 1/2/3 headers, range selection and its keys, in-cell editor, fill handle, resizing, frozen rows and columns, a `cell` slot, `readonly`); values go in as functions and edits come out as events, so it never holds your data | a `Table` with inputs in its cells, own keyboard handling, own virtual scrolling |
 | Tag, count, status word | `Badge` | muted `span` |
 | A number that changes while it is on screen (a count, a total) | `CountTo` / `useCountTo` (counts to the new value; not for a number that ticks every second or one being typed) | a plain `{{ n }}` that jumps |
 | A list the user reorders by dragging | `useReorderMotion` and `liftedDragImage` from `ui/reorder`: the others slide aside, the dropped item settles; keys reorder at once | a hand-made drop line only |

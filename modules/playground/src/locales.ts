@@ -326,6 +326,11 @@ export const en = {
 
   "ex.lists.Table": "Table",
   "ex.lists.Table.note": "Put numbers in a right-aligned column. A table wider than its panel scrolls sideways.",
+  "ex.lists.DataGrid": "Data grid",
+  "ex.lists.DataGrid.note": "Type into a cell, press F2 to edit it, or drag the small square to fill. Drag a header edge to resize.",
+  "ex.lists.DataGrid.rule": "Cells you edit like a spreadsheet use DataGrid. It draws only what is in view and leaves the data to you.",
+  "ex.lists.DataGridReadOnly": "Data grid, read-only",
+  "ex.lists.DataGridReadOnly.note": "A big table to look through, select and copy. The first row and column stay put.",
   "ex.lists.SelectableList": "Selectable list",
   "ex.lists.SelectableList.note": "Rows highlight on hover with the accent surface, never a glow.",
   "ex.lists.AnimatedRows": "Rows added and removed",
@@ -726,6 +731,11 @@ export const de: Record<TextKey, string> = {
 
   "ex.lists.Table": "Tabelle",
   "ex.lists.Table.note": "Zahlen in eine rechtsbündige Spalte. Eine Tabelle, die breiter ist als ihr Panel, scrollt seitlich.",
+  "ex.lists.DataGrid": "Datenraster",
+  "ex.lists.DataGrid.note": "Tipp in eine Zelle, drück F2 zum Bearbeiten oder zieh das kleine Quadrat zum Füllen. Zieh an einer Kopfkante, um die Größe zu ändern.",
+  "ex.lists.DataGrid.rule": "Zellen, die man wie in einer Tabelle bearbeitet, nutzen DataGrid. Es zeichnet nur, was zu sehen ist, und lässt die Daten bei dir.",
+  "ex.lists.DataGridReadOnly": "Datenraster, nur lesen",
+  "ex.lists.DataGridReadOnly.note": "Eine große Tabelle zum Durchsehen, Auswählen und Kopieren. Die erste Zeile und Spalte bleiben stehen.",
   "ex.lists.SelectableList": "Liste zum Auswählen",
   "ex.lists.SelectableList.note": "Zeilen heben sich beim Darüberfahren mit der Akzentfläche ab, nie mit einem Leuchten.",
   "ex.lists.AnimatedRows": "Zeilen hinzufügen und entfernen",
