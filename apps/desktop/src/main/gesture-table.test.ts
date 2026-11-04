@@ -24,6 +24,8 @@ const PATH_CALLS: Record<string, CallName> = {
   PICTURES_PATH: "pictures.save",
   JSON_SAVE_PATH: "files.saveJson",
   JSON_OPEN_PATH: "files.openJson",
+  FILE_SAVE_PATH: "files.save",
+  FILE_OPEN_PATH: "files.open",
 };
 
 /** The addresses the session answers, and whether each one takes a press (`pressCheck`) first. */

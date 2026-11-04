@@ -118,12 +118,14 @@ test("a hostile module cannot escape its sandbox, spoof identity or reach the ne
   // G9: capabilities that were never granted fail the same way every time.
   for (const [probe, capability] of [
     ["networkFetch", "network"],
-    ["filesOpen", "files"],
     ["clipboardRead", "clipboard"],
     ["sharedDataRead", "sharedData"],
   ] as const) {
     expect(bridge[probe], probe).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability } });
   }
+
+  // files.open is a module address, not a bridge call: the bridge doesn't know it.
+  expect(bridge.filesOpen).toMatchObject({ ok: false, error: { code: "UNKNOWN_METHOD" } });
 
   // The "spoofed" write landed in the attacker's own store, not the victim's.
   await panels(page, VANILLA).getByTestId("close").click();

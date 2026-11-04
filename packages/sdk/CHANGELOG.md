@@ -1,3 +1,12 @@
+## 0.3.13
+
+Saving and opening CSV and Excel files. The new calls come with Tavora 0.23.102 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `files.save(data, { type, name? })` saves a `.csv` (`data` is its text) or an `.xlsx` (`data` is its bytes) through Tavora's save dialog, up to 8 MiB. It opens in the same remembered folder as `files.saveJson` (at first `Documents\Tavora`) with the name filled in, only that extension can be chosen, and it resolves with `{ fileName }`, or `null` when the user closed the dialog.
+- `files.open({ types? })` opens a `.csv` or `.xlsx` the user picks, up to 8 MiB, and resolves with `{ fileName, type: "csv", text }` (UTF-8, or Windows-1252 when that is what the file is), `{ fileName, type: "xlsx", bytes }`, or `null` when the dialog was closed.
+- Both need a real click or key press, one file per press, and no permission. The module never learns a path. `files.open` and `files.save` are no longer reserved bridge methods; they are module addresses like `files.saveJson`. Check `sdk.supports("files.save")` and `sdk.supports("files.open")`; an older Tavora throws `UNKNOWN_METHOD`.
+- The memory host (`@tavora/sdk/testing`) answers both (`host.saved` lists the `csv` and `xlsx` files; script `files.open` with `host.answer`) and defaults to Tavora 0.23.102.
+
 ## 0.3.12
 
 Frames that grow with their content. The new field comes with Tavora 0.23.94 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).

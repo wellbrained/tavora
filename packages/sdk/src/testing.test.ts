@@ -505,6 +505,38 @@ describe("scripted answers", () => {
     expect(await sdk.blobs.list()).toEqual([]);
   });
 
+  it("saves and opens csv and xlsx files like the host does", async () => {
+    const { sdk, host } = createMemoryHost({ gestures: "enforce" });
+    const book = new Uint8Array([0x50, 0x4b, 3, 4]);
+    expect(await failure(sdk.files.save("a,b\n", { type: "csv" }))).toMatchObject({ code: "PERMISSION_DENIED" });
+    host.gesture(7);
+    expect(await sdk.files.save("a,b\n1,2\n", { type: "csv", name: "Farm.csv" })).toEqual({ fileName: "Farm.csv" });
+    expect(await sdk.files.save(book, { type: "xlsx", name: "Book" })).toEqual({ fileName: "Book.xlsx" });
+    expect(await sdk.files.save("x", { type: "csv" })).toEqual({ fileName: "Untitled.csv" });
+    expect(host.saved.map((item) => [item.kind, item.fileName])).toEqual([["csv", "Farm.csv"], ["xlsx", "Book.xlsx"], ["csv", "Untitled.csv"]]);
+    expect(host.saved[1]!.value).toEqual(book);
+    expect(await failure(sdk.files.save("x", { type: "pdf" as never }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.files.save(book, { type: "csv" }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.files.save("x", { type: "xlsx" }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.files.save("x".repeat(8 * 1024 * 1024 + 1), { type: "csv" }))).toMatchObject({ code: "QUOTA_EXCEEDED" });
+
+    host.gesture(3);
+    expect(await sdk.files.open()).toBeNull();
+    expect(await failure(sdk.files.open({ types: ["json" as never] }))).toMatchObject({ code: "INVALID_PARAMS" });
+    host.answer("files.open", () => ({ fileName: "a.csv", type: "csv", text: "a;b" }));
+    expect(await sdk.files.open({ types: ["csv"] })).toEqual({ fileName: "a.csv", type: "csv", text: "a;b" });
+    expect(await failure(sdk.files.open())).toMatchObject({ code: "PERMISSION_DENIED" });
+  });
+
+  it("only has files.save and files.open from Tavora 0.23.102", async () => {
+    expect(createMemoryHost({ version: "0.23.101" }).sdk.supports("files.save")).toBe(false);
+    expect(createMemoryHost({ version: "0.23.101" }).sdk.supports("files.open")).toBe(false);
+    const { sdk } = createMemoryHost({ version: "0.23.102" });
+    expect(sdk.supports("files.save")).toBe(true);
+    expect(sdk.supports("files.open")).toBe(true);
+    expect(await failure(createMemoryHost({ version: "0.23.101" }).sdk.files.open())).toMatchObject({ code: "UNKNOWN_METHOD" });
+  });
+
   it("keeps overlays and hotkeys in memory", async () => {
     const { sdk, host } = createMemoryHost();
     await sdk.overlay.publish("score", { n: 1 });

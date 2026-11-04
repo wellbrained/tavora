@@ -84,6 +84,8 @@ function make(extra: Record<string, unknown> = {}) {
     savePicture: async () => null,
     saveJson: async () => null,
     openJson: async () => null,
+    saveFile: async () => null,
+    openFile: async () => null,
     discord: { release: () => undefined },
     ...extra,
   };

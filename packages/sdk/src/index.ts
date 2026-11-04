@@ -16,6 +16,14 @@ import {
   JSON_EXPORT_PATH,
   JSON_SAVE_PATH,
   JSON_OPEN_PATH,
+  FILE_SAVE_PATH,
+  FILE_OPEN_PATH,
+  FILE_NAME_HEADER,
+  FILE_KIND_HEADER,
+  FILE_KINDS,
+  MAX_FILE_BYTES,
+  type FileKind,
+  type OpenedFile,
   READ_ONLY_FILE_PATH,
   type PickNear,
   type ReadOnlyFile,
@@ -178,7 +186,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.12";
+export const SDK_VERSION = "0.3.13";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -187,7 +195,16 @@ export const SDK_VERSION = "0.3.12";
  * changelog names it for every version.
  */
 export { MIN_TAVORA };
-export type { SupportedCall } from "./protocol.js";
+export type { SupportedCall, FileKind, OpenedFile } from "./protocol.js";
+
+/** A CSV's text: UTF-8 (a leading byte order mark dropped), or Windows-1252 when the bytes are not UTF-8, as Excel in German writes it. */
+function decodeCsv(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder("windows-1252").decode(bytes);
+  }
+}
 
 export class TavoraError extends Error {
   readonly code: ErrorCode;
@@ -455,6 +472,25 @@ export interface TavoraSDK {
      * Call it from the click or key press that asked for it (PERMISSION_DENIED otherwise); one press opens one file.
      */
     openJson(): Promise<{ fileName: string; value: JsonValue } | null>;
+    /**
+     * Saves a table file where the user says: a `.csv` (`data` is its text) or an `.xlsx` (`data` is its bytes), up
+     * to 8 MiB. Tavora's save dialog opens in the same folder as saveJson and fills in `options.name` (made safe, " (2)"
+     * and so on when taken); only that extension can be chosen. Resolves with the name it was saved under, or null
+     * when the user closed the dialog; the module never learns the folder. Replacing a file needs the user's OK in
+     * the dialog. An xlsx that is not a zip, or a csv that is not UTF-8 text, is INVALID_PARAMS.
+     * Call it from the click or key press that asked for it (PERMISSION_DENIED otherwise); one press saves one file.
+     * Needs Tavora 0.23.102 or newer: check `sdk.supports("files.save")`.
+     */
+    save(data: string | Uint8Array, options: { type: FileKind; name?: string }): Promise<{ fileName: string } | null>;
+    /**
+     * Opens a `.csv` or `.xlsx` the user picks in Tavora's open dialog (`options.types` limits it to one; both when
+     * left out), which starts in the same folder as saveJson. Resolves with the file's name and kind and its content
+     * (a CSV as text, read as UTF-8, or as Windows-1252 when it is not UTF-8; an xlsx as bytes), at most 8 MiB
+     * (QUOTA_EXCEEDED), or null when the user closed the dialog. The module never learns the folder.
+     * Call it from the click or key press that asked for it (PERMISSION_DENIED otherwise); one press opens one file.
+     * Needs Tavora 0.23.102 or newer: check `sdk.supports("files.open")`.
+     */
+    open(options?: { types?: FileKind[] }): Promise<OpenedFile | null>;
   };
   pictures: {
     /**
@@ -1085,6 +1121,43 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         if(response.ok && result === null) return null;
         if(response.ok && typeof result?.fileName === 'string' && result.value !== undefined) return {fileName:result.fileName,value:result.value};
         throw new TavoraError(result?.error ?? {code:'INTERNAL',message:`could not open the file (${response.status})`});
+      },
+      save: async (data, options) => {
+        const type = options?.type;
+        if (!FILE_KINDS.includes(type as FileKind)) throw new TavoraError({code:'INVALID_PARAMS',message:'only a csv or xlsx file can be saved'});
+        if (type === 'csv' ? typeof data !== 'string' : !(data instanceof Uint8Array)) throw new TavoraError({code:'INVALID_PARAMS',message:type === 'csv' ? 'a csv file is saved from text' : 'an xlsx file is saved from bytes'});
+        const body = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+        if (body.byteLength > MAX_FILE_BYTES) throw new TavoraError({code:'QUOTA_EXCEEDED',message:'files may be at most 8 MiB'});
+        const address = new URL(FILE_SAVE_PATH, window.location.href);
+        address.searchParams.set('type', type);
+        if (options.name) address.searchParams.set('name', options.name);
+        let response: Response;
+        try { response = await fetch(address, {method:'POST',headers:{'Content-Type':'application/octet-stream'},body:body as BodyInit}); }
+        catch { throw new TavoraError({code:'INTERNAL',message:'could not save the file'}); }
+        const result = await response.json().catch(() => null) as {fileName?:string|null;error?:ErrorPayload}|null;
+        if(response.ok && result?.fileName === null) return null;
+        if(response.ok && typeof result?.fileName === 'string') return {fileName:result.fileName};
+        throw new TavoraError(result?.error ?? {code: response.status === 404 || response.status === 405 ? 'UNKNOWN_METHOD' : 'INTERNAL',message:`could not save the file (${response.status})`});
+      },
+      open: async (options) => {
+        const types = options?.types ?? [...FILE_KINDS];
+        if (!Array.isArray(types) || !types.length || !types.every(kind => FILE_KINDS.includes(kind))) throw new TavoraError({code:'INVALID_PARAMS',message:'only csv and xlsx files can be opened'});
+        const address = new URL(FILE_OPEN_PATH, window.location.href);
+        address.searchParams.set('types', [...new Set(types)].join(','));
+        let response: Response;
+        try { response = await fetch(address, {method:'POST'}); }
+        catch { throw new TavoraError({code:'INTERNAL',message:'could not open the file'}); }
+        const kind = response.headers.get(FILE_KIND_HEADER);
+        if (response.ok && (kind === 'csv' || kind === 'xlsx')) {
+          let fileName: string;
+          try { fileName = decodeURIComponent(response.headers.get(FILE_NAME_HEADER) ?? ''); }
+          catch { throw new TavoraError({code:'INTERNAL',message:'could not open the file'}); }
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          return kind === 'xlsx' ? {fileName,type:'xlsx',bytes} : {fileName,type:'csv',text:decodeCsv(bytes)};
+        }
+        const result = await response.json().catch(() => null) as {error?:ErrorPayload}|null;
+        if(response.ok && result === null) return null;
+        throw new TavoraError(result?.error ?? {code: response.status === 404 || response.status === 405 ? 'UNKNOWN_METHOD' : 'INTERNAL',message:`could not open the file (${response.status})`});
       },
     },
     pictures: {

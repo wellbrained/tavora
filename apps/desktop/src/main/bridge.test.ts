@@ -432,7 +432,6 @@ describe("denied and malformed calls", () => {
   it.each([
     ["network.fetch", "network"],
     ["network.readPage", "network"],
-    ["files.open", "files"],
     ["clipboard.readText", "clipboard"],
     ["sharedData.read", "sharedData"],
   ])("denies %s with the capability it needs", async (method, capability) => {
@@ -447,6 +446,9 @@ describe("denied and malformed calls", () => {
     [{ method: "hasOwnProperty" }, "UNKNOWN_METHOD"],
     [{ method: "__proto__" }, "UNKNOWN_METHOD"],
     [{ method: 42 }, "UNKNOWN_METHOD"],
+    // files.open and files.save are module addresses, not bridge calls (like files.saveJson).
+    [{ method: "files.open" }, "UNKNOWN_METHOD"],
+    [{ method: "files.save" }, "UNKNOWN_METHOD"],
     [{ method: "storage.get", params: null }, "INVALID_PARAMS"],
     [{ method: "storage.get", params: [] }, "INVALID_PARAMS"],
     [{ method: "storage.get", params: { key: 7 } }, "INVALID_PARAMS"],
