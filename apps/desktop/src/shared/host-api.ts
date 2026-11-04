@@ -1264,6 +1264,8 @@ export interface TavoraHostApi {
   /** The dialog's page has drawn (or is hidden): the frame may show. */
   onPanelDialogDrawn(listener: (instanceId: string) => void): void;
   /** Where the dialog's frame leaves room for the panel's page, in window pixels; the host moves the page there. */
+  /** The dialog's frame is on screen: the host moves the panel's page into it. */
+  panelDialogShown(instanceId: string): void;
   placePanelDialog(bounds: { x: number; y: number; width: number; height: number }): void;
   /** The user closed the panel's dialog (its close button or a click beside it). */
   closePanelDialog(): void;

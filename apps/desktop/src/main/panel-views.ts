@@ -52,6 +52,11 @@ export function clampRect(raw: unknown, size: { width: number; height: number })
  * What Panel views needs from a panel's native view. ModuleView and BrowserPanel are the real ones; tests use a
  * fake that only counts calls.
  */
+/** How far left of its place a panel's page waits while its dialog's frame is not shown yet. */
+const OFFSCREEN_PX = 20000;
+/** The longest the page waits out of sight for the host UI to show the frame. */
+const SHOW_DIALOG_CAP_MS = 1500;
+
 export interface PanelViewAdapter {
   readonly kind: "module" | "browser";
   /** The panel as a hotkey hears it, for a module panel; a Browser panel has none. */
@@ -188,7 +193,7 @@ export class PanelViews {
    * dialog still on top, and the host UI only reports a change.
    */
   private dialogCovered = false;
-  private dialogState: { instanceId: string; width: number; height: number; bounds: PanelRect | null; still: Promise<string | null> } | null = null;
+  private dialogState: { instanceId: string; width: number; height: number; bounds: PanelRect | null; shown: boolean; still: Promise<string | null> } | null = null;
 
   constructor(private readonly deps: PanelViewsDeps) {}
 
@@ -423,7 +428,9 @@ export class PanelViews {
     // A panel in its dialog is placed there and stays in sight above the dimmed app, while the others step aside.
     const dialog = this.dialogState?.instanceId === instanceId ? (this.dialogState.bounds ?? undefined) : undefined;
     const rect = dialog ?? this.bounds.get(instanceId);
-    if (rect) adapter.setBounds(rect);
+    // Until the host UI shows the frame, the page is laid out of sight (far outside the window) so it can draw but not show bare.
+    const inFrame = this.dialogState?.instanceId === instanceId && !this.dialogState.shown;
+    if (rect) adapter.setBounds(dialog && inFrame ? { ...dialog, x: dialog.x - OFFSCREEN_PX } : rect);
     // Its panel shows a question in its place: the page waits, hidden, until it is answered.
     if (this.deps.asking(instanceId)) {
       adapter.setVisible(false);
@@ -653,7 +660,7 @@ export class PanelViews {
     if (this.dialogState?.instanceId === instanceId) return false;
     this.closeDialog();
     const still = this.canBePictured(instanceId, adapter) ? this.pictureOf(adapter) : Promise.resolve(null);
-    const state = { instanceId, ...size, bounds: null, still };
+    const state = { instanceId, ...size, bounds: null, shown: false, still };
     this.dialogState = state;
     void still.then(() => {
       if (this.dialogState === state) adapter.setInDialog(true);
@@ -675,7 +682,18 @@ export class PanelViews {
     this.layOut(open.instanceId, adapter);
     // The frame's own focus trap took the keys when it opened; the page, once in the frame, takes them over.
     if (first) void adapter.drawn.then(() => this.dialogState === open && this.deps.dialogDrawn?.(open.instanceId));
-    if (first && adapter.revealed && !this.dialogCovered && !this.deps.asking(open.instanceId)) adapter.focus();
+    if (first) setTimeout(() => this.showDialog(open.instanceId), SHOW_DIALOG_CAP_MS);
+  }
+
+  /** The host UI's frame is on screen (or took too long): the page moves into it, in the same step, and takes the keys. */
+  showDialog(instanceId: string): void {
+    const open = this.dialogState;
+    const adapter = open && this.get(open.instanceId);
+    if (!open || !adapter || open.instanceId !== instanceId || open.shown || open.bounds === null) return;
+    open.shown = true;
+    this.layOut(open.instanceId, adapter);
+    // The frame's own focus trap took the keys when it opened; the page, once in the frame, takes them over.
+    if (adapter.revealed && !this.dialogCovered && !this.deps.asking(open.instanceId)) adapter.focus();
   }
 
   /** A page dialog opened above the panel dialog, or the last one closed: the panel's view steps aside or comes back. */

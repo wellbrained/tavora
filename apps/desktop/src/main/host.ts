@@ -2005,6 +2005,9 @@ export class Host {
     ipcMain.on("host:panel-dialog-bounds", (event, raw: unknown) => {
       if (fromHost(event)) this.panels.placeDialog(raw);
     });
+    ipcMain.on("host:panel-dialog-shown", (event, instanceId: unknown) => {
+      if (fromHost(event) && typeof instanceId === "string") this.panels.showDialog(instanceId);
+    });
     ipcMain.on("host:panel-dialog-close", (event) => {
       if (fromHost(event)) this.panels.closeDialog();
     });
