@@ -33,9 +33,18 @@ test("the update marker shows what's new, the download's progress, and waits for
     await expect(page.getByTestId("update-popover-progress")).toBeVisible();
     await expect(page.getByTestId("rail-tile-progress")).toBeVisible();
 
-    // Closed while it downloads, the ring goes on, and the marker turns into Restart once it's done.
+    // Closed with a click beside it, the focus stays where it went: no outline on the marker next to its ring.
+    await page.mouse.click(800, 300);
+    await expect(popover).toHaveCount(0);
+    expect(await marker.evaluate((element) => element.matches(":focus-visible"))).toBe(false);
+
+    // Escape gives the focus back to the marker, for the keyboard.
+    await marker.click();
     await page.keyboard.press("Escape");
     await expect(popover).toHaveCount(0);
+    await expect(marker).toBeFocused();
+
+    // The ring goes on, and the marker turns into Restart once it's done.
     await expect(marker).toHaveAttribute("data-status", "ready", { timeout: 20_000 });
 
     await marker.click();

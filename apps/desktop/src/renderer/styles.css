@@ -232,6 +232,15 @@ html.overlay-pending :is(
     box-shadow: 0 0 0 10px color-mix(in oklab, var(--primary) 0%, transparent);
   }
 }
+/* In the compact rail its ring runs along the tile's edge, so the keyboard's focus outline goes just outside the tile
+   rather than around the wider button, where the two would look like a doubled border. */
+nav[data-expanded="false"] .update-marker:focus-visible {
+  outline: none;
+}
+nav[data-expanded="false"] .update-marker:focus-visible .footer-tile {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 .update-arrive {
   animation: update-arrive var(--duration-pulse) var(--ease-out-strong) 2;
 }

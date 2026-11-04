@@ -56,6 +56,14 @@ watch(open, (value) => setFloating(value));
 // The popover goes when the version does (installed, or the preview ended).
 watch(found, (u) => u === null && (open.value = false));
 
+// Closing by Escape gives the focus back to the marker, for the keyboard. Closing any other way (a click beside it,
+// often into a module panel) leaves it where it went: handing it back would light the marker's focus outline.
+let closedByKey = false;
+function closeAutoFocus(event: Event) {
+  if (!closedByKey) event.preventDefault();
+  closedByKey = false;
+}
+
 const allNotes = ref(false);
 watch(open, (value) => value || (allNotes.value = false));
 const notes = computed(() => {
@@ -71,7 +79,7 @@ const more = computed(() => !allNotes.value && (found.value?.notes.length ?? 0) 
       <PopoverTrigger as-child>
         <button
           type="button"
-          class="text-primary hover:bg-accent mx-2 flex items-center gap-2.5 rounded-lg px-1 transition-colors group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] focus-visible:-outline-offset-2"
+          class="update-marker text-primary hover:bg-accent mx-2 flex items-center gap-2.5 rounded-lg px-1 transition-colors group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] focus-visible:-outline-offset-2"
           data-rail-item
           data-testid="rail-update"
           :data-status="found.status"
@@ -85,7 +93,7 @@ const more = computed(() => !allNotes.value && (found.value?.notes.length ?? 0) 
         </button>
       </PopoverTrigger>
     </RailTooltip>
-    <PopoverContent side="right" align="end" :side-offset="10" class="w-[23rem] p-0" :aria-label="title" data-testid="update-popover">
+    <PopoverContent side="right" align="end" :side-offset="10" class="w-[23rem] p-0" :aria-label="title" data-testid="update-popover" @escape-key-down="closedByKey = true" @close-auto-focus="closeAutoFocus">
       <div class="p-4">
         <div class="flex items-baseline gap-3">
           <h2 class="text-sm font-semibold" data-testid="update-popover-title">{{ title }}</h2>
