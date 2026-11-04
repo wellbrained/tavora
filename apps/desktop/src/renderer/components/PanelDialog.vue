@@ -23,6 +23,17 @@ const SHOW_AFTER_MS = 700;
 /** False while the page has not drawn in the frame: an empty frame would show as a blank box before it. */
 const shown = ref(false);
 watch(panelDialogDrawn, (drawn) => drawn && (shown.value = true));
+// The frame is painted before the page moves into it, so the two appear in one step.
+watch(
+  shown,
+  async (now) => {
+    const dialog = panelDialog.value;
+    if (!now || !dialog) return;
+    await nextTick();
+    requestAnimationFrame(() => requestAnimationFrame(() => panelDialog.value === dialog && api.panelDialogShown(dialog.instanceId)));
+  },
+  { flush: "post" },
+);
 
 /** The workspace area the frame centres over, while a dialog is open. */
 const room = shallowRef<Room | null>(null);

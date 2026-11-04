@@ -497,6 +497,7 @@ describe("panel dialog", () => {
     expect(rig.views.snapshot().dialog).toEqual({ instanceId: A, width: 600, height: 400, placed: false });
     await rig.views.freeze(true);
     rig.views.placeDialog({ x: 100, y: 50, width: 600.4, height: 400 });
+    rig.views.showDialog(A);
     expect(a.bounds).toEqual({ x: 100, y: 50, width: 600, height: 400 });
     expect(a.visible).toBe(true);
     expect(b.visible).toBe(false);
@@ -512,8 +513,11 @@ describe("panel dialog", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(a.focused).toBe(0);
     rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    expect(a.focused).toBe(0);
+    rig.views.showDialog(A);
     expect(a.focused).toBe(1);
     rig.views.placeDialog({ x: 100, y: 60, width: 600, height: 400 });
+    rig.views.showDialog(A);
     expect(a.focused).toBe(1);
   });
 
@@ -544,6 +548,31 @@ describe("panel dialog", () => {
     expect(rig.calls).not.toContain(`dialogDrawn ${B}`);
   });
 
+  it("keeps the page out of sight until the frame is shown, then moves it in", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    expect(a.bounds!.x + a.bounds!.width).toBeLessThan(0);
+    expect(rig.views.snapshot().dialog?.placed).toBe(true);
+    rig.views.showDialog("other");
+    expect(a.bounds!.x).toBeLessThan(0);
+    rig.views.showDialog(A);
+    expect(a.bounds).toEqual({ x: 100, y: 50, width: 600, height: 400 });
+    expect(a.visible).toBe(true);
+  });
+
+  it("moves the page in on its own when the host UI never shows the frame", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(a.bounds).toEqual({ x: 100, y: 50, width: 600, height: 400 });
+  });
+
   it("does not focus the page of a dialog that closed, or one a question or page dialog covers", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);
@@ -555,6 +584,7 @@ describe("panel dialog", () => {
     rig.views.openDialog(A, { width: 600, height: 400 });
     rig.views.coverDialog(true);
     rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    rig.views.showDialog(A);
     expect(a.focused).toBe(0);
   });
 
