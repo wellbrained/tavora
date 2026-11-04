@@ -1,0 +1,96 @@
+/* The live view's plate (plate.ts sets the variables). Nothing on it can be clicked. The overlay page has no theme of
+   its own, so the plate is always dark with light text, as To-Dos' is: readable over any game. Its colours come from
+   Tavora Dark (palette.ts); the shade under the cells is the one exception, a plain dimming of the game. */
+.live-plate {
+  box-sizing: border-box;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  padding: var(--padding, 8px);
+  overflow: hidden;
+  border-radius: 0.6em;
+  background: color-mix(in srgb, black calc(var(--plate, 0.33) * 100%), transparent);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  line-height: 1.35;
+  user-select: none;
+  outline: none;
+  text-shadow: 0 1px 2px color-mix(in srgb, black 80%, transparent);
+}
+
+.live-plate[hidden] {
+  display: none;
+}
+
+.live-plate table {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.live-plate td,
+.live-plate th {
+  padding: 0.1em 0.45em;
+  overflow: hidden;
+  font-weight: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-plate th {
+  border-bottom: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.live-plate [data-align="c"] {
+  text-align: center;
+}
+
+.live-plate [data-align="r"] {
+  text-align: right;
+}
+
+.live-plate .bold {
+  font-weight: 700;
+}
+
+.live-plate .italic {
+  font-style: italic;
+}
+
+.live-plate .box {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 0.8em;
+  height: 0.8em;
+  vertical-align: -0.05em;
+  border: 0.1em solid currentColor;
+  border-radius: 0.2em;
+}
+
+.live-plate .box.ticked {
+  background: currentColor;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")
+      center / 85% no-repeat,
+    linear-gradient(black, black);
+  mask-composite: exclude;
+}
+
+.live-plate .pill {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 0.45em;
+  overflow: hidden;
+  border-radius: 999px;
+  text-overflow: ellipsis;
+  vertical-align: baseline;
+}
+
+.live-plate .more {
+  margin: 0.2em 0 0;
+  padding-left: 0.45em;
+  opacity: 0.6;
+}

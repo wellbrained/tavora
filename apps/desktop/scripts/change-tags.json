@@ -22,6 +22,7 @@
     { "tag": "clock-counter", "paths": ["modules/clock-counter/**"] },
     { "tag": "notes", "paths": ["modules/notes/**"] },
     { "tag": "pdf-viewer", "paths": ["modules/pdf-viewer/**"] },
+    { "tag": "spreadsheets", "paths": ["modules/spreadsheets/**"] },
     { "tag": "todos", "paths": ["modules/todos/**"] },
     { "tag": "whiteboard", "paths": ["modules/whiteboard/**"] },
     { "tag": "ui-kit", "paths": ["modules/shared/**", "modules/playground/**"] },

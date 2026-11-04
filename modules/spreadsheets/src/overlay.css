@@ -1,0 +1,12 @@
+/* The live view shown over the game: a transparent page with the plate (plate.css) in it. The kit's theme brings the
+   fonts; its page colours are taken off again. */
+@import "@tavora/official-ui/theme.css";
+
+html,
+body,
+#plate-root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}

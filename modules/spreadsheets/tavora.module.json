@@ -1,0 +1,22 @@
+{
+  "$schema": "../../packages/module-schema/schema/tavora.module.schema.json",
+  "id": "tavora.spreadsheets",
+  "name": "Spreadsheets",
+  "description": "Spreadsheets for this game, with formulas and sheets. Saved as you type.",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "minTavora": "0.23.102",
+  "entry": "dist/index.html",
+  "overlay": "dist/overlay.html",
+  "changelog": "changelog.json",
+  "games": [],
+  "viewport": { "minWidth": 360, "minHeight": 280, "preferredWidth": 720, "preferredHeight": 520 },
+  "inGame": true,
+  "translations": {
+    "de": {
+      "name": "Tabellen",
+      "description": "Tabellen für dieses Spiel, mit Formeln und Blättern. Wird beim Tippen gespeichert."
+    }
+  },
+  "permissions": { "network": [] }
+}
