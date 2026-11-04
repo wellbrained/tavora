@@ -517,6 +517,33 @@ describe("panel dialog", () => {
     expect(a.focused).toBe(1);
   });
 
+  it("tells the host UI the page has drawn in its frame, so the frame can show, but not for a dialog that closed first", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    let draw = () => {};
+    a.drawn = new Promise<void>((resolve) => (draw = resolve));
+    rig.views.place([place(A)]);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(rig.calls).not.toContain(`dialogDrawn ${A}`);
+    draw();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(rig.calls).toContain(`dialogDrawn ${A}`);
+    rig.calls.length = 0;
+    const b = rig.add(B);
+    let drawB = () => {};
+    b.drawn = new Promise<void>((resolve) => (drawB = resolve));
+    rig.views.place([place(A), place(B, 400)]);
+    rig.views.closeDialog();
+    rig.views.openDialog(B, { width: 600, height: 400 });
+    rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    rig.views.closeDialog();
+    drawB();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(rig.calls).not.toContain(`dialogDrawn ${B}`);
+  });
+
   it("does not focus the page of a dialog that closed, or one a question or page dialog covers", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);

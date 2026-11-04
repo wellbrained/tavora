@@ -105,6 +105,8 @@ export interface PanelViewsDeps {
   returned?(instanceId: string): void;
   /** The panel dialog closed (the host UI takes its frame away). */
   dialogClosed(): void;
+  /** The panel's page in its dialog has drawn (or will not: it is hidden), so the host UI may show the frame. */
+  dialogDrawn?(instanceId: string): void;
   /** The wait for a workspace's panels ended; `show`: the panels are placed now. */
   openingEnded(ended: { show: boolean; startedAt: number; tag: string }): void;
   /** Called first in every placement of the panels. */
@@ -672,6 +674,7 @@ export class PanelViews {
     open.bounds = rect;
     this.layOut(open.instanceId, adapter);
     // The frame's own focus trap took the keys when it opened; the page, once in the frame, takes them over.
+    if (first) void adapter.drawn.then(() => this.dialogState === open && this.deps.dialogDrawn?.(open.instanceId));
     if (first && adapter.revealed && !this.dialogCovered && !this.deps.asking(open.instanceId)) adapter.focus();
   }
 

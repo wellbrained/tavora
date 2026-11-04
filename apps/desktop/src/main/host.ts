@@ -428,6 +428,9 @@ export class Host {
       // The dialog's page may have held the keys; they go back to the host page (which returns focus to where it was).
       if (this.window.isFocused()) this.window.webContents.focus();
     },
+    dialogDrawn: (instanceId) => {
+      if (!this.window.isDestroyed()) this.window.webContents.send("host:panel-dialog-drawn", instanceId);
+    },
     openingEnded: (ended) => this.openingEnded(ended),
     placing: () => this.tooltips?.ensureVisible(),
     overlayOpening: () => {

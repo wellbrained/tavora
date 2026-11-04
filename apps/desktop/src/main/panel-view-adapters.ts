@@ -53,6 +53,9 @@ export class ModulePanelView implements PanelViewAdapter {
   setInDialog(open: boolean): void {
     this.panel.setInDialog(open);
   }
+  focus(): void {
+    this.panel.focus();
+  }
   setMaximized(maximized: boolean): void {
     this.panel.setMaximized(maximized);
   }
@@ -99,6 +102,7 @@ export class BrowserPanelView implements PanelViewAdapter {
     this.panel.resume();
   }
   setInDialog(): void {}
+  focus(): void {}
   setMaximized(): void {}
   capture(): Promise<string | null> {
     return stillOf(this.panel.view);

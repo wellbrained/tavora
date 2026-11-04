@@ -90,6 +90,7 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
     shownHere: (id) => !world.away.has(id),
     returned: (id) => void calls.push(`returned ${id}`),
     dialogClosed: () => void calls.push("dialogClosed"),
+    dialogDrawn: (id) => void calls.push(`dialogDrawn ${id}`),
     openingEnded: ({ show, tag }) => void ended.push({ show, tag }),
     overlayOpening: () => void calls.push("overlayOpening"),
     frozen: (images) => void frozen.push(images),
