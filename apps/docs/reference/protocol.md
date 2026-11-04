@@ -461,8 +461,8 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `files.exportJson` | 0.19.17 |  | always |
 | `files.saveJson` | 0.21.13 |  | always |
 | `files.openJson` | 0.21.13 |  | always |
-| `files.save` | 0.23.101 |  | always |
-| `files.open` | 0.23.101 |  | always |
+| `files.save` | 0.23.102 |  | always |
+| `files.open` | 0.23.102 |  | always |
 | `pictures.save` | 0.17.19 |  | always |
 
 <!-- protocol-index:end -->
@@ -645,7 +645,7 @@ source data or destroying the triggering UI. Underlying panels remain live.
 
 They go through module addresses rather than bridge calls so a document up to 8 MiB does not hit the bridge's message limit, like `pictures.save`.
 
-## Saving and opening CSV and Excel files (Tavora 0.23.101+)
+## Saving and opening CSV and Excel files (Tavora 0.23.102+)
 
 `sdk.files.save(data, { type, name? })` saves a `.csv` (`data` is the text) or an `.xlsx` (`data` is the bytes) where the user says, and `sdk.files.open({ types? })` opens one they pick. They use the same dialogs and the same remembered folder per module as `saveJson` and `openJson` (at first `DocumentsTavora`). Only these two extensions can be chosen.
 

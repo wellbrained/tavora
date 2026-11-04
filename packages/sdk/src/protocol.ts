@@ -1554,8 +1554,8 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "files.exportJson": call("0.19.17", null, true),
   "files.saveJson": later("0.21.13", null, true),
   "files.openJson": later("0.21.13", null, true),
-  "files.save": later("0.23.101", null, true),
-  "files.open": later("0.23.101", null, true),
+  "files.save": later("0.23.102", null, true),
+  "files.open": later("0.23.102", null, true),
   "pictures.save": call("0.17.19", null, true),
 };
 

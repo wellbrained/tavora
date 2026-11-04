@@ -479,7 +479,7 @@ export interface TavoraSDK {
      * when the user closed the dialog; the module never learns the folder. Replacing a file needs the user's OK in
      * the dialog. An xlsx that is not a zip, or a csv that is not UTF-8 text, is INVALID_PARAMS.
      * Call it from the click or key press that asked for it (PERMISSION_DENIED otherwise); one press saves one file.
-     * Needs Tavora 0.23.101 or newer: check `sdk.supports("files.save")`.
+     * Needs Tavora 0.23.102 or newer: check `sdk.supports("files.save")`.
      */
     save(data: string | Uint8Array, options: { type: FileKind; name?: string }): Promise<{ fileName: string } | null>;
     /**
@@ -488,7 +488,7 @@ export interface TavoraSDK {
      * (a CSV as text, read as UTF-8, or as Windows-1252 when it is not UTF-8; an xlsx as bytes), at most 8 MiB
      * (QUOTA_EXCEEDED), or null when the user closed the dialog. The module never learns the folder.
      * Call it from the click or key press that asked for it (PERMISSION_DENIED otherwise); one press opens one file.
-     * Needs Tavora 0.23.101 or newer: check `sdk.supports("files.open")`.
+     * Needs Tavora 0.23.102 or newer: check `sdk.supports("files.open")`.
      */
     open(options?: { types?: FileKind[] }): Promise<OpenedFile | null>;
   };

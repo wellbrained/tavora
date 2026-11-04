@@ -528,13 +528,13 @@ describe("scripted answers", () => {
     expect(await failure(sdk.files.open())).toMatchObject({ code: "PERMISSION_DENIED" });
   });
 
-  it("only has files.save and files.open from Tavora 0.23.101", async () => {
-    expect(createMemoryHost({ version: "0.23.100" }).sdk.supports("files.save")).toBe(false);
-    expect(createMemoryHost({ version: "0.23.100" }).sdk.supports("files.open")).toBe(false);
-    const { sdk } = createMemoryHost({ version: "0.23.101" });
+  it("only has files.save and files.open from Tavora 0.23.102", async () => {
+    expect(createMemoryHost({ version: "0.23.101" }).sdk.supports("files.save")).toBe(false);
+    expect(createMemoryHost({ version: "0.23.101" }).sdk.supports("files.open")).toBe(false);
+    const { sdk } = createMemoryHost({ version: "0.23.102" });
     expect(sdk.supports("files.save")).toBe(true);
     expect(sdk.supports("files.open")).toBe(true);
-    expect(await failure(createMemoryHost({ version: "0.23.100" }).sdk.files.open())).toMatchObject({ code: "UNKNOWN_METHOD" });
+    expect(await failure(createMemoryHost({ version: "0.23.101" }).sdk.files.open())).toMatchObject({ code: "UNKNOWN_METHOD" });
   });
 
   it("keeps overlays and hotkeys in memory", async () => {
