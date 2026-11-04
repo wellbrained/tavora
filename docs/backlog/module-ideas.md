@@ -14,7 +14,12 @@ An overlay that shows a keyboard, a controller or both, with the keys you press 
 
 ## Other ideas
 
-- **Soundboard**: short clips on hotkeys, also on stream.
+- **Sounds** (one module, two panel types that share one sound library):
+  - **Soundboard**: short clips on hotkeys, also on stream.
+  - **Ambience**: looping rain, tavern or dungeon sounds in layers, each with its own volume, for tabletop nights or focus.
+  - Gapless loops with Web Audio (`loop = true` on a decoded buffer) plus a short crossfade. Test that sound keeps playing while the panel is hidden.
+  - Sounds: generate rain, wind, fire and noise in code; the rest from CC0 (Freesound, OpenGameArt) with a credits file. Avoid NonCommercial, Sonniss and Pixabay (no redistribution as files).
+  - Own sounds need a new Tavora file call; modules can only open JSON today.
 - **Screenshots**: your latest shots of the game, ready to look at or drop onto the Whiteboard.
 - **Dice Tray**: dice and a coin for tabletop RPGs and board games.
   - Every die games use: d4, d6, d8, d10, d12, d20, d100 (two d10), Fate dice, and custom dice with your own faces.
