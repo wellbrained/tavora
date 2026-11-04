@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.108",
+    date: "2026-11-04",
+    title: "Tidier panel tabs",
+    notes: [
+      "The line under the open tab now lines up with the top of the panel, with no grey notch at the corner.",
+    ],
+    prs: [
+      { number: 681, title: "Framed panels: the open tab's line starts where the module's top edge is straight" },
+    ],
+    tags: ["workspace"],
+  },
+  {
     version: "0.23.107",
     date: "2026-11-04",
     title: "Spreadsheets",
