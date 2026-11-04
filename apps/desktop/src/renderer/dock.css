@@ -75,6 +75,9 @@
   --panel-lift-border: color-mix(in srgb, var(--foreground) 22%, var(--border));
   --panel-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
   --panel-folder-back: rgb(0 0 0 / 0.06);
+  /* Framed and Folders: how far the module sits inside its frame, and the corner radius of its top edge. */
+  --panel-inset: 6px;
+  --panel-body-radius: 9px;
 }
 :root.dark {
   --panel-canvas: color-mix(in srgb, var(--background) 55%, black);
@@ -135,12 +138,21 @@
   border-bottom: none;
 }
 :root:is([data-panel-style="framed"], [data-panel-style="folders"]) .dockview-theme-tavora .dv-content-container {
-  padding: 0 6px 6px;
+  padding: 0 var(--panel-inset) var(--panel-inset);
 }
 :root:is([data-panel-style="framed"], [data-panel-style="folders"]) .panel-body {
-  border-radius: 9px;
+  border-radius: var(--panel-body-radius);
   overflow: hidden;
   background: var(--background);
+}
+
+/* Framed: the tabs start where the module's top edge turns straight (past the frame's inset and the corner), and the
+   actions end there too, so the open tab's line never runs over the corner's notch. */
+:root[data-panel-style="framed"] .dockview-theme-tavora .dv-tabs-and-actions-container > .dv-scrollable {
+  margin-left: calc(var(--panel-inset) + var(--panel-body-radius));
+}
+:root[data-panel-style="framed"] .dockview-theme-tavora .dv-right-actions-container {
+  margin-right: calc(var(--panel-inset) + var(--panel-body-radius));
 }
 
 /* Framed: a line between tabs, the open tab underlined (gold in the panel you work in, grey in the others). */
