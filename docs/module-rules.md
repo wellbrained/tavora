@@ -171,6 +171,9 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Descriptions**: inside one section either every row has a description or none does. Never one row with and one
   without.
 - **Units go in the description** ("In minutes.", "In percent."), never next to the last option or inside the options.
+- **Give controls room.** Never squeeze a segmented choice, select or field so its labels overlap, touch the edges or
+  lose their padding. When a row is too narrow, put the control under its label; when a page needs more width, ask
+  `settingsDialogSize` for it. Check every page in German too, where words are longer.
 
 ## 4. Behaviour
 
@@ -263,7 +266,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Menus and tooltips anchor to their element; no hover-only actions.
 - [ ] Motion uses the kit's tokens, animates only `transform` and `opacity`, and leaves out anything a key starts.
 - [ ] Dialogs use the header, footer and `DialogButton` as in [Dialogs](#dialogs); a close-only button has no icon.
-- [ ] Settings use `ModuleSettings`, ask for their size with `settingsDialogSize`, have no Done button, and follow the [Settings](#settings) rules for descriptions and units.
+- [ ] Settings use `ModuleSettings`, ask for their size with `settingsDialogSize`, have no Done button, and follow the [Settings](#settings) rules for descriptions, units and room (checked in German).
 - [ ] Keyboard: Tab reaches everything, Escape closes, focus ring visible.
 - [ ] `pnpm typecheck`, `pnpm test` and `pnpm build` pass.
 - [ ] The module's `DESIGN.md` (if any) does not contradict this file.
