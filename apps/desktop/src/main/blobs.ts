@@ -1,4 +1,5 @@
-// Files (pictures and PDFs) a module keeps for one workspace: one folder per module and workspace, files named by
+// Files (pictures, PDFs and sounds) a module keeps for one workspace, or for every workspace (blobs.app): one folder
+// per module and workspace (or `_app`), files named by
 // the host (32 hex characters and an extension from what the file turned out to be). A module
 // never gives a name or a path; it gets an id back. Reading and writing go through the module's
 // own address (see module-view.ts), so a file is never held in memory whole.
@@ -16,6 +17,9 @@ const EXTENSIONS: Record<BlobType, string> = {
   "image/gif": "gif",
   "image/webp": "webp",
   "application/pdf": "pdf",
+  "audio/mpeg": "mp3",
+  "audio/ogg": "ogg",
+  "audio/wav": "wav",
 };
 const TYPE_BY_EXTENSION = new Map(Object.entries(EXTENSIONS).map(([type, extension]) => [extension, type as BlobType]));
 
@@ -35,6 +39,11 @@ export function sniffType(head: Uint8Array): BlobType | null {
   if (is(0, [0x47, 0x49, 0x46, 0x38]) && (head[4] === 0x37 || head[4] === 0x39) && head[5] === 0x61) return "image/gif";
   if (is(0, [0x52, 0x49, 0x46, 0x46]) && is(8, [0x57, 0x45, 0x42, 0x50])) return "image/webp";
   if (is(0, [0x25, 0x50, 0x44, 0x46, 0x2d])) return "application/pdf";
+  if (is(0, [0x52, 0x49, 0x46, 0x46]) && is(8, [0x57, 0x41, 0x56, 0x45])) return "audio/wav";
+  if (is(0, [0x4f, 0x67, 0x67, 0x53])) return "audio/ogg";
+  // MP3: an ID3 tag first, or straight away an MPEG audio frame (11 sync bits, a known version, layer III).
+  if (is(0, [0x49, 0x44, 0x33])) return "audio/mpeg";
+  if (head[0] === 0xff && ((head[1] ?? 0) & 0xe0) === 0xe0 && ((head[1] ?? 0) & 0x18) !== 0x08 && ((head[1] ?? 0) & 0x06) === 0x02) return "audio/mpeg";
   return null;
 }
 
@@ -57,6 +66,8 @@ export class BlobStore {
     private readonly limits: BlobLimits = BLOB_LIMITS,
     /** True while the files are being moved to another folder, when nothing new may be added. */
     private readonly locked: () => boolean = () => false,
+    /** What the total is counted over, for the message when it is full. */
+    private readonly scope: "workspace" | "app" = "workspace",
   ) {}
 
   list(): Promise<BlobInfo[]> {
@@ -77,7 +88,7 @@ export class BlobStore {
 
   /**
    * Stores what the stream delivers. Refused, with nothing left behind, when it is empty, larger than
-   * one file may be, would take the module past its total, or is not a picture or PDF of a kind we accept.
+   * one file may be, would take the module past its total, or is not a picture, PDF or sound of a kind we accept.
    */
   put(body: AsyncIterable<Uint8Array>, declaredBytes?: number): Promise<BlobInfo> {
     if (this.locked()) return Promise.reject(new HostError("INTERNAL", "pictures are being moved to another folder; try again in a moment"));
@@ -190,10 +201,10 @@ export class BlobStore {
   }
 
   private tooMuch(): HostError {
-    return new HostError("QUOTA_EXCEEDED", `files are limited to ${this.limits.maxTotalBytes} bytes per module and workspace`);
+    return new HostError("QUOTA_EXCEEDED", `files are limited to ${this.limits.maxTotalBytes} bytes per module and ${this.scope === "app" ? "for every workspace together" : "workspace"}`);
   }
 
   private notAccepted(): HostError {
-    return new HostError("INVALID_PARAMS", "only PNG, JPEG, GIF and WebP pictures and PDF files can be stored");
+    return new HostError("INVALID_PARAMS", "only PNG, JPEG, GIF and WebP pictures, PDF files and MP3, Ogg and WAV sounds can be stored");
   }
 }

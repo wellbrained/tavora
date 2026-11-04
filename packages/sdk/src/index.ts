@@ -9,6 +9,7 @@ import {
   MIN_TAVORA,
   supportsCall,
   type SupportedCall,
+  APP_BLOB_PATH,
   BLOB_PATH,
   CLIPBOARD_PATH,
   PICTURES_PATH,
@@ -132,6 +133,7 @@ export type {
   BlobInfo,
   BlobType,
   PictureType,
+  AudioType,
   BlobUsage,
   Capability,
   DiscordCommand,
@@ -163,7 +165,7 @@ export type {
   ThemeToken,
   ToastPosition,
 } from "./protocol.js";
-export { BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PICTURE_TYPES, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, OPTIONAL_THEME_TOKENS, THEME_TOKENS, TOAST_POSITIONS } from "./protocol.js";
+export { AUDIO_TYPES, BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PICTURE_TYPES, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, OPTIONAL_THEME_TOKENS, THEME_TOKENS, TOAST_POSITIONS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;
@@ -204,6 +206,18 @@ export class TavoraError extends Error {
 }
 
 type Unsubscribe = () => void;
+
+/** A module's stored files (blobs), for one workspace or (blobs.app) for every workspace. */
+export interface BlobFiles {
+  /** Stores a file and returns its id. Rejects with QUOTA_EXCEEDED, or INVALID_PARAMS for another kind of file. */
+  put(file: Blob): Promise<BlobInfo>;
+  /** The address to show or play a stored file from, for example as an image source, or to fetch a sound to decode. */
+  url(id: string): string;
+  list(): Promise<BlobInfo[]>;
+  usage(): Promise<BlobUsage>;
+  /** Deletes a file; nothing happens when it does not exist. */
+  delete(id: string): Promise<void>;
+}
 
 /** Small key/value settings: at most 5 MB of keys and values together, values plain JSON. */
 export interface KeyValueStore {
@@ -382,19 +396,17 @@ export interface TavoraSDK {
     };
   };
   /**
-   * Files (pictures) this module keeps in the current workspace, shared by all of its panels. They live
-   * in a folder Tavora manages, not in a document, so they can be large: up to 50 MB each and
-   * 500 MB together. Only PNG, JPEG, GIF and WebP are accepted, judged by the file itself.
+   * Files (pictures, PDFs and sounds) this module keeps in the current workspace, shared by all of its panels. They
+   * live in a folder Tavora manages, not in a document, so they can be large: up to 50 MB each and 500 MB together.
+   * Only PNG, JPEG, GIF and WebP pictures, PDFs and (Tavora 0.23.101 and newer) MP3, Ogg and WAV sounds are
+   * accepted, judged by the file itself.
    */
-  blobs: {
-    /** Stores a file and returns its id. Rejects with QUOTA_EXCEEDED, or INVALID_PARAMS for another kind of file. */
-    put(file: Blob): Promise<BlobInfo>;
-    /** The address to show a stored file from, for example as an image source. */
-    url(id: string): string;
-    list(): Promise<BlobInfo[]>;
-    usage(): Promise<BlobUsage>;
-    /** Deletes a file; nothing happens when it does not exist. */
-    delete(id: string): Promise<void>;
+  blobs: BlobFiles & {
+    /**
+     * The same for files this module shares across every workspace, such as a library the user builds once, with
+     * limits of their own. Tavora 0.23.101 and newer: set `minTavora`, or check `sdk.supports("blobs.app.put")`.
+     */
+    app: BlobFiles;
   };
   clipboard: {
     /**
@@ -857,6 +869,33 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
 
   const host = await call("bridge.handshake", { protocol: PROTOCOL_VERSION, sdkVersion: SDK_VERSION });
 
+  /** Files at `path` (BLOB_PATH or APP_BLOB_PATH), listed and deleted through the calls under `prefix`. */
+  const blobFiles = (path: string, prefix: "blobs" | "blobs.app"): BlobFiles => ({
+    put: async (file) => {
+      let response: Response;
+      try {
+        response = await fetch(new URL(path, window.location.href), {
+          method: "POST",
+          body: file,
+          headers: { "Content-Type": file.type || "application/octet-stream" },
+        });
+      } catch {
+        throw new TavoraError({ code: "INTERNAL", message: "could not store the file" });
+      }
+      const body = (await response.json().catch(() => null)) as (BlobInfo & { error?: ErrorPayload }) | null;
+      if (!response.ok || !body || body.error) {
+        throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not store the file (${response.status})` });
+      }
+      return body;
+    },
+    url: (id) => new URL(`${path}${encodeURIComponent(id)}`, window.location.href).href,
+    list: () => call(`${prefix}.list`),
+    usage: () => call(`${prefix}.usage`),
+    delete: async (id) => {
+      await call(`${prefix}.delete`, { id });
+    },
+  });
+
   // panel.onNavigate: Tavora asks, the handler saves and switches, and the answer says how it went.
   let navigate: ((content: PanelContent) => void | Promise<void>) | null = null;
   on("panel.navigate", ({ requestId, content }) => {
@@ -982,29 +1021,8 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       },
     },
     blobs: {
-      put: async (file) => {
-        let response: Response;
-        try {
-          response = await fetch(new URL(BLOB_PATH, window.location.href), {
-            method: "POST",
-            body: file,
-            headers: { "Content-Type": file.type || "application/octet-stream" },
-          });
-        } catch {
-          throw new TavoraError({ code: "INTERNAL", message: "could not store the file" });
-        }
-        const body = (await response.json().catch(() => null)) as (BlobInfo & { error?: ErrorPayload }) | null;
-        if (!response.ok || !body || body.error) {
-          throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not store the file (${response.status})` });
-        }
-        return body;
-      },
-      url: (id) => new URL(`${BLOB_PATH}${encodeURIComponent(id)}`, window.location.href).href,
-      list: () => call("blobs.list"),
-      usage: () => call("blobs.usage"),
-      delete: async (id) => {
-        await call("blobs.delete", { id });
-      },
+      ...blobFiles(BLOB_PATH, "blobs"),
+      app: blobFiles(APP_BLOB_PATH, "blobs.app"),
     },
     clipboard: {
       writeImage: async (png) => {

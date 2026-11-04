@@ -190,6 +190,22 @@ describe("DataRegistry", () => {
     expect(() => registry.appSettings("local", "../x")).toThrow();
   });
 
+  it("keeps the files shared by every workspace in the files folder next to the workspaces' own", async () => {
+    const files = path.join(dir, "files");
+    const registry = new DataRegistry(dir, () => files);
+    const wav = Uint8Array.from([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x41, 0x56, 0x45, 0, 0, 0, 0]);
+    async function* body() {
+      yield wav;
+    }
+    const info = await registry.appBlobs("local", "local.example.a").put(body());
+    expect(info.type).toBe("audio/wav");
+    expect(await registry.get("local", "local.example.a", "poe2").blobs.list()).toEqual([]);
+    expect(await registry.appBlobs("local", "local.example.b").list()).toEqual([]);
+    expect(await readdir(path.join(files, "local", "local.example.a", "_app"))).toEqual([`${info.id}.wav`]);
+    expect(registry.appBlobs("local", "local.example.a")).toBe(registry.appBlobs("local", "local.example.a"));
+    expect(() => registry.appBlobs("local", "../x")).toThrow();
+  });
+
   it("reads the shared settings from disk again once a module's data is forgotten", async () => {
     const registry = new DataRegistry(dir);
     const store = registry.appSettings("local", "local.example.a");

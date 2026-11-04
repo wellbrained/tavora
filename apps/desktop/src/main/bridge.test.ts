@@ -57,6 +57,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     workspace: { id: "poe2", displayName: "Path of Exile 2", kind: "game" },
     data: registry.get("local", moduleId, "poe2"),
     appSettings: registry.appSettings("local", moduleId),
+    appBlobs: registry.appBlobs("local", moduleId),
     aiUsage: { accounts: () => Promise.reject(new Error("no AI accounts in this test")), read: () => Promise.reject(new Error("no AI accounts in this test")) },
     systemInfo: {
       info: () => { throw new Error("no system info in this test"); },
@@ -966,6 +967,13 @@ describe("blobs", () => {
       expect(await call(port, "blobs.delete", params)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
     }
     expect(await call(port, "blobs.list", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  });
+
+  it("answers the same for the files of every workspace (blobs.app)", async () => {
+    expect(await call(port, "blobs.app.list")).toMatchObject({ ok: true, result: [] });
+    expect(await call(port, "blobs.app.usage")).toMatchObject({ ok: true, result: { bytes: 0, count: 0, maxBytes: LIMITS.maxBlobsBytes } });
+    expect(await call(port, "blobs.app.delete", { id: "0".repeat(32) })).toMatchObject({ ok: true, result: null });
+    expect(await call(port, "blobs.app.delete", { id: "../etc/passwd" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   });
 });
 

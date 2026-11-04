@@ -3868,6 +3868,7 @@ export class Host {
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
+      appBlobs: this.data.appBlobs(module.owner, module.manifest.id),
       leaderboards: this.leaderboardsOf(module, (question) => this.askLeaderboard(record.instanceId, record.moduleId, question)),
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
       discord: this.discord,

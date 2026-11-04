@@ -80,6 +80,7 @@ Methods without params must be sent with `params` left out.
 | `blobs.list` | none | `BlobInfo[]` (`{ id, bytes, type, createdAt }`), oldest first |
 | `blobs.usage` | none | `{ bytes, count, maxBytes, maxFileBytes }` for this module and workspace |
 | `blobs.delete` | `{ id }` | `null` (also when the file did not exist); `INVALID_PARAMS` for an id the host did not make |
+| `blobs.app.list`, `blobs.app.usage`, `blobs.app.delete` | as above | the same for the module's files shared by every workspace, see [Files](#files-blobs). Tavora 0.23.101+ |
 | `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius, toasts }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`, with `toast`, `toast-foreground` and the three `primary-fill` tokens always filled in), `radius` is in CSS pixels, `toasts` is where the user wants toasts (`bottom-center`, `bottom-right` or `top-center`; older Tavora leaves it out) |
 | `network.fetch` | `{ url, method?, headers?, body?, responseType? }` | `{ status, url, headers, body }`; needs the `network` capability, see [Network](#network) |
 | `network.readPage` | `{ url }` | `{ status, url, title, html }`; isolated public page capture, same `network` grant, Tavora 0.19.3+ |
@@ -121,7 +122,8 @@ Methods without params must be sent with `params` left out.
 | `storage` | module + workspace, shared by all its panels | never by closing panels; later by uninstalling (Milestone C) |
 | `storage.app` | module, shared by all its panels in every workspace | never by closing panels or deleting a workspace; with the module's data in Settings > Modules |
 | `documents` | module + workspace, shared by all its panels | as above |
-| `blobs` (pictures) | module + workspace, shared by all its panels | the workspace is deleted from the Trash; never by closing panels |
+| `blobs` (pictures, PDFs, sounds) | module + workspace, shared by all its panels | the workspace is deleted from the Trash; never by closing panels |
+| `blobs.app` | module, shared by all its panels in every workspace | never by closing panels or deleting a workspace; with the module's data in Settings > Modules |
 | `panel` state | one panel instance | the panel is closed |
 | panel content (`panel.setContent`) | one panel instance | the panel is closed |
 
@@ -129,12 +131,14 @@ A module never sees another module's data, or its own data for another workspace
 
 ### Files (blobs)
 
-A module can keep pictures and PDF files that are too big for a document: up to 50 MB each and 500 MB together per module and workspace. They live in a folder Tavora manages (`module-blobs` in its data folder by default; the user can move it in Settings > Modules), shared by all of the module's panels, and are removed with the workspace.
+A module can keep pictures, PDF files and sounds that are too big for a document: up to 50 MB each and 500 MB together per module and workspace. They live in a folder Tavora manages (`module-blobs` in its data folder by default; the user can move it in Settings > Modules), shared by all of the module's panels, and are removed with the workspace.
+
+`sdk.blobs.app` (Tavora 0.23.101 and newer) is the same for files the module shares across every workspace, such as a sound library the user builds once: `put`, `url`, `list`, `usage` and `delete`, at `/_app-blobs/`, with limits of their own (50 MB each, 500 MB together per module). They stay when a workspace is deleted and go with the module's data in Settings > Modules. Set `minTavora`, or check `sdk.supports("blobs.app.put")`.
 
 - **Storing:** `sdk.blobs.put(file)` sends the file to the module's own address, `POST /_blobs/`, as the request body, so it is streamed to disk and never held in memory whole. The answer is a `BlobInfo`: `id` (32 lowercase hex characters chosen by the host), `bytes`, `type` and `createdAt`. A module never names a file.
-- **Showing:** `sdk.blobs.url(id)` is the address to use as an image source (`GET /_blobs/<id>`). It only works from the module's own page.
-- **What is accepted:** PNG, JPEG, GIF and WebP pictures and PDF files, judged by the first bytes of the file itself (`%PDF-` for a PDF), never by its name or type. Anything else (SVG, BMP, other documents, scripts) is refused with `INVALID_PARAMS`. Over the limits it is `QUOTA_EXCEEDED`, and nothing is left behind.
-- **Serving:** each file is sent with its real type, `X-Content-Type-Options: nosniff` and a policy that lets it load nothing, so a picture can only be shown. A PDF also carries `Content-Disposition: attachment`: Tavora never shows it as a page, the module reads the bytes and draws them itself. The SDK exports `PICTURE_TYPES` (the four pictures) and `BLOB_TYPES` (those and `application/pdf`). A Tavora from before PDF support refuses a PDF with `INVALID_PARAMS`.
+- **Showing:** `sdk.blobs.url(id)` is the address to use as an image source (`GET /_blobs/<id>`). It only works from the module's own page. For a sound, `fetch` it and decode it with Web Audio (`decodeAudioData`), or use it as an `<audio>` source.
+- **What is accepted:** PNG, JPEG, GIF and WebP pictures, PDF files and (Tavora 0.23.101 and newer) MP3, Ogg and WAV sounds, judged by the first bytes of the file itself (`%PDF-` for a PDF; an ID3 tag or an MPEG layer III frame for an MP3, `OggS` for Ogg, `RIFF`…`WAVE` for WAV), never by its name or type. Anything else (SVG, BMP, other documents, scripts) is refused with `INVALID_PARAMS`. Over the limits it is `QUOTA_EXCEEDED`, and nothing is left behind.
+- **Serving:** each file is sent with its real type, `X-Content-Type-Options: nosniff` and a policy that lets it load nothing, so a picture can only be shown. A PDF also carries `Content-Disposition: attachment`: Tavora never shows it as a page, the module reads the bytes and draws them itself. The SDK exports `PICTURE_TYPES` (the four pictures), `AUDIO_TYPES` (`audio/mpeg`, `audio/ogg`, `audio/wav`) and `BLOB_TYPES` (all of them and `application/pdf`). A Tavora from before PDF or sound support refuses that file with `INVALID_PARAMS`.
 
 ### Clipboard
 
@@ -403,6 +407,9 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `blobs.list` | 0.12.0 |  |  |
 | `blobs.usage` | 0.12.0 |  |  |
 | `blobs.delete` | 0.12.0 |  |  |
+| `blobs.app.list` | 0.23.101 |  |  |
+| `blobs.app.usage` | 0.23.101 |  |  |
+| `blobs.app.delete` | 0.23.101 |  |  |
 | `network.fetch` | 0.16.8 | `network` |  |
 | `network.readPage` | 0.19.3 | `network` |  |
 | `aiUsage.accounts` | 0.16.10 | `aiUsage` |  |
@@ -444,6 +451,7 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `hotkeys.set` | 0.19.26 |  | always |
 | `hotkeys.remove` | 0.19.26 |  |  |
 | `blobs.put` | 0.12.0 |  |  |
+| `blobs.app.put` | 0.23.101 |  |  |
 | `clipboard.writeImage` | 0.14.1 |  | always |
 | `files.pickReadOnly` | 0.21.13 |  | always |
 | `files.forget` | 0.21.13 |  |  |
@@ -563,7 +571,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | Panel content (`panel.setContent`) | `id` 200 characters, `title` 200 characters |
 | `panels.open` | one per click or key press; the panel asked to switch has 5 s |
 | `panels.openMany` | one call per click or key press, 1 to 16 types, each once |
-| Stored files (`blobs`) | 50 MB each, 500 MB per module and workspace; PNG, JPEG, GIF, WebP and PDF only |
+| Stored files (`blobs`) | 50 MB each, 500 MB per module and workspace (`blobs.app`: 500 MB per module); PNG, JPEG, GIF, WebP, PDF, MP3, Ogg and WAV only |
 | `clipboard.writeImage` | one PNG per click or key press, at most 20 MB, 16384 pixels on a side and 100 million pixels |
 | `pictures.save` | the same as `clipboard.writeImage`; names up to 80 characters |
 | `files.saveJson`, `files.openJson` | one file per click or key press, JSON up to 8 MiB; names up to 80 characters |

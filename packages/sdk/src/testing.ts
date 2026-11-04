@@ -4,6 +4,7 @@
 import { menuParams, tooltipParams, tooltipShowParams } from "./anchor.js";
 import { SDK_VERSION, TavoraError, type KeyValueStore, type TavoraSDK } from "./index.js";
 import {
+  APP_BLOB_PATH,
   BLOB_PATH,
   BLOB_TYPES,
   DOCUMENT_ID,
@@ -16,6 +17,7 @@ import {
   THEME_TOKENS,
   versionAtLeast,
   type BlobInfo,
+  type BlobUsage,
   type CallName,
   type Capability,
   type DocumentChange,
@@ -289,6 +291,8 @@ interface Shared {
   documents: Map<string, StoredDocument>;
   seq: number;
   blobs: Map<string, BlobInfo>;
+  /** blobs.app: the module's files for every workspace. */
+  appBlobs: Map<string, BlobInfo>;
   overlays: Map<string, JsonValue>;
   gameOverlays: Set<string>;
   hotkeys: HotkeyBinding[];
@@ -451,6 +455,26 @@ const DIALOG = { min: 240, max: 2000, width: 560, height: 640 } as const;
 
 type Handlers = { [M in CallName]?: (panel: Panel, params: Params<M>) => Result<M> | Promise<Result<M>> };
 
+/** blobs.put and blobs.app.put: the type is the Blob's own here, where the real host looks at the bytes. */
+function putBlob(shared: Shared, blobs: Map<string, BlobInfo>, file: Blob, scope: string): BlobInfo {
+  if (!(BLOB_TYPES as readonly string[]).includes(file.type)) fail("INVALID_PARAMS", "only PNG, JPEG, GIF and WebP pictures, PDF files and MP3, Ogg and WAV sounds can be stored");
+  if (file.size > shared.limits.maxBlobBytes) fail("QUOTA_EXCEEDED", `a file is limited to ${shared.limits.maxBlobBytes} bytes`);
+  const used = [...blobs.values()].reduce((sum, blob) => sum + blob.bytes, 0);
+  if (used + file.size > shared.limits.maxBlobsBytes) fail("QUOTA_EXCEEDED", `files are limited to ${shared.limits.maxBlobsBytes} bytes per module and ${scope}`);
+  const info: BlobInfo = { id: randomId().replaceAll("-", ""), bytes: file.size, type: file.type as BlobInfo["type"], createdAt: new Date(shared.now()).toISOString() };
+  blobs.set(info.id, info);
+  return { ...info };
+}
+
+function blobUsage(shared: Shared, blobs: Map<string, BlobInfo>): BlobUsage {
+  return {
+    bytes: [...blobs.values()].reduce((sum, blob) => sum + blob.bytes, 0),
+    count: blobs.size,
+    maxBytes: shared.limits.maxBlobsBytes,
+    maxFileBytes: shared.limits.maxBlobBytes,
+  };
+}
+
 const handlers: Handlers = {
   "bridge.handshake": (panel) => handshakeOf(panel),
   "workspace.getCurrent": (panel) => ({ ...panel.shared.workspace }),
@@ -569,24 +593,18 @@ const handlers: Handlers = {
   "ui.getTheme": ({ shared }) => structuredClone(shared.theme),
   "ui.getLanguage": ({ shared }) => shared.language,
 
-  "blobs.put": ({ shared }, { file }) => {
-    if (!(BLOB_TYPES as readonly string[]).includes(file.type)) fail("INVALID_PARAMS", "only PNG, JPEG, GIF and WebP pictures and PDF files can be stored");
-    if (file.size > shared.limits.maxBlobBytes) fail("QUOTA_EXCEEDED", `a file is limited to ${shared.limits.maxBlobBytes} bytes`);
-    const used = [...shared.blobs.values()].reduce((sum, blob) => sum + blob.bytes, 0);
-    if (used + file.size > shared.limits.maxBlobsBytes) fail("QUOTA_EXCEEDED", `files are limited to ${shared.limits.maxBlobsBytes} bytes per module and workspace`);
-    const info: BlobInfo = { id: randomId().replaceAll("-", ""), bytes: file.size, type: file.type as BlobInfo["type"], createdAt: new Date(shared.now()).toISOString() };
-    shared.blobs.set(info.id, info);
-    return { ...info };
-  },
+  "blobs.put": ({ shared }, { file }) => putBlob(shared, shared.blobs, file, "workspace"),
   "blobs.list": ({ shared }) => [...shared.blobs.values()].map((blob) => ({ ...blob })),
-  "blobs.usage": ({ shared }) => ({
-    bytes: [...shared.blobs.values()].reduce((sum, blob) => sum + blob.bytes, 0),
-    count: shared.blobs.size,
-    maxBytes: shared.limits.maxBlobsBytes,
-    maxFileBytes: shared.limits.maxBlobBytes,
-  }),
+  "blobs.usage": ({ shared }) => blobUsage(shared, shared.blobs),
   "blobs.delete": ({ shared }, { id }) => {
     shared.blobs.delete(id);
+    return null;
+  },
+  "blobs.app.put": ({ shared }, { file }) => putBlob(shared, shared.appBlobs, file, "every workspace together"),
+  "blobs.app.list": ({ shared }) => [...shared.appBlobs.values()].map((blob) => ({ ...blob })),
+  "blobs.app.usage": ({ shared }) => blobUsage(shared, shared.appBlobs),
+  "blobs.app.delete": ({ shared }, { id }) => {
+    shared.appBlobs.delete(id);
     return null;
   },
   "clipboard.writeImage": (_panel, { png }) => {
@@ -768,6 +786,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     documents: new Map(),
     seq: 0,
     blobs: new Map(),
+    appBlobs: new Map(),
     overlays: new Map(),
     gameOverlays: new Set(),
     hotkeys: [],
@@ -910,6 +929,13 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       list: () => call("blobs.list"),
       usage: () => call("blobs.usage"),
       delete: async (id) => void (await call("blobs.delete", { id })),
+      app: {
+        put: (file) => call("blobs.app.put", { file }),
+        url: (id) => `${APP_BLOB_PATH}${encodeURIComponent(id)}`,
+        list: () => call("blobs.app.list"),
+        usage: () => call("blobs.app.usage"),
+        delete: async (id) => void (await call("blobs.app.delete", { id })),
+      },
     },
     clipboard: { writeImage: async (png) => void (await call("clipboard.writeImage", { png })) },
     files: {

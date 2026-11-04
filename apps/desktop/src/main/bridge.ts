@@ -53,6 +53,7 @@ import { checkPanelContent } from "./panel-content";
 import { parseConnectionSettings, parseWatch, type ConnectionSettingsChange, type WatchRequest } from "./system-info-parse";
 import { parseControlParams, parseWatchParams } from "./media-parse";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
+import type { BlobStore } from "./blobs";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
 export interface BridgePort {
@@ -122,6 +123,8 @@ export interface BridgeContext {
   data: ModuleData;
   /** The module's settings shared by every workspace (storage.app). */
   appSettings: ModuleStore;
+  /** The module's files shared by every workspace (blobs.app). */
+  appBlobs: BlobStore;
   /** The ai-usage connector (ai-usage.ts); only reached with the `aiUsage` capability. */
   aiUsage: { accounts(): Promise<AiUsageAccountInfo[]>; read(accountId: string): Promise<AiUsageReading> };
   /**
@@ -427,6 +430,15 @@ const handlers = new Map<string, Handler>([
     "blobs.delete",
     async (s, params) => {
       await s.context.data.blobs.delete(object(params).id);
+      return null;
+    },
+  ],
+  ["blobs.app.list", (s, params) => (noParams(params), s.context.appBlobs.list())],
+  ["blobs.app.usage", (s, params) => (noParams(params), s.context.appBlobs.usage())],
+  [
+    "blobs.app.delete",
+    async (s, params) => {
+      await s.context.appBlobs.delete(object(params).id);
       return null;
     },
   ],

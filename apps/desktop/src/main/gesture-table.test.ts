@@ -18,6 +18,7 @@ function bridgeChecks(): string[] {
 const PATH_CALLS: Record<string, CallName> = {
   READ_ONLY_FILE_PATH: "files.read",
   BLOB_PATH: "blobs.put",
+  APP_BLOB_PATH: "blobs.app.put",
   CLIPBOARD_PATH: "clipboard.writeImage",
   JSON_EXPORT_PATH: "files.exportJson",
   PICTURES_PATH: "pictures.save",

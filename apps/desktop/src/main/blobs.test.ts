@@ -9,6 +9,11 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 
 const JPEG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1]);
 const GIF = Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
 const PDF = new TextEncoder().encode("%PDF-1.7\n1 0 obj <<>> endobj\n%%EOF");
+const WAV = Uint8Array.from([0x52, 0x49, 0x46, 0x46, 36, 0, 0, 0, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d, 0x74, 0x20, 16, 0, 0, 0]);
+const OGG = Uint8Array.from([0x4f, 0x67, 0x67, 0x53, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4]);
+const MP3_ID3 = Uint8Array.from([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0, 0xff, 0xfb, 0x90, 0x64, 0, 0]);
+/** An MPEG-1 layer III frame header with no tag before it. */
+const MP3_FRAME = Uint8Array.from([0xff, 0xfb, 0x90, 0x64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 const WEBP = Uint8Array.from([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20]);
 
 /** A stream of the given pieces, like a request body. */
@@ -36,6 +41,22 @@ describe("sniffType", () => {
     expect(sniffType(PDF)).toBe("application/pdf");
     expect(sniffType(new TextEncoder().encode(" %PDF-1.7"))).toBeNull();
     expect(sniffType(new TextEncoder().encode("%PDF"))).toBeNull();
+  });
+
+  it("knows WAV, Ogg and MP3 sounds by their first bytes", () => {
+    expect(sniffType(WAV)).toBe("audio/wav");
+    expect(sniffType(OGG)).toBe("audio/ogg");
+    expect(sniffType(MP3_ID3)).toBe("audio/mpeg");
+    expect(sniffType(MP3_FRAME)).toBe("audio/mpeg");
+  });
+
+  it("takes only an MPEG layer III frame as MP3, and a RIFF file only as WAV or WebP", () => {
+    // Layer II (0xfd), a reserved version (0xeb) and a RIFF file of another kind.
+    expect(sniffType(Uint8Array.from([0xff, 0xfd, 0x90, 0x64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))).toBeNull();
+    expect(sniffType(Uint8Array.from([0xff, 0xeb, 0x90, 0x64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))).toBeNull();
+    expect(sniffType(Uint8Array.from([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x41, 0x56, 0x49, 0x20, 0, 0, 0, 0]))).toBeNull();
+    // A JPEG starts with 0xff too, and stays a JPEG.
+    expect(sniffType(JPEG)).toBe("image/jpeg");
   });
 
   it("refuses everything else, including text, SVG and BMP", () => {
@@ -153,6 +174,27 @@ describe("serveBlobs", () => {
     const picture = await serveBlobs(store, post(PNG), url(""));
     const pictureId = ((await picture.json()) as { id: string }).id;
     expect((await serveBlobs(store, new Request(url(pictureId).href), url(pictureId))).headers.get("content-disposition")).toBeNull();
+  });
+
+  it("stores and serves a sound with its own type", async () => {
+    const stored = await serveBlobs(store, post(OGG), url(""));
+    expect(stored.status).toBe(201);
+    const info = (await stored.json()) as { id: string; type: string };
+    expect(info.type).toBe("audio/ogg");
+    const served = await serveBlobs(store, new Request(url(info.id).href), url(info.id));
+    expect(served.headers.get("content-type")).toBe("audio/ogg");
+    expect(served.headers.get("content-disposition")).toBeNull();
+    expect(served.headers.get("content-security-policy")).toContain("sandbox");
+    expect(new Uint8Array(await served.arrayBuffer())).toEqual(OGG);
+  });
+
+  it("answers at another address for the files of every workspace", async () => {
+    const appUrl = (rest: string) => new URL(`tavora-module://notes/_app-blobs/${rest}`);
+    const stored = await serveBlobs(store, new Request(appUrl("").href, { method: "POST", body: WAV as unknown as BodyInit }), appUrl(""), "/_app-blobs/");
+    expect(stored.status).toBe(201);
+    const info = (await stored.json()) as { id: string; type: string };
+    expect(info.type).toBe("audio/wav");
+    expect((await serveBlobs(store, new Request(appUrl(info.id).href), appUrl(info.id), "/_app-blobs/")).status).toBe(200);
   });
 
   it("answers a refused file with the error and a fitting status", async () => {

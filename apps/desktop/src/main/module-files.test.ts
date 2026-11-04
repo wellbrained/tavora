@@ -60,12 +60,14 @@ describe("moving the files", () => {
   it("lists only the pictures the host stores", async () => {
     await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("a")}.png`, "one");
     await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("b")}.webp`, "two");
+    await put(root, path.join("official", "tavora.notes"), "_app", `${ID("f")}.ogg`, "every workspace");
+    await put(root, path.join("official", "tavora.notes"), "_other", `${ID("9")}.ogg`, "not a workspace");
     await put(root, path.join("official", "tavora.notes"), "poe2", "notes.txt", "not ours");
     await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("c")}.tmp`, "half");
     await put(root, path.join("local", "Not A Module!"), "poe2", `${ID("d")}.png`, "wrong folder");
     await put(root, path.join("someone", "tavora.notes"), "poe2", `${ID("e")}.png`, "not an owner");
     const files = await listStoredFiles(root);
-    expect(files.map((file) => file.name).sort()).toEqual([`${ID("a")}.png`, `${ID("b")}.webp`]);
+    expect(files.map((file) => file.name).sort()).toEqual([`${ID("a")}.png`, `${ID("b")}.webp`, `${ID("f")}.ogg`].sort());
     expect(await listStoredFiles(path.join(base, "missing"))).toEqual([]);
   });
 
