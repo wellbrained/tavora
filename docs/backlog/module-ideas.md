@@ -5,7 +5,7 @@ Already exist (don't repeat): Calculator, Clock & Counter, Notes, PDF Viewer, Sy
 
 ## Parked: Input display (keys you press)
 
-An overlay that shows a keyboard, a controller or both, with the keys you press lighting up. Pairs with Keybinds: show the action ("Dodge") instead of the key ("Space").
+An overlay that shows a keyboard, a controller or both, with the keys you press lighting up. Could show the action ("Dodge") instead of the key ("Space") if the user names their keys.
 
 - Needs a Tavora change: a native helper (keyboard, mouse, controller in the background), a new `input` connector with a yes prompt, an `input.changed` event in the SDK and protocol, a security page update, and maybe a keyboard/controller view in the UI kit.
 - Open question: any module after a yes (like `media`) or Tavora's own modules only (like System Monitor's app list). Leaning: any module, keys only while the game is in front, only keys you picked or bound.
@@ -14,16 +14,9 @@ An overlay that shows a keyboard, a controller or both, with the keys you press 
 
 ## Other ideas
 
-- **Keybinds**: your own cheat sheet of each game's controls, with an in-game overlay. Possible as a community module today. Top pick.
 - **Soundboard**: short clips on hotkeys, also on stream.
-- **Converter**: units, currencies and time zones, next to Calculator.
 - **Screenshots**: your latest shots of the game, ready to look at or drop onto the Whiteboard.
-- **Dice & Picker**: dice, coin flip, spin the wheel.
-- **Shopping List**: materials you still need for a build or craft.
-- **Map Pins**: pins on any map image you have.
-- **Loadouts**: save and compare gear, skill or deck setups.
-- **Squad**: who you play with, their times and roles.
 
 ## Dropped
 
-- Now Playing (Soundtrack exists), Quick Links and Patch Notes (browser panels cover them), Session Log (just Notes without a game started/stopped event).
+- Now Playing (Soundtrack exists), Quick Links and Patch Notes (browser panels cover them), Session Log (just Notes without a game started/stopped event), Keybinds, Converter, Dice & Picker, Shopping List, Map Pins, Loadouts, Squad (not wanted).
