@@ -4,7 +4,7 @@
 // product (Discord, React, Vue, ...), its real logo, or a plain line icon
 // for the built-in ones; any other module gets a puzzle piece. A picture that loads late fades in over its box; one
 // that fails shows the logo or line icon instead.
-import { Activity, Calculator, FileText, Gauge, Globe, ListTodo, NotebookPen, PenTool, Puzzle, Timer } from "@lucide/vue";
+import { Activity, Calculator, FileText, Gauge, Globe, ListTodo, NotebookPen, PenTool, Puzzle, Sheet, Timer } from "@lucide/vue";
 import { computed } from "vue";
 import { FadeImage } from "@tavora/official-ui/components/ui/fade-image";
 import { state } from "../host";
@@ -12,7 +12,7 @@ import { BRAND_LOGOS } from "../module-icons";
 
 const props = withDefaults(defineProps<{ moduleId: string | undefined; panelType?: string | null; size?: string }>(), { size: "size-4", panelType: null });
 
-const LINE_ICONS = { "wellbrained.ai-usage": Gauge, "tavora.browser": Globe, "tavora.calculator": Calculator, "tavora.clock-counter": Timer, "tavora.notes": NotebookPen, "tavora.pdf-viewer": FileText, "tavora.system-monitor": Activity, "tavora.todos": ListTodo, "tavora.whiteboard": PenTool } as const;
+const LINE_ICONS = { "wellbrained.ai-usage": Gauge, "tavora.browser": Globe, "tavora.calculator": Calculator, "tavora.clock-counter": Timer, "tavora.notes": NotebookPen, "tavora.pdf-viewer": FileText, "tavora.spreadsheets": Sheet, "tavora.system-monitor": Activity, "tavora.todos": ListTodo, "tavora.whiteboard": PenTool } as const;
 const picture = computed(() => {
   const module = state.value?.modules.find((item) => item.id === props.moduleId);
   const type = props.panelType === null ? undefined : module?.panels.find((item) => item.id === props.panelType);
