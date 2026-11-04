@@ -30,165 +30,35 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.23.102",
     date: "2026-11-04",
-    title: "Modules can save and open CSV and Excel files",
+    title: "Updates you can see and overlay text that keeps its size",
     notes: [
-      "A module can now save a table as a .csv or .xlsx and open one, through Tavora's own save and open windows.",
-      "They start in the folder you used last for that module, and nothing is saved or opened without your pick.",
+      "When a new version is out, an icon shows up at the bottom of the rail. Click it to see what's new and download it; you can watch it fill up there and in Settings › Updates.",
+      "Restart when it suits you, or it installs when you close Tavora. Tavora looks for updates every hour and when your PC wakes up.",
+      "Overlay text keeps its size: drag a corner to scale it, or give it a fixed box where long text scrolls, shrinks or gets cut off.",
+      "Overlay frames have a right-click menu (arrange, align, lock) and a toolbar you can customize.",
+      "Change the opacity of several overlay frames at once.",
+      "Clock & Counter: each row has a ··· menu with Move up and Move down, dragging rows works again, and you can see which row is active.",
+      "Maps keep their view when you switch tabs or close a dialog.",
+      "Item cards from modules that don't pin no longer say Click to pin.",
+      "If your sign-in code runs out before you press Create, you can get a new one right there.",
+      "Tavora takes less space and opens faster: it loads only your language, and rarely used dialogs load when you first need them.",
     ],
     prs: [
       { number: 673, title: "SDK: files.save and files.open for .csv and .xlsx" },
-    ],
-    tags: ["modules", "privacy", "publishing", "sdk", "website"],
-  },
-  {
-    version: "0.23.101",
-    date: "2026-11-04",
-    title: "Sounds for modules",
-    notes: [
-      "Modules can now keep your MP3, Ogg and WAV sounds.",
-      "A module can keep files for all your games at once, like a sound library you set up only once.",
-    ],
-    prs: [
       { number: 671, title: "Let modules keep sounds and files for every workspace, plus module ideas backlog" },
-    ],
-    tags: ["modules", "privacy", "sdk", "website"],
-  },
-  {
-    version: "0.23.100",
-    date: "2026-11-04",
-    title: "Updates you can see",
-    notes: [
-      "When a new version is out, an icon shows up at the bottom of the rail. Click it to see what's new.",
-      "Download from there and watch it fill up, around the icon and in Settings › Updates.",
-      "Restart when it suits you, or it installs when you close Tavora.",
-      "Tavora now looks for updates every hour and when your PC wakes up.",
-    ],
-    prs: [
       { number: 670, title: "Make app updates visible: rail marker with popover, progress and what's new" },
-    ],
-    tags: ["rail", "settings", "updates"],
-  },
-  {
-    version: "0.23.99",
-    date: "2026-11-03",
-    title: "Clock & Counter rows",
-    notes: [
-      "Clock & Counter: you can now see which row is active.",
-    ],
-    prs: [
-      { number: 664, title: "Clock & Counter: the active row is tinted with an accent edge (0.1.26)" },
-    ],
-    tags: ["clock-counter"],
-  },
-  {
-    version: "0.23.98",
-    date: "2026-11-03",
-    title: "Sign-in code ran out",
-    notes: [
-      "If your sign-in code runs out before you press Create, you land back on the code step and can get a new one.",
-    ],
-    prs: [
       { number: 669, title: "Typed state unions follow-up: cloud copy questions, publish discard, expired sign-in code" },
-    ],
-    tags: ["accounts", "cloud-copy"],
-  },
-  {
-    version: "0.23.97",
-    date: "2026-11-03",
-    title: "Maps keep their view",
-    notes: [
-      "Maps keep their view when you switch tabs or close a dialog.",
-    ],
-    prs: [
-      { number: 663, title: "Maps keep their view when the pane is hidden" },
-    ],
-    tags: ["pdf-viewer", "ui-kit"],
-  },
-  {
-    version: "0.23.96",
-    date: "2026-11-03",
-    title: "Smaller install",
-    notes: [
-      "Tavora takes less space on your PC.",
-    ],
-    prs: [
       { number: 666, title: "Smaller install: no WebGPU compiler, compressed Chromium licences" },
-    ],
-  },
-  {
-    version: "0.23.95",
-    date: "2026-11-03",
-    title: "Overlay text keeps its size",
-    notes: [
-      "Overlay text keeps its size: drag a corner to scale it, or give it a fixed box where long text scrolls.",
-      "A fixed box can also shrink long text or cut it off, with your speed, pause and soft edges.",
-    ],
-    prs: [
-      { number: 661, title: "Overlay text box: grows with the text or a fixed box (OBS-style)" },
-    ],
-    tags: ["clock-counter", "overlays", "privacy", "publishing", "sdk", "ui-kit", "website"],
-  },
-  {
-    version: "0.23.94",
-    date: "2026-11-03",
-    title: "Overlay opacity for several frames",
-    notes: [
-      "Change the opacity of several overlay frames at once.",
-    ],
-    prs: [
+      { number: 664, title: "Clock & Counter: the active row is tinted with an accent edge (0.1.26)" },
+      { number: 663, title: "Maps keep their view when the pane is hidden" },
       { number: 662, title: "Overlay: Mixed badge on Opacity, locked frames covered by tests, change note" },
-    ],
-    tags: ["overlays"],
-  },
-  {
-    version: "0.23.93",
-    date: "2026-11-03",
-    title: "Overlay frames have a menu",
-    notes: [
-      "Overlay frames have a right-click menu (arrange, align, lock) and a toolbar you can customize.",
-    ],
-    prs: [
-      { number: 652, title: "Overlay frames have a right-click menu" },
-    ],
-    tags: ["overlays"],
-  },
-  {
-    version: "0.23.92",
-    date: "2026-11-03",
-    title: "Clock & Counter rows",
-    notes: [
-      "Clock & Counter: one ··· menu per row with Move up and Move down; dragging rows works again.",
-    ],
-    prs: [
-      { number: 657, title: "Clock & Counter: one ··· menu per row with Move up and Move down; dragging rows works again (0.1.24)" },
-    ],
-    tags: ["clock-counter", "notes", "ui-kit"],
-  },
-  {
-    version: "0.23.91",
-    date: "2026-11-03",
-    title: "Item cards that don't pin",
-    notes: [
-      "Item cards from modules that don't pin no longer say Click to pin.",
-    ],
-    prs: [
+      { number: 661, title: "Overlay text box: grows with the text or a fixed box (OBS-style)" },
       { number: 659, title: "Item cards can say they don't pin (ui.tooltip.show pinnable: false)" },
-    ],
-    tags: ["publishing", "sdk", "website"],
-  },
-  {
-    version: "0.23.90",
-    date: "2026-11-03",
-    title: "Tavora starts with less to load",
-    notes: [
-      "Tavora loads only your language and the patch notes when you open them.",
-      "Dialogs most people never open load when you first need them.",
-      "Fonts keep just the Latin letters, so every window and module is smaller.",
-    ],
-    prs: [
+      { number: 657, title: "Clock & Counter: one ··· menu per row with Move up and Move down; dragging rows works again (0.1.24)" },
+      { number: 652, title: "Overlay frames have a right-click menu" },
       { number: 648, title: "Load less up front: locales, patch notes and rare dialogs on demand, latin-only fonts" },
     ],
-    tags: ["accounts", "calculator", "catalog", "clock-counter", "games", "modules", "notes", "onboarding", "overlays", "pdf-viewer", "publishing", "rail", "settings", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
+    tags: ["accounts", "calculator", "catalog", "clock-counter", "cloud-copy", "games", "modules", "notes", "onboarding", "overlays", "pdf-viewer", "privacy", "publishing", "rail", "sdk", "settings", "system-monitor", "todos", "ui-kit", "updates", "website", "whiteboard", "workspace"],
   },
   {
     version: "0.23.89",
