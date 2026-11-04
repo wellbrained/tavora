@@ -10,19 +10,26 @@ import type { Lang } from "./formula/locale";
 import { cellLabel, cellName, parseCellName, rangeName, type CellRange } from "./formula/refs";
 import { isError, isFormula, rawValue, storedDate, type Scalar } from "./formula/values";
 import { History, replay, type Step } from "./history";
-import { LIMITS, documentBytes, formatAt, freeSheetName, setFormat, setStyle, sheetById, sheetByName, styleAt, usedSize, type CellFormat, type CellStyle, type ColumnFilter, type Sheet, type SpreadsheetData } from "./model";
+import { LIMITS, columnView, fitsStore, formatAt, freeSheetName, setFormat, setStyle, sheetById, sheetByName, styleAt, usedSize, type CellFormat, type CellStyle, type ColumnFilter, type Sheet, type StoredColumnFilter, type SpreadsheetData } from "./model";
 import { addSheet, clearRange, deleteSheet, movedRaw, orderSheets, renameSheet, setCells, shiftSheet } from "./ops";
 import type { SpreadsheetHandle } from "./store";
-import { emptyColumnFilter, fillCells, hiddenRows, isActive, sortOrder, sortedCells, type SortKey } from "./table";
+import { fillCells, hiddenRows, isActive, sortOrder, sortedCells, type SortKey } from "./table";
 
 /** What a change could not do, for a message. */
-export type Refusal = { kind: "tooBig"; limit: "rows" | "cols" | "sheets" | "bytes" } | { kind: "kept"; count: number } | { kind: "nothing" };
+export type Refusal =
+  | { kind: "tooBig"; limit: "rows" | "cols" | "sheets" | "bytes" }
+  | { kind: "kept"; count: number }
+  /** A step that moves rows, columns or sheets around can't be taken back in part: another panel changed what it touched. */
+  | { kind: "blocked" }
+  | { kind: "nothing" };
 
 export interface SessionOptions {
   lang: Ref<Lang>;
   texts: () => DisplayTexts;
   /** Now, for Ctrl+; and TODAY(). */
   now?: () => Date;
+  /** Hears every change that was refused (too big for the store), so the panel can say so. */
+  refused?: (refusal: Refusal) => void;
 }
 
 const sheetsOf = (doc: SpreadsheetData) => doc.sheets.map((sheet) => ({ id: sheet.id, name: sheet.name, cells: sheet.cells }));
@@ -38,6 +45,10 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
   const sheetId = ref(handle.data.sheets[0]!.id);
   /** The cells the last local edit touched, so the calculation doesn't compare whole sheets. */
   let touched: Map<string, string[]> | undefined;
+  /** What the last refused change was, for the functions that answer with it. */
+  let lastRefusal: Refusal | null = null;
+  /** A change's answer: null when it went through, else why not. */
+  const outcome = (changes: Step["changes"] | null): Refusal | null => (changes === null ? lastRefusal : null);
 
   const sync = () => {
     canUndo.value = history.canUndo;
@@ -62,8 +73,19 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
   /**
    * Applies a change, remembers it for Undo and saves it soon. `names` lists the cells it sets on the current sheet,
    * when that's all it does; it lets the calculation skip comparing the sheet.
+   *
+   * Every change is tried on a copy first: one that would make the document bigger than the store takes (4 MB) is
+   * refused before anything changes, and null comes back.
    */
-  function change(label: string, apply: (draft: SpreadsheetData) => void, names?: string[]): Step["changes"] {
+  function change(label: string, apply: (draft: SpreadsheetData) => void, names?: string[]): Step["changes"] | null {
+    const trial = structuredClone(handle.data);
+    apply(trial);
+    if (!fitsStore(trial)) {
+      const refusal: Refusal = { kind: "tooBig", limit: "bytes" };
+      lastRefusal = refusal;
+      options.refused?.(refusal);
+      return null;
+    }
     const before = handle.data;
     touched = names ? new Map([[sheetId.value, names]]) : undefined;
     handle.update(apply);
@@ -80,7 +102,8 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
     let result = { done: [] as Step["changes"], skipped: 0 };
     const before = handle.data;
     handle.update((draft) => {
-      result = replay(draft, changes, "undo");
+      // All or nothing: a sheet comes back whole, with its formulas, or not at all.
+      result = replay(draft, changes, "undo", true);
     });
     history.record("revert", before, handle.data);
     sync();
@@ -95,9 +118,12 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
     if (!taken) return { kind: "nothing" };
     let result = { done: taken.changes, skipped: 0 };
     handle.update((draft) => {
-      result = replay(draft, taken.changes, direction);
+      result = replay(draft, taken.changes, direction, taken.whole);
     });
-    const kept: Step = { label: taken.label, changes: result.done };
+    sync();
+    // A step that moves rows, columns or sheets is put back whole or not at all; one that can't is dropped.
+    if (taken.whole && result.done.length === 0 && result.skipped) return { kind: "blocked" };
+    const kept: Step = { label: taken.label, changes: result.done, whole: taken.whole };
     if (direction === "undo") history.pushRedo(kept);
     else history.pushUndo(kept);
     sync();
@@ -172,14 +198,13 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
   function fill(plan: FillPlan, mode: "series" | "copy"): Refusal | null {
     if (plan.target.bottom >= LIMITS.rows || plan.target.right >= LIMITS.cols) return { kind: "tooBig", limit: plan.target.bottom >= LIMITS.rows ? "rows" : "cols" };
     const entries = fillCells(plan, (row, col) => rawAt(row, col), mode);
-    change("fill", (draft) => {
+    return outcome(change("fill", (draft) => {
       const target = onSheet(draft);
       if (!target) return;
       setCells(target, entries);
       // Formats and looks go along with what they fill, as in Excel.
       copyLooks(target, plan.source, plan.target);
-    });
-    return null;
+    }));
   }
 
   /** Repeats the source's formats and looks over the target. */
@@ -263,7 +288,6 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
         if (source.italic !== undefined || cells.from) italic.push([row, col, !!source.italic]);
       }
     }
-    let refused: Refusal | null = null;
     const apply = (draft: SpreadsheetData) => {
       const target = onSheet(draft);
       if (!target) return;
@@ -271,13 +295,8 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
       for (const [row, col, on] of bold) if (!!styleAt(target, row, col).bold !== on) setStyle(target, { top: row, left: col, bottom: row, right: col }, { bold: on });
       for (const [row, col, on] of italic) if (!!styleAt(target, row, col).italic !== on) setStyle(target, { top: row, left: col, bottom: row, right: col }, { italic: on });
     };
-    // A paste that would make the document too big for the store is refused before anything changes.
-    const trial = structuredClone(handle.data);
-    apply(trial);
-    if (documentBytes(trial) > LIMITS.bytes) refused = { kind: "tooBig", limit: "bytes" };
-    if (refused) return refused;
-    change("paste", apply);
-    return null;
+    // A paste that would make the document too big for the store is refused in change(), before anything changes.
+    return outcome(change("paste", apply));
   }
 
   // ── Looks and formats
@@ -342,8 +361,7 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
       const size = axis === "row" ? used.value.rows : used.value.cols;
       if (size + count > (axis === "row" ? LIMITS.rows : LIMITS.cols)) return { kind: "tooBig", limit: axis === "row" ? "rows" : "cols" };
     }
-    change(axis === "row" ? "rows" : "cols", (draft) => shiftSheet(draft, sheetId.value, axis, at, count));
-    return null;
+    return outcome(change(axis === "row" ? "rows" : "cols", (draft) => shiftSheet(draft, sheetId.value, axis, at, count)));
   }
 
   function resize(axis: "row" | "col", index: number, size: number): void {
@@ -376,25 +394,26 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
     if (doc.value.sheets.length >= LIMITS.sheets) return { kind: "tooBig", limit: "sheets" };
     const name = freeSheetName(doc.value, base);
     const at = doc.value.sheets.findIndex((item) => item.id === sheetId.value) + 1;
-    change("addSheet", (draft) => void addSheet(draft, id, sheetByName(draft, name) ? freeSheetName(draft, base) : name, at));
-    sheetId.value = id;
-    return null;
+    const changes = change("addSheet", (draft) => void addSheet(draft, id, sheetByName(draft, name) ? freeSheetName(draft, base) : name, at));
+    if (changes) sheetId.value = id;
+    return outcome(changes);
   }
 
   /** Renames a sheet; false when another sheet has that name. */
   function renameSheetTo(id: string, name: string): boolean {
     const clash = sheetByName(doc.value, name);
     if (clash && clash.id !== id) return false;
-    change("renameSheet", (draft) => renameSheet(draft, id, name));
-    return true;
+    return change("renameSheet", (draft) => renameSheet(draft, id, name)) !== null;
   }
 
   /** Takes a sheet out (never the last one); what changed, for the toast's Undo, or null. */
   function removeSheet(id: string): Step["changes"] | null {
     if (doc.value.sheets.length <= 1) return null;
     const index = doc.value.sheets.findIndex((item) => item.id === id);
-    if (id === sheetId.value) sheetId.value = (doc.value.sheets[index + 1] ?? doc.value.sheets[index - 1])!.id;
-    return change("deleteSheet", (draft) => deleteSheet(draft, id));
+    const next = (doc.value.sheets[index + 1] ?? doc.value.sheets[index - 1])!.id;
+    const changes = change("deleteSheet", (draft) => deleteSheet(draft, id));
+    if (changes && id === sheetId.value) sheetId.value = next;
+    return changes;
   }
 
   const reorderSheets = (ids: string[]) => change("orderSheets", (draft) => orderSheets(draft, ids));
@@ -416,12 +435,26 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
     change("sort", (draft) => void (onSheet(draft) && setCells(onSheet(draft)!, entries)));
   }
 
+  /** Sets one column's filter (null takes it off). */
   function setColumnFilter(col: number, filter: ColumnFilter | null): void {
     change("filter", (draft) => {
       const target = onSheet(draft);
       if (!target) return;
       const columns = { ...(target.filter?.columns ?? {}) };
-      if (filter && isActive(filter)) columns[col] = filter;
+      if (filter && isActive(filter)) columns[col] = { ...filter };
+      else delete columns[col];
+      target.filter = { ...(target.filter ?? {}), columns };
+    });
+  }
+
+  /** Changes some conditions of a column's filter; the rest, and anything a newer copy saved there, stays. */
+  function updateColumnFilter(col: number, update: Partial<ColumnFilter>): void {
+    change("filter", (draft) => {
+      const target = onSheet(draft);
+      if (!target) return;
+      const columns = { ...(target.filter?.columns ?? {}) };
+      const next = { ...columns[col], ...update } as StoredColumnFilter;
+      if (isActive(next)) columns[col] = next;
       else delete columns[col];
       target.filter = { ...(target.filter ?? {}), columns };
     });
@@ -445,7 +478,7 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
     });
   }
 
-  const columnFilter = (col: number): ColumnFilter => sheet.value.filter?.columns[col] ?? emptyColumnFilter();
+  const columnFilter = (col: number): ColumnFilter => columnView(sheet.value.filter?.columns[col]);
 
   /** The different texts a column shows below the header, for the filter's tick list. */
   function columnValues(col: number): string[] {
@@ -463,19 +496,13 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
   /** Puts sheets in (from a CSV): refused whole when it doesn't fit. */
   function addFilledSheet(id: string, name: string, cells: Record<string, string>): Refusal | null {
     if (doc.value.sheets.length >= LIMITS.sheets) return { kind: "tooBig", limit: "sheets" };
-    let refused: Refusal | null = null;
-    const apply = (draft: SpreadsheetData) => {
+    const changes = change("import", (draft) => {
       const unique = sheetByName(draft, name) ? freeSheetName(draft, `${name} `) : name;
       addSheet(draft, id, unique);
       sheetById(draft, id)!.cells = { ...cells };
-    };
-    const trial = structuredClone(handle.data);
-    apply(trial);
-    if (documentBytes(trial) > LIMITS.bytes) refused = { kind: "tooBig", limit: "bytes" };
-    if (refused) return refused;
-    change("import", apply);
-    sheetId.value = id;
-    return null;
+    });
+    if (changes) sheetId.value = id;
+    return outcome(changes);
   }
 
   /** The sum and count of the selection's filled cells (hidden rows count, as in Excel). */
@@ -514,6 +541,8 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
     formatOf,
     styleOf,
     loopAt,
+    /** Whether a cell's chain of formulas was too deep to work out. */
+    tooDeepAt: (row: number, col: number) => engine.tooDeep(sheetId.value, row, col),
     commit,
     clear,
     fill,
@@ -535,6 +564,7 @@ export function createSession(handle: SpreadsheetHandle, options: SessionOptions
     reorderSheets,
     sort,
     setColumnFilter,
+    updateColumnFilter,
     clearFilter,
     toggleFilter,
     columnFilter,

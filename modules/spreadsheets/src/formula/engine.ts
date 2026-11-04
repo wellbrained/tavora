@@ -54,6 +54,9 @@ interface Listener {
   key: Key;
 }
 
+/** Thrown up a chain of formulas that is too deep; caught where the chain was asked for. */
+const TOO_DEEP = Symbol("too deep");
+
 export class Workbook {
   private sheets = new Map<string, SheetState>();
   private byName = new Map<string, string>();
@@ -76,8 +79,14 @@ export class Workbook {
   /** Today, fixed for one round of changes. */
   private clock: () => number;
 
-  constructor(sheets: readonly SheetCells[] = [], options: { now?: () => number } = {}) {
+  /** How many formulas may wait on each other at once before the chain counts as too deep. */
+  private maxDepth: number;
+  /** Cells whose chain was too deep to work out, for their tooltip. */
+  private deep = new Set<Key>();
+
+  constructor(sheets: readonly SheetCells[] = [], options: { now?: () => number; maxDepth?: number } = {}) {
     this.clock = options.now ?? localNow;
+    this.maxDepth = options.maxDepth ?? 1000;
     this.sync(sheets);
   }
 
@@ -119,6 +128,13 @@ export class Workbook {
   /** How a cell's number is best shown when it has no format of its own: a date for TODAY() and dates. */
   hint(sheetId: string, row: number, col: number): ValueHint {
     return this.hintOf(keyOf(sheetId, row, col), 0);
+  }
+
+  /** Whether a cell couldn't be worked out because too many formulas wait on each other behind it. */
+  tooDeep(sheetId: string, row: number, col: number): boolean {
+    const key = keyOf(sheetId, row, col);
+    this.cellValue(key);
+    return this.deep.has(key);
   }
 
   /** The cells of the loop a cell is in, starting with itself, or undefined. */
@@ -163,6 +179,7 @@ export class Workbook {
     this.listeners.clear();
     this.volatile.clear();
     this.loops.clear();
+    this.deep.clear();
     this.order = order;
     for (const sheet of sheets) {
       this.sheets.set(sheet.id, { id: sheet.id, name: sheet.name, cells: sheet.cells, raw: new Map(), extent: null });
@@ -270,6 +287,7 @@ export class Workbook {
       seen.add(key);
       this.values.delete(key);
       this.loops.delete(key);
+      this.deep.delete(key);
       for (const dependent of this.dependents.get(key) ?? []) if (!seen.has(dependent)) queue.push(dependent);
       const { sheetId, row, col } = refOf(key);
       for (const listener of this.listeners.get(sheetId)?.get(col) ?? []) {
@@ -310,15 +328,22 @@ export class Workbook {
       for (const member of members) this.loops.set(member, members);
       return err("#CYCLE!");
     }
+    // Too many formulas waiting on each other (a chain the first pass couldn't see, through a huge range): give up
+    // the whole chain rather than run out of stack.
+    if (this.stack.length >= this.maxDepth) throw TOO_DEEP;
     this.evaluating.add(key);
     this.stack.push(key);
     let result: Scalar;
+    let gaveUp = false;
     try {
-      result = scalarOf(evaluate(formula.node, this.context(sheetId)), this.context(sheetId));
       // A range on its own (=A1:A3) is no single value.
+      result = scalarOf(evaluate(formula.node, this.context(sheetId)), this.context(sheetId));
     } catch (error) {
-      // A chain thousands of cells deep can run out of stack; better an error than a broken panel.
-      if (!(error instanceof RangeError)) throw error;
+      if (error !== TOO_DEEP && !(error instanceof RangeError)) throw error;
+      // Nothing on the way down keeps a value worked out from half a chain: inner cells pass it up uncached, and
+      // the cell that was asked for shows an honest error, not kept, so it is tried again next time.
+      if (this.stack.length > 1) throw TOO_DEEP;
+      gaveUp = true;
       result = err("#VALUE!");
     } finally {
       this.evaluating.delete(key);
@@ -326,7 +351,11 @@ export class Workbook {
     }
     if (this.loops.has(key)) result = err("#CYCLE!");
     if (result === null) result = 0;
-    this.values.set(key, result);
+    if (gaveUp) this.deep.add(key);
+    else {
+      this.deep.delete(key);
+      this.values.set(key, result);
+    }
     return result;
   }
 

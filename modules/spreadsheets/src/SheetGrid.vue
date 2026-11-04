@@ -78,7 +78,9 @@ const cellTitle = computed(() => {
   void session.value.version.value;
   return (row: number, col: number) => {
     const value = session.value.valueAt(row, col);
-    if (!isError(value) || value.error !== "#CYCLE!") return undefined;
+    if (!isError(value)) return undefined;
+    if (value.error === "#VALUE!" && session.value.tooDeepAt(row, col)) return t("deep");
+    if (value.error !== "#CYCLE!") return undefined;
     const loop = session.value.loopAt(row, col);
     return loop ? t("cycle", { cells: loop.join(" → ") }) : undefined;
   };

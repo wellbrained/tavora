@@ -3,7 +3,7 @@ import { createMemoryHost } from "@tavora/sdk/testing";
 import { describe, expect, it } from "vitest";
 import { ref } from "vue";
 import type { Lang } from "./formula/locale";
-import { newSpreadsheet, parseSpreadsheet, type SpreadsheetData } from "./model";
+import { LIMITS, documentBytes, newSpreadsheet, parseSpreadsheet, type SpreadsheetData } from "./model";
 import { createSession } from "./session";
 import { createSpreadsheets } from "./store";
 
@@ -56,6 +56,36 @@ describe("two panels on one spreadsheet", () => {
     expect(stored(a.host).sheets[0]!.cells.A1).toBe("99");
   });
 
+  it("undoes an inserted row whole or not at all when the other panel changed a moved cell", async () => {
+    const { handleA, handleB, one, two } = await twoPanels();
+    one.commit(2, 0, "=A1+B1");
+    one.shift("row", 0, 1);
+    await settle(handleA, handleB);
+    expect(two.rawAt(1, 0)).toBe("1");
+    two.commit(1, 0, "7");
+    await settle(handleB, handleA);
+    const now = structuredClone(one.doc.value);
+    expect(one.undo()).toEqual({ kind: "blocked" });
+    expect(one.doc.value).toEqual(now);
+    expect(one.rawAt(3, 0)).toBe("=A2+B2");
+    // The step is gone. The edit before it was at A3, which the row moved to A4: it says so and leaves it.
+    expect(one.undo()).toEqual({ kind: "kept", count: 1 });
+    expect(one.rawAt(3, 0)).toBe("=A2+B2");
+    expect(one.canUndo.value).toBe(false);
+  });
+
+  it("brings a deleted sheet back whole from its toast, or says it can't", async () => {
+    const { one } = await twoPanels();
+    one.addNewSheet("g", "Sheet");
+    one.commit(0, 0, "21");
+    const changes = one.removeSheet("g")!;
+    expect(one.revert(changes)).toBe(true);
+    expect(one.valueAt(0, 0, "g")).toBe(21);
+    const again = one.removeSheet("g")!;
+    one.addNewSheet("g", "Sheet");
+    expect(one.revert(again)).toBe(false);
+  });
+
   it("follows a sheet added and renamed in the other panel", async () => {
     const { handleA, handleB, one, two } = await twoPanels();
     one.commit(0, 2, "=Gear!A1*2");
@@ -64,6 +94,49 @@ describe("two panels on one spreadsheet", () => {
     two.commit(0, 0, "21");
     await settle(handleB, handleA);
     expect(one.valueAt(0, 2)).toBe(42);
+  });
+});
+
+describe("the 4 MB limit", () => {
+  /** A spreadsheet a few bytes under the limit, open in one panel. */
+  async function nearlyFull(margin: number) {
+    const a = createMemoryHost();
+    const list = await createSpreadsheets(a.sdk);
+    const data = newSpreadsheet("Full", "Sheet1", "2026-11-04T00:00:00.000Z");
+    data.sheets[0]!.cells = { A1: "" };
+    const size = documentBytes(data);
+    data.sheets[0]!.cells.A1 = "x".repeat(LIMITS.bytes - size - margin);
+    await list.put("sheet-1", data);
+    const handle = await list.open("sheet-1");
+    const told: unknown[] = [];
+    const session = createSession(handle, { lang: ref<Lang>("en"), texts, refused: (refusal) => told.push(refusal) });
+    return { a, handle, session, told };
+  }
+
+  it("refuses every change that would go over it, before anything changes", async () => {
+    const { a, handle, session, told } = await nearlyFull(20);
+    const start = structuredClone(session.doc.value);
+    session.commit(0, 1, "a text longer than the few bytes that are left");
+    expect(session.fill({ source: { top: 0, left: 0, bottom: 0, right: 0 }, target: { top: 1, left: 0, bottom: 3, right: 0 }, direction: "down" }, "copy")).toEqual({ kind: "tooBig", limit: "bytes" });
+    session.styleRange({ top: 0, left: 0, bottom: 99, right: 25 }, { bold: true, color: "info" });
+    session.formatRange({ top: 0, left: 0, bottom: 99, right: 25 }, { type: "dropdown", options: [{ value: "Gold", color: "warning" }] });
+    expect(session.paste({ row: 5, col: 5 }, { top: 5, left: 5, bottom: 5, right: 5 }, { rows: [[{ text: "a longer text than fits" }]], from: null })).toEqual({ kind: "tooBig", limit: "bytes" });
+    expect(session.addNewSheet("x", "Sheet")).toEqual({ kind: "tooBig", limit: "bytes" });
+    expect(told).toHaveLength(6);
+    expect(told.every((refusal) => JSON.stringify(refusal) === JSON.stringify({ kind: "tooBig", limit: "bytes" }))).toBe(true);
+    expect(session.doc.value).toEqual(start);
+    expect(session.canUndo.value).toBe(false);
+    expect(session.sheetId.value).toBe("s1");
+    await handle.flush();
+    expect(parseSpreadsheet(a.host.documents.get("sheet-1")!.data)).toEqual(start);
+  });
+
+  it("lets through what still fits", async () => {
+    const { session, told } = await nearlyFull(400);
+    session.commit(0, 1, "fits");
+    session.styleRange({ top: 0, left: 0, bottom: 0, right: 0 }, { bold: true });
+    expect(told).toEqual([]);
+    expect(session.rawAt(0, 1)).toBe("fits");
   });
 });
 

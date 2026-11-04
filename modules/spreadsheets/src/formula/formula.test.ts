@@ -144,6 +144,24 @@ describe("recalculation", () => {
     expect(wb.loop("s1", 0, 0)).toBeUndefined();
   });
 
+  it("gives a chain too deep to follow an honest error, and keeps no value worked out from half of it", () => {
+    // Each cell reads the one above through a range too big for the first pass to look into, so the chain is followed
+    // cell by cell; the engine here allows 100 at once.
+    const cells: Record<string, string> = { A1: "1" };
+    for (let row = 2; row <= 300; row++) cells[`A${row}`] = `=INDEX($A$1:$GR$1001,${row - 1},1)+1`;
+    // The sheet reaches far down, so the range really is 200 × 1001 cells.
+    cells.GR20000 = "1";
+    const wb = new Workbook([sheet("s1", cells)], { maxDepth: 100 });
+    expect(wb.value("s1", 299, 0)).toEqual(err("#VALUE!"));
+    expect(wb.tooDeep("s1", 299, 0)).toBe(true);
+    // Worked out in steps it is fine, so nothing on the way down kept a wrong value.
+    expect(wb.value("s1", 89, 0)).toBe(90);
+    expect(wb.value("s1", 179, 0)).toBe(180);
+    expect(wb.value("s1", 249, 0)).toBe(250);
+    expect(wb.value("s1", 299, 0)).toBe(300);
+    expect(wb.tooDeep("s1", 299, 0)).toBe(false);
+  });
+
   it("keeps IFERROR from hiding a loop", () => {
     const wb = new Workbook([sheet("s1", { A1: "=IFERROR(B1,0)", B1: "=A1" })]);
     expect(wb.value("s1", 0, 0)).toEqual(err("#CYCLE!"));

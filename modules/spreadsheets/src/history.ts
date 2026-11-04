@@ -23,7 +23,12 @@ export interface Change {
 export interface Step {
   label: string;
   changes: Change[];
+  /** Moves rows, columns or sheets around: taken back whole or not at all. */
+  whole?: boolean;
 }
+
+/** The steps that are undone whole or not at all: half an inserted row would leave cells and formulas out of step. */
+export const WHOLE_STEPS = new Set(["rows", "cols", "addSheet", "deleteSheet", "renameSheet", "orderSheets", "sort", "import"]);
 
 const SKIP_DOC = new Set(["sheets", "version"]);
 
@@ -139,15 +144,22 @@ const ORDER: Record<Part["kind"], number> = { sheet: 0, order: 1, doc: 2, field:
  * Puts a step's changes back (`undo`) or again (`redo`) on a copy, part by part, where the part still is what the
  * step left. Returns the changes that were made and how many were left because something newer was there.
  */
-export function replay(doc: SpreadsheetData, changes: readonly Change[], direction: "undo" | "redo"): { done: Change[]; skipped: number } {
+export function replay(doc: SpreadsheetData, changes: readonly Change[], direction: "undo" | "redo", whole = false): { done: Change[]; skipped: number } {
   const done: Change[] = [];
   let skipped = 0;
   // Sheets come back before their cells and their place in the order; sheets go after.
   const sorted = [...changes].sort((a, b) => ORDER[a.part.kind] - ORDER[b.part.kind]);
+  const expectedOf = (change: Change) => (direction === "undo" ? change.after : change.before);
+  const matches = (change: Change) => same(read(doc, change.part), expectedOf(change)) || (change.part.kind === "order" && sameOrder(doc, expectedOf(change)));
+  if (whole) {
+    // Nothing is written unless every part still is what the step left.
+    const blocked = sorted.filter((change) => !matches(change)).length;
+    if (blocked) return { done: [], skipped: changes.length };
+  }
   for (const change of sorted) {
-    const expected = direction === "undo" ? change.after : change.before;
     const target = direction === "undo" ? change.before : change.after;
-    if (!same(read(doc, change.part), expected) && !(change.part.kind === "order" && sameOrder(doc, expected))) {
+    // A whole step was checked before anything was written; the others go part by part.
+    if (!whole && !matches(change)) {
       skipped++;
       continue;
     }
@@ -177,7 +189,7 @@ export class History {
   record(label: string, before: SpreadsheetData, after: SpreadsheetData): Change[] {
     const changes = diff(before, after);
     if (!changes.length) return changes;
-    this.undoSteps.push({ label, changes });
+    this.undoSteps.push({ label, changes, whole: WHOLE_STEPS.has(label) });
     this.redoSteps = [];
     while (this.undoSteps.length > HISTORY_STEPS || (this.undoSteps.length > 1 && this.size() > HISTORY_CHANGES)) this.undoSteps.shift();
     return changes;

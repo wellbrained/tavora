@@ -50,21 +50,32 @@ export interface CellStyle {
 }
 export type StyleKey = keyof CellStyle;
 
+/**
+ * A format as it is saved: kept exactly as read, so a kind or a field a newer copy wrote survives. Read it through
+ * `formatView` (formatAt does), which shows anything unknown as Automatic.
+ */
+export type StoredFormat = { type: string; [key: string]: JsonValue };
+
+/** A look as it is saved, kept as read; `styleView` (styleAt) leaves out what it doesn't know. */
+export type StoredStyle = { [key: string]: JsonValue };
+
 export interface FormatRule {
   [key: string]: JsonValue;
   range: string;
-  format: CellFormat & { [key: string]: JsonValue };
+  format: StoredFormat;
 }
 
 export interface StyleRule {
   [key: string]: JsonValue;
   range: string;
-  style: CellStyle & { [key: string]: JsonValue };
+  style: StoredStyle;
 }
+
+/** One column of the filter as it is saved, kept as read; read it through `columnView`. */
+export type StoredColumnFilter = { [key: string]: JsonValue };
 
 /** What one column of the filter lets through; a row shows when every column lets it. */
 export interface ColumnFilter {
-  [key: string]: JsonValue;
   /** Shown texts that are ticked off in the values list. */
   hidden: string[];
   /** Only texts that contain this (any case). */
@@ -78,7 +89,7 @@ export interface ColumnFilter {
 export interface SheetFilter {
   [key: string]: JsonValue;
   /** By column index. */
-  columns: { [col: string]: ColumnFilter };
+  columns: { [col: string]: StoredColumnFilter };
 }
 
 export interface Sheet {
@@ -120,37 +131,70 @@ const isObject = (value: unknown): value is Raw => typeof value === "object" && 
 const text = (value: unknown, fallback = ""): string => (typeof value === "string" ? value : fallback);
 const count = (value: unknown, max: number): number => (typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(max, Math.floor(value))) : 0);
 
-function parseFormat(raw: unknown): (CellFormat & { [key: string]: JsonValue }) | null {
-  if (!isObject(raw)) return null;
-  const extra = raw as { [key: string]: JsonValue };
+/** A saved format, kept exactly as it is (anything with a kind). */
+function parseFormat(raw: unknown): StoredFormat | null {
+  return isObject(raw) && typeof raw.type === "string" ? ({ ...raw } as StoredFormat) : null;
+}
+
+const formatViews = new WeakMap<object, CellFormat>();
+const AUTO_FORMAT: CellFormat = { type: "auto" };
+
+/** What a saved format means here: a kind this copy doesn't know, or odd fields, read as the nearest it does know. */
+export function formatView(raw: StoredFormat): CellFormat {
+  const known = formatViews.get(raw);
+  if (known) return known;
+  let view: CellFormat;
   switch (raw.type) {
     case "auto":
     case "text":
     case "checkbox":
     case "date":
     case "link":
-      return { ...extra, type: raw.type };
+      view = { type: raw.type };
+      break;
     case "number":
-      return { ...extra, type: "number", decimals: count(raw.decimals, 10), thousands: raw.thousands === true };
+      view = { type: "number", decimals: count(raw.decimals, 10), thousands: raw.thousands === true };
+      break;
     case "percent":
-      return { ...extra, type: "percent", decimals: count(raw.decimals, 10) };
+      view = { type: "percent", decimals: count(raw.decimals, 10) };
+      break;
     case "dropdown": {
-      const options = (Array.isArray(raw.options) ? raw.options : []).filter(isObject).map((option) => ({ ...(option as { [key: string]: JsonValue }), value: text(option.value), color: isColor(option.color) ? option.color : null }));
-      return { ...extra, type: "dropdown", options: options.filter((option) => option.value !== "") };
+      const options = (Array.isArray(raw.options) ? raw.options : []).filter(isObject).map((option) => ({ value: text(option.value), color: isColor(option.color) ? option.color : null }));
+      view = { type: "dropdown", options: options.filter((option) => option.value !== "") };
+      break;
     }
     default:
-      // A format a newer copy knows: shown as Automatic here, and kept.
-      return typeof raw.type === "string" ? ({ ...extra, type: "auto" } as CellFormat & { [key: string]: JsonValue }) : null;
+      // A kind a newer copy knows: shown as Automatic here; the saved one stays as it is.
+      view = AUTO_FORMAT;
   }
+  formatViews.set(raw, view);
+  return view;
 }
 
-function parseStyle(raw: unknown): (CellStyle & { [key: string]: JsonValue }) | null {
-  if (!isObject(raw)) return null;
-  const style: CellStyle & { [key: string]: JsonValue } = { ...(raw as { [key: string]: JsonValue }) };
-  for (const key of ["bold", "italic", "wrap"] as const) if (key in style && typeof style[key] !== "boolean") delete style[key];
-  if ("align" in style && !["left", "center", "right"].includes(style.align as string)) delete style.align;
-  for (const key of ["color", "fill"] as const) if (key in style && !isColor(style[key])) delete style[key];
+/** A saved look, kept exactly as it is. */
+function parseStyle(raw: unknown): StoredStyle | null {
+  return isObject(raw) ? { ...raw } : null;
+}
+
+/** What a saved look means here: only the parts this copy knows, with values it knows. */
+export function styleView(raw: StoredStyle): CellStyle {
+  const style: CellStyle = {};
+  for (const key of ["bold", "italic", "wrap"] as const) if (typeof raw[key] === "boolean") style[key] = raw[key] as boolean;
+  if (raw.align === "left" || raw.align === "center" || raw.align === "right") style.align = raw.align;
+  for (const key of ["color", "fill"] as const) if (isColor(raw[key])) style[key] = raw[key] as ColorName;
   return style;
+}
+
+/** What a saved filter column lets through, read as this copy knows it; anything odd lets everything through. */
+export function columnView(raw: StoredColumnFilter | undefined): ColumnFilter {
+  const value = raw ?? {};
+  return {
+    hidden: (Array.isArray(value.hidden) ? value.hidden : []).filter((item): item is string => typeof item === "string"),
+    contains: text(value.contains),
+    min: typeof value.min === "number" && Number.isFinite(value.min) ? value.min : null,
+    max: typeof value.max === "number" && Number.isFinite(value.max) ? value.max : null,
+    checked: typeof value.checked === "boolean" ? value.checked : null,
+  };
 }
 
 function sizes(raw: unknown, min: number, max: number): { [index: string]: number } {
@@ -162,25 +206,16 @@ function sizes(raw: unknown, min: number, max: number): { [index: string]: numbe
 
 function parseFilter(raw: unknown): SheetFilter | null {
   if (!isObject(raw) || !isObject(raw.columns)) return null;
-  const columns: { [col: string]: ColumnFilter } = {};
-  for (const [key, value] of Object.entries(raw.columns)) {
-    if (!/^\d+$/.test(key) || !isObject(value)) continue;
-    columns[key] = {
-      ...(value as { [key: string]: JsonValue }),
-      hidden: (Array.isArray(value.hidden) ? value.hidden : []).filter((item): item is string => typeof item === "string"),
-      contains: text(value.contains),
-      min: typeof value.min === "number" && Number.isFinite(value.min) ? value.min : null,
-      max: typeof value.max === "number" && Number.isFinite(value.max) ? value.max : null,
-      checked: typeof value.checked === "boolean" ? value.checked : null,
-    };
-  }
+  // Each column is kept as it was saved; columnView reads it.
+  const columns: { [col: string]: StoredColumnFilter } = {};
+  for (const [key, value] of Object.entries(raw.columns)) if (/^\d+$/.test(key) && isObject(value)) columns[key] = { ...value };
   return { ...(raw as { [key: string]: JsonValue }), columns };
 }
 
 export function parseSheet(raw: unknown, index: number): Sheet {
   const sheet = isObject(raw) ? raw : {};
   const cells: { [name: string]: string } = {};
-  if (isObject(sheet.cells)) for (const [name, value] of Object.entries(sheet.cells)) if (/^[A-Z]{1,3}\d{1,5}$/.test(name) && typeof value === "string" && value !== "") cells[name] = value;
+  if (isObject(sheet.cells)) for (const [name, value] of Object.entries(sheet.cells)) if (/^[A-Z]{1,3}\d{1,7}$/.test(name) && typeof value === "string" && value !== "") cells[name] = value;
   const frozen = isObject(sheet.frozen) ? sheet.frozen : {};
   return {
     ...(sheet as { [key: string]: JsonValue }),
@@ -235,6 +270,25 @@ export function newSpreadsheet(name: string, sheetName: string, createdAt: strin
 /** How big a document is when saved, in bytes. */
 export const documentBytes = (doc: SpreadsheetData): number => new TextEncoder().encode(JSON.stringify(doc)).length;
 
+/** The first limit a whole spreadsheet goes over (sheets, rows, columns, size), or null when it fits. */
+export function limitProblem(doc: SpreadsheetData): "sheets" | "rows" | "cols" | "bytes" | null {
+  if (doc.sheets.length > LIMITS.sheets) return "sheets";
+  for (const sheet of doc.sheets) {
+    const size = usedSize(sheet);
+    if (size.rows > LIMITS.rows) return "rows";
+    if (size.cols > LIMITS.cols) return "cols";
+  }
+  return fitsStore(doc) ? null : "bytes";
+}
+
+/** Whether the store takes a document (4 MB at most). Cheap while it is far below: no character takes more than 3 bytes. */
+export function fitsStore(doc: SpreadsheetData): boolean {
+  const json = JSON.stringify(doc);
+  if (json.length * 3 <= LIMITS.bytes) return true;
+  if (json.length > LIMITS.bytes) return false;
+  return new TextEncoder().encode(json).length <= LIMITS.bytes;
+}
+
 // ── Formats and looks by cell
 
 const parsedRanges = new WeakMap<object, (CellRange | null)[]>();
@@ -244,16 +298,14 @@ function rangesOf(rules: readonly { range: string }[]): (CellRange | null)[] {
   return ranges;
 }
 
-const AUTO: CellFormat = { type: "auto" };
-
 /** A cell's format: the last rule covering it wins. */
 export function formatAt(sheet: Sheet, row: number, col: number): CellFormat {
   const ranges = rangesOf(sheet.formats);
   for (let i = sheet.formats.length - 1; i >= 0; i--) {
     const range = ranges[i];
-    if (range && row >= range.top && row <= range.bottom && col >= range.left && col <= range.right) return sheet.formats[i]!.format;
+    if (range && row >= range.top && row <= range.bottom && col >= range.left && col <= range.right) return formatView(sheet.formats[i]!.format);
   }
-  return AUTO;
+  return AUTO_FORMAT;
 }
 
 /** A cell's look: every rule covering it, later ones on top. */
@@ -262,7 +314,7 @@ export function styleAt(sheet: Sheet, row: number, col: number): CellStyle {
   let style: CellStyle = {};
   for (let i = 0; i < sheet.styles.length; i++) {
     const range = ranges[i];
-    if (range && row >= range.top && row <= range.bottom && col >= range.left && col <= range.right) style = { ...style, ...(sheet.styles[i]!.style as CellStyle) };
+    if (range && row >= range.top && row <= range.bottom && col >= range.left && col <= range.right) style = { ...style, ...styleView(sheet.styles[i]!.style) };
   }
   return style;
 }
@@ -275,7 +327,7 @@ export function setFormat(sheet: Sheet, range: CellRange, format: CellFormat): v
     const old = parseRangeName(rule.range);
     return !old || !covers(range, old);
   });
-  if (format.type !== "auto" || sheet.formats.some((rule) => rangesOverlapName(rule.range, range))) sheet.formats.push({ range: rangeName(range), format: { ...format } as FormatRule["format"] });
+  if (format.type !== "auto" || sheet.formats.some((rule) => rangesOverlapName(rule.range, range))) sheet.formats.push({ range: rangeName(range), format: structuredClone(format) as StoredFormat });
 }
 
 function rangesOverlapName(name: string, range: CellRange): boolean {
@@ -296,7 +348,7 @@ export function setStyle(sheet: Sheet, range: CellRange, change: CellStyle): voi
   const kept = Object.fromEntries(Object.entries(change).filter(([, value]) => value !== undefined && value !== false)) as CellStyle;
   // Turning something off only needs a rule where an older one still turns it on.
   const needed = Object.keys(kept).length > 0 || keys.some((key) => sheet.styles.some((rule) => key in rule.style && rangesOverlapName(rule.range, range)));
-  if (needed) sheet.styles.push({ range: rangeName(range), style: { ...change } as StyleRule["style"] });
+  if (needed) sheet.styles.push({ range: rangeName(range), style: Object.fromEntries(Object.entries(change).filter(([, value]) => value !== undefined)) as StoredStyle });
 }
 
 // ── Finding sheets

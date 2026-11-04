@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { JsonValue } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
 import { parseHtmlTable, parseTsv, readClipboard, toTsv, writeClipboard, TAVORA_TYPE } from "./clipboard";
 import { readCsv, writeCsv } from "./csv";
@@ -6,7 +7,7 @@ import { displayValue, inputToStored, parseLocalDate, parseLocalNumber, storedTo
 import { Workbook } from "./formula/engine";
 import { dateSerial } from "./formula/values";
 import { History, diff, replay } from "./history";
-import { formatAt, newSpreadsheet, parseSpreadsheet, setFormat, setStyle, styleAt, type SpreadsheetData } from "./model";
+import { columnView, formatAt, limitProblem, newSpreadsheet, parseSpreadsheet, setFormat, setStyle, styleAt, type SpreadsheetData } from "./model";
 import { addSheet, deleteSheet, renameSheet, setCells, shiftSheet } from "./ops";
 import { fillCells, hiddenRows, sortOrder, sortedCells } from "./table";
 
@@ -38,10 +39,60 @@ describe("saved data", () => {
     expect(parsed.version).toBe(2);
     expect(parsed.sheets[0]!.tint).toBe("x");
     expect(parsed.sheets[0]!.cells).toEqual({ A1: "Iron", B2: "=A1" });
-    // A format it doesn't know shows as Automatic and stays in the data.
-    expect(formatAt(parsed.sheets[0]!, 3, 1)).toMatchObject({ type: "auto", glow: 1 });
+    // A format it doesn't know shows as Automatic and stays in the data exactly as it was.
+    expect(formatAt(parsed.sheets[0]!, 3, 1)).toEqual({ type: "auto" });
+    expect(parsed.sheets[0]!.formats[0]!.format).toEqual({ type: "sparkle", glow: 1 });
     expect(parsed.sheets[0]!.frozen).toEqual({ rows: 1, cols: 0 });
     expect(parsed.live).toEqual({ sheet: "a", range: "A1:B5" });
+  });
+
+  it("keeps values it doesn't know in formats, looks and the filter, and reads them as what it knows", () => {
+    const raw = {
+      sheets: [
+        {
+          id: "a",
+          name: "Items",
+          cells: { A1: "x" },
+          formats: [
+            { range: "A1:A9", format: { type: "dropdown", options: [{ value: "Gold", color: "pink", glow: true }, { value: "Iron", color: "info" }] } },
+            { range: "B1:B9", format: { type: "number", decimals: 42, thousands: "maybe" } },
+          ],
+          styles: [{ range: "A1:C3", style: { bold: "yes", italic: true, align: "justify", color: "pink", fill: "info", shadow: 2 } }],
+          filter: { columns: { 0: { checked: "partly", hidden: [1, "Iron"], contains: "ir", future: { x: 1 } } } },
+        },
+      ],
+    };
+    const before = structuredClone(raw);
+    const stored = raw as unknown as JsonValue;
+    const sheet = parseSpreadsheet(stored).sheets[0]!;
+    // Read as what this copy knows…
+    expect(formatAt(sheet, 0, 0)).toEqual({ type: "dropdown", options: [{ value: "Gold", color: null }, { value: "Iron", color: "info" }] });
+    expect(formatAt(sheet, 0, 1)).toEqual({ type: "number", decimals: 10, thousands: false });
+    expect(styleAt(sheet, 0, 0)).toEqual({ italic: true, fill: "info" });
+    expect(columnView(sheet.filter!.columns[0])).toEqual({ hidden: ["Iron"], contains: "ir", min: null, max: null, checked: null });
+    // …and kept as it was saved.
+    expect(sheet.formats.map((rule) => rule.format)).toEqual(before.sheets[0]!.formats.map((rule) => rule.format));
+    expect(sheet.styles[0]!.style).toEqual(before.sheets[0]!.styles[0]!.style);
+    expect(sheet.filter!.columns[0]).toEqual(before.sheets[0]!.filter.columns[0]);
+    expect(JSON.parse(JSON.stringify(parseSpreadsheet(JSON.parse(JSON.stringify(parseSpreadsheet(stored)))))).sheets[0].formats).toEqual(before.sheets[0]!.formats);
+  });
+
+  it("names the limit a spreadsheet goes over", () => {
+    const tall = newSpreadsheet("x", "S", "");
+    tall.sheets[0]!.cells = { A20001: "1" };
+    expect(limitProblem(parseSpreadsheet(JSON.parse(JSON.stringify(tall))))).toBe("rows");
+    const wide = newSpreadsheet("x", "S", "");
+    wide.sheets[0]!.cells = { GS1: "1" };
+    expect(limitProblem(wide)).toBe("cols");
+    const many = newSpreadsheet("x", "S", "");
+    for (let i = 0; i < 50; i++) many.sheets.push({ ...structuredClone(many.sheets[0]!), id: `s${i + 2}` });
+    expect(limitProblem(many)).toBe("sheets");
+    const big = newSpreadsheet("x", "S", "");
+    big.sheets[0]!.cells = { A1: "x".repeat(4 * 1024 * 1024) };
+    expect(limitProblem(big)).toBe("bytes");
+    const fine = newSpreadsheet("x", "S", "");
+    fine.sheets[0]!.cells = { A20000: "1", GR1: "1" };
+    expect(limitProblem(fine)).toBeNull();
   });
 
   it("makes an empty spreadsheet for a missing document", () => {
@@ -113,6 +164,20 @@ describe("rows, columns and sheets", () => {
     expect(skipped).toBe(0);
     expect(data).toEqual(before);
     expect(values(data).value("s1", 0, 0)).toBe(42);
+  });
+
+  it("takes a step that moves rows back whole or not at all", () => {
+    const data = doc({ A1: "1", A2: "=A1+1", A3: "x" });
+    const before = structuredClone(data);
+    shiftSheet(data, "s1", "row", 1, 1);
+    const changes = diff(before, data);
+    // Another panel changes one of the moved cells.
+    data.sheets[0]!.cells.A4 = "changed";
+    const now = structuredClone(data);
+    expect(replay(data, changes, "undo", true)).toEqual({ done: [], skipped: changes.length });
+    expect(data).toEqual(now);
+    // Part by part (cells only), the untouched ones would have gone back.
+    expect(replay(structuredClone(now), changes, "undo").done.length).toBeGreaterThan(0);
   });
 
   it("undo puts inserted rows back exactly", () => {

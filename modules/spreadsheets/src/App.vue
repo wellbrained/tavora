@@ -23,7 +23,7 @@ import DropdownDialog from "./DropdownDialog.vue";
 import { plural, setLanguage, t, language } from "./i18n";
 import { buildLiveState, LIVE_DEFAULTS, parseLook, type LiveCell, type LiveLook, type LiveState } from "./live";
 import { de, en } from "./locales";
-import { LIMITS, TooBig, documentBytes, formatAt, parseSpreadsheet, sheetById, styleAt, usedSize, type DropdownOption, type SheetRange, type SpreadsheetData } from "./model";
+import { LIMITS, TooBig, limitProblem, formatAt, parseSpreadsheet, sheetById, styleAt, usedSize, type DropdownOption, type SheetRange, type SpreadsheetData } from "./model";
 import { createSession, type Refusal, type Session } from "./session";
 import Settings from "./Settings.vue";
 import SheetGrid from "./SheetGrid.vue";
@@ -78,7 +78,7 @@ async function show(id: string, restore?: Pick<PanelState, "sheet" | "cell" | "s
     let entry = open.get(id);
     if (!entry) {
       const handle = await list.open(id);
-      const created = createSession(handle, { lang, texts: () => ({ yes: t("value.true"), no: t("value.false") }) });
+      const created = createSession(handle, { lang, texts: () => ({ yes: t("value.true"), no: t("value.false") }), refused });
       const stop = handle.onError((reason, kind) => {
         if (kind === "save") toast({ title: t("saveError", { error: errorMessage(reason) }), variant: "error" });
       });
@@ -141,9 +141,15 @@ async function flushAll() {
 
 // ── Messages
 
+/** Refusals said already: a change refused for its size is told by the session and handed back to its caller too. */
+const told = new WeakSet<Refusal>();
+
 function refused(refusal: Refusal | null) {
-  if (!refusal || refusal.kind === "nothing") return;
+  if (!refusal || refusal.kind === "nothing" || told.has(refusal)) return;
+  told.add(refusal);
   if (refusal.kind === "kept") toast({ title: plural("kept", refusal.count), duration: 5000 });
+  else if (refusal.kind === "blocked") toast({ title: t("blocked"), duration: 5000 });
+  else if (refusal.limit === "bytes") toast({ title: t("full"), description: t("limit.bytes"), variant: "error", duration: 6000 });
   else toast({ title: t("tooFit"), description: t(`limit.${refusal.limit}`), variant: "error", duration: 6000 });
 }
 
@@ -275,7 +281,9 @@ async function runFileAction(id: string) {
       const value = opened.value as { sheets?: unknown };
       if (typeof value !== "object" || value === null || !Array.isArray(value.sheets)) return void toast({ title: t("notTavora"), variant: "error" });
       const data = parseSpreadsheet(opened.value);
-      if (data.sheets.length > LIMITS.sheets) return tooBig("sheets");
+      // Over a limit, nothing is made at all.
+      const problem = limitProblem(data);
+      if (problem) return tooBig(problem);
       data.name = freeName(data.name || baseName(opened.fileName));
       await add(data);
       toast({ title: t("imported", { name: data.name }) });
@@ -314,7 +322,8 @@ async function runFileAction(id: string) {
         return void toast({ title: t("cantOpen"), description: t("saveXlsx"), variant: "error" });
       }
       const data: SpreadsheetData = { version: 1, name: freeName(baseName(opened.fileName)), sheets, live: null, createdAt: new Date().toISOString() };
-      if (documentBytes(data) > LIMITS.bytes) return tooBig("bytes");
+      const problem = limitProblem(data);
+      if (problem) return tooBig(problem);
       await add(data);
       toast({ title: t("imported", { name: opened.fileName }) });
     } else if (id === "xlsx.export" && current) {

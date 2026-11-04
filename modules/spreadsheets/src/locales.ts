@@ -109,6 +109,9 @@ export const en = {
 
   tooBig: "This file is too big for Spreadsheets.",
   tooFit: "That doesn't fit in this sheet.",
+  full: "This spreadsheet is full.",
+  blocked: "That changed in another panel since, so it can't be undone.",
+  deep: "Too many formulas lean on each other here.",
   "limit.rows": "At most 20,000 rows per sheet.",
   "limit.cols": "At most 200 columns per sheet.",
   "limit.sheets": "At most 50 sheets per spreadsheet.",
@@ -325,6 +328,9 @@ export const de: Record<keyof typeof en, string> = {
 
   tooBig: "Diese Datei ist zu groß für Tabellen.",
   tooFit: "Das passt nicht in dieses Blatt.",
+  full: "Diese Tabelle ist voll.",
+  blocked: "Das wurde inzwischen in einem anderen Panel geändert und lässt sich nicht mehr rückgängig machen.",
+  deep: "Hier hängen zu viele Formeln aneinander.",
   "limit.rows": "Höchstens 20.000 Zeilen pro Blatt.",
   "limit.cols": "Höchstens 200 Spalten pro Blatt.",
   "limit.sheets": "Höchstens 50 Blätter pro Tabelle.",

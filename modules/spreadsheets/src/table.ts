@@ -4,7 +4,7 @@ import type { FillPlan } from "@tavora/official-ui/components/ui/data-grid";
 import { cellName } from "./formula/refs";
 import { compare, isError, isFormula, parseStoredDate, rawValue, storedDate, storedNumber, type Scalar } from "./formula/values";
 import { movedRaw } from "./ops";
-import type { ColumnFilter, SheetFilter } from "./model";
+import { columnView, type ColumnFilter, type SheetFilter, type StoredColumnFilter } from "./model";
 
 type RawAt = (row: number, col: number) => string | undefined;
 
@@ -141,10 +141,15 @@ export function sortedCells(order: readonly number[], top: number, left: number,
 
 export const emptyColumnFilter = (): ColumnFilter => ({ hidden: [], contains: "", min: null, max: null, checked: null });
 
-export const isActive = (filter: ColumnFilter): boolean => filter.hidden.length > 0 || filter.contains !== "" || filter.min !== null || filter.max !== null || filter.checked !== null;
+/** Whether a filter column (saved, or read already) holds anything back. */
+export function isActive(raw: ColumnFilter | StoredColumnFilter): boolean {
+  const filter = columnView(raw as StoredColumnFilter);
+  return filter.hidden.length > 0 || filter.contains !== "" || filter.min !== null || filter.max !== null || filter.checked !== null;
+}
 
 /** Whether one cell gets through a column's filter, by what it shows and its value. */
-export function passes(filter: ColumnFilter, shown: string, value: Scalar): boolean {
+export function passes(raw: ColumnFilter | StoredColumnFilter, shown: string, value: Scalar): boolean {
+  const filter = columnView(raw as StoredColumnFilter);
   if (filter.hidden.includes(shown)) return false;
   if (filter.contains && !shown.toLowerCase().includes(filter.contains.toLowerCase())) return false;
   if (filter.min !== null || filter.max !== null) {

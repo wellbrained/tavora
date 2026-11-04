@@ -27,7 +27,8 @@ const values = computed(() => {
 const isCheckbox = computed(() => session.value.formatOf(1, props.col).type === "checkbox");
 const lang = computed(() => panel.lang.value);
 
-const update = (change: Partial<ColumnFilter>) => session.value.setColumnFilter(props.col, { ...filter.value, ...change } as ColumnFilter);
+// Only what was changed is written; the rest of the saved filter stays as it is.
+const update = (change: Partial<ColumnFilter>) => session.value.updateColumnFilter(props.col, change);
 const shown = (value: string) => !filter.value.hidden.includes(value);
 const toggleValue = (value: string, on: boolean) => update({ hidden: on ? filter.value.hidden.filter((item) => item !== value) : [...filter.value.hidden, value] });
 const allShown = computed(() => filter.value.hidden.length === 0);
