@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.104",
+    date: "2026-11-04",
+    title: "Calmer wide buttons",
+    notes: [
+      "Wide buttons and pickers now only dip 1px when pressed, instead of shrinking.",
+    ],
+    prs: [
+      { number: 677, title: "Kit: wide buttons only dip 1px when pressed" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.23.103",
     date: "2026-11-04",
     title: "Dialogs from modules open cleanly",
