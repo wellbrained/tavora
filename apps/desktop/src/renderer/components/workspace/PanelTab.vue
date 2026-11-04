@@ -41,9 +41,10 @@ function items() {
 </script>
 
 <template>
+  <!-- Padding: the ✕ button is 24px with a 14px glyph (5px of room each side) and pr-1 after it, so the glyph sits 9px from the right edge; pl-[9px] puts the icon the same distance from the left. -->
   <MenuArea :items="items" :title="title" side="bottom">
     <div
-      class="flex h-full max-w-72 min-w-0 items-center gap-2 pr-1 pl-3 text-sm"
+      class="flex h-full max-w-72 min-w-0 items-center gap-2 pr-1 pl-[9px] text-sm"
       :data-testid="`panel-${id}`"
       data-panel-tab
       :data-module-id="panel?.moduleId"
