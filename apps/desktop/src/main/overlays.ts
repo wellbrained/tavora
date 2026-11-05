@@ -13,6 +13,7 @@ import { contentTypeFor, resolveAsset } from "./assets";
 import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { isJsonValue, readJsonOrSetAside } from "./json";
+import { trackOwnServer } from "./own-ports";
 
 export const OVERLAYS_FILE = "overlays.json";
 /** Where Stream overlays listen unless the user picks another port. */
@@ -263,6 +264,7 @@ export class OverlayServer {
     if (this.server && this.listening === port) return this.status;
     await this.stop();
     const server = createServer((request, response) => void this.handle(request, response, port));
+    trackOwnServer(server);
     server.keepAliveTimeout = 5_000;
     this.status = await new Promise<OverlayServerStatus>((resolve) => {
       server.once("error", (error: NodeJS.ErrnoException) => resolve(error.code === "EADDRINUSE" || error.code === "EACCES" ? "in-use" : "failed"));

@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -65,6 +65,20 @@ describe("validateManifest", () => {
     expect(validateManifest({ ...valid, workspaces: true })).toEqual({ ok: false, errors: ["workspaces can only be true for a module made for any game (games is empty)"] });
   });
 
+  it("takes localhost:<port> in permissions.network only from a minTavora that knows it", () => {
+    const local = { ...valid, permissions: { network: ["localhost:6119"] } };
+    expect(validateManifest({ ...local, minTavora: "0.23.112" }).ok).toBe(true);
+    expect(validateManifest({ ...local, minTavora: LAST_TAVORA_WITHOUT_LOCAL_PORTS })).toEqual({
+      ok: false,
+      errors: [`localhost:<port> in permissions.network needs a minTavora newer than ${LAST_TAVORA_WITHOUT_LOCAL_PORTS}, because older Tavoras refuse it`],
+    });
+    expect(validateManifest({ ...local, minTavora: undefined }).ok).toBe(false);
+    expect(isLocalPort("localhost:6119")).toBe(true);
+    expect(localPortOf("localhost:6119")).toBe(6119);
+    expect(localPortOf("api.example.com")).toBeNull();
+    for (const port of BLOCKED_LOCAL_PORTS) expect(isLocalPort(`localhost:${port}`)).toBe(false);
+  });
+
   it("takes personalWorkspaces like workspaces, from a minTavora that knows it, and never both", () => {
     const anyGame = { ...valid, games: [], minTavora: "0.21.43" };
     expect(validateManifest({ ...anyGame, personalWorkspaces: false }).ok).toBe(true);
@@ -108,7 +122,7 @@ describe("validateManifest", () => {
   it("names the hosts it refuses", () => {
     expect(validateManifest({ ...valid, permissions: { network: ["https://api.example.com", "*.example.com"] } })).toEqual({
       ok: false,
-      errors: ["permissions.network must list exact public host names such as api.example.com (lowercase, no scheme, port or wildcard): https://api.example.com, *.example.com"],
+      errors: ["permissions.network must list exact public host names such as api.example.com (lowercase, no scheme, port or wildcard) or a program on this PC as localhost:<port> (1024 to 65535, not a blocked port): https://api.example.com, *.example.com"],
     });
     expect(validateManifest({ ...valid, permissions: { network: ["a.example", "a.example"] } })).toEqual({ ok: false, errors: ["permissions.network lists a host twice"] });
   });
@@ -324,6 +338,21 @@ const cases: [string, unknown, boolean][] = [
   ["ipv4 host", { ...valid, permissions: { network: ["93.184.216.34"] } }, false],
   ["ipv6 host", { ...valid, permissions: { network: ["[::1]"] } }, false],
   ["localhost", { ...valid, permissions: { network: ["localhost"] } }, false],
+  ["a program on this PC", { ...valid, minTavora: "0.23.112", permissions: { network: ["localhost:6119", "api.example.com"] } }, true],
+  ["the lowest and highest local port", { ...valid, minTavora: "0.23.112", permissions: { network: ["localhost:1024", "localhost:65535"] } }, true],
+  ["a system port on this PC", { ...valid, minTavora: "0.23.112", permissions: { network: ["localhost:80"] } }, false],
+  ["local port 1023", { ...valid, minTavora: "0.23.112", permissions: { network: ["localhost:1023"] } }, false],
+  ["local port too high", { ...valid, minTavora: "0.23.112", permissions: { network: ["localhost:65536"] } }, false],
+  ["local port with a leading zero", { ...valid, minTavora: "0.23.112", permissions: { network: ["localhost:06119"] } }, false],
+  ["a debugger port", { ...valid, minTavora: "0.23.112", permissions: { network: ["localhost:9222"] } }, false],
+  ["Discord's local port", { ...valid, minTavora: "0.23.112", permissions: { network: ["localhost:6463"] } }, false],
+  ["Docker's port", { ...valid, minTavora: "0.23.112", permissions: { network: ["localhost:2375"] } }, false],
+  ["Tavora's overlay port", { ...valid, minTavora: "0.23.112", permissions: { network: ["localhost:47820"] } }, false],
+  ["127.0.0.1 with a port", { ...valid, minTavora: "0.23.112", permissions: { network: ["127.0.0.1:6119"] } }, false],
+  ["localhost with a scheme", { ...valid, minTavora: "0.23.112", permissions: { network: ["http://localhost:6119"] } }, false],
+  ["localhost with a path", { ...valid, minTavora: "0.23.112", permissions: { network: ["localhost:6119/game"] } }, false],
+  ["LOCALHOST uppercase", { ...valid, minTavora: "0.23.112", permissions: { network: ["LOCALHOST:6119"] } }, false],
+  ["a local name with a port", { ...valid, minTavora: "0.23.112", permissions: { network: ["printer.local:6119"] } }, false],
   ["dev.localhost", { ...valid, permissions: { network: ["dev.localhost"] } }, false],
   [".local host", { ...valid, permissions: { network: ["printer.local"] } }, false],
   ["hyphen-edged label", { ...valid, permissions: { network: ["-api.example.com"] } }, false],

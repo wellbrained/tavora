@@ -88,7 +88,7 @@ const updated = computed(() => {
 });
 const homepageText = computed(() => module.value.homepage?.replace(/^https?:\/\//, "").replace(/\/$/, "") ?? null);
 const access = computed(() => [
-  ...module.value.permissions.network.map((host) => t("catalog.accessHost", { host })),
+  ...module.value.permissions.network.map((host) => (host.startsWith("localhost:") ? t("catalog.accessProgram", { port: host.slice("localhost:".length) }) : t("catalog.accessHost", { host }))),
   ...module.value.permissions.connectors.map((id) => t(`catalog.accessConnector.${id}`)),
 ]);
 /** Why Install and Add are greyed out: the module is for another game, or not for personal workspaces. */

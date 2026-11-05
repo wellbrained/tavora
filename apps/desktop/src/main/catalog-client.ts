@@ -5,7 +5,7 @@
 // matches the listing. After that the zip goes through the same installer as Install from zip, which
 // checks the publisher signature itself.
 import { createHash } from "node:crypto";
-import { apiReason, isConnector, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkHost, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, OFFICIAL_PINS, officialOn, translationsFor, type ApiReason, type Connector } from "@tavora/module-schema";
+import { apiReason, isConnector, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkEntry, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, OFFICIAL_PINS, officialOn, translationsFor, type ApiReason, type Connector } from "@tavora/module-schema";
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView, CatalogOwnReview, CatalogRating } from "../shared/host-api";
 import { isWebUrl } from "./browser-url";
@@ -225,7 +225,7 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
   const asks = (typeof permissions === "object" && permissions !== null ? permissions : {}) as Record<string, unknown>;
   const network = asks.network ?? [];
   const connectors = asks.connectors ?? [];
-  if (!Array.isArray(network) || network.length > MAX_NETWORK_HOSTS || !network.every(isNetworkHost)) return null;
+  if (!Array.isArray(network) || network.length > MAX_NETWORK_HOSTS || !network.every(isNetworkEntry)) return null;
   if (!Array.isArray(connectors) || !connectors.every(isConnector)) return null;
   const file = (typeof zip === "object" && zip !== null ? zip : {}) as Record<string, unknown>;
   if (typeof file.sha256 !== "string" || !SHA256.test(file.sha256)) return null;
