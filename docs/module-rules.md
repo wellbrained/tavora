@@ -198,7 +198,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Deleting**<a id="deleting"></a>: what can be put back exactly as it was (an item of the module's own document: a to-do, a
   group, a saved value) is deleted at once and saved, then `undoable({ title, undo })` shows "<Thing> deleted" with Undo
   for a few seconds; Ctrl+Z outside text fields takes back the newest one (`handleUndoKey(event)` in the page's
-  keydown). Each delete gets its own toast; `undo` puts back only its own thing, in its place, with its id, and
+  keydown; it stands down while a kit dialog is open and for keys pressed inside a menu, list or popover). Each delete gets its own toast; `undo` puts back only its own thing, in its place, with its id, and
   answers `false` when it can't any more (its place is gone, something took its name): the kit then says so. Check that
   on the list as it is now, since a store change may run again on a newer one. A closed panel or app keeps the delete
   (it is saved already); end open offers in `onBeforeUnmount` with `close()`. `ConfirmDialog` stays for what can't be
