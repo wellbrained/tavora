@@ -1141,7 +1141,7 @@ export const de: Record<keyof typeof en, string> = {
   "grant.networkNote": "Es kann Daten abrufen und öffentliche Seiten in einem temporären Browser lesen, nur auf diesen Websites. Deine Cookies und Anmeldungen bleiben privat.",
   "grant.programs": "Programme auf diesem PC lesen",
   "grant.programPort": "Das Programm auf Port {port}",
-  "grant.programsNote": "Es kann nur lesen, was das Programm teilt, etwa die Live-Daten eines Spiels. Ändern kann es dort nichts.",
+  "grant.programsNote": "Es kann alles lesen, was das Programm teilt, etwa die Live-Daten eines Spiels, ihm aber keine Änderungen schicken. Erlaube das nur, wenn du weißt, was dort läuft.",
   "grant.later": "Du kannst das jederzeit in den Einstellungen ändern.",
   "grant.waiting": "Wartet auf dein OK",
   "grant.allow": "Erlauben",

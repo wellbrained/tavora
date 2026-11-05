@@ -1139,7 +1139,7 @@ export const en = {
   "grant.networkNote": "It can request data and read public pages in a temporary browser, only on these websites. Your cookies and sign-ins stay private.",
   "grant.programs": "Read programs on this PC",
   "grant.programPort": "The program on port {port}",
-  "grant.programsNote": "It can only read what that program shares, like a game's live data. It can't change anything there.",
+  "grant.programsNote": "It can read whatever that program shares, like a game's live data, but can't send it changes. Only allow this if you know what runs there.",
   "grant.later": "You can change this anytime in Settings.",
   "grant.waiting": "Waiting for your OK",
   "grant.allow": "Allow",

@@ -86,8 +86,8 @@ const title = computed(() => {
   const only = connectors.value.length === 1 && !hosts.value.length ? (ASK as Record<string, (typeof ASK)[keyof typeof ASK]>)[connectors.value[0]!] : undefined;
   if (only) return t(only, { name: current.name });
   if (!connectors.value.length && programs.value.length === 1 && !sites.value.length) return t("grant.ask.program", { name: current.name, port: programs.value[0]! });
-  if (!connectors.value.length && hosts.value.length === 1) return t("grant.ask.site", { name: current.name, host: hosts.value[0]! });
-  if (!connectors.value.length && hosts.value.length > 1) return t("grant.ask.sites", { name: current.name, count: hosts.value.length });
+  if (!connectors.value.length && !programs.value.length && hosts.value.length === 1) return t("grant.ask.site", { name: current.name, host: hosts.value[0]! });
+  if (!connectors.value.length && !programs.value.length && hosts.value.length > 1) return t("grant.ask.sites", { name: current.name, count: hosts.value.length });
   return t("grant.title", { name: current.name });
 });
 

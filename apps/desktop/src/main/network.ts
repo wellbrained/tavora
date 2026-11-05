@@ -18,6 +18,7 @@ import { isOwnPort } from "./own-ports";
 /** The names a `localhost:<port>` grant answers to; both reach 127.0.0.1. */
 const LOCAL_NAMES = new Set(["localhost", "127.0.0.1"]);
 const LOCAL_METHODS = new Set(["GET", "HEAD"]);
+const METHOD_OVERRIDES = new Set(["x-http-method-override", "x-http-method", "x-method-override"]);
 
 /** Whether this address is a program on this PC (a `localhost:<port>` grant), not a site. */
 export function isLocalTarget(url: URL): boolean {
@@ -286,6 +287,9 @@ export async function moduleFetch(params: unknown, policy: FetchPolicy): Promise
   if (local && !LOCAL_METHODS.has(request.method)) {
     throw new HostError("PERMISSION_DENIED", "a program on this PC can only be read (GET or HEAD)", { capability: "network" });
   }
+  // Some servers take these on any method and act as if it were a DELETE or a POST.
+  const override = Object.keys(request.headers).find((name) => METHOD_OVERRIDES.has(name));
+  if (local && override) throw new HostError("PERMISSION_DENIED", `header ${override} cannot be sent to a program on this PC`, { capability: "network" });
   let { method, body } = request;
   let headers = request.headers;
   const timeoutMs = policy.timeoutMs ?? LIMITS.networkTimeoutMs;

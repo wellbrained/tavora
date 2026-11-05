@@ -5,7 +5,7 @@ import { LIMITS } from "@tavora/sdk/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { HostError } from "./errors";
 import { checkTarget, isPublicAddress, moduleFetch, parseNetworkRequest, parseTestHosts, type FetchPolicy } from "./network";
-import { holdOwnPort, releaseOwnPort } from "./own-ports";
+import { holdOwnPort, isOwnPort, releaseOwnPort, trackOwnServer } from "./own-ports";
 
 /** What the test server saw of the last request. */
 let seen: { method?: string | undefined; url?: string | undefined; host?: string | undefined; headers: http.IncomingHttpHeaders; body: string } = { headers: {}, body: "" };
@@ -33,6 +33,9 @@ beforeAll(async () => {
         case "/missing":
           response.writeHead(404);
           return response.end("nope");
+        case "/to-local":
+          response.writeHead(302, { location: `http://localhost:${port}/echo` });
+          return response.end();
         case "/to-granted":
           response.writeHead(302, { location: `http://cdn.tavora.test:${port}/echo` });
           return response.end();
@@ -269,6 +272,38 @@ describe("a program on this PC (localhost:<port>)", () => {
       expect(error.message).toContain("can only be read");
     }
     expect(seen.method).toBeUndefined();
+  });
+
+  it("never reaches a program on this PC through a website's redirect, even when the port is granted", async () => {
+    const both = policy(["api.tavora.test", `localhost:${port}`]);
+    const error = await failure(moduleFetch({ url: at("/to-local") }, both));
+    expect(error).toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(error.message).toContain("can only be read by network.fetch directly");
+  });
+
+  it("refuses method-override headers to a program on this PC", async () => {
+    for (const name of ["X-HTTP-Method-Override", "x-http-method", "X-Method-Override"]) {
+      const error = await failure(moduleFetch({ url: `http://localhost:${port}/echo`, headers: { [name]: "DELETE" } }, local()));
+      expect(error, name).toMatchObject({ code: "PERMISSION_DENIED" });
+    }
+  });
+
+  it("treats numeric spellings of 127.0.0.1 as the same port grant, and other loopback names as not granted", () => {
+    for (const host of ["2130706433", "0x7f.1", "0177.0.0.1", "127.1"]) {
+      expect(checkTarget(`http://${host}:${port}/`, local(), { local: true }).hostname, host).toBe("127.0.0.1");
+      expect(deniedTarget(`http://${host}:6119/`, local()).message, host).toContain("localhost:6119 has not been granted");
+    }
+    for (const host of ["localhost.", "[::ffff:7f00:1]", "0.0.0.0"]) expect(deniedTarget(`http://${host}:${port}/`, local()).code, host).toBe("PERMISSION_DENIED");
+  });
+
+  it("holds a server's port while it listens and lets it go when it closes", async () => {
+    const own = http.createServer();
+    trackOwnServer(own);
+    await new Promise<void>((resolve) => own.listen(0, "127.0.0.1", resolve));
+    const ownPort = (own.address() as AddressInfo).port;
+    expect(isOwnPort(ownPort)).toBe(true);
+    await new Promise((resolve) => own.close(resolve));
+    expect(isOwnPort(ownPort)).toBe(false);
   });
 
   it("does not follow a redirect from a program on this PC", async () => {
