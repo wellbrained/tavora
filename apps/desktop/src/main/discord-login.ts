@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { Language } from "../shared/i18n";
 import { UserError } from "./messages";
+import { trackOwnServer } from "./own-ports";
 
 // Discord login for the Tavora account (decided 2026-10-16): Discord's sign-in
 // page opens in the user's own browser, and Discord sends the browser back to
@@ -78,6 +79,7 @@ export async function discordLogin(options: DiscordLoginOptions): Promise<Discor
       if (ok) finish(null, { code: code!, verifier });
       else finish(new UserError(url.searchParams.get("error") === "access_denied" ? "account.error.discordCancelled" : "account.error.discordRefused"));
     });
+    trackOwnServer(server);
     const timer = setTimeout(() => finish(new UserError("account.error.discordCancelled")), options.timeoutMs ?? DISCORD_LOGIN_TIMEOUT_MS);
     const finish = (error: Error | null, result?: DiscordLoginResult) => {
       if (settled) return;

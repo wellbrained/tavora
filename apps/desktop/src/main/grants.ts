@@ -4,7 +4,7 @@
 // A grant only covers what the module's current manifest still asks for, and every gated call
 // checks it again, so revoking takes effect at once.
 import path from "node:path";
-import { connectorsAtAdd, isConnector, isModuleId, isNetworkHost, isOwnerId, type Connector, type ModuleManifest } from "@tavora/module-schema";
+import { connectorsAtAdd, isConnector, isModuleId, isNetworkEntry, isOwnerId, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 
@@ -46,7 +46,7 @@ function sanitizeGrant(value: unknown): Grant | null {
   if (typeof value !== "object" || value === null) return null;
   const { version, grantedAt, network, connectors = [] } = value as Record<string, unknown>;
   if (typeof version !== "string" || typeof grantedAt !== "string" || !Array.isArray(network) || !Array.isArray(connectors)) return null;
-  return { version, grantedAt, network: [...new Set(network.filter(isNetworkHost))], connectors: [...new Set(connectors.filter(isConnector))] };
+  return { version, grantedAt, network: [...new Set(network.filter(isNetworkEntry))], connectors: [...new Set(connectors.filter(isConnector))] };
 }
 
 /** Reads grants.json, keeping only well-formed entries; anything else is as if never granted. */

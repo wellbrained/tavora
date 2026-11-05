@@ -10,7 +10,7 @@
 // With `inPanel` the same question is the content of the panel that asks (decision of 2026-10-28): the module's first
 // panel when it is added or still misses access, or the running panel that asks for a connector on request. Cancel then
 // closes the panels that wait for the answer; Allow lets the host start them (main/host.ts questionOf).
-import { Check, Cpu, Gauge, Globe, Headphones, Music, Radio, ShieldCheck, Trophy } from "@lucide/vue";
+import { Check, Cpu, Gauge, Globe, Headphones, Monitor, Music, Radio, ShieldCheck, Trophy } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
@@ -32,6 +32,9 @@ const asks = computed(() =>
   props.request.onRequest ? { network: [], connectors: props.request.onRequest.connectors } : props.request.update ? update.value?.asks : module.value?.permissions.missing,
 );
 const hosts = computed(() => asks.value?.network ?? []);
+/** Websites, and programs on this PC (`localhost:<port>`, read only), shown apart. */
+const sites = computed(() => hosts.value.filter((host) => !host.startsWith("localhost:")));
+const programs = computed(() => hosts.value.filter((host) => host.startsWith("localhost:")).map((host) => host.slice("localhost:".length)));
 const connectors = computed(() => asks.value?.connectors ?? []);
 const aiAccounts = computed(() => aiUsage.value?.accounts ?? []);
 const discordUser = computed(() => discord.value?.user ?? null);
@@ -82,6 +85,7 @@ const title = computed(() => {
   if (props.request.review) return t("grant.reviewTitle", { name: current.name });
   const only = connectors.value.length === 1 && !hosts.value.length ? (ASK as Record<string, (typeof ASK)[keyof typeof ASK]>)[connectors.value[0]!] : undefined;
   if (only) return t(only, { name: current.name });
+  if (!connectors.value.length && programs.value.length === 1 && !sites.value.length) return t("grant.ask.program", { name: current.name, port: programs.value[0]! });
   if (!connectors.value.length && hosts.value.length === 1) return t("grant.ask.site", { name: current.name, host: hosts.value[0]! });
   if (!connectors.value.length && hosts.value.length > 1) return t("grant.ask.sites", { name: current.name, count: hosts.value.length });
   return t("grant.title", { name: current.name });
@@ -187,12 +191,19 @@ async function allow() {
       <h3 class="flex items-center gap-2 font-medium"><Radio :stroke-width="1.5" class="size-4" /> {{ t("grant.overlay") }}</h3>
       <p class="text-muted-foreground text-sm">{{ t("grant.overlayNote") }}</p>
     </section>
-    <section v-if="hosts.length" class="flex flex-col gap-2" :aria-label="t('grant.network')">
+    <section v-if="sites.length" class="flex flex-col gap-2" :aria-label="t('grant.network')">
       <h3 class="flex items-center gap-2 font-medium"><Globe :stroke-width="1.5" class="size-4" /> {{ t("grant.network") }}</h3>
       <ul class="bg-muted flex flex-col gap-1 rounded-md px-3 py-2 text-sm" data-testid="grant-hosts">
-        <li v-for="host in hosts" :key="host" class="font-mono break-all">{{ host }}</li>
+        <li v-for="host in sites" :key="host" class="font-mono break-all">{{ host }}</li>
       </ul>
       <p class="text-muted-foreground text-sm">{{ t("grant.networkNote") }}</p>
+    </section>
+    <section v-if="programs.length" class="flex flex-col gap-2" :aria-label="t('grant.programs')">
+      <h3 class="flex items-center gap-2 font-medium"><Monitor :stroke-width="1.5" class="size-4" /> {{ t("grant.programs") }}</h3>
+      <ul class="bg-muted flex flex-col gap-1 rounded-md px-3 py-2 text-sm" data-testid="grant-programs">
+        <li v-for="port in programs" :key="port">{{ t("grant.programPort", { port }) }}</li>
+      </ul>
+      <p class="text-muted-foreground text-sm">{{ t("grant.programsNote") }}</p>
     </section>
     <ModuleNotes v-if="update && update.notes.length" :module-id="module.id" :version="update.version" :unseen="false" :entries="update.notes" />
     <p class="text-muted-foreground text-sm">{{ t("grant.later") }}</p>

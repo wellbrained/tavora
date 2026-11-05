@@ -46,6 +46,13 @@ A module lists what it needs in its [manifest](../reference/manifest.md). Nothin
 - Requests come from the main process, not from a browser session: no cookies, no browser sign-ins, no proxy credentials. A module cannot set `Cookie`, `Host`, `Origin`, `Referer`, `User-Agent`, `Proxy-*` or `Sec-*` headers, `Set-Cookie` is not passed back, and `Authorization` is dropped on a redirect to another host.
 - An answer is read to at most 5 MB after unpacking. A request takes at most 15 s including redirects, with at most 5 redirects and 6 requests per panel at a time.
 
+A module can also ask to **read a program on this PC**, such as a game's local API, as `localhost:<port>` in `permissions.network`. The user grants it like a website, shown apart as "Read programs on this PC" with the port. It is read only:
+
+- Exactly `localhost:<port>` with a port from 1024 to 65535, reached at `127.0.0.1` only (never what a name server or the hosts file says). No other address on the PC or the local network, no `[::1]`, no port ranges.
+- `GET` and `HEAD` only; anything else is refused before a request is made. Plain `http` is allowed here, and `https` with a certificate the program made itself, since nothing leaves the PC. Redirects are not followed.
+- Never reachable: the ports Tavora listens on at that moment (stream overlays, page imports, Discord sign-in), and a fixed list of ports that hold control over the PC or a sign-in (Docker 2375/2376, Discord's local RPC 6463–6472, browser and Node debuggers 9222/9229). `network.readPage` and redirects from websites never reach a program on this PC.
+- The other rules above (no cookies, the headers Tavora sets, the limits) hold the same.
+
 A module page still cannot load remote code (`script-src 'self'`), even from a granted host.
 
 ### Connectors
