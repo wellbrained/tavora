@@ -39,7 +39,7 @@ classes where you use a control; never copy it.
 | A button that starts work that takes a while (install, update, import) | `ProgressButton`: the button fills as the percent, or a stripe moves, then shows a tick | a disabled `Button` with a spinner or "Working…" next to it |
 | Group of buttons, toolbar | `ButtonGroup`, `Separator` between groups | a `div` with a 1 px `span` as divider |
 | On/off button (bold, show outline) | `Toggle`, `ToggleGroup` | `Button` with `aria-pressed` |
-| 2 to 4 views or choices | `SegmentedControl` | a row of buttons acting as tabs |
+| 2 to 4 views or choices | `SegmentedControl`. An option can have an `icon` (with `iconOnly`, the icon alone: its `label` becomes the tooltip and `aria-label`), be `disabled` by itself, and carry a `tooltip`. Say why an option is off with `disabledReason`: it shows as the option's tooltip, and the option stays hoverable and focusable (the arrow keys land on it) but can't be picked | a row of buttons acting as tabs, icons teleported into the items, a wrapper `span` with a tooltip around a disabled option |
 | Tabs | `Tabs`; closable, reorderable or renamable tabs: `TabStrip` | own tab bar |
 | Text, number, code field | `Input`, `Textarea`, `CodeInput`, `Label` | own input with an icon positioned by hand |
 | Pick one | `Select` (short list), `Combobox` (searchable), `Picker`, `RadioGroup` | native `<select>` |

@@ -8,7 +8,7 @@ export { connectModule, type ConnectModuleOptions, type ModuleHandle } from "./c
 export { default as ConfirmDialog } from "./components/ConfirmDialog.vue";
 export { default as NameDialog } from "./components/NameDialog.vue";
 export { checkName, type NameProblem } from "./components/name-check";
-export { SegmentedControl } from "./components/ui/segmented-control";
+export { SegmentedControl, type SegmentedOption } from "./components/ui/segmented-control";
 export { useDocument, type UseDocument } from "./use-document";
 export { useItemSession, type UseItemSession } from "./use-item-session";
 export { errorMessage } from "./documents";
