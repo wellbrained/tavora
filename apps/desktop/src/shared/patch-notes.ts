@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.111",
+    date: "2026-11-05",
+    title: "Ctrl+Z behind a dialog",
+    notes: [
+      "Ctrl+Z no longer brings back a deleted item while a dialog is open.",
+    ],
+    prs: [
+      { number: 686, title: "Ctrl+Z no longer undoes a delete behind an open dialog" },
+    ],
+    tags: ["calculator", "todos", "ui-kit"],
+  },
+  {
     version: "0.23.110",
     date: "2026-11-05",
     title: "Tidier submenus",
