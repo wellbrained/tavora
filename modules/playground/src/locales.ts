@@ -283,7 +283,13 @@ export const en = {
 
   "ex.numbers.Slider": "Slider",
   "ex.numbers.SliderField": "Slider with its value",
-  "ex.numbers.SliderField.note": "Steps of 5.",
+  "ex.numbers.SliderField.note": "Steps of 5. Arrows move one step; Shift+arrow and Page Up/Down move ten.",
+  "demo.slider.plain": "Plain",
+  "demo.slider.editable": "Editable: type a number, Enter or leaving the box takes it, Escape puts it back",
+  "demo.slider.editableReset": "Editable, with Reset",
+  "demo.slider.narrow": "Narrow: the box moves under the slider",
+  "demo.slider.opacity": "Opacity",
+  "demo.slider.reset": "Reset",
   "ex.numbers.NumberField": "Number field",
   "ex.numbers.NumberField.note": "Plus and minus, 1 to 99.",
 
@@ -690,7 +696,13 @@ export const de: Record<TextKey, string> = {
 
   "ex.numbers.Slider": "Regler",
   "ex.numbers.SliderField": "Regler mit seinem Wert",
-  "ex.numbers.SliderField.note": "In Fünferschritten.",
+  "ex.numbers.SliderField.note": "In Fünferschritten. Pfeiltasten gehen einen Schritt, Umschalt+Pfeil und Bild auf/ab zehn.",
+  "demo.slider.plain": "Schlicht",
+  "demo.slider.editable": "Bearbeitbar: Zahl tippen, Enter oder Verlassen des Felds übernimmt sie, Esc stellt sie zurück",
+  "demo.slider.editableReset": "Bearbeitbar, mit Zurücksetzen",
+  "demo.slider.narrow": "Schmal: das Feld rutscht unter den Regler",
+  "demo.slider.opacity": "Deckkraft",
+  "demo.slider.reset": "Zurücksetzen",
   "ex.numbers.NumberField": "Zahlenfeld",
   "ex.numbers.NumberField.note": "Plus und Minus, 1 bis 99.",
 

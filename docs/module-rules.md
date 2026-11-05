@@ -45,7 +45,7 @@ classes where you use a control; never copy it.
 | Pick one | `Select` (short list), `Combobox` (searchable), `Picker`, `RadioGroup` | native `<select>` |
 | A field where the user types their own value or picks a suggestion (a format) | `Combobox` with `free` on its `ComboboxInput`, `ignore-filter` and a `ComboboxTrigger` chevron; the list starts at the field's left edge and is as wide | an `Input` with a "···" button beside it and a menu of its own |
 | Yes/no setting | `Switch` / `SwitchField`, `Checkbox` | own switch |
-| Amount on a range | `Slider` / `SliderField` | |
+| Amount on a range | `Slider` / `SliderField`; `editable` makes its value a box to type in, `resetValue` adds a Reset button (see [Sliders](#sliders)) | |
 | Colour | `ColorPicker` | |
 | Show and hide a part | `Collapsible`, `Expandable` | native `<details>` |
 | List of items to choose or open | `NavList`, `ActionList`, `ActionRow` | a hand-built `ul` of buttons |
@@ -157,6 +157,23 @@ each pattern.
   an icon, even when it is the primary one: `<DialogButton close>Done</DialogButton>`.
 - **Forms**: make the `form` `class="contents"` and put the `DialogFooter` inside it, so the Save button submits.
 - **Texts**: a title of a few words, one short sentence under it, in English and German like everything else.
+
+### Sliders
+
+`SliderField` is the slider with its value and unit at the end. Without options it is the slider and a read-only value.
+
+- **Keys** (Reka's, on the thumb): arrows move one step; Shift+arrow and Page Up/Down move ten steps, kept between min
+  and max; Home and End jump to the limits. Nothing to add in a module.
+- **`editable`**: for an amount people will want to set exactly (a size, a volume, an opacity). The value becomes a
+  small right-aligned box with the unit beside it. A typed number is clamped to min and max and moved onto the step
+  when the box is left or on Enter; Escape puts the old number back (and only takes the key while there is something
+  to put back). A comma works as the decimal mark. Leave it off where the number only needs to be read.
+- **`resetValue`**: for a setting with a default people may want back. A "Reset" button shows before the slider while
+  the value differs from it; its room is kept while it is hidden, so nothing jumps. Pass `reset-label` in the user's
+  language ("Zurücksetzen"). After a reset the focus moves to the slider.
+- **Room**: with either option the slider keeps a least width of 96 px and the box (or the value) moves under it when
+  the row is too narrow, instead of squeezing. Inside a `SettingsRow` (224 px) that means the box sits under the slider
+  with Reset and an editable box; check it in German, where "Zurücksetzen" is wider.
 
 ### Settings
 
