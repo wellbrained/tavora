@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.112",
+    date: "2026-11-05",
+    title: "Modules can read programs on this PC",
+    notes: [
+      "A module can ask to read a program on your PC, like a game's live data, and you decide whether it may.",
+      "It can only read, never change anything there, and never reach Tavora itself or tools like debuggers and Docker.",
+    ],
+    prs: [
+      { number: 690, title: "Modules can read a program on this PC, read only (localhost:<port>)" },
+    ],
+    tags: ["catalog", "discord", "overlays", "privacy", "publishing", "sdk", "website"],
+  },
+  {
     version: "0.23.111",
     date: "2026-11-05",
     title: "Ctrl+Z behind a dialog",
