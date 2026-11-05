@@ -13,6 +13,7 @@ import {
 import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
 import { provideDialogInstant } from "./instant"
+import { trackModal } from "./track-modal"
 
 defineOptions({
   inheritAttrs: false,
@@ -25,6 +26,8 @@ const emits = defineEmits<DialogContentEmits>()
 
 const delegatedProps = reactiveOmit(props, "class", "instant")
 const instant = provideDialogInstant(() => props.instant)
+// Page keys such as Ctrl+Z stand down while it is open (modal.ts).
+trackModal()
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>

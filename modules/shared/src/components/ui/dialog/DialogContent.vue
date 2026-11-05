@@ -16,6 +16,7 @@ import { uiText } from "../text"
 import { dialogChromeKey, dialogCloseClass } from "./chrome"
 import DialogOverlay from "./DialogOverlay.vue"
 import { provideDialogInstant } from "./instant"
+import { trackModal } from "./track-modal"
 
 defineOptions({
   inheritAttrs: false,
@@ -31,6 +32,8 @@ const delegatedProps = reactiveOmit(props, "class", "showCloseButton", "instant"
 
 // Opened by a key (or closed with Escape), or `instant` for a dialog that never animates: no rise, no fade (instant.ts).
 const instant = provideDialogInstant(() => props.instant)
+// Page keys such as Ctrl+Z stand down while it is open (modal.ts).
+trackModal()
 
 // A DialogHeader with a title draws the close X itself (centred against the title); without one the X sits in the corner.
 const headerClose = ref(false)
