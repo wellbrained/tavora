@@ -8,6 +8,7 @@
 //   name), it returns false and the user is told in a short toast.
 // - The delete itself is already saved when the toast shows. A reload or a closed app in the meantime keeps it deleted;
 //   nothing is left half-done.
+import { isModalOpen } from "../dialog/modal";
 import { uiText } from "../text";
 import { toast, type ToastHandle } from "./toast";
 
@@ -114,13 +115,21 @@ function typing(target: EventTarget | null): boolean {
   return typeof Element !== "undefined" && target instanceof Element && target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])") !== null;
 }
 
+/** A key pressed inside an open menu, list or popover belongs to it, as one pressed in a text field. */
+const POPUP = "[role='menu'], [role='listbox'], [role='dialog'], [role='alertdialog']";
+function inPopup(target: EventTarget | null): boolean {
+  return typeof Element !== "undefined" && target instanceof Element && target.closest(POPUP) !== null;
+}
+
 /**
  * Ctrl+Z (Cmd+Z) takes back the newest delete that is still open, outside text fields. Call it from the page's
- * keydown; it answers whether it used the key (it then stops the browser's own handling).
+ * keydown; it answers whether it used the key (it then stops the browser's own handling). It stands down while a kit
+ * dialog is open (the page behind it is waiting, not the user's focus) and for keys pressed inside a menu, list or
+ * popover.
  */
 export function handleUndoKey(event: KeyboardEvent): boolean {
   if (event.defaultPrevented || !(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "z") return false;
-  if (typing(event.target)) return false;
+  if (typing(event.target) || inPopup(event.target) || isModalOpen()) return false;
   const latest = open.findLast((entry) => entry.key);
   if (!latest) return false;
   event.preventDefault();

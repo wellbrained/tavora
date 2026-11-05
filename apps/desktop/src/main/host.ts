@@ -55,6 +55,7 @@ import { boardsModuleId, ModuleLeaderboards, type LeaderboardQuestion } from "./
 import { profileRanks, type ProfileRankSource } from "./profile-ranks";
 import { ModuleLifecycle } from "./module-lifecycle";
 import type { TestHosts } from "./network";
+import { holdOwnPort } from "./own-ports";
 import { shortcutFor } from "./shortcuts";
 import { IconError, importIcon, removeIcon } from "./icons";
 import { clipInitials, clipName, type Profile, removePicture, savePicture } from "./profile";
@@ -5215,6 +5216,7 @@ async function registerHostProtocol(rendererDir: string, imageDirs: Record<strin
   if (devServer) {
     const server = new URL(devServer);
     allowed.push(`${server.origin}/`, `ws://${server.host}/`);
+    if (server.port) holdOwnPort(Number(server.port));
     // Vite injects styles while it hot-reloads, so its pages get a looser
     // policy; still no remote content.
     session.defaultSession.webRequest.onHeadersReceived({ urls: [`${server.origin}/*`] }, (details, callback) => {

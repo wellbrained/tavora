@@ -1,7 +1,10 @@
 // network.fetch: web requests the main process makes for a module, to hosts the user granted
 // (the decision log, module grants row of 2026-10-16; N1–N7 in the threat model). The module's
 // own page still has no network at all (G4); this is the only way out, and every hop is checked.
+// A program on this PC (`localhost:<port>`, such as a game's local API) is read only: GET or HEAD, no redirects,
+// never one of Tavora's own ports or a blocked one (N11).
 import { lookup as dnsLookup, type LookupAddress } from "node:dns";
+import { isLocalPort } from "@tavora/module-schema";
 import http from "node:http";
 import https from "node:https";
 import { isIP, type LookupFunction } from "node:net";
@@ -10,6 +13,17 @@ import type { Readable } from "node:stream";
 import { LIMITS, type NetworkRequest, type NetworkResponse } from "@tavora/sdk/protocol";
 import { isPrivateHost } from "./browser-url";
 import { HostError } from "./errors";
+import { isOwnPort } from "./own-ports";
+
+/** The names a `localhost:<port>` grant answers to; both reach 127.0.0.1. */
+const LOCAL_NAMES = new Set(["localhost", "127.0.0.1"]);
+const LOCAL_METHODS = new Set(["GET", "HEAD"]);
+const METHOD_OVERRIDES = new Set(["x-http-method-override", "x-http-method", "x-method-override"]);
+
+/** Whether this address is a program on this PC (a `localhost:<port>` grant), not a site. */
+export function isLocalTarget(url: URL): boolean {
+  return LOCAL_NAMES.has(url.hostname.toLowerCase());
+}
 
 const METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
 const MAX_URL = 8192;
@@ -123,8 +137,11 @@ export interface FetchPolicy {
   timeoutMs?: number;
 }
 
-/** Checks one address of a request or redirect against the grant. Throws PERMISSION_DENIED. */
-export function checkTarget(raw: string, policy: FetchPolicy): URL {
+/**
+ * Checks one address of a request or redirect against the grant. Throws PERMISSION_DENIED. Only network.fetch's first
+ * hop passes `local`: a program on this PC is never reached by a redirect or a page import.
+ */
+export function checkTarget(raw: string, policy: FetchPolicy, options: { local?: boolean } = {}): URL {
   let url: URL;
   try {
     url = new URL(raw);
@@ -134,6 +151,16 @@ export function checkTarget(raw: string, policy: FetchPolicy): URL {
   const host = url.hostname.toLowerCase();
   const test = policy.testHosts?.has(host) === true;
   const deny = (why: string) => new HostError("PERMISSION_DENIED", why, { capability: "network" });
+  if (isLocalTarget(url) && !test) {
+    if (url.protocol !== "http:" && url.protocol !== "https:") throw deny("network.fetch only uses http or https addresses");
+    if (url.username || url.password) throw deny("network.fetch addresses cannot carry a user name or password");
+    const port = Number(url.port || (url.protocol === "https:" ? 443 : 80));
+    const entry = `localhost:${port}`;
+    if (!options.local) throw deny(`${entry} can only be read by network.fetch directly`);
+    if (!isLocalPort(entry) || isOwnPort(port)) throw deny(`modules cannot reach port ${port} on this PC`);
+    if (!policy.allowedHosts().has(entry)) throw deny(`${entry} has not been granted to this module`);
+    return url;
+  }
   if (url.protocol !== "https:" && !(test && url.protocol === "http:")) throw deny("network.fetch only uses https addresses");
   if (url.username || url.password) throw deny("network.fetch addresses cannot carry a user name or password");
   if (!policy.allowedHosts().has(host)) throw deny(`${host} has not been granted to this module`);
@@ -191,7 +218,13 @@ interface Hop {
   body: Buffer;
 }
 
-function send(url: URL, method: string, headers: Record<string, string>, body: string | undefined, policy: FetchPolicy, signal: AbortSignal): Promise<Hop> {
+/** A program on this PC is always 127.0.0.1, never what a name server or the hosts file says. */
+const loopbackLookup: LookupFunction = (_hostname, options, callback) => {
+  if (options.all) (callback as (error: null, addresses: LookupAddress[]) => void)(null, [{ address: "127.0.0.1", family: 4 }]);
+  else callback(null, "127.0.0.1", 4);
+};
+
+function send(url: URL, method: string, headers: Record<string, string>, body: string | undefined, policy: FetchPolicy, signal: AbortSignal, local: boolean): Promise<Hop> {
   return new Promise((resolve, reject) => {
     const client = url.protocol === "https:" ? https : http;
     const request = client.request(
@@ -199,7 +232,9 @@ function send(url: URL, method: string, headers: Record<string, string>, body: s
       {
         method,
         headers: { ...headers, "user-agent": policy.userAgent, "accept-encoding": "gzip, deflate, br", ...(body !== undefined ? { "content-length": Buffer.byteLength(body) } : {}) },
-        lookup: guardedLookup(policy.testHosts, policy.resolve),
+        lookup: local ? loopbackLookup : guardedLookup(policy.testHosts, policy.resolve),
+        // Local game APIs serve https with a certificate they made themselves; nothing leaves this PC.
+        ...(local && url.protocol === "https:" ? { rejectUnauthorized: false } : {}),
         agent: false,
         signal,
       },
@@ -247,7 +282,14 @@ function networkError(error: unknown, host: string, signal: AbortSignal, timeout
 /** Makes a module's request, following redirects only to granted hosts. */
 export async function moduleFetch(params: unknown, policy: FetchPolicy): Promise<NetworkResponse> {
   const request = parseNetworkRequest(params);
-  let url = checkTarget(request.url, policy);
+  let url = checkTarget(request.url, policy, { local: true });
+  const local = isLocalTarget(url) && policy.testHosts?.has(url.hostname.toLowerCase()) !== true;
+  if (local && !LOCAL_METHODS.has(request.method)) {
+    throw new HostError("PERMISSION_DENIED", "a program on this PC can only be read (GET or HEAD)", { capability: "network" });
+  }
+  // Some servers take these on any method and act as if it were a DELETE or a POST.
+  const override = Object.keys(request.headers).find((name) => METHOD_OVERRIDES.has(name));
+  if (local && override) throw new HostError("PERMISSION_DENIED", `header ${override} cannot be sent to a program on this PC`, { capability: "network" });
   let { method, body } = request;
   let headers = request.headers;
   const timeoutMs = policy.timeoutMs ?? LIMITS.networkTimeoutMs;
@@ -255,10 +297,11 @@ export async function moduleFetch(params: unknown, policy: FetchPolicy): Promise
   for (let redirects = 0; ; redirects++) {
     let hop: Hop;
     try {
-      hop = await send(url, method, headers, body, policy, signal);
+      hop = await send(url, method, headers, body, policy, signal, local);
     } catch (error) {
       throw networkError(error, url.hostname, signal, timeoutMs);
     }
+    if (local && hop.location !== undefined) throw new HostError("NETWORK_ERROR", "a program on this PC answered with a redirect, which is not followed");
     if (hop.location === undefined) {
       return { status: hop.status, url: url.href, headers: hop.headers, body: request.responseType === "base64" ? hop.body.toString("base64") : hop.body.toString("utf8") };
     }

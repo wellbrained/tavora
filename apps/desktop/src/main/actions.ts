@@ -1,4 +1,4 @@
-import { isConnector, isGameId, isModuleId, isNetworkHost, isOwnerId, isPanelTypeId, MAX_NETWORK_HOSTS } from "@tavora/module-schema";
+import { isConnector, isGameId, isModuleId, isNetworkEntry, isOwnerId, isPanelTypeId, MAX_NETWORK_HOSTS } from "@tavora/module-schema";
 import type { ActionResult, HostAction, HostActionType } from "../shared/host-api";
 import { check, hostActionTable, parseHostAction, parsed, type HostChecks } from "../shared/host-actions";
 import { isSite, MAX_ADDRESS } from "./browser-url";
@@ -36,7 +36,7 @@ const CHECKS: HostChecks = {
   gameStart: check((value) => GAME_START_CHOICES.some((choice) => choice === value)),
   layout: parsed(parseLayout),
   networkHosts: check(
-    (value) => Array.isArray(value) && value.length <= MAX_NETWORK_HOSTS && value.every(isNetworkHost) && new Set(value).size === value.length,
+    (value) => Array.isArray(value) && value.length <= MAX_NETWORK_HOSTS && value.every(isNetworkEntry) && new Set(value).size === value.length,
   ),
   connector: check(isConnector),
   snapshotName: text(MAX_SNAPSHOT_NAME),

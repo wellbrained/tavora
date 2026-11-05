@@ -39,13 +39,13 @@ classes where you use a control; never copy it.
 | A button that starts work that takes a while (install, update, import) | `ProgressButton`: the button fills as the percent, or a stripe moves, then shows a tick | a disabled `Button` with a spinner or "Working…" next to it |
 | Group of buttons, toolbar | `ButtonGroup`, `Separator` between groups | a `div` with a 1 px `span` as divider |
 | On/off button (bold, show outline) | `Toggle`, `ToggleGroup` | `Button` with `aria-pressed` |
-| 2 to 4 views or choices | `SegmentedControl` | a row of buttons acting as tabs |
+| 2 to 4 views or choices | `SegmentedControl`. An option can have an `icon` (with `iconOnly`, the icon alone: its `label` becomes the tooltip and `aria-label`), be `disabled` by itself, and carry a `tooltip`. Say why an option is off with `disabledReason`: it shows as the option's tooltip, and the option stays hoverable and focusable (the arrow keys land on it) but can't be picked | a row of buttons acting as tabs, icons teleported into the items, a wrapper `span` with a tooltip around a disabled option |
 | Tabs | `Tabs`; closable, reorderable or renamable tabs: `TabStrip` | own tab bar |
 | Text, number, code field | `Input`, `Textarea`, `CodeInput`, `Label` | own input with an icon positioned by hand |
 | Pick one | `Select` (short list), `Combobox` (searchable), `Picker`, `RadioGroup` | native `<select>` |
 | A field where the user types their own value or picks a suggestion (a format) | `Combobox` with `free` on its `ComboboxInput`, `ignore-filter` and a `ComboboxTrigger` chevron; the list starts at the field's left edge and is as wide | an `Input` with a "···" button beside it and a menu of its own |
 | Yes/no setting | `Switch` / `SwitchField`, `Checkbox` | own switch |
-| Amount on a range | `Slider` / `SliderField` | |
+| Amount on a range | `Slider` / `SliderField`; `editable` makes its value a box to type in, `resetValue` adds a Reset button (see [Sliders](#sliders)) | |
 | Colour | `ColorPicker` | |
 | Show and hide a part | `Collapsible`, `Expandable` | native `<details>` |
 | List of items to choose or open | `NavList`, `ActionList`, `ActionRow` | a hand-built `ul` of buttons |
@@ -159,6 +159,23 @@ each pattern.
 - **Forms**: make the `form` `class="contents"` and put the `DialogFooter` inside it, so the Save button submits.
 - **Texts**: a title of a few words, one short sentence under it, in English and German like everything else.
 
+### Sliders
+
+`SliderField` is the slider with its value and unit at the end. Without options it is the slider and a read-only value.
+
+- **Keys** (Reka's, on the thumb): arrows move one step; Shift+arrow and Page Up/Down move ten steps, kept between min
+  and max; Home and End jump to the limits. Nothing to add in a module.
+- **`editable`**: for an amount people will want to set exactly (a size, a volume, an opacity). The value becomes a
+  small right-aligned box with the unit beside it. A typed number is clamped to min and max and moved onto the step
+  when the box is left or on Enter; Escape puts the old number back (and only takes the key while there is something
+  to put back). A comma works as the decimal mark. Leave it off where the number only needs to be read.
+- **`resetValue`**: for a setting with a default people may want back. A "Reset" button shows before the slider while
+  the value differs from it; its room is kept while it is hidden, so nothing jumps. Pass `reset-label` in the user's
+  language ("Zurücksetzen"). After a reset the focus moves to the slider.
+- **Room**: with either option the slider keeps a least width of 96 px and the box (or the value) moves under it when
+  the row is too narrow, instead of squeezing. Inside a `SettingsRow` (224 px) that means the box sits under the slider
+  with Reset and an editable box; check it in German, where "Zurücksetzen" is wider.
+
 ### Settings
 
 A module's settings are one dialog built from `ModuleSettings` and its parts (guide: [module-settings.md](../apps/docs/guide/module-settings.md)).
@@ -199,7 +216,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Deleting**<a id="deleting"></a>: what can be put back exactly as it was (an item of the module's own document: a to-do, a
   group, a saved value) is deleted at once and saved, then `undoable({ title, undo })` shows "<Thing> deleted" with Undo
   for a few seconds; Ctrl+Z outside text fields takes back the newest one (`handleUndoKey(event)` in the page's
-  keydown). Each delete gets its own toast; `undo` puts back only its own thing, in its place, with its id, and
+  keydown; it stands down while a kit dialog is open and for keys pressed inside a menu, list or popover). Each delete gets its own toast; `undo` puts back only its own thing, in its place, with its id, and
   answers `false` when it can't any more (its place is gone, something took its name): the kit then says so. Check that
   on the list as it is now, since a store change may run again on a newer one. A closed panel or app keeps the delete
   (it is saved already); end open offers in `onBeforeUnmount` with `close()`. `ConfirmDialog` stays for what can't be
@@ -220,7 +237,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
   size: fixed side columns fold away or become a view switch below it. A separate wide layout uses `viewport.wide` and
   `@media (orientation: landscape)` (each panel is its own page, so media queries measure the panel).
 - **Overlays and drop targets** inside a panel use token colours and the kit's radius like everything else.
-- **Data**: bundled with the module, loaded once and shared between panels. Modules reach the network only through the hosts the user granted (`permissions.network`, `network.fetch`).
+- **Data**: bundled with the module, loaded once and shared between panels. Modules reach the network only through the hosts the user granted (`permissions.network`, `network.fetch`), and a program on this PC, such as a game's local API, only read-only as `localhost:<port>`.
 - **Accessibility**: icon-only buttons have a label, everything works by keyboard, a tree or list with a role also has
   its arrow keys, state is never shown by colour alone.
 

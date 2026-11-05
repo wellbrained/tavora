@@ -516,6 +516,8 @@ export interface TavoraSDK {
      * Makes a web request through Tavora, to a host listed in `permissions.network` that the user
      * granted (PERMISSION_DENIED otherwise). HTTPS only, no cookies, at most 5 MB back and 15 seconds.
      * Error statuses such as 404 are answers, not errors; NETWORK_ERROR means no answer came.
+     * A program on this PC listed as `localhost:<port>` (such as a game's local API) is read only:
+     * http or https, GET or HEAD, no redirects. Needs Tavora newer than 0.23.111.
      */
     fetch(url: string, init?: Omit<NetworkRequest, "url">): Promise<NetworkResponse>;
     /** Render a public HTTPS page in a temporary session, with the same granted domains.

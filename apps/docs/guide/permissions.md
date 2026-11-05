@@ -13,7 +13,7 @@ List what your module needs under `permissions` in [`tavora.module.json`](../ref
 }
 ```
 
-- **`network`**: the exact hosts you call with `tavora.network.fetch`, HTTPS only, at most 32. No wildcards, IP addresses or local names. Your page itself still has no network: no `fetch`, remote images, CDN scripts or web fonts.
+- **`network`**: the exact hosts you call with `tavora.network.fetch`, HTTPS only, at most 32. No wildcards, IP addresses or local names. To read a program on the user's PC, such as a game's local API, list `localhost:<port>` (read only: `GET` and `HEAD`, see [Network](../reference/protocol.md#network)). Your page itself still has no network: no `fetch`, remote images, CDN scripts or web fonts.
 - **`connectors`**: `"ai-usage"` for the user's Claude and Codex usage, `"discord"` for the Discord app on this PC, `"system-info"` for the PC's hardware, how busy it is and how its connection is doing, `"media"` for what plays on the PC (Spotify, browsers, video players) with play/pause and skip, `"stream-overlay"` to show your [overlay page](../reference/manifest.md#overlay) in OBS, `"leaderboards"` for [leaderboards](./leaderboards.md) with the user's Tavora account. Tavora keeps the sign-in; you get answers, never a token.
 - **`onRequest`**: connectors your module works without, which Tavora should ask for only when it first needs one. So far that's `"stream-overlay"`: list it in `connectors` and `onRequest`, and users are asked on their first Copy OBS link instead of when they add your module.
 

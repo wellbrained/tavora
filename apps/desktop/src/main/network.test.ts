@@ -5,6 +5,7 @@ import { LIMITS } from "@tavora/sdk/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { HostError } from "./errors";
 import { checkTarget, isPublicAddress, moduleFetch, parseNetworkRequest, parseTestHosts, type FetchPolicy } from "./network";
+import { holdOwnPort, isOwnPort, releaseOwnPort, trackOwnServer } from "./own-ports";
 
 /** What the test server saw of the last request. */
 let seen: { method?: string | undefined; url?: string | undefined; host?: string | undefined; headers: http.IncomingHttpHeaders; body: string } = { headers: {}, body: "" };
@@ -32,6 +33,9 @@ beforeAll(async () => {
         case "/missing":
           response.writeHead(404);
           return response.end("nope");
+        case "/to-local":
+          response.writeHead(302, { location: `http://localhost:${port}/echo` });
+          return response.end();
         case "/to-granted":
           response.writeHead(302, { location: `http://cdn.tavora.test:${port}/echo` });
           return response.end();
@@ -222,7 +226,9 @@ describe("checkTarget", () => {
     ["https://api.example.com:8443/", "standard https port"],
     ["https://user:pw@api.example.com/", "user name or password"],
     ["file:///etc/passwd", "https"],
-    ["https://127.0.0.1/", "has not been granted"],
+    ["https://127.0.0.1/", "can only be read by network.fetch directly"],
+    ["http://localhost:6119/", "can only be read by network.fetch directly"],
+    ["http://[::1]:6119/", "https"],
   ])("refuses %s", (url, why) => {
     let error: unknown;
     try {
@@ -236,6 +242,96 @@ describe("checkTarget", () => {
 
   it("allows plain http only for test hosts", () => {
     expect(checkTarget(`http://api.tavora.test:${port}/`, policy()).protocol).toBe("http:");
+  });
+});
+
+describe("a program on this PC (localhost:<port>)", () => {
+  // The test server listens on 127.0.0.1 at a free port, as a game's local API would.
+  const local = (hosts?: string[]) => policy(hosts ?? [`localhost:${port}`], { testHosts: new Map() });
+  const deniedTarget = (url: string, grant: FetchPolicy) => {
+    try {
+      checkTarget(url, grant, { local: true });
+    } catch (error) {
+      return error as HostError;
+    }
+    throw new Error("expected a refusal");
+  };
+
+  it("reads a granted port through localhost and 127.0.0.1", async () => {
+    expect(await moduleFetch({ url: `http://localhost:${port}/text` }, local())).toMatchObject({ status: 200, body: "hello ü" });
+    expect(await moduleFetch({ url: `http://127.0.0.1:${port}/text` }, local())).toMatchObject({ status: 200, body: "hello ü" });
+    expect(seen.method).toBe("GET");
+    expect((await moduleFetch({ url: `http://localhost:${port}/text`, method: "HEAD" }, local())).status).toBe(200);
+  });
+
+  it("only reads: POST, PUT, PATCH and DELETE are refused before anything is sent", async () => {
+    seen = { headers: {}, body: "" };
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"] as const) {
+      const error = await failure(moduleFetch({ url: `http://localhost:${port}/echo`, method, ...(method === "DELETE" ? {} : { body: "x" }) }, local()));
+      expect(error, method).toMatchObject({ code: "PERMISSION_DENIED", extra: { capability: "network" } });
+      expect(error.message).toContain("can only be read");
+    }
+    expect(seen.method).toBeUndefined();
+  });
+
+  it("never reaches a program on this PC through a website's redirect, even when the port is granted", async () => {
+    const both = policy(["api.tavora.test", `localhost:${port}`]);
+    const error = await failure(moduleFetch({ url: at("/to-local") }, both));
+    expect(error).toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(error.message).toContain("can only be read by network.fetch directly");
+  });
+
+  it("refuses method-override headers to a program on this PC", async () => {
+    for (const name of ["X-HTTP-Method-Override", "x-http-method", "X-Method-Override"]) {
+      const error = await failure(moduleFetch({ url: `http://localhost:${port}/echo`, headers: { [name]: "DELETE" } }, local()));
+      expect(error, name).toMatchObject({ code: "PERMISSION_DENIED" });
+    }
+  });
+
+  it("treats numeric spellings of 127.0.0.1 as the same port grant, and other loopback names as not granted", () => {
+    for (const host of ["2130706433", "0x7f.1", "0177.0.0.1", "127.1"]) {
+      expect(checkTarget(`http://${host}:${port}/`, local(), { local: true }).hostname, host).toBe("127.0.0.1");
+      expect(deniedTarget(`http://${host}:6119/`, local()).message, host).toContain("localhost:6119 has not been granted");
+    }
+    for (const host of ["localhost.", "[::ffff:7f00:1]", "0.0.0.0"]) expect(deniedTarget(`http://${host}:${port}/`, local()).code, host).toBe("PERMISSION_DENIED");
+  });
+
+  it("holds a server's port while it listens and lets it go when it closes", async () => {
+    const own = http.createServer();
+    trackOwnServer(own);
+    await new Promise<void>((resolve) => own.listen(0, "127.0.0.1", resolve));
+    const ownPort = (own.address() as AddressInfo).port;
+    expect(isOwnPort(ownPort)).toBe(true);
+    await new Promise((resolve) => own.close(resolve));
+    expect(isOwnPort(ownPort)).toBe(false);
+  });
+
+  it("does not follow a redirect from a program on this PC", async () => {
+    expect(await failure(moduleFetch({ url: `http://localhost:${port}/see-other` }, local()))).toMatchObject({ code: "NETWORK_ERROR" });
+  });
+
+  it("refuses a port that was not granted, and a public name for the port", () => {
+    expect(deniedTarget("http://localhost:6119/", local()).message).toContain("localhost:6119 has not been granted");
+    expect(deniedTarget(`http://localhost:${port}/`, local(["api.example.com"])).message).toContain("has not been granted");
+  });
+
+  it("refuses blocked ports, system ports and Tavora's own ports even when granted", () => {
+    expect(deniedTarget("http://localhost:9222/json", local(["localhost:9222"])).message).toContain("cannot reach port 9222");
+    expect(deniedTarget("http://localhost/", local(["localhost:80"])).message).toContain("cannot reach port 80");
+    holdOwnPort(port);
+    try {
+      expect(deniedTarget(`http://localhost:${port}/`, local()).message).toContain(`cannot reach port ${port}`);
+    } finally {
+      releaseOwnPort(port);
+    }
+    expect(checkTarget(`http://localhost:${port}/`, local(), { local: true }).port).toBe(String(port));
+  });
+
+  it("refuses a user name, other schemes and other loopback spellings", () => {
+    expect(deniedTarget(`http://user:pw@localhost:${port}/`, local()).message).toContain("user name or password");
+    expect(deniedTarget(`ftp://localhost:${port}/`, local()).message).toContain("http or https");
+    expect(deniedTarget(`http://[::1]:${port}/`, local()).code).toBe("PERMISSION_DENIED");
+    expect(deniedTarget(`http://127.0.0.2:${port}/`, local()).code).toBe("PERMISSION_DENIED");
   });
 });
 

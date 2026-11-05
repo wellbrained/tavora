@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.25",
+    "date": "2026-11-05",
+    "notes": [
+      "Ctrl+Z no longer brings back a deleted item while a dialog is open."
+    ]
+  },
+  {
     "version": "0.1.24",
     "date": "2026-11-03",
     "notes": [

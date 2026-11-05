@@ -2,6 +2,7 @@ import http from "node:http";
 import net from "node:net";
 import { lookup } from "node:dns/promises";
 import { checkTarget, isPublicAddress, type FetchPolicy } from "./network";
+import { trackOwnServer } from "./own-ports";
 
 /** Chromium's DNS is deliberately bypassed: each CONNECT uses a checked, pinned public IP. */
 export async function createPageProxy(policy: FetchPolicy, signal: AbortSignal): Promise<{ port: number; close(): void }> {
@@ -18,6 +19,7 @@ export async function createPageProxy(policy: FetchPolicy, signal: AbortSignal):
     });
   };
   const close = () => { for (const socket of sockets) socket.destroy(); server.close(); };
+  trackOwnServer(server);
   server.on("connection", track);
   server.on("connect", (req, client, head) => {
     void (async () => {

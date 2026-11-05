@@ -1,6 +1,7 @@
 // The Overlay page's view as the main process last sent it (the page in the main window and the layer on the canvas both
 // use it), and the keys both share: the arrow keys nudge the selected frames (together), Del and Backspace remove them,
 // Ctrl+Z and Ctrl+Y (or Ctrl+Shift+Z) undo and redo, Esc lets go of the selection.
+import { isModalOpen } from "@tavora/official-ui/components/ui/dialog";
 import { nextTick, onBeforeUnmount, onMounted, shallowRef } from "vue";
 import type { LayoutItemView, LayoutMessage, LayoutStills, LayoutView } from "../../../shared/layout-view";
 import { boundsOf, moveGroup, nudge } from "../../../shared/layout-math";
@@ -41,7 +42,8 @@ function belongsToControl(target: EventTarget | null): boolean {
 
 export function onLayoutKey(event: KeyboardEvent): void {
   const current = view.value;
-  if (!current || belongsToControl(event.target)) return;
+  // Nothing here while a dialog is open, even when the focus has slipped to the page behind it (Ctrl+Z would undo a frame).
+  if (!current || belongsToControl(event.target) || isModalOpen()) return;
   const key = event.key.toLowerCase();
   if ((event.ctrlKey || event.metaKey) && !event.altKey) {
     if (key === "z" && !event.shiftKey) send({ type: "undo" });

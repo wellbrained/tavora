@@ -157,7 +157,10 @@ export interface ModuleManifest {
    */
   leaderboards?: { boards: LeaderboardBoard[] };
   permissions: {
-    /** Hosts the module asks to reach through network.fetch, such as `api.example.com`. Each needs the user's grant. */
+    /**
+     * Hosts the module asks to reach through network.fetch, such as `api.example.com`, and programs on this PC as
+     * `localhost:<port>` (read only, see isLocalPort). Each needs the user's grant.
+     */
     network: string[];
     /** Parts of Tavora that hold a sign-in, which the module asks to use (see CONNECTORS). Each needs the user's grant. */
     connectors?: Connector[];
@@ -441,6 +444,38 @@ export function isNetworkHost(value: unknown): value is string {
   return !/^\d+$/.test(last) && !["localhost", "local", "internal", "arpa"].includes(last);
 }
 
+/**
+ * Ports on this PC no module may ask for, even with the user's grant: services that hold control over the PC or a
+ * sign-in (Docker 2375/2376, Discord's local RPC 6463–6472, browser and Node debuggers 9222/9229) and Tavora's own
+ * defaults (stream overlays 47820, Discord sign-in 53682). Tavora also refuses whatever port it listens on at the time.
+ */
+export const BLOCKED_LOCAL_PORTS: readonly number[] = [2375, 2376, 6463, 6464, 6465, 6466, 6467, 6468, 6469, 6470, 6471, 6472, 9222, 9229, 47820, 53682];
+/** The lowest port a module may ask for on this PC; the ports below are the system's own services. */
+export const MIN_LOCAL_PORT = 1024;
+
+/**
+ * A program on this PC a module may read from, such as a game's local API: exactly `localhost:<port>` with a port from
+ * MIN_LOCAL_PORT to 65535, not one of BLOCKED_LOCAL_PORTS. network.fetch reaches it over http or https with GET or
+ * HEAD only and no redirects. Needs a `minTavora` newer than LAST_TAVORA_WITHOUT_LOCAL_PORTS.
+ */
+export function isLocalPort(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = /^localhost:([1-9][0-9]{3,4})$/.exec(value);
+  if (!match) return false;
+  const port = Number(match[1]);
+  return port >= MIN_LOCAL_PORT && port <= 65535 && !BLOCKED_LOCAL_PORTS.includes(port);
+}
+
+/** The port of a `localhost:<port>` entry, or null for a public host. */
+export function localPortOf(entry: string): number | null {
+  return isLocalPort(entry) ? Number(entry.slice("localhost:".length)) : null;
+}
+
+/** What `permissions.network` may list: a public host (isNetworkHost) or a program on this PC (isLocalPort). */
+export function isNetworkEntry(value: unknown): value is string {
+  return isNetworkHost(value) || isLocalPort(value);
+}
+
 /** Most languages one manifest may translate into. */
 export const MAX_TRANSLATIONS = 32;
 /** The last Tavora that refuses an `overlay` without the `stream-overlay` connector. */
@@ -459,6 +494,8 @@ export const LAST_TAVORA_WITHOUT_LEADERBOARDS = "0.21.91";
 export const LAST_TAVORA_WITHOUT_WIDE_LAYOUT = "0.21.93";
 /** The last Tavora that refuses `panelLayout`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_PANEL_LAYOUT = "0.23.28";
+/** The last Tavora that refuses `localhost:<port>` in `permissions.network`; a manifest with it needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_LOCAL_PORTS = "0.23.111";
 /** How many rows and columns a `panelLayout` may hold inside each other (the outer one counts), and the most a part's `size` may be. */
 export const MAX_PANEL_LAYOUT_DEPTH = 3;
 export const MAX_PANEL_LAYOUT_SIZE = 10_000;
@@ -884,11 +921,15 @@ export function validateManifest(input: unknown): ManifestResult {
   } else {
     const hosts = permissions.network as unknown[];
     if (hosts.length > MAX_NETWORK_HOSTS) errors.push(`permissions.network may name at most ${MAX_NETWORK_HOSTS} hosts`);
-    const bad = hosts.filter((host) => !isNetworkHost(host));
+    const bad = hosts.filter((host) => !isNetworkEntry(host));
     if (bad.length > 0) {
-      errors.push(`permissions.network must list exact public host names such as api.example.com (lowercase, no scheme, port or wildcard): ${bad.slice(0, 3).map(String).join(", ")}`);
+      errors.push(
+        `permissions.network must list exact public host names such as api.example.com (lowercase, no scheme, port or wildcard) or a program on this PC as localhost:<port> (${MIN_LOCAL_PORT} to 65535, not a blocked port): ${bad.slice(0, 3).map(String).join(", ")}`,
+      );
     } else if (new Set(hosts).size !== hosts.length) {
       errors.push("permissions.network lists a host twice");
+    } else if (hosts.some(isLocalPort) && !officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_LOCAL_PORTS)) {
+      errors.push(`localhost:<port> in permissions.network needs a minTavora newer than ${LAST_TAVORA_WITHOUT_LOCAL_PORTS}, because older Tavoras refuse it`);
     }
   }
   if (isRecord(permissions)) {

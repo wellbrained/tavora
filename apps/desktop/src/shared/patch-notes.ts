@@ -28,6 +28,31 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.112",
+    date: "2026-11-05",
+    title: "Modules can read programs on this PC",
+    notes: [
+      "A module can ask to read a program on your PC, like a game's live data, and you decide whether it may.",
+      "It can only read, never change anything there, and never reach Tavora itself or tools like debuggers and Docker.",
+    ],
+    prs: [
+      { number: 690, title: "Modules can read a program on this PC, read only (localhost:<port>)" },
+    ],
+    tags: ["catalog", "discord", "overlays", "privacy", "publishing", "sdk", "website"],
+  },
+  {
+    version: "0.23.111",
+    date: "2026-11-05",
+    title: "Ctrl+Z behind a dialog",
+    notes: [
+      "Ctrl+Z no longer brings back a deleted item while a dialog is open.",
+    ],
+    prs: [
+      { number: 686, title: "Ctrl+Z no longer undoes a delete behind an open dialog" },
+    ],
+    tags: ["calculator", "todos", "ui-kit"],
+  },
+  {
     version: "0.23.110",
     date: "2026-11-05",
     title: "Tidier submenus",
