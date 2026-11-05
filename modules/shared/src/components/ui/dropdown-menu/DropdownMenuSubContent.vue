@@ -8,7 +8,12 @@ import {
 } from "reka-ui"
 import { cn } from "../../../lib/utils"
 
-const props = defineProps<DropdownMenuSubContentProps & { class?: HTMLAttributes["class"] }>()
+// A submenu opens beside its parent with the same 4 px gap as other menus: its trigger row sits 5 px inside the
+// parent (p-1 + border), so it moves out by 9 px, and up by 5 px so its first row lines up with the trigger.
+const props = withDefaults(defineProps<DropdownMenuSubContentProps & { class?: HTMLAttributes["class"] }>(), {
+  sideOffset: 9,
+  alignOffset: -5,
+})
 const emits = defineEmits<DropdownMenuSubContentEmits>()
 
 const delegatedProps = reactiveOmit(props, "class")
