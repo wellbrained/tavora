@@ -6,11 +6,12 @@
 // inside it. When the folder is not where the manifest says, the user can show Tavora where it is, in the system's own
 // folder dialog; that choice stays on this PC (outside backups and cloud copies), per publisher and module.
 
-import { watch, type FSWatcher } from "node:fs";
+import { realpathSync, watch, type FSWatcher } from "node:fs";
 import { lstat, mkdir, open, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { folderKey, isFolderName, isModuleId, isOwnerId, type FolderAccess, type FolderRoot } from "@tavora/module-schema";
 import type { FolderChange, FolderEntry, FolderListing, FolderState } from "@tavora/sdk/protocol";
+import { readBody } from "./clipboard-http";
 import { HostError } from "./errors";
 import { writeFileAtomic } from "./fsutil";
 
@@ -25,6 +26,8 @@ export const MAX_FOLDER_READ_BYTES = 50 * 1024 * 1024;
 /** How long changes gather before the module hears of them, and most changed paths in one notice. */
 const CHANGE_WAIT_MS = 400;
 const MAX_CHANGES = 500;
+/** A Windows 8.3 short name, such as PASSWO~1.TXT. */
+const SHORT_NAME = /^[^.~]{1,6}~[0-9]+(?:\.[^.]{0,3})?$/;
 
 /** Where things are on this PC, for finding and checking folders. */
 export interface FolderPlaces {
@@ -34,6 +37,13 @@ export interface FolderPlaces {
   home: string;
   /** Tavora's data folder. */
   userData: string;
+  /** Folders nothing inside may be read from: AppData (Roaming and Local), ProgramData, Windows. */
+  closed?: string[];
+  /**
+   * The user's own known folders (Desktop, Downloads, Pictures, OneDrive...): a folder inside one is fine, the folder
+   * itself or one holding it is not, so a pick can't take in more than a manifest could name.
+   */
+  known?: string[];
 }
 
 const win = process.platform === "win32";
@@ -45,16 +55,42 @@ function within(inner: string, outer: string): boolean {
   return a === b || a.startsWith(b.endsWith(path.sep) ? b : b + path.sep);
 }
 
+/** A place as given and with its links resolved (a profile on a junction, a redirected AppData), when that differs. */
+function forms(place: string): string[] {
+  try {
+    const real = realpathSync.native(place);
+    return same(real) === same(path.resolve(place)) ? [place] : [place, real];
+  } catch {
+    return [place];
+  }
+}
+
 /**
- * A folder no module may read, whatever the user picks: a drive, the user's own folder or one holding it, anything in
- * AppData (other programs' sign-ins), and Tavora's data folder, anything in it or holding it.
+ * A folder no module may read, whatever the user picks: a network or device path, a drive, the user's own folder or
+ * one holding it, another user's folder, a dot-folder of the user's (.ssh, .aws...), anything in AppData, ProgramData
+ * or Windows, Tavora's data folder (anything in it or holding it), and the known folders themselves (Documents, Saved
+ * Games, Desktop, Downloads...) or one holding them. A folder inside a known folder, such as Documents\My Game, is fine.
+ * Every place counts as given and with its links resolved.
  */
-export function isRefusedFolder(folder: string, places: Pick<FolderPlaces, "home" | "userData">): boolean {
+export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pick<FolderPlaces, "home" | "userData">): boolean {
   const resolved = path.resolve(folder);
-  if (same(path.parse(resolved).root) === same(resolved) || same(path.parse(resolved).root) === same(resolved + path.sep)) return true;
-  if (within(places.home, resolved)) return true;
-  if (within(resolved, path.join(places.home, "AppData"))) return true;
-  return within(resolved, places.userData) || within(places.userData, resolved);
+  if (win && (resolved.startsWith("\\\\") || resolved.startsWith("//"))) return true;
+  const root = same(path.parse(resolved).root);
+  if (root === same(resolved) || root === same(resolved + path.sep)) return true;
+  for (const home of forms(full.home)) {
+    if (within(home, resolved)) return true;
+    // Another user's folder: inside the folder that holds the user's own, but not inside the user's own.
+    if (within(resolved, path.dirname(home)) && !within(resolved, home)) return true;
+    if (within(resolved, home)) {
+      const first = path.relative(home, resolved).split(path.sep)[0] ?? "";
+      if (first.startsWith(".")) return true;
+    }
+    if (within(resolved, path.join(home, "AppData"))) return true;
+  }
+  for (const closed of (full.closed ?? []).flatMap(forms)) if (within(resolved, closed)) return true;
+  for (const data of forms(full.userData)) if (within(resolved, data) || within(data, resolved)) return true;
+  const known = [...(full.known ?? []), ...Object.values(full.roots ?? {})].flatMap(forms);
+  return known.some((place) => within(place, resolved));
 }
 
 /** Where the manifest says the folder is: its root's folder, then the names below it. */
@@ -133,12 +169,22 @@ export async function listFolder(base: string, entry: FolderAccess): Promise<Fol
     }
     const items = await readdir(dir, { withFileTypes: true }).catch(() => []);
     for (const item of items) {
-      if (item.isSymbolicLink()) continue;
-      if (item.isDirectory()) {
+      if (!isInsideName(item.name)) continue;
+      let isDirectory = item.isDirectory();
+      let isFile = item.isFile();
+      if (item.isSymbolicLink()) {
+        // A listing calls every reparse point a link, also a cloud file (OneDrive's files on demand); ask the file
+        // itself, which says link only for real links and junctions.
+        const info = await lstat(path.join(dir, item.name)).catch(() => null);
+        if (!info || info.isSymbolicLink()) continue;
+        isDirectory = info.isDirectory();
+        isFile = info.isFile();
+      }
+      if (isDirectory) {
         if (rel.length < MAX_FOLDER_LEVELS) queue.push({ dir: path.join(dir, item.name), rel: [...rel, item.name] });
         continue;
       }
-      if (!item.isFile()) continue;
+      if (!isFile) continue;
       const kind = kindOf(item.name, entry);
       if (!kind) continue;
       if (files.length >= MAX_FOLDER_FILES) {
@@ -154,12 +200,28 @@ export async function listFolder(base: string, entry: FolderAccess): Promise<Fol
   return { files, truncated };
 }
 
+/** A file or folder name inside the folder: like a manifest's folder names (isFolderName), but up to 255 characters. */
+function isInsideName(name: string): boolean {
+  return isFolderName(name, 255);
+}
+
 /** The parts of a path inside the folder a module gave, or null when it can't be one (`..`, a drive, a backslash...). */
 export function insidePath(relative: unknown): string[] | null {
-  if (typeof relative !== "string" || relative.length === 0 || relative.length > 1000) return null;
+  if (typeof relative !== "string" || relative.length === 0 || relative.length > 2600) return null;
   const parts = relative.split("/");
-  if (parts.length > MAX_FOLDER_LEVELS + 1 || !parts.every(isFolderName)) return null;
+  if (parts.length > MAX_FOLDER_LEVELS + 1 || !parts.every(isInsideName)) return null;
   return parts;
+}
+
+/**
+ * A path inside the folder as it really is: its real place must be exactly the path asked for (case aside), so a
+ * Windows short name (PASSWO~1.TXT for passwords.txtbackup), a link or a junction is never a way to another file.
+ * Null when it isn't there or isn't that.
+ */
+async function exactly(base: string, parts: string[]): Promise<string | null> {
+  const full = path.join(base, ...parts);
+  const real = await realpath(full).catch(() => null);
+  return real && same(real) === same(full) && within(real, base) && same(real) !== same(base) ? real : null;
 }
 
 const reading = new Map<string, number>();
@@ -177,14 +239,9 @@ export async function readFolderFile(base: string, entry: FolderAccess, relative
   if (active >= 2) throw new HostError("QUOTA_EXCEEDED", "Files are already being read. Try again.");
   reading.set(scope, active + 1);
   try {
-    const full = path.join(base, ...parts);
-    let real: string;
-    try {
-      real = await realpath(full);
-    } catch {
-      throw new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
-    }
-    if (!within(real, base) || same(real) === same(base)) throw new HostError("PERMISSION_DENIED", "This file is not in the folder.");
+    // Missing, or not exactly this file (a short name, a link): the same answer, so nothing can be learned from it.
+    const real = await exactly(base, parts);
+    if (!real || kindOf(path.basename(real), entry) !== "read") throw new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
     const handle = await open(real, "r");
     try {
       const info = await handle.stat();
@@ -277,21 +334,29 @@ export class FolderWatch {
     }
     const changed: FolderEntry[] = [];
     const removed: string[] = [];
+    let unsure = false;
     for (const name of names) {
       const parts = insidePath(name);
       if (!parts) continue;
       const full = path.join(this.base, ...parts);
       const info = await lstat(full).catch(() => null);
       if (!info) {
-        removed.push(name);
+        // The system can name a file by its short name (PASSWO~1.TXT), which says nothing of what it really was: a
+        // listing finds out instead of passing that name on.
+        if (parts.some((part) => SHORT_NAME.test(part))) unsure = true;
+        else removed.push(name);
         continue;
       }
       if (!info.isFile()) continue;
-      const real = await realpath(full).catch(() => null);
-      if (!real || !within(real, this.base)) continue;
-      changed.push({ path: name, size: info.size, modifiedAt: Math.floor(info.mtimeMs), readable: kindOf(name, this.entry) === "read" });
+      // Exactly the file named, of a kind the module may see: never a short name or a link to another one.
+      const real = await exactly(this.base, parts);
+      const kind = real ? kindOf(path.basename(real), this.entry) : null;
+      if (!real || !kind) continue;
+      changed.push({ path: name, size: info.size, modifiedAt: Math.floor(info.mtimeMs), readable: kind === "read" });
     }
-    if (!this.closed && changed.length + removed.length > 0) this.notify({ folder: this.folder, changed, removed, rescan: false });
+    if (this.closed) return;
+    if (unsure) this.notify({ folder: this.folder, changed: [], removed: [], rescan: true });
+    else if (changed.length + removed.length > 0) this.notify({ folder: this.folder, changed, removed, rescan: false });
   }
 
   close(): void {
@@ -327,7 +392,8 @@ export interface FolderHostOptions {
   /** The folderKeys the user granted and the module still asks for (grants.ts), asked on every call. */
   allowed(): ReadonlySet<string>;
   chosen: ChosenFolders;
-  places: FolderPlaces;
+  /** Where things are on this PC, looked up when a call needs them. */
+  places(): FolderPlaces;
   /** The system's folder dialog, starting at `start`; the folder picked, or undefined when it was closed. */
   pick(start: string | undefined, entry: FolderAccess): Promise<string | undefined>;
   /** Tells the user a folder they picked can't be used (a drive, their own folder, AppData, Tavora's data). */
@@ -343,19 +409,31 @@ export function folderHost(options: FolderHostOptions): FolderHost {
     if (!entry) throw new HostError("PERMISSION_DENIED", "This folder isn't allowed for this module.", { capability: "folders" });
     return entry;
   };
+  const listings = new Map<string, Promise<FolderListing>>();
   const base = async (entry: FolderAccess) => {
-    const found = await findFolder(entry, options.chosen, options.places);
+    const found = await findFolder(entry, options.chosen, options.places());
     if (!found) throw new HostError("BAD_REQUEST", "Can't find this folder. Show Tavora where it is.");
     return found;
   };
   return {
     state: async (folder) => {
       const entry = granted(folder);
-      return folderState(entry, entry ? await findFolder(entry, options.chosen, options.places) : null);
+      return folderState(entry, entry ? await findFolder(entry, options.chosen, options.places()) : null);
     },
     list: async (folder) => {
       const entry = need(folder);
-      return listFolder(await base(entry), entry);
+      // One listing of a folder at a time per module: calls made meanwhile get the same answer, so a page can't keep
+      // the system's file threads busy.
+      const key = folderKey(entry);
+      const running = listings.get(key);
+      if (running) return running;
+      const listing = base(entry).then((found) => listFolder(found, entry));
+      listings.set(key, listing);
+      try {
+        return await listing;
+      } finally {
+        listings.delete(key);
+      }
     },
     read: async (folder, relative) => {
       const entry = need(folder);
@@ -363,7 +441,7 @@ export function folderHost(options: FolderHostOptions): FolderHost {
     },
     watch: async (folder, notify) => {
       const entry = need(folder);
-      const found = await findFolder(entry, options.chosen, options.places);
+      const found = await findFolder(entry, options.chosen, options.places());
       if (!found) return null;
       const watcher = new FolderWatch(entry.path, found, entry, (change) => {
         // A grant taken back, or a folder moved elsewhere, ends the watch at its next change.
@@ -374,12 +452,12 @@ export function folderHost(options: FolderHostOptions): FolderHost {
     },
     choose: async (folder) => {
       const entry = need(folder);
-      const start = (await findFolder(entry, options.chosen, options.places)) ?? options.places.roots[entry.path.split("/")[0] as FolderRoot];
+      const start = (await findFolder(entry, options.chosen, options.places())) ?? options.places().roots[entry.path.split("/")[0] as FolderRoot];
       const picked = await options.pick(start, entry);
       if (!picked || !granted(entry.path)) return false;
       const real = await realpath(picked).catch(() => null);
       if (!real || !(await stat(real).catch(() => null))?.isDirectory()) return false;
-      if (isRefusedFolder(real, options.places)) {
+      if (isRefusedFolder(real, options.places())) {
         options.refused();
         return false;
       }
@@ -397,8 +475,8 @@ export async function serveFolderFile(request: Request, folders: Pick<FolderHost
   if (!folders) return fail("UNKNOWN_METHOD", "Update Tavora to read folders.", 400);
   let body: { folder?: unknown; path?: unknown };
   try {
-    const text = await request.text();
-    if (text.length > 4096) return fail("INVALID_PARAMS", "Not a file in this folder.", 400);
+    if (!request.body) throw Error();
+    const text = (await readBody(request, 8192, "a folder request")).toString("utf8");
     body = JSON.parse(text) as typeof body;
     if (!body || typeof body !== "object") throw Error();
   } catch {

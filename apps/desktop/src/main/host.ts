@@ -4104,7 +4104,7 @@ export class Host {
       folders: () => current()?.manifest.permissions.folders,
       allowed,
       chosen: new ChosenFolders(app.getPath("userData"), module.owner, module.manifest.id),
-      places: this.folderPlaces(),
+      places: () => this.folderPlaces(),
       pick: async (start, entry) => {
         const picked = await dialog.showOpenDialog(this.window, {
           ...(start ? { defaultPath: start } : {}),
@@ -4122,10 +4122,30 @@ export class Host {
     return { ...host, granted: () => allowed().size > 0 };
   }
 
-  /** Where Documents and Saved Games are on this PC, and the folders no module may read from. */
+  /**
+   * Where Documents and Saved Games are on this PC, and the folders no module may read from (folder-access.ts). Looked
+   * up when a folder call needs them, so a PC whose known folders the system can't say still opens every panel.
+   */
   private folderPlaces(): FolderPlaces {
-    const home = app.getPath("home");
-    return { roots: { Documents: app.getPath("documents"), "Saved Games": path.join(home, "Saved Games") }, home, userData: app.getPath("userData") };
+    const at = (name: Parameters<typeof app.getPath>[0]): string | null => {
+      try {
+        return app.getPath(name);
+      } catch {
+        return null;
+      }
+    };
+    const home = at("home") ?? os.homedir();
+    const documents = !app.isPackaged && process.env.TAVORA_DOCUMENTS_DIR ? path.resolve(process.env.TAVORA_DOCUMENTS_DIR) : (at("documents") ?? path.join(home, "Documents"));
+    const env = (name: string) => process.env[name] || null;
+    const known = [at("desktop"), at("downloads"), at("pictures"), at("music"), at("videos"), env("OneDrive"), env("OneDriveConsumer"), env("OneDriveCommercial")];
+    const closed = [at("appData"), env("LOCALAPPDATA"), env("APPDATA"), env("ProgramData"), env("SystemRoot"), env("windir")];
+    return {
+      roots: { Documents: documents, "Saved Games": path.join(home, "Saved Games") },
+      home,
+      userData: app.getPath("userData"),
+      known: known.filter((place): place is string => place !== null),
+      closed: closed.filter((place): place is string => place !== null),
+    };
   }
 
   private networkHostsOf(moduleId: string): ReadonlySet<string> {

@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -14,8 +15,14 @@ let game: string;
 
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), "tavora-folders-"));
-  const home = path.join(root, "home");
-  places = { roots: { Documents: path.join(home, "Documents"), "Saved Games": path.join(home, "Saved Games") }, home, userData: path.join(home, "AppData", "Roaming", "Tavora") };
+  const home = path.join(root, "Users", "me");
+  places = {
+    roots: { Documents: path.join(home, "Documents"), "Saved Games": path.join(home, "Saved Games") },
+    home,
+    userData: path.join(home, "AppData", "Roaming", "Tavora"),
+    known: [path.join(home, "Desktop"), path.join(home, "Downloads"), path.join(home, "OneDrive")],
+    closed: [path.join(root, "ProgramData"), path.join(root, "Windows")],
+  };
   game = path.join(places.roots.Documents, "Game");
   await mkdir(path.join(game, "Accounts", "1", "Replays"), { recursive: true });
   await writeFile(path.join(game, "Accounts", "1", "Replays", "Ladder.SC2Replay"), "replay");
@@ -38,8 +45,22 @@ describe("refused folders", () => {
     expect(isRefusedFolder(path.join(places.home, "Downloads", "Saves"), places)).toBe(false);
   });
 
+  it("refuses more than a manifest could name: the known folders themselves, dot-folders, other users, closed places, network paths", () => {
+    expect(isRefusedFolder(places.roots.Documents, places)).toBe(true);
+    expect(isRefusedFolder(places.roots["Saved Games"], places)).toBe(true);
+    expect(isRefusedFolder(path.join(places.home, "Desktop"), places)).toBe(true);
+    expect(isRefusedFolder(path.join(places.home, "OneDrive"), places)).toBe(true);
+    expect(isRefusedFolder(path.join(places.home, ".ssh"), places)).toBe(true);
+    expect(isRefusedFolder(path.join(places.home, ".docker", "contexts"), places)).toBe(true);
+    expect(isRefusedFolder(path.join(path.dirname(places.home), "someone", "Documents", "Game"), places)).toBe(true);
+    expect(isRefusedFolder(path.join(root, "ProgramData", "Game"), places)).toBe(true);
+    if (process.platform === "win32") expect(isRefusedFolder("\\\\localhost\\c$\\Users\\me\\Documents\\Game", places)).toBe(true);
+    expect(isRefusedFolder(path.join(places.home, "OneDrive", "Documents", "Game"), places)).toBe(false);
+  });
+
   it("refuses Tavora's data folder and the folders holding it when it lives outside the user's folder", () => {
     const portable = { home: places.home, userData: path.join(root, "Portable", "Tavora", "data") };
+    expect(isRefusedFolder(path.join(root, "Portable", "Tavora"), portable)).toBe(true);
     expect(isRefusedFolder(path.join(root, "Portable"), portable)).toBe(true);
     expect(isRefusedFolder(path.join(root, "Portable", "Tavora", "data", "grants"), portable)).toBe(true);
     expect(isRefusedFolder(path.join(root, "Portable", "Games"), portable)).toBe(false);
@@ -74,7 +95,35 @@ describe("listing", () => {
     await symlink(outside, path.join(game, "Linked"), "junction");
     const paths = (await listFolder(game, replays)).files.map((file) => file.path);
     expect(paths.some((item) => item.includes("Stolen"))).toBe(false);
-    await expect(readFolderFile(game, replays, "Linked/Stolen.SC2Replay", "test")).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    // The same answer as a file that isn't there, so a link can't tell what lies behind it.
+    await expect(readFolderFile(game, replays, "Linked/Stolen.SC2Replay", "test")).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("names", () => {
+  it("lists and reads files with long names", async () => {
+    const long = `${"Ladder game on a map with a very long name, ".repeat(3)}.SC2Replay`;
+    await writeFile(path.join(game, long), "long");
+    expect((await listFolder(game, replays)).files.map((file) => file.path)).toContain(long);
+    expect((await readFolderFile(game, replays, long, "test")).toString()).toBe("long");
+  });
+
+  it("never reads another file through a Windows short name", async () => {
+    if (process.platform !== "win32") return;
+    const secret = path.join(game, "passwords.txtbackup");
+    await writeFile(secret, "secret");
+    let short = "";
+    try {
+      const line = execSync(`for %I in ("${secret}") do @echo %~sI`, { encoding: "utf8", shell: "cmd.exe" });
+      short = path.basename(line.trim());
+    } catch {
+      return;
+    }
+    // Short names are off on this drive: nothing to try.
+    if (!short || short.toLowerCase() === "passwords.txtbackup") return;
+    const text = { path: "Documents/Game", read: ["txt"] };
+    await expect(readFolderFile(game, text, short, "test")).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(readFolderFile(game, text, "missing.txt", "test")).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
 
@@ -99,7 +148,7 @@ describe("the module's folders", () => {
       folders: () => [replays],
       allowed: () => new Set(allowed),
       chosen: new ChosenFolders(places.userData, "local", "local.game"),
-      places,
+      places: () => places,
       pick: async () => pick,
       refused,
       scope: "local/local.game",
@@ -119,10 +168,18 @@ describe("the module's folders", () => {
     await rm(game, { recursive: true });
     expect(await granted.state("Documents/Game")).toEqual({ found: false, reason: "missing" });
     const moved = path.join(root, "D", "Games", "Game");
+    expect(await host([folderKey(replays)], places.roots.Documents).choose("Documents/Game")).toBe(false);
     await mkdir(moved, { recursive: true });
     await writeFile(path.join(moved, "Moved.SC2Replay"), "x");
     expect(await host([folderKey(replays)], moved).choose("Documents/Game")).toBe(true);
     expect((await granted.list("Documents/Game")).files.map((file) => file.path)).toEqual(["Moved.SC2Replay"]);
+  });
+
+  it("lists a folder once at a time, giving calls made meanwhile the same answer", async () => {
+    const granted = host([folderKey(replays)]);
+    const [a, b] = await Promise.all([granted.list("Documents/Game"), granted.list("Documents/Game")]);
+    expect(a).toEqual(b);
+    expect(a.files).toHaveLength(2);
   });
 
   it("won't take a folder no module may read, and says so", async () => {
@@ -140,6 +197,7 @@ describe("the module's folders", () => {
     expect(await ok.text()).toBe("replay");
     expect((await serveFolderFile(new Request("tavora-module://local.game/_folders/read"), granted)).status).toBe(405);
     expect((await serveFolderFile(post("not json"), granted)).status).toBe(400);
+    expect((await serveFolderFile(post(JSON.stringify({ folder: "Documents/Game", path: "x".repeat(9000) })), granted)).status).toBe(400);
     expect((await serveFolderFile(post(JSON.stringify({ folder: "Documents/Game", path: "Brain_844@2.lnk" })), granted)).status).toBe(403);
     expect((await serveFolderFile(post(JSON.stringify({ folder: "Documents/Game", path: "x.SC2Replay" })), host([]))).status).toBe(403);
   });

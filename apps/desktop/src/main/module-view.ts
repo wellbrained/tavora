@@ -359,6 +359,8 @@ export class ModuleView {
   private mediaWatch: MediaSubscription | undefined;
   /** The folders this panel watches (folders.watch), by manifest path. */
   private readonly folderWatches = new Map<string, FolderWatch>();
+  /** How many folders.watch calls each folder had, so a slow start can't outlive a later call. */
+  private readonly folderTurns = new Map<string, number>();
   /** When one of the module's hotkeys was last pressed for this panel; it allows one media.control, like a click. */
   private hotkeyAt = 0;
   /** The inserted theme stylesheet of the current page, removed when the theme changes. */
@@ -869,6 +871,9 @@ export class ModuleView {
       state: (folder) => folders.state(folder),
       list: (folder) => folders.list(folder),
       watch: async (folder, on) => {
+        // Only the newest call for a folder counts: a watch that finishes starting after a later on or off is dropped.
+        const turn = (this.folderTurns.get(folder) ?? 0) + 1;
+        this.folderTurns.set(folder, turn);
         this.folderWatches.get(folder)?.close();
         this.folderWatches.delete(folder);
         if (!on) return;
@@ -877,9 +882,7 @@ export class ModuleView {
           else this.stopFolderWatches();
         });
         if (!watcher) return;
-        // A second watch call while this one started: only the newest stays.
-        this.folderWatches.get(folder)?.close();
-        if (this.bridge === bridge()) this.folderWatches.set(folder, watcher);
+        if (this.bridge === bridge() && this.folderTurns.get(folder) === turn) this.folderWatches.set(folder, watcher);
         else watcher.close();
       },
       choose: async (folder) => {

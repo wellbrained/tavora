@@ -507,13 +507,13 @@ const FOLDER_EXTENSION = /^[a-z0-9]{1,16}$/;
 const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
 
 /**
- * One folder name a path may hold: 1 to 64 characters that Windows allows in a name, not `.` or `..`, not starting or
+ * One folder name a path may hold: 1 to `max` (64) characters that Windows allows in a name, not `.` or `..`, not starting or
  * ending with a space, not ending with a dot and not a name Windows keeps for devices (CON, NUL, COM1...).
  */
-export function isFolderName(value: string): boolean {
+export function isFolderName(value: string, max = 64): boolean {
   return (
     value.length >= 1 &&
-    value.length <= 64 &&
+    value.length <= max &&
     !/[<>:"/\\|?*\u0000-\u001f\u007f]/.test(value) &&
     value !== "." &&
     value !== ".." &&
@@ -526,7 +526,7 @@ export function isFolderName(value: string): boolean {
 export function isFolderPath(value: unknown): value is string {
   if (typeof value !== "string" || value.length > 400) return false;
   const [root, ...names] = value.split("/");
-  return (FOLDER_ROOTS as readonly string[]).includes(root!) && names.length >= 1 && names.length <= MAX_FOLDER_DEPTH && names.every(isFolderName);
+  return (FOLDER_ROOTS as readonly string[]).includes(root!) && names.length >= 1 && names.length <= MAX_FOLDER_DEPTH && names.every((name) => isFolderName(name));
 }
 
 /** Why a `permissions.folders` entry is not one, or null when it is. */
