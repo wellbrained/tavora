@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.30",
+    "date": "2026-11-05",
+    "notes": [
+      "New specimen: segmented control with icons, icon-only options and one option that is off with a reason."
+    ]
+  },
+  {
     "version": "0.1.29",
     "date": "2026-11-04",
     "notes": [
