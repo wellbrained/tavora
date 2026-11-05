@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.110",
+    date: "2026-11-05",
+    title: "Tidier submenus",
+    notes: [
+      "Submenus open next to their menu with a small gap, no longer over its edge.",
+    ],
+    prs: [
+      { number: 685, title: "Kit: submenus open beside their menu with a 4 px gap, first row in line with the trigger" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.23.109",
     date: "2026-11-04",
     title: "Evener panel tabs",
