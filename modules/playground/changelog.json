@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.30",
+    "version": "0.1.31",
     "date": "2026-11-05",
     "notes": [
       "The slider with its value now shows an editable box and a Reset button, with specimens for each, narrow and in German."
+    ]
+  },
+  {
+    "version": "0.1.30",
+    "date": "2026-11-05",
+    "notes": [
+      "New specimen: segmented control with icons, icon-only options and one option that is off with a reason."
     ]
   },
   {

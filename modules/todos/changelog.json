@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.2.17",
+    "version": "0.2.18",
     "date": "2026-11-05",
     "notes": [
       "Under the hood: a shared slider got new options."
+    ]
+  },
+  {
+    "version": "0.2.17",
+    "date": "2026-11-05",
+    "notes": [
+      "Ctrl+Z no longer brings back a deleted item while a dialog is open."
     ]
   },
   {
