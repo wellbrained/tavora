@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { allowsPersonalWorkspaces, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, SIGNATURE_FILE, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
 
@@ -240,7 +240,8 @@ export interface CatalogEntry {
   personalWorkspaces: boolean;
   /** @deprecated The same, for Tavora 0.21.42 and older, which read it under this name. Sent until Tavora's 1.0 preparation. */
   workspaces: boolean;
-  permissions: { network: string[]; connectors: string[] };
+  /** `folders`: permissions.folders as grant keys (folderKey); Tavora 0.23.112 and older ignore it. */
+  permissions: { network: string[]; connectors: string[]; folders: string[] };
   /** The fingerprint of the publisher key that signed this version: the module's first key, or its successor. */
   owner: string;
   zip: { sha256: string; size: number };
@@ -356,7 +357,7 @@ function entryOf(row: VersionSql): CatalogEntry {
     games: manifest.games,
     personalWorkspaces: allowsPersonalWorkspaces(manifest),
     workspaces: allowsPersonalWorkspaces(manifest),
-    permissions: { network: manifest.permissions.network, connectors: manifest.permissions.connectors ?? [] },
+    permissions: { network: manifest.permissions.network, connectors: manifest.permissions.connectors ?? [], folders: (manifest.permissions.folders ?? []).map(folderKey) },
     owner: row.owner,
     zip: { sha256: row.sha256, size: row.size },
     publishedAt: row.published_at,

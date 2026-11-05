@@ -42,7 +42,7 @@ import {
   type TavoraViewport,
   type TavoraWorkspace,
 } from "@tavora/sdk/protocol";
-import { isActionId, isPanelTypeId, MAX_PANEL_TYPES } from "@tavora/module-schema";
+import { isActionId, isFolderPath, isPanelTypeId, MAX_PANEL_TYPES } from "@tavora/module-schema";
 import { HostError } from "./errors";
 import { serializeJson } from "./json";
 import { discordCommand, discordSubscription } from "./discord-commands";
@@ -78,6 +78,16 @@ export const PANEL_DIALOG = { min: 240, max: 2000, width: 560, height: 640 } as 
  * view that owns the port, never from anything the module sends.
  */
 export interface BridgeContext {
+  /**
+   * Folders of permissions.folders (main/folder-access.ts). Each call names the folder by its manifest path and checks
+   * the user's grant again; none of them ever says where the folder is.
+   */
+  folders?: {
+    state(folder: string): Promise<import('@tavora/sdk/protocol').FolderState>;
+    list(folder: string): Promise<import('@tavora/sdk/protocol').FolderListing>;
+    watch(folder: string, on: boolean): Promise<void>;
+    choose(folder: string): Promise<boolean>;
+  };
   readOnlyFiles?: {
     pick(extensions: string[], multiple: boolean, near?: import('@tavora/sdk/protocol').PickNear): Promise<import('@tavora/sdk/protocol').ReadOnlyFile[]>;
     forget(id:string):Promise<void>;
@@ -307,6 +317,19 @@ function fileReference(params: unknown): string {
   return id;
 }
 
+/** The host's folders, or UNKNOWN_METHOD from a host that has none. */
+function folderContext(s: BridgeSession): NonNullable<BridgeContext["folders"]> {
+  if (!s.context.folders) throw new HostError('UNKNOWN_METHOD','Update Tavora to read folders.');
+  return s.context.folders;
+}
+
+/** The folder a folders.* call names: a permissions.folders path, checked against the grant by the host. */
+function folderParam(params: unknown): string {
+  const folder = object(params).folder;
+  if (!isFolderPath(folder)) throw new HostError('INVALID_PARAMS','folder must be a path of permissions.folders, such as Documents/My Game.');
+  return folder;
+}
+
 /** Where files.pickReadOnly starts: next to a linked file, up to three folders higher. Only a start, never access. */
 function pickNear(value: unknown): import('@tavora/sdk/protocol').PickNear | undefined {
   if (value === undefined) return undefined;
@@ -322,6 +345,15 @@ function legacyGame({ id, displayName, kind }: TavoraWorkspace): TavoraGame {
 }
 
 const handlers = new Map<string, Handler>([
+  ['folders.state', (s,params) => { const folder = folderParam(params); needs(s,'folders','folders.state'); return folderContext(s).state(folder); }],
+  ['folders.list', (s,params) => { const folder = folderParam(params); needs(s,'folders','folders.list'); return folderContext(s).list(folder); }],
+  ['folders.watch', async (s,params) => {
+    const folder = folderParam(params), on = object(params).on;
+    if (typeof on !== 'boolean') throw new HostError('INVALID_PARAMS','on must be true or false.');
+    needs(s,'folders','folders.watch');
+    await folderContext(s).watch(folder, on); return null;
+  }],
+  ['folders.choose', (s,params) => { const folder = folderParam(params); needs(s,'folders','folders.choose'); return folderContext(s).choose(folder); }],
   ['files.pickReadOnly', async (s,params) => {
     const extensions = object(params).extensions;
     if (!Array.isArray(extensions) || !extensions.length || extensions.length>10 || extensions.some(e=>typeof e!=='string'|| !/^[a-z0-9]{1,12}$/.test(e))) throw new HostError('INVALID_PARAMS','Choose up to ten file extensions.');

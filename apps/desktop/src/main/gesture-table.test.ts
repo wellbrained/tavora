@@ -17,6 +17,7 @@ function bridgeChecks(): string[] {
 /** The call each address the module's session answers stands for. A new address must be added here. */
 const PATH_CALLS: Record<string, CallName> = {
   READ_ONLY_FILE_PATH: "files.read",
+  FOLDER_READ_PATH: "folders.read",
   BLOB_PATH: "blobs.put",
   APP_BLOB_PATH: "blobs.app.put",
   CLIPBOARD_PATH: "clipboard.writeImage",

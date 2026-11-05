@@ -1,7 +1,7 @@
 import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ChangelogEntry, type ModuleManifest } from "@tavora/module-schema";
+import { folderKey, isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ChangelogEntry, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, packModule, PackError, type Published } from "@tavora/pack";
 import type { AccountView, PrefixState, PublishProblem, PublishView, ReadmeBlock } from "../shared/host-api";
 import { suggestPrefix } from "../shared/id-prefix";
@@ -157,7 +157,7 @@ export class ModulePublisher {
     }
     const { id, name, version } = manifest;
     view.module = { id, name, version, icon: this.options.icon(id) };
-    view.asks = { network: [...manifest.permissions.network], connectors: [...(manifest.permissions.connectors ?? [])] };
+    view.asks = { network: [...manifest.permissions.network], connectors: [...(manifest.permissions.connectors ?? [])], folders: (manifest.permissions.folders ?? []).map(folderKey) };
     view.readme = await readReadme(project, manifest);
     view.notes = (await readChangelog(project, manifest)).find((entry) => entry.version === version)?.notes ?? [];
 
@@ -220,7 +220,7 @@ function emptyView(project: string): PublishView {
     module: null,
     notes: [],
     readme: null,
-    asks: { network: [], connectors: [] },
+    asks: { network: [], connectors: [], folders: [] },
     size: null,
     builtAt: null,
     sourceNewer: false,

@@ -1,6 +1,7 @@
 import { ReadOnlyFiles } from './read-only-files';
 import { serveReadOnlyFile } from './read-only-files-http';
-import { READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
+import { FOLDER_READ_PATH, READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
+import { serveFolderFile, type FolderHost, type FolderWatch } from './folder-access';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, shell, WebContentsView, type Session } from "electron";
@@ -114,6 +115,8 @@ export interface ModuleViewOptions {
   networkHosts(): ReadonlySet<string>;
   /** Connectors the user granted this module, as installed now; asked on every call. */
   connectors(): ReadonlySet<string>;
+  /** The module's folders on this PC (permissions.folders), the grant asked on every call; none for a host without them. */
+  folders?: FolderHost & { granted(): boolean };
   /** The module's settings shared by every workspace (storage.app). */
   appSettings: ModuleStore;
   /** The module's files shared by every workspace (blobs.app). */
@@ -237,7 +240,7 @@ export function documentsFolder(): string {
  * Every module gets its own session per workspace: separate cookies, web storage,
  * cache and a separate renderer process from the host and other modules.
  */
-function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blobs: BlobStore, appBlobs: BlobStore, files: Pick<ModuleViewOptions, "savePicture" | "saveJson" | "openJson" | "saveFile" | "openFile">): Session {
+function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blobs: BlobStore, appBlobs: BlobStore, files: Pick<ModuleViewOptions, "savePicture" | "saveJson" | "openJson" | "saveFile" | "openFile" | "folders">): Session {
   const ses = session.fromPartition(modulePartition(module.owner, module.manifest.id, workspace.id));
   // The folder a session serves from follows the module as installed now: a built-in module's downloaded copy lives elsewhere than the shipped one.
   serving.set(ses, module);
@@ -254,6 +257,7 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
     const url = new URL(request.url);
     if (url.host !== module.manifest.id) return new Response("Not found", { status: 404 });
     if (url.pathname.startsWith(READ_ONLY_FILE_PATH)) return serveReadOnlyFile(request,url.pathname.slice(READ_ONLY_FILE_PATH.length),new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id));
+    if (url.pathname === FOLDER_READ_PATH) return serveFolderFile(request, files.folders);
     if (url.pathname.startsWith(BLOB_PATH)) return serveBlobs(blobs, request, url);
     if (url.pathname.startsWith(APP_BLOB_PATH)) return serveBlobs(appBlobs, request, url, APP_BLOB_PATH);
     if (url.pathname === CLIPBOARD_PATH) return serveClipboard(request, { ...pressCheck(gestureOf(ses)), write: writeClipboardPicture });
@@ -353,6 +357,8 @@ export class ModuleView {
   private systemWatch: SystemSubscription | undefined;
   /** This panel's watch of what plays on the PC (media.ts), while it watches. */
   private mediaWatch: MediaSubscription | undefined;
+  /** The folders this panel watches (folders.watch), by manifest path. */
+  private readonly folderWatches = new Map<string, FolderWatch>();
   /** When one of the module's hotkeys was last pressed for this panel; it allows one media.control, like a click. */
   private hotkeyAt = 0;
   /** The inserted theme stylesheet of the current page, removed when the theme changes. */
@@ -384,6 +390,7 @@ export class ModuleView {
           openJson: () => options.openJson(),
           saveFile: (data, name, kind) => options.saveFile(data, name, kind),
           openFile: (kinds) => options.openFile(kinds),
+          ...(options.folders ? { folders: options.folders } : {}),
         }),
         preload: options.preload,
         sandbox: true,
@@ -746,6 +753,7 @@ export class ModuleView {
           move:anchor=>{if(this.tooltipAnchorAllowed(anchor.at)&&this.tooltipPointerMatches(anchor.at))this.options.tooltip?.move(anchor);},
           close:(id,hoverOnly)=>this.options.tooltip?.close(id,hoverOnly),
         },
+        ...(this.options.folders ? { folders: this.foldersFor(() => bridge, this.options.folders) } : {}),
         readOnlyFiles: {
           pick: async (extensions, multiple, near) => {
             this.refuseOverGame('files.pickReadOnly');
@@ -829,6 +837,7 @@ export class ModuleView {
         this.bridge = undefined;
         this.stopSystemWatch();
         this.stopMediaWatch();
+        this.stopFolderWatches();
         this.options.discord.release(this.options.instanceId);
       },
     );
@@ -846,7 +855,45 @@ export class ModuleView {
     if (this.options.connectors().has("media")) granted.add("media");
     if (this.options.connectors().has("discord")) granted.add("discord");
     if (this.options.connectors().has("stream-overlay")) granted.add("overlay");
+    if (this.options.folders?.granted()) granted.add("folders");
     return granted;
+  }
+
+  /**
+   * The module's folders as this panel uses them. Changes reach only this page and only while the grant lasts (a revoke
+   * ends a watch at its next change at the latest, and closing the panel ends it at once); like media they keep coming
+   * while the panel is hidden, since they are rare and an overlay over the game may need them.
+   */
+  private foldersFor(bridge: () => BridgeSession, folders: FolderHost): NonNullable<BridgeContext["folders"]> {
+    return {
+      state: (folder) => folders.state(folder),
+      list: (folder) => folders.list(folder),
+      watch: async (folder, on) => {
+        this.folderWatches.get(folder)?.close();
+        this.folderWatches.delete(folder);
+        if (!on) return;
+        const watcher = await folders.watch(folder, (change) => {
+          if (this.bridge === bridge() && this.capabilities().has("folders")) bridge().emit("folders.changed", change);
+          else this.stopFolderWatches();
+        });
+        if (!watcher) return;
+        // A second watch call while this one started: only the newest stays.
+        this.folderWatches.get(folder)?.close();
+        if (this.bridge === bridge()) this.folderWatches.set(folder, watcher);
+        else watcher.close();
+      },
+      choose: async (folder) => {
+        // Tavora's folder dialog; one click opens it once, and not while the panel is over the game.
+        this.refuseOverGame("folders.choose");
+        await this.takeGesture("folders.choose");
+        return folders.choose(folder);
+      },
+    };
+  }
+
+  private stopFolderWatches(): void {
+    for (const watcher of this.folderWatches.values()) watcher.close();
+    this.folderWatches.clear();
   }
 
   /**
@@ -1370,6 +1417,7 @@ export class ModuleView {
     this.bridge = undefined;
     this.stopSystemWatch();
     this.stopMediaWatch();
+    this.stopFolderWatches();
     this.options.discord.release(this.options.instanceId);
   }
 

@@ -1,5 +1,5 @@
 // Module updates that wait for the user (HostViewState.modules[].update). An update that asks for
-// nothing new needs no question; one that asks for network hosts or connectors goes through the
+// nothing new needs no question; one that asks for network hosts, connectors or folders goes through the
 // consent dialog first. Update all uses this order: the first group right away, then one dialog each.
 import type { ModulePermissions } from "./host-api";
 
@@ -16,7 +16,7 @@ export function waitingUpdates<T extends WaitingUpdate>(modules: readonly T[]): 
 
 /** Whether installing the update needs the user's yes to new access first. */
 export function asksMore(update: { asks: ModulePermissions }): boolean {
-  return update.asks.network.length > 0 || update.asks.connectors.length > 0;
+  return update.asks.network.length > 0 || update.asks.connectors.length > 0 || update.asks.folders.length > 0;
 }
 
 /** Update all: the ids that install at once, then the ids that each get a consent dialog, in the order the list shows. */

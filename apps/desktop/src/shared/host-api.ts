@@ -901,6 +901,8 @@ export interface ModulePermissions {
   network: string[];
   /** Connectors whose sign-in it may use, such as "ai-usage". */
   connectors: ModuleConnector[];
+  /** Folders on this PC it may read (permissions.folders), each as its grant key (module-schema folderKey, parseFolderKey). */
+  folders: string[];
 }
 
 /** The connectors Tavora has (module-schema CONNECTORS). */

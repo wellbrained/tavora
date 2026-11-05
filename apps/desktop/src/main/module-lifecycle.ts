@@ -4,7 +4,7 @@
 // that asks for more is granted only what the user was shown. The host lends it its panels, the
 // recycle bin and the module list; the steps and their order live here.
 import path from "node:path";
-import { LOCAL_OWNER, OFFICIAL_OWNER, type Connector } from "@tavora/module-schema";
+import { folderKey, LOCAL_OWNER, OFFICIAL_OWNER, type Connector } from "@tavora/module-schema";
 import type { CatalogClient } from "./catalog-client";
 import { CatalogUpdater, asksNothing, type CatalogInstalled } from "./catalog-updates";
 import type { GrantStore } from "./grants";
@@ -180,10 +180,10 @@ export class ModuleLifecycle {
    * (grants.ts), so a module updated while the dialog was open gets nothing it did not show. Open
    * panels of the module start again, so they connect with the new grant.
    */
-  async grant(moduleId: string, network: string[], connectors: Connector[]): Promise<void> {
+  async grant(moduleId: string, network: string[], connectors: Connector[], folders: string[] = []): Promise<void> {
     const module = this.options.modules().get(moduleId);
     if (!module || module.builtIn) throw new LibraryError("error.moduleMissing");
-    await this.options.grants().grant(module, { network, connectors });
+    await this.options.grants().grant(module, { network, connectors, folders });
     this.options.grantsChanged?.();
     this.options.panels.reload(moduleId);
   }
@@ -227,16 +227,16 @@ export class ModuleLifecycle {
     if (this.options.official?.on) {
       for (const [id, module] of this.options.modules()) {
         if (module.provenance !== "official" || module.builtIn || module.shippedVersion === undefined) continue;
-        const { network, connectors = [] } = module.manifest.permissions;
-        installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors] }, official: true });
+        const { network, connectors = [], folders = [] } = module.manifest.permissions;
+        installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors], folders: folders.map(folderKey) }, official: true });
       }
     }
     for (const id of this.options.catalogIds()) {
       // A module stopped by a block counts too: an update that is not blocked brings it back (C14).
       const module = this.options.modules().get(id) ?? this.options.blocked().get(id);
       if (!module || module.owner === LOCAL_OWNER) continue;
-      const { network, connectors = [] } = module.manifest.permissions;
-      installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors] } });
+      const { network, connectors = [], folders = [] } = module.manifest.permissions;
+      installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors], folders: folders.map(folderKey) } });
     }
     return installed;
   }

@@ -47,6 +47,10 @@ export interface HostChecks {
   gameStart: Field<GameStart>;
   layout: Field<SavedLayout>;
   networkHosts: Field<string[]>;
+  /** Grant keys of permissions.folders (module-schema folderKey). */
+  folderKeys: Field<string[]>;
+  /** A permissions.folders path, such as Documents/My Game. */
+  folderPath: Field<string>;
   connector: Field<ModuleConnector>;
   snapshotName: Field<string>;
   profileName: Field<string>;
@@ -365,7 +369,9 @@ export function hostActionTable(c: HostChecks) {
     /** Moves a module from the user's modules folder to the recycle bin, after removing its panels in every workspace; its data stays. */
     "remove-module": { moduleId: c.moduleId },
     /** The user's yes in the consent dialog: exactly what it showed (only what the module still asks for is granted). */
-    "grant-module": { moduleId: c.moduleId, network: c.networkHosts, connectors: list(c.connector, { max: Infinity, unique: true }) },
+    "grant-module": { moduleId: c.moduleId, network: c.networkHosts, connectors: list(c.connector, { max: Infinity, unique: true }), folders: optional(c.folderKeys) },
+    /** Settings: shows the system's folder dialog so the user can say where one of a module's granted folders is. */
+    "choose-module-folder": { moduleId: c.moduleId, folder: c.folderPath },
     /** Takes back everything granted to a module, after removing its panels in every workspace; its data stays. */
     "revoke-module": { moduleId: c.moduleId },
     /** Settings > Integrations > Leaderboards: takes the user off a module's boards; the service deletes their results there. */

@@ -20,6 +20,7 @@ import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { ProgressButton, type ProgressButtonStatus } from "@tavora/official-ui/components/ui/progress-button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { formatDate, t } from "../i18n";
+import { folderLabel, foldersOf } from "../folder-label";
 import { ExternalLink, X } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
 import CatalogReviews from "./CatalogReviews.vue";
@@ -90,6 +91,7 @@ const homepageText = computed(() => module.value.homepage?.replace(/^https?:\/\/
 const access = computed(() => [
   ...module.value.permissions.network.map((host) => (host.startsWith("localhost:") ? t("catalog.accessProgram", { port: host.slice("localhost:".length) }) : t("catalog.accessHost", { host }))),
   ...module.value.permissions.connectors.map((id) => t(`catalog.accessConnector.${id}`)),
+  ...foldersOf(module.value.permissions.folders).map((folder) => t("catalog.accessFolder", { folder: folderLabel(folder) })),
 ]);
 /** Why Install and Add are greyed out: the module is for another game, or not for personal workspaces. */
 const notHere = computed(() => {

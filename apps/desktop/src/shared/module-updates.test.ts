@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ModulePermissions } from "./host-api";
 import { asksMore, updateAllPlan, waitingUpdates, type WaitingUpdate } from "./module-updates";
 
-const none = { network: [], connectors: [] };
+const none = { network: [], connectors: [], folders: [] };
 const module = (id: string, name: string, asks: ModulePermissions | null): WaitingUpdate => ({
   id,
   name,
@@ -11,10 +11,10 @@ const module = (id: string, name: string, asks: ModulePermissions | null): Waiti
 
 describe("module updates", () => {
   const modules = [
-    module("b.hosts", "Beta", { network: ["api.example.com"], connectors: [] }),
+    module("b.hosts", "Beta", { network: ["api.example.com"], connectors: [], folders: [] }),
     module("a.plain", "Alpha", none),
     module("c.idle", "Gamma", null),
-    module("d.connector", "Delta", { network: [], connectors: ["discord"] }),
+    module("d.connector", "Delta", { network: [], connectors: ["discord"], folders: [] }),
     module("e.plain", "Epsilon", none),
   ];
 
@@ -24,8 +24,9 @@ describe("module updates", () => {
 
   it("tells updates that need a yes from those that do not", () => {
     expect(asksMore({ asks: none })).toBe(false);
-    expect(asksMore({ asks: { network: ["api.example.com"], connectors: [] } })).toBe(true);
-    expect(asksMore({ asks: { network: [], connectors: ["discord"] } })).toBe(true);
+    expect(asksMore({ asks: { network: ["api.example.com"], connectors: [], folders: [] } })).toBe(true);
+    expect(asksMore({ asks: { network: [], connectors: ["discord"], folders: [] } })).toBe(true);
+    expect(asksMore({ asks: { network: [], connectors: [], folders: ["Documents/Game|sav|"] } })).toBe(true);
   });
 
   it("updates the plain ones first, then asks for each of the others in list order", () => {

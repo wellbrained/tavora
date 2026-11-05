@@ -25,6 +25,11 @@ import {
   type FileKind,
   type OpenedFile,
   READ_ONLY_FILE_PATH,
+  FOLDER_READ_PATH,
+  type FolderChange,
+  type FolderEntry,
+  type FolderListing,
+  type FolderState,
   type PickNear,
   type ReadOnlyFile,
   type ReadOnlyFileState,
@@ -98,6 +103,10 @@ import {
 } from "./protocol.js";
 
 export type {
+  FolderChange,
+  FolderEntry,
+  FolderListing,
+  FolderState,
   PickNear,
   ReadOnlyFile,
   ReadOnlyFileState,
@@ -491,6 +500,28 @@ export interface TavoraSDK {
      * Needs Tavora 0.23.102 or newer: check `sdk.supports("files.open")`.
      */
     open(options?: { types?: FileKind[] }): Promise<OpenedFile | null>;
+  };
+  /**
+   * Folders on this PC the manifest asks to read (`permissions.folders`), such as a game's replays, once the user allowed
+   * them. Each call names the folder by its manifest path (`"Documents/My Game"`) and every file by its path inside it,
+   * joined by `/`; the module never learns where the folder is. Only the extensions the manifest lists show: `read`
+   * ones can be read, `names` ones only listed. Needs capability `folders` and Tavora 0.23.113 or newer: check
+   * `sdk.supports("folders.list")`.
+   */
+  folders: {
+    /** Whether the folder can be read now: `missing` when it isn't where the manifest says (offer folders.choose). */
+    state(folder: string): Promise<FolderState>;
+    /** The files the module may see, subfolders too (8 deep), at most 20,000 (`truncated` past that). */
+    list(folder: string): Promise<FolderListing>;
+    /** Reads one file of a `read` extension, at most 50 MB. */
+    read(folder: string, path: string): Promise<Uint8Array>;
+    /** Tells `fn` about files added, changed or removed while the panel is open; returns a function that stops it. */
+    watch(folder: string, fn: (change: FolderChange) => void): Promise<() => void>;
+    /**
+     * Opens the system's folder dialog so the user can show Tavora where the folder is. Call it from a click or key
+     * press (PERMISSION_DENIED otherwise). True when the user chose a folder Tavora accepts; then list it again.
+     */
+    choose(folder: string): Promise<boolean>;
   };
   pictures: {
     /**
@@ -1075,6 +1106,39 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         const body = (await response.json().catch(() => null)) as { error?: ErrorPayload } | null;
         throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not copy the picture (${response.status})` });
       },
+    },
+    folders: {
+      state: (folder) => call("folders.state", { folder }),
+      list: (folder) => call("folders.list", { folder }),
+      read: async (folder, path) => {
+        let response: Response;
+        try {
+          response = await fetch(new URL(FOLDER_READ_PATH, window.location.href), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ folder, path }) });
+        } catch {
+          throw new TavoraError({ code: "INTERNAL", message: "could not read the file" });
+        }
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as { error?: ErrorPayload } | null;
+          throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not read the file (${response.status})` });
+        }
+        return new Uint8Array(await response.arrayBuffer());
+      },
+      watch: async (folder, fn) => {
+        const off = on("folders.changed", (change) => {
+          if (change.folder === folder) fn(change);
+        });
+        try {
+          await call("folders.watch", { folder, on: true });
+        } catch (error) {
+          off();
+          throw error;
+        }
+        return () => {
+          off();
+          void call("folders.watch", { folder, on: false }).catch(() => undefined);
+        };
+      },
+      choose: (folder) => call("folders.choose", { folder }, MENU_TIMEOUT_MS),
     },
     files: {
       pickReadOnly: ((options: { extensions: string[]; multiple?: boolean; near?: PickNear }) => call('files.pickReadOnly',options,MENU_TIMEOUT_MS)) as TavoraSDK['files']['pickReadOnly'],

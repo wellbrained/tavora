@@ -5,7 +5,7 @@
 // matches the listing. After that the zip goes through the same installer as Install from zip, which
 // checks the publisher signature itself.
 import { createHash } from "node:crypto";
-import { apiReason, isConnector, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkEntry, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, OFFICIAL_PINS, officialOn, translationsFor, type ApiReason, type Connector } from "@tavora/module-schema";
+import { apiReason, isConnector, MAX_FOLDERS, parseFolderKey, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkEntry, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, OFFICIAL_PINS, officialOn, translationsFor, type ApiReason, type Connector } from "@tavora/module-schema";
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView, CatalogOwnReview, CatalogRating } from "../shared/host-api";
 import { isWebUrl } from "./browser-url";
@@ -227,6 +227,9 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
   const connectors = asks.connectors ?? [];
   if (!Array.isArray(network) || network.length > MAX_NETWORK_HOSTS || !network.every(isNetworkEntry)) return null;
   if (!Array.isArray(connectors) || !connectors.every(isConnector)) return null;
+  // A service from before folders sends none.
+  const folders = asks.folders ?? [];
+  if (!Array.isArray(folders) || folders.length > MAX_FOLDERS || !folders.every((key) => parseFolderKey(key) !== null)) return null;
   const file = (typeof zip === "object" && zip !== null ? zip : {}) as Record<string, unknown>;
   if (typeof file.sha256 !== "string" || !SHA256.test(file.sha256)) return null;
   if (typeof file.size !== "number" || !Number.isSafeInteger(file.size) || file.size <= 0 || file.size > ZIP_LIMITS.maxArchiveBytes) return null;
@@ -239,7 +242,7 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     games: [...games],
     // A service deployed before the Game → Workspace rename sends it as `workspaces` only.
     personalWorkspaces: (typeof personalWorkspaces === "boolean" ? personalWorkspaces : workspaces) !== false,
-    permissions: { network: [...new Set(network as string[])], connectors: [...new Set(connectors as Connector[])] },
+    permissions: { network: [...new Set(network as string[])], connectors: [...new Set(connectors as Connector[])], folders: [...new Set(folders as string[])] },
     owner,
     // Only the name the service gives for the key's account, never a name the listing claims elsewhere.
     publisher: isPublisherName(publisher) ? publisher : null,

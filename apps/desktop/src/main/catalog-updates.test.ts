@@ -33,7 +33,7 @@ function listing(version: string, zip: Buffer, owner: string, fields: Partial<Ca
     minTavora: null,
     games: [],
     personalWorkspaces: true,
-    permissions: { network: [], connectors: [] },
+    permissions: { network: [], connectors: [], folders: [] },
     owner,
     publisher: null,
     size: zip.length,
@@ -81,7 +81,7 @@ async function setup(key: KeyObject, network: string[] = [], safety?: SafetyChec
       },
     },
     installed: (): CatalogInstalled[] =>
-      [...modules.values()].map((module) => ({ id: module.manifest.id, owner: module.owner, version: module.manifest.version, asks: { network: module.manifest.permissions.network, connectors: [] } })),
+      [...modules.values()].map((module) => ({ id: module.manifest.id, owner: module.owner, version: module.manifest.version, asks: { network: module.manifest.permissions.network, connectors: [], folders: [] } })),
     tavoraVersion: TAVORA,
     ...(safety ? { firstKey: (fingerprint: string) => safety.firstKey(fingerprint) } : {}),
     check: (zip, expect) => checkZipData(zip, { ...options(), expect }),
@@ -97,7 +97,7 @@ async function setup(key: KeyObject, network: string[] = [], safety?: SafetyChec
 
 describe("findUpdates", () => {
   const owner = "0123456789abcdef0123456789abcdef";
-  const installed: CatalogInstalled[] = [{ id: ID, owner, version: "1.0.0", asks: { network: [], connectors: [] } }];
+  const installed: CatalogInstalled[] = [{ id: ID, owner, version: "1.0.0", asks: { network: [], connectors: [], folders: [] } }];
   const at = (version: string, fields: Partial<CatalogEntry> = {}) => listing(version, Buffer.from("zip"), owner, fields);
 
   it("takes only a newer version from the same owner", () => {
@@ -116,13 +116,14 @@ describe("findUpdates", () => {
 
 describe("newAsks", () => {
   it("is what the update asks for that the installed version did not", () => {
-    expect(newAsks({ network: ["a.example.com"], connectors: [] }, { network: ["a.example.com", "b.example.com"], connectors: ["discord"] })).toEqual({
+    expect(newAsks({ network: ["a.example.com"], connectors: [], folders: [] }, { network: ["a.example.com", "b.example.com"], connectors: ["discord"], folders: [] })).toEqual({
       network: ["b.example.com"],
       connectors: ["discord"],
+      folders: [],
     });
-    expect(newAsks({ network: ["a.example.com"], connectors: ["discord"] }, { network: [] })).toEqual({ network: [], connectors: [] });
+    expect(newAsks({ network: ["a.example.com"], connectors: ["discord"], folders: [] }, { network: [] })).toEqual({ network: [], connectors: [], folders: [] });
     // A connector asked for on request waits until the module needs it.
-    expect(newAsks({ network: [], connectors: [] }, { network: [], connectors: ["stream-overlay"], onRequest: ["stream-overlay"] })).toEqual({ network: [], connectors: [] });
+    expect(newAsks({ network: [], connectors: [], folders: [] }, { network: [], connectors: ["stream-overlay"], onRequest: ["stream-overlay"] })).toEqual({ network: [], connectors: [], folders: [] });
   });
 });
 
@@ -170,7 +171,7 @@ describe("CatalogUpdater", () => {
     const outcome = await updater.check();
     expect(outcome.updated).toEqual([]);
     expect(outcome.waiting.map(({ version, from, asks, notes }) => ({ version, from, asks, notes }))).toEqual([
-      { version: "1.1.0", from: "1.0.0", asks: { network: [], connectors: [] }, notes: [{ version: "1.1.0", notes: ["Faster."] }] },
+      { version: "1.1.0", from: "1.0.0", asks: { network: [], connectors: [], folders: [] }, notes: [{ version: "1.1.0", notes: ["Faster."] }] },
     ]);
     expect(await page()).toBe("<p>1.0.0</p>");
     expect(catalog.downloads).toHaveLength(1);
@@ -194,7 +195,7 @@ describe("CatalogUpdater", () => {
     await updater.check();
     const { installed, asks } = await updater.apply(ID, "1.1.0");
     expect(installed.manifest.version).toBe("1.1.0");
-    expect(asks).toEqual({ network: [], connectors: [] });
+    expect(asks).toEqual({ network: [], connectors: [], folders: [] });
     expect(await page()).toBe("<p>1.1.0</p>");
   });
 
@@ -272,7 +273,7 @@ describe("CatalogUpdater", () => {
     const outcome = await updater.check();
     expect(outcome.updated).toEqual([]);
     expect(outcome.waiting.map(({ version, from, asks, notes }) => ({ version, from, asks, notes }))).toEqual([
-      { version: "1.1.0", from: "1.0.0", asks: { network: ["api.example.com"], connectors: [] }, notes: [{ version: "1.1.0", notes: ["Reads your runs from api.example.com."] }] },
+      { version: "1.1.0", from: "1.0.0", asks: { network: ["api.example.com"], connectors: [], folders: [] }, notes: [{ version: "1.1.0", notes: ["Reads your runs from api.example.com."] }] },
     ]);
     expect(await page()).toBe("<p>1.0.0</p>");
     expect(modules.get(ID)?.manifest.version).toBe("1.0.0");
@@ -285,7 +286,7 @@ describe("CatalogUpdater", () => {
     await expect(updater.apply(ID, "1.2.0")).rejects.toThrow();
     const { installed, asks } = await updater.apply(ID, "1.1.0");
     expect(installed.manifest.version).toBe("1.1.0");
-    expect(asks).toEqual({ network: ["api.example.com"], connectors: [] });
+    expect(asks).toEqual({ network: ["api.example.com"], connectors: [], folders: [] });
     expect(await page()).toBe("<p>1.1.0</p>");
     expect(updater.pending(ID)).toBeUndefined();
   });

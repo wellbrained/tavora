@@ -134,7 +134,7 @@ function publishView(): PublishView {
     module: { id: "example.safety", name: "Safety", version: "1.0.0", icon: null },
     notes: ["A change."],
     readme: null,
-    asks: { network: [], connectors: [] },
+    asks: { network: [], connectors: [], folders: [] },
     size: 1024,
     builtAt: null,
     sourceNewer: false,
