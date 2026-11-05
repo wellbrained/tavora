@@ -179,16 +179,13 @@ function settings() {
                   <span class="shrink-0 tabular-nums" :data-testid="`catalog-installs-${module.id}`">{{ t("catalog.installs", { count: module.installs }) }}</span>
                 </template>
               </span>
-              <!-- A disabled button gets no hover, so the reason sits on a wrapper. -->
-              <span class="shrink-0" :title="whereFits(module) ?? undefined">
-                <Button v-if="installed.has(module.id) && statusOf(module.id) === 'idle'" size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!module.fits"
-                  :data-testid="`catalog-add-${module.id}`" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
-                >{{ t("common.add") }}</Button>
-                <ProgressButton v-else size="sm" :disabled="(working && statusOf(module.id) === 'idle') || !module.fits"
-                  :status="statusOf(module.id)" :progress="installProgress[module.id] ?? null" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')" :failed-label="t('catalog.installFailed')"
-                  :data-testid="`catalog-install-${module.id}`" :aria-label="t('catalog.installLabel', { name: module.name })" @click="install(module)"
-                >{{ t("catalog.install") }}</ProgressButton>
-              </span>
+              <Button v-if="installed.has(module.id) && statusOf(module.id) === 'idle'" size="sm" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!module.fits" :disabled-reason="whereFits(module) ?? undefined"
+                :data-testid="`catalog-add-${module.id}`" :aria-label="t('addModule.addLabel', { name: module.name })" @click="add(module.id)"
+              >{{ t("common.add") }}</Button>
+              <ProgressButton v-else size="sm" :disabled="(working && statusOf(module.id) === 'idle') || !module.fits" :disabled-reason="whereFits(module) ?? undefined"
+                :status="statusOf(module.id)" :progress="installProgress[module.id] ?? null" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')" :failed-label="t('catalog.installFailed')"
+                :data-testid="`catalog-install-${module.id}`" :aria-label="t('catalog.installLabel', { name: module.name })" @click="install(module)"
+              >{{ t("catalog.install") }}</ProgressButton>
           </div>
           </div>
         </li>

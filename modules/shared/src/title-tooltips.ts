@@ -1,5 +1,6 @@
 import { createApp, h, reactive } from "vue";
 import Tooltip, { tooltipDelay } from "./components/tooltip/Tooltip";
+import type { TooltipSide } from "./components/tooltip/geometry";
 
 const installed = new WeakMap<Document, () => void>();
 
@@ -10,6 +11,11 @@ export interface TitleTooltipOptions {
   onPending?: () => void;
 }
 
+/** On a switched-off control that can say why (`disabledReason` in the kit): the reason, shown like a hint. It is not a `title`, so it never names the control. */
+export const REASON_ATTRIBUTE = "data-tavora-reason";
+/** On an element whose hint should open beside it (`left` or `right`) instead of below, such as a menu row that must not be covered. */
+export const SIDE_ATTRIBUTE = "data-tooltip-side";
+
 /** One readable hover layer for title hints, in official modules and in the host: the compact card below the element, as the rail's.
  * An element's `aria-keyshortcuts` shows beside the hint as key caps. */
 export function installTitleTooltips(doc: Document = document, options: TitleTooltipOptions = {}): () => void {
@@ -18,7 +24,7 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
   const container = doc.createElement("div");
   container.dataset.tooltipLayer = "titles";
   doc.body.append(container);
-  const state = reactive({ open: false, title: "", shortcut: undefined as string | undefined, anchor: { left: 0, top: 0, right: 0, bottom: 0 } });
+  const state = reactive({ open: false, title: "", side: "bottom" as TooltipSide, shortcut: undefined as string | undefined, anchor: { left: 0, top: 0, right: 0, bottom: 0 } });
   const id = "tavora-title-tooltip";
   const suppressed = new WeakSet<Element>();
   let current: Element | null = null;
@@ -60,17 +66,21 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     }
   }
   function target(event: Event) {
-    return event.target instanceof Element ? event.target.closest("[title],[data-tavora-tooltip]") : null;
+    return event.target instanceof Element ? event.target.closest(`[title],[data-tavora-tooltip],[${REASON_ATTRIBUTE}]`) : null;
   }
   function show(element: Element) {
     if (element === current) return;
-    const title = element.getAttribute("title") || element.getAttribute("data-tavora-tooltip");
+    // A reason a control gives for being off comes before any hint it has when on.
+    const own = element.getAttribute("title") || element.getAttribute("data-tavora-tooltip");
+    const title = element.getAttribute(REASON_ATTRIBUTE) || own;
     if (!title?.trim()) return;
     hide();
     current = element;
     gone.observe(doc.body, { childList: true, subtree: true });
-    if (element.getAttribute("title")) remember(element, title);
+    if (element.getAttribute("title")) remember(element, element.getAttribute("title")!);
     state.title = title;
+    const side = element.getAttribute(SIDE_ATTRIBUTE);
+    state.side = side === "left" || side === "right" || side === "top" ? side : "bottom";
     state.shortcut = element.getAttribute("aria-keyshortcuts") || undefined;
     // Half way to the hint, so a pointer just passing over a row of buttons gets ready for none of them. The host
     // does not repeat the work for hints that follow each other.
@@ -101,12 +111,18 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     const element = target(event);
     if (element) show(element);
   };
-  const key = (event: KeyboardEvent) => { if (event.key === "Tab") keyboard = true; if (event.key === "Escape") hide(); };
+  // Keys that move the focus: a hint follows it when it was moved by the keyboard (Tab, or the arrows through a menu).
+  const FOCUS_KEYS = new Set(["Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"]);
+  // Focus leaving some other element (a menu moving its focus to the row under the pointer) leaves this hint be.
+  const blur = (event: FocusEvent) => {
+    if (current && event.target instanceof Node && current.contains(event.target)) hide();
+  };
+  const key = (event: KeyboardEvent) => { if (FOCUS_KEYS.has(event.key)) keyboard = true; if (event.key === "Escape") hide(); };
   const down = () => { keyboard = false; hide(); };
   doc.addEventListener("pointerover", over, true);
   doc.addEventListener("pointerout", out, true);
   doc.addEventListener("focusin", focus, true);
-  doc.addEventListener("focusout", hide, true);
+  doc.addEventListener("focusout", blur, true);
   doc.addEventListener("pointerdown", down, true);
   doc.addEventListener("keydown", key, true);
   // A title that changes, appears or goes away; nothing else in the page matters here.
@@ -141,7 +157,7 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     doc.removeEventListener("pointerover", over, true);
     doc.removeEventListener("pointerout", out, true);
     doc.removeEventListener("focusin", focus, true);
-    doc.removeEventListener("focusout", hide, true);
+    doc.removeEventListener("focusout", blur, true);
     doc.removeEventListener("pointerdown", down, true);
     doc.removeEventListener("keydown", key, true);
     installed.delete(doc);

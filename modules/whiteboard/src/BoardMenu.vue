@@ -94,7 +94,7 @@ function finishRename(save: boolean, event?: Event) {
           {{ t("board.rename") }}
         </DropdownMenuItem>
         <!-- Clearing shows Undo afterwards (and Ctrl+Z works), so it needs no question first. -->
-        <DropdownMenuItem :disabled="!canClear" :title="t('clear.hint')" data-testid="clear-board" @select="emit('clear')">
+        <DropdownMenuItem :disabled="!canClear" :disabled-reason="t('board.nothingYet')" :title="t('clear.hint')" data-testid="clear-board" @select="emit('clear')">
           <Eraser :stroke-width="1.5" />
           {{ t("clear.button") }}
         </DropdownMenuItem>

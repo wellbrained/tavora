@@ -2283,6 +2283,7 @@ export const en = {
   "settings.module-files.details": "Moving the folder takes all pictures along.",
   "settings.overlay-layer-key.details": "Press it in your game to move overlays and use your panels. Press it again or Esc when you're done.",
   "settings.overlays-stay.details": "They go when you minimize or close the game.",
+  "overlays.stayOff": "Turn on Game overlays first.",
   "settings.stream-overlays.details": "Works with OBS or any other streaming app on this PC that can show a web page.",
   "settings.overlay-port.details": "Pick a number from 1024 to 65535. Then copy the overlay links again.",
   "settings.overlay-links.details": "Each overlay you copied from a module has its own link. Reset links makes new ones; the old ones stop working.",

@@ -2285,6 +2285,7 @@ export const de: Record<keyof typeof en, string> = {
   "settings.module-files.details": "Beim Verschieben des Ordners kommen alle Bilder mit.",
   "settings.overlay-layer-key.details": "Drück sie im Spiel, um Overlays zu verschieben und deine Panels zu benutzen. Drück sie noch mal oder Esc, wenn du fertig bist.",
   "settings.overlays-stay.details": "Sie gehen, wenn du das Spiel minimierst oder schließt.",
+  "overlays.stayOff": "Schalte zuerst Spiel-Overlays ein.",
   "settings.stream-overlays.details": "Klappt mit OBS oder jeder anderen Streaming-App auf diesem PC, die eine Webseite zeigen kann.",
   "settings.overlay-port.details": "Nimm eine Zahl von 1024 bis 65535. Kopier danach die Overlay-Links neu.",
   "settings.overlay-links.details": "Jedes Overlay, das du aus einem Modul kopiert hast, hat einen eigenen Link. Links zurücksetzen macht neue; die alten funktionieren dann nicht mehr.",

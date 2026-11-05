@@ -124,7 +124,7 @@ function resetAddress(): void {
           <Switch
             :model-value="panel.sections[id]"
             :disabled="isLastOn(panel.sections, id)"
-            :title="isLastOn(panel.sections, id) ? t('settings.lastOne') : undefined"
+            :disabled-reason="t('settings.lastOne')"
             :aria-label="t(`section.${id}`)"
             :data-testid="`settings-section-${id}`"
             @update:model-value="act(() => monitor.toggleSection(id))"
@@ -137,7 +137,7 @@ function resetAddress(): void {
           <Switch
             :model-value="panel.blocks[id]"
             :disabled="isLastOn(panel.blocks, id)"
-            :title="isLastOn(panel.blocks, id) ? t('settings.lastOne') : undefined"
+            :disabled-reason="t('settings.lastOne')"
             :aria-label="t(`${id}.title`)"
             :data-testid="`settings-block-${id}`"
             @update:model-value="act(() => monitor.toggleBlock(id))"
@@ -171,6 +171,7 @@ function resetAddress(): void {
           <Checkbox
             :model-value="chosen.has(drive.id)"
             :disabled="!chosen.has(drive.id) && chosen.size >= SYSTEM_MAX_DRIVES"
+            :disabled-reason="t('settings.driveLimit', { count: SYSTEM_MAX_DRIVES })"
             :aria-label="driveName(drive)"
             :data-testid="`pick-${drive.id}`"
             @update:model-value="(value: boolean | 'indeterminate') => pickDrive(drive.id, value === true)"

@@ -137,11 +137,8 @@ async function openHomepage() {
           <DialogDescription v-if="module.description" class="text-muted-foreground mt-1 line-clamp-2 text-sm">{{ module.description }}</DialogDescription>
         </div>
         <div class="flex flex-none items-center gap-2">
-          <!-- A disabled button gets no hover, so the reason sits on a wrapper. -->
-          <span :title="notHere ?? undefined">
-            <Button v-if="installed && status === 'idle'" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!!notHere" data-testid="catalog-info-add" @click="emit('add')">{{ t("common.add") }}</Button>
-            <ProgressButton v-else :disabled="!!notHere" :status="status" :progress="progress" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')" :failed-label="t('catalog.installFailed')" data-testid="catalog-info-install" @click="emit('install')">{{ t("catalog.install") }}</ProgressButton>
-          </span>
+          <Button v-if="installed && status === 'idle'" variant="outline" class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary" :disabled="!!notHere" :disabled-reason="notHere ?? undefined" data-testid="catalog-info-add" @click="emit('add')">{{ t("common.add") }}</Button>
+          <ProgressButton v-else :disabled="!!notHere" :disabled-reason="notHere ?? undefined" :status="status" :progress="progress" :busy-label="t('catalog.installing')" :done-label="t('catalog.installed')" :failed-label="t('catalog.installFailed')" data-testid="catalog-info-install" @click="emit('install')">{{ t("catalog.install") }}</ProgressButton>
           <Button variant="ghost" size="icon" :aria-label="t('common.close')" @click="emit('close')"><X class="size-4" /></Button>
         </div>
       </header>
