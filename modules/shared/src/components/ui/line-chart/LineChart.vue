@@ -263,7 +263,7 @@ function onKey(event: KeyboardEvent) {
       </template>
       <g v-if="open" pointer-events="none">
         <line :x1="px(activeX!)" :x2="px(activeX!)" :y1="TOP" :y2="TOP + plotHeight" stroke-opacity="0.5" shape-rendering="crispEdges" style="stroke: var(--muted-foreground)" />
-        <circle v-for="({ line, point }, index) in active" :key="index":cx="dx(point.x)" :cy="dy(point.y)" r="4" stroke-width="2" :style="{ fill: `var(--${line.color})`, stroke: 'var(--card)' }" />
+        <circle v-for="({ line, point }, index) in active" :key="index" :cx="dx(point.x)" :cy="dy(point.y)" r="4" stroke-width="2" :style="{ fill: `var(--${line.color})`, stroke: 'var(--card)' }" />
       </g>
     </svg>
     <Tooltip :open="open" :anchor="anchor ?? undefined" side="top" :title="heading" :id="tipId" @dismiss="hide">
