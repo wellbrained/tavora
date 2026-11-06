@@ -832,10 +832,10 @@ export interface Methods {
    */
   "folders.choose": { params: { folder: string }; result: boolean };
   /**
-   * Shows a file of a folder in Explorer or Finder with the file selected (or, when it is gone, the folder it was in),
-   * like files.showInFolder does for a picked file. `path` is inside the folder, joined by `/`, and of an extension the
-   * manifest lists (`read` or `names`). Only right after a click. Resolves with null and tells the module nothing back.
-   * Tavora 0.23.116 and newer.
+   * Shows a file of a folder in Explorer with the file selected (or, when it is gone, the folder it was in; nothing when
+   * that is gone too), like files.showInFolder does for a picked file. `path` is inside the folder, joined by `/`, and of
+   * an extension the manifest lists (`read` or `names`). Only right after a click. Resolves with null whether or not
+   * anything was shown, and tells the module nothing back. Tavora 0.23.116 and newer.
    */
   "folders.showInFolder": { params: { folder: string; path: string }; result: null };
   /**

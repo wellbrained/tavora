@@ -905,9 +905,10 @@ export class ModuleView {
         this.refuseOverGame("folders.showInFolder");
         await this.takeGesture("folders.showInFolder");
         const target = await folders.reveal(folder, file);
-        if (this.bridge !== bridge() || !this.capabilities().has("folders")) return;
-        if (target.kind === "file") shell.showItemInFolder(target.path);
-        else if (await shell.openPath(target.path)) throw new HostError("INTERNAL", "Could not open the folder.");
+        // Nothing to show, or the panel or the grant went while it was looked up: the same quiet answer.
+        if (!target || this.bridge !== bridge() || !this.capabilities().has("folders")) return;
+        // Only ever selected in its own folder, also the folder a gone file was in: nothing is launched or opened.
+        shell.showItemInFolder(target.path);
       },
     };
   }

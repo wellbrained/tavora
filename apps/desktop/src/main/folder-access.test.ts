@@ -223,10 +223,11 @@ describe("showing a file in its folder", () => {
   it("shows a file of a read or a names extension, as it really is", async () => {
     expect(await revealTarget(realpathSync.native(game), replays, "Accounts/1/Replays/Ladder.SC2Replay")).toEqual({ path: real("Accounts", "1", "Replays", "Ladder.SC2Replay"), kind: "file" });
     expect(await revealTarget(realpathSync.native(game), replays, "Brain_844@2.lnk")).toEqual({ path: real("Brain_844@2.lnk"), kind: "file" });
-    if (process.platform === "win32") {
-      // The real name is shown, not the case the module wrote.
-      expect(await revealTarget(realpathSync.native(game), replays, "accounts/1/replays/LADDER.sc2replay")).toEqual({ path: real("Accounts", "1", "Replays", "Ladder.SC2Replay"), kind: "file" });
-    }
+  });
+
+  // Windows paths don't care about case; the real name is shown, not the case the module wrote.
+  it.skipIf(process.platform !== "win32")("shows the file's real name when the module wrote another case", async () => {
+    expect(await revealTarget(realpathSync.native(game), replays, "accounts/1/replays/LADDER.sc2replay")).toEqual({ path: real("Accounts", "1", "Replays", "Ladder.SC2Replay"), kind: "file" });
   });
 
   it("shows nothing for a kind the listing leaves out", async () => {
@@ -247,8 +248,12 @@ describe("showing a file in its folder", () => {
     expect(await revealTarget(realpathSync.native(game), replays, "Gone.SC2Replay")).toEqual({ path: realpathSync.native(game), kind: "folder" });
   });
 
-  it("says the same as for a missing file when even its folder is gone", async () => {
-    await expect(revealTarget(game, replays, "Nowhere/Gone.SC2Replay")).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  it("answers null, not an error, when even its folder is gone, so the answer doesn't tell which subfolders exist", async () => {
+    const base = realpathSync.native(game);
+    expect(await revealTarget(base, replays, "Nowhere/Gone.SC2Replay")).toBeNull();
+    expect(await revealTarget(base, replays, "Accounts/9/Replays/Gone.SC2Replay")).toBeNull();
+    // A subfolder that is there shows it, one that is not shows nothing: neither is an error.
+    expect(await revealTarget(base, replays, "Accounts/1/Gone.SC2Replay")).toEqual({ path: real("Accounts", "1"), kind: "folder" });
   });
 
   it("doesn't show a folder that only carries a file's name", async () => {
@@ -262,29 +267,28 @@ describe("showing a file in its folder", () => {
     await writeFile(path.join(outside, "Stolen.SC2Replay"), "x");
     await symlink(outside, path.join(game, "Linked"), "junction");
     const base = realpathSync.native(game);
-    await expect(revealTarget(base, replays, "Linked/Stolen.SC2Replay")).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await expect(revealTarget(base, replays, "Linked/Gone.SC2Replay")).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(await revealTarget(base, replays, "Linked/Stolen.SC2Replay")).toBeNull();
+    expect(await revealTarget(base, replays, "Linked/Gone.SC2Replay")).toBeNull();
     // A junction with a file's name isn't a file inside the folder: the granted folder is shown, never where it leads.
     await symlink(outside, path.join(game, "Named.SC2Replay"), "junction");
     await expect(revealTarget(base, replays, "Named.SC2Replay")).resolves.toEqual({ path: base, kind: "folder" });
   });
 
-  it("never leads out through a link to a file", async () => {
+  it("never leads out through a link to a file", async (context) => {
     const outside = path.join(root, "outside.SC2Replay");
     await writeFile(outside, "outside");
     try {
       await symlink(outside, path.join(game, "Shortcut.SC2Replay"), "file");
     } catch {
-      // Links to files need a right this account may not have: nothing to try.
-      return;
+      // Links to files need a right this account may not have.
+      context.skip("this account can't make a link to a file");
     }
     const base = realpathSync.native(game);
     const target = await revealTarget(base, replays, "Shortcut.SC2Replay");
     expect(target).toEqual({ path: base, kind: "folder" });
   });
 
-  it("never shows another file through a Windows short name", async () => {
-    if (process.platform !== "win32") return;
+  it.skipIf(process.platform !== "win32")("never shows another file through a Windows short name", async (context) => {
     const secret = path.join(game, "passwords.txtbackup");
     await writeFile(secret, "secret");
     let short = "";
@@ -292,10 +296,9 @@ describe("showing a file in its folder", () => {
       const line = execSync(`for %I in ("${secret}") do @echo %~sI`, { encoding: "utf8", shell: "cmd.exe" });
       short = path.basename(line.trim());
     } catch {
-      return;
+      context.skip("can't ask Windows for a short name");
     }
-    // Short names are off on this drive: nothing to try.
-    if (!short || short.toLowerCase() === "passwords.txtbackup") return;
+    if (!short || short.toLowerCase() === "passwords.txtbackup") context.skip("short names are off on this drive");
     const text = { path: "Documents/Game", read: ["txt"] };
     // Not the file the short name stands for: the folder it is in.
     expect(await revealTarget(realpathSync.native(game), text, short)).toEqual({ path: realpathSync.native(game), kind: "folder" });

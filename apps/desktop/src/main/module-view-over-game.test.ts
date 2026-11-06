@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ModuleView needs only a little of Electron to be made: a view with a page, and a session to harden.
 const made = vi.hoisted(() => ({
@@ -6,6 +6,8 @@ const made = vi.hoisted(() => ({
   sent: [] as unknown[][],
   /** What the session answers for the module's own addresses (the clipboard, pictures, files). */
   serve: undefined as ((request: Request) => Promise<Response>) | undefined,
+  /** What the module's calls hand to the system's file manager. */
+  shell: { showItemInFolder: vi.fn(), openPath: vi.fn(async () => "") },
 }));
 
 vi.mock("electron", () => {
@@ -66,6 +68,7 @@ vi.mock("electron", () => {
       port2 = {};
     },
     session: { fromPartition: () => ses },
+    shell: made.shell,
     WebContentsView,
   };
 });
@@ -140,6 +143,97 @@ describe("panels.openMany", () => {
     await expect(bridge.openPanels(["map"])).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
     expect(told).toHaveBeenCalledTimes(1);
     expect(opened).not.toHaveBeenCalled();
+  });
+});
+
+describe("folders.showInFolder", () => {
+  type Target = { path: string; kind: "file" | "folder" } | null;
+  const bridged = { launch: () => ({ reason: "add" }), data: { blobs: {}, documents: { on: () => undefined, off: () => undefined } }, networkHosts: () => new Set(), connectors: () => new Set() };
+  /** A module view whose folders answer `target` and note what they were asked. */
+  function folderView(target: Target, granted = true) {
+    const asked: unknown[][] = [];
+    const folders = {
+      granted: () => granted,
+      state: async () => ({ found: true }),
+      list: async () => ({ files: [], truncated: false }),
+      read: async () => Buffer.alloc(0),
+      watch: async () => null,
+      choose: async () => false,
+      reveal: async (...args: unknown[]) => (asked.push(args), target),
+    };
+    const view = make({ ...bridged, folders });
+    view.connect();
+    const show = (folder = "Documents/StarCraft II", file = "Replays/a.SC2Replay") =>
+      (view as unknown as { bridge: { context: { folders: { showInFolder(folder: string, file: string): Promise<void> } } } }).bridge.context.folders.showInFolder(folder, file);
+    return { view, asked, show };
+  }
+  const shell = made.shell;
+  beforeEach(() => {
+    shell.showItemInFolder.mockClear();
+    shell.openPath.mockClear();
+  });
+
+  it("selects a file in its folder after a press", async () => {
+    const { view, asked, show } = folderView({ path: "/docs/StarCraft II/Replays/a.SC2Replay", kind: "file" });
+    view.noteGesture();
+    await show();
+    expect(asked).toEqual([["Documents/StarCraft II", "Replays/a.SC2Replay"]]);
+    expect(shell.showItemInFolder.mock.calls).toEqual([["/docs/StarCraft II/Replays/a.SC2Replay"]]);
+  });
+
+  it("selects the folder a gone file was in the same way, and never opens or launches anything", async () => {
+    const { view, show } = folderView({ path: "/docs/StarCraft II/Replays", kind: "folder" });
+    view.noteGesture();
+    await show();
+    expect(shell.showItemInFolder.mock.calls).toEqual([["/docs/StarCraft II/Replays"]]);
+    expect(shell.openPath).not.toHaveBeenCalled();
+  });
+
+  it("shows nothing, and says nothing, when there is nothing to show", async () => {
+    const { view, show } = folderView(null);
+    view.noteGesture();
+    await expect(show()).resolves.toBeUndefined();
+    expect(shell.showItemInFolder).not.toHaveBeenCalled();
+    expect(shell.openPath).not.toHaveBeenCalled();
+  });
+
+  it("needs a press for every call", async () => {
+    const { view, asked, show } = folderView({ path: "/docs/a.SC2Replay", kind: "file" });
+    await expect(show()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    view.noteGesture();
+    await show();
+    await expect(show()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(asked).toHaveLength(1);
+    expect(shell.showItemInFolder).toHaveBeenCalledTimes(1);
+  });
+
+  it("is refused for a panel over the game, before the folder is even looked at", async () => {
+    const told = vi.fn();
+    const asked: unknown[][] = [];
+    const view = make({
+      ...bridged,
+      onNeedsTavora: told,
+      folders: { granted: () => true, state: async () => ({ found: true }), list: async () => ({ files: [], truncated: false }), read: async () => Buffer.alloc(0), watch: async () => null, choose: async () => false, reveal: async (...args: unknown[]) => (asked.push(args), null) },
+    });
+    view.connect();
+    view.enterGame(() => true);
+    view.noteGesture();
+    const folders = (view as unknown as { bridge: { context: { folders: { showInFolder(folder: string, file: string): Promise<void> } } } }).bridge.context.folders;
+    await expect(folders.showInFolder("Documents/StarCraft II", "Replays/a.SC2Replay")).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(told).toHaveBeenCalledTimes(1);
+    expect(asked).toEqual([]);
+    expect(shell.showItemInFolder).not.toHaveBeenCalled();
+  });
+
+  it("shows nothing once the grant is taken back while the folder was looked at", async () => {
+    let granted = true;
+    const { view, show } = folderView({ path: "/docs/a.SC2Replay", kind: "file" });
+    (view as unknown as { options: { folders: { granted(): boolean; reveal(): Promise<Target> } } }).options.folders.granted = () => granted;
+    const reveal = (view as unknown as { options: { folders: { reveal(): Promise<Target> } } }).options.folders.reveal;
+    (view as unknown as { options: { folders: { reveal(): Promise<Target> } } }).options.folders.reveal = async () => ((granted = false), reveal());
+    view.noteGesture();
+    await show();
+    expect(shell.showItemInFolder).not.toHaveBeenCalled();
   });
 });
 
