@@ -30,189 +30,38 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.23.117",
     date: "2026-11-07",
-    title: "Shorter website list",
+    title: "Modules can read your folders and programs",
     notes: [
+      "A module can ask to read one of your folders, such as a game's replays. You see the folder and the file types first, and it can't change anything there. Moved that folder? Press Change folder… in Settings > Connections > Folder access.",
+      "A module can ask to read a program on your PC, like a game's live data, and you decide whether it may. It can only read, and never reach Tavora itself or tools like debuggers and Docker.",
+      "A module that can read one of your folders can show a file from it in Explorer, such as a replay. It only shows the file, and only after you click.",
       "Settings > Connections > Website access shows each site once, like `mobalytics.gg`. Point at it to see every address behind it.",
-    ],
-    prs: [
-      { number: 698, title: "Website access shows one chip per site" },
-    ],
-    tags: ["settings"],
-  },
-  {
-    version: "0.23.116",
-    date: "2026-11-06",
-    title: "Show a file from a module's folder in Explorer",
-    notes: [
-      "A module that can read one of your folders can now show a file from it in Explorer, such as a replay in Documents. It only shows the file and only after you click.",
-    ],
-    prs: [
-      { number: 693, title: "Modules can show a file of their folder in Explorer (folders.showInFolder)" },
-    ],
-    tags: ["modules", "privacy", "sdk", "website"],
-  },
-  {
-    version: "0.23.115",
-    date: "2026-11-06",
-    title: "Switched-off things say why",
-    notes: [
-      "Hover a switch, box, field or menu row that is off and it tells you why.",
-      "Game overlays: Keep when you switch windows now says it needs Game overlays first.",
-      "To-Dos, Whiteboard and System Monitor explain their switched-off items too.",
-    ],
-    prs: [
-      { number: 689, title: "Kit: a switched-off control can say why" },
-    ],
-    tags: ["catalog", "overlays", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.23.114",
-    date: "2026-11-06",
-    title: "A line chart for modules",
-    notes: [
-      "Modules can now draw a line chart over time, with the values shown beside the point you hover.",
-    ],
-    prs: [
-      { number: 692, title: "Kit: LineChart for one or two lines over time" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.23.113",
-    date: "2026-11-06",
-    title: "Modules can read a folder on this PC",
-    notes: [
-      "A module can ask to read one of your folders, such as a game's replays. You see the folder and the file types first, and it can't change anything there.",
-      "Moved that folder? Press Change folder… in Settings > Connections > Folder access.",
-    ],
-    prs: [
-      { number: 691, title: "Modules can read a folder on this PC, read only (permissions.folders)" },
-    ],
-    tags: ["catalog", "modules", "privacy", "publishing", "sdk", "service", "settings", "website"],
-  },
-  {
-    version: "0.23.112",
-    date: "2026-11-05",
-    title: "Modules can read programs on this PC",
-    notes: [
-      "A module can ask to read a program on your PC, like a game's live data, and you decide whether it may.",
-      "It can only read, never change anything there, and never reach Tavora itself or tools like debuggers and Docker.",
-    ],
-    prs: [
-      { number: 690, title: "Modules can read a program on this PC, read only (localhost:<port>)" },
-    ],
-    tags: ["catalog", "discord", "overlays", "privacy", "publishing", "sdk", "website"],
-  },
-  {
-    version: "0.23.111",
-    date: "2026-11-05",
-    title: "Ctrl+Z behind a dialog",
-    notes: [
+      "Hover a switch, box, field or menu row that is off and it tells you why. To-Dos, Whiteboard, System Monitor and Game overlays use this too.",
+      "Modules can show a grid you edit like a spreadsheet, and a line chart over time. The UI Playground shows both.",
+      "A module's dialog, like Add a clock, opens with its frame and content together and lets you type right away.",
       "Ctrl+Z no longer brings back a deleted item while a dialog is open.",
-    ],
-    prs: [
-      { number: 686, title: "Ctrl+Z no longer undoes a delete behind an open dialog" },
-    ],
-    tags: ["calculator", "todos", "ui-kit"],
-  },
-  {
-    version: "0.23.110",
-    date: "2026-11-05",
-    title: "Tidier submenus",
-    notes: [
-      "Submenus open next to their menu with a small gap, no longer over its edge.",
-    ],
-    prs: [
-      { number: 685, title: "Kit: submenus open beside their menu with a 4 px gap, first row in line with the trigger" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.23.109",
-    date: "2026-11-04",
-    title: "Evener panel tabs",
-    notes: [
-      "A panel tab now has the same space left of its icon as right of its ✕.",
-    ],
-    prs: [
-      { number: 682, title: "Panel tabs: same space left of the icon as right of the close button" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.23.108",
-    date: "2026-11-04",
-    title: "Tidier panel tabs",
-    notes: [
-      "The line under the open tab now lines up with the top of the panel, with no grey notch at the corner.",
-    ],
-    prs: [
-      { number: 681, title: "Framed panels: the open tab's line starts where the module's top edge is straight" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.23.107",
-    date: "2026-11-04",
-    title: "Behind the scenes",
-    notes: [
+      "Submenus open next to their menu with a small gap, and panel tabs line up neatly with their panel.",
+      "Wide buttons and pickers only dip 1px when pressed, instead of shrinking.",
       "Smaller fixes and behind-the-scenes improvements.",
     ],
     prs: [
+      { number: 698, title: "Website access shows one chip per site" },
+      { number: 693, title: "Modules can show a file of their folder in Explorer (folders.showInFolder)" },
+      { number: 692, title: "Kit: LineChart for one or two lines over time" },
+      { number: 691, title: "Modules can read a folder on this PC, read only (permissions.folders)" },
+      { number: 690, title: "Modules can read a program on this PC, read only (localhost:<port>)" },
+      { number: 689, title: "Kit: a switched-off control can say why" },
+      { number: 686, title: "Ctrl+Z no longer undoes a delete behind an open dialog" },
+      { number: 685, title: "Kit: submenus open beside their menu with a 4 px gap, first row in line with the trigger" },
+      { number: 682, title: "Panel tabs: same space left of the icon as right of the close button" },
+      { number: 681, title: "Framed panels: the open tab's line starts where the module's top edge is straight" },
       { number: 680, title: "Spreadsheets: a new built-in module (Spreadsheets part 2)" },
-    ],
-    tags: ["modules", "spreadsheets"],
-  },
-  {
-    version: "0.23.106",
-    date: "2026-11-04",
-    title: "Data grid for modules",
-    notes: [
-      "Modules can show a grid of cells you edit like a spreadsheet: type, F2, Delete, Ctrl+D and Ctrl+R, the fill handle, resizable columns and rows, frozen rows and columns.",
-      "It also comes read-only for big tables, and only draws what you can see, so thousands of rows scroll smoothly.",
-      "The UI Playground shows both.",
-    ],
-    prs: [
       { number: 679, title: "Kit: DataGrid, a virtual grid with cell and range selection (Spreadsheets part 1)" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.23.105",
-    date: "2026-11-04",
-    title: "Dialogs from modules appear in one piece",
-    notes: [
-      "A module's dialog now shows its frame and its content together, with no flicker.",
-    ],
-    prs: [
       { number: 678, title: "Show a module dialog's frame and page in one step" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.23.104",
-    date: "2026-11-04",
-    title: "Calmer wide buttons",
-    notes: [
-      "Wide buttons and pickers now only dip 1px when pressed, instead of shrinking.",
-    ],
-    prs: [
       { number: 677, title: "Kit: wide buttons only dip 1px when pressed" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.23.103",
-    date: "2026-11-04",
-    title: "Dialogs from modules open cleanly",
-    notes: [
-      "A module's dialog, like Add a clock, now lets you type right away without a click first.",
-      "A module's dialog no longer shows an empty box before its page appears.",
-    ],
-    prs: [
       { number: 676, title: "Focus a module's dialog page when it opens" },
     ],
-    tags: ["modules", "workspace"],
+    tags: ["calculator", "catalog", "discord", "modules", "overlays", "privacy", "publishing", "sdk", "service", "settings", "spreadsheets", "system-monitor", "todos", "ui-kit", "website", "whiteboard", "workspace"],
   },
   {
     version: "0.23.102",
