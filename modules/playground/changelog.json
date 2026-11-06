@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.32",
+    "date": "2026-11-06",
+    "notes": [
+      "New specimens: a line chart with one or two lines over game time or dates, its tooltip, and its empty and one-point states."
+    ]
+  },
+  {
     "version": "0.1.31",
     "date": "2026-11-05",
     "notes": [
