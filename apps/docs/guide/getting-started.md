@@ -8,21 +8,97 @@ A Tavora module is a web page that runs in a sandboxed panel inside Tavora Deskt
 
 ## Make a project
 
-```sh
+There are three ways to start. Pick the one that suits you; they all end up in the same place.
+
+### With the starter
+
+::: code-group
+
+```sh [npm]
 npm create @tavora/module
 ```
 
-It asks where the project goes (the empty folder you are in, or a new folder in it), the module's name, its id (`publisher.module-name`) and a template: vanilla TypeScript, Vue or React. The project builds with Vite and depends on `@tavora/sdk` and `@tavora/pack`; its page starts with `bootstrapModule` (see [Talk to the host](#talk-to-the-host)), its `vite.config.ts` is one `moduleConfig()` call (see [Build the module](#build-the-module)); its manifest already sets [`minTavora`](../reference/manifest.md) to the Tavora that SDK needs. pnpm works too: `pnpm create @tavora/module`.
-
-```sh
-cd my-module
-npm install
-npm run dev     # builds, then rebuilds on every change: leave it running
+```sh [pnpm]
+pnpm create @tavora/module
 ```
 
-In Tavora, open **Settings > Developer > Project folders**, choose **Add folder…** and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves when `npm run dev` rebuilds.
+```sh [Yarn]
+yarn create @tavora/module
+```
 
-To add the SDK to a project of your own instead: `npm install @tavora/sdk`, and follow [Build the module](#build-the-module). The same small module is also built three ways in Tavora's repository: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). A module that offers several panels is shown in the [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) (see [Panel types](../reference/manifest.md#panel-types)). These examples ship with Tavora too: under Examples in **Settings > Developer > Project folders**, **Make a copy** turns one into a project of your own, with its own id and the SDK from npm, in a project folder or a folder you pick.
+```sh [Bun]
+bun create @tavora/module
+```
+
+:::
+
+It asks where the project goes (the empty folder you are in, or a new folder in it), the module's name, its id (`publisher.module-name`), the game it is for and a template: vanilla TypeScript, Vue or React. The project builds with Vite and depends on `@tavora/sdk` and `@tavora/pack`. Its page starts with `bootstrapModule` (see [Talk to the host](#talk-to-the-host)), its `vite.config.ts` is one `moduleConfig()` call (see [Build the module](#build-the-module)), and its manifest already sets [`minTavora`](../reference/manifest.md) to the Tavora that SDK needs.
+
+### From an example
+
+The same small module is built three ways in Tavora's repository: [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module), [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module) and [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module). The [panel types example](https://github.com/wellbrained/tavora/tree/main/examples/panels-module) shows a module with several panels (see [Panel types](../reference/manifest.md#panel-types)).
+
+The examples ship with Tavora too: under Examples in **Settings > Developer > Project folders**, **Make a copy** turns one into a project of your own, with its own id and the SDK from npm, in a project folder or a folder you pick.
+
+### In your own project
+
+Add the SDK, and `@tavora/pack` for the build:
+
+::: code-group
+
+```sh [npm]
+npm install @tavora/sdk
+npm install -D @tavora/pack
+```
+
+```sh [pnpm]
+pnpm add @tavora/sdk
+pnpm add -D @tavora/pack
+```
+
+```sh [Yarn]
+yarn add @tavora/sdk
+yarn add -D @tavora/pack
+```
+
+```sh [Bun]
+bun add @tavora/sdk
+bun add -d @tavora/pack
+```
+
+:::
+
+Then follow [Build the module](#build-the-module), and add a `dev` script such as `vite build --watch`.
+
+### Run it
+
+In the project folder, install the packages and start `dev`. It builds, then builds again on every change, so leave it running:
+
+::: code-group
+
+```sh [npm]
+npm install
+npm run dev
+```
+
+```sh [pnpm]
+pnpm install
+pnpm dev
+```
+
+```sh [Yarn]
+yarn
+yarn dev
+```
+
+```sh [Bun]
+bun install
+bun run dev
+```
+
+:::
+
+In Tavora, open **Settings > Developer > Project folders**, choose **Add folder…** and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves every time `dev` rebuilds.
 
 ## Talk to the host
 
@@ -119,7 +195,7 @@ Every item on Tavora's rail is a workspace: a game workspace, linked to a game, 
 
 Publish from Tavora: open **Settings > Developer** and press **Publish** next to your module. The first time, Tavora walks you through signing in and choosing a developer name; saving the name makes your [publisher key](./publisher-key.md) and claims your prefix. Tavora keeps the key for you, and your recovery key is its backup. Read [Your publisher key](./publisher-key.md) before your first publish: updates and your users' data depend on that key.
 
-Tavora packs what's already built, so keep `npm run dev` running or run `npm run build` first. The review screen shows what will go out: the name, version, patch notes, what the module asks for, and when it was built. When the catalog has this version already, it offers the next one and a box for its patch notes, and **Save to project** writes both into your files. Press **Publish** there to sign and upload; users find your module under **Browse** in the module library.
+Tavora packs what's already built, so keep `dev` running or run the `build` script first. The review screen shows what will go out: the name, version, patch notes, what the module asks for, and when it was built. When the catalog has this version already, it offers the next one and a box for its patch notes, and **Save to project** writes both into your files. Press **Publish** there to sign and upload; users find your module under **Browse** in the module library.
 
 The part of your module id before the first dot is your prefix, usually your developer name. Once it's yours, nobody else can publish under it; an account holds up to 3, and **Add another** under Module developer claims more. A module stays with the key that published its first version, and each new version must be newer. An account can publish 10 versions a day. [Publishing to the catalog](./publishing.md) covers the listing, updates, limits and reports.
 

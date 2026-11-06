@@ -5,7 +5,7 @@ A [Tavora](https://mytavora.app) module, made with `@tavora/create-module`. Tavo
 ## Develop
 
 ```sh
-{{run}} install
+{{install}}
 {{run}} dev
 ```
 

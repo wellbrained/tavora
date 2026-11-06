@@ -24,13 +24,13 @@ The page sorts your readme into the same sections every module has, so pages rea
 | `## Requirements` | Voraussetzungen | A game, an account, the internet |
 | `## Known issues` | Bekannte Probleme | What doesn't work yet |
 
-Any other heading goes at the end under **More**. A readme without these headings still shows fine. A title on the very first line (`# My module`) is left out, since the page already shows the name. `npm create @tavora/module` writes a `README.md` in this shape. Bold, italic, `code` and links (`[words](https://…)`, `http` or `https` only) work, and a list item can have one level of items under it.
+Any other heading goes at the end under **More**. A readme without these headings still shows fine. A title on the very first line (`# My module`) is left out, since the page already shows the name. The [starter](./getting-started.md#with-the-starter) writes a `README.md` in this shape. Bold, italic, `code` and links (`[words](https://…)`, `http` or `https` only) work, and a list item can have one level of items under it.
 
 The **Publish** review shows the description as it will appear, with a tip when it has no Overview or Features. Tips never stop a publish.
 
 ## Publish
 
-Build the module (`npm run dev` keeps `dist/` up to date), then press **Publish** next to it in **Settings > Developer**, or in its menu in Add module. Tavora packs the folder as it is and opens a review screen:
+Build the module (the `dev` script keeps `dist/` up to date), then press **Publish** next to it in **Settings > Developer**, or in its menu in Add module. Tavora packs the folder as it is and opens a review screen:
 
 - the name, icon, version and this version's patch notes
 - your description as the catalog page will show it
@@ -43,7 +43,7 @@ If something blocks the upload, the screen says what and offers the fix:
 - **The catalog has this version already:** pick the next one (Fixes, New features or Big changes), add its patch notes, and press **Save to project**. Tavora writes both into `tavora.module.json` and `changelog.json`.
 - **The version is a test version** (a pre-release such as `0.2.0-beta.1`): pick a plain one the same way. Module versions are always `major.minor.patch`.
 - **The id doesn't start with one of your prefixes:** type a new id and press **Use it**. A prefix you don't hold yet is claimed when you publish.
-- **Nothing is built yet:** run `npm run build`, then press **Check again**.
+- **Nothing is built yet:** run the `build` script, then press **Check again**.
 
 Press **Publish** on the review screen to sign the zip with your key and upload it with your sign-in. That press is your yes; nothing else asks. Your secret key never leaves Tavora, and the key alone can't publish: the service also checks that the account signed in is the one the key is linked to.
 
@@ -60,7 +60,29 @@ Every new version goes through automatic checks: its words (including adult term
 
 Tavora's Publish screen says the version is waiting for review, and `tavora-pack publish` prints **Waiting for review** with the reasons. You get an email when it waits and another when it's decided; nothing is approved automatically. Waiting is normal and nothing to fix. **Approve** lists it, **Decline** tells you why in an email (*Unsafe or harmful*, *Hateful content*, *Adult content*, *Spam or copy* or *Doesn't work*, with an optional note), never lists that version and deletes its zip, and a developer who keeps breaking the [rules](./catalog-rules.md) can be banned: the account and its keys can't publish, and its modules leave the catalog.
 
-To take a waiting version back, run `TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pack withdraw <zip or sha256>`. An account can have 5 versions waiting at once.
+To take a waiting version back, run this with the zip or its sha256:
+
+::: code-group
+
+```sh [npm]
+TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pack withdraw <zip or sha256>
+```
+
+```sh [pnpm]
+TAVORA_PUBLISH_TOKEN=tvp_… pnpm dlx @tavora/pack withdraw <zip or sha256>
+```
+
+```sh [Yarn]
+TAVORA_PUBLISH_TOKEN=tvp_… yarn dlx @tavora/pack withdraw <zip or sha256>
+```
+
+```sh [Bun]
+TAVORA_PUBLISH_TOKEN=tvp_… bunx @tavora/pack withdraw <zip or sha256>
+```
+
+:::
+
+An account can have 5 versions waiting at once.
 
 ## What users see
 
@@ -113,11 +135,33 @@ A build server can publish too, with the `@tavora/pack` command line tool. It ne
 1. **Your key as a file.** Press **Export** next to the key and save it. Pass it with `--key <file>`.
 2. **A publish token.** Type a name (like "GitHub Actions") and press **Make a token**. Copy it right away: Tavora shows it only once. Put it in the `TAVORA_PUBLISH_TOKEN` environment variable.
 
-```sh
+::: code-group
+
+```sh [npm]
 npm run build
 npx @tavora/pack . --key publisher-key.pem
 TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pack publish <id>-<version>.zip --key publisher-key.pem
 ```
+
+```sh [pnpm]
+pnpm build
+pnpm exec tavora-pack . --key publisher-key.pem
+TAVORA_PUBLISH_TOKEN=tvp_… pnpm exec tavora-pack publish <id>-<version>.zip --key publisher-key.pem
+```
+
+```sh [Yarn]
+yarn build
+yarn tavora-pack . --key publisher-key.pem
+TAVORA_PUBLISH_TOKEN=tvp_… yarn tavora-pack publish <id>-<version>.zip --key publisher-key.pem
+```
+
+```sh [Bun]
+bun run build
+bunx @tavora/pack . --key publisher-key.pem
+TAVORA_PUBLISH_TOKEN=tvp_… bunx @tavora/pack publish <id>-<version>.zip --key publisher-key.pem
+```
+
+:::
 
 A token publishes only under id prefixes your account already holds, so publish the first version from Tavora, or claim your prefix there first. It works for a year, only together with a key linked to your account. You get an email for every upload, naming the token. Remove a token you don't need any more, and it stops working at once.
 

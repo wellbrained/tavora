@@ -6,7 +6,7 @@ Open **Settings > Developer > Project folders**. Each development folder lists i
 
 - **"No module here"**: add the project folder (the one with `tavora.module.json`), or the folder that has your projects directly inside it, not a project's `src` or `dist`.
 - **A manifest error**, such as an unknown field or a wrong `id`: Tavora refuses manifests with mistakes rather than guessing. Add `"$schema": "https://docs.mytavora.app/schema/tavora.module.schema.json"` and your editor shows the problem. The fields are in the [manifest reference](../reference/manifest.md).
-- **"Not built yet"**: run `npm run dev` in that project and leave it running; the module loads by itself once `dist/index.html` is there.
+- **"Not built yet"**: start `dev` in that project (see [Run it](./getting-started.md#run-it)) and leave it running; the module loads by itself once `dist/index.html` is there.
 - **"another module with the same id is already loaded"**: a development folder wins over an installed module with the same id, so the installed copy is the one that waits. Remove one of them, or use another id while you test.
 - **It needs a newer Tavora**: your `minTavora` is newer than the Tavora you run. Update Tavora, or lower `minTavora` if you don't use the newer features.
 
@@ -21,7 +21,7 @@ When the page crashes or stops responding, the panel says so and offers **Reload
 
 ## Changes don't appear
 
-- Keep `npm run dev` running: it rebuilds on every change, and Tavora reloads the module's open panels when the build changes. A change to `tavora.module.json` makes Tavora read the module again.
+- Keep `dev` running (`npm run dev`, `pnpm dev`, `yarn dev` or `bun run dev`): it rebuilds on every change, and Tavora reloads the module's open panels when the build changes. A change to `tavora.module.json` makes Tavora read the module again.
 - Tavora watches the project folder and its build folder. If your build writes somewhere else, point the manifest's `entry` there.
 - Still old? Remove the development folder in Settings > Developer > Project folders and add it again.
 
