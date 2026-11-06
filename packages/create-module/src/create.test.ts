@@ -4,7 +4,7 @@ import path from "node:path";
 import { validateManifest } from "@tavora/module-schema";
 import { MIN_TAVORA, SDK_VERSION } from "@tavora/sdk";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createModule, CreateError, defaultsFor, idProblem, slugOf, TEMPLATES } from "./create.ts";
+import { commandsFor, createModule, CreateError, defaultsFor, idProblem, PACKAGE_MANAGERS, slugOf, TEMPLATES, type PackageManager } from "./create.ts";
 import { CATALOG } from "../../../apps/desktop/src/main/catalog.ts";
 import { GAMES } from "./games.ts";
 import { VERSIONS } from "./versions.ts";
@@ -18,6 +18,8 @@ afterEach(async () => {
 });
 
 const json = async (file: string) => JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
+/** A file's text with \n line ends, whatever the checkout uses. */
+const lines = async (file: string) => (await readFile(file, "utf8")).replace(/\r\n/g, "\n");
 
 describe("createModule", () => {
   it.each(TEMPLATES)("makes a %s project with a valid manifest and every placeholder filled", async (template) => {
@@ -66,9 +68,26 @@ describe("createModule", () => {
 
   it("writes npm commands into DEVELOP.md unless another manager ran it", async () => {
     await createModule({ dir: root, id: "example.notes", name: "Notes", template: "vanilla" });
-    const readme = await readFile(path.join(root, "DEVELOP.md"), "utf8");
-    expect(readme).toContain("npm run dev");
+    const readme = await lines(path.join(root, "DEVELOP.md"));
+    expect(readme).toContain("```sh\nnpm install\nnpm run dev\n```");
     expect(readme).toContain("npx tavora-pack . --key");
+  });
+
+  const expected: Record<PackageManager, { develop: string; build: string; pack: string; check: string }> = {
+    npm: { develop: "npm install\nnpm run dev", build: "npm run build", pack: "npx tavora-pack . --key", check: "Run npm install first" },
+    pnpm: { develop: "pnpm install\npnpm dev", build: "pnpm build", pack: "pnpm exec tavora-pack . --key", check: "Run pnpm install first" },
+    yarn: { develop: "yarn\nyarn dev", build: "yarn build", pack: "yarn tavora-pack . --key", check: "Run yarn first" },
+    bun: { develop: "bun install\nbun run dev", build: "bun run build", pack: "bunx tavora-pack . --key", check: "Run bun install first" },
+  };
+  it.each(PACKAGE_MANAGERS)("writes %s commands into DEVELOP.md and the install check", async (manager) => {
+    await createModule({ dir: root, id: "example.notes", name: "Notes", template: "vanilla", packageManager: manager });
+    const develop = await lines(path.join(root, "DEVELOP.md"));
+    expect(develop).toContain(`\`\`\`sh\n${expected[manager].develop}\n\`\`\``);
+    expect(develop).toContain(expected[manager].build);
+    expect(develop).toContain(expected[manager].pack);
+    expect(develop).toContain(`TAVORA_PUBLISH_TOKEN=<token> ${expected[manager].pack.replace(" . --key", " publish <zip> --key")}`);
+    expect(await readFile(path.join(root, "scripts/check-install.cjs"), "utf8")).toContain(expected[manager].check);
+    expect(commandsFor(manager).install).toBe(expected[manager].develop.split("\n")[0]);
   });
 
   it("keeps Vue's own template braces", async () => {

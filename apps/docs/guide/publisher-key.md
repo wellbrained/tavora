@@ -44,9 +44,25 @@ To link a key file Tavora doesn't keep (one you sign with `--key` in CI):
 1. Press **Get a link code** under Settings > Developer > Publishing > Publisher keys and CI. Tavora shows a one-time code, valid for 10 minutes.
 2. Copy the command it shows and run it in a terminal, in any folder:
 
-   ```sh
+   ::: code-group
+
+   ```sh [npm]
    npx @tavora/pack link ABCD-EFGH --key <file>
    ```
+
+   ```sh [pnpm]
+   pnpm dlx @tavora/pack link ABCD-EFGH --key <file>
+   ```
+
+   ```sh [Yarn]
+   yarn dlx @tavora/pack link ABCD-EFGH --key <file>
+   ```
+
+   ```sh [Bun]
+   bunx @tavora/pack link ABCD-EFGH --key <file>
+   ```
+
+   :::
 
 The key signs the code, and only the signature and the key's public half are sent. An account can link several keys, and a key belongs to one account. You can unlink a key in Settings > Developer > Publishing.
 

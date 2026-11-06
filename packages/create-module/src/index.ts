@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // npm create @tavora/module [folder] -- [--template vanilla|vue|react] [--id publisher.name] [--name "Name"] [--game poe2|any] [--yes]
-// pnpm create @tavora/module [folder] [--template ...]
+// pnpm create @tavora/module [folder] [--template ...]   (yarn create and bun create work the same way)
 // Makes a new Tavora module project. Asks for what was not given, unless --yes (or no terminal):
 // where (this empty folder or a new one in it), the game and the template are picked with the arrow keys.
 import { readdir } from "node:fs/promises";
@@ -8,17 +8,20 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { autocomplete, cancel, intro, isCancel, note, outro, select, text } from "@clack/prompts";
 import { isGameId } from "@tavora/module-schema";
-import { createModule, CreateError, defaultsFor, idProblem, nameProblem, TEMPLATES, type Template } from "./create.ts";
+import { commandsFor, createModule, CreateError, defaultsFor, idProblem, nameProblem, TEMPLATES, type PackageManager, type Template } from "./create.ts";
 import { GAMES } from "./games.ts";
 
-const USAGE = "usage: npm create @tavora/module [folder] -- [--template vanilla|vue|react] [--id publisher.module-name] [--name \"Module name\"] [--game poe2|any] [--yes]";
+const USAGE = [
+  "usage: npm create @tavora/module [folder] -- [--template vanilla|vue|react] [--id publisher.module-name] [--name \"Module name\"] [--game poe2|any] [--yes]",
+  "   or: pnpm create, yarn create or bun create @tavora/module [folder] [options], without the --",
+].join("\n");
 
 const TEMPLATE_LABELS: Record<Template, string> = { vanilla: "Vanilla TypeScript", vue: "Vue", react: "React" };
 
 /** The package manager that ran the starter, so the printed commands fit. */
-function packageManager(): "npm" | "pnpm" | "yarn" {
+function packageManager(): PackageManager {
   const agent = process.env.npm_config_user_agent ?? "";
-  return agent.startsWith("pnpm") ? "pnpm" : agent.startsWith("yarn") ? "yarn" : "npm";
+  return agent.startsWith("pnpm") ? "pnpm" : agent.startsWith("yarn") ? "yarn" : agent.startsWith("bun") ? "bun" : "npm";
 }
 
 /** Thrown when the developer pressed Ctrl+C or Esc in a question. */
@@ -143,12 +146,12 @@ async function main(): Promise<number> {
     const manager = packageManager();
     await createModule({ dir: folder, id, name, template, ...(game && game !== "any" ? { game } : {}), packageManager: manager });
 
-    const run = manager === "npm" ? "npm run" : manager;
+    const commands = commandsFor(manager);
     const project = path.resolve(folder);
     const steps = [
       ...(folder === "." ? [] : [`cd ${folder}`]),
-      `${manager} install`,
-      `${run} dev        # builds, then rebuilds on every change: leave it running`,
+      commands.install,
+      `${commands.run} dev       # builds, then rebuilds on every change: leave it running`,
       "",
       "Then in Tavora: Settings > Project folders > Add folder…",
       `and pick ${project}`,

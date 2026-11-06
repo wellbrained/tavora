@@ -23,8 +23,11 @@ export interface ModuleOptions {
   /** The game the module is made for (its id, such as poe2), or none for any game. */
   game?: string;
   /** The package manager the commands in DEVELOP.md use. */
-  packageManager?: "npm" | "pnpm" | "yarn";
+  packageManager?: PackageManager;
 }
+
+export const PACKAGE_MANAGERS = ["npm", "pnpm", "yarn", "bun"] as const;
+export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
 
 export class CreateError extends Error {}
 
@@ -64,9 +67,19 @@ export function nameProblem(name: string): string | null {
   return name.trim() === "" || name.length > 80 ? "a name is 1 to 80 characters" : null;
 }
 
-const run = (manager: ModuleOptions["packageManager"]) => (manager === "pnpm" ? "pnpm" : manager === "yarn" ? "yarn" : "npm run");
-const exec = (manager: ModuleOptions["packageManager"]) => (manager === "pnpm" ? "pnpm exec" : manager === "yarn" ? "yarn" : "npx");
-const install = (manager: ModuleOptions["packageManager"]) => (manager === "yarn" ? "yarn" : `${manager} install`);
+/** How a package manager installs the packages, runs a script and runs a package's tool (npm when none is given). */
+export function commandsFor(manager: PackageManager = "npm"): { install: string; run: string; exec: string } {
+  switch (manager) {
+    case "pnpm":
+      return { install: "pnpm install", run: "pnpm", exec: "pnpm exec" };
+    case "yarn":
+      return { install: "yarn", run: "yarn", exec: "yarn" };
+    case "bun":
+      return { install: "bun install", run: "bun run", exec: "bunx" };
+    default:
+      return { install: "npm install", run: "npm run", exec: "npx" };
+  }
+}
 
 /** Placeholders that are already JSON, standing outside quotes, so they are put in as they are. */
 const RAW = new Set(["games"]);
@@ -110,9 +123,7 @@ export async function createModule(options: ModuleOptions): Promise<string[]> {
     sdkVersion: VERSIONS.sdk,
     packVersion: VERSIONS.pack,
     minTavora: VERSIONS.minTavora,
-    run: run(options.packageManager),
-    exec: exec(options.packageManager),
-    install: install(options.packageManager),
+    ...commandsFor(options.packageManager),
   };
   const written: string[] = [];
   for (const source of ["shared", options.template]) {

@@ -2,6 +2,11 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.30
+
+- The starter knows Bun: `bun create @tavora/module` prints `bun install` and `bun run dev`, and DEVELOP.md uses `bun run` and `bunx`.
+- DEVELOP.md says `npm install` for npm projects, not `npm run install`.
+
 ## 0.1.29
 
 - New projects start on `@tavora/sdk` 0.3.11: an item card can say it does not pin (`pinnable: false`).
