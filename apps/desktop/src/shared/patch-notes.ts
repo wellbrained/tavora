@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.115",
+    date: "2026-11-06",
+    title: "Switched-off things say why",
+    notes: [
+      "Hover a switch, box, field or menu row that is off and it tells you why.",
+      "Game overlays: Keep when you switch windows now says it needs Game overlays first.",
+      "To-Dos, Whiteboard and System Monitor explain their switched-off items too.",
+    ],
+    prs: [
+      { number: 689, title: "Kit: a switched-off control can say why" },
+    ],
+    tags: ["catalog", "overlays", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.23.114",
     date: "2026-11-06",
     title: "A line chart for modules",
