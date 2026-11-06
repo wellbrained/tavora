@@ -21,7 +21,7 @@ When the page crashes or stops responding, the panel says so and offers **Reload
 
 ## Changes don't appear
 
-- Keep `dev` running (`npm run dev`, `pnpm dev`, `yarn dev` or `bun run dev`): it rebuilds on every change, and Tavora reloads the module's open panels when the build changes. A change to `tavora.module.json` makes Tavora read the module again.
+- Keep `dev` running (`npm run dev`, `pnpm dev`, `yarn dev`, `bun run dev` or `vp run dev`): it rebuilds on every change, and Tavora reloads the module's open panels when the build changes. A change to `tavora.module.json` makes Tavora read the module again.
 - Tavora watches the project folder and its build folder. If your build writes somewhere else, point the manifest's `entry` there.
 - Still old? Remove the development folder in Settings > Developer > Project folders and add it again.
 

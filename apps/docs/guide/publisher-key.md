@@ -62,6 +62,10 @@ To link a key file Tavora doesn't keep (one you sign with `--key` in CI):
    bunx @tavora/pack link ABCD-EFGH --key <file>
    ```
 
+   ```sh [Vite+]
+   vp dlx @tavora/pack link ABCD-EFGH --key <file>
+   ```
+
    :::
 
 The key signs the code, and only the signature and the key's public half are sent. An account can link several keys, and a key belongs to one account. You can unlink a key in Settings > Developer > Publishing.
