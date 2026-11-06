@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { folderKey, isFolderName, isFolderPath, LAST_TAVORA_WITHOUT_FOLDERS, parseFolderKey, allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",

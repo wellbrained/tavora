@@ -40,7 +40,7 @@ import { UserError } from "./messages";
 import { UndoGoneError, UndoShelf } from "./undo-shelf";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { popularGames } from "./catalog";
-import { gridTemplate, layoutTemplate, type LayoutTemplate } from "../shared/layout-templates";
+import { gridTemplate, layoutTemplate } from "../shared/layout-templates";
 import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./module-data";
@@ -58,7 +58,7 @@ import { ModuleLifecycle } from "./module-lifecycle";
 import type { TestHosts } from "./network";
 import { holdOwnPort } from "./own-ports";
 import { shortcutFor } from "./shortcuts";
-import { IconError, importIcon, removeIcon } from "./icons";
+import { importIcon, removeIcon } from "./icons";
 import { clipInitials, clipName, type Profile, removePicture, savePicture } from "./profile";
 import {
   addWorkspace,
@@ -184,7 +184,7 @@ import { osEncryptor } from "./os-encryptor";
 import { SignIn } from "./sign-in";
 import { accountServiceUrl, serviceUrl } from "./service-url";
 import { LibraryWorkspaces } from "./workspace-lookup";
-import type { Shell } from "./shell";
+
 
 import { CopySync } from "./cloud-copy-sync";
 import { Inbox } from "./inbox";

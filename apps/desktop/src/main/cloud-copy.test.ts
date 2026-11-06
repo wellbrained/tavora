@@ -1,7 +1,7 @@
 import { mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CloudCopy, copyRoots, CopyError, EMPTY_STATE, hasLocalChanges, safeCopyPath, ServiceStorage, swapInCopy, type CopyState } from "./cloud-copy";
+import { CloudCopy, CopyError, EMPTY_STATE, hasLocalChanges, safeCopyPath, ServiceStorage, swapInCopy, type CopyState } from "./cloud-copy";
 import { cleanUp, OWNER, pc, service } from "./cloud-copy.test-helper";
 import { copyKeys, newCopyKey, open, parseRecoveryKey, partId, recoveryKey, seal } from "./copy-crypto";
 

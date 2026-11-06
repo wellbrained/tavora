@@ -62,7 +62,7 @@ import {
 import type { GameOverlaySource } from "./game-overlay-page";
 import type { VeilWindow } from "./game-veil-window";
 import type { HotkeyRecord, ShortcutRegistry } from "./hotkeys";
-import type { OverlayPage, OverlayStore, OverlaySubject } from "./overlays";
+import type { OverlayPage, OverlaySubject } from "./overlays";
 import type { Streaming, StreamingModule } from "./streaming";
 import type { WorkspaceNames } from "./workspace-lookup";
 import type { Library } from "./library";

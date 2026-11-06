@@ -769,7 +769,6 @@ function checkPanelLayout(layout: unknown, types: ReadonlySet<string> | null, al
   if (!allowed) errors.push(`panelLayout needs a minTavora newer than ${LAST_TAVORA_WITHOUT_PANEL_LAYOUT}, because older Tavoras refuse it`);
   if (types === null) return void errors.push("panelLayout needs panels: it places the module's panel types");
   const seen = new Set<string>();
-  const before = errors.length;
   const node = (value: unknown, at: string, depth: number, outer: "row" | "column" | null): void => {
     if (!isRecord(value)) return void errors.push(`${at} must be an object`);
     if (value.size !== undefined) {

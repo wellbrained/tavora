@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
-import { AccountKey } from "./account-key";
+
 import { CloudCopy, ServiceStorage } from "./cloud-copy";
 import { FOLDER_NAME } from "./copy-folder";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
