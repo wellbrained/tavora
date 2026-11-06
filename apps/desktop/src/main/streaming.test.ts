@@ -49,7 +49,7 @@ async function setup({ held = [] as string[] } = {}) {
     settings: () => world.settings,
     saveSettings: (next) => Object.assign(world.settings, next),
     installed: { shown: (id) => (id === MODULE.manifest.id ? MODULE : undefined), get: (id) => (id === MODULE.manifest.id ? MODULE : undefined) },
-    grants: { allowed: () => ({ network: [], connectors: world.granted ? ["stream-overlay"] : [] }) },
+    grants: { allowed: () => ({ network: [], connectors: world.granted ? ["stream-overlay"] : [], folders: [] }) },
     askConnector: async () => {
       world.asked++;
       world.granted = world.answer;

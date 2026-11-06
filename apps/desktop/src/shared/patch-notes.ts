@@ -28,6 +28,31 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.114",
+    date: "2026-11-06",
+    title: "A line chart for modules",
+    notes: [
+      "Modules can now draw a line chart over time, with the values shown beside the point you hover.",
+    ],
+    prs: [
+      { number: 692, title: "Kit: LineChart for one or two lines over time" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
+    version: "0.23.113",
+    date: "2026-11-06",
+    title: "Modules can read a folder on this PC",
+    notes: [
+      "A module can ask to read one of your folders, such as a game's replays. You see the folder and the file types first, and it can't change anything there.",
+      "Moved that folder? Press Change folder… in Settings > Connections > Folder access.",
+    ],
+    prs: [
+      { number: 691, title: "Modules can read a folder on this PC, read only (permissions.folders)" },
+    ],
+    tags: ["catalog", "modules", "privacy", "publishing", "sdk", "service", "settings", "website"],
+  },
+  {
     version: "0.23.112",
     date: "2026-11-05",
     title: "Modules can read programs on this PC",

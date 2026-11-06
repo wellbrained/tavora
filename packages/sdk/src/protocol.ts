@@ -625,10 +625,10 @@ export interface DocumentChange {
  * Capabilities gate methods beyond the always-available core. A module has a
  * capability once the user granted one of its permissions for it (`network`:
  * a host in `permissions.network`; `aiUsage`: the `ai-usage` connector; `discord`:
- * the `discord` connector; `overlay`: the `stream-overlay` connector; `systemInfo`: the `system-info` connector; `media`: the `media` connector; `leaderboards`: the `leaderboards` connector); calling a gated method without it fails
+ * the `discord` connector; `overlay`: the `stream-overlay` connector; `systemInfo`: the `system-info` connector; `media`: the `media` connector; `leaderboards`: the `leaderboards` connector; `folders`: a folder in `permissions.folders`); calling a gated method without it fails
  * with PERMISSION_DENIED. The others cannot be granted yet.
  */
-export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "systemInfo" | "media" | "leaderboards" | "files" | "clipboard" | "sharedData";
+export type Capability = "network" | "aiUsage" | "discord" | "overlay" | "systemInfo" | "media" | "leaderboards" | "folders" | "files" | "clipboard" | "sharedData";
 
 /**
  * Where the user stands with this module's leaderboards (leaderboards.status). `online`: Tavora's service answered;
@@ -799,7 +799,38 @@ export interface PickNear { file: string; up?: number }
  */
 export type ReadOnlyFileState = { found: true; size: number; modifiedAt: number } | { found: false; reason: "gone" | "unlinked" };
 export const READ_ONLY_FILE_PATH = '/_read-only-files/';
+/**
+ * A file in a folder this module may read (permissions.folders): its path inside the folder joined by `/` (such as
+ * `Saves/slot 1.sav`), its size in bytes, when it last changed (ms since 1970), and whether the module may read it
+ * (an extension of `read`) or only see it (one of `names`).
+ */
+export interface FolderEntry { path: string; size: number; modifiedAt: number; readable: boolean }
+/** What folders.list found. `truncated`: the folder holds more than one listing may (20,000 files or 5,000 folders). */
+export interface FolderListing { files: FolderEntry[]; truncated: boolean }
+/**
+ * Whether a folder of permissions.folders can be read now. `missing`: it isn't where the manifest says and the user
+ * hasn't shown Tavora where it is (folders.choose). `not-granted`: the user hasn't allowed it, or took it back.
+ */
+export type FolderState = { found: true } | { found: false; reason: "missing" | "not-granted" };
+/**
+ * Files the module may see that were added or changed (`changed`) or removed (`removed`, their paths) in a watched
+ * folder. `rescan`: Tavora can't say which, so list the folder again.
+ */
+export interface FolderChange { folder: string; changed: FolderEntry[]; removed: string[]; rescan: boolean }
+/** Where folders.read asks for a file, by POST with `{ folder, path }` as JSON. */
+export const FOLDER_READ_PATH = '/_folders/read';
 export interface Methods {
+  /** Whether a folder of permissions.folders can be read now, without saying where it is. Tavora 0.23.113 and newer. */
+  "folders.state": { params: { folder: string }; result: FolderState };
+  /** The files the module may see in a folder, subfolders too (8 deep). Tavora 0.23.113 and newer. */
+  "folders.list": { params: { folder: string }; result: FolderListing };
+  /** Starts (`on`) or stops telling this panel about changes in a folder (event folders.changed). Tavora 0.23.113 and newer. */
+  "folders.watch": { params: { folder: string; on: boolean }; result: null };
+  /**
+   * Opens the system's folder dialog so the user can show Tavora where the folder is, when it isn't where the manifest
+   * says. Only right after a click. True when the user chose a folder Tavora accepts. Tavora 0.23.113 and newer.
+   */
+  "folders.choose": { params: { folder: string }; result: boolean };
   /**
    * Opens Tavora's open dialog after a click and remembers read-only access to the file picked. With `multiple: true`
    * the user can pick several, and the answer is a list (empty when the dialog was closed). `multiple` needs Tavora 0.23.6.
@@ -1072,6 +1103,8 @@ export interface Events {
   "systemInfo.connectionChanged": SystemConnection;
   /** What plays on this PC changed (media.watch). Only with capability `media`, while the panel watches. */
   "media.changed": MediaState;
+  /** Files changed in a folder this panel watches (folders.watch). Only with capability `folders`. Tavora 0.23.113 and newer. */
+  "folders.changed": FolderChange;
   /** The user added, renamed or removed an AI account; ask aiUsage.accounts again. Only with capability `aiUsage`. */
   "aiUsage.accountsChanged": null;
   /** The connection to the Discord app changed. Only with capability `discord`, after discord.state. */
@@ -1411,6 +1444,7 @@ export interface HttpCalls {
   "blobs.app.put": { params: { file: Blob }; result: BlobInfo };
   "clipboard.writeImage": { params: { png: Blob }; result: null };
   "files.read": { params: { id: string }; result: Uint8Array };
+  "folders.read": { params: { folder: string; path: string }; result: Uint8Array };
   "files.exportJson": { params: { value: JsonValue; name?: string }; result: { fileName: string } };
   "files.saveJson": { params: { value: JsonValue; name?: string }; result: { fileName: string } | null };
   "files.openJson": { params: undefined; result: { fileName: string; value: JsonValue } | null };
@@ -1551,6 +1585,11 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "files.check": later("0.23.6"),
   "files.showInFolder": later("0.23.6", null, true),
   "files.read": later("0.21.13"),
+  "folders.state": later("0.23.113", "folders"),
+  "folders.list": later("0.23.113", "folders"),
+  "folders.watch": later("0.23.113", "folders"),
+  "folders.choose": later("0.23.113", "folders", true),
+  "folders.read": later("0.23.113", "folders"),
   "files.exportJson": call("0.19.17", null, true),
   "files.saveJson": later("0.21.13", null, true),
   "files.openJson": later("0.21.13", null, true),

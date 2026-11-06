@@ -10,12 +10,14 @@
 // With `inPanel` the same question is the content of the panel that asks (decision of 2026-10-28): the module's first
 // panel when it is added or still misses access, or the running panel that asks for a connector on request. Cancel then
 // closes the panels that wait for the answer; Allow lets the host start them (main/host.ts questionOf).
-import { Check, Cpu, Gauge, Globe, Headphones, Monitor, Music, Radio, ShieldCheck, Trophy } from "@lucide/vue";
+import { Check, Cpu, Folder, Gauge, Globe, Headphones, Monitor, Music, Radio, ShieldCheck, Trophy } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { act, aiUsage, dialog, discord, nextUpdateAsk, openPanels, openSettings, state, stopUpdateAsks, type GrantRequest } from "../host";
 import { t } from "../i18n";
+import { extensionList } from "../../shared/folder-keys";
+import { folderLabel, foldersOf } from "../folder-label";
 import ModalDialog from "./ModalDialog.vue";
 import ModuleIcon from "./ModuleIcon.vue";
 import ModuleNotes from "./settings/ModuleNotes.vue";
@@ -29,13 +31,15 @@ const busy = ref(false);
 const module = computed(() => state.value?.modules.find((item) => item.id === props.request.moduleId) ?? null);
 const update = computed(() => (props.request.update ? (module.value?.update ?? null) : null));
 const asks = computed(() =>
-  props.request.onRequest ? { network: [], connectors: props.request.onRequest.connectors } : props.request.update ? update.value?.asks : module.value?.permissions.missing,
+  props.request.onRequest ? { network: [], connectors: props.request.onRequest.connectors, folders: [] } : props.request.update ? update.value?.asks : module.value?.permissions.missing,
 );
 const hosts = computed(() => asks.value?.network ?? []);
 /** Websites, and programs on this PC (`localhost:<port>`, read only), shown apart. */
 const sites = computed(() => hosts.value.filter((host) => !host.startsWith("localhost:")));
 const programs = computed(() => hosts.value.filter((host) => host.startsWith("localhost:")).map((host) => host.slice("localhost:".length)));
 const connectors = computed(() => asks.value?.connectors ?? []);
+/** Folders on this PC to read (permissions.folders), with what the module may see in each. */
+const folders = computed(() => foldersOf(asks.value?.folders ?? []));
 const aiAccounts = computed(() => aiUsage.value?.accounts ?? []);
 const discordUser = computed(() => discord.value?.user ?? null);
 
@@ -53,9 +57,9 @@ function close() {
 
 // The module went away, or has nothing left to ask: nothing to answer.
 watch(
-  [module, hosts, connectors],
+  [module, hosts, connectors, folders],
   () => {
-    if (!props.inPanel && !busy.value && (!module.value || hosts.value.length + connectors.value.length === 0)) dialog.value = null;
+    if (!props.inPanel && !busy.value && (!module.value || hosts.value.length + connectors.value.length + folders.value.length === 0)) dialog.value = null;
   },
   { immediate: true },
 );
@@ -83,8 +87,10 @@ const title = computed(() => {
   if (!current) return "";
   if (update.value) return t("grant.updateTitle", { name: current.name, version: update.value.version });
   if (props.request.review) return t("grant.reviewTitle", { name: current.name });
-  const only = connectors.value.length === 1 && !hosts.value.length ? (ASK as Record<string, (typeof ASK)[keyof typeof ASK]>)[connectors.value[0]!] : undefined;
+  if (!connectors.value.length && !hosts.value.length && folders.value.length) return t("grant.ask.folder", { name: current.name });
+  const only = connectors.value.length === 1 && !hosts.value.length && !folders.value.length ? (ASK as Record<string, (typeof ASK)[keyof typeof ASK]>)[connectors.value[0]!] : undefined;
   if (only) return t(only, { name: current.name });
+  if (folders.value.length) return t("grant.title", { name: current.name });
   if (!connectors.value.length && programs.value.length === 1 && !sites.value.length) return t("grant.ask.program", { name: current.name, port: programs.value[0]! });
   if (!connectors.value.length && !programs.value.length && hosts.value.length === 1) return t("grant.ask.site", { name: current.name, host: hosts.value[0]! });
   if (!connectors.value.length && !programs.value.length && hosts.value.length > 1) return t("grant.ask.sites", { name: current.name, count: hosts.value.length });
@@ -121,7 +127,7 @@ async function allow() {
     return;
   }
   // Exactly what this dialog shows: the main process grants only what the module still asks for.
-  const result = await act({ type: "grant-module", moduleId: current.id, network: [...hosts.value], connectors: [...connectors.value] }, { quiet: true });
+  const result = await act({ type: "grant-module", moduleId: current.id, network: [...hosts.value], connectors: [...connectors.value], folders: folders.value.map((folder) => folder.key) }, { quiet: true });
   busy.value = false;
   if (!result.ok) {
     error.value = result.error;
@@ -204,6 +210,17 @@ async function allow() {
         <li v-for="port in programs" :key="port">{{ t("grant.programPort", { port }) }}</li>
       </ul>
       <p class="text-muted-foreground text-sm">{{ t("grant.programsNote") }}</p>
+    </section>
+    <section v-if="folders.length" class="flex flex-col gap-2" :aria-label="t('grant.folders')">
+      <h3 class="flex items-center gap-2 font-medium"><Folder :stroke-width="1.5" class="size-4" /> {{ t("grant.folders") }}</h3>
+      <ul class="bg-muted flex flex-col gap-2 rounded-md px-3 py-2 text-sm" data-testid="grant-folders">
+        <li v-for="folder in folders" :key="folder.key" class="flex flex-col gap-0.5">
+          <span class="font-mono break-all">{{ folderLabel(folder) }}</span>
+          <span v-if="folder.read.length" class="text-muted-foreground">{{ t("grant.folderRead", { types: extensionList(folder.read) }) }}</span>
+          <span v-if="folder.nameOnly.length" class="text-muted-foreground">{{ t("grant.folderNames", { types: extensionList(folder.nameOnly) }) }}</span>
+        </li>
+      </ul>
+      <p class="text-muted-foreground text-sm">{{ t("grant.foldersNote") }}</p>
     </section>
     <ModuleNotes v-if="update && update.notes.length" :module-id="module.id" :version="update.version" :unseen="false" :entries="update.notes" />
     <p class="text-muted-foreground text-sm">{{ t("grant.later") }}</p>

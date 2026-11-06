@@ -408,7 +408,7 @@ describe("the registry", () => {
 
 describe("the update check", () => {
   const entry = (version: string, owner = PINNED, hash = "b".repeat(64)): CatalogEntry => ({ id: "tavora.notes", name: "Notes", version, minTavora: "0.23.0", owner, zip: { sha256: hash, size: 1 }, notes: [] }) as unknown as CatalogEntry;
-  const installed = [{ id: "tavora.notes", owner: "official", version: "1.0.0", asks: { network: [], connectors: [] }, official: true as const }];
+  const installed = [{ id: "tavora.notes", owner: "official", version: "1.0.0", asks: { network: [], connectors: [], folders: [] }, official: true as const }];
 
   it("counts a shipped official module when a trusted Tavora key signed the newer listing", () => {
     const trusted = (key: string) => key === PINNED;

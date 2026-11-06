@@ -11,7 +11,7 @@ export function placeholderModule(index: number): CatalogModuleView {
     description: placeholderText(90 + ((index * 23) % 50)),
     version: "0.0.0",
     minTavora: null,
-    permissions: { network: [], connectors: [] },
+    permissions: { network: [], connectors: [], folders: [] },
     owner: "placeholder",
     publisher: placeholderText(8 + (index % 5)),
     size: 0,

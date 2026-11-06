@@ -4,7 +4,7 @@
 // A grant only covers what the module's current manifest still asks for, and every gated call
 // checks it again, so revoking takes effect at once.
 import path from "node:path";
-import { connectorsAtAdd, isConnector, isModuleId, isNetworkEntry, isOwnerId, type Connector, type ModuleManifest } from "@tavora/module-schema";
+import { connectorsAtAdd, folderKey, isConnector, isModuleId, isNetworkEntry, isOwnerId, parseFolderKey, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 
@@ -18,6 +18,8 @@ export interface Permissions {
   network: string[];
   /** Connectors whose sign-in the module may use (ai-usage). */
   connectors: Connector[];
+  /** Folders on this PC to read, each as its folderKey (path and both extension lists). */
+  folders: string[];
 }
 
 export interface Grant extends Permissions {
@@ -35,18 +37,24 @@ export interface GrantSubject {
 
 type GrantFile = { version: number; owners: Record<string, Record<string, Grant>> };
 
-const EMPTY: Permissions = { network: [], connectors: [] };
+const EMPTY: Permissions = { network: [], connectors: [], folders: [] };
 
 /** What a manifest asks for, with the optional connectors filled in. */
 function asked(manifest: GrantSubject["manifest"]): Permissions {
-  return { network: manifest.permissions.network, connectors: manifest.permissions.connectors ?? [] };
+  return { network: manifest.permissions.network, connectors: manifest.permissions.connectors ?? [], folders: (manifest.permissions.folders ?? []).map(folderKey) };
 }
 
 function sanitizeGrant(value: unknown): Grant | null {
   if (typeof value !== "object" || value === null) return null;
-  const { version, grantedAt, network, connectors = [] } = value as Record<string, unknown>;
-  if (typeof version !== "string" || typeof grantedAt !== "string" || !Array.isArray(network) || !Array.isArray(connectors)) return null;
-  return { version, grantedAt, network: [...new Set(network.filter(isNetworkEntry))], connectors: [...new Set(connectors.filter(isConnector))] };
+  const { version, grantedAt, network, connectors = [], folders = [] } = value as Record<string, unknown>;
+  if (typeof version !== "string" || typeof grantedAt !== "string" || !Array.isArray(network) || !Array.isArray(connectors) || !Array.isArray(folders)) return null;
+  return {
+    version,
+    grantedAt,
+    network: [...new Set(network.filter(isNetworkEntry))],
+    connectors: [...new Set(connectors.filter(isConnector))],
+    folders: [...new Set(folders.filter((key): key is string => parseFolderKey(key) !== null))],
+  };
 }
 
 /** Reads grants.json, keeping only well-formed entries; anything else is as if never granted. */
@@ -71,10 +79,15 @@ export function sanitizeGrants(raw: unknown): Map<string, Map<string, Grant>> {
  * connectors it asks for on request (permissions.onRequest) wait until the module first needs them.
  */
 export function missingPermissions(manifest: GrantSubject["manifest"], grant: Grant | undefined): Permissions {
-  const ask = { network: manifest.permissions.network, connectors: connectorsAtAdd(manifest.permissions) };
+  const ask = { network: manifest.permissions.network, connectors: connectorsAtAdd(manifest.permissions), folders: asked(manifest).folders };
   const hosts = new Set(grant?.network ?? []);
   const connectors = new Set(grant?.connectors ?? []);
-  return { network: ask.network.filter((host) => !hosts.has(host)), connectors: ask.connectors.filter((name) => !connectors.has(name)) };
+  const folders = new Set(grant?.folders ?? []);
+  return {
+    network: ask.network.filter((host) => !hosts.has(host)),
+    connectors: ask.connectors.filter((name) => !connectors.has(name)),
+    folders: ask.folders.filter((key) => !folders.has(key)),
+  };
 }
 
 /** What a grant allows now: only what the current manifest still asks for. */
@@ -83,7 +96,8 @@ export function effectivePermissions(manifest: GrantSubject["manifest"], grant: 
   const ask = asked(manifest);
   const hosts = new Set(grant.network);
   const connectors = new Set(grant.connectors);
-  return { network: ask.network.filter((host) => hosts.has(host)), connectors: ask.connectors.filter((name) => connectors.has(name)) };
+  const folders = new Set(grant.folders);
+  return { network: ask.network.filter((host) => hosts.has(host)), connectors: ask.connectors.filter((name) => connectors.has(name)), folders: ask.folders.filter((key) => folders.has(key)) };
 }
 
 export class GrantStore {
@@ -125,8 +139,9 @@ export class GrantStore {
     const previous = this.get(owner, manifest.id);
     const network = [...new Set([...(previous?.network ?? []), ...what.network.filter((host) => ask.network.includes(host))])];
     const connectors = [...new Set([...(previous?.connectors ?? []), ...what.connectors.filter((name) => ask.connectors.includes(name))])];
+    const folders = [...new Set([...(previous?.folders ?? []), ...what.folders.filter((key) => ask.folders.includes(key))])];
     if (!this.owners.has(owner)) this.owners.set(owner, new Map());
-    this.owners.get(owner)!.set(manifest.id, { version: manifest.version, grantedAt: this.now().toISOString(), network, connectors });
+    this.owners.get(owner)!.set(manifest.id, { version: manifest.version, grantedAt: this.now().toISOString(), network, connectors, folders });
     return this.save();
   }
 
@@ -136,9 +151,11 @@ export class GrantStore {
     if (!previous) return Promise.resolve();
     const takenHosts = new Set(what?.network ?? previous.network);
     const takenConnectors = new Set(what?.connectors ?? previous.connectors);
+    const takenFolders = new Set(what?.folders ?? previous.folders);
     const network = previous.network.filter((host) => !takenHosts.has(host));
     const connectors = previous.connectors.filter((name) => !takenConnectors.has(name));
-    if (what && network.length + connectors.length > 0) this.owners.get(owner)!.set(moduleId, { ...previous, network, connectors });
+    const folders = previous.folders.filter((key) => !takenFolders.has(key));
+    if (what && network.length + connectors.length + folders.length > 0) this.owners.get(owner)!.set(moduleId, { ...previous, network, connectors, folders });
     else this.owners.get(owner)!.delete(moduleId);
     if (this.owners.get(owner)!.size === 0) this.owners.delete(owner);
     return this.save();

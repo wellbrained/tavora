@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { folderKey, isFolderName, isFolderPath, LAST_TAVORA_WITHOUT_FOLDERS, parseFolderKey, allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -419,6 +419,23 @@ const cases: [string, unknown, boolean][] = [
   ["module inGame", { ...valid, minTavora: "0.21.3", inGame: true }, true],
   ["panel inGame false", { ...valid, panels: [{ id: "planner", name: "Planner", inGame: false }] }, true],
   ["panel inGame as a string", { ...valid, minTavora: "0.21.3", panels: [{ id: "planner", name: "Planner", inGame: "yes" }] }, false],
+  ["a folder to read", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/StarCraft II", read: ["sc2replay"], names: ["lnk"] }] } }, true],
+  ["a folder in Saved Games, names only", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Saved Games/My Game/Saves", names: ["sav"] }] } }, true],
+  ["a folder in AppData", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "AppData/Roaming/Discord", read: ["ldb"] }] } }, false],
+  ["the Documents folder itself", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents", read: ["txt"] }] } }, false],
+  ["a folder path going up", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/../AppData", read: ["txt"] }] } }, false],
+  ["a folder path with a backslash", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents\Game", read: ["txt"] }] } }, false],
+  ["a folder path with a drive", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "C:/Users", read: ["txt"] }] } }, false],
+  ["a folder name ending with a dot", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game.", read: ["txt"] }] } }, false],
+  ["a folder seven deep", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/a/b/c/d/e/f/g", read: ["txt"] }] } }, false],
+  ["a folder without extensions", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game" }] } }, false],
+  ["a folder with empty read", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: [], names: ["lnk"] }] } }, false],
+  ["a folder extension with a dot", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: [".txt"] }] } }, false],
+  ["a folder extension in capitals", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["SC2Replay"] }] } }, false],
+  ["shortcuts to read", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["lnk"] }] } }, false],
+  ["a folder with an unknown field", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["txt"], write: true }] } }, false],
+  ["five folders", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: ["a","b","c","d","e"].map((name) => ({ path: `Documents/${name}`, read: ["txt"] })) } }, false],
+  ["no folders", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [] } }, false],
   ["unknown panel field", { ...valid, panels: [{ id: "planner", name: "Planner", title: "x" }] }, false],
 ];
 

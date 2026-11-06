@@ -171,6 +171,8 @@ export interface ModuleManifest {
     onRequest?: Connector[];
     /** Lets the page compile WebAssembly (Excalidraw's picture resizing needs it). Only Tavora's own modules may ask for it. */
     webAssembly?: boolean;
+    /** Folders on this PC the module asks to read, up to MAX_FOLDERS (see FolderAccess). Each needs the user's grant. */
+    folders?: FolderAccess[];
   };
 }
 
@@ -476,6 +478,101 @@ export function isNetworkEntry(value: unknown): value is string {
   return isNetworkHost(value) || isLocalPort(value);
 }
 
+/**
+ * A folder on this PC a module asks to read (permissions.folders): `path` starts at one of FOLDER_ROOTS and names the
+ * folders below it with `/`, such as `Documents/StarCraft II`. The module sees only files with the extensions it lists:
+ * `read` it may list and read, `names` it may only list (a shortcut holds the full path of the PC, so `lnk` and `url`
+ * may only be names). Extensions are lowercase, without the dot. Needs the user's grant and a `minTavora` newer than
+ * LAST_TAVORA_WITHOUT_FOLDERS.
+ */
+export interface FolderAccess {
+  path: string;
+  read?: string[];
+  names?: string[];
+}
+
+/**
+ * Where a folder in permissions.folders may start: the user's Documents and Saved Games folders. Never AppData, which
+ * holds other programs' sign-ins, and never the user's folder itself or a drive.
+ */
+export const FOLDER_ROOTS = ["Documents", "Saved Games"] as const;
+export type FolderRoot = (typeof FOLDER_ROOTS)[number];
+/** Most folders one module may ask for, most extensions per list, and most folders below the root a path may name. */
+export const MAX_FOLDERS = 4;
+export const MAX_FOLDER_EXTENSIONS = 16;
+export const MAX_FOLDER_DEPTH = 6;
+/** Extensions a module may only see by name: a shortcut's content holds where things are on the PC. */
+export const NAME_ONLY_EXTENSIONS: readonly string[] = ["lnk", "url"];
+const FOLDER_EXTENSION = /^[a-z0-9]{1,16}$/;
+const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
+
+/**
+ * One folder name a path may hold: 1 to `max` (64) characters that Windows allows in a name, not `.` or `..`, not starting or
+ * ending with a space, not ending with a dot and not a name Windows keeps for devices (CON, NUL, COM1...).
+ */
+export function isFolderName(value: string, max = 64): boolean {
+  return (
+    value.length >= 1 &&
+    value.length <= max &&
+    !/[<>:"/\\|?*\u0000-\u001f\u007f]/.test(value) &&
+    value !== "." &&
+    value !== ".." &&
+    !/^\s|\s$|\.$/.test(value) &&
+    !WINDOWS_RESERVED.test(value)
+  );
+}
+
+/** A `permissions.folders` path: a root of FOLDER_ROOTS, then 1 to MAX_FOLDER_DEPTH folder names, joined by `/`. */
+export function isFolderPath(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 400) return false;
+  const [root, ...names] = value.split("/");
+  return (FOLDER_ROOTS as readonly string[]).includes(root!) && names.length >= 1 && names.length <= MAX_FOLDER_DEPTH && names.every((name) => isFolderName(name));
+}
+
+/** Why a `permissions.folders` entry is not one, or null when it is. */
+export function folderAccessProblem(value: unknown): string | null {
+  if (!isRecord(value) || Object.keys(value).some((key) => key !== "path" && key !== "read" && key !== "names")) return "must be { path, read, names }";
+  if (!isFolderPath(value.path)) return `path must start at ${FOLDER_ROOTS.join(" or ")} and name folders below it with /, such as Documents/My Game`;
+  for (const key of ["read", "names"] as const) {
+    if (value[key] === undefined) continue;
+    const list = value[key];
+    if (!Array.isArray(list) || list.length === 0 || list.length > MAX_FOLDER_EXTENSIONS || !list.every((item) => typeof item === "string" && FOLDER_EXTENSION.test(item))) {
+      return `${key} must list 1 to ${MAX_FOLDER_EXTENSIONS} lowercase extensions without the dot, such as "txt"`;
+    }
+    if (new Set(list).size !== list.length) return `${key} lists an extension twice`;
+  }
+  const read = (value.read as string[] | undefined) ?? [];
+  const names = (value.names as string[] | undefined) ?? [];
+  if (read.length + names.length === 0) return "must list extensions in read or names";
+  if (read.some((item) => names.includes(item))) return "lists an extension in both read and names";
+  if (read.some((item) => NAME_ONLY_EXTENSIONS.includes(item))) return `may list ${NAME_ONLY_EXTENSIONS.join(" and ")} only in names`;
+  return null;
+}
+
+export function isFolderAccess(value: unknown): value is FolderAccess {
+  return folderAccessProblem(value) === null;
+}
+
+/**
+ * What the user grants for a folder entry: its path and both lists, sorted. A changed path or a new extension is a new
+ * key, so it asks again.
+ */
+export function folderKey(entry: FolderAccess): string {
+  const list = (items: string[] | undefined) => [...(items ?? [])].sort().join(",");
+  return `${entry.path}|${list(entry.read)}|${list(entry.names)}`;
+}
+
+/** The entry a folderKey stands for, or null when it is not one. */
+export function parseFolderKey(key: unknown): FolderAccess | null {
+  if (typeof key !== "string") return null;
+  const parts = key.split("|");
+  if (parts.length !== 3) return null;
+  const entry: FolderAccess = { path: parts[0]! };
+  if (parts[1]) entry.read = parts[1].split(",");
+  if (parts[2]) entry.names = parts[2].split(",");
+  return isFolderAccess(entry) && folderKey(entry) === key ? entry : null;
+}
+
 /** Most languages one manifest may translate into. */
 export const MAX_TRANSLATIONS = 32;
 /** The last Tavora that refuses an `overlay` without the `stream-overlay` connector. */
@@ -496,6 +593,8 @@ export const LAST_TAVORA_WITHOUT_WIDE_LAYOUT = "0.21.93";
 export const LAST_TAVORA_WITHOUT_PANEL_LAYOUT = "0.23.28";
 /** The last Tavora that refuses `localhost:<port>` in `permissions.network`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_LOCAL_PORTS = "0.23.111";
+/** The last Tavora that refuses `permissions.folders`; a manifest with it needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_FOLDERS = "0.23.112";
 /** How many rows and columns a `panelLayout` may hold inside each other (the outer one counts), and the most a part's `size` may be. */
 export const MAX_PANEL_LAYOUT_DEPTH = 3;
 export const MAX_PANEL_LAYOUT_SIZE = 10_000;
@@ -933,8 +1032,20 @@ export function validateManifest(input: unknown): ManifestResult {
     }
   }
   if (isRecord(permissions)) {
-    const unsupported = Object.keys(permissions).filter((key) => key !== "network" && key !== "connectors" && key !== "onRequest" && key !== "webAssembly");
+    const unsupported = Object.keys(permissions).filter((key) => key !== "network" && key !== "connectors" && key !== "onRequest" && key !== "webAssembly" && key !== "folders");
     if (unsupported.length > 0) errors.push(`unsupported permissions: ${unsupported.join(", ")}`);
+    if ("folders" in permissions) {
+      const folders = permissions.folders;
+      if (!Array.isArray(folders) || folders.length === 0 || folders.length > MAX_FOLDERS) errors.push(`permissions.folders must list 1 to ${MAX_FOLDERS} folders`);
+      else {
+        const problems = folders.map(folderAccessProblem).map((problem, index) => (problem ? `permissions.folders[${index}] ${problem}` : null)).filter((problem) => problem !== null);
+        if (problems.length > 0) errors.push(...problems.slice(0, 3));
+        else if (new Set(folders.map((entry) => (entry as FolderAccess).path)).size !== folders.length) errors.push("permissions.folders lists a folder twice");
+        else if (!officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_FOLDERS)) {
+          errors.push(`permissions.folders needs a minTavora newer than ${LAST_TAVORA_WITHOUT_FOLDERS}, because older Tavoras refuse it`);
+        }
+      }
+    }
     if ("connectors" in permissions) {
       const connectors = permissions.connectors;
       if (!Array.isArray(connectors) || !connectors.every(isConnector)) errors.push(`permissions.connectors must list connectors Tavora has: ${CONNECTORS.join(", ")}`);

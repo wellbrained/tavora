@@ -1,4 +1,5 @@
 import { ReadOnlyFiles } from './read-only-files';
+import { ChosenFolders, folderHost, type FolderHost, type FolderPlaces } from './folder-access';
 import { showInBackground, windowLook, type WindowStart } from "./background-window";
 import { saveDialogDirectory } from './save-dialog-folder';
 import { randomUUID, type KeyObject } from "node:crypto";
@@ -7,7 +8,7 @@ import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
-import { allowsPersonalWorkspaces, continuingPanelType, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, OFFICIAL_PINS, officialOn, panelTypes, translateManifest, type Connector, type ModuleManifest, type ResolvedPanelType } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, continuingPanelType, folderKey, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, OFFICIAL_PINS, officialOn, panelTypes, translateManifest, type Connector, type ModuleManifest, type ResolvedPanelType } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -1418,7 +1419,7 @@ export class Host {
     const module = this.modules.get(moduleId);
     if (!module || module.builtIn) return false;
     const missing = this.grants.missing(module);
-    return missing.network.length > 0 || missing.connectors.length > 0;
+    return missing.network.length > 0 || missing.connectors.length > 0 || missing.folders.length > 0;
   }
 
   /**
@@ -2607,7 +2608,13 @@ export class Host {
       "open-developer-link": (action) => this.openDeveloperLink(action.link),
       "reload-modules": async () => void (await this.reloadModules()),
       "remove-module": (action) => this.lifecycle.remove(action.moduleId),
-      "grant-module": (action) => this.lifecycle.grant(action.moduleId, action.network, action.connectors),
+      "grant-module": (action) => this.lifecycle.grant(action.moduleId, action.network, action.connectors, action.folders ?? []),
+      "choose-module-folder": async (action) => {
+        const module = this.modules.get(action.moduleId);
+        if (!module) throw new LibraryError("error.moduleMissing");
+        // The module's pages start again, so they find the folder where the user said.
+        if (await this.folderHostOf(module).choose(action.folder)) this.reloadModuleViews(action.moduleId);
+      },
       "revoke-module": (action) => this.lifecycle.revoke(action.moduleId),
       "leaderboards-hide": (action) => this.leaveLeaderboards(action.moduleId),
       "install-module": () => this.installModule(),
@@ -3880,6 +3887,7 @@ export class Host {
       setDialogTitle: (title) => this.setPanelDialogTitle(record.instanceId, title),
       networkHosts: () => this.networkHostsOf(record.moduleId),
       connectors: () => this.connectorsOf(record.moduleId),
+      folders: this.folderHostOf(module),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
       appBlobs: this.data.appBlobs(module.owner, module.manifest.id),
       leaderboards: this.leaderboardsOf(module, (question) => this.askLeaderboard(record.instanceId, record.moduleId, question)),
@@ -4085,6 +4093,63 @@ export class Host {
   }
 
   /** Hosts a module may reach now: its grant, as far as the module installed now still asks for them. */
+  /**
+   * The folders of permissions.folders a module may read now (folder-access.ts): the grant is asked again on every call,
+   * for the module installed now, so a revoke or an update that changed the folder takes effect at once.
+   */
+  private folderHostOf(module: InstalledModule): FolderHost & { granted(): boolean } {
+    const current = () => ((found) => (found && found.owner === module.owner ? found : undefined))(this.modules.get(module.manifest.id));
+    const allowed = (): ReadonlySet<string> => ((found) => new Set(found ? this.grants.allowed(found).folders : []))(current());
+    const host = folderHost({
+      folders: () => current()?.manifest.permissions.folders,
+      allowed,
+      chosen: new ChosenFolders(app.getPath("userData"), module.owner, module.manifest.id),
+      places: () => this.folderPlaces(),
+      pick: async (start, entry) => {
+        const picked = await dialog.showOpenDialog(this.window, {
+          ...(start ? { defaultPath: start } : {}),
+          title: translate(this.language, "dialog.chooseFolder", { name: this.shown(module.manifest).name, folder: entry.path.split("/").join(path.sep) }),
+          properties: ["openDirectory"],
+        });
+        return picked.canceled ? undefined : picked.filePaths[0];
+      },
+      refused: () => {
+        this.notice = translate(this.language, "folders.refused");
+        this.pushState();
+      },
+      scope: `${module.owner}/${module.manifest.id}`,
+    });
+    return { ...host, granted: () => allowed().size > 0 };
+  }
+
+  /**
+   * Where Documents and Saved Games are on this PC, and the folders no module may read from (folder-access.ts). Looked
+   * up when a folder call needs them, so a PC whose known folders the system can't say still opens every panel.
+   */
+  private folderPlaces(): FolderPlaces {
+    const at = (name: Parameters<typeof app.getPath>[0]): string | null => {
+      try {
+        return app.getPath(name);
+      } catch {
+        return null;
+      }
+    };
+    const home = at("home") ?? os.homedir();
+    const documents = !app.isPackaged && process.env.TAVORA_DOCUMENTS_DIR ? path.resolve(process.env.TAVORA_DOCUMENTS_DIR) : (at("documents") ?? path.join(home, "Documents"));
+    const env = (name: string) => process.env[name] || null;
+    const known = [at("desktop"), at("downloads"), at("pictures"), at("music"), at("videos"), env("OneDrive"), env("OneDriveConsumer"), env("OneDriveCommercial")];
+    // A test run that points Documents into the temp folder (under Local AppData) keeps Local AppData open, only there.
+    const testDocuments = !app.isPackaged && Boolean(process.env.TAVORA_DOCUMENTS_DIR);
+    const closed = [at("appData"), testDocuments ? null : env("LOCALAPPDATA"), env("APPDATA"), env("ProgramData"), env("SystemRoot"), env("windir")];
+    return {
+      roots: { Documents: documents, "Saved Games": path.join(home, "Saved Games") },
+      home,
+      userData: app.getPath("userData"),
+      known: known.filter((place): place is string => place !== null),
+      closed: closed.filter((place): place is string => place !== null),
+    };
+  }
+
   private networkHostsOf(moduleId: string): ReadonlySet<string> {
     const module = this.modules.get(moduleId);
     return new Set(module ? this.grants.allowed(module).network : []);
@@ -4627,13 +4692,13 @@ export class Host {
         localDataWaiting: this.localDataWaiting(module),
         icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null,
         permissions: {
-          asks: { network: [...module.manifest.permissions.network], connectors: [...(module.manifest.permissions.connectors ?? [])] },
+          asks: { network: [...module.manifest.permissions.network], connectors: [...(module.manifest.permissions.connectors ?? [])], folders: (module.manifest.permissions.folders ?? []).map(folderKey) },
           granted: this.grants.allowed(module),
           missing: this.grants.missing(module),
         },
         usedIn: this.workspacesUsing(module.manifest.id),
         notes: this.notesView(module),
-        update: ((pending) => (pending ? { version: pending.version, asks: { network: [...pending.asks.network], connectors: [...pending.asks.connectors] }, notes: pending.notes } : null))(
+        update: ((pending) => (pending ? { version: pending.version, asks: { network: [...pending.asks.network], connectors: [...pending.asks.connectors], folders: [...pending.asks.folders] }, notes: pending.notes } : null))(
           this.lifecycle.updates.pending(module.manifest.id),
         ),
       })),
@@ -5027,7 +5092,7 @@ export class Host {
     const module = this.modules.get(moduleId);
     const grant = async (): Promise<boolean> => {
       const granted = allow && module !== undefined && (module.manifest.permissions.onRequest ?? []).includes(connector);
-      if (granted) await this.grants.grant(module, { network: [], connectors: [connector] });
+      if (granted) await this.grants.grant(module, { network: [], connectors: [connector], folders: [] });
       return granted;
     };
     // The question is gone now; the module hears the answer once the grant is stored.

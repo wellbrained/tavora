@@ -37,7 +37,7 @@ export const PAGES = [
   { id: "toggles", group: "inputs", keywords: "toggle pressed bold italic underline format group style tiles looks pictures", examples: ["Toggles", "ToggleGroup", "StyleTiles"] },
   // Display
   { id: "status", group: "display", keywords: "badge chip tag status dot kbd shortcut keys", examples: ["Badges", "StatusDot", "Keys"] },
-  { id: "loading", group: "display", keywords: "progress spinner skeleton loading sparkline chart graph line count picture image fade", examples: ["ProgressBar", "CountingNumbers", "Sparkline", "Spinner", "SkeletonCard", "LatePicture"] },
+  { id: "loading", group: "display", keywords: "progress spinner skeleton loading sparkline chart graph line time axis dates rating curve hover value count picture image fade", examples: ["ProgressBar", "CountingNumbers", "Sparkline", "LineChart", "LineChartDates", "LineChartEmpty", "Spinner", "SkeletonCard", "LatePicture"] },
   { id: "notices", group: "display", keywords: "notice alert callout info warning error success inline message empty state nothing placeholder no items action list start", examples: ["Notices", "Empty", "EmptyActions"] },
   { id: "lists", group: "display", keywords: "table rows columns grid data cells spreadsheet sheet fill handle frozen virtual header list stats compare row hover selected settings divider card add remove animated reorder drag", examples: ["Table", "DataGrid", "DataGridReadOnly", "SelectableList", "AnimatedRows", "ReorderRows", "SettingRows", "Card"] },
   { id: "folding", group: "display", keywords: "expand collapse more less long text read clamp collapsible disclosure accordion details summary open close fold section force-mount height", examples: ["ShowMoreLong", "ShowMoreShort", "Collapsible", "CollapsibleDivider"] },

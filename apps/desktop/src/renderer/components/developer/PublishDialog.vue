@@ -15,6 +15,7 @@ import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import type { HostAction, PublishProblem } from "../../../shared/host-api";
 import { account, act, dialog, publish, settingsOpen, showToast } from "../../host";
 import { formatAgo, t } from "../../i18n";
+import { folderLabel, foldersOf } from "../../folder-label";
 import { missingSections } from "../../../shared/readme-sections";
 import ModalDialog from "../ModalDialog.vue";
 import ModuleDescription from "../ModuleDescription.vue";
@@ -51,7 +52,11 @@ const catalogLine = computed(() => {
   return t("publish.catalogUnknown");
 });
 const asks = computed(() => {
-  const list = [...(view.value?.asks.network ?? []), ...(view.value?.asks.connectors ?? []).map((id) => t(`catalog.accessConnector.${id}`))];
+  const list = [
+    ...(view.value?.asks.network ?? []),
+    ...(view.value?.asks.connectors ?? []).map((id) => t(`catalog.accessConnector.${id}`)),
+    ...foldersOf(view.value?.asks.folders ?? []).map((folder) => folderLabel(folder)),
+  ];
   return list.length ? t("publish.asks", { list: list.join(", ") }) : t("publish.asksNothing");
 });
 const size = computed(() => {
