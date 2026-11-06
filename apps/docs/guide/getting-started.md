@@ -30,6 +30,10 @@ yarn create @tavora/module
 bun create @tavora/module
 ```
 
+```sh [Vite+]
+vp create @tavora/module
+```
+
 :::
 
 It asks where the project goes (the empty folder you are in, or a new folder in it), the module's name, its id (`publisher.module-name`), the game it is for and a template: vanilla TypeScript, Vue or React. The project builds with Vite and depends on `@tavora/sdk` and `@tavora/pack`. Its page starts with `bootstrapModule` (see [Talk to the host](#talk-to-the-host)), its `vite.config.ts` is one `moduleConfig()` call (see [Build the module](#build-the-module)), and its manifest already sets [`minTavora`](../reference/manifest.md) to the Tavora that SDK needs.
@@ -66,6 +70,11 @@ bun add @tavora/sdk
 bun add -d @tavora/pack
 ```
 
+```sh [Vite+]
+vp add @tavora/sdk
+vp add -D @tavora/pack
+```
+
 :::
 
 Then follow [Build the module](#build-the-module), and add a `dev` script such as `vite build --watch`.
@@ -96,7 +105,14 @@ bun install
 bun run dev
 ```
 
+```sh [Vite+]
+vp install
+vp run dev
+```
+
 :::
+
+With Vite+, use `vp run dev`, not `vp dev`: `vp dev` starts a dev server instead of building the module.
 
 In Tavora, open **Settings > Developer > Project folders**, choose **Add folder…** and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves every time `dev` rebuilds.
 

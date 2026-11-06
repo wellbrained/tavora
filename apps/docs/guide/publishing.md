@@ -80,6 +80,10 @@ TAVORA_PUBLISH_TOKEN=tvp_… yarn dlx @tavora/pack withdraw <zip or sha256>
 TAVORA_PUBLISH_TOKEN=tvp_… bunx @tavora/pack withdraw <zip or sha256>
 ```
 
+```sh [Vite+]
+TAVORA_PUBLISH_TOKEN=tvp_… vp dlx @tavora/pack withdraw <zip or sha256>
+```
+
 :::
 
 An account can have 5 versions waiting at once.
@@ -159,6 +163,12 @@ TAVORA_PUBLISH_TOKEN=tvp_… yarn tavora-pack publish <id>-<version>.zip --key p
 bun run build
 bunx @tavora/pack . --key publisher-key.pem
 TAVORA_PUBLISH_TOKEN=tvp_… bunx @tavora/pack publish <id>-<version>.zip --key publisher-key.pem
+```
+
+```sh [Vite+]
+vp run build
+vp exec tavora-pack . --key publisher-key.pem
+TAVORA_PUBLISH_TOKEN=tvp_… vp exec tavora-pack publish <id>-<version>.zip --key publisher-key.pem
 ```
 
 :::
