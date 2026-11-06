@@ -900,6 +900,15 @@ export class ModuleView {
         await this.takeGesture("folders.choose");
         return folders.choose(folder);
       },
+      showInFolder: async (folder, file) => {
+        // Explorer opens once per click, and not over the game; the file must pass the same checks as a listing.
+        this.refuseOverGame("folders.showInFolder");
+        await this.takeGesture("folders.showInFolder");
+        const target = await folders.reveal(folder, file);
+        if (this.bridge !== bridge() || !this.capabilities().has("folders")) return;
+        if (target.kind === "file") shell.showItemInFolder(target.path);
+        else if (await shell.openPath(target.path)) throw new HostError("INTERNAL", "Could not open the folder.");
+      },
     };
   }
 

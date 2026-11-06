@@ -236,6 +236,35 @@ async function exactly(base: string, parts: string[]): Promise<string | null> {
   return real && same(real) === same(full) && within(real, base) && same(real) !== same(base) ? real : null;
 }
 
+/** What to show in Explorer: the file itself, or (when it is gone) the folder it was in. Always inside the granted folder. */
+export interface RevealTarget {
+  path: string;
+  kind: "file" | "folder";
+}
+
+/**
+ * Where folders.showInFolder shows a file: the same path and kind rules as a listing (an extension of `read` or `names`,
+ * the real place exactly the path asked for, so no `..`, drive, short name, link or junction leads out), and a file that
+ * is gone shows the folder it was in, when that is exactly the path it should be and inside the folder. Anything else is
+ * the same answer as a missing file.
+ */
+export async function revealTarget(base: string, entry: FolderAccess, relative: unknown): Promise<RevealTarget> {
+  const parts = insidePath(relative);
+  if (!parts) throw new HostError("INVALID_PARAMS", "Not a file in this folder.");
+  if (!kindOf(parts.at(-1)!, entry)) throw new HostError("PERMISSION_DENIED", "This module may not see this kind of file.");
+  const gone = new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
+  const real = await exactly(base, parts);
+  if (real && kindOf(path.basename(real), entry)) {
+    const info = await lstat(real).catch(() => null);
+    if (info?.isFile()) return { path: real, kind: "file" };
+  }
+  // Not there (or not that file): its folder, which must itself be exactly where the path says, not a link out.
+  const parent = parts.slice(0, -1);
+  const folder = parent.length === 0 ? base : await exactly(base, parent);
+  if (!folder || !(await stat(folder).catch(() => null))?.isDirectory()) throw gone;
+  return { path: folder, kind: "folder" };
+}
+
 const reading = new Map<string, number>();
 /** The listing running for each module and folder, shared by every panel of the module. */
 const listings = new Map<string, Promise<FolderListing>>();
@@ -400,6 +429,8 @@ export interface FolderHost {
   state(folder: unknown): Promise<FolderState>;
   list(folder: unknown): Promise<FolderListing>;
   read(folder: unknown, relative: unknown): Promise<Buffer>;
+  /** What folders.showInFolder shows for a file (revealTarget), the grant asked again; the caller opens it. */
+  reveal(folder: unknown, relative: unknown): Promise<RevealTarget>;
   /** Starts watching a granted folder that is there; null when it isn't, or the system can't watch it. */
   watch(folder: unknown, notify: (change: FolderChange) => void): Promise<FolderWatch | null>;
   /** Shows the system's folder dialog for a granted folder; true when the user chose one Tavora accepts. */
@@ -457,6 +488,13 @@ export function folderHost(options: FolderHostOptions): FolderHost {
     read: async (folder, relative) => {
       const entry = need(folder);
       return readFolderFile(await base(entry), entry, relative, options.scope);
+    },
+    reveal: async (folder, relative) => {
+      const entry = need(folder);
+      const target = await revealTarget(await base(entry), entry, relative);
+      // A grant taken back while the folder was looked at shows nothing.
+      need(folder);
+      return target;
     },
     watch: async (folder, notify) => {
       const entry = need(folder);

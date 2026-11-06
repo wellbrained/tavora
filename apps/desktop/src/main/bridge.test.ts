@@ -612,6 +612,56 @@ describe("network.fetch", () => {
   });
 });
 
+describe("folders.showInFolder", () => {
+  const folders = (shown: unknown[][], granted = true) =>
+    connected({
+      ...makeContext(),
+      capabilities: () => new Set(granted ? (["folders"] as const) : []),
+      folders: {
+        state: async () => ({ found: true }),
+        list: async () => ({ files: [], truncated: false }),
+        watch: async () => undefined,
+        choose: async () => false,
+        showInFolder: async (...args) => void shown.push(args),
+      },
+    });
+
+  it("hands the folder and the path to the host and answers null", async () => {
+    const shown: unknown[][] = [];
+    const p = await folders(shown);
+    expect(await call(p, "folders.showInFolder", { folder: "Documents/StarCraft II", path: "Accounts/1/Replays/Ladder.SC2Replay" })).toMatchObject({ ok: true, result: null });
+    expect(shown).toEqual([["Documents/StarCraft II", "Accounts/1/Replays/Ladder.SC2Replay"]]);
+  });
+
+  it("needs the folders permission, asked on every call", async () => {
+    const shown: unknown[][] = [];
+    const p = await folders(shown, false);
+    expect(await call(p, "folders.showInFolder", { folder: "Documents/StarCraft II", path: "x.SC2Replay" })).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "folders" } });
+    expect(shown).toEqual([]);
+  });
+
+  it("refuses a folder that is not a manifest path and a path that is not text, before the host hears of it", async () => {
+    const shown: unknown[][] = [];
+    const p = await folders(shown);
+    for (const params of [
+      { folder: "C:/Users", path: "x.SC2Replay" },
+      { folder: "../Documents/Game", path: "x.SC2Replay" },
+      { folder: "Documents/Game" },
+      { folder: "Documents/Game", path: "" },
+      { folder: "Documents/Game", path: 7 },
+      { folder: "Documents/Game", path: "x".repeat(2601) },
+    ]) {
+      expect(await call(p, "folders.showInFolder", params), JSON.stringify(params)).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    }
+    expect(shown).toEqual([]);
+  });
+
+  it("says so on a host that has no folders", async () => {
+    const p = await connected({ ...makeContext(), capabilities: () => new Set(["folders"] as const) });
+    expect(await call(p, "folders.showInFolder", { folder: "Documents/Game", path: "x.SC2Replay" })).toMatchObject({ ok: false, error: { code: "UNKNOWN_METHOD" } });
+  });
+});
+
 describe("storage.app", () => {
   it("shares a module's settings across workspaces, apart from each workspace's own", async () => {
     expect(await call(port, "storage.app.set", { key: "style", value: "used" })).toMatchObject({ ok: true, result: null });

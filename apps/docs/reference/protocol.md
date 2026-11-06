@@ -205,6 +205,7 @@ A module that lists folders in `permissions.folders` (Tavora 0.23.113 and newer)
 - `folders.read(folder, path)` (SDK): POSTs `{ folder, path }` to `/_folders/read` in the module origin and returns a Uint8Array, at most 50 MB, for a file of a `read` extension. Two reads at a time per module. A path with `..`, a drive or a backslash is `INVALID_PARAMS`; another extension or a file outside the folder is `PERMISSION_DENIED`; a file that is gone is `BAD_REQUEST`.
 - `folders.watch({ folder, on })`: while on, the panel gets `folders.changed` with `{ folder, changed, removed, rescan }` about a moment after files of its types were added, changed or removed; `rescan` asks for a new listing (a folder came or went, or too much changed at once). The SDK's `folders.watch(folder, fn)` returns a function that stops it. Watches end when the panel closes or the grant is taken back.
 - `folders.choose({ folder })`: after a real click or key press, opens the system's folder dialog so the user can show Tavora where the folder is; `true` when they chose one Tavora accepts (not a drive, their own folder, AppData or Tavora's data). List it again after that.
+- `folders.showInFolder({ folder, path })` (Tavora 0.23.116 and newer): after a real click or key press, shows the file in Explorer or Finder with it selected, like `files.showInFolder` does for a picked file; `null` back, nothing else. The path follows the same rules as a read, and the file must be of an extension the manifest lists (`read` or `names`, as a listing shows). A path with `..`, a drive or a backslash is `INVALID_PARAMS`; another extension is `PERMISSION_DENIED`. A file that is gone (or only a link or short name for something else) opens the folder it was in instead; when that folder isn't there either, or isn't exactly the path asked for, it is `BAD_REQUEST`. Not while the panel is over the game.
 
 See [Security](../guide/security.md#folders-on-this-pc).
 
@@ -476,6 +477,7 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `folders.watch` | 0.23.113 | `folders` |  |
 | `folders.choose` | 0.23.113 | `folders` | always |
 | `folders.read` | 0.23.113 | `folders` |  |
+| `folders.showInFolder` | 0.23.116 | `folders` | always |
 | `files.exportJson` | 0.19.17 |  | always |
 | `files.saveJson` | 0.21.13 |  | always |
 | `files.openJson` | 0.21.13 |  | always |
@@ -571,7 +573,7 @@ Some methods need a capability the user grants. A module asks for it in its mani
 | `discord.*` | `discord` | granted for the `discord` connector, see [Connectors](#connectors) |
 | `leaderboards.*` | `leaderboards` | granted for the `leaderboards` connector, see [Connectors](#connectors) |
 | `overlay.copyLink`, `overlay.resetLink` | `overlay` | granted for the `stream-overlay` connector, see [Stream overlays](#stream-overlays). `overlay.publish`, `overlay.remove`, `overlay.showOverGame`, `overlay.preview` and `overlay.openPage` need none |
-| `folders.state`, `folders.list`, `folders.read`, `folders.watch`, `folders.choose` | `folders` | granted per folder of `permissions.folders`, see [Folders](#folders) |
+| `folders.state`, `folders.list`, `folders.read`, `folders.watch`, `folders.choose`, `folders.showInFolder` | `folders` | granted per folder of `permissions.folders`, see [Folders](#folders) |
 | `clipboard.writeText`, `clipboard.readText` | `clipboard` | reserved |
 | `sharedData.publish`, `sharedData.read`, `sharedData.subscribe` | `sharedData` | reserved |
 

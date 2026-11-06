@@ -832,6 +832,13 @@ export interface Methods {
    */
   "folders.choose": { params: { folder: string }; result: boolean };
   /**
+   * Shows a file of a folder in Explorer or Finder with the file selected (or, when it is gone, the folder it was in),
+   * like files.showInFolder does for a picked file. `path` is inside the folder, joined by `/`, and of an extension the
+   * manifest lists (`read` or `names`). Only right after a click. Resolves with null and tells the module nothing back.
+   * Tavora 0.23.116 and newer.
+   */
+  "folders.showInFolder": { params: { folder: string; path: string }; result: null };
+  /**
    * Opens Tavora's open dialog after a click and remembers read-only access to the file picked. With `multiple: true`
    * the user can pick several, and the answer is a list (empty when the dialog was closed). `multiple` needs Tavora 0.23.6.
    */
@@ -1589,6 +1596,7 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "folders.list": later("0.23.113", "folders"),
   "folders.watch": later("0.23.113", "folders"),
   "folders.choose": later("0.23.113", "folders", true),
+  "folders.showInFolder": later("0.23.116", "folders", true),
   "folders.read": later("0.23.113", "folders"),
   "files.exportJson": call("0.19.17", null, true),
   "files.saveJson": later("0.21.13", null, true),

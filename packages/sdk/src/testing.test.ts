@@ -537,6 +537,18 @@ describe("scripted answers", () => {
     expect(await failure(createMemoryHost({ version: "0.23.101" }).sdk.files.open())).toMatchObject({ code: "UNKNOWN_METHOD" });
   });
 
+  it("shows a folder's file only with the folders permission, from Tavora 0.23.116 and after a click", async () => {
+    const show = (sdk: ReturnType<typeof createMemoryHost>["sdk"]) => sdk.folders.showInFolder("Documents/StarCraft II", "Replays/a.SC2Replay");
+    expect(createMemoryHost({ version: "0.23.115", capabilities: ["folders"] }).sdk.supports("folders.showInFolder")).toBe(false);
+    expect(await failure(show(createMemoryHost({ version: "0.23.115", capabilities: ["folders"] }).sdk))).toMatchObject({ code: "UNKNOWN_METHOD" });
+    expect(await failure(show(createMemoryHost({ version: "0.23.116", capabilities: [] }).sdk))).toMatchObject({ code: "PERMISSION_DENIED", capability: "folders" });
+    const { sdk, host } = createMemoryHost({ version: "0.23.116", capabilities: ["folders"], gestures: "enforce" });
+    expect(sdk.supports("folders.showInFolder")).toBe(true);
+    expect(await failure(show(sdk))).toMatchObject({ code: "PERMISSION_DENIED" });
+    await host.click(() => show(sdk));
+    expect(await failure(show(sdk))).toMatchObject({ code: "PERMISSION_DENIED" });
+  });
+
   it("keeps overlays and hotkeys in memory", async () => {
     const { sdk, host } = createMemoryHost();
     await sdk.overlay.publish("score", { n: 1 });
