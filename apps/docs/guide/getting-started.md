@@ -14,12 +14,12 @@ There are three ways to start. Pick the one that suits you; they all end up in t
 
 ::: code-group
 
-```sh [npm]
-npm create @tavora/module
-```
-
 ```sh [pnpm]
 pnpm create @tavora/module
+```
+
+```sh [npm]
+npm create @tavora/module
 ```
 
 ```sh [Yarn]
@@ -50,14 +50,14 @@ Add the SDK, and `@tavora/pack` for the build:
 
 ::: code-group
 
-```sh [npm]
-npm install @tavora/sdk
-npm install -D @tavora/pack
-```
-
 ```sh [pnpm]
 pnpm add @tavora/sdk
 pnpm add -D @tavora/pack
+```
+
+```sh [npm]
+npm install @tavora/sdk
+npm install -D @tavora/pack
 ```
 
 ```sh [Yarn]
@@ -85,14 +85,14 @@ In the project folder, install the packages and start `dev`. It builds, then bui
 
 ::: code-group
 
-```sh [npm]
-npm install
-npm run dev
-```
-
 ```sh [pnpm]
 pnpm install
 pnpm dev
+```
+
+```sh [npm]
+npm install
+npm run dev
 ```
 
 ```sh [Yarn]
