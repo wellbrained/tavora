@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.117",
+    date: "2026-11-07",
+    title: "Shorter website list",
+    notes: [
+      "Settings > Connections > Website access shows each site once, like `mobalytics.gg`. Point at it to see every address behind it.",
+    ],
+    prs: [
+      { number: 698, title: "Website access shows one chip per site" },
+    ],
+    tags: ["settings"],
+  },
+  {
     version: "0.23.116",
     date: "2026-11-06",
     title: "Show a file from a module's folder in Explorer",
