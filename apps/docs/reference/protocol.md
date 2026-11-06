@@ -196,6 +196,18 @@ A module's page has no network of its own: it cannot fetch, load remote images o
 - **To show a picture** from a granted host, ask for `responseType: "base64"` and use a `data:` address, or store it with `blobs.put`.
 - **A program on this PC** (such as a game's local API): list it as `localhost:<port>` (port 1024 to 65535) and set `minTavora` newer than 0.23.111. Read it with `sdk.network.fetch("http://localhost:6119/game")` (`127.0.0.1` works too). Only `GET` and `HEAD`, `http` or `https` (a self-made certificate is accepted), no redirects; Tavora's own ports and a few sensitive ones (debuggers, Docker, Discord's local RPC) are always refused with `PERMISSION_DENIED`. A program that isn't running gives `NETWORK_ERROR`.
 
+### Folders
+
+A module that lists folders in `permissions.folders` (Tavora 0.23.113 and newer) can read them once the user allowed them, with the `folders` capability. Every call names a folder by its manifest `path` (`"Documents/My Game"`) and every file by its path inside it, joined by `/`; the module never learns where the folder is.
+
+- `folders.state({ folder })`: `{ found: true }`, or `{ found: false, reason }` with `"missing"` (not where the manifest says; offer `folders.choose`) or `"not-granted"`.
+- `folders.list({ folder })`: `{ files: [{ path, size, modifiedAt, readable }], truncated }`, the files of the manifest's extensions in the folder and its subfolders, up to 8 deep and 20,000 files (`truncated` past that, or past 5,000 folders). `readable` is false for `names` extensions. Links and junctions are left out.
+- `folders.read(folder, path)` (SDK): POSTs `{ folder, path }` to `/_folders/read` in the module origin and returns a Uint8Array, at most 50 MB, for a file of a `read` extension. Two reads at a time per module. A path with `..`, a drive or a backslash is `INVALID_PARAMS`; another extension or a file outside the folder is `PERMISSION_DENIED`; a file that is gone is `BAD_REQUEST`.
+- `folders.watch({ folder, on })`: while on, the panel gets `folders.changed` with `{ folder, changed, removed, rescan }` about a moment after files of its types were added, changed or removed; `rescan` asks for a new listing (a folder came or went, or too much changed at once). The SDK's `folders.watch(folder, fn)` returns a function that stops it. Watches end when the panel closes or the grant is taken back.
+- `folders.choose({ folder })`: after a real click or key press, opens the system's folder dialog so the user can show Tavora where the folder is; `true` when they chose one Tavora accepts (not a drive, their own folder, AppData or Tavora's data). List it again after that.
+
+See [Security](../guide/security.md#folders-on-this-pc).
+
 ### Isolated public pages
 
 `sdk.network.readPage(url)` is an optional public-page fallback when a source needs
@@ -459,6 +471,11 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `files.check` | 0.23.6 |  |  |
 | `files.showInFolder` | 0.23.6 |  | always |
 | `files.read` | 0.21.13 |  |  |
+| `folders.state` | 0.23.113 | `folders` |  |
+| `folders.list` | 0.23.113 | `folders` |  |
+| `folders.watch` | 0.23.113 | `folders` |  |
+| `folders.choose` | 0.23.113 | `folders` | always |
+| `folders.read` | 0.23.113 | `folders` |  |
 | `files.exportJson` | 0.19.17 |  | always |
 | `files.saveJson` | 0.21.13 |  | always |
 | `files.openJson` | 0.21.13 |  | always |
@@ -481,6 +498,7 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `systemInfo.drivesChanged` | `null` | a drive letter appeared or went away; only with the `systemInfo` capability, while the panel watches |
 | `systemInfo.connectionChanged` | `SystemConnection` | the connection went down, changed kind or came back; only with the `systemInfo` capability, while the panel watches `connection` and is shown. Tavora 0.21.22+ |
 | `media.changed` | `MediaState` | what plays on the PC changed; only with the `media` capability, while the panel watches (also while hidden) |
+| `folders.changed` | `{ folder, changed, removed, rescan }` | files of the module's types changed in a folder the panel watches (`folders.watch`); only with the `folders` capability. Tavora 0.23.113+ |
 | `discord.state` | `DiscordState` | the connection to the Discord app changed; only with the `discord` capability, after `discord.state` was asked |
 | `discord.event` | `{ event, data }` | a Discord event the panel subscribed to; only with the `discord` capability |
 | `hotkeys.pressed` | `{ action, target }` | the user pressed a hotkey set for this module in the workspace shown now; sent to one panel of the module there, the one used last |
@@ -553,6 +571,7 @@ Some methods need a capability the user grants. A module asks for it in its mani
 | `discord.*` | `discord` | granted for the `discord` connector, see [Connectors](#connectors) |
 | `leaderboards.*` | `leaderboards` | granted for the `leaderboards` connector, see [Connectors](#connectors) |
 | `overlay.copyLink`, `overlay.resetLink` | `overlay` | granted for the `stream-overlay` connector, see [Stream overlays](#stream-overlays). `overlay.publish`, `overlay.remove`, `overlay.showOverGame`, `overlay.preview` and `overlay.openPage` need none |
+| `folders.state`, `folders.list`, `folders.read`, `folders.watch`, `folders.choose` | `folders` | granted per folder of `permissions.folders`, see [Folders](#folders) |
 | `clipboard.writeText`, `clipboard.readText` | `clipboard` | reserved |
 | `sharedData.publish`, `sharedData.read`, `sharedData.subscribe` | `sharedData` | reserved |
 

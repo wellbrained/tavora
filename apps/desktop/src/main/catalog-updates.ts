@@ -5,7 +5,7 @@
 // "Update modules automatically" does one that asks for nothing new install at once (its panels
 // reload); every other update waits, fully checked, until the user says yes, and the installed
 // version keeps running until then. One that asks for new network hosts or connectors always waits.
-import { connectorsAtAdd, type Connector, type ModuleManifest } from "@tavora/module-schema";
+import { connectorsAtAdd, folderKey, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import type { ModuleNote } from "../shared/host-api";
 import type { CatalogClient, CatalogEntry, CatalogVersion } from "./catalog-client";
 import type { Permissions } from "./grants";
@@ -83,14 +83,16 @@ export function findUpdates(
 export function newAsks(before: Permissions, after: Pick<ModuleManifest, "permissions">["permissions"]): Permissions {
   const hosts = new Set(before.network);
   const connectors = new Set(before.connectors);
+  const folders = new Set(before.folders);
   return {
     network: after.network.filter((host) => !hosts.has(host)),
     connectors: connectorsAtAdd(after).filter((name: Connector) => !connectors.has(name)),
+    folders: (after.folders ?? []).map(folderKey).filter((key) => !folders.has(key)),
   };
 }
 
 export function asksNothing(asks: Permissions): boolean {
-  return asks.network.length === 0 && asks.connectors.length === 0;
+  return asks.network.length === 0 && asks.connectors.length === 0 && asks.folders.length === 0;
 }
 
 /**

@@ -132,7 +132,7 @@ export async function listModuleData(userData: string, blobRoot?: string): Promi
  */
 export async function deleteModuleDataOf(userData: string, owner: string, moduleId: string, blobRoot?: string): Promise<string[]> {
   if (!isOwnerId(owner) || !isModuleId(moduleId)) throw new Error("invalid owner or module id");
-  for (const root of [...dataRoots(userData, blobRoot), path.join(userData, 'read-only-files')]) await rm(path.join(root, owner, moduleId), { recursive: true, force: true });
+  for (const root of [...dataRoots(userData, blobRoot), path.join(userData, 'read-only-files'), path.join(userData, 'folder-access')]) await rm(path.join(root, owner, moduleId), { recursive: true, force: true });
   const partitions: string[] = [];
   for (const name of await readdir(path.join(userData, "Partitions")).catch(() => [] as string[])) {
     const match = /^module:([a-z0-9]+):([a-z0-9.-]+)@([a-z0-9-]+)$/.exec(safeDecode(name));

@@ -10,12 +10,13 @@ import type { ModuleConnector } from "../../../shared/host-api";
 import type { MessageKey } from "../../../shared/i18n";
 import { state } from "../../host";
 import { t } from "../../i18n";
+import { folderLabel, foldersOf } from "../../folder-label";
 import ModuleIcon from "../ModuleIcon.vue";
 import { revokeModule } from "./grants";
 
 const props = defineProps<{
-  /** The connector, or "network" for the websites a module may reach. */
-  uses: ModuleConnector | "network";
+  /** The connector, "network" for the websites a module may reach, or "folders" for the folders it may read. */
+  uses: ModuleConnector | "network" | "folders";
   /** A heading above the list. */
   heading?: string;
   /** Said when no module may use it yet. */
@@ -29,7 +30,11 @@ const props = defineProps<{
 
 const users = computed(() =>
   (state.value?.modules ?? []).filter((module) =>
-    props.uses === "network" ? module.permissions.granted.network.length > 0 : module.permissions.granted.connectors.includes(props.uses as ModuleConnector),
+    props.uses === "network"
+      ? module.permissions.granted.network.length > 0
+      : props.uses === "folders"
+        ? module.permissions.granted.folders.length > 0
+        : module.permissions.granted.connectors.includes(props.uses as ModuleConnector),
   ),
 );
 </script>
@@ -47,6 +52,12 @@ const users = computed(() =>
           <span class="truncate font-medium">{{ module.name }}</span>
           <span v-if="uses === 'network'" class="flex flex-wrap gap-1">
             <code v-for="host in module.permissions.granted.network" :key="host" class="bg-muted rounded px-1.5 py-0.5 text-xs break-all">{{ host }}</code>
+          </span>
+          <span v-else-if="uses === 'folders'" class="flex flex-col gap-1">
+            <span v-for="folder in foldersOf(module.permissions.granted.folders)" :key="folder.key" class="flex flex-wrap items-center gap-2">
+              <code class="bg-muted rounded px-1.5 py-0.5 text-xs break-all">{{ folderLabel(folder) }}</code>
+              <slot name="folder" :module="module" :folder="folder" />
+            </span>
           </span>
         </span>
         <slot :module="module" />

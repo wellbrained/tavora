@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { validateChangelog } from "@tavora/module-schema";
+import { folderKey, validateChangelog } from "@tavora/module-schema";
 import type { ZipFile } from "@tavora/pack";
 import { type CatalogStore, type CheckedZip, copyHashes, type ReviewReason } from "./catalog.ts";
 import { checkModuleText } from "./review-filter.ts";
@@ -75,16 +75,27 @@ function checkWords(checked: CheckedZip): ReviewReason | null {
 
 function checkPermissions(checked: CheckedZip, catalog: CatalogStore, exceptSha?: string): ReviewReason | null {
   const { network, connectors = [] } = checked.manifest.permissions;
+  const folders = (checked.manifest.permissions.folders ?? []).map(folderKey);
   const previous = catalog.previousListed(checked.manifest.id, exceptSha);
   if (!previous) {
-    if (network.length === 0 && connectors.length === 0) return null;
-    return reason("permissions", "Its first version asks for network access or connectors.", `Network: ${network.join(", ") || "none"}; connectors: ${connectors.join(", ") || "none"}`);
+    if (network.length === 0 && connectors.length === 0 && folders.length === 0) return null;
+    return reason(
+      "permissions",
+      "Its first version asks for network access, connectors or folders.",
+      `Network: ${network.join(", ") || "none"}; connectors: ${connectors.join(", ") || "none"}; folders: ${folders.join(", ") || "none"}`,
+    );
   }
   const before = previous.manifest.permissions;
+  const beforeFolders = (before.folders ?? []).map(folderKey);
   const moreNetwork = network.filter((host) => !before.network.includes(host));
   const moreConnectors = connectors.filter((name) => !(before.connectors ?? []).includes(name));
-  if (moreNetwork.length === 0 && moreConnectors.length === 0) return null;
-  return reason("permissions", "This update asks for more permissions than the last version.", `New since ${previous.version}: network ${moreNetwork.join(", ") || "none"}; connectors ${moreConnectors.join(", ") || "none"}`);
+  const moreFolders = folders.filter((key) => !beforeFolders.includes(key));
+  if (moreNetwork.length === 0 && moreConnectors.length === 0 && moreFolders.length === 0) return null;
+  return reason(
+    "permissions",
+    "This update asks for more permissions than the last version.",
+    `New since ${previous.version}: network ${moreNetwork.join(", ") || "none"}; connectors ${moreConnectors.join(", ") || "none"}; folders ${moreFolders.join(", ") || "none"}`,
+  );
 }
 
 // ── 3. Copies ─────────────────────────────────────────────────────────────

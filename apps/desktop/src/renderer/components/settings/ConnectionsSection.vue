@@ -3,7 +3,7 @@
 // accounts, system info, media and leaderboards. A row says how much it is used; opened, it lists the modules
 // allowed to use it, each with Take back, and what there is to set up. Discord, AI accounts and Leaderboards show
 // only once an installed module asks for them (hiddenSettingIds). A search result opens its row.
-import { Cpu, Globe, Headphones, Music, Sparkles, Trophy } from "@lucide/vue";
+import { Cpu, Folder, Globe, Headphones, Music, Sparkles, Trophy } from "@lucide/vue";
 import { computed, reactive, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -12,6 +12,7 @@ import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
 import AiUsageAccounts from "./AiUsageAccounts.vue";
 import GrantedModules from "./GrantedModules.vue";
+import { folderLabel } from "../../folder-label";
 import { revokeModule, type ModuleView } from "./grants";
 import SettingExpand from "./SettingExpand.vue";
 import SettingGroup from "./SettingGroup.vue";
@@ -35,6 +36,7 @@ watch(
 const usedBy = (count: number) => (count ? t("connections.usedBy", { count }) : t("connections.unused"));
 
 const websites = computed(() => modules.value.filter((module) => module.permissions.granted.network.length > 0).length);
+const folderModules = computed(() => modules.value.filter((module) => module.permissions.granted.folders.length > 0).length);
 
 const DISCORD_STATUS = {
   off: "discord.status.off",
@@ -84,6 +86,31 @@ function leaveBoards(module: ModuleView) {
     >
       <template #lead><span class="module-tile size-9" aria-hidden="true"><Globe class="size-4" :stroke-width="1.75" /></span></template>
       <GrantedModules uses="network" :none="t('integrations.grants.none')" revoke-label="integrations.grants.revokeLabel" revoke-unused="integrations.grants.revokeUnused" testid="module-grant" />
+    </SettingExpand>
+
+    <SettingExpand
+      v-model:open="open['folder-grants']"
+      :label="t('settings.folder-grants.label')"
+      :description="folderModules ? t('connections.folders', { count: folderModules }) : t('connections.unused')"
+      :details="t('settings.folder-grants.description')"
+      setting="folder-grants"
+      :highlighted="highlight === 'folder-grants'"
+      testid="connection-folders"
+    >
+      <template #lead><span class="module-tile size-9" aria-hidden="true"><Folder class="size-4" :stroke-width="1.75" /></span></template>
+      <GrantedModules uses="folders" :none="t('integrations.folders.none')" revoke-label="integrations.folders.revokeLabel" revoke-unused="integrations.folders.revokeUnused" testid="folder-grant">
+        <template #folder="{ module, folder }">
+          <Button
+            variant="ghost"
+            size="sm"
+            :aria-label="t('integrations.folders.changeLabel', { folder: folderLabel(folder), name: module.name })"
+            :data-testid="`folder-grant-change-${module.id}`"
+            @click="act({ type: 'choose-module-folder', moduleId: module.id, folder: folder.path })"
+          >
+            {{ t("integrations.folders.change") }}
+          </Button>
+        </template>
+      </GrantedModules>
     </SettingExpand>
 
     <SettingExpand

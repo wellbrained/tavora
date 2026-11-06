@@ -189,10 +189,11 @@ const SILENT = new Set<CallName>([
   "files.forget", "files.showInFolder", "files.check", "links.open", "ui.tooltip.show", "ui.tooltip.move", "ui.tooltip.hide", "ui.tooltip.close", "ui.showMenu",
   "systemInfo.watch", "systemInfo.clearConnectionLog", "media.watch", "media.control", "discord.connect", "discord.allowControl",
   "discord.subscribe", "discord.unsubscribe", "overlay.resetLink", "overlay.preview", "clipboard.writeImage", "files.pickReadOnly",
-  "files.openJson", "files.open", "discord.image", "hotkeys.set", "overlay.copyLink", "overlay.showOverGame", "overlay.openPage", "panel.navigated",
+  "files.openJson", "files.open", "discord.image", "folders.watch", "folders.choose", "hotkeys.set", "overlay.copyLink", "overlay.showOverGame", "overlay.openPage", "panel.navigated",
 ]);
 const SILENT_ANSWER: Partial<Record<CallName, unknown>> = {
   "files.check": { found: false, reason: "unlinked" },
+  "folders.choose": false,
   "ui.tooltip.show": true,
   "media.control": true,
   "hotkeys.set": "set",
@@ -951,6 +952,27 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       },
     },
     clipboard: { writeImage: async (png) => void (await call("clipboard.writeImage", { png })) },
+    folders: {
+      state: (folder) => call("folders.state", { folder }),
+      list: (folder) => call("folders.list", { folder }),
+      read: (folder, path) => call("folders.read", { folder, path }),
+      watch: async (folder, fn) => {
+        const off = on("folders.changed", (change) => {
+          if (change.folder === folder) fn(change);
+        });
+        try {
+          await call("folders.watch", { folder, on: true });
+        } catch (error) {
+          off();
+          throw error;
+        }
+        return () => {
+          off();
+          void call("folders.watch", { folder, on: false }).catch(() => undefined);
+        };
+      },
+      choose: (folder) => call("folders.choose", { folder }),
+    },
     files: {
       pickReadOnly: ((opts: { extensions: string[]; multiple?: boolean }) => call("files.pickReadOnly", opts)) as TavoraSDK["files"]["pickReadOnly"],
       read: (id) => call("files.read", { id }),

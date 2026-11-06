@@ -141,7 +141,7 @@ describe("adding to the catalog", () => {
         games: [],
         personalWorkspaces: true,
         workspaces: true,
-        permissions: { network: ["api.example.com"], connectors: [] },
+        permissions: { network: ["api.example.com"], connectors: [], folders: [] },
         owner: added.owner,
         zip: { sha256: added.sha256, size: zip.length },
         publishedAt: "2026-10-18T10:00:00.000Z",

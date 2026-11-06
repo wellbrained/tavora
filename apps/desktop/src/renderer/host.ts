@@ -713,7 +713,7 @@ export function stopUpdateAsks(): void {
 
 /** Whether the module asks for something the user has not granted yet. */
 export function needsGrant(module: ModuleState): boolean {
-  return module.permissions.missing.network.length > 0 || module.permissions.missing.connectors.length > 0;
+  return module.permissions.missing.network.length > 0 || module.permissions.missing.connectors.length > 0 || module.permissions.missing.folders.length > 0;
 }
 
 /**

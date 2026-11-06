@@ -1,4 +1,4 @@
-import { isConnector, isGameId, isModuleId, isNetworkEntry, isOwnerId, isPanelTypeId, MAX_NETWORK_HOSTS } from "@tavora/module-schema";
+import { isConnector, isFolderPath, isGameId, isModuleId, isNetworkEntry, isOwnerId, isPanelTypeId, MAX_FOLDERS, MAX_NETWORK_HOSTS, parseFolderKey } from "@tavora/module-schema";
 import type { ActionResult, HostAction, HostActionType } from "../shared/host-api";
 import { check, hostActionTable, parseHostAction, parsed, type HostChecks } from "../shared/host-actions";
 import { isSite, MAX_ADDRESS } from "./browser-url";
@@ -38,6 +38,10 @@ const CHECKS: HostChecks = {
   networkHosts: check(
     (value) => Array.isArray(value) && value.length <= MAX_NETWORK_HOSTS && value.every(isNetworkEntry) && new Set(value).size === value.length,
   ),
+  folderKeys: check(
+    (value) => Array.isArray(value) && value.length <= MAX_FOLDERS && value.every((key) => parseFolderKey(key) !== null) && new Set(value).size === value.length,
+  ),
+  folderPath: check(isFolderPath),
   connector: check(isConnector),
   snapshotName: text(MAX_SNAPSHOT_NAME),
   // Code units, so emoji still fit; both are clipped by character when stored.
