@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.116",
+    date: "2026-11-06",
+    title: "Show a file from a module's folder in Explorer",
+    notes: [
+      "A module that can read one of your folders can now show a file from it in Explorer, such as a replay in Documents. It only shows the file and only after you click.",
+    ],
+    prs: [
+      { number: 693, title: "Modules can show a file of their folder in Explorer (folders.showInFolder)" },
+    ],
+    tags: ["modules", "privacy", "sdk", "website"],
+  },
+  {
     version: "0.23.115",
     date: "2026-11-06",
     title: "Switched-off things say why",
