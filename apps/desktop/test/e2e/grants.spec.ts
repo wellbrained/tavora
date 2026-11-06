@@ -85,7 +85,12 @@ test("adding a module asks first, adding it again does not, and taking it back r
   await page.getByTestId("settings-nav-connections").click();
   await expect(page.getByTestId("connection-websites")).toContainText("1 module may get data from websites.");
   await page.getByTestId("connection-websites-toggle").click();
-  await expect(page.getByTestId(`module-grant-user-${NETWORK}`)).toContainText("cdn.tavora.test");
+  // One chip per site; hovering it lists the full hosts.
+  const site = page.getByTestId(`module-grant-site-${NETWORK}-tavora.test`);
+  await expect(site).toHaveText("tavora.test");
+  await site.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(/api\.tavora\.test\s*cdn\.tavora\.test/);
+  await page.mouse.move(0, 0);
   await page.getByTestId(`module-grant-revoke-${NETWORK}`).click();
   await expect(page.getByTestId("confirm")).toContainText("Path of Exile 2");
   await page.getByTestId("confirm-submit").click();

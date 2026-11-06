@@ -3,15 +3,17 @@
 // back. Taking back removes everything the module was granted, as in the consent dialog; its data stays (decision
 // log, module grants row of 2026-10-16). `testid` names the list: `<testid>-users`, `-user-<id>`, `-revoke-<id>`,
 // and `-users-none` when no module may use it yet.
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Tooltip, tooltipDelay } from "@tavora/official-ui/components/tooltip";
 import type { ModuleConnector } from "../../../shared/host-api";
 import type { MessageKey } from "../../../shared/i18n";
 import { state } from "../../host";
 import { t } from "../../i18n";
 import { folderLabel, foldersOf } from "../../folder-label";
 import ModuleIcon from "../ModuleIcon.vue";
+import { siteGroups } from "../../site-groups";
 import { revokeModule } from "./grants";
 
 const props = defineProps<{
@@ -37,6 +39,22 @@ const users = computed(() =>
         : module.permissions.granted.connectors.includes(props.uses as ModuleConnector),
   ),
 );
+
+/** The full hosts behind the hovered or focused site chip, shown beside it. */
+const tip = ref<{ hosts: string[]; anchor: { left: number; top: number; right: number; bottom: number } } | null>(null);
+let delay: ReturnType<typeof setTimeout> | undefined;
+function showHosts(event: Event, hosts: string[]) {
+  const chip = event.currentTarget as HTMLElement;
+  clearTimeout(delay);
+  delay = setTimeout(() => {
+    const { left, top, right, bottom } = chip.getBoundingClientRect();
+    tip.value = { hosts, anchor: { left, top, right, bottom } };
+  }, tooltipDelay(300));
+}
+function hideHosts() {
+  clearTimeout(delay);
+  tip.value = null;
+}
 </script>
 
 <template>
@@ -51,7 +69,20 @@ const users = computed(() =>
         <span class="flex min-w-0 flex-1 flex-col gap-1">
           <span class="truncate font-medium">{{ module.name }}</span>
           <span v-if="uses === 'network'" class="flex flex-wrap gap-1">
-            <code v-for="host in module.permissions.granted.network" :key="host" class="bg-muted rounded px-1.5 py-0.5 text-xs break-all">{{ host }}</code>
+            <!-- One chip per site; its tooltip lists the full hosts (granting always shows them in full). -->
+            <code
+              v-for="group in siteGroups(module.permissions.granted.network)"
+              :key="group.site"
+              tabindex="0"
+              class="bg-muted rounded px-1.5 py-0.5 text-xs break-all"
+              :aria-label="group.hosts.join(', ')"
+              :data-testid="`${testid}-site-${module.id}-${group.site}`"
+              @pointerenter="showHosts($event, group.hosts)"
+              @pointerleave="hideHosts"
+              @focus="showHosts($event, group.hosts)"
+              @blur="hideHosts"
+              >{{ group.site }}</code
+            >
           </span>
           <span v-else-if="uses === 'folders'" class="flex flex-col gap-1">
             <span v-for="folder in foldersOf(module.permissions.granted.folders)" :key="folder.key" class="flex flex-wrap items-center gap-2">
@@ -66,5 +97,8 @@ const users = computed(() =>
         </Button>
       </li>
     </AnimatedList>
+    <Tooltip :open="tip !== null" :anchor="tip?.anchor" side="top" compact @dismiss="hideHosts">
+      <span v-for="host in tip?.hosts ?? []" :key="host" class="block font-mono">{{ host }}</span>
+    </Tooltip>
   </div>
 </template>
