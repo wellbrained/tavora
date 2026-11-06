@@ -55,14 +55,24 @@ function within(inner: string, outer: string): boolean {
   return a === b || a.startsWith(b.endsWith(path.sep) ? b : b + path.sep);
 }
 
-/** A place as given and with its links resolved (a profile on a junction, a redirected AppData), when that differs. */
+const resolvedPlaces = new Map<string, { forms: string[]; at: number }>();
+/**
+ * A place as given and with its links resolved (a profile on a junction, a redirected AppData), when that differs.
+ * Kept for a minute, so a folder call doesn't ask the system about every place each time.
+ */
 function forms(place: string): string[] {
+  const kept = resolvedPlaces.get(place);
+  if (kept && Date.now() - kept.at < 60_000) return kept.forms;
+  let found = [place];
   try {
     const real = realpathSync.native(place);
-    return same(real) === same(path.resolve(place)) ? [place] : [place, real];
+    if (same(real) !== same(path.resolve(place))) found = [place, real];
   } catch {
-    return [place];
+    // A place that isn't there counts as given.
   }
+  if (resolvedPlaces.size > 200) resolvedPlaces.clear();
+  resolvedPlaces.set(place, { forms: found, at: Date.now() });
+  return found;
 }
 
 /**
@@ -79,8 +89,10 @@ export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pi
   if (root === same(resolved) || root === same(resolved + path.sep)) return true;
   for (const home of forms(full.home)) {
     if (within(home, resolved)) return true;
-    // Another user's folder: inside the folder that holds the user's own, but not inside the user's own.
-    if (within(resolved, path.dirname(home)) && !within(resolved, home)) return true;
+    // Another user's folder: inside the folder that holds the user's own (such as Users), but not inside the user's own.
+    // Not when the user's folder sits right on a drive, where that would be the whole drive.
+    const users = path.dirname(home);
+    if (same(path.parse(users).root) !== same(users) && within(resolved, users) && !within(resolved, home)) return true;
     if (within(resolved, home)) {
       const first = path.relative(home, resolved).split(path.sep)[0] ?? "";
       if (first.startsWith(".")) return true;
@@ -225,6 +237,8 @@ async function exactly(base: string, parts: string[]): Promise<string | null> {
 }
 
 const reading = new Map<string, number>();
+/** The listing running for each module and folder, shared by every panel of the module. */
+const listings = new Map<string, Promise<FolderListing>>();
 
 /**
  * Reads one file a module may read in a folder: an extension of `read`, inside the folder once links are resolved, a
@@ -246,6 +260,8 @@ export async function readFolderFile(base: string, entry: FolderAccess, relative
     try {
       const info = await handle.stat();
       if (!info.isFile()) throw new HostError("INVALID_PARAMS", "Not a file in this folder.");
+      // A hard link can be a file outside the folder by another name: such a file is not read.
+      if (info.nlink > 1) throw new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
       if (info.size > MAX_FOLDER_READ_BYTES) throw new HostError("QUOTA_EXCEEDED", "This file is bigger than 50 MB.");
       const bytes = Buffer.alloc(info.size + 1);
       let size = 0;
@@ -351,7 +367,11 @@ export class FolderWatch {
       // Exactly the file named, of a kind the module may see: never a short name or a link to another one.
       const real = await exactly(this.base, parts);
       const kind = real ? kindOf(path.basename(real), this.entry) : null;
-      if (!real || !kind) continue;
+      if (!real || !kind) {
+        // A short name of a file that is there may stand for one the module may see: a listing tells.
+        if (parts.some((part) => SHORT_NAME.test(part))) unsure = true;
+        continue;
+      }
       changed.push({ path: name, size: info.size, modifiedAt: Math.floor(info.mtimeMs), readable: kind === "read" });
     }
     if (this.closed) return;
@@ -409,7 +429,6 @@ export function folderHost(options: FolderHostOptions): FolderHost {
     if (!entry) throw new HostError("PERMISSION_DENIED", "This folder isn't allowed for this module.", { capability: "folders" });
     return entry;
   };
-  const listings = new Map<string, Promise<FolderListing>>();
   const base = async (entry: FolderAccess) => {
     const found = await findFolder(entry, options.chosen, options.places());
     if (!found) throw new HostError("BAD_REQUEST", "Can't find this folder. Show Tavora where it is.");
@@ -424,7 +443,7 @@ export function folderHost(options: FolderHostOptions): FolderHost {
       const entry = need(folder);
       // One listing of a folder at a time per module: calls made meanwhile get the same answer, so a page can't keep
       // the system's file threads busy.
-      const key = folderKey(entry);
+      const key = `${options.scope}|${folderKey(entry)}`;
       const running = listings.get(key);
       if (running) return running;
       const listing = base(entry).then((found) => listFolder(found, entry));

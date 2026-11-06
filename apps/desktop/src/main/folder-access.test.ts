@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -124,6 +124,19 @@ describe("names", () => {
     const text = { path: "Documents/Game", read: ["txt"] };
     await expect(readFolderFile(game, text, short, "test")).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(readFolderFile(game, text, "missing.txt", "test")).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("hard links", () => {
+  it("doesn't read a file that has another name somewhere else", async () => {
+    const outside = path.join(root, "outside.SC2Replay");
+    await writeFile(outside, "outside");
+    try {
+      await link(outside, path.join(game, "hl.SC2Replay"));
+    } catch {
+      return;
+    }
+    await expect(readFolderFile(game, replays, "hl.SC2Replay", "test")).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
 

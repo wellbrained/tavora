@@ -872,15 +872,24 @@ export class ModuleView {
       list: (folder) => folders.list(folder),
       watch: async (folder, on) => {
         // Only the newest call for a folder counts: a watch that finishes starting after a later on or off is dropped.
-        const turn = (this.folderTurns.get(folder) ?? 0) + 1;
-        this.folderTurns.set(folder, turn);
         this.folderWatches.get(folder)?.close();
         this.folderWatches.delete(folder);
-        if (!on) return;
-        const watcher = await folders.watch(folder, (change) => {
-          if (this.bridge === bridge() && this.capabilities().has("folders")) bridge().emit("folders.changed", change);
-          else this.stopFolderWatches();
-        });
+        if (!on) {
+          this.folderTurns.delete(folder);
+          return;
+        }
+        const turn = (this.folderTurns.get(folder) ?? 0) + 1;
+        this.folderTurns.set(folder, turn);
+        let watcher: FolderWatch | null;
+        try {
+          watcher = await folders.watch(folder, (change) => {
+            if (this.bridge === bridge() && this.capabilities().has("folders")) bridge().emit("folders.changed", change);
+            else this.stopFolderWatches();
+          });
+        } catch (error) {
+          if (this.folderTurns.get(folder) === turn) this.folderTurns.delete(folder);
+          throw error;
+        }
         if (!watcher) return;
         if (this.bridge === bridge() && this.folderTurns.get(folder) === turn) this.folderWatches.set(folder, watcher);
         else watcher.close();

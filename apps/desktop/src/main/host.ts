@@ -4138,7 +4138,9 @@ export class Host {
     const documents = !app.isPackaged && process.env.TAVORA_DOCUMENTS_DIR ? path.resolve(process.env.TAVORA_DOCUMENTS_DIR) : (at("documents") ?? path.join(home, "Documents"));
     const env = (name: string) => process.env[name] || null;
     const known = [at("desktop"), at("downloads"), at("pictures"), at("music"), at("videos"), env("OneDrive"), env("OneDriveConsumer"), env("OneDriveCommercial")];
-    const closed = [at("appData"), env("LOCALAPPDATA"), env("APPDATA"), env("ProgramData"), env("SystemRoot"), env("windir")];
+    // A test run that points Documents into the temp folder (under Local AppData) keeps Local AppData open, only there.
+    const testDocuments = !app.isPackaged && Boolean(process.env.TAVORA_DOCUMENTS_DIR);
+    const closed = [at("appData"), testDocuments ? null : env("LOCALAPPDATA"), env("APPDATA"), env("ProgramData"), env("SystemRoot"), env("windir")];
     return {
       roots: { Documents: documents, "Saved Games": path.join(home, "Saved Games") },
       home,
