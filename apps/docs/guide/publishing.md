@@ -64,12 +64,12 @@ To take a waiting version back, run this with the zip or its sha256:
 
 ::: code-group
 
-```sh [npm]
-TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pack withdraw <zip or sha256>
-```
-
 ```sh [pnpm]
 TAVORA_PUBLISH_TOKEN=tvp_… pnpm dlx @tavora/pack withdraw <zip or sha256>
+```
+
+```sh [npm]
+TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pack withdraw <zip or sha256>
 ```
 
 ```sh [Yarn]
@@ -141,16 +141,16 @@ A build server can publish too, with the `@tavora/pack` command line tool. It ne
 
 ::: code-group
 
-```sh [npm]
-npm run build
-npx @tavora/pack . --key publisher-key.pem
-TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pack publish <id>-<version>.zip --key publisher-key.pem
-```
-
 ```sh [pnpm]
 pnpm build
 pnpm exec tavora-pack . --key publisher-key.pem
 TAVORA_PUBLISH_TOKEN=tvp_… pnpm exec tavora-pack publish <id>-<version>.zip --key publisher-key.pem
+```
+
+```sh [npm]
+npm run build
+npx @tavora/pack . --key publisher-key.pem
+TAVORA_PUBLISH_TOKEN=tvp_… npx @tavora/pack publish <id>-<version>.zip --key publisher-key.pem
 ```
 
 ```sh [Yarn]

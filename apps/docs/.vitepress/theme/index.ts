@@ -3,7 +3,7 @@ import { inBrowser, onContentUpdated } from "vitepress";
 import DefaultTheme from "vitepress/theme";
 import "./tokens.css";
 
-// Picking a tab in one code group (npm, pnpm, Yarn, Bun, Vite+) picks the tab with the same label in every
+// Picking a tab in one code group (pnpm, npm, Yarn, Bun, Vite+) picks the tab with the same label in every
 // other group, on this page and the next ones, and the choice is remembered. VitePress switches the
 // clicked group itself; this only follows it in the others.
 

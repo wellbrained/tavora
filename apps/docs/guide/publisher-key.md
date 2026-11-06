@@ -46,12 +46,12 @@ To link a key file Tavora doesn't keep (one you sign with `--key` in CI):
 
    ::: code-group
 
-   ```sh [npm]
-   npx @tavora/pack link ABCD-EFGH --key <file>
-   ```
-
    ```sh [pnpm]
    pnpm dlx @tavora/pack link ABCD-EFGH --key <file>
+   ```
+
+   ```sh [npm]
+   npx @tavora/pack link ABCD-EFGH --key <file>
    ```
 
    ```sh [Yarn]

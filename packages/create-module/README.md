@@ -3,8 +3,8 @@
 Makes a new [Tavora](https://mytavora.app) module project. Start it with the package manager you use:
 
 ```sh
-npm create @tavora/module
 pnpm create @tavora/module
+npm create @tavora/module
 yarn create @tavora/module
 bun create @tavora/module
 vp create @tavora/module    # Vite+
@@ -13,8 +13,8 @@ vp create @tavora/module    # Vite+
 It asks where the project goes (the empty folder you are in, or a new folder in it), the module's name, its id (`publisher.module-name`), the game it is for (any game, or one, such as Path of Exile 2) and a template: **vanilla** TypeScript, **vue** or **react**, picked with the arrow keys. Give them up front to skip the questions (npm and Vite+ need a `--` before them, the others don't):
 
 ```sh
-npm create @tavora/module raid-timer -- --template vue --id example.raid-timer --name "Raid Timer" --game poe2
 pnpm create @tavora/module raid-timer --template vue --id example.raid-timer --name "Raid Timer" --game poe2
+npm create @tavora/module raid-timer -- --template vue --id example.raid-timer --name "Raid Timer" --game poe2
 vp create @tavora/module -- raid-timer --template vue --id example.raid-timer --name "Raid Timer" --game poe2
 ```
 
