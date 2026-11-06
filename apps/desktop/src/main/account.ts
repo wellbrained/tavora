@@ -10,7 +10,7 @@ import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
 import type { DiscordLoginResult } from "./discord-login";
 import { UserError } from "./messages";
-import { serviceUrl } from "./service-url";
+
 import type { SignIn } from "./sign-in";
 
 // The user's Tavora account (decided 2026-10-16): signed into with an email

@@ -22,11 +22,13 @@
     "tavora-pack": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source packages/pack/src/cli.ts",
     "tavora-catalog-sign": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source scripts/catalog-sign.ts",
     "check:patches": "node scripts/check-patches.mjs",
+    "lint": "oxlint",
     "check": "pnpm check:patches && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.10",
     "jsdom": "30.1.3",
+    "oxlint": "1.91.0",
     "typescript": "^5.9.3",
     "vitest": "5.1.0"
   },

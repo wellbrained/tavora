@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
-import { AccountKey } from "./account-key";
-import { CloudCopy, EMPTY_STATE, ServiceStorage, swapInCopy } from "./cloud-copy";
+
+import { CloudCopy, EMPTY_STATE, swapInCopy } from "./cloud-copy";
 import { cleanUp, pc } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
 import { newCopyKey } from "./copy-crypto";

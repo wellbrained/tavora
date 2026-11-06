@@ -83,7 +83,6 @@ function makeRandom(seed: number) {
     bytes: (length: number) => Buffer.from(Uint8Array.from({ length }, () => int(0, 255))),
   };
 }
-type Random = ReturnType<typeof makeRandom>;
 
 /** An ed25519 key made from a seed, so a publisher keeps the same key (and fingerprint) in every run. */
 function keyFromSeed(seed: Buffer): KeyObject {

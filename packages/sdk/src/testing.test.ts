@@ -94,7 +94,7 @@ describe("documents", () => {
   it("makes an id when none is given, and lists the newest first", async () => {
     const { sdk } = createMemoryHost({ now: () => 0 });
     const a = await sdk.documents.put({ title: "A", data: 1 });
-    const b = await sdk.documents.put({ id: "b", title: "B", data: 2 });
+    await sdk.documents.put({ id: "b", title: "B", data: 2 });
     expect(a.id).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
     expect((await sdk.documents.list()).map((doc) => doc.id)).toEqual(["b", a.id]);
   });

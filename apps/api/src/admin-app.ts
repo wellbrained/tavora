@@ -450,7 +450,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
 
   // As files for `pnpm tavora-catalog-sign successions|revocations <file> --key … --out …`: every entry in force, plus the waiting ones.
   for (const kind of ["successions", "revocations"] as const) {
-    app.get(`/api/keys/${kind}.json`, (context) => {
+    app.get(`/api/keys/${kind}.json`, () => {
       const entries = !accounts ? [] : kind === "successions" ? successionEntries(accounts, trust()) : revocationEntries(accounts, trust(), catalog);
       return new Response(`${JSON.stringify(entries, null, 2)}\n`, { headers: { "Content-Type": "application/json; charset=utf-8" } });
     });

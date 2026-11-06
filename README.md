@@ -130,6 +130,7 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm test:e2e
+pnpm lint        # oxlint: unused code and slips; warnings only, not part of check or CI
 ```
 
 Electron tests need a display and must run as a normal user with Chromium's sandbox enabled. On headless Linux, use `xvfb-run -a pnpm test:e2e`.

@@ -442,7 +442,7 @@ describe("deleting an account", () => {
 
 describe("deleting an account through the account route", () => {
   it("closes its conversations with left and removes the senders of its reports", async () => {
-    const { user, started, call, devToken, inbox, conversations, catalog } = setup();
+    const { user, started, call, devToken, inbox, catalog } = setup();
     const mara = user("mara@example.com");
     const conversation = await started(mara.token, { text: "Private words" });
     await call("POST", "/v1/account/delete/code", mara.token, {});

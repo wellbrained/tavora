@@ -9,7 +9,7 @@ import type { Foreground, ForegroundProbe } from "./foreground";
 import { GameOverlays, isOverlayAction, layerBinding, toggleBinding, type OverlayWindow, type OverlayWindowRequest, type PanelLoan } from "./game-overlay-service";
 import type { OverlayPanel } from "./game-overlay-window";
 import type { VeilWindow } from "./game-veil-window";
-import { ALL_GAMES, GameOverlayStore, OVERLAY_LAYER_ACTION, OVERLAY_TOGGLE_ACTION, type OverlayScope, type Rect } from "./game-overlays";
+import { GameOverlayStore, OVERLAY_LAYER_ACTION, OVERLAY_TOGGLE_ACTION, type OverlayScope, type Rect } from "./game-overlays";
 import type { HotkeyRecord, ShortcutRegistry } from "./hotkeys";
 import { OverlayStore } from "./overlays";
 import type { StreamingModule } from "./streaming";

@@ -32,7 +32,6 @@ import {
   type LeaderboardResult,
   type LeaderboardStatus,
   type LeaderboardSubmitResult,
-  type MethodName,
   type Methods,
   type OverlaySource,
   type PanelContent,

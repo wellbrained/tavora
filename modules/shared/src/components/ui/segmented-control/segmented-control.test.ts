@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest"
-import { createApp, defineComponent, h, ref, type App } from "vue"
+import { createApp, h, ref, type App } from "vue"
 import { Grid3x3, List } from "@lucide/vue"
 import { SegmentedControl, type SegmentedOption } from "."
 import { isSoftOption, optionHint } from "./options"

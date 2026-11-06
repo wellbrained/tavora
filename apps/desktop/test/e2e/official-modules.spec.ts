@@ -670,7 +670,7 @@ test.describe("ui playground pages", () => {
   });
 
   test("ui playground: the foundations pages fill up, show the theme's own values and play their motion", async () => {
-    const { app, page } = running;
+    const { app } = running;
     const examples = (id: string) => inModule<string[]>(app, PLAYGROUND, `[...${q(`page-${id}`)}.querySelectorAll('section[data-testid^="example-"]')].map((el) => el.dataset.testid.slice(8))`);
 
     // Every page of the group lists its examples, and none says it is coming.
@@ -710,7 +710,7 @@ test.describe("ui playground pages", () => {
   });
 
   test("ui playground: a select can pick an empty choice, a switch field toggles from its label and menu rows show a line under the name", async () => {
-    const { app, page } = running;
+    const { app } = running;
     const text = (testId: string) => inModule<string>(app, PLAYGROUND, `${q(testId)}.textContent.trim()`);
 
     // Inputs: the empty choice clears the select to "", and its own text shows in the trigger.
@@ -745,7 +745,7 @@ test.describe("ui playground pages", () => {
   });
 
   test("ui playground: tabs close with the X and a middle click, reorder by drag, rename in place and scroll with the wheel", async () => {
-    const { app, page } = running;
+    const { app } = running;
     await openPage(app, "tabs");
     await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("tab-strip")}`)).toBe(true);
 
@@ -827,7 +827,7 @@ test.describe("ui playground pages", () => {
   });
 
   test("ui playground: the segmented control's pill and the tabs' line follow the pick, hide when nothing is picked or disabled, and the tab strip keeps its own line", async () => {
-    const { app, page } = running;
+    const { app } = running;
     await openPage(app, "pick");
     await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("segmented-many")}`)).toBe(true);
 

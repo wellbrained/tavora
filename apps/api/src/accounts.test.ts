@@ -440,7 +440,7 @@ describe("Discord login", () => {
   });
 
   it("does not let a stolen sign-in add, swap or keep a Discord login without the mailbox (A6)", async () => {
-    const { call, signIn, inbox, store, lastCode, connect } = setupDiscord();
+    const { call, signIn, inbox, store, lastCode } = setupDiscord();
     const token = await signIn("me@example.com");
     inbox.clear();
     // Without the code from the account's mailbox, a session alone cannot connect a Discord login.

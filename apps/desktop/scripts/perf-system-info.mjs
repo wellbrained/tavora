@@ -77,7 +77,6 @@ let lastAt = performance.now();
 // The connection watcher with the real pings; its own timer is timed apart from the monitor's.
 const wantsWatcher = blockNames.includes("connection") || blockNames.includes("watcher");
 const pingTimes = [];
-let routerFound = true;
 let watcher = null;
 if (wantsWatcher) {
   const real = windowsConnectionProbe();

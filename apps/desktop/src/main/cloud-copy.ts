@@ -4,7 +4,7 @@ import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { DATA_DIRS, PICTURE_DIRS } from "./backup";
-import { copyKeys, open, PART_ID_BYTES, partId, seal, type CopyKeys } from "./copy-crypto";
+import { copyKeys, open, PART_ID_BYTES, partId, seal } from "./copy-crypto";
 import { writeFileAtomic } from "./fsutil";
 import { OWNER_RECORDS_FILE } from "./installer";
 import { FILES_DIR } from "./module-files";

@@ -57,7 +57,6 @@ function build(spec: Spec): DockviewApi {
 
 const near = (a: number, b: number, tolerance: number) => Math.abs(a - b) <= tolerance;
 
-type Node = { type: string; size?: number; visible?: boolean; data: unknown };
 
 function run(spec: Spec, entry: Case): Report {
   const api = build(spec);

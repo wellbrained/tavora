@@ -1,4 +1,4 @@
-import { nextTick, onBeforeUnmount, type Ref } from "vue"
+import { onBeforeUnmount, type Ref } from "vue"
 import { placeAt, pointerAtGrab, slideOffsets, type Slot } from "./slide"
 import { commitAndWait } from "./settle"
 import "./reorder.css"
