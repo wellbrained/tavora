@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.114",
+    date: "2026-11-06",
+    title: "A line chart for modules",
+    notes: [
+      "Modules can now draw a line chart over time, with the values shown beside the point you hover.",
+    ],
+    prs: [
+      { number: 692, title: "Kit: LineChart for one or two lines over time" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.23.113",
     date: "2026-11-06",
     title: "Modules can read a folder on this PC",
