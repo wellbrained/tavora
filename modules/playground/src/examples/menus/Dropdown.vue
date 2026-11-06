@@ -32,7 +32,7 @@ const sort = ref("recent");
         <DropdownMenuLabel>Note</DropdownMenuLabel>
         <DropdownMenuItem><Pencil /> Rename <DropdownMenuShortcut>F2</DropdownMenuShortcut></DropdownMenuItem>
         <DropdownMenuItem><Copy /> Duplicate <DropdownMenuShortcut>Ctrl+D</DropdownMenuShortcut></DropdownMenuItem>
-        <DropdownMenuItem disabled><Pin /> Pin (already pinned)</DropdownMenuItem>
+        <DropdownMenuItem disabled disabled-reason="Already pinned."><Pin /> Pin</DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger><FolderInput /> Move to group</DropdownMenuSubTrigger>
           <DropdownMenuSubContent>

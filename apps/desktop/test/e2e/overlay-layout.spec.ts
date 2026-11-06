@@ -835,7 +835,8 @@ test("Copy to… is off with a reason while the setup is empty", async () => {
   try {
     await overlayPage(app, page, "$everywhere");
     await expect(page.getByTestId("layout-copy")).toBeDisabled();
-    await expect(page.getByTestId("layout-copy-hint")).toHaveAttribute("title", "Add a frame first.");
+    // Off but still hoverable and focusable, with its reason.
+    await expect(page.getByTestId("layout-copy")).toHaveAttribute("data-tavora-reason", "Add a frame first.");
   } finally {
     await app.close();
   }

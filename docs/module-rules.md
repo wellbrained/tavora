@@ -55,7 +55,8 @@ classes where you use a control; never copy it.
 | A number that changes while it is on screen (a count, a total) | `CountTo` / `useCountTo` (counts to the new value; not for a number that ticks every second or one being typed) | a plain `{{ n }}` that jumps |
 | A list the user reorders by dragging | `useReorderMotion` and `liftedDragImage` from `ui/reorder`: the others slide aside, the dropped item settles; keys reorder at once | a hand-made drop line only |
 | Menu | `ContextMenu`, `DropdownMenu`, or `sdk.ui.showMenu({ anchor: element })` | menu at the pointer, own popup |
-| Tooltip | `Tooltip` / `TooltipRows`, or a `title` (connectModule turns it into the kit tooltip). A disabled `Button` with a `title` (or `hinted`, when you show the tooltip yourself) stays hoverable and focusable, so say why it is off there | own hover box, a wrapper `span` around a disabled button |
+| Tooltip | `Tooltip` / `TooltipRows`, or a `title` (connectModule turns it into the kit tooltip) | own hover box |
+| Say why a control is off | `disabled-reason` next to `disabled` on `Button`, `Switch` / `SwitchField`, `Checkbox`, `Input`, `Select` (or its `SelectTrigger`), `DropdownMenuItem` and `ContextMenuItem`: the control stays hoverable and focusable, shows the reason in the kit tooltip and does nothing when used. A `Button` also does this with a `title` (or `hinted`, when you show the tooltip yourself) | a wrapper `span` with a `title` around a disabled control, a `title` on a native `disabled` control (it never shows), the reason in the label ("Pin (already pinned)") |
 | Floating panel | `Popover` | absolutely positioned `div` |
 | Dialog | `ConfirmDialog` (asks; only before what can't be put back, see [Deleting](#deleting)), `NameDialog` (asks for a name), else `Dialog` with `DialogHeader`, `DialogFooter`, `DialogButton` (see [Dialogs](#dialogs)) | own overlay |
 | Nothing here yet | `EmptyState` (one sentence, one action) | a bare `<p>` |
@@ -229,6 +230,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
   `document.querySelector`. Keyboard shortcuts act on the focused pane only, not through a window-wide listener. Ctrl+K
   belongs to Tavora.
 - **Menus and tooltips** open next to their element with a small gap, never at the pointer (see `CLAUDE.md`).
+- **A switched-off control says why**: where a user would wonder why something is off, give it a `disabled-reason` (a short, friendly sentence: "Sign in first.", "Already pinned.") and keep the label short. The control stays hoverable and focusable, the reason opens in the kit tooltip beside it (a menu row's opens to its side, so it covers no other row) and is the control's description for a screen reader. A menu row with a reason can be reached with ↑ / ↓ but not chosen; one without a reason is skipped as before. A control that is off for an obvious reason (an empty list's Select all, a first row's Move up) needs none. Not a `title` on a native `disabled` control, which never shows.
 - **Actions are visible**: nothing is hover-only or right-click-only. A row's actions sit behind a visible ⋯ button too.
 - **States**: every view has its empty, loading and error state from the kit (table above). Long work shows progress.
   Content that loads shows [a skeleton](#loading), not a text.
@@ -283,6 +285,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] `onSuspend` / `onDispose` flush; nothing is lost when the panel is hidden or closed mid-edit.
 - [ ] Empty, loading and error states exist and use the kit; what loads is a `Skeleton` over the real template, a late picture a `FadeImage`.
 - [ ] Menus and tooltips anchor to their element; no hover-only actions.
+- [ ] Where a user would wonder why a control is off, it has a `disabled-reason`; no reason squeezed into a label.
 - [ ] Motion uses the kit's tokens, animates only `transform` and `opacity`, and leaves out anything a key starts.
 - [ ] Dialogs use the header, footer and `DialogButton` as in [Dialogs](#dialogs); a close-only button has no icon.
 - [ ] Settings use `ModuleSettings`, ask for their size with `settingsDialogSize`, have no Done button, and follow the [Settings](#settings) rules for descriptions, units and room (checked in German).

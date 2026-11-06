@@ -1,19 +1,29 @@
 <script setup lang="ts">
 import type { SelectRootEmits, SelectRootProps } from "reka-ui"
+import { reactiveOmit } from "@vueuse/core"
 import { SelectRoot, useForwardPropsEmits } from "reka-ui"
 import { computed, provide, ref } from "vue"
-import { emptyChoicesKey, fromInner, toInner } from "./empty"
+import { isSoftDisabled } from "../../../lib/soft-disabled"
+import { emptyChoicesKey, fromInner, offReasonKey, toInner } from "./empty"
 
-const props = defineProps<SelectRootProps>()
+const props = defineProps<SelectRootProps & {
+  /** Why it is off. While `disabled` the trigger stays hoverable and focusable, and the reason shows in a tooltip beside it. */
+  disabledReason?: string
+}>()
 const emits = defineEmits<SelectRootEmits>()
 
 // A `SelectItem value=""` is an empty choice: picking it clears the value to "" and its text shows in the trigger.
 const emptyChoices = ref(0)
 provide(emptyChoicesKey, { add: () => emptyChoices.value++, remove: () => emptyChoices.value-- })
 
-const forwarded = useForwardPropsEmits(props, emits)
+// Off with a reason: Reka is not told it is disabled (it would make the trigger unreachable); the trigger takes over.
+const soft = computed(() => isSoftDisabled({ disabled: props.disabled, reason: props.disabledReason }))
+provide(offReasonKey, computed(() => (soft.value ? props.disabledReason!.trim() : undefined)))
+
+const forwarded = useForwardPropsEmits(reactiveOmit(props, "disabledReason"), emits)
 const bound = computed((): Record<string, unknown> => ({
   ...forwarded.value,
+  ...(soft.value ? { disabled: undefined } : {}),
   modelValue: toInner(props.modelValue, emptyChoices.value > 0),
   "onUpdate:modelValue": (value: unknown) => emits("update:modelValue", fromInner(value) as never),
 }))

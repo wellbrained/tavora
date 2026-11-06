@@ -6,9 +6,17 @@ import {
   ContextMenuItem,
   useForwardPropsEmits,
 } from "reka-ui"
+import { ref } from "vue"
+import { ACTIVATE_KEYS, useAriaDisabled, useSoftDisabled } from "../../../lib/soft-disabled"
 import { cn } from "../../../lib/utils"
 
+defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<ContextMenuItemProps & {
+  /**
+   * Why it is off. With `disabled` the row stays reachable by hover and the arrow keys, shows the reason beside it
+   * and can't be chosen. Without a reason a disabled row is skipped, as before.
+   */
+  disabledReason?: string
   class?: HTMLAttributes["class"]
   inset?: boolean
   variant?: "default" | "destructive"
@@ -17,19 +25,26 @@ const props = withDefaults(defineProps<ContextMenuItemProps & {
 })
 const emits = defineEmits<ContextMenuItemEmits>()
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, "class", "disabledReason")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+// Reka skips rows marked `data-disabled`, so a row with a reason is not marked: it is `aria-disabled` and ignores a click or Enter / Space.
+const soft = useSoftDisabled(() => ({ disabled: props.disabled, reason: props.disabledReason }), { keys: ACTIVATE_KEYS, dataDisabled: false, side: "right" })
+// Reka writes `aria-disabled` itself (and would blank ours), so it is set on the row's element.
+const item = ref<{ $el?: unknown } | null>(null)
+useAriaDisabled(() => item.value, soft.soft)
 </script>
 
 <template>
   <ContextMenuItem
+    ref="item"
     data-slot="context-menu-item"
     :data-inset="inset ? '' : undefined"
     :data-variant="variant"
-    v-bind="forwarded"
+    v-bind="{ ...forwarded, ...soft.attrs() }"
+    :disabled="soft.disabled()"
     :class="cn(
-      `focus:bg-[color-mix(in_srgb,var(--foreground)_5%,var(--accent))] focus:text-accent-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:!text-destructive [&_svg:not([class*='text-'])]:text-muted-foreground focus:[&_svg:not([class*='text-'])]:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4`,
+      `focus:bg-[color-mix(in_srgb,var(--foreground)_5%,var(--accent))] focus:text-accent-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:!text-destructive [&_svg:not([class*='text-'])]:text-muted-foreground focus:[&_svg:not([class*='text-'])]:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4`,
       props.class,
     )"
   >

@@ -400,14 +400,14 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
               <DropdownMenuItem data-testid="menu-add-below" @select="later(() => addBelow(depth))">
                 <ListPlus :stroke-width="1.5" /> {{ t("task.addBelow") }}
               </DropdownMenuItem>
-              <DropdownMenuItem :disabled="depth >= MAX_DEPTH" data-testid="menu-add-sub" @select="later(() => addBelow(depth + 1))">
+              <DropdownMenuItem :disabled="depth >= MAX_DEPTH" :disabled-reason="t('task.addSub.off', { count: MAX_DEPTH })" data-testid="menu-add-sub" @select="later(() => addBelow(depth + 1))">
                 <CornerDownRight :stroke-width="1.5" /> {{ t("task.addSub") }}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem :disabled="!canIndent(group, index)" data-testid="menu-indent" @select="change((data) => indentTask(data, task.id))">
+              <DropdownMenuItem :disabled="!canIndent(group, index)" :disabled-reason="t('task.indent.off')" data-testid="menu-indent" @select="change((data) => indentTask(data, task.id))">
                 <IndentIncrease :stroke-width="1.5" /> {{ t("task.indent") }}
               </DropdownMenuItem>
-              <DropdownMenuItem :disabled="!task.parentId" data-testid="menu-outdent" @select="change((data) => outdentTask(data, task.id))">
+              <DropdownMenuItem :disabled="!task.parentId" :disabled-reason="t('task.outdent.off')" data-testid="menu-outdent" @select="change((data) => outdentTask(data, task.id))">
                 <IndentDecrease :stroke-width="1.5" /> {{ t("task.outdent") }}
               </DropdownMenuItem>
               <DropdownMenuItem :disabled="!canShift(group, index, -1)" @select="change((data) => shiftTask(data, task.id, -1))">

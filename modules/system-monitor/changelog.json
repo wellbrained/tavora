@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.20",
+    "date": "2026-11-05",
+    "notes": [
+      "Switches and drive boxes that are off now say why when you hover them."
+    ]
+  },
+  {
     "version": "0.1.19",
     "date": "2026-11-03",
     "notes": [

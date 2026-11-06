@@ -144,7 +144,7 @@ watch(
       setting="overlays-stay"
       :highlighted="highlight === 'overlays-stay'"
     >
-      <Switch v-model="stay" :disabled="!enabled" :aria-label="t('settings.overlays-stay.label')" data-testid="overlays-stay" />
+      <Switch v-model="stay" :disabled="!enabled" :disabled-reason="t('overlays.stayOff')" :aria-label="t('settings.overlays-stay.label')" data-testid="overlays-stay" />
     </SettingRow>
     <SettingRow :label="t('settings.overlay-sidebar.label')" :description="t('settings.overlay-sidebar.description')" setting="overlay-sidebar" :highlighted="highlight === 'overlay-sidebar'">
       <SegmentedControl v-model="sidebar" :options="sidebarOptions" :label="t('settings.overlay-sidebar.label')" />

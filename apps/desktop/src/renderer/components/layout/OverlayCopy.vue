@@ -35,23 +35,20 @@ function copy(mode: "replace" | "add") {
 </script>
 
 <template>
-  <!-- A disabled button shows no hint of its own, so the hint sits on its wrapper. -->
-  <span class="inline-flex" :title="hint ?? undefined" data-testid="layout-copy-hint">
-    <DropdownMenu>
-      <DropdownMenuTrigger as-child>
-        <Button variant="secondary" size="sm" :disabled="hint !== null" :aria-description="hint ?? undefined" data-testid="layout-copy">
-          <Copy :stroke-width="1.5" />{{ t("overlays.copy.button") }}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="bottom" align="start" class="max-h-80 max-w-72 min-w-52" data-testid="layout-copy-menu">
-        <DropdownMenuLabel class="text-muted-foreground truncate text-xs font-normal">{{ t("overlays.copy.menu") }}</DropdownMenuLabel>
-        <DropdownMenuItem v-for="game in targets" :key="game.id" :data-testid="`layout-copy-option-${game.id}`" @select="pick(game.id)">
-          <span class="min-w-0 flex-1 truncate">{{ game.name }}</span>
-          <span class="text-muted-foreground flex-none text-xs">{{ game.frames > 0 ? t("overlays.copy.frames", { count: game.frames }) : t("overlays.copy.noFrames") }}</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  </span>
+  <DropdownMenu>
+    <DropdownMenuTrigger as-child>
+      <Button variant="secondary" size="sm" :disabled="hint !== null" :disabled-reason="hint ?? undefined" data-testid="layout-copy">
+        <Copy :stroke-width="1.5" />{{ t("overlays.copy.button") }}
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent side="bottom" align="start" class="max-h-80 max-w-72 min-w-52" data-testid="layout-copy-menu">
+      <DropdownMenuLabel class="text-muted-foreground truncate text-xs font-normal">{{ t("overlays.copy.menu") }}</DropdownMenuLabel>
+      <DropdownMenuItem v-for="game in targets" :key="game.id" :data-testid="`layout-copy-option-${game.id}`" @select="pick(game.id)">
+        <span class="min-w-0 flex-1 truncate">{{ game.name }}</span>
+        <span class="text-muted-foreground flex-none text-xs">{{ game.frames > 0 ? t("overlays.copy.frames", { count: game.frames }) : t("overlays.copy.noFrames") }}</span>
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
   <Dialog :open="target !== null" @update:open="(open: boolean) => !open && (asking = null)">
     <DialogContent v-if="target" class="top-[12vh] translate-y-0 gap-4 sm:max-w-[460px]" data-testid="layout-copy-dialog" :show-close-button="false">
       <DialogHeader>

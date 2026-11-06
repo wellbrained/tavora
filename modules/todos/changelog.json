@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.19",
+    "date": "2026-11-05",
+    "notes": [
+      "Add sub-to-do, Make a sub-to-do and Move one level up say why they are off."
+    ]
+  },
+  {
     "version": "0.2.18",
     "date": "2026-11-05",
     "notes": [

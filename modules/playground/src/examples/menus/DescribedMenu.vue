@@ -18,7 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
         <template #icon><Pencil :stroke-width="1.6" /></template>
         New note
       </DropdownMenuItem>
-      <DropdownMenuItem disabled description="Sign in first.">
+      <DropdownMenuItem disabled disabled-reason="Sign in first." description="Send others a link.">
         <template #icon><Pin :stroke-width="1.6" /></template>
         Share
       </DropdownMenuItem>

@@ -1,6 +1,6 @@
 // Reka's Select refuses an item with an empty value, so the kit swaps the empty choice for a stand-in
 // while it talks to Reka. Callers only ever see "".
-import type { InjectionKey } from "vue"
+import type { ComputedRef, InjectionKey } from "vue"
 
 export const EMPTY_CHOICE = "__tavora-empty-choice__"
 
@@ -21,3 +21,6 @@ export function toInner(value: unknown, hasEmptyChoice: boolean): unknown {
 export function fromInner<T>(value: T): T | "" {
   return value === EMPTY_CHOICE ? "" : value
 }
+
+/** Set on a `Select` that is off and says why: its trigger then stays hoverable and focusable. Holds the reason. */
+export const offReasonKey: InjectionKey<ComputedRef<string | undefined>> = Symbol("select-off-reason")

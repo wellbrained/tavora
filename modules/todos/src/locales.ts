@@ -100,7 +100,9 @@ export const en = {
   "task.pin": "Pin as current objective",
   "task.unpin": "Unpin objective",
   "task.indent": "Make a sub-to-do",
+  "task.indent.off": "Needs a to-do right above it, and room to nest deeper.",
   "task.outdent": "Move one level up",
+  "task.outdent.off": "It's already on the top level.",
   "task.moveUp": "Move up",
   "task.moveDown": "Move down",
   "task.moveToGroup": "Move to group",
@@ -108,6 +110,7 @@ export const en = {
   "task.deleteTitle": "Delete “{title}”",
   "task.addBelow": "Add to-do below",
   "task.addSub": "Add sub-to-do",
+  "task.addSub.off": "Sub-to-dos can go {count} levels deep at most.",
 } as const;
 
 export const de: Record<keyof typeof en, string> = {
@@ -211,7 +214,9 @@ export const de: Record<keyof typeof en, string> = {
   "task.pin": "Als aktuelles Ziel anheften",
   "task.unpin": "Ziel lösen",
   "task.indent": "Zum Unter-To-Do machen",
+  "task.indent.off": "Braucht ein To-Do direkt darüber und Platz für eine weitere Ebene.",
   "task.outdent": "Eine Ebene nach oben",
+  "task.outdent.off": "Das ist schon die oberste Ebene.",
   "task.moveUp": "Nach oben",
   "task.moveDown": "Nach unten",
   "task.moveToGroup": "In Gruppe verschieben",
@@ -219,4 +224,5 @@ export const de: Record<keyof typeof en, string> = {
   "task.deleteTitle": "„{title}“ löschen",
   "task.addBelow": "To-Do darunter hinzufügen",
   "task.addSub": "Unter-To-Do hinzufügen",
+  "task.addSub.off": "Sub-To-Dos können höchstens {count} Ebenen tief gehen.",
 };
