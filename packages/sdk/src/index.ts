@@ -522,6 +522,14 @@ export interface TavoraSDK {
      * press (PERMISSION_DENIED otherwise). True when the user chose a folder Tavora accepts; then list it again.
      */
     choose(folder: string): Promise<boolean>;
+    /**
+     * Shows a file of the folder in Explorer with the file selected, like `files.showInFolder` does for a file the user
+     * picked; when the file is gone, the folder it was in is selected instead, and when that is gone too nothing is shown.
+     * `path` is inside the folder, joined by `/`, of an extension the manifest lists (`read` or `names`). Call it from the
+     * click or key press that asked for it (PERMISSION_DENIED otherwise); one press opens one window. It resolves with
+     * nothing either way, so the module learns nothing back, and never where the folder is. Needs Tavora 0.23.116 or newer: check `sdk.supports("folders.showInFolder")`.
+     */
+    showInFolder(folder: string, path: string): Promise<void>;
   };
   pictures: {
     /**
@@ -1139,6 +1147,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         };
       },
       choose: (folder) => call("folders.choose", { folder }, MENU_TIMEOUT_MS),
+      showInFolder: async (folder, path) => void (await call("folders.showInFolder", { folder, path })),
     },
     files: {
       pickReadOnly: ((options: { extensions: string[]; multiple?: boolean; near?: PickNear }) => call('files.pickReadOnly',options,MENU_TIMEOUT_MS)) as TavoraSDK['files']['pickReadOnly'],

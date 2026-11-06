@@ -189,7 +189,7 @@ const SILENT = new Set<CallName>([
   "files.forget", "files.showInFolder", "files.check", "links.open", "ui.tooltip.show", "ui.tooltip.move", "ui.tooltip.hide", "ui.tooltip.close", "ui.showMenu",
   "systemInfo.watch", "systemInfo.clearConnectionLog", "media.watch", "media.control", "discord.connect", "discord.allowControl",
   "discord.subscribe", "discord.unsubscribe", "overlay.resetLink", "overlay.preview", "clipboard.writeImage", "files.pickReadOnly",
-  "files.openJson", "files.open", "discord.image", "folders.watch", "folders.choose", "hotkeys.set", "overlay.copyLink", "overlay.showOverGame", "overlay.openPage", "panel.navigated",
+  "files.openJson", "files.open", "discord.image", "folders.watch", "folders.choose", "folders.showInFolder", "hotkeys.set", "overlay.copyLink", "overlay.showOverGame", "overlay.openPage", "panel.navigated",
 ]);
 const SILENT_ANSWER: Partial<Record<CallName, unknown>> = {
   "files.check": { found: false, reason: "unlinked" },
@@ -972,6 +972,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
         };
       },
       choose: (folder) => call("folders.choose", { folder }),
+      showInFolder: async (folder, path) => void (await call("folders.showInFolder", { folder, path })),
     },
     files: {
       pickReadOnly: ((opts: { extensions: string[]; multiple?: boolean }) => call("files.pickReadOnly", opts)) as TavoraSDK["files"]["pickReadOnly"],

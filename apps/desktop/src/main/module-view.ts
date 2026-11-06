@@ -900,6 +900,16 @@ export class ModuleView {
         await this.takeGesture("folders.choose");
         return folders.choose(folder);
       },
+      showInFolder: async (folder, file) => {
+        // Explorer opens once per click, and not over the game; the file must pass the same checks as a listing.
+        this.refuseOverGame("folders.showInFolder");
+        await this.takeGesture("folders.showInFolder");
+        const target = await folders.reveal(folder, file);
+        // Nothing to show, or the panel or the grant went while it was looked up: the same quiet answer.
+        if (!target || this.bridge !== bridge() || !this.capabilities().has("folders")) return;
+        // Only ever selected in its own folder, also the folder a gone file was in: nothing is launched or opened.
+        shell.showItemInFolder(target.path);
+      },
     };
   }
 

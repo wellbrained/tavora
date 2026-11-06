@@ -87,6 +87,7 @@ export interface BridgeContext {
     list(folder: string): Promise<import('@tavora/sdk/protocol').FolderListing>;
     watch(folder: string, on: boolean): Promise<void>;
     choose(folder: string): Promise<boolean>;
+    showInFolder(folder: string, path: string): Promise<void>;
   };
   readOnlyFiles?: {
     pick(extensions: string[], multiple: boolean, near?: import('@tavora/sdk/protocol').PickNear): Promise<import('@tavora/sdk/protocol').ReadOnlyFile[]>;
@@ -354,6 +355,12 @@ const handlers = new Map<string, Handler>([
     await folderContext(s).watch(folder, on); return null;
   }],
   ['folders.choose', (s,params) => { const folder = folderParam(params); needs(s,'folders','folders.choose'); return folderContext(s).choose(folder); }],
+  ['folders.showInFolder', async (s,params) => {
+    const folder = folderParam(params), file = object(params).path;
+    if (typeof file !== 'string' || file.length === 0 || file.length > 2600) throw new HostError('INVALID_PARAMS','path must be a file path inside the folder, such as Replays/Game.SC2Replay.');
+    needs(s,'folders','folders.showInFolder');
+    await folderContext(s).showInFolder(folder, file); return null;
+  }],
   ['files.pickReadOnly', async (s,params) => {
     const extensions = object(params).extensions;
     if (!Array.isArray(extensions) || !extensions.length || extensions.length>10 || extensions.some(e=>typeof e!=='string'|| !/^[a-z0-9]{1,12}$/.test(e))) throw new HostError('INVALID_PARAMS','Choose up to ten file extensions.');
