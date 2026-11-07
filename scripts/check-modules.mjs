@@ -33,12 +33,23 @@ export const RULES = {
   "focus-ring": "Keep the kit's focus ring; never remove it or draw your own.",
   "menu-anchor": "Pass the element as anchor: ui.showMenu({ anchor: element }), never the pointer position.",
   "file-save": "Save through files.saveJson or pictures.save (Tavora's save dialog), not a browser download.",
+  "window-keys": "Listen for keys on your own element (a ref), not the whole window: the component may be shown twice.",
 };
 
 /** Problems with an allow comment itself. They are never kept in the baseline. */
 export const ALLOW_RULE = "rules-allow";
 export const BASELINE_FILE = "module-rules-baseline.json";
 const SOURCE = /\.(vue|ts|tsx|css)$/;
+/** Rules that read strings as colours or classes, which a sentence in a text catalog can look like ("Items #123"). */
+const CATALOG_SKIP = new Set(["color", "color-fallback", "palette", "motion"]);
+
+/** A translation catalog: locales.ts, i18n.ts, texts.ts, a file in an i18n/, locales/ or texts/ folder, or one exporting en and de. */
+export function isCatalog(file, text = "") {
+  const name = file.split("/").pop();
+  if (/(?:^|\/)(?:i18n|locales?|texts?|lang|translations?)\/[^/]+$/.test(file)) return true;
+  if (/^(?:[\w-]+[.-])?(?:locales?|i18n|texts|translations?|messages)\.tsx?$/.test(name)) return true;
+  return /^export const en\b/m.test(text) && /^export const de\b/m.test(text);
+}
 const SKIP = /\.(test|spec)\.tsx?$|\.d\.ts$/;
 
 // ── Lexing: where the comments and strings are ───────────────────────────────────────────────────────────────
@@ -242,11 +253,11 @@ const GENERIC_FAMILIES = /^(?:serif|sans-serif|monospace|cursive|fantasy|math|em
  * What in a font-family list is not the theme's: a font name anywhere (also as a var() fallback), or a generic family
  * on its own. Generic families after the theme's var(--font-…) are only the browser's last resort, so they pass.
  */
-function familyProblem(value) {
+function familyProblem(value, { generics = false } = {}) {
   const fallbacks = [...value.matchAll(/\bvar\(\s*--[\w-]+\s*,([^()]*)\)/g)].map((m) => m[1]);
   const top = value.replace(/\bvar\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)/g, "var()");
   const parts = [...top.split(","), ...fallbacks.flatMap((f) => f.split(","))].map((part) => part.trim()).filter(Boolean);
-  const themed = /var\(/.test(top);
+  const themed = generics || /var\(/.test(top);
   const own = parts.filter((part) => !part.startsWith("var(") && !NEUTRAL_VALUES.test(part) && !(themed && GENERIC_FAMILIES.test(part)));
   return own.length ? `font-family ${own.join(", ")}` : null;
 }
@@ -274,7 +285,8 @@ function checkDeclaration(property, value, at) {
     if (shorthand) {
       const problem = sizeProblem(pixels(shorthand[1], shorthand[2]));
       if (problem) add("font-size", problem);
-      const family = familyProblem(shorthand[3]);
+      // In the shorthand a generic family (sans-serif, monospace) only completes it; the size part still counts.
+      const family = familyProblem(shorthand[3], { generics: true });
       if (family) add("font-family", family);
     }
   }
@@ -406,9 +418,18 @@ function problem(rule, message, what) {
   return message ? { rule, message: `${what}: ${message}` } : null;
 }
 
-/** Tailwind classes in `text`. `bare` also looks at one-word classes (shadow, uppercase, transition). */
-function classes(text, base, bare) {
+/**
+ * Tailwind classes in `text`. `bare` also looks at one-word classes (shadow, uppercase, transition). `ctx.smallText`
+ * holds the module's own text tokens under 12 px or between the steps (`--text-tiny: 10px` makes `text-tiny`).
+ */
+function classes(text, base, bare, ctx = {}) {
   const out = [];
+  if (ctx.smallText?.size) {
+    const names = [...ctx.smallText.keys()].map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+    for (const m of matches(new RegExp(`(?<![\\w-])text-(${names})(?![\\w-])`, "g"), text)) {
+      out.push({ index: base + m.index, rule: "font-size", message: `${m[0]}: ${ctx.smallText.get(m[1])}` });
+    }
+  }
   for (const { re, check, bare: needsBare } of CLASS_RULES) {
     if (needsBare && !bare) continue;
     for (const m of matches(re, text)) {
@@ -427,17 +448,22 @@ function classes(text, base, bare) {
  * ("a smooth transition.") has capitals or punctuation.
  */
 function looksLikeClassList(s) {
-  const tokens = s.trim().split(/\s+/);
-  return tokens.length > 1 && tokens.every((t) => /^!?[a-z0-9[\]():/.%_#,'=&>*-]+$/.test(t) && !/[.,]$/.test(t)) && tokens.some((t) => /[a-z]-|:/.test(t));
+  const tokens = classTokens(s);
+  return tokens.length > 1 && tokens.every(isClassToken) && tokens.some((t) => /[a-z]-|:/.test(t));
 }
 
-function scriptChecks(code, strings, stringRanges, raw, component) {
+/** The words of a string, with arbitrary values (`[calc(10px+1px)]`, `(--x)`) folded to one letter: they may hold anything. */
+const classTokens = (s) => s.trim().replace(/\[[^\]\s]*\]/g, "x").replace(/\([^)\s]*\)/g, "x").split(/\s+/).filter(Boolean);
+const isClassToken = (t) => /^!?[a-z0-9@:/.%_*&-]+!?$/.test(t) && !/[.,:]$/.test(t);
+
+function scriptChecks(code, strings, stringRanges, raw, component, ctx) {
   const out = [];
   out.push(...colors(code, strings));
   for (const { start, end } of stringRanges) {
     const s = raw.slice(start, end);
     const list = looksLikeClassList(s);
-    if (list || /^\s*[!a-z0-9[\]():/.%_#,'=&>*-]+\s*$/.test(s)) out.push(...classes(s, start, list));
+    const one = classTokens(s);
+    if (list || (one.length === 1 && isClassToken(one[0]))) out.push(...classes(s, start, list, ctx));
     if (/[a-z-]+\s*:\s*[^;]+;/.test(s)) out.push(...declarations(s, start));
   }
   for (const m of matches(CAMEL_STYLE, code)) {
@@ -479,11 +505,13 @@ const RAW_ELEMENTS = {
   dialog: "Dialog",
 };
 const RAW_INPUTS = { range: "Slider or SliderField", checkbox: "Checkbox, Switch or SwitchField", radio: "RadioGroup", color: "ColorPicker" };
-const TEXT_INPUTS = new Set(["text", "number", "search", "email", "password", "url", "tel"]);
+// A plain text field stays allowed: the uses are in-place renames and titles that need the element (focus, select)
+// and a field with a leading icon, which the kit's Input doesn't cover yet. A search field has SearchInput.
+const TEXT_INPUTS = { search: "SearchInput" };
 /** An opening tag's attributes, allowing `>` inside quoted values (`@click="a > b"`). */
 const ATTRS = `(?:[^>"']|"[^"]*"|'[^']*')*`;
 
-function templateChecks(code) {
+function templateChecks(code, ctx) {
   const out = [];
   out.push(...colors(code, slotFree(code)));
   for (const m of matches(/<(button|select|table|details|textarea|progress|dialog)(?=[\s>/])/g, code)) {
@@ -492,7 +520,7 @@ function templateChecks(code) {
   for (const m of matches(new RegExp(`<input\\b(${ATTRS})>`, "g"), code)) {
     if (/(?:^|\s)(?::|v-bind:)type\s*=/.test(m[1])) continue;
     const type = /(?:^|\s)type\s*=\s*["']?([\w-]+)/.exec(m[1])?.[1]?.toLowerCase() ?? "text";
-    const kit = RAW_INPUTS[type] ?? (TEXT_INPUTS.has(type) ? "Input" : null);
+    const kit = RAW_INPUTS[type] ?? TEXT_INPUTS[type] ?? null;
     if (kit) out.push({ index: m.index, rule: "kit-control", message: `raw <input type="${type}">: use ${kit}` });
   }
   for (const m of matches(new RegExp(`<Button\\b(?:[^>"']|"[^"]*"|'[^']*')*?\\s:?aria-pressed\\b`, "g"), code)) {
@@ -501,7 +529,7 @@ function templateChecks(code) {
   for (const m of matches(new RegExp(`<a\\b(?:[^>"']|"[^"]*"|'[^']*')*?\\s:?download\\b`, "g"), code)) out.push({ index: m.index, rule: "file-save", message: "a download link" });
   for (const m of matches(/(?<=\s)(?::|v-bind:)?(?:[\w-]+-)?class\s*=\s*(?:"([^"]*)"|'([^']*)')/g, code)) {
     const value = m[1] ?? m[2];
-    out.push(...classes(value, m.index + m[0].length - value.length - 1, true));
+    out.push(...classes(value, m.index + m[0].length - value.length - 1, true, ctx));
   }
   for (const m of matches(/(?<=\s)style\s*=\s*(?:"([^"]*)"|'([^']*)')/g, code)) {
     const value = m[1] ?? m[2];
@@ -529,11 +557,11 @@ function slotFree(code) {
   return code.replace(new RegExp(`<template\\b${ATTRS}>`, "g"), (tag) => tag.replace(/(\s)#[\w-]+/g, (s, space) => space + " ".repeat(s.length - 1)));
 }
 
-function cssChecks(code) {
+function cssChecks(code, ctx) {
   const out = [];
   out.push(...colors(code));
   out.push(...declarations(code));
-  for (const m of matches(/@apply\s+([^;}]+)/g, code)) out.push(...classes(m[1], m.index + m[0].length - m[1].length, true));
+  for (const m of matches(/@apply\s+([^;}]+)/g, code)) out.push(...classes(m[1], m.index + m[0].length - m[1].length, true, ctx));
   const vars = new RegExp(`var\\(\\s*--color-(?:(?:${PALETTE})-(?:50|[1-9]00|950)|white|black)\\b`, "g");
   for (const m of matches(vars, code)) out.push({ index: m.index, rule: "palette", message: m[0].replace(/^var\(\s*/, "") });
   return out;
@@ -557,12 +585,12 @@ function lineIndex(text) {
   };
 }
 
-/** Reads `rules-allow: <rule>[,<rule>…] <reason>` from a comment. */
+/** Reads `rules-allow: <rule>[,<rule>…] <reason>` (one line) or `rules-allow-file: …` (the whole file) from a comment. */
 export function parseAllow(comment) {
   const body = comment.replace(/^\s*(?:\/\/+|\/\*+|<!--)/, "").replace(/(?:\*\/|-->)\s*$/, "").replace(/^\s*\*\s?/gm, "");
-  const m = /rules-allow:\s*([\w-]+(?:\s*,\s*[\w-]+)*)\s*([\s\S]*)$/.exec(body);
+  const m = /rules-allow(-file)?:\s*([\w-]+(?:\s*,\s*[\w-]+)*)\s*([\s\S]*)$/.exec(body);
   if (!m) return null;
-  return { rules: m[1].split(",").map((r) => r.trim()), reason: m[2].trim() };
+  return { rules: m[2].split(",").map((r) => r.trim()), reason: m[3].trim(), file: Boolean(m[1]) };
 }
 
 // ── One file, one module ──────────────────────────────────────────────────────────────────────────────────────
@@ -571,14 +599,15 @@ export function parseAllow(comment) {
  * The breaks in one source file: [{ file, line, rule, message, text }], with allowed ones left out and problems
  * with allow comments added (rule "rules-allow"). `file` is the path shown and kept in the baseline.
  */
-export function checkFile(file, text) {
-  return analyse(file, text).findings;
+export function checkFile(file, text, ctx = {}) {
+  return analyse(file, text, ctx).findings;
 }
 
-function analyse(file, text) {
+function analyse(file, text, ctx = {}) {
   const lineOf = lineIndex(text);
   const lines = text.split("\n");
   const allowed = new Map();
+  const fileAllowed = new Set();
   const problems = [];
   const raw = [];
   const allComments = [];
@@ -592,9 +621,14 @@ function analyse(file, text) {
       const first = lineOf(comment.start);
       const last = lineOf(Math.max(comment.start, comment.end - 1));
       const unknown = allow.rules.filter((rule) => !(rule in RULES));
+      const form = allow.file ? "rules-allow-file" : "rules-allow";
       if (unknown.length) problems.push({ line: first, message: `unknown rule ${unknown.join(", ")} (rules: ${Object.keys(RULES).join(", ")})` });
-      else if (!allow.reason) problems.push({ line: first, message: `say why: rules-allow: ${allow.rules.join(", ")} <reason>` });
+      else if (!allow.reason) problems.push({ line: first, message: `say why: ${form}: ${allow.rules.join(", ")} <reason>` });
       if (unknown.length || !allow.reason) continue;
+      if (allow.file) {
+        for (const rule of allow.rules) fileAllowed.add(rule);
+        continue;
+      }
       const covered = [];
       for (let line = first; line <= last; line++) covered.push(line);
       if (!code.split("\n")[last - 1]?.trim()) covered.push(last + 1);
@@ -606,10 +640,12 @@ function analyse(file, text) {
     }
     // A page's entry script (overlay.ts, main.ts) finds its root by id; components and composables use refs.
     const component = file.endsWith(".vue") || (/from\s+["']vue["']/.test(code) && !/\bcreateApp\s*\(/.test(code));
-    if (part.kind === "script") raw.push(...scriptChecks(code, only(code, lexed.strings), lexed.strings, code, component));
-    else if (part.kind === "css") raw.push(...cssChecks(code));
-    else raw.push(...templateChecks(code));
+    if (part.kind === "script") raw.push(...scriptChecks(code, only(code, lexed.strings), lexed.strings, code, component, ctx));
+    else if (part.kind === "css") raw.push(...cssChecks(code, ctx));
+    else raw.push(...templateChecks(code, ctx));
   }
+  const catalog = isCatalog(file, text);
+  const isAllowed = (line, rule) => fileAllowed.has(rule) || Boolean(allowed.get(line)?.has(rule));
   const seen = new Set();
   const findings = [];
   for (const hit of raw.sort((a, b) => a.index - b.index)) {
@@ -617,11 +653,13 @@ function analyse(file, text) {
     if (seen.has(key)) continue;
     seen.add(key);
     const line = lineOf(hit.index);
-    if (allowed.get(line)?.has(hit.rule)) continue;
+    if (isAllowed(line, hit.rule) || (catalog && CATALOG_SKIP.has(hit.rule))) continue;
     findings.push(finding(file, lines, line, hit.rule, hit.message));
   }
   for (const p of problems) findings.push(finding(file, lines, p.line, ALLOW_RULE, p.message));
-  return { file, findings, allowed, lines, text, code: blank(text, allComments) };
+  const code = blank(text, allComments);
+  const component = file.endsWith(".vue") || (/from\s+["']vue["']/.test(code) && !/\bcreateApp\s*\(/.test(code));
+  return { file, findings, isAllowed, lines, text, code, component };
 }
 
 /**
@@ -636,6 +674,53 @@ function finding(file, lines, line, rule, message) {
   return { file, line, rule, message, text: text.slice(0, 300) };
 }
 
+const WINDOW_KEYS =
+  /(?:(?<![\w$.])|\b(?:window|document|globalThis|self)\s*\.\s*)addEventListener\s*\(\s*["'`]key(?:down|up|press)["'`]|\b(?:window|document)\s*\.\s*onkey(?:down|up|press)\s*=(?!=)|(?<![\w$.])useEventListener\s*\(\s*(?:(?:window|document)\s*,\s*)?["'`]key(?:down|up|press)["'`]|(?<![\w$.])onKeyStroke\s*\(/g;
+
+/** The scripts the module's pages load (`<script type="module" src="./main.ts">`), as file paths. */
+function entryScripts(pages) {
+  const entries = new Set();
+  for (const page of pages) {
+    for (const m of matches(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/g, page.text)) {
+      if (!/^(?:[a-z]+:)?\/\//i.test(m[1])) entries.add(path.posix.normalize(path.posix.join(path.posix.dirname(page.file), m[1].replace(/^\//, ""))));
+    }
+  }
+  return entries;
+}
+
+/** The components the module's entry scripts mount (createApp(App), createApp({ render: () => h(App) })), as file paths. */
+function pageRoots(analysed) {
+  const roots = new Set();
+  for (const a of analysed) {
+    for (const m of matches(/\bcreateApp\s*\(/g, a.code)) {
+      const args = argsAt(a.code, m.index + m[0].length - 1);
+      for (const id of new Set(args.match(/[A-Za-z_$][\w$]*/g) ?? [])) {
+        const from = new RegExp(`import\\s+${id.replace(/\$/g, "\\$")}\\s+from\\s+["']([^"']+\\.vue)["']`).exec(a.code);
+        if (from) roots.add(path.posix.normalize(path.posix.join(path.posix.dirname(a.file), from[1])));
+      }
+    }
+  }
+  return roots;
+}
+
+/** The module's own text tokens (`--text-tiny: 10px` in its CSS) that are under 12 px or between the steps: name → why. */
+function smallTextTokens(sources) {
+  const small = new Map();
+  for (const { file, text } of sources) {
+    if (!file.endsWith(".css") && !file.endsWith(".vue")) continue;
+    for (const part of regions(file, text)) {
+      if (part.kind !== "css") continue;
+      const code = blank(part.text, lexCss(part.text).comments);
+      for (const m of matches(/--text-([\w-]+?)\s*:\s*(\d*\.?\d+)(px|rem|pt)\s*[;}]/g, code)) {
+        if (m[1].includes("--")) continue;
+        const problem = sizeProblem(pixels(m[2], m[3]));
+        if (problem) small.set(m[1], problem);
+      }
+    }
+  }
+  return small;
+}
+
 const DELAY = /(?<![\w$.])(setTimeout|debounce|useDebounceFn|watchDebounced|throttle|useThrottleFn|requestIdleCallback)\s*\(/g;
 /** A save inside a timer's arguments: a call to (or a callback named) save…/…Save…/persist/write, or a store write. */
 const SAVES = /(?<![\w$])\w*(?:[sS]ave|[pP]ersist|[wW]rite)\w*\s*[(,)]|\.setState\s*\(|storage(?:\.\w+)*\.set\s*\(/;
@@ -643,12 +728,15 @@ const SAVES = /(?<![\w$])\w*(?:[sS]ave|[pP]ersist|[wW]rite)\w*\s*[(,)]|\.setStat
 /**
  * The breaks in one module: every file's, plus the rules about the module as a whole (a delayed save needs an
  * onSuspend flush, panel state is read back, ZoomPane views are flushed, the catalogs are tested).
- * `files`: [{ file, text }] of the module's src, tests included (they only count for checkCatalogs).
+ * `files`: [{ file, text }] of the module's src, tests included (they only count for checkCatalogs), and its pages
+ * (`*.html`, which name the entry scripts).
  */
 export function checkModule(files) {
-  const sources = files.filter((f) => !SKIP.test(f.file));
+  const pages = files.filter((f) => f.file.endsWith(".html"));
+  const sources = files.filter((f) => SOURCE.test(f.file) && !SKIP.test(f.file));
   const tests = files.filter((f) => SKIP.test(f.file) && !f.file.endsWith(".d.ts"));
-  const analysed = sources.map((f) => analyse(f.file, f.text));
+  const ctx = { smallText: smallTextTokens(sources) };
+  const analysed = sources.map((f) => analyse(f.file, f.text, ctx));
   const findings = analysed.flatMap((a) => a.findings);
   const all = analysed.map((a) => a.code).join("\n");
   const has = (re) => re.test(all);
@@ -685,8 +773,23 @@ export function checkModule(files) {
   if (has(/\b(?:connectModule|bootstrapModule)\s*\(/) && !tests.some((t) => /\bcheckCatalogs\s*\(/.test(t.text))) {
     for (const a of analysed) firstIn(a, /\b(?:connectModule|bootstrapModule)\s*\(/g, "catalogs", "no test runs checkCatalogs on the texts");
   }
+  // Key listeners on the whole window, in components and the code they share. A page's entry script (the one its HTML
+  // loads, or one that calls createApp) and the component it mounts (App.vue: there, with handleUndoKey, is where the
+  // rules want the page's keydown) run once per page, so they may.
+  const roots = pageRoots(analysed);
+  const entries = entryScripts(pages);
+  for (const a of analysed) {
+    // Without pages to go by (a module laid out otherwise), a script counts when it is a Vue composable.
+    const shared = pages.length ? !a.file.endsWith(".css") && !entries.has(a.file) && !/\bcreateApp\s*\(/.test(a.code) : a.component;
+    if (!shared || roots.has(a.file)) continue;
+    const lineOf = lineIndex(a.text);
+    for (const m of matches(WINDOW_KEYS, a.code)) {
+      if (m[0].startsWith("onKeyStroke") && /\btarget\s*:/.test(argsAt(a.code, m.index + m[0].indexOf("(")))) continue;
+      extra.push({ a, line: lineOf(m.index), rule: "window-keys", message: "a key listener on the whole window" });
+    }
+  }
   for (const { a, line, rule, message } of extra) {
-    if (a.allowed.get(line)?.has(rule)) continue;
+    if (a.isAllowed(line, rule)) continue;
     findings.push(finding(a.file, a.lines, line, rule, message));
   }
   return findings.sort((x, y) => (x.file === y.file ? x.line - y.line : x.file < y.file ? -1 : 1));
@@ -720,7 +823,7 @@ function sourceFiles(dir) {
       if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
       const full = path.join(folder, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (SOURCE.test(entry.name)) out.push(full);
+      else if (SOURCE.test(entry.name) || entry.name.endsWith(".html")) out.push(full);
     }
   };
   if (existsSync(dir)) walk(dir);

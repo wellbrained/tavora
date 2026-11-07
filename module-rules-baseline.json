@@ -104,6 +104,9 @@
     "modules/notes/src/ImageLightbox.vue": {
       "palette": {
         "class=\"flex h-full max-h-none w-full max-w-none items-center justify-center border-0 bg-black/80 p-4 sm:max-w-none\"": 1
+      },
+      "window-keys": {
+        "onMounted(() => addEventListener(\"keydown\", onKey, true));": 1
       }
     },
     "modules/notes/src/LinkPopover.vue": {
@@ -121,13 +124,17 @@
       },
       "kit-control": {
         "<Button v-else variant=\"ghost\" size=\"icon-sm\"": 1,
-        "<Button v-for=\"tool in group\" :key=\"tool.label\"": 1,
-        "<input v-if=\"noteId !== SCRATCHPAD_ID\" ref=\"titleInput\"": 1
+        "<Button v-for=\"tool in group\" :key=\"tool.label\"": 1
       },
       "radius": {
         "border-radius: 3px;": 1,
         "border-radius: 4px;": 1,
         "border-radius: 6px;": 2
+      },
+      "window-keys": {
+        "addEventListener(\"keydown\", onLinkKey, true);": 1,
+        "addEventListener(\"keydown\", onModifierKey);": 1,
+        "addEventListener(\"keyup\", onModifierKey);": 1
       }
     },
     "modules/notes/src/NoteList.vue": {
@@ -148,8 +155,7 @@
         "class=\"bg-background border-ring placeholder:text-muted-foreground h-6 w-full min-w-0 rounded-sm border px-1 text-sm font-medium outline-none\"": 1
       },
       "kit-control": {
-        "<button v-else type=\"button\" class=\"flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left\"": 1,
-        "<input ref=\"input\" v-model=\"draft\" type=\"text\"": 1
+        "<button v-else type=\"button\" class=\"flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left\"": 1
       }
     },
     "modules/pdf-viewer/src/PdfPage.vue": {
@@ -208,9 +214,6 @@
       "color": {
         "context.fillStyle = \"rgb(0 0 0 / 0.6)\";": 1
       },
-      "font-family": {
-        "context.font = \"12px sans-serif\";": 1
-      },
       "view-flush": {
         "<TileMap ref=\"map\" class=\"h-96\" :source=\"source\" :pins=\"pins\" :selected=\"selected\" :highlight=\"highlightEggs ? eggs : null\" persist-key=\"playground-island\" whole-label=\"Show the whole island\" label=\"Made-up island\" @select=\"selected = $event.id\">": 1
       }
@@ -252,29 +255,9 @@
         "<button v-for=\"(height, index) in bars\" :key=\"index\" class=\"bg-primary/30 hover:bg-primary focus-visible:bg-primary w-6 rounded-t-sm\" :style=\"{ height: height + '%' }\" :aria-label=\"'Day ' + (index + 1)\" v-bind=\"tipFor('chart')\" />": 1
       }
     },
-    "modules/playground/src/examples/zoom/BoxTooltip.vue": {
-      "font-family": {
-        "context.font = \"14px sans-serif\";": 1
-      }
-    },
     "modules/playground/src/examples/zoom/PersistView.vue": {
       "view-flush": {
         "<ZoomPane class=\"h-64\" persist-key=\"playground-line\" label=\"Remembering line\">": 1
-      }
-    },
-    "modules/playground/src/examples/zoom/ViewOnly.vue": {
-      "font-family": {
-        "context.font = \"14px sans-serif\";": 1
-      }
-    },
-    "modules/playground/src/locales.ts": {
-      "color": {
-        "\"ex.colours.DoDont.rule\": \"Kein Hex, rgb() oder benannte Farben, keine Tailwind-Palettenfarben (neutral-500, white, black), keine Hex-Fallbacks wie var(--warning, #f5c518).\",": 1,
-        "\"ex.colours.DoDont.rule\": \"No hex, rgb() or named colours, no Tailwind palette colours (neutral-500, white, black), no hex fallbacks such as var(--warning, #f5c518).\",": 1
-      },
-      "color-fallback": {
-        "\"ex.colours.DoDont.rule\": \"Kein Hex, rgb() oder benannte Farben, keine Tailwind-Palettenfarben (neutral-500, white, black), keine Hex-Fallbacks wie var(--warning, #f5c518).\",": 1,
-        "\"ex.colours.DoDont.rule\": \"No hex, rgb() or named colours, no Tailwind palette colours (neutral-500, white, black), no hex fallbacks such as var(--warning, #f5c518).\",": 1
       }
     },
     "modules/system-monitor/src/App.vue": {
@@ -322,9 +305,6 @@
     "modules/todos/src/AddInput.vue": {
       "focus-ring": {
         "'placeholder:text-muted-foreground focus-visible:border-ring h-8 w-full min-w-0 rounded-md border bg-transparent pr-2 text-sm outline-none',": 1
-      },
-      "kit-control": {
-        "<input ref=\"input\" v-model=\"value\" :placeholder=\"placeholder\"": 1
       }
     },
     "modules/todos/src/GroupSection.vue": {
@@ -333,8 +313,7 @@
       },
       "kit-control": {
         "<button type=\"button\" :class=\"cn('text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-40 group-hover/header:opacity-100 focus-visible:opacity-100', menuOpen && 'opacity-100')\"": 1,
-        "<button type=\"button\" class=\"text-muted-foreground hover:text-foreground flex size-6 flex-none items-center justify-center rounded-md\"": 1,
-        "<input v-if=\"renaming\" ref=\"nameInput\" :value=\"group.name\"": 1
+        "<button type=\"button\" class=\"text-muted-foreground hover:text-foreground flex size-6 flex-none items-center justify-center rounded-md\"": 1
       },
       "motion": {
         "class=\"absolute bottom-[-1px] left-0 h-px bg-[var(--tint,var(--primary))] transition-[width] duration-300 motion-reduce:transition-none\"": 2
@@ -446,6 +425,11 @@
       },
       "z-index": {
         "<div v-if=\"spots.length > 0\" :class=\"LOCKS_CLASS\" class=\"pointer-events-none absolute inset-0 z-[2] overflow-hidden\">": 1
+      }
+    },
+    "modules/whiteboard/src/boardSession.ts": {
+      "window-keys": {
+        "addEventListener(\"keydown\", copyKey, true);": 1
       }
     },
     "modules/whiteboard/src/boards.ts": {

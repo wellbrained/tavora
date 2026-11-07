@@ -2,11 +2,12 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { BASELINE_FILE, RULES, checkFile, checkModule, compareBaseline, findModules, lexScript, main, parseAllow, updatedBaseline } from "./check-modules.mjs";
+import { BASELINE_FILE, RULES, checkFile, checkModule, compareBaseline, findModules, isCatalog, lexScript, main, parseAllow, updatedBaseline } from "./check-modules.mjs";
 
 type Finding = { file: string; line: number; rule: string; message: string; text: string };
 
-const rulesIn = (file: string, text: string) => (checkFile(file, text) as Finding[]).map((f) => f.rule);
+/** The rules a file breaks, as the one file of a module (so the module-wide window-keys check runs too). */
+const rulesIn = (file: string, text: string) => (checkModule([{ file, text }]) as Finding[]).map((f) => f.rule);
 const vue = (template: string, script = "", style = "") =>
   `<script setup lang="ts">\n${script}\n</script>\n\n<template>\n${template}\n</template>\n${style ? `\n<style scoped>\n${style}\n</style>\n` : ""}`;
 
@@ -63,6 +64,8 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
       ["a.vue", vue('<div :class="{ \'hover:bg-black/50\': open }">x</div>')],
       ["a.vue", vue('<div class="border-red-500">x</div>')],
       ["a.ts", 'const tone = "flex text-gray-500";'],
+      ["a.ts", 'const tone = "text-[calc(10px+1px)] hover:text-red-500";'],
+      ["a.vue", vue('<div class="@max-[279px]:hidden [&_input]:bg-background! bg-white">x</div>')],
       ["a.css", ".x { @apply bg-zinc-900; }"],
       ["a.css", ".x { color: var(--color-red-500); }"],
     ],
@@ -77,6 +80,7 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
       ["a.css", '.x { font-family: "Inter Variable", system-ui, sans-serif; }'],
       ["a.css", ".x { font-family: monospace; }"],
       ["a.css", ".x { font: 600 13px Georgia, serif; }"],
+      ["a.css", '.x { font: 12px/1 "Segoe UI", sans-serif; }'],
       ["a.css", '.x { font-family: var(--font, "Inter Variable"), sans-serif; }'],
       ["a.ts", 'const s = { fontFamily: "Arial" };'],
       ["a.ts", 'ctx.font = "12px Inter";'],
@@ -86,6 +90,8 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
       ["a.css", ".x { font-family: var(--font-sans); }"],
       ["a.css", ".x { font-family: var(--note-font, inherit); }"],
       ["a.css", ".x { font-family: var(--font-mono), ui-monospace, monospace; }"],
+      ["a.css", ".x { font: 11px/1 sans-serif; } .y { font: 600 12px system-ui; } .z { font: 13px inherit; }"],
+      ["a.ts", 'ctx.font = "12px monospace";'],
       ["a.css", "@font-face { font-family: 'Lora Variable'; src: url(x.woff2); }"],
       ["a.ts", "const el = { fontFamily: 2 };"],
       ["a.ts", "ctx.font = `${weight} ${size}px ${family}`;"],
@@ -103,6 +109,7 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
       ["a.vue", vue('<span class="text-[0.7rem]">x</span>')],
       ["a.ts", 'const s = { fontSize: "10px" };'],
       ["a.ts", 'ctx.font = "9px sans-serif";'],
+      ["a.css", ".x { font: 11px/1 sans-serif; }"],
     ],
     miss: [
       ["a.css", ".x { font-size: 12px; } .y { font-size: 0.875rem; } .z { font-size: 20px; } .w { font-size: 34px; }"],
@@ -145,13 +152,15 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
       ["a.vue", vue("<details><summary>More</summary></details>")],
       ["a.vue", vue('<input type="range" min="0" max="10" />')],
       ["a.vue", vue('<input type="checkbox" v-model="on" />')],
-      ["a.vue", vue('<input v-model="name" @keydown.enter="a > b && save()" />')],
+      ["a.vue", vue('<input v-model="query" type="search" @keydown.enter="a > b && go()" />')],
       ["a.vue", vue('<textarea v-model="body" />')],
       ["a.vue", vue('<Button variant="ghost" :aria-pressed="bold">B</Button>')],
     ],
     miss: [
       ["a.vue", vue('<Button variant="ghost" @click="go">Go</Button><Select v-model="x" /><Table /><Collapsible />')],
       ["a.vue", vue('<input type="file" hidden @change="pick" />')],
+      ["a.vue", vue('<input ref="rename" v-model="draft" type="text" class="h-6 border-ring" />')],
+      ["a.vue", vue('<input ref="title" v-model="title" />')],
       ["a.vue", vue('<input :type="kind" />')],
       ["a.vue", vue("<Toggle :pressed=\"bold\">B</Toggle>")],
       ["a.ts", 'const html = "a <button> in a string of a .ts file";'],
@@ -249,6 +258,23 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
       ["a.ts", "const showMenu = (request: MenuOptions) => sdk.value?.ui.showMenu(request);"],
     ],
   },
+  "window-keys": {
+    hit: [
+      ["Board.vue", vue("<div />", 'onMounted(() => window.addEventListener("keydown", onKey));')],
+      ["Board.vue", vue("<div />", "onMounted(() => addEventListener('keyup', onKey, true));")],
+      ["Board.vue", vue("<div />", 'document.addEventListener("keydown", escape);')],
+      ["use-keys.ts", 'import { onMounted } from "vue";\nonMounted(() => window.addEventListener("keypress", onKey));'],
+      ["Board.vue", vue("<div />", 'useEventListener(window, "keydown", onKey);')],
+      ["Board.vue", vue("<div />", 'onKeyStroke("Escape", close);')],
+    ],
+    miss: [
+      ["Board.vue", vue('<div ref="root" @keydown="onKey" />', 'root.value?.addEventListener("keydown", onKey);')],
+      ["Board.vue", vue("<div />", 'window.addEventListener("resize", onResize);')],
+      ["Board.vue", vue("<div />", 'onKeyStroke("Escape", close, { target: root });')],
+      ["overlay.ts", 'addEventListener("keydown", onKey);'],
+      ["main.ts", 'import { createApp } from "vue";\ncreateApp(App).mount("#app");\naddEventListener("keydown", onKey);'],
+    ],
+  },
   "file-save": {
     hit: [
       ["a.ts", "const a = document.createElement('a');\na.href = url;\na.download = 'board.png';\na.click();"],
@@ -263,7 +289,7 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
 
 /** The line of a case's first hit, for putting an allow comment before it. */
 function withAllow(file: string, source: string, rule: string): string {
-  const hits = checkFile(file, source) as Finding[];
+  const hits = checkModule([{ file, text: source }]) as Finding[];
   const line = hits.find((h) => h.rule === rule)!.line;
   const lines = source.split("\n");
   const inTemplate = file.endsWith(".vue") && lines.slice(0, line - 1).some((l) => l.startsWith("<template>")) && !lines.slice(0, line - 1).some((l) => l.startsWith("</template>"));
@@ -333,15 +359,57 @@ describe("allow comments", () => {
     expect(rulesIn("a.ts", "// rules-allow: colour game art\nconst a = 1;")).toEqual(["rules-allow"]);
   });
 
+  it("rules-allow-file covers the whole file for the rules it names", () => {
+    const palette = '// rules-allow-file: color rarity colours from the game\nexport const RARITY = { epic: "#b67cff", legendary: "#ff8000" };\nconst size = { fontSize: "10px" };';
+    expect(rulesIn("rarity.ts", palette)).toEqual(["font-size"]);
+    expect(rulesIn("Page.vue", vue('<div class="bg-white">x</div>\n<p class="text-black">y</p>', "", "/* rules-allow-file: palette the paper of a PDF page */"))).toEqual([]);
+  });
+
+  it("rules-allow-file needs a reason and can't be faked by a string", () => {
+    expect(checkFile("a.ts", '// rules-allow-file: color\nconst a = "#fff";').map((f: Finding) => [f.rule, f.message])).toEqual([
+      ["color", "#fff"],
+      ["rules-allow", "say why: rules-allow-file: color <reason>"],
+    ]);
+    expect(rulesIn("a.ts", 'const fake = "// rules-allow-file: color nope";\nconst a = "#fff";')).toEqual(["color"]);
+    expect(rulesIn("a.ts", 'const fake = `/* rules-allow-file: color nope */`;\nconst a = "#fff";')).toEqual(["color"]);
+  });
+
+  it("rules-allow-file also covers the module rules anchored in that file", () => {
+    const delayed = { file: "m/src/App.vue", text: vue("<div />", "// rules-allow-file: suspend-flush the store flushes it\nsetTimeout(save, 500);") };
+    expect(checkModule([delayed])).toEqual([]);
+  });
+
   it("are read in every comment form", () => {
-    expect(parseAllow("// rules-allow: color game art")).toEqual({ rules: ["color"], reason: "game art" });
-    expect(parseAllow("/* rules-allow: color, radius canvas drawing */")).toEqual({ rules: ["color", "radius"], reason: "canvas drawing" });
-    expect(parseAllow("<!-- rules-allow: kit-control the kit has no tree yet -->")).toEqual({ rules: ["kit-control"], reason: "the kit has no tree yet" });
+    expect(parseAllow("// rules-allow: color game art")).toEqual({ rules: ["color"], reason: "game art", file: false });
+    expect(parseAllow("/* rules-allow: color, radius canvas drawing */")).toEqual({ rules: ["color", "radius"], reason: "canvas drawing", file: false });
+    expect(parseAllow("<!-- rules-allow: kit-control the kit has no tree yet -->")).toEqual({ rules: ["kit-control"], reason: "the kit has no tree yet", file: false });
     expect(parseAllow("// a plain comment")).toBeNull();
+    expect(parseAllow("/* rules-allow-file: color, palette rarity colours */")).toEqual({ rules: ["color", "palette"], reason: "rarity colours", file: true });
+  });
+});
+
+describe("text catalogs", () => {
+  it("are told by their name, their folder or their en and de exports", () => {
+    expect(["m/src/locales.ts", "m/src/builds/locales.ts", "m/src/i18n.ts", "m/src/texts/index.ts", "m/src/i18n/de.ts", "m/src/texts.ts"].every((f) => isCatalog(f))).toBe(true);
+    expect(isCatalog("m/src/strings.ts", "export const en = {};\nexport const de = {};")).toBe(true);
+    expect(isCatalog("m/src/text.ts", "export function line() {}")).toBe(false);
+    expect(isCatalog("m/src/App.vue")).toBe(false);
+  });
+
+  it("skip the colour and motion rules, whose patterns a sentence can look like", () => {
+    const texts = 'export const en = {\n  pick: "Pick a color like #ff8800",\n  items: "Items #123",\n  hint: "Use var(--warning, #f5c518) and ease-in.",\n};';
+    expect(rulesIn("m/src/locales.ts", texts)).toEqual([]);
+    expect(rulesIn("m/src/labels.ts", texts)).toContain("color");
   });
 });
 
 describe("lexScript", () => {
+  it("reads a class list with an arbitrary value in it as a class list", () => {
+    const hits = checkFile("a.ts", 'const c = "text-[calc(10px+1px)] hover:text-red-500 dark:bg-slate-900";') as Finding[];
+    expect(hits.map((h) => h.message)).toEqual(["hover:text-red-500".slice(6), "dark:bg-slate-900".slice(5)]);
+    expect(checkFile("a.ts", 'const c = "Pick text-red-500 if you like.";')).toEqual([]);
+  });
+
   it("tells comments from strings, template literals and regular expressions", () => {
     const src = 'const a = "// not a comment"; const r = /\\/\\/[a-z]/g; const t = `x ${"/*"} y`; // real\n/* block */';
     const { comments } = lexScript(src);
@@ -384,6 +452,32 @@ describe("module rules", () => {
     const connect = file("main.ts", 'import { de, en } from "./locales";\nconnectModule({ texts: { en, de } });');
     expect(rules([connect])).toEqual(["catalogs@main.ts:2"]);
     expect(rules([connect, file("locales.test.ts", "it('matches', () => checkCatalogs(en, de));")])).toEqual([]);
+  });
+
+  it("font-size: the module's own text tokens under 12 px count where they are used", () => {
+    const theme = file("style.css", "@theme {\n  --text-tiny: 10px;\n  --text-tiny--line-height: 14px;\n  --text-big: 24px;\n}");
+    const use = file("Row.vue", vue('<span class="text-tiny">x</span>\n<span class="text-big text-tinyish">y</span>', 'const c = "flex text-tiny";'));
+    expect(rules([theme, use])).toEqual(["font-size@Row.vue:2", "font-size@Row.vue:6", "font-size@style.css:2"]);
+    expect(checkModule([theme, use]).find((f: Finding) => f.file.endsWith("Row.vue"))!.message).toBe("text-tiny: 10 px is under 12 px");
+    expect(rules([file("Row.vue", vue('<span class="text-tiny">x</span>'))])).toEqual([]);
+  });
+
+  it("window-keys: the page's entry script and the component it mounts may listen on the window", () => {
+    const main = file("main.ts", 'import { createApp } from "vue";\nimport App from "./App.vue";\ncreateApp(App).mount("#app");');
+    const root = file("App.vue", vue("<div />", "function onKey(event: KeyboardEvent) {\n  if (handleUndoKey(event)) return;\n}\nonMounted(() => addEventListener(\"keydown\", onKey));"));
+    const board = file("ui/Board.vue", vue("<div />", 'onMounted(() => window.addEventListener("keydown", keydown));'));
+    expect(rules([main, root, board])).toEqual(["window-keys@ui/Board.vue:2"]);
+    const rendered = file("overlay.ts", 'import { createApp, h } from "vue";\nimport Card from "./ui/Board.vue";\ncreateApp({ render: () => h(Card) }).mount("#app");');
+    expect(rules([rendered, board])).toEqual([]);
+    expect(rules([root])).toEqual(["window-keys@App.vue:5"]);
+  });
+
+  it("window-keys: with pages, every script but their entries counts, Vue or not", () => {
+    const pages = [file("index.html", '<script type="module" src="./main.ts"></script>'), file("overlay.html", '<script type="module" src="/overlay.ts"></script>')];
+    const main = file("main.ts", 'import { createApp } from "vue";\nimport App from "./App.vue";\ncreateApp(App).mount("#app");');
+    const overlay = file("overlay.ts", 'addEventListener("keydown", onKey);');
+    const session = file("boardSession.ts", 'import { exportToBlob } from "@excalidraw/excalidraw";\naddEventListener("keydown", copyKey, true);');
+    expect(rules([...pages, main, overlay, session])).toEqual(["window-keys@boardSession.ts:2"]);
   });
 
   it("leaves tests out of the per-file rules", () => {

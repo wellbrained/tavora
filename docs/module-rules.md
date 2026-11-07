@@ -300,11 +300,14 @@ Before you say it is done, check each item and name in your summary any you coul
 
 `pnpm check:modules` reads every module's source (`src/**/*.vue`, `.ts`, `.tsx`, `.css`, tests left out) and flags what
 this file forbids and a script can see: colour literals and hex fallbacks, palette colours, font names, text sizes and
-weights off the scale, corners of your own, raw controls the kit has, `document.querySelector` in components, your own
-`z-index`, shadows, all caps and focus rings, motion outside the tokens, menus at the pointer and browser downloads. Per
-module it also flags a delayed save without an `onSuspend` and `onDispose` flush, a `persist-key` without
-`flushViewMemory()`, panel state that is never read back, and texts without a `checkCatalogs` test. It runs in CI and in
-`pnpm lint`. In `tavora-modules`, `pnpm check:modules` runs the same script from the `../tavora` checkout.
+weights off the scale (also your own `--text-*` tokens), corners of your own, raw controls the kit has,
+`document.querySelector` in components, your own `z-index`, shadows, all caps and focus rings, motion outside the
+tokens, menus at the pointer and browser downloads. Per module it also flags a delayed save without an `onSuspend` and
+`onDispose` flush, a `persist-key` without `flushViewMemory()`, panel state that is never read back, texts without a
+`checkCatalogs` test, and key listeners on the whole window outside the page's entry script and the component it
+mounts (that is where the page's keydown with `handleUndoKey` goes). Text catalogs (`locales.ts`, `i18n.ts`, `texts/`)
+skip the colour and motion rules, since a sentence like "Items #123" isn't a colour. It runs in CI and in `pnpm lint`.
+In `tavora-modules`, `pnpm check:modules` runs the same script from the `../tavora` checkout.
 
 - **Run it**: `pnpm check:modules` checks `modules/*` (in `tavora-modules`, every module folder); name folders to check
   only those (`pnpm check:modules modules/todos`). Each break is one line: file and line, the rule, what it found and
@@ -316,6 +319,9 @@ module it also flags a delayed save without an `onSuspend` and `onDispose` flush
 - **A real exception** (game art in its own colours, a game's meaningful colours, the paper of a document page, canvas
   drawing) gets a comment with the rule and the reason, on the line or alone on the line before. Several rules are
   separated by commas. Without a reason, or with a rule that doesn't exist, the comment itself fails the check.
+  A file that is the exception as a whole (a game's rarity palette, the paper of a PDF page) takes `rules-allow-file`
+  anywhere in it, in a comment (never in a string), with the same rules and reason; keep it to files where every line
+  is the exception.
 
   ```ts
   // rules-allow: color rarity colours from the game
@@ -327,6 +333,10 @@ module it also flags a delayed save without an `onSuspend` and `onDispose` flush
 
   ```css
   /* rules-allow: color, font-family the paper of a PDF page */
+  ```
+
+  ```ts
+  // rules-allow-file: color rarity colours from the game
   ```
 
 - `--all` lists the known breaks too, `--summary` counts all of them per rule and per module.
