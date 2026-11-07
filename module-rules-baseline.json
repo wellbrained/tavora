@@ -1,0 +1,475 @@
+{
+  "version": 1,
+  "about": "Known breaks of the module rules (tavora docs/module-rules.md). pnpm check:modules fails only on new ones; --update-baseline rewrites this file.",
+  "files": {
+    "modules/calculator/src/App.vue": {
+      "kit-control": {
+        "<Button variant=\"ghost\" size=\"icon-sm\" :class=\"settings.history && 'bg-accent text-accent-foreground'\"": 1
+      }
+    },
+    "modules/clock-counter/src/App.vue": {
+      "dom-query": {
+        "setTimeout(() => (neighbour ? document.querySelector<HTMLElement>(`[data-testid=\"more-${neighbour.id}\"]`) : scroller.value)?.focus(), 60);": 1,
+        "setTimeout(() => document.querySelector<HTMLElement>(focus)?.focus(), 60);": 1
+      },
+      "focus-ring": {
+        "<div ref=\"scroller\" class=\"min-h-0 flex-1 overflow-y-auto p-2 outline-none\" tabindex=\"-1\">": 1
+      },
+      "shadow": {
+        "return drop.value?.id === rowId(row) && (drop.value.after ? \"shadow-[0_2px_0_0_var(--primary)]\" : \"shadow-[0_-2px_0_0_var(--primary)]\");": 2
+      }
+    },
+    "modules/clock-counter/src/ItemCard.vue": {
+      "focus-ring": {
+        "class=\"bg-card rounded-lg border outline-none\"": 1
+      }
+    },
+    "modules/clock-counter/src/active.ts": {
+      "motion": {
+        "export const ROW_FADE = \"transition-[background-color,border-color] duration-(--duration-press) ease-(--ease-out-strong) motion-reduce:transition-none\";": 1
+      }
+    },
+    "modules/clock-counter/src/items.ts": {
+      "color": {
+        "export const COLORS = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#f472b6\", \"#a78bfa\", \"#60a5fa\", \"#2dd4bf\", \"#4ade80\", \"#111111\"] as const;": 10
+      }
+    },
+    "modules/clock-counter/src/overlay-view.css": {
+      "color": {
+        "-webkit-text-stroke: 0.04em rgb(0 0 0 / 0.85);": 1,
+        "text-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.6);": 1
+      },
+      "color-fallback": {
+        "color: var(--color, #fff);": 1,
+        "color: var(--words, var(--color, #fff));": 1
+      },
+      "font-family": {
+        "font-family: \"Inter Variable\", system-ui, sans-serif;": 1,
+        "font-family: \"JetBrains Mono Variable\", ui-monospace, Consolas, monospace;": 1,
+        "font-family: \"Segoe UI\", system-ui, sans-serif;": 1
+      },
+      "font-weight": {
+        "font-weight: 700;": 1
+      },
+      "motion": {
+        "animation: cc-flash 1s steps(2, jump-none) infinite;": 1
+      }
+    },
+    "modules/clock-counter/src/overlay.css": {
+      "color": {
+        "-webkit-text-stroke: 0.06em rgb(0 0 0 / 0.85);": 1,
+        "color: #fff;": 1,
+        "text-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.6);": 1
+      },
+      "color-fallback": {
+        "color: var(--color, #fff);": 1,
+        "color: var(--words, var(--color, #fff));": 1
+      },
+      "font-family": {
+        "font-family: \"Inter Variable\", system-ui, sans-serif;": 1,
+        "font-family: \"JetBrains Mono Variable\", ui-monospace, Consolas, monospace;": 1,
+        "font-family: \"Segoe UI\", system-ui, sans-serif;": 1
+      },
+      "font-weight": {
+        "font-weight: 700;": 1
+      },
+      "motion": {
+        "animation: flash 1s steps(2, jump-none) infinite;": 1
+      }
+    },
+    "modules/clock-counter/src/style.css": {
+      "motion": {
+        "animation: clock-flash 1s steps(2, jump-none) infinite;": 1
+      }
+    },
+    "modules/notes/src/App.vue": {
+      "focus-ring": {
+        "class=\"hover:bg-primary/40 focus-visible:bg-primary/60 absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize touch-none outline-none\"": 1
+      },
+      "z-index": {
+        "class=\"hover:bg-primary/40 focus-visible:bg-primary/60 absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize touch-none outline-none\"": 1
+      }
+    },
+    "modules/notes/src/ImageBar.vue": {
+      "kit-control": {
+        "<Button v-for=\"choice in choices\" :key=\"choice.id\"": 1
+      },
+      "shadow": {
+        "class=\"bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg\"": 1
+      },
+      "z-index": {
+        "class=\"bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg\"": 1
+      }
+    },
+    "modules/notes/src/ImageLightbox.vue": {
+      "palette": {
+        "class=\"flex h-full max-h-none w-full max-w-none items-center justify-center border-0 bg-black/80 p-4 sm:max-w-none\"": 1
+      }
+    },
+    "modules/notes/src/LinkPopover.vue": {
+      "shadow": {
+        "class=\"bg-popover text-popover-foreground fixed z-50 flex max-w-[272px] items-center gap-0.5 rounded-md border py-1 pr-1 pl-2.5 text-xs shadow-lg\"": 1
+      },
+      "z-index": {
+        "class=\"bg-popover text-popover-foreground fixed z-50 flex max-w-[272px] items-center gap-0.5 rounded-md border py-1 pr-1 pl-2.5 text-xs shadow-lg\"": 1
+      }
+    },
+    "modules/notes/src/NoteEditor.vue": {
+      "focus-ring": {
+        "class=\"note-title placeholder:text-muted-foreground mb-3 w-full min-w-0 border-b border-transparent bg-transparent pb-1 text-xl font-semibold outline-none\"": 1,
+        "outline: none;": 1
+      },
+      "kit-control": {
+        "<Button v-else variant=\"ghost\" size=\"icon-sm\"": 1,
+        "<Button v-for=\"tool in group\" :key=\"tool.label\"": 1,
+        "<input v-if=\"noteId !== SCRATCHPAD_ID\" ref=\"titleInput\"": 1
+      },
+      "radius": {
+        "border-radius: 3px;": 1,
+        "border-radius: 4px;": 1,
+        "border-radius: 6px;": 2
+      }
+    },
+    "modules/notes/src/NoteList.vue": {
+      "dom-query": {
+        "setTimeout(() => document.querySelector<HTMLElement>(`[data-testid=\"note-${id}\"] button`)?.focus(), 60);": 1
+      },
+      "kit-control": {
+        "<button type=\"button\" :class=\"cn('hover:bg-accent relative flex size-8 items-center justify-center rounded-md', entry.id === selectedId && 'bg-accent ring-primary ring-1')\"": 1,
+        "<button v-if=\"query\" type=\"button\" class=\"text-muted-foreground hover:text-foreground absolute right-1 rounded-sm p-1\"": 1,
+        "<input v-model=\"query\" type=\"search\" data-testid=\"search\"": 1
+      },
+      "shadow": {
+        "return drop.value?.id === entry.id && (drop.value.after ? \"shadow-[0_2px_0_0_var(--primary)]\" : \"shadow-[0_-2px_0_0_var(--primary)]\");": 2
+      }
+    },
+    "modules/notes/src/NoteRow.vue": {
+      "focus-ring": {
+        "class=\"bg-background border-ring placeholder:text-muted-foreground h-6 w-full min-w-0 rounded-sm border px-1 text-sm font-medium outline-none\"": 1
+      },
+      "kit-control": {
+        "<button v-else type=\"button\" class=\"flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left\"": 1,
+        "<input ref=\"input\" v-model=\"draft\" type=\"text\"": 1
+      }
+    },
+    "modules/pdf-viewer/src/PdfPage.vue": {
+      "palette": {
+        "class=\"ring-border relative isolate mx-auto bg-white ring-1\"": 1
+      }
+    },
+    "modules/pdf-viewer/src/PdfPane.vue": {
+      "focus-ring": {
+        "<div ref=\"root\" class=\"flex h-full min-h-0 flex-col outline-none\" tabindex=\"-1\" data-testid=\"pdf-pane\" @keydown=\"onKey\">": 1
+      }
+    },
+    "modules/pdf-viewer/src/PdfThumbs.vue": {
+      "palette": {
+        "class=\"relative block overflow-hidden bg-white ring-1 ring-border\"": 1
+      }
+    },
+    "modules/pdf-viewer/src/style.css": {
+      "z-index": {
+        "z-index: 1;": 1,
+        "z-index: 2;": 1
+      }
+    },
+    "modules/playground/src/examples/buttons/ToggleButtons.vue": {
+      "kit-control": {
+        "<Button size=\"icon-sm\" variant=\"ghost\" aria-label=\"Bold\" title=\"Bold\" :aria-pressed=\"true\" class=\"bg-secondary\"><Bold :stroke-width=\"1.5\" /></Button>": 1,
+        "<Button size=\"icon-sm\" variant=\"ghost\" aria-label=\"Italic\" title=\"Italic\" :aria-pressed=\"false\"><Italic :stroke-width=\"1.5\" /></Button>": 1
+      }
+    },
+    "modules/playground/src/examples/colour-stars/CustomColour.vue": {
+      "color": {
+        "const SWATCHES = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#60a5fa\", \"#4ade80\", \"#111111\"];": 7,
+        "const colour = ref(\"#60a5fa\");": 1
+      }
+    },
+    "modules/playground/src/examples/colour-stars/Swatches.vue": {
+      "color": {
+        "const SWATCHES = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#60a5fa\", \"#4ade80\", \"#111111\"];": 7,
+        "const colour = ref(\"#60a5fa\");": 1
+      }
+    },
+    "modules/playground/src/examples/colours/DoDont.vue": {
+      "color": {
+        "const DONT = `<div class=\"bg-[#1b1b1b] text-white border-neutral-700 border\">": 1
+      },
+      "color-fallback": {
+        "<p style=\"color: var(--warning, #f5c518)\">Low space</p>": 1
+      }
+    },
+    "modules/playground/src/examples/lists/SelectableList.vue": {
+      "focus-ring": {
+        ":class=\"['group flex h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-sm outline-none', selected === row.id ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60']\"": 1
+      }
+    },
+    "modules/playground/src/examples/map/TileMap.vue": {
+      "color": {
+        "context.fillStyle = \"rgb(0 0 0 / 0.6)\";": 1
+      },
+      "font-family": {
+        "context.font = \"12px sans-serif\";": 1
+      },
+      "view-flush": {
+        "<TileMap ref=\"map\" class=\"h-96\" :source=\"source\" :pins=\"pins\" :selected=\"selected\" :highlight=\"highlightEggs ? eggs : null\" persist-key=\"playground-island\" whole-label=\"Show the whole island\" label=\"Made-up island\" @select=\"selected = $event.id\">": 1
+      }
+    },
+    "modules/playground/src/examples/settings/ModuleSettings.vue": {
+      "color": {
+        "<div class=\"flex w-72 items-center gap-3 rounded-xl py-2.5 pr-4 pl-2.5\" :style=\"{ background: `rgb(0 0 0 / ${look.opacity}%)`, color: look.color }\">": 1,
+        "<span class=\"size-12 flex-none rounded-lg bg-[linear-gradient(135deg,#d4644a,#5b2b6e)]\" />": 2,
+        "const COLORS = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#f472b6\", \"#a78bfa\", \"#60a5fa\", \"#2dd4bf\", \"#4ade80\", \"#000000\"];": 10,
+        "const DEFAULTS = { size: \"m\", bold: true, italic: false, color: \"#ffffff\", opacity: 70, overlay: true, autoplay: false };": 1
+      },
+      "font-weight": {
+        "<Toggle :model-value=\"look.bold\" label=\"Bold\" class=\"font-bold\" @update:model-value=\"set('bold', $event)\">B</Toggle>": 1
+      }
+    },
+    "modules/playground/src/examples/settings/OnePage.vue": {
+      "color": {
+        "const COLORS = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#f472b6\", \"#a78bfa\", \"#60a5fa\", \"#2dd4bf\", \"#4ade80\", \"#000000\"];": 10,
+        "const DEFAULTS = { seconds: true, twentyFour: true, size: \"m\", color: \"#ffffff\", every: \"15\" };": 1
+      }
+    },
+    "modules/playground/src/examples/spacing/Depth.vue": {
+      "shadow": {
+        "<div class=\"bg-popover text-popover-foreground flex h-20 items-center justify-center rounded-md border text-sm shadow-md\">Menu</div>": 1
+      }
+    },
+    "modules/playground/src/examples/toggles/StyleTiles.vue": {
+      "palette": {
+        "<span :class=\"['absolute inset-x-2 rounded-sm bg-black/70', option.value === 'card' ? 'top-2 bottom-2' : option.value === 'bar' ? 'bottom-2 h-2' : 'top-1/2 h-1 -translate-y-1/2 bg-black/40']\" />": 2
+      }
+    },
+    "modules/playground/src/examples/toggles/Toggles.vue": {
+      "font-weight": {
+        "<Toggle v-model=\"bold\" label=\"Bold\" class=\"font-bold\">B</Toggle>": 1
+      }
+    },
+    "modules/playground/src/examples/tooltips/Values.vue": {
+      "kit-control": {
+        "<button v-for=\"(height, index) in bars\" :key=\"index\" class=\"bg-primary/30 hover:bg-primary focus-visible:bg-primary w-6 rounded-t-sm\" :style=\"{ height: height + '%' }\" :aria-label=\"'Day ' + (index + 1)\" v-bind=\"tipFor('chart')\" />": 1
+      }
+    },
+    "modules/playground/src/examples/zoom/BoxTooltip.vue": {
+      "font-family": {
+        "context.font = \"14px sans-serif\";": 1
+      }
+    },
+    "modules/playground/src/examples/zoom/PersistView.vue": {
+      "view-flush": {
+        "<ZoomPane class=\"h-64\" persist-key=\"playground-line\" label=\"Remembering line\">": 1
+      }
+    },
+    "modules/playground/src/examples/zoom/ViewOnly.vue": {
+      "font-family": {
+        "context.font = \"14px sans-serif\";": 1
+      }
+    },
+    "modules/playground/src/locales.ts": {
+      "color": {
+        "\"ex.colours.DoDont.rule\": \"Kein Hex, rgb() oder benannte Farben, keine Tailwind-Palettenfarben (neutral-500, white, black), keine Hex-Fallbacks wie var(--warning, #f5c518).\",": 1,
+        "\"ex.colours.DoDont.rule\": \"No hex, rgb() or named colours, no Tailwind palette colours (neutral-500, white, black), no hex fallbacks such as var(--warning, #f5c518).\",": 1
+      },
+      "color-fallback": {
+        "\"ex.colours.DoDont.rule\": \"Kein Hex, rgb() oder benannte Farben, keine Tailwind-Palettenfarben (neutral-500, white, black), keine Hex-Fallbacks wie var(--warning, #f5c518).\",": 1,
+        "\"ex.colours.DoDont.rule\": \"No hex, rgb() or named colours, no Tailwind palette colours (neutral-500, white, black), no hex fallbacks such as var(--warning, #f5c518).\",": 1
+      }
+    },
+    "modules/system-monitor/src/App.vue": {
+      "all-caps": {
+        "<h2 v-if=\"bothSections\" class=\"text-muted-foreground px-3 pt-1 text-[0.6875rem] font-medium tracking-wide uppercase\" data-testid=\"heading-connection\">{{ t(\"section.connection\") }}</h2>": 1,
+        "<h2 v-if=\"bothSections\" class=\"text-muted-foreground px-3 pt-2 text-[0.6875rem] font-medium tracking-wide uppercase\" data-testid=\"heading-system\">{{ t(\"section.system\") }}</h2>": 1
+      },
+      "font-size": {
+        "<h2 v-if=\"bothSections\" class=\"text-muted-foreground px-3 pt-1 text-[0.6875rem] font-medium tracking-wide uppercase\" data-testid=\"heading-connection\">{{ t(\"section.connection\") }}</h2>": 1,
+        "<h2 v-if=\"bothSections\" class=\"text-muted-foreground px-3 pt-2 text-[0.6875rem] font-medium tracking-wide uppercase\" data-testid=\"heading-system\">{{ t(\"section.system\") }}</h2>": 1
+      }
+    },
+    "modules/system-monitor/src/ConnectionSection.vue": {
+      "all-caps": {
+        "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";": 1
+      },
+      "font-size": {
+        "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";": 1
+      }
+    },
+    "modules/system-monitor/src/MetricCard.vue": {
+      "all-caps": {
+        "<span class=\"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\">{{ title }}</span>": 1
+      },
+      "font-size": {
+        "<span class=\"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\">{{ title }}</span>": 1
+      }
+    },
+    "modules/system-monitor/src/SystemSection.vue": {
+      "all-caps": {
+        "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";": 1
+      },
+      "font-size": {
+        "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";": 1
+      }
+    },
+    "modules/system-monitor/src/TrafficCard.vue": {
+      "all-caps": {
+        "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";": 1
+      },
+      "font-size": {
+        "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";": 1
+      }
+    },
+    "modules/todos/src/AddInput.vue": {
+      "focus-ring": {
+        "'placeholder:text-muted-foreground focus-visible:border-ring h-8 w-full min-w-0 rounded-md border bg-transparent pr-2 text-sm outline-none',": 1
+      },
+      "kit-control": {
+        "<input ref=\"input\" v-model=\"value\" :placeholder=\"placeholder\"": 1
+      }
+    },
+    "modules/todos/src/GroupSection.vue": {
+      "focus-ring": {
+        "class=\"focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-semibold outline-none\"": 1
+      },
+      "kit-control": {
+        "<button type=\"button\" :class=\"cn('text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-40 group-hover/header:opacity-100 focus-visible:opacity-100', menuOpen && 'opacity-100')\"": 1,
+        "<button type=\"button\" class=\"text-muted-foreground hover:text-foreground flex size-6 flex-none items-center justify-center rounded-md\"": 1,
+        "<input v-if=\"renaming\" ref=\"nameInput\" :value=\"group.name\"": 1
+      },
+      "motion": {
+        "class=\"absolute bottom-[-1px] left-0 h-px bg-[var(--tint,var(--primary))] transition-[width] duration-300 motion-reduce:transition-none\"": 2
+      }
+    },
+    "modules/todos/src/Settings.vue": {
+      "font-weight": {
+        "<Toggle :model-value=\"look.bold\" :label=\"t('live.bold')\" class=\"font-bold\" data-testid=\"live-bold\" @update:model-value=\"set('bold', $event)\">B</Toggle>": 1
+      },
+      "palette": {
+        "<p v-if=\"!state.rows.length\" class=\"text-sm text-white/80\">{{ t(\"live.previewEmpty\") }}</p>": 1
+      },
+      "shadow": {
+        "<div class=\"bg-card text-card-foreground w-80 rounded-lg border p-2 shadow-lg\" :style=\"panelStyle\" data-testid=\"panel-preview\">": 1
+      }
+    },
+    "modules/todos/src/TaskRow.vue": {
+      "focus-ring": {
+        "class=\"block field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent px-1 py-1.5 font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words outline-none\"": 1,
+        "class=\"placeholder:text-muted-foreground border-input focus-visible:border-ring field-sizing-content block max-h-60 min-h-20 w-full resize-none rounded-md border bg-transparent px-2 py-1.5 text-sm outline-none\"": 1
+      },
+      "font-size": {
+        "<p class=\"text-muted-foreground mt-1.5 px-0.5 text-[11px]\">{{ t(\"task.descriptionHint\") }}</p>": 1
+      },
+      "kit-control": {
+        "<button type=\"button\" class=\"text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex size-7 items-center justify-center rounded-md opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100\"": 1,
+        "<button v-else type=\"button\" class=\"block w-full cursor-text rounded-sm px-1 py-1.5 text-left font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words\"": 1,
+        "<button v-if=\"children.total\" type=\"button\"": 1,
+        "<input type=\"checkbox\" class=\"todo-check\"": 1,
+        "<textarea ref=\"descriptionInput\" v-model=\"description\"": 1,
+        "<textarea v-if=\"editing\" ref=\"titleInput\"": 1
+      }
+    },
+    "modules/todos/src/live.ts": {
+      "color": {
+        "backgroundColor: \"#000000\",": 1,
+        "color: \"#ffffff\",": 1,
+        "export const LIVE_COLORS = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#f472b6\", \"#a78bfa\", \"#60a5fa\", \"#2dd4bf\", \"#4ade80\", \"#000000\"];": 10
+      }
+    },
+    "modules/todos/src/plate.css": {
+      "all-caps": {
+        "text-transform: uppercase;": 1
+      },
+      "color": {
+        "0 0 4px rgb(0 0 0 / 0.5);": 1,
+        "0 1px 2px rgb(0 0 0 / 0.7),": 1,
+        "0 1px 2px rgb(0 0 0 / 0.85),": 1,
+        "inset 0 1px 2px rgb(0 0 0 / 0.5);": 1
+      },
+      "color-fallback": {
+        "background: var(--plate, rgb(0 0 0 / 0.33));": 1,
+        "color: var(--text, #fff);": 1
+      },
+      "focus-ring": {
+        "outline: none;": 1
+      },
+      "font-weight": {
+        "font-weight: 700;": 2
+      },
+      "radius": {
+        "border-radius: 0.2em;": 1,
+        "border-radius: 10px;": 1
+      },
+      "shadow": {
+        "0 1px 2px rgb(0 0 0 / 0.7),": 1
+      }
+    },
+    "modules/todos/src/plate.ts": {
+      "color": {
+        "plate.style.setProperty(\"--plate\", `rgb(${hexToRgb(look.backgroundColor)} / ${look.background / 100})`);": 1
+      }
+    },
+    "modules/todos/src/style.css": {
+      "motion": {
+        "background-color 150ms ease,": 1,
+        "transition: transform 150ms ease;": 1
+      },
+      "radius": {
+        "border-radius: 1px;": 1
+      }
+    },
+    "modules/todos/src/todos.ts": {
+      "color": {
+        "blue: \"oklch(0.65 0.17 255)\",": 1,
+        "green: \"oklch(0.7 0.17 150)\",": 1,
+        "orange: \"oklch(0.72 0.17 55)\",": 1,
+        "pink: \"oklch(0.7 0.19 350)\",": 1,
+        "red: \"oklch(0.64 0.2 25)\",": 1,
+        "teal: \"oklch(0.7 0.12 195)\",": 1,
+        "violet: \"oklch(0.63 0.2 295)\",": 1,
+        "yellow: \"oklch(0.82 0.16 95)\",": 1
+      }
+    },
+    "modules/whiteboard/src/App.vue": {
+      "suspend-flush": {
+        "viewTimer = setTimeout(saveSelection, 500);": 1
+      },
+      "z-index": {
+        "<EmptyState v-if=\"boardState.empty\" :title=\"t('empty.hint')\" class=\"text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-[1] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0\" data-testid=\"empty-hint\" />": 1
+      }
+    },
+    "modules/whiteboard/src/PictureLocks.vue": {
+      "kit-control": {
+        "<Button v-for=\"spot in spots\" :key=\"spot.id\"": 1
+      },
+      "palette": {
+        "'picture-lock pointer-events-auto absolute size-6 -translate-x-1/2 -translate-y-1/2 bg-black/65 text-white opacity-0 transition-opacity hover:bg-black/80 hover:text-white hover:opacity-100 focus-visible:opacity-100',": 4
+      },
+      "z-index": {
+        "<div v-if=\"spots.length > 0\" :class=\"LOCKS_CLASS\" class=\"pointer-events-none absolute inset-0 z-[2] overflow-hidden\">": 1
+      }
+    },
+    "modules/whiteboard/src/boards.ts": {
+      "color": {
+        "export const DEFAULT_BACKGROUND = \"#ffffff\";": 1
+      }
+    },
+    "modules/whiteboard/src/cards.ts": {
+      "color": {
+        "const BODY = \"#514b40\";": 1,
+        "const CARD_STYLE = { strokeColor: \"#d6cfc1\", strokeWidth: 1, fillStyle: \"solid\" as const, roughness: 0, roundness: { type: 3 as const, value: 8 } };": 1,
+        "const HEADING = \"#26231e\";": 1,
+        "{ type: \"rectangle\", x, y, width: 300, height: 190, backgroundColor: \"#f5f0e4\", ...CARD_STYLE, groupIds },": 1,
+        "{ type: \"rectangle\", x, y, width: Math.max(w, 160) + 24, height: h + 64, backgroundColor: \"#f1eee8\", ...CARD_STYLE, groupIds, customData },": 1
+      }
+    },
+    "modules/whiteboard/src/style.css": {
+      "font-size": {
+        ".whiteboard-app .excalidraw .HintViewer { margin-top: 4px; font-size: 11px; }": 1,
+        "font-size: 0.6875rem;": 1
+      },
+      "z-index": {
+        "z-index: 1;": 1
+      }
+    }
+  }
+}

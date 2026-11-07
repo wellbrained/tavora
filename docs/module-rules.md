@@ -276,6 +276,7 @@ for data (the document store, a file, a list), draw the **real template** with p
 Before you say it is done, check each item and name in your summary any you could not check.
 
 - [ ] Every control is a kit control (section 2); any new one was agreed and is in the kit with a Playground specimen.
+- [ ] `pnpm check:modules` shows no new breaks (see [Rules check](#6-rules-check)).
 - [ ] No hex, `rgb()`, palette colour, hex fallback, literal font name, px radius or off-scale text size in the new code
       (search the diff for `#[0-9a-f]{3,6}`, `rgb(`, `neutral-`, `white`, `px` in CSS).
 - [ ] Looked at in a dark and a light theme (for example Tavora Dark and Hearthwood Light), and in German.
@@ -294,3 +295,40 @@ Before you say it is done, check each item and name in your summary any you coul
       German, or each finding is looked at and written down with the reason ([Testing a panel in the browser](../apps/docs/guide/testing-panels.md)).
 - [ ] `pnpm typecheck`, `pnpm test` and `pnpm build` pass.
 - [ ] The module's `DESIGN.md` (if any) does not contradict this file.
+
+## 6. Rules check
+
+`pnpm check:modules` reads every module's source (`src/**/*.vue`, `.ts`, `.tsx`, `.css`, tests left out) and flags what
+this file forbids and a script can see: colour literals and hex fallbacks, palette colours, font names, text sizes and
+weights off the scale, corners of your own, raw controls the kit has, `document.querySelector` in components, your own
+`z-index`, shadows, all caps and focus rings, motion outside the tokens, menus at the pointer and browser downloads. Per
+module it also flags a delayed save without an `onSuspend` and `onDispose` flush, a `persist-key` without
+`flushViewMemory()`, panel state that is never read back, and texts without a `checkCatalogs` test. It runs in CI and in
+`pnpm lint`. In `tavora-modules`, `pnpm check:modules` runs the same script from the `../tavora` checkout.
+
+- **Run it**: `pnpm check:modules` checks `modules/*` (in `tavora-modules`, every module folder); name folders to check
+  only those (`pnpm check:modules modules/todos`). Each break is one line: file and line, the rule, what it found and
+  what to use instead.
+- **Known breaks** are in `module-rules-baseline.json`; only new ones fail. A break is known by its file, rule and the
+  text of its line, so moving a line keeps it known, and changing it makes it new: fix it then. When you fix known
+  breaks, the check says so; `pnpm check:modules --update-baseline` takes them out. Don't use it to let new breaks
+  in.
+- **A real exception** (game art in its own colours, a game's meaningful colours, the paper of a document page, canvas
+  drawing) gets a comment with the rule and the reason, on the line or alone on the line before. Several rules are
+  separated by commas. Without a reason, or with a rule that doesn't exist, the comment itself fails the check.
+
+  ```ts
+  // rules-allow: color rarity colours from the game
+  ```
+
+  ```vue
+  <!-- rules-allow: kit-control the kit has no tree yet -->
+  ```
+
+  ```css
+  /* rules-allow: color, font-family the paper of a PDF page */
+  ```
+
+- `--all` lists the known breaks too, `--summary` counts all of them per rule and per module.
+
+A clean check doesn't replace the [Done checklist](#5-done-checklist): it can't see texts, layout, behaviour or a theme.
