@@ -4,6 +4,7 @@ import { createMemoryHost } from "@tavora/sdk/testing";
 import { describe, expect, it, vi } from "vitest";
 import { createBoardSaver, type Problem, type Scene, type SceneElement } from "./boardSave";
 import type { SaverState } from "./boardSave";
+import { flushOnLifecycle } from "./lifecycleFlush";
 import { boardTitle, emptyBoard, MAX_BOARD_BYTES, parseBoard, type BoardData, type StoredFile } from "./boards";
 
 const ID = "board-000000001-aaaa";
@@ -218,5 +219,28 @@ describe("letting go", () => {
     await wait();
     expect(panel.host.documents.get(ID)!.revision).toBe(revision);
     expect(read()?.elements).toEqual([]);
+  });
+});
+
+describe("saving when the panel sleeps", () => {
+  it("writes a drawing that is still waiting for its pause when Tavora suspends the panel", async () => {
+    const { saver, panel, read } = await setup();
+    flushOnLifecycle(panel.sdk.lifecycle, () => saver.flush());
+    const kept = rectangle();
+    saver.change(scene([kept]));
+    // The pause is not over: nothing is stored yet.
+    expect(read()?.elements).toEqual([]);
+    panel.host.suspend();
+    await saver.flush();
+    expect(read()?.elements).toMatchObject([{ type: "rectangle", versionNonce: kept.versionNonce }]);
+  });
+
+  it("writes it when the panel is closed", async () => {
+    const { saver, panel, read } = await setup();
+    flushOnLifecycle(panel.sdk.lifecycle, () => saver.flush());
+    saver.change(scene([rectangle()]));
+    panel.host.dispose();
+    await saver.flush();
+    expect(read()?.elements).toHaveLength(1);
   });
 });
