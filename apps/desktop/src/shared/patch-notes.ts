@@ -30,38 +30,18 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.24.0",
     date: "2026-11-07",
-    title: "Tavora 0.24",
-    notes: [
-      "Tavora moves to 0.24 after more than a hundred 0.23 updates.",
-    ],
-    prs: [
-      { number: 706, title: "Raise Tavora to 0.24" },
-    ],
-  },
-  {
-    version: "0.23.119",
-    date: "2026-11-07",
-    title: "Themes can name the Tavora they need",
+    title: "Clearer focus and theme versions",
     notes: [
       "A theme can say which Tavora it needs. A Tavora that's too old lists it in Settings > Appearance (\"Needs Tavora 0.24.0 or newer\") instead of a confusing error.",
       "Making a theme? If it uses a newer colour without saying so, Appearance now tells you which version to set.",
-    ],
-    prs: [
-      { number: 704, title: "Themes: minimum Tavora version" },
-    ],
-    tags: ["settings", "website"],
-  },
-  {
-    version: "0.23.118",
-    date: "2026-11-07",
-    title: "Tab panels show where the keyboard is",
-    notes: [
       "A tab panel now has a ring around it when you tab into it.",
     ],
     prs: [
+      { number: 706, title: "Raise Tavora to 0.24" },
+      { number: 704, title: "Themes: minimum Tavora version" },
       { number: 700, title: "Kit: visible focus ring on tab panels" },
     ],
-    tags: ["ui-kit"],
+    tags: ["settings", "ui-kit", "website"],
   },
   {
     version: "0.23.117",
