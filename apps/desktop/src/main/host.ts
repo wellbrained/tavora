@@ -205,6 +205,7 @@ import {
   veiled,
   withRadius,
   type InstalledTheme,
+  type ThemeHint,
   type ThemeProblem,
 } from "./themes";
 import { copyExample, slugOf } from "./example-copy";
@@ -594,6 +595,7 @@ export class Host {
     windowState: WindowState,
     private themes: Map<string, InstalledTheme>,
     private themeProblems: ThemeProblem[],
+    private themeHints: ThemeHint[],
     /** Reads and writes library.json and the other data files (saved-data.ts). */
     private readonly savedData: SavedData,
   ) {
@@ -830,7 +832,7 @@ export class Host {
     const official = new OfficialUpdates({ userData, pins: resolveOfficialPins(app.isPackaged), safety: safetyLists });
     const installed = new Installed(await Host.loadModules(options, library.developmentFolders, safetyLists, official), (manifest) => translateManifest(manifest, Host.languageOf(library, options)));
     const { modules, problems: moduleProblems } = installed;
-    const { themes, problems: themeProblems } = await discoverThemes(Host.themeSources(options));
+    const { themes, problems: themeProblems, hints: themeHints } = await discoverThemes(Host.themeSources(options), app.getVersion());
     // Before any module session or store is opened (S5: data is keyed by owner and id).
     await migrateModuleData(userData, (line) => console.warn(`[tavora] ${line}`), library.moduleFilesFolder ?? defaultFilesRoot(userData)).catch((error: unknown) =>
       console.error("[tavora] moving module data under its owner failed", error),
@@ -879,7 +881,7 @@ export class Host {
     await openTimes.load();
     const emblem = await Host.readEmblem(options);
 
-    const host = new Host(options, { encryptor, signIn, copySync, installed, safetyLists, official, grants, connection, systemInfo, openTimes, emblem }, library, workspaces, profile, windowState, themes, themeProblems, savedData);
+    const host = new Host(options, { encryptor, signIn, copySync, installed, safetyLists, official, grants, connection, systemInfo, openTimes, emblem }, library, workspaces, profile, windowState, themes, themeProblems, themeHints, savedData);
     host.openedAtStart = openedTimes(library);
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
@@ -1741,9 +1743,10 @@ export class Host {
   }
 
   private async reloadThemes(): Promise<void> {
-    const { themes, problems } = await discoverThemes(Host.themeSources(this.options));
+    const { themes, problems, hints } = await discoverThemes(Host.themeSources(this.options), app.getVersion());
     this.themes = themes;
     this.themeProblems = problems;
+    this.themeHints = hints;
     this.applyTheme();
   }
 
@@ -4848,7 +4851,8 @@ export class Host {
         provenance,
         variations: item.variations.map(({ id, name, mode, radius, colors }) => ({ id, name, mode, radius, colors: { ...colors } })),
       })),
-      problems: this.themeProblems.map((problem) => ({ ...problem })),
+      problems: this.themeProblems.map((problem) => ({ ...problem, ...(problem.values ? { values: { ...problem.values } } : {}) })),
+      hints: this.themeHints.map((hint) => ({ ...hint })),
     };
   }
 

@@ -647,7 +647,9 @@ export interface AppearanceView {
   radius: number | null;
   themes: ThemeView[];
   /** Theme folders that could not be used, and why, for theme authors. */
-  problems: { folder: string; message: string }[];
+  problems: { folder: string; message: string; kind?: "needs-newer"; values?: { needs: string; current: string } }[];
+  /** Themes that work but that older Tavoras can't open, with the `minTavora` to set (soft notes, not errors). */
+  hints: { folder: string; needs: string }[];
 }
 
 export interface HostViewState {

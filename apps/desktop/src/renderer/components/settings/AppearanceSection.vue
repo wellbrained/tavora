@@ -247,7 +247,13 @@ const showVariation = computed(() => {
         <ul v-if="appearance.problems.length" class="mt-2 flex flex-col gap-1.5" :aria-label="t('settings.appearance.problems')" data-testid="theme-problems">
           <li v-for="problem in appearance.problems" :key="problem.folder" class="text-sm">
             <span class="text-destructive font-medium">{{ problem.folder }}</span>{{ " " }}
-            <span class="text-muted-foreground">{{ t("settings.appearance.problem", { message: problem.message }) }}</span>
+            <span class="text-muted-foreground">{{ problem.kind === "needs-newer" && problem.values ? t("settings.appearance.needsNewer", problem.values) : t("settings.appearance.problem", { message: problem.message }) }}</span>
+          </li>
+        </ul>
+        <ul v-if="appearance.hints.length" class="mt-2 flex flex-col gap-1.5" :aria-label="t('settings.appearance.hints')" data-testid="theme-hints">
+          <li v-for="hint in appearance.hints" :key="hint.folder" class="text-sm">
+            <span class="font-medium">{{ hint.folder }}</span>{{ " " }}
+            <span class="text-muted-foreground">{{ t("settings.appearance.hint", { needs: hint.needs }) }}</span>
           </li>
         </ul>
       </template>

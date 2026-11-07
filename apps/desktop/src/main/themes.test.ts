@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { OPTIONAL_THEME_TOKENS } from "@tavora/sdk/protocol";
 import { THEME } from "./games";
 import {
   contrast,
@@ -11,6 +12,7 @@ import {
   FALLBACK_THEME,
   isThemeRadius,
   moduleTheme,
+  OPTIONAL_TOKEN_SINCE,
   resolveTheme,
   variationForMode,
   starterTheme,
@@ -70,8 +72,10 @@ describe("validateTheme", () => {
         description: null,
         author: null,
         version: "1.0.0",
+        minTavora: null,
         variations: [{ id: "dark", name: "Dark", mode: "dark", contrast: "normal", radius: THEME.radius, colors: THEME.tokens }],
       },
+      hint: { needs: "0.23.89" },
     });
   });
 
@@ -189,6 +193,89 @@ describe("validateTheme", () => {
   });
 });
 
+/** The default palette without the colours a theme may leave out, as an older Tavora can read it. */
+const PLAIN = Object.fromEntries(Object.entries(THEME.tokens).filter(([token]) => !(token in OPTIONAL_THEME_TOKENS)));
+const FILL = { "primary-fill": "#a3482e", "primary-fill-hover": "#8f3e26", "primary-fill-foreground": "#e6e2da" };
+const plainTheme = (overrides: Record<string, unknown> = {}, extra: Record<string, string> = {}) => manifest(overrides, { colors: { ...PLAIN, ...extra } });
+
+describe("minTavora", () => {
+  it("is kept when it is a plain version, and null when left out", () => {
+    expect(validateTheme(plainTheme({ minTavora: "0.23.89" }), "0.23.118")).toMatchObject({ ok: true, theme: { minTavora: "0.23.89" } });
+    expect(validateTheme(plainTheme(), "0.23.118")).toMatchObject({ ok: true, theme: { minTavora: null } });
+    expect(validateTheme(plainTheme({ minTavora: "0.23.118" }), "0.23.118")).toMatchObject({ ok: true });
+  });
+
+  it("refuses anything that is not major.minor.patch", () => {
+    for (const bad of ["0.24", "v0.24.0", "0.24.0-beta.1", "", 24, null]) {
+      expect(validateTheme(plainTheme({ minTavora: bad }), "0.23.118")).toEqual({ ok: false, error: "minTavora must be a Tavora version, like 0.24.0" });
+    }
+  });
+
+  it("says only that Tavora is too old when the theme needs a newer one", () => {
+    expect(validateTheme(plainTheme({ minTavora: "0.24.0" }), "0.23.118")).toEqual({
+      ok: false,
+      error: "Needs Tavora 0.24.0 or newer. You have 0.23.118.",
+      kind: "needs-newer",
+      values: { needs: "0.24.0", current: "0.23.118" },
+    });
+  });
+
+  it("leaves out the unknown fields and colours a newer Tavora brings, but still catches them otherwise", () => {
+    const future = plainTheme({ minTavora: "0.24.0", glow: true }, { "glow-fill": "#ffffff" });
+    expect(validateTheme(future, "0.23.118")).toMatchObject({ ok: false, kind: "needs-newer" });
+    expect(validateTheme(future, "0.24.0")).toEqual({ ok: false, error: "Unknown fields: glow" });
+    expect(validateTheme(plainTheme({ minTavora: "0.24.0" }, { "glow-fill": "#ffffff" }), "0.24.0")).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("unknown colors: glow-fill"),
+    });
+  });
+
+  it("checks nothing about the version when Tavora's own is not given", () => {
+    expect(validateTheme(plainTheme({ minTavora: "99.0.0" }))).toMatchObject({ ok: true });
+  });
+
+  it("hints at the version of the newest optional token a theme sets", () => {
+    const hint = (overrides: Record<string, unknown>, extra: Record<string, string>) => {
+      const result = validateTheme(plainTheme(overrides, extra), "0.30.0");
+      return result.ok ? result.hint : "not ok";
+    };
+    expect(hint({}, {})).toBeUndefined();
+    expect(hint({}, FILL)).toEqual({ needs: "0.23.89" });
+    expect(hint({}, { toast: "#e8dcc0" })).toEqual({ needs: "0.22.0" });
+    expect(hint({}, { ...FILL, toast: "#e8dcc0" })).toEqual({ needs: "0.23.89" });
+    expect(hint({ minTavora: "0.23.88" }, FILL)).toEqual({ needs: "0.23.89" });
+    expect(hint({ minTavora: "0.23.89" }, FILL)).toBeUndefined();
+    expect(hint({ minTavora: "0.24.0" }, { ...FILL, toast: "#e8dcc0" })).toBeUndefined();
+    expect(hint({ minTavora: "0.22.0" }, { toast: "#e8dcc0" })).toBeUndefined();
+  });
+
+  it("knows the version of every optional token", () => {
+    expect(Object.keys(OPTIONAL_TOKEN_SINCE).sort()).toEqual(Object.keys(OPTIONAL_THEME_TOKENS).sort());
+  });
+
+  it("is written to the manifest when set, and the starter has none and gives no hint", async () => {
+    const result = validateTheme(plainTheme({ minTavora: "0.23.89" }));
+    if (!result.ok) throw new Error(result.error);
+    expect(JSON.parse(themeManifest(result.theme))).toMatchObject({ minTavora: "0.23.89" });
+    const { themes } = await discoverThemes({ official: [officialDir] });
+    const starter = starterTheme(themes, 1);
+    expect(starter.minTavora).toBeNull();
+    const written = themeManifest(starter);
+    expect(written).not.toContain("minTavora");
+    expect(written).not.toMatch(/primary-fill|toast/);
+    expect(validateTheme(JSON.parse(written), "0.23.118")).toMatchObject({ ok: true, theme: { minTavora: null } });
+    expect(validateTheme(JSON.parse(written), "0.23.118")).not.toHaveProperty("hint");
+  });
+
+  it("keeps a button fill or toast colour the theme really chose when writing", () => {
+    const chosen = validateTheme(plainTheme({}, { ...FILL, toast: "#e8dcc0" }));
+    if (!chosen.ok) throw new Error(chosen.error);
+    const colors = JSON.parse(themeManifest(chosen.theme)).variations[0].colors;
+    expect(colors).toMatchObject({ ...FILL, toast: "#e8dcc0" });
+    expect(colors).not.toHaveProperty("toast-foreground");
+  });
+});
+
 describe("the official themes", () => {
   it("are all valid, and the default's Dark is exactly the look in code and styles.css", async () => {
     const { themes, problems } = await discoverThemes({ official: [officialDir] });
@@ -239,6 +326,33 @@ describe("discoverThemes", () => {
       { folder: "broken", message: `${THEME_MANIFEST} is not valid JSON` },
       { folder: "copycat", message: 'Ids starting with "tavora." are reserved for Tavora\'s own themes' },
     ]);
+  });
+
+  it("lists a theme that needs a newer Tavora as a problem, offers no way to pick it, and hints to authors", async () => {
+    const local = await mkdtemp(path.join(tmpdir(), "tavora-themes-"));
+    await themeFolder(local, "future", plainTheme({ id: "community.future", minTavora: "0.24.0", glow: 1 }));
+    await themeFolder(local, "fill", plainTheme({ id: "community.fill" }, FILL));
+    await themeFolder(local, "safe", plainTheme({ id: "community.safe", minTavora: "0.23.89" }, FILL));
+    const { themes, problems, hints } = await discoverThemes({ local: [local] }, "0.23.118");
+    expect(themes.has("community.future")).toBe(false);
+    expect(themes.has("community.fill")).toBe(true);
+    expect(problems).toEqual([
+      { folder: "future", message: "Needs Tavora 0.24.0 or newer. You have 0.23.118.", kind: "needs-newer", values: { needs: "0.24.0", current: "0.23.118" } },
+    ]);
+    expect(hints).toEqual([{ folder: "fill", needs: "0.23.89" }]);
+    // A chosen theme that is too new falls back to the default, as a broken one does.
+    expect(resolveTheme(themes, { id: "community.future", variation: "dark" }).theme.id).toBe(DEFAULT_THEME.id);
+    // On a Tavora that is new enough it loads.
+    await themeFolder(local, "future", plainTheme({ id: "community.future", minTavora: "0.24.0" }));
+    const newer = await discoverThemes({ local: [local] }, "0.24.0");
+    expect(newer.themes.has("community.future")).toBe(true);
+    expect(newer.problems).toEqual([]);
+  });
+
+  it("gives Tavora's own themes no hints", async () => {
+    const { hints, problems } = await discoverThemes({ official: [officialDir] }, "0.23.118");
+    expect(hints).toEqual([]);
+    expect(problems).toEqual([]);
   });
 
   it("keeps the official theme when a local one has the same id", async () => {
