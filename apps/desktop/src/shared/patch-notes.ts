@@ -28,6 +28,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.0",
+    date: "2026-11-07",
+    title: "Tavora 0.24",
+    notes: [
+      "Tavora moves to 0.24 after more than a hundred 0.23 updates.",
+    ],
+    prs: [
+      { number: 706, title: "Raise Tavora to 0.24" },
+    ],
+  },
+  {
     version: "0.23.119",
     date: "2026-11-07",
     title: "Themes can name the Tavora they need",
