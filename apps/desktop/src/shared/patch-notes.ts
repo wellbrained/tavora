@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.1",
+    date: "2026-11-07",
+    title: "Whiteboard keeps your last stroke",
+    notes: [
+      "Whiteboard keeps your last stroke when Tavora closes or sleeps.",
+    ],
+    prs: [
+      { number: 708, title: "Whiteboard and Playground save before they sleep" },
+    ],
+    tags: ["ui-kit", "whiteboard"],
+  },
+  {
     version: "0.24.0",
     date: "2026-11-07",
     title: "Clearer focus and theme versions",
