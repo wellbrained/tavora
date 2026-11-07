@@ -6,9 +6,10 @@
 // it can be picked, and the Tavora default is always there to go back to.
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { isModuleId } from "@tavora/module-schema";
+import { isModuleId, isReleaseVersion, needsNewerTavora } from "@tavora/module-schema";
 import { OPTIONAL_THEME_TOKENS, THEME_TOKENS, type TavoraTheme, type ThemeToken, type ToastPosition } from "@tavora/sdk/protocol";
 import { THEME } from "./games";
+import { compareModuleVersions } from "../shared/module-version";
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
 
 export const THEME_MANIFEST = "tavora.theme.json";
@@ -58,6 +59,8 @@ export interface ThemePackage {
   description: string | null;
   author: string | null;
   version: string;
+  /** The oldest Tavora that can open this theme, or null when the author named none. */
+  minTavora: string | null;
   variations: ThemeVariation[];
 }
 
@@ -69,7 +72,41 @@ export interface InstalledTheme {
 /** A theme folder that could not be used, and why, so theme authors can fix it. */
 export interface ThemeProblem {
   folder: string;
+  /** The reason in English, for the log and for kinds without a text of their own. */
   message: string;
+  /** "needs-newer": the theme asks for a newer Tavora than this one; Appearance words it in the user's language. */
+  kind?: "needs-newer";
+  values?: { needs: string; current: string };
+}
+
+/** A soft note for theme authors: the theme works here, but older Tavoras can't open it. */
+export interface ThemeHint {
+  folder: string;
+  /** The `minTavora` to set. */
+  needs: string;
+}
+
+/**
+ * The Tavora each optional token arrived in, so a theme that uses one can be told which `minTavora` to
+ * set. The toast colours came with 0.22.0 (#461), the button fill with 0.23.89 (#622). A new optional
+ * token needs a line here, or this stops compiling.
+ */
+export const OPTIONAL_TOKEN_SINCE = {
+  "primary-fill": "0.23.89",
+  "primary-fill-hover": "0.23.89",
+  "primary-fill-foreground": "0.23.89",
+  toast: "0.22.0",
+  "toast-foreground": "0.22.0",
+} as const satisfies Record<keyof typeof OPTIONAL_THEME_TOKENS, string>;
+
+/** The `minTavora` a theme needs for the optional tokens it sets, or null when it sets none. */
+function neededMinTavora(tokens: ThemeToken[]): string | null {
+  let needs: string | null = null;
+  for (const token of tokens) {
+    const since = (OPTIONAL_TOKEN_SINCE as Partial<Record<ThemeToken, string>>)[token];
+    if (since && (needs === null || compareModuleVersions(since, needs) > 0)) needs = since;
+  }
+  return needs;
 }
 
 export interface ThemeChoice {
@@ -167,7 +204,7 @@ function unknownKeys(record: Fields, allowed: string[]): string[] {
   return Object.keys(record).filter((key) => !allowed.includes(key));
 }
 
-function parseVariation(raw: unknown, where: string): ThemeVariation | string {
+function parseVariation(raw: unknown, where: string): { variation: ThemeVariation; set: ThemeToken[] } | string {
   if (!isRecord(raw)) return `${where} is not an object`;
   const extra = unknownKeys(raw, ["id", "name", "mode", "contrast", "radius", "colors"]);
   if (extra.length) return `${where} has unknown fields: ${extra.join(", ")}`;
@@ -182,9 +219,11 @@ function parseVariation(raw: unknown, where: string): ThemeVariation | string {
   const extraColors = unknownKeys(raw.colors, [...THEME_TOKENS]);
   if (extraColors.length) return `${where} has unknown colors: ${extraColors.join(", ")}`;
   const colors = {} as Record<ThemeToken, string>;
+  const set: ThemeToken[] = [];
   for (const token of THEME_TOKENS) {
     const value = raw.colors[token];
     if (value === undefined && optionalToken(token)) continue;
+    if (optionalToken(token)) set.push(token);
     if (typeof value !== "string" || !HEX.test(value)) return `${where} needs ${token} as a #rrggbb colour`;
     colors[token] = value.toLowerCase();
   }
@@ -204,14 +243,31 @@ function parseVariation(raw: unknown, where: string): ThemeVariation | string {
   };
   const problems = contrastProblems(variation);
   if (problems.length) return `${where}: ${problems[0]}${problems.length > 1 ? ` (and ${problems.length - 1} more)` : ""}`;
-  return variation;
+  return { variation, set };
 }
 
+/** The result of checking a manifest. A theme that asks for a newer Tavora fails with its own kind. */
+export type ThemeCheck =
+  | { ok: true; theme: ThemePackage; hint?: { needs: string } }
+  | { ok: false; error: string; kind?: "needs-newer"; values?: { needs: string; current: string } };
+
 /** Checks a parsed tavora.theme.json. Strict: unknown fields are refused, so the format can grow safely. */
-export function validateTheme(raw: unknown): { ok: true; theme: ThemePackage } | { ok: false; error: string } {
+export function validateTheme(raw: unknown, tavoraVersion?: string): ThemeCheck {
   const fail = (error: string) => ({ ok: false as const, error });
   if (!isRecord(raw)) return fail("The manifest is not a JSON object");
-  const extra = unknownKeys(raw, ["$schema", "id", "name", "description", "author", "version", "variations"]);
+  if (raw.minTavora !== undefined && (typeof raw.minTavora !== "string" || !isReleaseVersion(raw.minTavora))) {
+    return fail("minTavora must be a Tavora version, like 0.24.0");
+  }
+  // A theme made for a newer Tavora has fields and colours this one doesn't know, so say only that.
+  if (typeof raw.minTavora === "string" && tavoraVersion !== undefined && needsNewerTavora({ minTavora: raw.minTavora }, tavoraVersion)) {
+    return {
+      ok: false,
+      error: `Needs Tavora ${raw.minTavora} or newer. You have ${tavoraVersion}.`,
+      kind: "needs-newer",
+      values: { needs: raw.minTavora, current: tavoraVersion },
+    };
+  }
+  const extra = unknownKeys(raw, ["$schema", "id", "name", "description", "author", "version", "minTavora", "variations"]);
   if (extra.length) return fail(`Unknown fields: ${extra.join(", ")}`);
   if (!isModuleId(raw.id)) return fail('The id must look like "publisher.name", in lowercase');
   if (!name(raw.name, THEME_LIMITS.name)) return fail(`The name must be 1 to ${THEME_LIMITS.name} characters`);
@@ -222,21 +278,29 @@ export function validateTheme(raw: unknown): { ok: true; theme: ThemePackage } |
     return fail(`A theme needs 1 to ${THEME_LIMITS.variations} variations`);
   }
   const variations: ThemeVariation[] = [];
+  const set = new Set<ThemeToken>();
   for (const [index, item] of raw.variations.entries()) {
     const id = isRecord(item) && typeof item.id === "string" ? `"${item.id}"` : `${index + 1}`;
-    const variation = parseVariation(item, `Variation ${id}`);
-    if (typeof variation === "string") return fail(variation);
+    const parsed = parseVariation(item, `Variation ${id}`);
+    if (typeof parsed === "string") return fail(parsed);
+    const { variation } = parsed;
     if (variations.some((other) => other.id === variation.id)) return fail(`Two variations are called "${variation.id}"`);
     variations.push(variation);
+    for (const token of parsed.set) set.add(token);
   }
+  const minTavora = typeof raw.minTavora === "string" ? raw.minTavora : null;
+  const needs = neededMinTavora([...set]);
+  const hint = needs !== null && (minTavora === null || needsNewerTavora({ minTavora: needs }, minTavora)) ? { needs } : undefined;
   return {
     ok: true,
+    ...(hint ? { hint } : {}),
     theme: {
       id: raw.id,
       name: raw.name.trim(),
       description: typeof raw.description === "string" ? raw.description.trim() : null,
       author: typeof raw.author === "string" ? raw.author.trim() : null,
       version: raw.version,
+      minTavora,
       variations,
     },
   };
@@ -254,6 +318,7 @@ export const FALLBACK_THEME: ThemePackage = {
   description: "Warm charcoal and firelight gold.",
   author: "Tavora",
   version: "1.0.0",
+  minTavora: null,
   variations: [{ id: DEFAULT_THEME.variation, name: "Dark", mode: "dark", contrast: "normal", radius: THEME.radius, colors: { ...THEME.tokens } }],
 };
 
@@ -282,12 +347,14 @@ async function readManifest(dir: string): Promise<unknown> {
  * where a theme was found, so a local theme cannot pass itself off as
  * official, and the default is always present.
  */
-export async function discoverThemes({ official = [], local = [] }: ThemeSources): Promise<{
+export async function discoverThemes({ official = [], local = [] }: ThemeSources, tavoraVersion?: string): Promise<{
   themes: Map<string, InstalledTheme>;
   problems: ThemeProblem[];
+  hints: ThemeHint[];
 }> {
   const themes = new Map<string, InstalledTheme>();
   const problems: ThemeProblem[] = [];
+  const hints: ThemeHint[] = [];
   const dirs = [
     ...official.map((dir) => ({ dir, provenance: "official" as const })),
     ...local.map((dir) => ({ dir, provenance: "local" as const })),
@@ -295,14 +362,22 @@ export async function discoverThemes({ official = [], local = [] }: ThemeSources
   for (const { dir, provenance } of dirs) {
     for (const candidate of await candidates(dir)) {
       try {
-        const result = validateTheme(await readManifest(candidate));
-        if (!result.ok) throw new Error(result.error);
+        const result = validateTheme(await readManifest(candidate), tavoraVersion);
+        if (!result.ok) {
+          if (result.kind === "needs-newer") {
+            problems.push({ folder: path.basename(candidate), message: result.error, kind: result.kind, ...(result.values ? { values: result.values } : {}) });
+            continue;
+          }
+          throw new Error(result.error);
+        }
         const { theme } = result;
         if (provenance !== "official" && theme.id.startsWith(OFFICIAL_PREFIX)) {
           throw new Error(`Ids starting with "${OFFICIAL_PREFIX}" are reserved for Tavora's own themes`);
         }
         if (themes.has(theme.id)) throw new Error(`Another theme already uses the id ${theme.id}`);
         themes.set(theme.id, { theme, provenance });
+        // Tavora's own themes ship with the app, so only a theme someone could share needs the note.
+        if (result.hint && provenance !== "official") hints.push({ folder: path.basename(candidate), needs: result.hint.needs });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (provenance === "official") console.warn(`[tavora] official theme ${candidate} skipped: ${message}`);
@@ -311,7 +386,7 @@ export async function discoverThemes({ official = [], local = [] }: ThemeSources
     }
   }
   if (!themes.has(DEFAULT_THEME.id)) themes.set(DEFAULT_THEME.id, { theme: FALLBACK_THEME, provenance: "official" });
-  return { themes, problems };
+  return { themes, problems, hints };
 }
 
 async function candidates(dir: string): Promise<string[]> {
@@ -415,12 +490,24 @@ export function starterTheme(themes: Map<string, InstalledTheme>, suffix: number
     description: "A copy of the Tavora theme to make your own.",
     author: "You",
     version: "1.0.0",
+    minTavora: null,
     variations: base.variations.map((variation) => ({ ...variation, colors: { ...variation.colors } })),
   };
 }
 
 /** The manifest as written to disk: defaults that a user would not need are left out. */
 export function themeManifest(theme: ThemePackage): string {
-  const variations = theme.variations.map(({ contrast, ...rest }) => (contrast === "high" ? { ...rest, contrast } : rest));
-  return `${JSON.stringify({ id: theme.id, name: theme.name, description: theme.description, author: theme.author, version: theme.version, variations }, null, 2)}\n`;
+  // Optional colours that only copy what they would copy anyway are left out, so a theme that never chose them does not look like it needs a newer Tavora.
+  const copies = (colors: Record<ThemeToken, string>, token: ThemeToken) => colors[token] === colors[OPTIONAL_THEME_TOKENS[token as keyof typeof OPTIONAL_THEME_TOKENS]];
+  const plain = (colors: Record<ThemeToken, string>) => {
+    const fillIsDefault = copies(colors, "primary-fill") && copies(colors, "primary-fill-hover");
+    const kept = { ...colors } as Partial<Record<ThemeToken, string>>;
+    for (const token of Object.keys(OPTIONAL_THEME_TOKENS) as (keyof typeof OPTIONAL_THEME_TOKENS)[]) {
+      const pairedFill = token === "primary-fill" || token === "primary-fill-hover";
+      if (pairedFill ? fillIsDefault : copies(colors, token)) delete kept[token];
+    }
+    return kept;
+  };
+  const variations = theme.variations.map(({ contrast, colors, ...rest }) => ({ ...rest, ...(contrast === "high" ? { contrast } : {}), colors: plain(colors) }));
+  return `${JSON.stringify({ id: theme.id, name: theme.name, description: theme.description, author: theme.author, version: theme.version, ...(theme.minTavora ? { minTavora: theme.minTavora } : {}), variations }, null, 2)}\n`;
 }

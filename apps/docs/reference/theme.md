@@ -47,6 +47,7 @@ Unknown fields are refused, so a typo fails loudly rather than being ignored.
 | `description` | no | At most 200 characters. |
 | `author` | no | At most 60 characters. |
 | `version` | yes | `major.minor.patch`. |
+| `minTavora` | no | The oldest Tavora that can open the theme, as `major.minor.patch` (like `0.23.89`). A Tavora older than that lists the folder in Appearance with "Needs Tavora 0.23.89 or newer. You have …" and does not offer the theme. See [Older Tavora](#older-tavora). |
 | `variations` | yes | 1 to 4 variations. Users switch between them in Settings. |
 
 Each variation:
@@ -81,4 +82,15 @@ A variation that misses one is not loaded, and Settings shows which pair failed 
 
 ## Older Tavora
 
-Unknown colours are refused, so a Tavora released before `primary-fill`, `primary-fill-hover` and `primary-fill-foreground` does not load a theme that sets them; it lists the folder with "unknown colors" instead. Tavora's own themes ship with the app, so they are fine. Leave the three out if your theme should work everywhere. A published theme that sets them would need a minimum Tavora version, and themes have no such field yet.
+Unknown colours are refused, so a theme that uses a newer colour does not load on a Tavora that doesn't know it. Set `minTavora` to the Tavora that brought the colour, and a Tavora older than that says "Needs Tavora 0.23.89 or newer. You have 0.23.50." instead of listing unknown colours; the same goes for any unknown field or colour in a theme that names a newer `minTavora`. Unknown colours and fields are still refused when `minTavora` is not newer than the Tavora running it, so a typo is still caught.
+
+The colours a theme may leave out arrived in these versions:
+
+| Colours | Since |
+| --- | --- |
+| `toast`, `toast-foreground` | 0.22.0 |
+| `primary-fill`, `primary-fill-hover`, `primary-fill-foreground` | 0.23.89 |
+
+A theme that sets one of them without a `minTavora` at least that new still loads, and Appearance shows a tip with the `minTavora` to set. Tavora's own themes ship with the app and need none. Leave the colours out if your theme should work everywhere.
+
+`minTavora` itself is new: a Tavora from before it was added refuses a theme that has the field ("Unknown fields: minTavora"). That is the safe outcome, since such a Tavora could not open a theme that needs a newer one anyway.
