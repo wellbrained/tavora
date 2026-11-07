@@ -92,3 +92,7 @@ Some calls only work right after a click or key press: opening a menu, `links.op
 const { sdk, host } = createMemoryHost({ gestures: "enforce" });
 await host.click(() => sdk.links.open("https://example.com")); // one click, one call
 ```
+
+## Your real panel
+
+To run your module's real panel in a browser on the memory host, and check that nothing is cut off and the Tab key reaches every control, see [Testing a panel in the browser](./testing-panels).

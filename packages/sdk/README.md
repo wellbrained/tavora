@@ -66,6 +66,10 @@ What needs the user's permission (`permissions.network` and `permissions.connect
 
 The same small module built three ways: [vanilla TypeScript](https://github.com/wellbrained/tavora/tree/main/examples/vanilla-module), [React](https://github.com/wellbrained/tavora/tree/main/examples/react-module) and [Vue](https://github.com/wellbrained/tavora/tree/main/examples/vue-module).
 
+## Testing
+
+`@tavora/sdk/testing` stands in for Tavora in your tests. `createMemoryHost()` gives your code a complete SDK that keeps everything in memory ([Testing your module](https://docs.mytavora.app/guide/testing)). `mountPanel()` runs your real panel on it in a browser, and `checkLayout()` and `checkFocus()` find cut-off text, things sticking out and Tab-key problems ([Testing a panel in the browser](https://docs.mytavora.app/guide/testing-panels)). It needs no particular test runner or browser driver.
+
 ## Building a module
 
 - Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, list its host in `permissions.network` and use `tavora.network.fetch` once the user has granted it.

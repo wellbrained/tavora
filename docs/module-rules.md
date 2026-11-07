@@ -290,5 +290,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Dialogs use the header, footer and `DialogButton` as in [Dialogs](#dialogs); a close-only button has no icon.
 - [ ] Settings use `ModuleSettings`, ask for their size with `settingsDialogSize`, have no Done button, and follow the [Settings](#settings) rules for descriptions, units and room (checked in German).
 - [ ] Keyboard: Tab reaches everything, Escape closes, focus ring visible.
+- [ ] The layout and Tab checks of `@tavora/sdk/testing` pass on the real panel at those sizes, in both themes and in
+      German, or each finding is looked at and written down with the reason ([Testing a panel in the browser](../apps/docs/guide/testing-panels.md)).
 - [ ] `pnpm typecheck`, `pnpm test` and `pnpm build` pass.
 - [ ] The module's `DESIGN.md` (if any) does not contradict this file.

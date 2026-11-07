@@ -1,3 +1,12 @@
+## 0.3.14
+
+Testing a real panel in the browser. Nothing here talks to Tavora, so `MIN_TAVORA` stays (Tavora 0.19.32). All of it is in `@tavora/sdk/testing`, and none of it needs a test runner, framework or browser driver.
+
+- `mountPanel({ start, ...memoryHostOptions })` runs a module's real page code on a memory host, as Tavora loads a panel, and waits until it has connected. The page's own `connect()` (also through `bootstrapModule()` or the kit's `connectModule()`) gets that panel's host, so the module's code stays as it is. Calls that need a click are refused without a real press in the panel (`gestures: "enforce"`), and the theme is Tavora Dark. `unmount()` closes it like Tavora (`onDispose` first, storage stays); `share: panel.host` reopens it or opens a second panel.
+- `themeOf("dark" | "light")` is Tavora Dark or Hearthwood Light as a panel gets them. `themeFromPackage(json, variation?)` turns any `tavora.theme.json` into the theme Tavora sends.
+- `inspectLayout(root, options?)` lists what sticks out of the panel, text that is cut off or under 12 px, and input values that don't fit. `inspectFocus(root, { pressTab })` presses Tab through the panel and checks reach, reading order, positive tabindexes and focus rings. Both run in the page; `checkLayout(page, root)` and `checkFocus(page, root)` run them from Node in any page with `evaluate` and `keyboard.press`, such as a Playwright or Puppeteer page.
+- `connect()` returns the SDK `mountPanel` left for the page when there is one; otherwise nothing changes.
+
 ## 0.3.13
 
 Saving and opening CSV and Excel files. The new calls come with Tavora 0.23.102 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
