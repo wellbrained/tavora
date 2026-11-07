@@ -1,6 +1,8 @@
 // @tavora/sdk/testing: a test adapter for module tests. It implements the whole `TavoraSDK` and keeps its state in
 // memory, so a module can be tested without Tavora; it follows the real host's rules (limits, revisions, errors).
-// Not for use in a module's shipped code.
+// For tests of a real panel in a browser it also has `mountPanel` (the module's page on a memory host), Tavora's own
+// themes (`themeOf`) and layout and Tab checks (`inspectLayout`, `checkFocus`…): see testing/. Not for use in a
+// module's shipped code. Nothing here needs vitest, Playwright or a framework.
 import { menuParams, tooltipParams, tooltipShowParams } from "./anchor.js";
 import { SDK_VERSION, TavoraError, type KeyValueStore, type TavoraSDK } from "./index.js";
 import {
@@ -45,6 +47,23 @@ import {
 } from "./protocol.js";
 
 export { TavoraError } from "./index.js";
+export { themeFromPackage, themeOf, type ThemePackageJson, type ThemeVariationJson } from "./testing/themes.js";
+export { mountPanel, type MountedPanel, type MountPanelOptions, type StopPanel } from "./testing/mount.js";
+export {
+  checkFocus,
+  checkLayout,
+  inspectFocus,
+  inspectLayout,
+  type CheckIssue,
+  type FocusCheckOptions,
+  type FocusIssue,
+  type FocusIssueKind,
+  type FocusResult,
+  type LayoutCheckOptions,
+  type LayoutIssue,
+  type LayoutIssueKind,
+  type TestPage,
+} from "./testing/checks.js";
 
 type Table = Methods & HttpCalls;
 export type { CallName };

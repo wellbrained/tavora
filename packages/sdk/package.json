@@ -1,6 +1,6 @@
 {
   "name": "@tavora/sdk",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "description": "Typed client for Tavora modules: talks to the Tavora Desktop host over its bridge.",
   "type": "module",
   "sideEffects": false,
@@ -82,5 +82,8 @@
     "README.md",
     "CHANGELOG.md"
   ],
+  "devDependencies": {
+    "playwright-core": "1.64.1"
+  },
   "license": "MIT"
 }

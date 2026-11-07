@@ -1,6 +1,7 @@
 // @tavora/sdk: thin typed client for modules running inside Tavora Desktop.
 // The host enforces every check; this package only marshals typed calls.
 import { menuParams, tooltipParams, tooltipShowParams, type MenuOptions, type TooltipMoveOptions, type TooltipShowOptions } from "./anchor.js";
+import { takeTestSdk } from "./test-slot.js";
 export type { TooltipAnchor, TooltipRequest, TooltipContent } from "./tooltip-types.js";
 export type { AnchorTarget, MenuOptions, TooltipMoveOptions, TooltipShowOptions } from "./anchor.js";
 // Protocol reference: apps/docs/reference/protocol.md.
@@ -190,7 +191,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.13";
+export const SDK_VERSION = "0.3.14";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -786,8 +787,12 @@ let connection: Promise<TavoraSDK> | undefined;
  * Connects to the Tavora host. Safe to call more than once: every call
  * returns the same connection for this window. Rejects with a TavoraError
  * (HOST_UNAVAILABLE, INCOMPATIBLE) if the module cannot run here.
+ *
+ * In a test, `mountPanel` from `@tavora/sdk/testing` hands the panel it starts a memory host here instead.
  */
 export function connect(options: ConnectOptions = {}): Promise<TavoraSDK> {
+  const testSdk = takeTestSdk();
+  if (testSdk) return Promise.resolve(testSdk);
   connection ??= openPort(options.connectTimeoutMs ?? 5000)
     .then((port) => createClient(port, options.requestTimeoutMs ?? 10_000))
     .catch((error: unknown) => {
