@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.119",
+    date: "2026-11-07",
+    title: "Themes can name the Tavora they need",
+    notes: [
+      "A theme can say which Tavora it needs. A Tavora that's too old lists it in Settings > Appearance (\"Needs Tavora 0.24.0 or newer\") instead of a confusing error.",
+      "Making a theme? If it uses a newer colour without saying so, Appearance now tells you which version to set.",
+    ],
+    prs: [
+      { number: 704, title: "Themes: minimum Tavora version" },
+    ],
+    tags: ["settings", "website"],
+  },
+  {
     version: "0.23.118",
     date: "2026-11-07",
     title: "Tab panels show where the keyboard is",
