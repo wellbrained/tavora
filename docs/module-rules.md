@@ -290,5 +290,32 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Dialogs use the header, footer and `DialogButton` as in [Dialogs](#dialogs); a close-only button has no icon.
 - [ ] Settings use `ModuleSettings`, ask for their size with `settingsDialogSize`, have no Done button, and follow the [Settings](#settings) rules for descriptions, units and room (checked in German).
 - [ ] Keyboard: Tab reaches everything, Escape closes, focus ring visible.
-- [ ] `pnpm typecheck`, `pnpm test` and `pnpm build` pass.
+- [ ] `pnpm typecheck`, `pnpm test` and `pnpm build` pass, and `pnpm check:modules` finds no new break.
 - [ ] The module's `DESIGN.md` (if any) does not contradict this file.
+
+## 6. Automatic check
+
+`pnpm check:modules` finds the breaks of this file that a script can see, in every module's `src` (`.vue`, `.ts`,
+`.css`; tests and text catalogs left out). It runs in CI (Checks) and in `pnpm lint`. In tavora-modules it is the same
+script, run through the sibling checkout: `pnpm check:modules` there too.
+
+- `pnpm check:modules [folder…]` checks the given modules (a module folder or a folder of modules); with none, all of
+  them. Each finding is `file:line`, the rule and how to fix it; new ones fail the run.
+- **Rules**: `color-literal`, `color-fallback`, `named-color`, `palette-color`, `font-family`, `text-size` (under
+  12 px, also classes the module defines), `text-scale` (between 12 and 20 px but not a step), `font-weight`,
+  `radius-px`, `z-index`, `motion-token`, `spacing`, `shadow`, `focus-ring`, `raw-control` (`<button>`, `<select>`,
+  `<table>`, `<details>`, `<dialog>`, `<progress>`, `<input type=range|checkbox|radio|color>`), `dom-query` (in Vue
+  code; a plain page without Vue may find its own elements), `window-keys`, `menu-anchor`, `file-save` (a download
+  link), `glued-text`, and per module `catalog-check`, `suspend-flush` (a save behind a timer without `onSuspend` and
+  `onDispose`), `view-memory-flush`, `panel-state-read`.
+- **A real exception** (game art, a game's rarity colours, PDF paper, canvas drawing) gets a comment on the line or
+  the line before, with the rule and why: `// rules-allow: color-literal rarity colours from the game`, in CSS
+  `/* rules-allow: … */`, in a template `<!-- rules-allow: … -->`. Several rules: `rules-allow: color-literal, spacing
+  PDF paper`. A file that is all exception (a game's palette) takes `rules-allow-file: <rule> <reason>` once. An allow
+  without a reason or with an unknown rule is a finding of its own.
+- **Known breaks** are listed in `module-rules-baseline.json` at the repo root (by file, rule and the line's text, so
+  a line that moves stays known, and a new break never hides behind an old line number). Fix them rather than add to
+  them. After fixing some, or for a real reason to take a new one in, `pnpm check:modules --update-baseline` rewrites
+  the list (with folders: only theirs). `--counts` prints the findings per rule and per module.
+- The check sees text, not meaning: it can't tell whether panel state is read back correctly, a text is translated or
+  a layout works at the minimum size. The Done checklist still applies.

@@ -22,8 +22,9 @@
     "tavora-pack": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source packages/pack/src/cli.ts",
     "tavora-catalog-sign": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source scripts/catalog-sign.ts",
     "check:patches": "node scripts/check-patches.mjs",
-    "lint": "oxlint",
-    "check": "pnpm check:patches && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
+    "check:modules": "node scripts/check-modules.mjs",
+    "lint": "oxlint && node scripts/check-modules.mjs",
+    "check": "pnpm check:patches && pnpm check:modules && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.10",

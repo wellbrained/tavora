@@ -1,0 +1,1565 @@
+{
+  "about": "Known breaks of docs/module-rules.md. Fix them, don't add to them: pnpm check:modules --update-baseline rewrites this file.",
+  "findings": [
+    {
+      "file": "modules/calculator/src/App.vue",
+      "rule": "spacing",
+      "text": "<div class=\"grid flex-1 grid-cols-4 gap-1.5\" :class=\"ROWS[keys.length]\" data-testid=\"keypad\" role=\"group\" :aria-label=\"t('calc.keypad')\">",
+      "count": 1
+    },
+    {
+      "file": "modules/calculator/src/App.vue",
+      "rule": "window-keys",
+      "text": "window.addEventListener(\"keydown\", onKeydown);",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/App.vue",
+      "rule": "focus-ring",
+      "text": "<div ref=\"scroller\" class=\"min-h-0 flex-1 overflow-y-auto p-2 outline-none\" tabindex=\"-1\">",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/App.vue",
+      "rule": "shadow",
+      "text": "return drop.value?.id === rowId(row) && (drop.value.after ? \"shadow-[0_2px_0_0_var(--primary)]\" : \"shadow-[0_-2px_0_0_var(--primary)]\");",
+      "count": 2
+    },
+    {
+      "file": "modules/clock-counter/src/App.vue",
+      "rule": "spacing",
+      "text": "<div v-if=\"!list.items.length\" class=\"flex h-full flex-col items-center justify-center gap-3 px-4 py-10 text-center\" data-testid=\"empty\">",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/App.vue",
+      "rule": "suspend-flush",
+      "text": "else sourcesTimer = setTimeout(flushSources, wait);",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/ItemCard.vue",
+      "rule": "focus-ring",
+      "text": "class=\"bg-card rounded-lg border outline-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/ItemCard.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 pr-1.5 pl-3\">",
+      "count": 2
+    },
+    {
+      "file": "modules/clock-counter/src/ItemCard.vue",
+      "rule": "spacing",
+      "text": "<ol v-if=\"laps.length\" class=\"text-muted-foreground flex flex-col gap-0.5 border-t px-3 py-2 text-xs tabular-nums\">",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/ItemEditor.vue",
+      "rule": "glued-text",
+      "text": "<ComboboxItem v-for=\"preset in FORMAT_PRESETS\" :key=\"preset\" :value=\"preset\" class=\"tabular-nums\" :data-testid=\"`format-${preset}`\">{{ preset }} · {{ formatSeconds(sample, preset) }}</ComboboxItem>",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/items.ts",
+      "rule": "color-literal",
+      "text": "export const COLORS = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#f472b6\", \"#a78bfa\", \"#60a5fa\", \"#2dd4bf\", \"#4ade80\", \"#111111\"] as const;",
+      "count": 10
+    },
+    {
+      "file": "modules/clock-counter/src/overlay-view.css",
+      "rule": "color-fallback",
+      "text": "color: var(--color, #fff);",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay-view.css",
+      "rule": "color-fallback",
+      "text": "color: var(--words, var(--color, #fff));",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay-view.css",
+      "rule": "color-literal",
+      "text": "-webkit-text-stroke: 0.04em rgb(0 0 0 / 0.85);",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay-view.css",
+      "rule": "color-literal",
+      "text": "text-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.6);",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay-view.css",
+      "rule": "font-family",
+      "text": "font-family: \"Inter Variable\", system-ui, sans-serif;",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay-view.css",
+      "rule": "font-family",
+      "text": "font-family: \"JetBrains Mono Variable\", ui-monospace, Consolas, monospace;",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay-view.css",
+      "rule": "font-family",
+      "text": "font-family: \"Segoe UI\", system-ui, sans-serif;",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay-view.css",
+      "rule": "font-weight",
+      "text": "font-weight: 700;",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay-view.css",
+      "rule": "motion-token",
+      "text": "animation: cc-flash 1s steps(2, jump-none) infinite;",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay.css",
+      "rule": "color-fallback",
+      "text": "color: var(--color, #fff);",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay.css",
+      "rule": "color-fallback",
+      "text": "color: var(--words, var(--color, #fff));",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay.css",
+      "rule": "color-literal",
+      "text": "-webkit-text-stroke: 0.06em rgb(0 0 0 / 0.85);",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay.css",
+      "rule": "color-literal",
+      "text": "color: #fff;",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay.css",
+      "rule": "color-literal",
+      "text": "text-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.6);",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay.css",
+      "rule": "font-family",
+      "text": "font-family: \"Inter Variable\", system-ui, sans-serif;",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay.css",
+      "rule": "font-family",
+      "text": "font-family: \"JetBrains Mono Variable\", ui-monospace, Consolas, monospace;",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay.css",
+      "rule": "font-family",
+      "text": "font-family: \"Segoe UI\", system-ui, sans-serif;",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay.css",
+      "rule": "font-weight",
+      "text": "font-weight: 700;",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/overlay.css",
+      "rule": "motion-token",
+      "text": "animation: flash 1s steps(2, jump-none) infinite;",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/sources.ts",
+      "rule": "font-family",
+      "text": "inter: '\"Inter Variable\", system-ui, sans-serif',",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/sources.ts",
+      "rule": "font-family",
+      "text": "mono: '\"JetBrains Mono Variable\", ui-monospace, Consolas, monospace',",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/sources.ts",
+      "rule": "font-family",
+      "text": "system: '\"Segoe UI\", system-ui, sans-serif',",
+      "count": 1
+    },
+    {
+      "file": "modules/clock-counter/src/style.css",
+      "rule": "motion-token",
+      "text": "animation: clock-flash 1s steps(2, jump-none) infinite;",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/App.vue",
+      "rule": "focus-ring",
+      "text": "class=\"hover:bg-primary/40 focus-visible:bg-primary/60 absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize touch-none outline-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/App.vue",
+      "rule": "z-index",
+      "text": "class=\"hover:bg-primary/40 focus-visible:bg-primary/60 absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize touch-none outline-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/ImageBar.vue",
+      "rule": "shadow",
+      "text": "class=\"bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg\"",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/ImageBar.vue",
+      "rule": "spacing",
+      "text": "class=\"bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg\"",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/ImageBar.vue",
+      "rule": "z-index",
+      "text": "class=\"bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg\"",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/ImageLightbox.vue",
+      "rule": "palette-color",
+      "text": "class=\"flex h-full max-h-none w-full max-w-none items-center justify-center border-0 bg-black/80 p-4 sm:max-w-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/LinkPopover.vue",
+      "rule": "shadow",
+      "text": "class=\"bg-popover text-popover-foreground fixed z-50 flex max-w-[272px] items-center gap-0.5 rounded-md border py-1 pr-1 pl-2.5 text-xs shadow-lg\"",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/LinkPopover.vue",
+      "rule": "spacing",
+      "text": "class=\"bg-popover text-popover-foreground fixed z-50 flex max-w-[272px] items-center gap-0.5 rounded-md border py-1 pr-1 pl-2.5 text-xs shadow-lg\"",
+      "count": 2
+    },
+    {
+      "file": "modules/notes/src/LinkPopover.vue",
+      "rule": "z-index",
+      "text": "class=\"bg-popover text-popover-foreground fixed z-50 flex max-w-[272px] items-center gap-0.5 rounded-md border py-1 pr-1 pl-2.5 text-xs shadow-lg\"",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "focus-ring",
+      "text": "class=\"note-title placeholder:text-muted-foreground mb-3 w-full min-w-0 border-b border-transparent bg-transparent pb-1 text-xl font-semibold outline-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "focus-ring",
+      "text": "outline: none;",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "radius-px",
+      "text": "border-radius: 3px;",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "radius-px",
+      "text": "border-radius: 4px;",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "radius-px",
+      "text": "border-radius: 6px;",
+      "count": 2
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden\" role=\"toolbar\" :aria-label=\"t('editor.formatting')\">",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "spacing",
+      "text": "<div v-if=\"store.deleted.value\" class=\"bg-muted flex flex-none items-center gap-2 border-b px-3 py-1.5 text-sm\" role=\"status\" data-testid=\"deleted-banner\">",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-muted-foreground px-2 py-1.5 text-xs\" data-testid=\"image-usage\">{{ t(\"image.usage\", { used: formatMegabytes(imageUsage.bytes), total: formatMegabytes(imageUsage.maxBytes) }) }}</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-muted-foreground px-2 py-1.5 text-xs\">{{ noteId === SCRATCHPAD_ID ? t(\"editor.appliesScratchpad\") : t(\"editor.appliesNotes\") }}</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "spacing",
+      "text": "margin-top: 2px;",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "spacing",
+      "text": "margin: 4px 0 8px 14px;",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "spacing",
+      "text": "margin: 4px 14px 8px 0;",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "spacing",
+      "text": "padding-left: 22px;",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "spacing",
+      "text": "padding-left: 2px;",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteEditor.vue",
+      "rule": "spacing",
+      "text": "padding: 1px 4px;",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteList.vue",
+      "rule": "raw-control",
+      "text": "<button",
+      "count": 2
+    },
+    {
+      "file": "modules/notes/src/NoteList.vue",
+      "rule": "shadow",
+      "text": "return drop.value?.id === entry.id && (drop.value.after ? \"shadow-[0_2px_0_0_var(--primary)]\" : \"shadow-[0_-2px_0_0_var(--primary)]\");",
+      "count": 2
+    },
+    {
+      "file": "modules/notes/src/NoteList.vue",
+      "rule": "spacing",
+      "text": "<ul role=\"list\" class=\"mt-2 flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto p-1.5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteList.vue",
+      "rule": "spacing",
+      "text": "class=\"h-7 pr-7 pl-7 text-sm shadow-none\"",
+      "count": 2
+    },
+    {
+      "file": "modules/notes/src/NoteRow.vue",
+      "rule": "focus-ring",
+      "text": "class=\"bg-background border-ring placeholder:text-muted-foreground h-6 w-full min-w-0 rounded-sm border px-1 text-sm font-medium outline-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteRow.vue",
+      "rule": "raw-control",
+      "text": "<button",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteRow.vue",
+      "rule": "spacing",
+      "text": "'text-muted-foreground hover:text-foreground mt-1.5 mr-1 flex size-7 flex-none items-center justify-center rounded-md opacity-0 group-hover:opacity-100 focus-visible:opacity-100',",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteRow.vue",
+      "rule": "spacing",
+      "text": "<div v-if=\"renaming\" class=\"flex min-w-0 flex-1 flex-col items-start gap-0.5 px-3 py-2\">",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteRow.vue",
+      "rule": "spacing",
+      "text": "<span class=\"flex w-full min-w-0 items-center gap-1.5 text-sm font-medium\">",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/NoteRow.vue",
+      "rule": "spacing",
+      "text": "class=\"flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left\"",
+      "count": 1
+    },
+    {
+      "file": "modules/notes/src/notes.ts",
+      "rule": "font-family",
+      "text": "{ id: \"inter\", name: \"Inter\", stack: '\"Inter Variable\", system-ui, sans-serif' },",
+      "count": 2
+    },
+    {
+      "file": "modules/notes/src/notes.ts",
+      "rule": "font-family",
+      "text": "{ id: \"jetbrains-mono\", name: \"JetBrains Mono\", stack: '\"JetBrains Mono Variable\", ui-monospace, monospace' },",
+      "count": 2
+    },
+    {
+      "file": "modules/pdf-viewer/src/App.vue",
+      "rule": "color-literal",
+      "text": "<template #add>",
+      "count": 1
+    },
+    {
+      "file": "modules/pdf-viewer/src/App.vue",
+      "rule": "spacing",
+      "text": "<Notice v-else-if=\"activeStatus === 'gone'\" variant=\"warning\" class=\"m-1 mb-0 items-center py-1.5\" :title=\"t('original.gone')\" data-testid=\"original-gone\">",
+      "count": 1
+    },
+    {
+      "file": "modules/pdf-viewer/src/App.vue",
+      "rule": "spacing",
+      "text": "<Notice v-if=\"activeStatus === 'changed'\" variant=\"info\" class=\"m-1 mb-0 items-center py-1.5\" :title=\"t('original.changed')\" data-testid=\"original-changed\">",
+      "count": 1
+    },
+    {
+      "file": "modules/pdf-viewer/src/PdfPage.vue",
+      "rule": "palette-color",
+      "text": "class=\"ring-border relative isolate mx-auto bg-white ring-1\"",
+      "count": 1
+    },
+    {
+      "file": "modules/pdf-viewer/src/PdfPage.vue",
+      "rule": "raw-control",
+      "text": "const button = document.createElement(\"button\");",
+      "count": 1
+    },
+    {
+      "file": "modules/pdf-viewer/src/PdfPane.vue",
+      "rule": "focus-ring",
+      "text": "<div ref=\"root\" class=\"flex h-full min-h-0 flex-col outline-none\" tabindex=\"-1\" data-testid=\"pdf-pane\" @keydown=\"onKey\">",
+      "count": 1
+    },
+    {
+      "file": "modules/pdf-viewer/src/PdfPane.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-col gap-1.5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/pdf-viewer/src/PdfThumbs.vue",
+      "rule": "palette-color",
+      "text": "class=\"relative block overflow-hidden bg-white ring-1 ring-border\"",
+      "count": 1
+    },
+    {
+      "file": "modules/pdf-viewer/src/style.css",
+      "rule": "z-index",
+      "text": "z-index: 1;",
+      "count": 1
+    },
+    {
+      "file": "modules/pdf-viewer/src/style.css",
+      "rule": "z-index",
+      "text": "z-index: 2;",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/App.vue",
+      "rule": "spacing",
+      "text": "<div v-else class=\"flex min-w-0 flex-1 items-center gap-2.5 text-base\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/buttons/SplitButtons.vue",
+      "rule": "spacing",
+      "text": "<Button size=\"sm\" variant=\"secondary\" class=\"px-1.5\" aria-label=\"Modules in this workspace\" title=\"Modules in this workspace\"><ChevronDown :stroke-width=\"1.5\" /></Button>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/buttons/ToggleButtons.vue",
+      "rule": "spacing",
+      "text": "<div class=\"bg-background inline-flex gap-0.5 rounded-lg border p-0.5\">",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/examples/colour-stars/CustomColour.vue",
+      "rule": "color-literal",
+      "text": "const colour = ref(\"#60a5fa\");",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/colour-stars/CustomColour.vue",
+      "rule": "color-literal",
+      "text": "const SWATCHES = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#60a5fa\", \"#4ade80\", \"#111111\"];",
+      "count": 7
+    },
+    {
+      "file": "modules/playground/src/examples/colour-stars/Swatches.vue",
+      "rule": "color-literal",
+      "text": "const colour = ref(\"#60a5fa\");",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/colour-stars/Swatches.vue",
+      "rule": "color-literal",
+      "text": "const SWATCHES = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#60a5fa\", \"#4ade80\", \"#111111\"];",
+      "count": 7
+    },
+    {
+      "file": "modules/playground/src/examples/colours/DoDont.vue",
+      "rule": "color-fallback",
+      "text": "<p style=\"color: var(--warning, #f5c518)\">Low space</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/colours/DoDont.vue",
+      "rule": "color-literal",
+      "text": "const DONT = `<div class=\"bg-[#1b1b1b] text-white border-neutral-700 border\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/colours/DoDont.vue",
+      "rule": "palette-color",
+      "text": "<p class=\"text-neutral-500\">Saved</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/colours/DoDont.vue",
+      "rule": "palette-color",
+      "text": "const DONT = `<div class=\"bg-[#1b1b1b] text-white border-neutral-700 border\">",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/examples/colours/DoDont.vue",
+      "rule": "spacing",
+      "text": "<div class=\"bg-card text-card-foreground flex flex-col gap-0.5 rounded-md border p-3 text-sm\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/colours/DoDont.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-destructive flex items-center gap-1.5 text-xs font-medium\"><X class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.dont\") }}</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/colours/DoDont.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-success flex items-center gap-1.5 text-xs font-medium\"><Check class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.do\") }}</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/colours/Tokens.vue",
+      "rule": "spacing",
+      "text": "<div v-for=\"[token, tailwind] in group.tokens\" :key=\"token\" class=\"flex items-center gap-2 rounded-md border p-1.5\" :data-token=\"token\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/fields/Basic.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-col gap-1.5\">",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/examples/fields/Code.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-col gap-1.5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/fields/Errors.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-col gap-1.5\">",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/examples/fields/Monospace.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-col gap-1.5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/fields/Search.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-col gap-1.5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/fields/Template.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex w-80 flex-col gap-1.5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/fields/TextArea.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-col gap-1.5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/lists/SelectableList.vue",
+      "rule": "focus-ring",
+      "text": ":class=\"['group flex h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-sm outline-none', selected === row.id ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60']\"",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/lists/SettingRows.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex min-w-0 flex-1 flex-col gap-0.5\">",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/examples/loading/LineChart.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-col gap-1.5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/loading/LineChartEmpty.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-col gap-1.5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/loading/SkeletonCard.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-muted-foreground mt-1.5 line-clamp-2 text-sm\">{{ card.text }}</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/map/TileMap.vue",
+      "rule": "color-literal",
+      "text": "context.fillStyle = \"rgb(0 0 0 / 0.6)\";",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/map/TileMap.vue",
+      "rule": "view-memory-flush",
+      "text": "",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/motion/Rules.vue",
+      "rule": "spacing",
+      "text": "<Check class=\"text-success mt-0.5 size-4 flex-none\" :stroke-width=\"1.5\" />",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/navlist/Plates.vue",
+      "rule": "spacing",
+      "text": "class=\"w-56 gap-2.5\"",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/numbers/Slider.vue",
+      "rule": "glued-text",
+      "text": "<span class=\"text-muted-foreground text-xs tabular-nums\">{{ range[0] }}–{{ range[1] }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/numbers/SliderField.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-col gap-1.5\">",
+      "count": 4
+    },
+    {
+      "file": "modules/playground/src/examples/numbers/SliderField.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-col gap-5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/pick/ComboboxFree.vue",
+      "rule": "glued-text",
+      "text": "<ComboboxItem v-for=\"{ format, example } in FORMATS\" :key=\"format\" :value=\"format\" class=\"tabular-nums\">{{ format }} · {{ example }}</ComboboxItem>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/settings/ModuleSettings.vue",
+      "rule": "color-literal",
+      "text": "<div class=\"flex w-72 items-center gap-3 rounded-xl py-2.5 pr-4 pl-2.5\" :style=\"{ background: `rgb(0 0 0 / ${look.opacity}%)`, color: look.color }\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/settings/ModuleSettings.vue",
+      "rule": "color-literal",
+      "text": "<span class=\"size-12 flex-none rounded-lg bg-[linear-gradient(135deg,#d4644a,#5b2b6e)]\" />",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/examples/settings/ModuleSettings.vue",
+      "rule": "color-literal",
+      "text": "const COLORS = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#f472b6\", \"#a78bfa\", \"#60a5fa\", \"#2dd4bf\", \"#4ade80\", \"#000000\"];",
+      "count": 10
+    },
+    {
+      "file": "modules/playground/src/examples/settings/ModuleSettings.vue",
+      "rule": "color-literal",
+      "text": "const DEFAULTS = { size: \"m\", bold: true, italic: false, color: \"#ffffff\", opacity: 70, overlay: true, autoplay: false };",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/settings/ModuleSettings.vue",
+      "rule": "font-weight",
+      "text": "<Toggle :model-value=\"look.bold\" label=\"Bold\" class=\"font-bold\" @update:model-value=\"set('bold', $event)\">B</Toggle>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/settings/ModuleSettings.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex w-72 items-center gap-3 rounded-xl py-2.5 pr-4 pl-2.5\" :style=\"{ background: `rgb(0 0 0 / ${look.opacity}%)`, color: look.color }\">",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/examples/settings/OnePage.vue",
+      "rule": "color-literal",
+      "text": "const COLORS = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#f472b6\", \"#a78bfa\", \"#60a5fa\", \"#2dd4bf\", \"#4ade80\", \"#000000\"];",
+      "count": 10
+    },
+    {
+      "file": "modules/playground/src/examples/settings/OnePage.vue",
+      "rule": "color-literal",
+      "text": "const DEFAULTS = { seconds: true, twentyFour: true, size: \"m\", color: \"#ffffff\", every: \"15\" };",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/spacing/Depth.vue",
+      "rule": "shadow",
+      "text": "<div class=\"bg-popover text-popover-foreground flex h-20 items-center justify-center rounded-md border text-sm shadow-md\">Menu</div>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/spacing/Depth.vue",
+      "rule": "shadow",
+      "text": "<figcaption class=\"text-muted-foreground text-xs\"><code class=\"font-mono\">bg-popover border shadow-md</code><br />{{ t(\"demo.depth.floating\") }}</figcaption>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/spacing/NestedCorners.vue",
+      "rule": "spacing",
+      "text": "<figcaption class=\"text-destructive flex items-center gap-1.5 text-xs font-medium\"><X class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.dont\") }}</figcaption>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/spacing/NestedCorners.vue",
+      "rule": "spacing",
+      "text": "<figcaption class=\"text-success flex items-center gap-1.5 text-xs font-medium\"><Check class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.do\") }}</figcaption>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/tabs/TabStrip.vue",
+      "rule": "color-literal",
+      "text": "<template #add>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/text/Capitals.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-destructive flex items-center gap-1.5 text-xs font-medium\"><X class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.dont\") }}</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/text/Capitals.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-success flex items-center gap-1.5 text-xs font-medium\"><Check class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.do\") }}</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/text/Mono.vue",
+      "rule": "spacing",
+      "text": "<code class=\"bg-secondary rounded-sm px-1.5 py-0.5 font-mono text-sm\">1.4.2</code>",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/examples/text/Mono.vue",
+      "rule": "spacing",
+      "text": "<code class=\"bg-secondary rounded-sm px-1.5 py-0.5 font-mono text-sm\">a1b2c3d</code>",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/examples/text/Mono.vue",
+      "rule": "spacing",
+      "text": "<code class=\"bg-secondary rounded-sm px-1.5 py-0.5 font-mono text-sm\">tavora.notes</code>",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/examples/text/Numbers.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex flex-wrap gap-x-10 gap-y-4\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/toggles/StyleTiles.vue",
+      "rule": "palette-color",
+      "text": "<span :class=\"['absolute inset-x-2 rounded-sm bg-black/70', option.value === 'card' ? 'top-2 bottom-2' : option.value === 'bar' ? 'bottom-2 h-2' : 'top-1/2 h-1 -translate-y-1/2 bg-black/40']\" />",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/examples/toggles/Toggles.vue",
+      "rule": "font-weight",
+      "text": "<Toggle v-model=\"bold\" label=\"Bold\" class=\"font-bold\">B</Toggle>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/tooltips/FromTitle.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-muted-foreground max-w-40 truncate rounded-md border px-2 py-1.5 text-sm\" title=\"D:\\Games\\Steam\\steamapps\\common\\Enshrouded\\Saves\">D:\\Games\\Steam\\steamapps\\common\\Enshrouded\\Saves</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/tooltips/Values.vue",
+      "rule": "raw-control",
+      "text": "<button v-for=\"(height, index) in bars\" :key=\"index\" class=\"bg-primary/30 hover:bg-primary focus-visible:bg-primary w-6 rounded-t-sm\" :style=\"{ height: height + '%' }\" :aria-label=\"'Day ' + (index + 1)\" v-bind=\"tipFor('chart')\" />",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/tooltips/Values.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex h-16 items-end gap-1.5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/Descriptions.vue",
+      "rule": "spacing",
+      "text": "<p class=\"flex flex-col gap-0.5 text-sm\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/Descriptions.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-muted-foreground flex flex-col gap-0.5 text-sm\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/Descriptions.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-destructive flex items-center gap-1.5\"><X class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.dont\") }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/Descriptions.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-success flex items-center gap-1.5\"><Check class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.do\") }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/FewWords.vue",
+      "rule": "spacing",
+      "text": "<p class=\"flex flex-col gap-0.5 text-sm\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/FewWords.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-muted-foreground flex flex-col gap-0.5 text-sm\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/FewWords.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-destructive flex items-center gap-1.5\"><X class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.dont\") }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/FewWords.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-success flex items-center gap-1.5\"><Check class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.do\") }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/Names.vue",
+      "rule": "spacing",
+      "text": "<p class=\"flex flex-col gap-0.5 text-sm\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/Names.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-muted-foreground flex flex-col gap-0.5 text-sm\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/Names.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-destructive flex items-center gap-1.5\"><X class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.dont\") }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/Names.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-success flex items-center gap-1.5\"><Check class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.do\") }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/PlainWords.vue",
+      "rule": "spacing",
+      "text": "<p class=\"flex flex-col gap-0.5 text-sm\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/PlainWords.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-muted-foreground flex flex-col gap-0.5 text-sm\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/PlainWords.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-destructive flex items-center gap-1.5\"><X class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.dont\") }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/PlainWords.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-success flex items-center gap-1.5\"><Check class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.do\") }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/YouDu.vue",
+      "rule": "spacing",
+      "text": "<p class=\"flex flex-col gap-0.5 text-sm\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/YouDu.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-muted-foreground flex flex-col gap-0.5 text-sm\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/YouDu.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-destructive flex items-center gap-1.5\"><X class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.dont\") }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/writing/YouDu.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-success flex items-center gap-1.5\"><Check class=\"size-4\" :stroke-width=\"1.5\" /> {{ t(\"demo.do\") }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/zoom/AutoFitOff.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex items-center gap-10 p-4\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/zoom/HideAndShow.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex items-center gap-10 p-4\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/zoom/HundredExtras.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex items-center gap-20 p-8\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/zoom/PersistView.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex items-center gap-10 p-4\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/zoom/RememberView.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex items-center gap-10 p-4\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/examples/zoom/WideContent.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex items-center gap-10 p-4\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/shell/CodeBlock.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex items-center gap-2 py-1.5 pr-2 pl-4\">",
+      "count": 1
+    },
+    {
+      "file": "modules/playground/src/shell/ExampleBox.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex min-w-0 flex-1 flex-col gap-0.5 pt-0.5\">",
+      "count": 2
+    },
+    {
+      "file": "modules/playground/src/shell/ExampleBox.vue",
+      "rule": "spacing",
+      "text": "<p v-if=\"rule\" class=\"text-muted-foreground flex gap-2 border-t px-4 py-2.5 text-xs\" data-testid=\"example-rule\">",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/App.vue",
+      "rule": "text-size",
+      "text": "<h2 v-if=\"bothSections\" class=\"text-muted-foreground px-3 pt-1 text-[0.6875rem] font-medium tracking-wide uppercase\" data-testid=\"heading-connection\">{{ t(\"section.connection\") }}</h2>",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/App.vue",
+      "rule": "text-size",
+      "text": "<h2 v-if=\"bothSections\" class=\"text-muted-foreground px-3 pt-2 text-[0.6875rem] font-medium tracking-wide uppercase\" data-testid=\"heading-system\">{{ t(\"section.system\") }}</h2>",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/AppsDialog.vue",
+      "rule": "spacing",
+      "text": "<CollapsibleTrigger class=\"text-muted-foreground h-7 px-1.5 font-normal\" data-testid=\"apps-small\">",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/AppsDialog.vue",
+      "rule": "spacing",
+      "text": "<span class=\"flex min-w-0 flex-1 items-center gap-2 px-1.5\">",
+      "count": 2
+    },
+    {
+      "file": "modules/system-monitor/src/AppsDialog.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-muted-foreground w-16 flex-none px-1.5 text-right\">{{ pct(app.cpu) }}</span>",
+      "count": 2
+    },
+    {
+      "file": "modules/system-monitor/src/AppsDialog.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-muted-foreground w-16 flex-none px-1.5 text-right\">{{ pct(ramShare(app.memoryBytes, totalBytes)) }}</span>",
+      "count": 2
+    },
+    {
+      "file": "modules/system-monitor/src/AppsDialog.vue",
+      "rule": "spacing",
+      "text": "<span class=\"w-20 flex-none px-1.5 text-right\">{{ memory(app.memoryBytes, language) }}</span>",
+      "count": 2
+    },
+    {
+      "file": "modules/system-monitor/src/ConnectionSection.vue",
+      "rule": "spacing",
+      "text": "<CollapsibleTrigger class=\"min-w-0 flex-1 py-0.5\" data-testid=\"drops-toggle\">",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/ConnectionSection.vue",
+      "rule": "spacing",
+      "text": "<div :class=\"cn(BIG, 'text-center', loss.class)\" data-testid=\"loss-text\">{{ loss.text }}<span v-if=\"loss.text\" class=\"text-muted-foreground ml-0.5 text-base font-normal\">%</span></div>",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/ConnectionSection.vue",
+      "rule": "spacing",
+      "text": "<p v-if=\"rows.length === 0\" class=\"text-muted-foreground pt-1.5 text-xs\" data-testid=\"drops-empty\">{{ t(\"drops.empty\") }}</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/ConnectionSection.vue",
+      "rule": "spacing",
+      "text": "<span :class=\"cn(BIG, 'text-[1.375rem]')\" data-testid=\"speed-down\"><ArrowDown class=\"text-muted-foreground mr-0.5 inline size-4 align-[-0.1em]\" :stroke-width=\"1.75\" aria-hidden=\"true\" />{{ speed.down }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/ConnectionSection.vue",
+      "rule": "spacing",
+      "text": "<span :class=\"cn(BIG, 'text-[1.375rem]')\" data-testid=\"speed-up\"><ArrowUp class=\"text-muted-foreground mr-0.5 inline size-4 align-[-0.1em]\" :stroke-width=\"1.75\" aria-hidden=\"true\" />{{ speed.up }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/ConnectionSection.vue",
+      "rule": "spacing",
+      "text": "<span :class=\"cn(BIG, 'truncate text-[1.375rem]', internet.class)\" data-testid=\"ping-internet\">{{ internet.text }}<span v-if=\"internet.unit\" class=\"text-muted-foreground ml-0.5 text-sm font-normal\">ms</span></span>",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/ConnectionSection.vue",
+      "rule": "spacing",
+      "text": "<span :class=\"cn(BIG, 'truncate text-[1.375rem]', router.class)\" data-testid=\"ping-router\">{{ router.text }}<span v-if=\"router.unit\" class=\"text-muted-foreground ml-0.5 text-sm font-normal\">ms</span></span>",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/ConnectionSection.vue",
+      "rule": "spacing",
+      "text": "<ul v-else class=\"mt-1.5 flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs\" data-testid=\"drops-list\">",
+      "count": 2
+    },
+    {
+      "file": "modules/system-monitor/src/ConnectionSection.vue",
+      "rule": "spacing",
+      "text": "const CARD = \"bg-card text-card-foreground flex flex-col gap-1.5 rounded-lg border p-2.5\";",
+      "count": 2
+    },
+    {
+      "file": "modules/system-monitor/src/ConnectionSection.vue",
+      "rule": "text-size",
+      "text": "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/MetricCard.vue",
+      "rule": "spacing",
+      "text": "<section class=\"bg-card text-card-foreground flex flex-col gap-1.5 rounded-lg border p-2.5\" :data-testid=\"testid\" :title=\"hint || undefined\" :tabindex=\"hint ? 0 : undefined\">",
+      "count": 2
+    },
+    {
+      "file": "modules/system-monitor/src/MetricCard.vue",
+      "rule": "spacing",
+      "text": "<span class=\"text-[2.125rem] leading-none font-semibold tabular-nums\">{{ usage }}<span v-if=\"usage\" class=\"text-muted-foreground ml-0.5 text-base font-normal\">%</span></span>",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/MetricCard.vue",
+      "rule": "spacing",
+      "text": "<span v-else class=\"text-muted-foreground text-[2.125rem] leading-none font-semibold tabular-nums\" :title=\"temperatureHint\" :tabindex=\"temperatureHint ? 0 : undefined\" data-testid=\"temperature-none\">–<span class=\"ml-0.5 text-base font-norma",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/MetricCard.vue",
+      "rule": "spacing",
+      "text": "<span v-if=\"temperature\" :class=\"cn('text-[2.125rem] leading-none font-semibold tabular-nums', temperatureClass)\" data-testid=\"temperature\">{{ temperature }}<span class=\"text-muted-foreground ml-0.5 text-base font-normal\">°C</span></span>",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/MetricCard.vue",
+      "rule": "text-size",
+      "text": "<span class=\"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\">{{ title }}</span>",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/SystemSection.vue",
+      "rule": "spacing",
+      "text": "<Button variant=\"ghost\" size=\"icon-xs\" class=\"-my-1.5 -mr-1 self-center\" :title=\"t('apps.show')\" :aria-label=\"t('apps.show')\" data-testid=\"show-apps\" @click=\"emit('showApps')\">",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/SystemSection.vue",
+      "rule": "spacing",
+      "text": "<section v-for=\"drive in drives\" :key=\"drive.id\" class=\"bg-card text-card-foreground flex flex-col gap-1 rounded-lg border px-2.5 py-2\" :data-testid=\"`drive-${drive.id}`\">",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/SystemSection.vue",
+      "rule": "spacing",
+      "text": "const CARD = \"bg-card text-card-foreground flex flex-col gap-1.5 rounded-lg border p-2.5\";",
+      "count": 2
+    },
+    {
+      "file": "modules/system-monitor/src/SystemSection.vue",
+      "rule": "text-size",
+      "text": "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";",
+      "count": 1
+    },
+    {
+      "file": "modules/system-monitor/src/TrafficCard.vue",
+      "rule": "spacing",
+      "text": "const CARD = \"bg-card text-card-foreground flex flex-col gap-1.5 rounded-lg border p-2.5\";",
+      "count": 2
+    },
+    {
+      "file": "modules/system-monitor/src/TrafficCard.vue",
+      "rule": "text-size",
+      "text": "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/AddInput.vue",
+      "rule": "focus-ring",
+      "text": "'placeholder:text-muted-foreground focus-visible:border-ring h-8 w-full min-w-0 rounded-md border bg-transparent pr-2 text-sm outline-none',",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/AddInput.vue",
+      "rule": "spacing",
+      "text": "alignToTasks ? 'pl-[79px]' : 'pl-8',",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/GroupSection.vue",
+      "rule": "focus-ring",
+      "text": "class=\"focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-semibold outline-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/GroupSection.vue",
+      "rule": "motion-token",
+      "text": "class=\"absolute bottom-[-1px] left-0 h-px bg-[var(--tint,var(--primary))] transition-[width] duration-300 motion-reduce:transition-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/GroupSection.vue",
+      "rule": "raw-control",
+      "text": "<button",
+      "count": 2
+    },
+    {
+      "file": "modules/todos/src/GroupSection.vue",
+      "rule": "spacing",
+      "text": ":class=\"cn('flex-none rounded-full px-2 py-0.5 text-xs tabular-nums', remaining ? 'bg-background text-muted-foreground' : 'bg-primary/15 text-primary')\"",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/GroupSection.vue",
+      "rule": "spacing",
+      "text": "'group/header relative flex h-10 cursor-pointer items-center gap-1 pr-1 pl-1.5 select-none',",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/live.ts",
+      "rule": "color-literal",
+      "text": "backgroundColor: \"#000000\",",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/live.ts",
+      "rule": "color-literal",
+      "text": "color: \"#ffffff\",",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/live.ts",
+      "rule": "color-literal",
+      "text": "export const LIVE_COLORS = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#f472b6\", \"#a78bfa\", \"#60a5fa\", \"#2dd4bf\", \"#4ade80\", \"#000000\"];",
+      "count": 10
+    },
+    {
+      "file": "modules/todos/src/live.ts",
+      "rule": "font-family",
+      "text": "{ id: \"inter\", name: \"Inter\", stack: '\"Inter Variable\", system-ui, sans-serif' },",
+      "count": 2
+    },
+    {
+      "file": "modules/todos/src/plate.css",
+      "rule": "color-fallback",
+      "text": "background: var(--plate, rgb(0 0 0 / 0.33));",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/plate.css",
+      "rule": "color-fallback",
+      "text": "color: var(--text, #fff);",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/plate.css",
+      "rule": "color-literal",
+      "text": "0 0 4px rgb(0 0 0 / 0.5);",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/plate.css",
+      "rule": "color-literal",
+      "text": "0 1px 2px rgb(0 0 0 / 0.7),",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/plate.css",
+      "rule": "color-literal",
+      "text": "0 1px 2px rgb(0 0 0 / 0.85),",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/plate.css",
+      "rule": "color-literal",
+      "text": "inset 0 1px 2px rgb(0 0 0 / 0.5);",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/plate.css",
+      "rule": "focus-ring",
+      "text": "outline: none;",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/plate.css",
+      "rule": "font-weight",
+      "text": "font-weight: 700;",
+      "count": 2
+    },
+    {
+      "file": "modules/todos/src/plate.css",
+      "rule": "radius-px",
+      "text": "border-radius: 10px;",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/plate.css",
+      "rule": "shadow",
+      "text": "box-shadow:",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/plate.ts",
+      "rule": "color-literal",
+      "text": "plate.style.setProperty(\"--plate\", `rgb(${hexToRgb(look.backgroundColor)} / ${look.background / 100})`);",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/Settings.vue",
+      "rule": "font-weight",
+      "text": "<Toggle :model-value=\"look.bold\" :label=\"t('live.bold')\" class=\"font-bold\" data-testid=\"live-bold\" @update:model-value=\"set('bold', $event)\">B</Toggle>",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/Settings.vue",
+      "rule": "palette-color",
+      "text": "<p v-if=\"!state.rows.length\" class=\"text-sm text-white/80\">{{ t(\"live.previewEmpty\") }}</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/Settings.vue",
+      "rule": "shadow",
+      "text": "<div class=\"bg-card text-card-foreground w-80 rounded-lg border p-2 shadow-lg\" :style=\"panelStyle\" data-testid=\"panel-preview\">",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/style.css",
+      "rule": "motion-token",
+      "text": "transition:",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/style.css",
+      "rule": "motion-token",
+      "text": "transition: transform 150ms ease;",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/style.css",
+      "rule": "radius-px",
+      "text": "border-radius: 1px;",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "focus-ring",
+      "text": "class=\"block field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent px-1 py-1.5 font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words outline-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "focus-ring",
+      "text": "class=\"placeholder:text-muted-foreground border-input focus-visible:border-ring field-sizing-content block max-h-60 min-h-20 w-full resize-none rounded-md border bg-transparent px-2 py-1.5 text-sm outline-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "raw-control",
+      "text": "<button",
+      "count": 3
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "raw-control",
+      "text": "<input",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "spacing",
+      "text": "<div class=\"flex items-start gap-1.5 py-0.5 pr-1 pl-0.5\">",
+      "count": 3
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "spacing",
+      "text": "<div v-if=\"hasMeta\" class=\"text-muted-foreground -mt-1 flex min-w-0 items-center gap-2 px-1 pb-1.5 text-xs leading-4\">",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "spacing",
+      "text": "<p class=\"text-muted-foreground mt-1.5 px-0.5 text-[11px]\">{{ t(\"task.descriptionHint\") }}</p>",
+      "count": 2
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "spacing",
+      "text": "<span class=\"flex h-8 flex-none items-center px-0.5\">",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "spacing",
+      "text": "class=\"block field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent px-1 py-1.5 font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words outline-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "spacing",
+      "text": "class=\"block w-full cursor-text rounded-sm px-1 py-1.5 text-left font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words\"",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "spacing",
+      "text": "class=\"placeholder:text-muted-foreground border-input focus-visible:border-ring field-sizing-content block max-h-60 min-h-20 w-full resize-none rounded-md border bg-transparent px-2 py-1.5 text-sm outline-none\"",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/TaskRow.vue",
+      "rule": "text-size",
+      "text": "<p class=\"text-muted-foreground mt-1.5 px-0.5 text-[11px]\">{{ t(\"task.descriptionHint\") }}</p>",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/todos.ts",
+      "rule": "color-literal",
+      "text": "blue: \"oklch(0.65 0.17 255)\",",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/todos.ts",
+      "rule": "color-literal",
+      "text": "green: \"oklch(0.7 0.17 150)\",",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/todos.ts",
+      "rule": "color-literal",
+      "text": "orange: \"oklch(0.72 0.17 55)\",",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/todos.ts",
+      "rule": "color-literal",
+      "text": "pink: \"oklch(0.7 0.19 350)\",",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/todos.ts",
+      "rule": "color-literal",
+      "text": "red: \"oklch(0.64 0.2 25)\",",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/todos.ts",
+      "rule": "color-literal",
+      "text": "teal: \"oklch(0.7 0.12 195)\",",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/todos.ts",
+      "rule": "color-literal",
+      "text": "violet: \"oklch(0.63 0.2 295)\",",
+      "count": 1
+    },
+    {
+      "file": "modules/todos/src/todos.ts",
+      "rule": "color-literal",
+      "text": "yellow: \"oklch(0.82 0.16 95)\",",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/App.vue",
+      "rule": "suspend-flush",
+      "text": "viewTimer = setTimeout(saveSelection, 500);",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/App.vue",
+      "rule": "z-index",
+      "text": "<EmptyState v-if=\"boardState.empty\" :title=\"t('empty.hint')\" class=\"text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-[1] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0\" data-",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/boards.ts",
+      "rule": "color-literal",
+      "text": "export const DEFAULT_BACKGROUND = \"#ffffff\";",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/cards.ts",
+      "rule": "color-literal",
+      "text": "{ type: \"rectangle\", x, y, width: 300, height: 190, backgroundColor: \"#f5f0e4\", ...CARD_STYLE, groupIds },",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/cards.ts",
+      "rule": "color-literal",
+      "text": "{ type: \"rectangle\", x, y, width: Math.max(w, 160) + 24, height: h + 64, backgroundColor: \"#f1eee8\", ...CARD_STYLE, groupIds, customData },",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/cards.ts",
+      "rule": "color-literal",
+      "text": "const BODY = \"#514b40\";",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/cards.ts",
+      "rule": "color-literal",
+      "text": "const CARD_STYLE = { strokeColor: \"#d6cfc1\", strokeWidth: 1, fillStyle: \"solid\" as const, roughness: 0, roundness: { type: 3 as const, value: 8 } };",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/cards.ts",
+      "rule": "color-literal",
+      "text": "const HEADING = \"#26231e\";",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/PictureLocks.vue",
+      "rule": "palette-color",
+      "text": "'picture-lock pointer-events-auto absolute size-6 -translate-x-1/2 -translate-y-1/2 bg-black/65 text-white opacity-0 transition-opacity hover:bg-black/80 hover:text-white hover:opacity-100 focus-visible:opacity-100',",
+      "count": 4
+    },
+    {
+      "file": "modules/whiteboard/src/PictureLocks.vue",
+      "rule": "z-index",
+      "text": "<div v-if=\"spots.length > 0\" :class=\"LOCKS_CLASS\" class=\"pointer-events-none absolute inset-0 z-[2] overflow-hidden\">",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/style.css",
+      "rule": "spacing",
+      "text": ".whiteboard-app .excalidraw .App-toolbar-content { flex-wrap: wrap; justify-content: center; gap: 2px; }",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/style.css",
+      "rule": "spacing",
+      "text": "gap: 6px;",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/style.css",
+      "rule": "spacing",
+      "text": "padding: 2px 4px 2px 8px;",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/style.css",
+      "rule": "text-size",
+      "text": ".whiteboard-app .excalidraw .HintViewer { margin-top: 4px; font-size: 11px; }",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/style.css",
+      "rule": "text-size",
+      "text": "font-size: 0.6875rem;",
+      "count": 1
+    },
+    {
+      "file": "modules/whiteboard/src/style.css",
+      "rule": "z-index",
+      "text": "z-index: 1;",
+      "count": 1
+    }
+  ]
+}
