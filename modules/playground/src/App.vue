@@ -13,6 +13,7 @@ import { SwitchField } from "@tavora/official-ui/components/ui/switch";
 import { Toaster } from "@tavora/official-ui/components/ui/toast";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { flushViewsOnLifecycle } from "./lifecycleFlush";
 import { exampleFor } from "./examples";
 import { maybe, setLanguage, t } from "./i18n";
 import type { TextKey } from "./locales";
@@ -119,6 +120,7 @@ onMounted(async () => {
     const saved = isPageId(state?.page) ? state.page : typeof state?.group === "string" ? OLD_TABS[state.group] : undefined;
     showDisabled.value = state?.disabled === true;
     sdk.value = connected;
+    cleanup.push(flushViewsOnLifecycle(connected.lifecycle));
     void connected.storage.app.delete(OLD_DEV_TOOLS_KEY).catch(() => undefined);
     if (saved && !pickedEarly) page.value = saved;
   } catch {

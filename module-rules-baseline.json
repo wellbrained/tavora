@@ -213,9 +213,6 @@
     "modules/playground/src/examples/map/TileMap.vue": {
       "color": {
         "context.fillStyle = \"rgb(0 0 0 / 0.6)\";": 1
-      },
-      "view-flush": {
-        "<TileMap ref=\"map\" class=\"h-96\" :source=\"source\" :pins=\"pins\" :selected=\"selected\" :highlight=\"highlightEggs ? eggs : null\" persist-key=\"playground-island\" whole-label=\"Show the whole island\" label=\"Made-up island\" @select=\"selected = $event.id\">": 1
       }
     },
     "modules/playground/src/examples/settings/ModuleSettings.vue": {
@@ -253,11 +250,6 @@
     "modules/playground/src/examples/tooltips/Values.vue": {
       "kit-control": {
         "<button v-for=\"(height, index) in bars\" :key=\"index\" class=\"bg-primary/30 hover:bg-primary focus-visible:bg-primary w-6 rounded-t-sm\" :style=\"{ height: height + '%' }\" :aria-label=\"'Day ' + (index + 1)\" v-bind=\"tipFor('chart')\" />": 1
-      }
-    },
-    "modules/playground/src/examples/zoom/PersistView.vue": {
-      "view-flush": {
-        "<ZoomPane class=\"h-64\" persist-key=\"playground-line\" label=\"Remembering line\">": 1
       }
     },
     "modules/system-monitor/src/App.vue": {
@@ -409,9 +401,6 @@
       }
     },
     "modules/whiteboard/src/App.vue": {
-      "suspend-flush": {
-        "viewTimer = setTimeout(saveSelection, 500);": 1
-      },
       "z-index": {
         "<EmptyState v-if=\"boardState.empty\" :title=\"t('empty.hint')\" class=\"text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-[1] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0\" data-testid=\"empty-hint\" />": 1
       }

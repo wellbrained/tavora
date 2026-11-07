@@ -15,6 +15,7 @@ import type { DocumentHandle } from "@tavora/sdk/store";
 import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import BoardMenu from "./BoardMenu.vue";
 import { openBoardLibrary, type BoardKind, type BoardLibrary } from "./board-library";
+import { flushOnLifecycle } from "./lifecycleFlush";
 import { initialBoardState, type BoardState, type View } from "./boardState";
 import type { BoardSession } from "./boardSession";
 import { cleanName, emptyBoard, formatMegabytes, MAX_BOARD_BYTES, newBoardId, sizeLevel, type BoardData, type BoardSummary } from "./boards";
@@ -188,6 +189,14 @@ onMounted(async () => {
     mode.value = modeOf(connection.theme);
     cleanup.push(connection.onTheme((theme) => (mode.value = modeOf(theme))));
     sdk.value = connected;
+    // Hidden or closed right after a stroke or a view change: write what is still waiting.
+    cleanup.push(
+      flushOnLifecycle(connected.lifecycle, async () => {
+        clearTimeout(viewTimer);
+        saveSelection();
+        await board.value?.flush();
+      }),
+    );
     // Where the toolbar goes is one choice for every workspace.
     toolbar.value = toolbarPlace(await connected.storage.app.get("toolbar").catch(() => null));
 

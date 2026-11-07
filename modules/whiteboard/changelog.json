@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.16",
+    "date": "2026-11-07",
+    "notes": [
+      "Your last stroke is kept when Tavora closes or sleeps."
+    ]
+  },
+  {
     "version": "0.3.15",
     "date": "2026-11-05",
     "notes": [
