@@ -74,11 +74,13 @@ jobs:
           path: npm
       # In the order the pack job numbered them (1-, 2-, ...), each package after the ones it depends on. The paths
       # start with ./ on purpose: npm reads a bare `npm/1-tavora-sdk-x.tgz` as a GitHub repo (owner/name) and tries git.
+      # --loglevel verbose: npm says why a trusted-publishing sign-in failed only in verbose output (it logs no token).
       - name: Publish
         env:
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
+          npm --version
           for file in $(ls ./npm/*.tgz | sort -V); do
-            if [ "$DRY_RUN" = "true" ]; then npm publish "$file" --access public --dry-run; else npm publish "$file" --access public; fi
+            if [ "$DRY_RUN" = "true" ]; then npm publish "$file" --access public --dry-run; else npm publish "$file" --access public --loglevel verbose; fi
           done
