@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.23.118",
+    date: "2026-11-07",
+    title: "Tab panels show where the keyboard is",
+    notes: [
+      "A tab panel now has a ring around it when you tab into it.",
+    ],
+    prs: [
+      { number: 700, title: "Kit: visible focus ring on tab panels" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.23.117",
     date: "2026-11-07",
     title: "Modules can read your folders and programs",
