@@ -1,7 +1,7 @@
 import { readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { expectModuleText, inModule, launch, type Running, NOTES, openWorkspace, openModule, panels, PDF_VIEWER, PLAYGROUND, RAIL_WIDTH, setContentSize, TODOS, typeInModule, VUE, waitForShown, q, clickSelector } from "./harness";
+import { expectModuleText, inModule, launch, type Running, NOTES, openWorkspace, openModule, layOutColumns, panels, PDF_VIEWER, PLAYGROUND, RAIL_WIDTH, setContentSize, TODOS, typeInModule, VUE, waitForShown, q, clickSelector } from "./harness";
 
 // The official Notes, To-Dos and UI Playground modules, driven through their own pages.
 
@@ -882,10 +882,14 @@ test.describe("ui playground pages", () => {
 
 test("to-dos: an open menu stays open when a save comes back", async () => {
   const { app, page } = await launch();
+  // Side by side: two tabs in one group would leave the first panel out of sight, and a page out of sight draws no
+  // frames, so the opening animation of a menu in it only ends if the panel happens to be hidden a moment later.
+  await layOutColumns(page, 2);
   await openModule(page, TODOS);
   await openModule(page, TODOS);
   await ready(app, TODOS, "empty", 0);
   await ready(app, TODOS, "empty", 1);
+  for (const index of [0, 1]) await expect.poll(() => inModule(app, TODOS, `document.visibilityState`, index)).toBe("visible");
   await addInto(app, TODOS, $(`[data-testid="first-task"]`), "Find the Ancient Crypt");
   await addInto(app, TODOS, $(`[data-testid="group-name-new"]`), "Bosses");
   await expect.poll(() => inModule(app, TODOS, `!!${groupNamed("Bosses")}`, 1)).toBe(true);
@@ -895,7 +899,10 @@ test("to-dos: an open menu stays open when a save comes back", async () => {
   const sub = `document.querySelector('[data-slot="dropdown-menu-sub-content"][data-state="open"]')`;
   const open = (index: number) => inModule<boolean>(app, TODOS, `!!${menu} && !!${sub}`, index);
   await inModule(app, TODOS, `${taskTitled("Find the Ancient Crypt")}.querySelector('[data-testid="task-menu"]').dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
-  await expect.poll(() => inModule(app, TODOS, `!!${menu} && ${menu}.getAnimations().length === 0`)).toBe(true);
+  // The menu has finished opening (items ignore clicks until then). A failure names what is still playing.
+  await expect
+    .poll(() => inModule(app, TODOS, `${menu} ? ${menu}.getAnimations().map((one) => one.playState + " " + (one.animationName ?? one.transitionProperty)).join(", ") : "no menu"`))
+    .toBe("");
   await inModule(
     app,
     TODOS,
