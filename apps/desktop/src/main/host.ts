@@ -2680,7 +2680,7 @@ export class Host {
       "stop-panel": (action) => this.nativePanel(action.instanceId)?.stop(),
       "show-panel-in-game": (action) => this.showPanelInGame(action.instanceId),
       "stop-panel-in-game": (action) => this.gameOverlays.stopPanel(action.instanceId, action.setup),
-      "save-layout": (action) => this.workspaces.saveLayout(this.currentWorkspaceId(), action.layout),
+      "save-layout": (action) => this.workspaces.saveLayout(action.workspaceId ?? this.currentWorkspaceId(), action.layout),
       "apply-layout-template": (action) => this.workspaces.applyTemplate(this.currentWorkspaceId(), layoutTemplate(action.templateId)),
       "apply-layout-grid": (action) => this.workspaces.applyTemplate(this.currentWorkspaceId(), gridTemplate(action.columns, action.rows)),
       "save-snapshot": (action) => this.workspaces.saveSnapshot(this.currentWorkspaceId(), action.name),
@@ -4766,7 +4766,8 @@ export class Host {
           const overGame = this.panels.isLent(record.instanceId);
           // A new page is also waiting until it has drawn once: its loader stays under the see-through view until then.
           const question = this.questionOf(record, workspace.instances);
-          const waiting = !question && !overGame && (status === "loading" || status === "ready") && (!view?.revealed || !view.firstDrawn);
+          const phase = view?.phase ?? "loading";
+          const waiting = !question && !overGame && (phase === "loading" || phase === "settling" || phase === "revealed");
           const inGame = this.gameOverlays.hasPanel(record.instanceId);
           const live = this.gameOverlays.liveFor(record.instanceId, this.modules.get(record.moduleId)?.owner ?? "", record.moduleId, current?.id ?? "");
           return {

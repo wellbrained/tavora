@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clampRect, FROZEN_GONE_MS, PREPARED_FRESH_MS } from "./panel-views";
+import { clampRect, FROZEN_GONE_MS, PREPARED_FRESH_MS, SHOW_DIALOG_CAP_MS } from "./panel-views";
 import { panelViewsRig } from "./panel-views.test-helper";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -546,6 +546,24 @@ describe("panel dialog", () => {
     drawB();
     await vi.advanceTimersByTimeAsync(0);
     expect(rig.calls).not.toContain(`dialogDrawn ${B}`);
+  });
+
+  it("shows a dialog opened again only by its own wait, not by the one before it", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    await vi.advanceTimersByTimeAsync(SHOW_DIALOG_CAP_MS / 2);
+    rig.views.closeDialog();
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    rig.views.placeDialog({ x: 100, y: 50, width: 600, height: 400 });
+    // The first opening's wait runs out: the new frame is not on screen yet, so the page stays out of sight.
+    await vi.advanceTimersByTimeAsync(SHOW_DIALOG_CAP_MS / 2 + 1);
+    expect(a.bounds!.x).toBeLessThan(0);
+    // Its own wait does show it.
+    await vi.advanceTimersByTimeAsync(SHOW_DIALOG_CAP_MS / 2);
+    expect(a.bounds).toEqual({ x: 100, y: 50, width: 600, height: 400 });
   });
 
   it("keeps the page out of sight until the frame is shown, then moves it in", async () => {

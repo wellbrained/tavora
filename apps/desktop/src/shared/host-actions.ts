@@ -464,8 +464,8 @@ export function hostActionTable(c: HostChecks) {
     "show-panel-in-game": { instanceId: c.uuid },
     /** Panel menu or Settings > Overlays > Stop showing in game: out of one setup, or out of every setup. */
     "stop-panel-in-game": { setup: optional(setup), instanceId: c.uuid },
-    /** Null when nothing is docked any more. */
-    "save-layout": { layout: nullable(c.layout) },
+    /** Null when nothing is docked any more. `workspaceId`: the workspace the layout belongs to (else the one open now). */
+    "save-layout": { layout: nullable(c.layout), workspaceId: optional(c.workspaceId) },
     /** Rearranges the workspace into empty slots of a layout template; open panels fill the first ones. */
     "apply-layout-template": { templateId: layoutTemplateId },
     /** The same, for an even grid (at most GRID_LIMITS). */

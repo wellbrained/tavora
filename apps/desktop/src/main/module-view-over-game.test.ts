@@ -360,7 +360,9 @@ describe("a panel shown again", () => {
     const drawn = vi.fn();
     const view = make({ onDrawn: drawn });
     const state = made.views.at(-1)!;
+    expect(view.phase).toBe("loading");
     view.revealed = true;
+    expect(view.phase).toBe("revealed");
     view.setVisible(true);
     expect(state.background).toBe("#00000000");
     const done = vi.fn();
@@ -375,6 +377,7 @@ describe("a panel shown again", () => {
     view.framed(requestId);
     await vi.waitFor(() => expect(done).toHaveBeenCalled());
     expect(view.firstDrawn).toBe(true);
+    expect(view.phase).toBe("drawn");
     expect(drawn).toHaveBeenCalledTimes(1);
     // Its colour comes back once the frame has had time to reach the screen, so it does not show plain before that.
     expect(state.background).toBe("#00000000");

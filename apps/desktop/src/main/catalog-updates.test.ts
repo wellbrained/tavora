@@ -62,7 +62,8 @@ async function setup(key: KeyObject, network: string[] = [], safety?: SafetyChec
     modules.set(ID, { manifest: installed.manifest, root: path.join(userModules, ID), provenance: "local", owner: installed.owner });
   load(await installZipData(zipOf("1.0.0", key, network), { ...options(), catalog: true }));
 
-  const catalog: { index: CatalogEntry[]; zips: Map<string, Buffer>; versions: CatalogVersion[]; downloads: string[]; offline: boolean; noDownloads: boolean } = { index: [], zips: new Map(), versions: [], downloads: [], offline: false, noDownloads: false };
+  const catalog: { index: CatalogEntry[]; zips: Map<string, Buffer>; versions: CatalogVersion[]; downloads: string[]; offline: boolean; noDownloads: boolean; beforeDownload?: () => Promise<void> } = { index: [], zips: new Map(), versions: [], downloads: [], offline: false, noDownloads: false };
+  const counts = { installs: 0 };
   const publish = (entry: CatalogEntry, zip: Buffer) => {
     catalog.index = [entry];
     catalog.zips.set(entry.zip.sha256, zip);
@@ -75,6 +76,7 @@ async function setup(key: KeyObject, network: string[] = [], safety?: SafetyChec
       index: async () => (catalog.offline ? null : catalog.index),
       details: async () => ({ entry: catalog.index[0]!, versions: catalog.versions, readme: null }),
       download: async (zip) => {
+        await catalog.beforeDownload?.();
         if (catalog.noDownloads) throw new Error("connection lost");
         catalog.downloads.push(zip.sha256);
         return catalog.zips.get(zip.sha256)!;
@@ -86,13 +88,14 @@ async function setup(key: KeyObject, network: string[] = [], safety?: SafetyChec
     ...(safety ? { firstKey: (fingerprint: string) => safety.firstKey(fingerprint) } : {}),
     check: (zip, expect) => checkZipData(zip, { ...options(), expect }),
     install: async (zip, expect) => {
+      counts.installs++;
       const installed = await installZipData(zip, { ...options(), expect, catalog: true });
       load(installed);
       return installed;
     },
   });
   const page = () => readFile(path.join(userModules, ID, "dist", "index.html"), "utf8");
-  return { userData, userModules, modules, updater, publish, catalog, page, auto };
+  return { userData, userModules, modules, updater, publish, catalog, page, auto, counts };
 }
 
 describe("findUpdates", () => {
@@ -197,6 +200,38 @@ describe("CatalogUpdater", () => {
     expect(installed.manifest.version).toBe("1.1.0");
     expect(asks).toEqual({ network: [], connectors: [], folders: [] });
     expect(await page()).toBe("<p>1.1.0</p>");
+  });
+
+  it("installs a waiting update once when Update is pressed twice", async () => {
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const { updater, publish, auto, counts } = await setup(key);
+    auto.on = false;
+    const zip = zipOf("1.1.0", key);
+    publish(listing("1.1.0", zip, fingerprint(key)), zip);
+    await updater.check();
+    const [first, second] = await Promise.all([updater.apply(ID, "1.1.0"), updater.apply(ID, "1.1.0")]);
+    expect(second).toBe(first);
+    expect(counts.installs).toBe(1);
+    expect(updater.pending(ID)).toBeUndefined();
+  });
+
+  it("keeps no waiting update for a version replaced while the check ran", async () => {
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const { updater, publish, auto, catalog, modules } = await setup(key);
+    auto.on = false;
+    const zip = zipOf("1.1.0", key);
+    publish(listing("1.1.0", zip, fingerprint(key)), zip);
+    let release!: () => void;
+    catalog.beforeDownload = () => new Promise<void>((resolve) => (release = resolve));
+    const checking = updater.check();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The user installs a zip by hand meanwhile.
+    const module = modules.get(ID)!;
+    modules.set(ID, { ...module, manifest: { ...module.manifest, version: "1.0.5" } });
+    release();
+    const outcome = await checking;
+    expect(outcome.waiting).toEqual([]);
+    expect(updater.pending(ID)).toBeUndefined();
   });
 
   it("keeps an update that asks for something new waiting even when the setting is on", async () => {

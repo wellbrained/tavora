@@ -131,6 +131,8 @@ export interface CatalogUpdaterOptions {
 export class CatalogUpdater {
   private readonly pendingUpdates = new Map<string, PendingUpdate>();
   private running: Promise<CheckOutcome> | null = null;
+  /** The install going for each module, by the user's yes or by a check: one at a time, so it is never installed twice. */
+  private readonly installing = new Map<string, Promise<{ installed: Installed; asks: Permissions }>>();
 
   constructor(private readonly options: CatalogUpdaterOptions) {}
 
@@ -154,12 +156,27 @@ export class CatalogUpdater {
    * The user said yes to a waiting update (exactly `version`, the one they were shown): it is
    * installed by every installer rule again, against what is installed now.
    */
-  async apply(id: string, version: string): Promise<{ installed: Installed; asks: Permissions }> {
+  apply(id: string, version: string): Promise<{ installed: Installed; asks: Permissions }> {
+    // A second press, or a check installing the same update: the install going is the answer.
+    const going = this.installing.get(id);
+    if (going) return going;
     const pending = this.pendingUpdates.get(id);
-    if (!pending || pending.version !== version) throw new Error(`no update of ${id} to ${version} is waiting`);
-    const installed = await this.options.install(pending.zip, { id, owner: pending.signer });
-    this.pendingUpdates.delete(id);
-    return { installed, asks: pending.asks };
+    if (!pending || pending.version !== version) return Promise.reject(new Error(`no update of ${id} to ${version} is waiting`));
+    return this.installOnce(id, pending.asks, () => this.options.install(pending.zip, { id, owner: pending.signer }));
+  }
+
+  /** Installs one module's update unless one is going already, and forgets its waiting update once it is in. */
+  private installOnce(id: string, asks: Permissions, install: () => Promise<Installed>): Promise<{ installed: Installed; asks: Permissions }> {
+    const going = this.installing.get(id);
+    if (going) return going;
+    const run = install()
+      .then((installed) => {
+        this.pendingUpdates.delete(id);
+        return { installed, asks };
+      })
+      .finally(() => this.installing.delete(id));
+    this.installing.set(id, run);
+    return run;
   }
 
   private async run(): Promise<CheckOutcome> {
@@ -174,14 +191,15 @@ export class CatalogUpdater {
     const index = await this.options.client.index(this.options.official?.() ? { official: true } : undefined);
     if (!index) return { ...outcome, unreachable: true };
     for (const entry of findUpdates(index, installed, this.options.tavoraVersion, this.options.firstKey?.bind(this.options), this.options.officialSigner?.bind(this.options))) {
+      // The user is installing this one right now.
+      if (this.installing.has(entry.id)) continue;
       const module = installed.find((item) => item.id === entry.id)!;
       const waiting = this.pendingUpdates.get(entry.id);
       if (waiting?.sha256 === entry.zip.sha256) {
         // Found while the setting was off, and nothing new is asked: turned on since, it installs now.
         if (asksNothing(waiting.asks) && this.options.autoInstall?.()) {
           try {
-            outcome.updated.push(await this.options.install(waiting.zip, { id: entry.id, owner: waiting.signer }));
-            this.pendingUpdates.delete(entry.id);
+            outcome.updated.push((await this.installOnce(entry.id, waiting.asks, () => this.options.install(waiting.zip, { id: entry.id, owner: waiting.signer }))).installed);
             continue;
           } catch (error) {
             this.options.log?.(`catalog update of ${entry.id} to ${entry.version} not installed: ${error instanceof Error ? error.message : String(error)}`);
@@ -205,8 +223,7 @@ export class CatalogUpdater {
         const checked = await this.options.check(zip, expect);
         const asks = newAsks(module.asks, checked.manifest.permissions);
         if (asksNothing(asks) && this.options.autoInstall?.()) {
-          outcome.updated.push(await this.options.install(zip, expect));
-          this.pendingUpdates.delete(entry.id);
+          outcome.updated.push((await this.installOnce(entry.id, asks, () => this.options.install(zip, expect))).installed);
           continue;
         }
         const versions = await this.options.client.details(entry.id).then(
@@ -224,6 +241,9 @@ export class CatalogUpdater {
           sha256: entry.zip.sha256,
           zip,
         };
+        // Installed another way while this check ran (a zip by hand, the user's yes): what it compared with is gone.
+        const now = this.options.installed().find((item) => item.id === entry.id);
+        if (!now || now.version !== module.version || now.owner !== module.owner || this.installing.has(entry.id)) continue;
         this.pendingUpdates.set(entry.id, pending);
         outcome.waiting.push(pending);
       } catch (error) {

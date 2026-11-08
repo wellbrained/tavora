@@ -325,6 +325,8 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
 export const SETTLE_MS = 150;
 export const NO_BRIDGE_MS = 400;
 export const REVEAL_CAP_MS = 2_000;
+/** Where a panel's page is, from its start to its first frame (`ModuleView.phase`), or what went wrong. */
+export type PagePhase = Exclude<InstanceStatus, "ready"> | "settling" | "revealed" | "drawn";
 /** How a panel answered panel.navigate. */
 export type NavigateOutcome = "switched" | "failed" | "unhandled";
 
@@ -371,7 +373,8 @@ export class ModuleView {
   private lastPong = 0;
   private storageWatch: ReturnType<typeof setInterval> | undefined;
   private measuring = false;
-  status: InstanceStatus = "loading";
+  /** How the page is doing; changed only by `setStatus`, read as `status`. */
+  private health: InstanceStatus = "loading";
   /** False while the page is still loading or filling itself with data; the host keeps the view hidden until then. */
   revealed = false;
   private revealTimers: ReturnType<typeof setTimeout>[] = [];
@@ -462,7 +465,7 @@ export class ModuleView {
       void this.insertThemeCss(options.getTheme());
     });
     contents.on("did-finish-load", () => {
-      if (this.status !== "loading") return;
+      if (this.health !== "loading") return;
       this.setStatus("ready");
       this.startHeartbeat();
       this.startStorageWatch();
@@ -476,10 +479,10 @@ export class ModuleView {
       this.setStatus("failed");
     });
     contents.on("unresponsive", () => {
-      if (this.status === "ready") this.setStatus("unresponsive");
+      if (this.health === "ready") this.setStatus("unresponsive");
     });
     contents.on("responsive", () => {
-      if (this.status === "unresponsive") this.setStatus("ready");
+      if (this.health === "unresponsive") this.setStatus("ready");
     });
     contents.on("render-process-gone", (_event, details) => {
       console.warn(`[tavora] module ${module.manifest.id} renderer gone: ${details.reason}`);
@@ -1082,6 +1085,22 @@ export class ModuleView {
   /** False from a new page's start until it has drawn once; the host UI keeps the panel's loader under it until then. */
   firstDrawn = false;
 
+  /** How the page is doing: loading, ready, failed, unresponsive, crashed or unavailable. */
+  get status(): InstanceStatus {
+    return this.health;
+  }
+
+  /**
+   * Where the page is, as one value (for the host UI and diagnostics): its trouble if it has one, else loading (the
+   * document is not in yet), settling (in, hidden until its first data), revealed (shown, its first frame not drawn yet)
+   * or drawn.
+   */
+  get phase(): PagePhase {
+    if (this.health !== "loading" && this.health !== "ready") return this.health;
+    if (!this.revealed) return this.health === "loading" ? "loading" : "settling";
+    return this.firstDrawn ? "drawn" : "revealed";
+  }
+
   setVisible(visible: boolean): void {
     this.view.setVisible(visible);
     if (visible === this.shown) return;
@@ -1127,7 +1146,7 @@ export class ModuleView {
       const timer = setTimeout(() => {
         if (!contents.isDestroyed()) {
           const { width, height } = this.view.getBounds();
-          console.warn(`[tavora] ${this.moduleId}${this.typeName ? ` (${this.typeName})` : ""} did not draw within ${DRAW_CAP_MS} ms of being shown: ${width}x${height}, ${this.status}, loading ${contents.isLoading()}, suspended ${this.suspended}, revealed ${this.revealed}, page ${this.frameSeenAs}, window ${this.windowState()}`);
+          console.warn(`[tavora] ${this.moduleId}${this.typeName ? ` (${this.typeName})` : ""} did not draw within ${DRAW_CAP_MS} ms of being shown: ${width}x${height}, ${this.phase}, loading ${contents.isLoading()}, suspended ${this.suspended}, revealed ${this.revealed}, page ${this.frameSeenAs}, window ${this.windowState()}`);
         }
         done();
       }, DRAW_CAP_MS);
@@ -1313,7 +1332,7 @@ export class ModuleView {
   /** Called when the page's preload answers a heartbeat ping. */
   pong(): void {
     this.lastPong = Date.now();
-    if (this.status === "unresponsive") this.setStatus("ready");
+    if (this.health === "unresponsive") this.setStatus("ready");
   }
 
   /**
@@ -1328,7 +1347,7 @@ export class ModuleView {
       const contents = this.view.webContents;
       if (contents.isDestroyed()) return this.stopHeartbeat();
       contents.send("tavora:ping");
-      if (this.status === "ready" && Date.now() - this.lastPong > UNRESPONSIVE_MS) this.setStatus("unresponsive");
+      if (this.health === "ready" && Date.now() - this.lastPong > UNRESPONSIVE_MS) this.setStatus("unresponsive");
     }, HEARTBEAT_MS);
   }
 
@@ -1388,7 +1407,7 @@ export class ModuleView {
     contents.forcefullyCrashRenderer();
     // Chromium has been seen to leave a busy renderer running; make sure.
     setTimeout(() => {
-      if (this.status === "crashed" || contents.isDestroyed() || contents.getOSProcessId() !== pid) return;
+      if (this.health === "crashed" || contents.isDestroyed() || contents.getOSProcessId() !== pid) return;
       try {
         process.kill(pid, "SIGKILL");
       } catch {
@@ -1413,7 +1432,7 @@ export class ModuleView {
    */
   navigate(content: PanelContent): Promise<NavigateOutcome> {
     const bridge = this.bridge;
-    if (!bridge || !bridge.ready || this.status !== "ready") return Promise.resolve("failed");
+    if (!bridge || !bridge.ready || this.health !== "ready") return Promise.resolve("failed");
     const requestId = this.nextNavigation++;
     return new Promise((resolve) => {
       const timer = setTimeout(() => finish("failed"), LIMITS.navigateTimeoutMs);
@@ -1444,10 +1463,10 @@ export class ModuleView {
   }
 
   private setStatus(status: InstanceStatus): void {
-    if (this.status === status) return;
+    if (this.health === status) return;
     // Only a running page is watched; it is restarted when the page loads again.
     if (status !== "ready" && status !== "unresponsive") this.stopHeartbeat();
-    this.status = status;
+    this.health = status;
     // A page that failed has nothing to wait for; show whatever it is.
     if (status === "failed" || status === "crashed") this.reveal();
     this.options.onStatus(status);
