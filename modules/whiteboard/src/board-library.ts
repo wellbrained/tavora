@@ -31,6 +31,8 @@ export interface OpenBoardView {
   flush(): Promise<void>;
   /** Lets go without storing what is left (the board is being deleted). */
   discard(): void;
+  /** The delete did not go through: what is drawn is stored again. */
+  resume(): void;
 }
 
 const isConflict = (error: unknown): boolean => error instanceof TavoraError && error.code === "CONFLICT";
@@ -136,15 +138,23 @@ export async function openBoardLibrary(sdk: TavoraSDK, options: BoardLibraryOpti
      * it back as it was (Undo).
      */
     async remove(id: string): Promise<() => Promise<void>> {
-      if (id === session.currentId) view?.discard();
+      // A save still waiting must not bring the board back once it is gone.
+      const open = id === session.currentId ? view : null;
+      open?.discard();
       let undo: () => Promise<void>;
       try {
-        undo = await session.remove(id);
+        try {
+          undo = await session.remove(id);
+        } catch (error) {
+          if (!isConflict(error)) throw error;
+          // Another panel saved the board since the list was read: delete the copy it has now.
+          await session.refresh();
+          undo = await session.remove(id);
+        }
       } catch (error) {
-        if (!isConflict(error)) throw error;
-        // Another panel saved the board since the list was read: delete the copy it has now.
-        await session.refresh();
-        undo = await session.remove(id);
+        // Not deleted: the board stays open, so what is drawn on it is saved again.
+        open?.resume();
+        throw error;
       }
       if (session.items.length === 0 && !session.currentId) await create("blank");
       return undo;

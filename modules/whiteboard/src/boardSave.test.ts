@@ -220,6 +220,33 @@ describe("letting go", () => {
     expect(panel.host.documents.get(ID)!.revision).toBe(revision);
     expect(read()?.elements).toEqual([]);
   });
+
+  it("resume saves again after a delete that did not go through", async () => {
+    const { saver, read } = await setup();
+    const kept = rectangle();
+    saver.change(scene([kept]));
+    saver.discard();
+    saver.resume();
+    expect(saver.state.dirty).toBe(true);
+    await wait();
+    expect(read()?.elements).toMatchObject([{ type: "rectangle", versionNonce: kept.versionNonce }]);
+    const later = rectangle();
+    saver.change(scene([kept, later]));
+    await saver.flush();
+    expect(read()?.elements).toHaveLength(2);
+  });
+
+  it("resume leaves a board deleted elsewhere alone", async () => {
+    const { saver, read, other } = await setup();
+    await other.sdk.documents.delete(ID);
+    await vi.waitFor(() => expect(saver.state.deleted).toBe(true));
+    saver.change(scene([rectangle()]));
+    saver.discard();
+    saver.resume();
+    await saver.flush();
+    await wait();
+    expect(read()).toBeUndefined();
+  });
 });
 
 describe("saving when the panel sleeps", () => {

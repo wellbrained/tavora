@@ -71,6 +71,8 @@ export interface BoardSession extends Controls {
   flush(): Promise<void>;
   /** Lets go without saving what is left (the board is being deleted). */
   discard(): void;
+  /** The delete did not go through: saving goes on. */
+  resume(): void;
   /** Saves what is left and lets go of the page's listeners. */
   dispose(): Promise<void>;
 }
@@ -313,6 +315,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     recheckLocks: () => locks.recheck(),
     flush: () => saver.flush(),
     discard: () => saver.discard(),
+    resume: () => saver.resume(),
     async dispose() {
       disposed = true;
       removeEventListener("keydown", copyKey, true);

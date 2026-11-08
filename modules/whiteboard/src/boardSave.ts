@@ -68,8 +68,11 @@ export function createBoardSaver(options: BoardSaverOptions) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let saving: Promise<void> = Promise.resolve();
   let failures = 0;
-  /** Nothing is saved any more: the board was deleted elsewhere, or the page let go of it. */
-  let paused = false;
+  /**
+   * Why nothing is saved any more, or null while it saves: the board was deleted elsewhere, the page let go of it for a
+   * delete (`resume` takes that back when the delete did not go through), or the saver was disposed.
+   */
+  let stopped: "deleted" | "discarded" | "disposed" | null = null;
   let state: SaverState = { save: "idle", dirty: false, bytes: JSON.stringify(document.data).length, deleted: false };
 
   const stateListeners = new Set<(state: SaverState) => void>();
@@ -87,17 +90,23 @@ export function createBoardSaver(options: BoardSaverOptions) {
   });
   const stopChanges = document.onChange((event) => {
     if (!event.deleted) return;
-    paused = true;
+    stopped = "deleted";
     clearTimeout(timer);
     timer = undefined;
     set({ deleted: true });
   });
 
+  function schedule(): void {
+    set({ dirty: true });
+    clearTimeout(timer);
+    timer = setTimeout(() => void flush(), delay);
+  }
+
   function flush(): Promise<void> {
     clearTimeout(timer);
     timer = undefined;
     const scene = latest;
-    if (!scene || paused) return saving;
+    if (!scene || stopped) return saving;
     const signature = signatureOf(scene);
     if (signature === queued) return saving;
     queued = signature;
@@ -145,18 +154,22 @@ export function createBoardSaver(options: BoardSaverOptions) {
     /** The drawing changed. */
     change(scene: Scene): void {
       latest = scene;
-      if (paused || signatureOf(scene) === queued) return;
-      set({ dirty: true });
-      clearTimeout(timer);
-      timer = setTimeout(() => void flush(), delay);
+      if (stopped || signatureOf(scene) === queued) return;
+      schedule();
     },
     /** Saves what is not stored yet; resolves once it is. */
     flush,
     /** Lets go without saving what is left (the board is being deleted). */
     discard(): void {
-      paused = true;
+      if (stopped === null) stopped = "discarded";
       clearTimeout(timer);
       timer = undefined;
+    },
+    /** The delete after `discard` did not go through: the board stays open, so what was drawn on it is saved again. */
+    resume(): void {
+      if (stopped !== "discarded") return;
+      stopped = null;
+      if (latest && signatureOf(latest) !== queued) schedule();
     },
     onState(fn: (state: SaverState) => void): () => void {
       stateListeners.add(fn);
@@ -170,7 +183,7 @@ export function createBoardSaver(options: BoardSaverOptions) {
     /** Saves what is left and stops listening. */
     async dispose(): Promise<void> {
       await flush();
-      paused = true;
+      stopped = "disposed";
       stopErrors();
       stopChanges();
       stateListeners.clear();
