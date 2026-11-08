@@ -67,13 +67,15 @@ const near = computed(() => new Set(pagesInBand(layout.value.tops, sizes.value, 
 
 async function load() {
   const mine = ++loadToken;
+  // A password question of the load this one replaces ends now (as Cancel), so that load lets go.
+  endPasswordQuestion();
   status.value = "opening";
   progress.value = 0;
   restoring = true;
   void closePdf(pdf.value);
   pdf.value = null;
   try {
-    const opened = await openPdf(props.url, askPassword);
+    const opened = await openPdf(props.url, (wrong) => askPassword(mine, wrong));
     if (mine !== loadToken) return void closePdf(opened);
     const found: PageSize[] = [];
     for (let start = 1; start <= opened.numPages; start += 40) {
@@ -101,7 +103,9 @@ async function load() {
     // Keys need the focus inside this pane; when nothing has it yet, it starts on the pages.
     if (document.activeElement === document.body) scroller.value?.focus({ preventScroll: true });
     // What the scroll reports while the page is being put in place is not the reader's doing.
-    setTimeout(() => (restoring = false), 150);
+    setTimeout(() => {
+      if (mine === loadToken) restoring = false;
+    }, 150);
   } catch (error) {
     const kind = error instanceof PdfProblem ? error.kind : "broken";
     if (mine !== loadToken || kind === "cancelled") return;
@@ -114,14 +118,23 @@ async function load() {
 const passwordField = ref("");
 const passwordWrong = ref(false);
 const passwordInput = ref<InstanceType<typeof Input> | null>(null);
-let passwordReply: ((password: string | null) => void) | null = null;
+/** The open question: which load asked, and how to answer it. Only the newest load may ask. */
+let question: { load: number; reply: (password: string | null) => void } | null = null;
 
-/** pdf.js needs the password: the pane asks for it and waits for Open or Cancel. */
-async function askPassword(wrong: boolean): Promise<string | null> {
+function endPasswordQuestion() {
+  const open = question;
+  question = null;
+  open?.reply(null);
+}
+
+/** pdf.js needs the password: the pane asks for it and waits for Open or Cancel. A load that was replaced gets no question. */
+async function askPassword(load: number, wrong: boolean): Promise<string | null> {
+  if (load !== loadToken) return null;
+  endPasswordQuestion();
   status.value = "password";
   passwordWrong.value = wrong;
   passwordField.value = "";
-  const answer = new Promise<string | null>((resolve) => (passwordReply = resolve));
+  const answer = new Promise<string | null>((resolve) => (question = { load, reply: resolve }));
   await nextTick();
   (passwordInput.value?.$el as HTMLInputElement | undefined)?.focus();
   return answer;
@@ -129,8 +142,8 @@ async function askPassword(wrong: boolean): Promise<string | null> {
 
 /** Open (with the password) or Cancel (null). The field is emptied right away, so the password is not kept. */
 function answerPassword(password: string | null) {
-  const reply = passwordReply;
-  passwordReply = null;
+  const reply = question?.reply;
+  question = null;
   passwordField.value = "";
   if (password === null) {
     reply?.(null);
@@ -151,7 +164,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   loadToken++;
-  passwordReply?.(null);
+  endPasswordQuestion();
   resizer?.disconnect();
   paneResizer?.disconnect();
   void closePdf(pdf.value);
