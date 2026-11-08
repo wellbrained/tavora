@@ -272,11 +272,18 @@ function updateConstraints(api: DockviewApi) {
   }
 }
 
+/** The workspace this page shows: a save that lands after a switch still goes to it, not to the one open by then. */
+const pageWorkspaceId = view.value.currentWorkspaceId;
+
+function saveNow() {
+  clearTimeout(saveTimer);
+  saveTimer = undefined;
+  if (dock && pageWorkspaceId) void act({ type: "save-layout", workspaceId: pageWorkspaceId, layout: fromDockview(dock.toJSON(), maximizedNow(dock)) }, { quiet: true });
+}
+
 function saveSoon() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    if (dock) void act({ type: "save-layout", layout: fromDockview(dock.toJSON(), maximizedNow(dock)) }, { quiet: true });
-  }, SAVE_DELAY_MS);
+  saveTimer = setTimeout(saveNow, SAVE_DELAY_MS);
 }
 
 watch(
@@ -414,7 +421,8 @@ watch([root, area], (elements, previous) => {
 });
 
 onBeforeUnmount(() => {
-  clearTimeout(saveTimer);
+  // A change made just before a switch is still saved, into this page's own workspace.
+  if (saveTimer !== undefined) saveNow();
   cancelAnimationFrame(reportFrame);
   resizes.disconnect();
   removeEventListener("dragend", endDrag, true);

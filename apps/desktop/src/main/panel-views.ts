@@ -55,7 +55,7 @@ export function clampRect(raw: unknown, size: { width: number; height: number })
 /** How far left of its place a panel's page waits while its dialog's frame is not shown yet. */
 const OFFSCREEN_PX = 20000;
 /** The longest the page waits out of sight for the host UI to show the frame. */
-const SHOW_DIALOG_CAP_MS = 1500;
+export const SHOW_DIALOG_CAP_MS = 1500;
 
 export interface PanelViewAdapter {
   readonly kind: "module" | "browser";
@@ -682,7 +682,8 @@ export class PanelViews {
     this.layOut(open.instanceId, adapter);
     // The frame's own focus trap took the keys when it opened; the page, once in the frame, takes them over.
     if (first) void adapter.drawn.then(() => this.dialogState === open && this.deps.dialogDrawn?.(open.instanceId));
-    if (first) setTimeout(() => this.showDialog(open.instanceId), SHOW_DIALOG_CAP_MS);
+    // Only for this opening: a dialog closed and opened again meanwhile waits for its own frame.
+    if (first) setTimeout(() => this.dialogState === open && this.showDialog(open.instanceId), SHOW_DIALOG_CAP_MS);
   }
 
   /** The host UI's frame is on screen (or took too long): the page moves into it, in the same step, and takes the keys. */

@@ -70,6 +70,8 @@ export class ModuleLifecycle {
   /** The newest catalog install running for each module, so only it reports its progress. */
   private readonly installRuns = new Map<string, number>();
   private installRunCount = 0;
+  /** The update the user said yes to, per module: a second press gets the same one, so grants and reloads run once. */
+  private readonly applying = new Map<string, Promise<string>>();
   /** Keeps modules installed from the catalog up to date (catalog-updates.ts). */
   readonly updates: CatalogUpdater;
 
@@ -142,7 +144,15 @@ export class ModuleLifecycle {
    * reload with the new version. The install already started them; only a new grant starts them again,
    * so they connect with it.
    */
-  async applyUpdate(moduleId: string, version: string): Promise<string> {
+  applyUpdate(moduleId: string, version: string): Promise<string> {
+    const going = this.applying.get(moduleId);
+    if (going) return going;
+    const run = this.applyUpdateNow(moduleId, version).finally(() => this.applying.delete(moduleId));
+    this.applying.set(moduleId, run);
+    return run;
+  }
+
+  private async applyUpdateNow(moduleId: string, version: string): Promise<string> {
     const module = this.options.modules().get(moduleId) ?? this.options.blocked().get(moduleId);
     const pending = this.updates.pending(moduleId);
     if (!module || !pending || pending.version !== version) throw new LibraryError("error.updateGone");
