@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.7",
+    date: "2026-11-08",
+    title: "Updates and layouts hold",
+    notes: [
+      "Pressing Update twice installs a module update once.",
+      "A panel you move just before switching workspaces stays where you put it.",
+    ],
+    prs: [
+      { number: 716, title: "App: one install per module update, layouts saved into their own workspace, one page phase" },
+    ],
+    tags: ["catalog", "modules", "workspace"],
+  },
+  {
     version: "0.24.6",
     date: "2026-11-08",
     title: "PDF passwords",
