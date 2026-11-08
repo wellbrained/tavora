@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.6",
+    date: "2026-11-08",
+    title: "PDF passwords",
+    notes: [
+      "Switching files while one asks for its password opens the right one.",
+    ],
+    prs: [
+      { number: 715, title: "PDF Viewer: a password question belongs to the load that asked" },
+    ],
+    tags: ["pdf-viewer"],
+  },
+  {
     version: "0.24.5",
     date: "2026-11-08",
     title: "Maps and lists let go",
