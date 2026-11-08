@@ -375,10 +375,11 @@ const hoverEdge = ref<"col" | "row" | null>(null)
 
 // ── Pointer
 
+// Each drag belongs to the pointer that started it: another pointer (a touch while the mouse drags) neither moves nor ends it.
 type Drag =
   | { kind: "select"; mode: "cell" | "column" | "row"; pointerId: number; x: number; y: number; captured: boolean }
-  | { kind: "fill"; plan: FillPlan | null }
-  | { kind: "resize"; axis: "col" | "row"; index: number; from: number; start: number }
+  | { kind: "fill"; pointerId: number; plan: FillPlan | null }
+  | { kind: "resize"; pointerId: number; axis: "col" | "row"; index: number; from: number; start: number }
 
 const drag = ref<Drag | null>(null)
 let lastPointer = { x: 0, y: 0 }
@@ -393,7 +394,7 @@ function onPointerDown(event: PointerEvent) {
   if (edge) {
     event.preventDefault()
     const axis = edge.kind === "col" ? colAxis.value : rowAxis.value
-    drag.value = { kind: "resize", axis: edge.kind, index: edge.index, from: edge.kind === "col" ? event.clientX : event.clientY, start: axis.size(edge.index) }
+    drag.value = { kind: "resize", pointerId: event.pointerId, axis: edge.kind, index: edge.index, from: edge.kind === "col" ? event.clientX : event.clientY, start: axis.size(edge.index) }
     root.value?.setPointerCapture?.(event.pointerId)
     return
   }
@@ -439,7 +440,7 @@ function onFillDown(event: PointerEvent) {
   event.preventDefault()
   event.stopPropagation()
   if (editing.value) commitEdit(null)
-  drag.value = { kind: "fill", plan: null }
+  drag.value = { kind: "fill", pointerId: event.pointerId, plan: null }
   startDrag(event, true)
 }
 
@@ -476,6 +477,7 @@ function onPointerMove(event: PointerEvent) {
     hoverEdge.value = edge?.kind ?? null
     return
   }
+  if (event.pointerId !== current.pointerId) return
   lastPointer = { x: event.clientX, y: event.clientY }
   if (current.kind === "select" && !current.captured && Math.hypot(event.clientX - current.x, event.clientY - current.y) > 4) {
     current.captured = true
@@ -514,6 +516,7 @@ function autoScroll() {
 
 function onPointerUp(event: PointerEvent) {
   const current = drag.value
+  if (current && event.pointerId !== current.pointerId) return
   drag.value = null
   cancelAnimationFrame(autoScrollFrame)
   if (root.value?.hasPointerCapture?.(event.pointerId)) root.value.releasePointerCapture(event.pointerId)

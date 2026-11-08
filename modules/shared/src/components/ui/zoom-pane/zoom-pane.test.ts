@@ -461,6 +461,48 @@ function mountLive(initial: Record<string, unknown>) {
   return { props, api: () => api, pane: root.querySelector("[data-slot=zoom-pane]") as HTMLElement, root, button: (id: string) => root.querySelector(`[data-testid=${id}]`) as HTMLElement }
 }
 
+/** A touch with its own pointer id (jsdom has no PointerEvent). */
+const touch = (target: Element, type: "pointerdown" | "pointermove" | "pointerup", id: number, at: { x: number, y: number }) => {
+  const event = new MouseEvent(type, { bubbles: true, clientX: at.x, clientY: at.y, button: 0 })
+  Object.defineProperties(event, { pointerId: { value: id }, pointerType: { value: "touch" } })
+  target.dispatchEvent(event)
+}
+
+describe("pointers", () => {
+  it("a pan that turns into a pinch ends with both fingers up: no grabbing hand is left", async () => {
+    const { pane } = mount()
+    await flush()
+    touch(pane, "pointerdown", 1, { x: 100, y: 100 })
+    touch(pane, "pointermove", 1, { x: 140, y: 100 })
+    await flush()
+    expect(pane.dataset.gesture).toBe("panning")
+    expect(pane.className).toContain("cursor-grabbing")
+    touch(pane, "pointerdown", 2, { x: 200, y: 100 })
+    await flush()
+    expect(pane.dataset.gesture).toBe("pinching")
+    touch(pane, "pointerup", 1, { x: 140, y: 100 })
+    touch(pane, "pointerup", 2, { x: 200, y: 100 })
+    await flush()
+    expect(pane.dataset.gesture).toBe("idle")
+    expect(pane.className).not.toContain("cursor-grabbing")
+  })
+
+  it("the finger left after a pinch does not pan", async () => {
+    const { api, pane } = mount()
+    await flush()
+    api().setView({ x: 0, y: 0, zoom: 1 })
+    await flush()
+    touch(pane, "pointerdown", 1, { x: 100, y: 100 })
+    touch(pane, "pointerdown", 2, { x: 200, y: 100 })
+    touch(pane, "pointerup", 2, { x: 200, y: 100 })
+    const before = api().view
+    touch(pane, "pointermove", 1, { x: 180, y: 160 })
+    await flush()
+    expect(api().view).toEqual(before)
+    expect(pane.dataset.gesture).toBe("idle")
+  })
+})
+
 describe("a glide is stopped by the user", () => {
   it("by the wheel, and stays where it was stopped", async () => {
     const { api, pane } = mount({ wheel: "zoom" })

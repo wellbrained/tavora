@@ -23,7 +23,7 @@
 // them; `world` is the size of what it draws, in its own units at zoom 1, so fitting and the limits know the content.
 import type { HTMLAttributes } from "vue"
 import { Maximize, Minus, Plus } from "@lucide/vue"
-import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { Separator } from "../separator"
@@ -104,7 +104,18 @@ const DOUBLE_CLICK_QUIET_MS = 500
 const pane = ref<HTMLElement>()
 const content = ref<HTMLElement>()
 const view = ref<ZoomView>({ x: 0, y: 0, zoom: 1 })
-const dragging = ref(false)
+type Point = { x: number, y: number }
+/**
+ * What the pointers do, as one value: one pointer pressed (not moved far enough to pan yet), panning, or two pinching.
+ * A pinch ends when a finger lifts; the one still down does nothing until it lifts too.
+ */
+type Gesture =
+  | { kind: "idle" }
+  | { kind: "pressing" | "panning", id: number, start: Point, from: ZoomView }
+  | { kind: "pinching", distance: number, middle: Point, from: ZoomView }
+const IDLE: Gesture = { kind: "idle" }
+const gesture = shallowRef<Gesture>(IDLE)
+const dragging = computed(() => gesture.value.kind === "panning")
 const hint = ref(false)
 /** Waiting for the saved view: the content stays hidden so the whole map does not flash before it. */
 const restoring = ref(Boolean(props.persistKey))
@@ -289,9 +300,7 @@ function local(event: { clientX: number, clientY: number }) {
   return { x: event.clientX - box.left, y: event.clientY - box.top }
 }
 
-const pointers = new Map<number, { x: number, y: number }>()
-let drag: { start: { x: number, y: number }, from: ZoomView, id: number } | null = null
-let pinch: { distance: number, middle: { x: number, y: number }, from: ZoomView } | null = null
+const pointers = new Map<number, Point>()
 /** A pan just ended: the click that follows it does nothing. */
 let swallowClick = false
 
@@ -312,13 +321,12 @@ function onPointerDown(event: PointerEvent) {
   // A glide goes on under a plain press (a click, the first half of a double-click) and stops when a pan or pinch begins.
   pointers.set(event.pointerId, local(event))
   if (pointers.size === 1) {
-    drag = { start: local(event), from: view.value, id: event.pointerId }
+    gesture.value = { kind: "pressing", id: event.pointerId, start: local(event), from: view.value }
   }
   else if (pointers.size === 2) {
-    const [a, b] = [...pointers.values()] as [{ x: number, y: number }, { x: number, y: number }]
-    drag = null
+    const [a, b] = [...pointers.values()] as [Point, Point]
     stopGlide()
-    pinch = { distance: distance(a, b), middle: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, from: view.value }
+    gesture.value = { kind: "pinching", distance: distance(a, b), middle: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, from: view.value }
     capture(event.pointerId)
   }
 }
@@ -327,44 +335,46 @@ function onPointerMove(event: PointerEvent) {
   if (!pointers.has(event.pointerId)) return
   const at = local(event)
   pointers.set(event.pointerId, at)
-  if (pinch && pointers.size === 2) {
-    const [a, b] = [...pointers.values()] as [{ x: number, y: number }, { x: number, y: number }]
+  const now = gesture.value
+  if (now.kind === "pinching") {
+    if (pointers.size !== 2) return
+    const [a, b] = [...pointers.values()] as [Point, Point]
     const middleNow = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
     lastMovedAt = performance.now()
-    const zoomed = zoomAt(pinch.from, distance(a, b) / pinch.distance, pinch.middle, limits.value, paneSize.value, contentSize.value, props.bounds)
-    panBy(middleNow.x - pinch.middle.x, middleNow.y - pinch.middle.y, zoomed)
+    const zoomed = zoomAt(now.from, distance(a, b) / now.distance, now.middle, limits.value, paneSize.value, contentSize.value, props.bounds)
+    panBy(middleNow.x - now.middle.x, middleNow.y - now.middle.y, zoomed)
     return
   }
-  if (!drag || drag.id !== event.pointerId) return
-  const dx = at.x - drag.start.x
-  const dy = at.y - drag.start.y
-  if (!dragging.value) {
+  if (now.kind === "idle" || now.id !== event.pointerId) return
+  const dx = at.x - now.start.x
+  const dy = at.y - now.start.y
+  if (now.kind === "pressing") {
     if (Math.hypot(dx, dy) < DRAG_START) return
-    dragging.value = true
     capture(event.pointerId)
     // The pan starts from where the view is now: a glide that was on its way stops here.
     stopGlide()
     lastMovedAt = performance.now()
-    drag.from = view.value
-    drag.start = at
+    gesture.value = { kind: "panning", id: now.id, start: at, from: view.value }
     return
   }
   lastMovedAt = performance.now()
-  panBy(dx, dy, drag.from)
+  panBy(dx, dy, now.from)
 }
 
 function onPointerUp(event: PointerEvent) {
   pointers.delete(event.pointerId)
-  if (pointers.size < 2) pinch = null
-  if (drag?.id === event.pointerId) {
-    if (dragging.value) {
-      // The click comes right after pointerup, if at all; never keep it for a later one.
-      swallowClick = true
-      setTimeout(() => (swallowClick = false))
-    }
-    drag = null
-    dragging.value = false
+  const now = gesture.value
+  if (now.kind === "pinching") {
+    if (pointers.size < 2) gesture.value = IDLE
+    return
   }
+  if (now.kind === "idle" || now.id !== event.pointerId) return
+  if (now.kind === "panning") {
+    // The click comes right after pointerup, if at all; never keep it for a later one.
+    swallowClick = true
+    setTimeout(() => (swallowClick = false))
+  }
+  gesture.value = IDLE
 }
 
 function onClickCapture(event: MouseEvent) {
@@ -525,6 +535,7 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
       dragging ? 'cursor-grabbing' : 'cursor-grab',
       props.class,
     )"
+    :data-gesture="gesture.kind"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
