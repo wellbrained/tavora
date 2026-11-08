@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.17",
+    "date": "2026-11-08",
+    "notes": [
+      "A board you couldn't delete keeps saving what you draw."
+    ]
+  },
+  {
     "version": "0.3.16",
     "date": "2026-11-07",
     "notes": [

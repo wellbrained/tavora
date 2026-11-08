@@ -228,12 +228,25 @@ describe("deleting", () => {
   it("lets the open board's view go without storing what it has left", async () => {
     const { a } = panels();
     const library = await open(a.sdk);
-    const view: OpenBoardView = { flush: vi.fn(async () => undefined), discard: vi.fn() };
+    const view: OpenBoardView = { flush: vi.fn(async () => undefined), discard: vi.fn(), resume: vi.fn() };
     library.attach(view);
     const second = await library.create("blank");
     expect(view.flush).toHaveBeenCalled();
     await library.remove(second);
     expect(view.discard).toHaveBeenCalled();
+  });
+
+  it("lets the view save again when the delete does not go through", async () => {
+    const { a } = panels();
+    const library = await open(a.sdk);
+    const view: OpenBoardView = { flush: vi.fn(async () => undefined), discard: vi.fn(), resume: vi.fn() };
+    library.attach(view);
+    vi.spyOn(a.sdk.documents, "delete").mockRejectedValueOnce(new Error("offline"));
+    await expect(library.remove("board-start")).rejects.toThrow("offline");
+    expect(view.discard).toHaveBeenCalled();
+    expect(view.resume).toHaveBeenCalled();
+    expect(library.currentId).toBe("board-start");
+    expect(stored(a.host, "board-start")).toBeDefined();
   });
 });
 
@@ -259,7 +272,7 @@ describe("restoring and navigating", () => {
     const { a } = panels();
     seed(a.host, "board-000000001-aaaa", "First");
     const library = await open(a.sdk);
-    const view: OpenBoardView = { flush: vi.fn(async () => undefined), discard: vi.fn() };
+    const view: OpenBoardView = { flush: vi.fn(async () => undefined), discard: vi.fn(), resume: vi.fn() };
     library.attach(view);
     expect(await a.host.navigate({ id: "board-000000001-aaaa", title: "First" })).toEqual({ handled: true, ok: true });
     expect(view.flush).toHaveBeenCalled();
@@ -273,7 +286,7 @@ describe("restoring and navigating", () => {
     const { a } = panels();
     const library = await open(a.sdk);
     const second = await library.create("blank");
-    const view: OpenBoardView = { flush: vi.fn(async () => undefined), discard: vi.fn() };
+    const view: OpenBoardView = { flush: vi.fn(async () => undefined), discard: vi.fn(), resume: vi.fn() };
     library.attach(view);
     await library.open("board-start");
     expect(view.flush).toHaveBeenCalled();
