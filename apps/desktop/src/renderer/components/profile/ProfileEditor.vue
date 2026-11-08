@@ -30,11 +30,12 @@ let savedTimer: ReturnType<typeof setTimeout> | undefined;
 async function save() {
   if (!dirty.value || saving.value) return;
   saving.value = true;
-  const result = await act({ type: "save-profile", name: draft.value.name, initials: draft.value.initials });
+  const sent = { name: draft.value.name, initials: draft.value.initials };
+  const result = await act({ type: "save-profile", ...sent });
   saving.value = false;
   if (!result.ok) return;
-  // Main may have tidied the values (spaces in initials, length).
-  draft.value = { name: profile.value.name, initials: profile.value.initials };
+  // Main may have tidied the values (spaces in initials, length); what was typed during the save stays.
+  if (draft.value.name === sent.name && draft.value.initials === sent.initials) draft.value = { name: profile.value.name, initials: profile.value.initials };
   saved.value = true;
   clearTimeout(savedTimer);
   savedTimer = setTimeout(() => (saved.value = false), 2000);

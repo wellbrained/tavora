@@ -6,6 +6,7 @@ import { Ban, Flag, Trash2, X } from "@lucide/vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
+import { useTask } from "@tavora/official-ui/use-task";
 import { developerNameOf, MAX_MESSAGE_LENGTH, messageProblem, type ConversationDetail, type ConversationItem, type ConversationMessage } from "../../../shared/conversations";
 import { act, api, confirmAction, inbox, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
@@ -16,10 +17,13 @@ const props = defineProps<{ id: string }>();
 const emit = defineEmits<{ gone: []; select: [id: string]; again: [item: ConversationItem] }>();
 
 const detail = ref<ConversationDetail | null>(null);
-const failure = ref<string | null>(null);
+// Reading the conversation: a newer read (another conversation picked) wins over one still on its way.
+const reading = useTask({ mode: "latest", describe: () => t("error.generic") });
+const failure = reading.error;
 const text = ref("");
-const busy = ref(false);
-const error = ref<string | null>(null);
+const sending = useTask({ describe: () => t("error.generic") });
+const busy = sending.busy;
+const error = sending.error;
 const closing = ref(false);
 const reporting = ref(false);
 const thread = ref<HTMLElement | null>(null);
@@ -56,23 +60,23 @@ function closedLine(conversation: ConversationItem): string {
 }
 
 async function load() {
-  const result = await api.conversation(props.id);
-  if (result.status === "ok") {
-    detail.value = result;
-    failure.value = null;
-    await nextTick();
-    thread.value?.scrollTo({ top: thread.value.scrollHeight });
-  } else {
-    failure.value = result.error;
-  }
+  const id = props.id;
+  const result = await reading.run(() => api.conversation(id));
+  if (!result) return;
+  if (result.status !== "ok") return reading.fail(result.error);
+  detail.value = result;
+  await nextTick();
+  thread.value?.scrollTo({ top: thread.value.scrollHeight });
 }
 watch(
   () => props.id,
   () => {
     detail.value = null;
-    failure.value = null;
     text.value = "";
-    error.value = null;
+    sending.reset();
+    // Their dialogs belong to the conversation they were opened for.
+    closing.value = false;
+    reporting.value = false;
     void load();
   },
   { immediate: true },
@@ -86,15 +90,12 @@ watch(
 );
 
 async function send() {
-  if (problem.value || busy.value) return;
-  busy.value = true;
-  error.value = null;
-  const result = await act({ type: "inbox-reply", id: props.id, text: text.value.trim() }, { quiet: true });
-  busy.value = false;
-  if (!result.ok) {
-    error.value = result.error;
-    return;
-  }
+  if (problem.value) return;
+  const id = props.id;
+  const result = await sending.run(() => act({ type: "inbox-reply", id, text: text.value.trim() }, { quiet: true }));
+  // Dropped: another conversation was picked meanwhile, whose reply box is its own.
+  if (!result || props.id !== id) return;
+  if (!result.ok) return sending.fail(result.error);
   text.value = "";
   await load();
 }
@@ -104,12 +105,13 @@ function closeOwn() {
     closing.value = true;
     return;
   }
+  const id = props.id;
   confirmAction({
     title: t("inbox.close.title"),
     message: t("inbox.close.message"),
     confirm: t("inbox.close"),
     run: async () => {
-      const failed = await submitAction({ type: "inbox-close", id: props.id });
+      const failed = await submitAction({ type: "inbox-close", id });
       if (!failed) await load();
       return failed;
     },
@@ -117,13 +119,14 @@ function closeOwn() {
 }
 
 function block() {
+  const id = props.id;
   confirmAction({
     title: t("inbox.block.title"),
     message: t("inbox.block.message"),
     confirm: t("inbox.block"),
     danger: true,
     run: async () => {
-      const failed = await submitAction({ type: "inbox-block", id: props.id, report: null });
+      const failed = await submitAction({ type: "inbox-block", id, report: null });
       if (!failed) await load();
       return failed;
     },
@@ -131,13 +134,14 @@ function block() {
 }
 
 function remove() {
+  const id = props.id;
   confirmAction({
     title: t("inbox.delete.title"),
     message: t("inbox.delete.message"),
     confirm: t("inbox.delete"),
     danger: true,
     run: async () => {
-      const failed = await submitAction({ type: "inbox-delete", id: props.id });
+      const failed = await submitAction({ type: "inbox-delete", id });
       if (!failed) emit("gone");
       return failed;
     },

@@ -33,6 +33,10 @@ The app and the official modules share one kit: `@tavora/official-ui` (`modules/
 
 Before building a new module, or a new panel or feature in one (here or in `tavora-modules`), read [docs/module-rules.md](docs/module-rules.md): which kit control to use for what, the theme's colours, sizes and spacing, and how a panel saves, translates and sizes itself. Go through its Done checklist before calling the work done, and name in your summary any item you could not check.
 
+## State
+
+The app follows the module rules' "One value per flow" too ([docs/module-rules.md](docs/module-rules.md#4-behaviour)): one status union per flow instead of flags, `useTask` for work a dialog waits for, and a dialog closes itself with `closeDialog(request)` (renderer `host.ts`), never `dialog.value = null` after an `await`.
+
 ## Menus and tooltips
 
 Context menus, dropdowns and tooltips, in the app and in every module (game modules too), open next to the element they are for, with a small gap: never at the pointer and never on top of the element. A right-click anchors to the clicked element, as the kit's `ContextMenu` and `Tooltip` do; with `ui.showMenu`, pass the element as `anchor` (the SDK reads its box), never the pointer's position.

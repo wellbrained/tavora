@@ -4,7 +4,7 @@
 // ticked modules. Keyboard first, in the style of Ctrl+K.
 import { Loader, Search } from "@lucide/vue";
 import { computed, nextTick, ref, watch } from "vue";
-import { act, dialog, openPanels, state } from "../host";
+import { act, closeDialog, dialog, openPanels, state } from "../host";
 import { useListNav } from "@/lib/list-nav";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
@@ -24,6 +24,7 @@ const query = ref("");
 const { name, rows, custom, count, installedLoaded, onlineStatus, catalogModules, modulesOf } = useGamePicker(query);
 const error = ref<string | null>(null);
 const busy = ref(false);
+const shownRequest = dialog.value;
 const input = ref<HTMLInputElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const list = ref<HTMLElement | null>(null);
@@ -147,7 +148,10 @@ async function confirm(row: PickerRow | null) {
       else error.value = result.error;
     }
     if (error.value) return;
-    dialog.value = null;
+    // Closed meanwhile: the game and its modules are added, but the user is not taken anywhere and whatever is shown
+    // now stays.
+    if (dialog.value !== shownRequest) return;
+    closeDialog(shownRequest);
     // A new workspace starts empty; take the user there, unless they are still in the first-run welcome, which lists it.
     // Ticked modules need the workspace open to add their panels.
     if (state.value?.library.onboarded || ready.length) await act({ type: "open-workspace", workspaceId: added.id });

@@ -13,6 +13,7 @@ export { useDocument, type UseDocument } from "./use-document";
 export { useItemSession, type UseItemSession } from "./use-item-session";
 export { errorMessage } from "./documents";
 export { createOptimistic, useOptimistic, useOptimisticKeyed, type Optimistic, type OptimisticOptions, type UseOptimistic, type UseOptimisticKeyed } from "./optimistic";
+export { useTask, type Task, type TaskOptions, type TaskState, type TaskStatus } from "./use-task";
 
 export{Tooltip,TooltipRows,type TooltipRow}from"./components/tooltip";
 export{installTitleTooltips}from"./title-tooltips";

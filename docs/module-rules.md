@@ -65,6 +65,7 @@ classes where you use a control; never copy it.
 | A picture that may arrive late | `FadeImage` (reserved box, fades in, keeps a fallback icon if it fails) | a bare `<img>` that pops in and shifts the layout |
 | Error or warning in place | `Notice` | red text in a `<p>` |
 | Short message | `toast()` from `ui/toast` (the `Toaster` follows the user's toast position) | own status line |
+| Work a view waits for (a confirm, an import, a load) | `useTask()` from `@tavora/official-ui/use-task`: one `state` (`idle`, `running`, `failed` with its message), always ends, drops an answer that is no longer the newest (`mode: "latest"` for loads) | `busy` and `error` refs set by hand around an `await` |
 | Delete something that can be put back | `undoable()` from `ui/toast`: delete at once, then "… deleted" with Undo (see [Deleting](#deleting)) | "Are you sure?" first, a toast with an own Undo button |
 | Key hint | `Kbd` | |
 | Zoomable picture, map, tree or canvas | `ZoomPane` (one control group: −, %, +, Whole map, and your own buttons in `extras`; `hundred` sets what 100 % is; `persist-key` remembers the view; a game that draws itself, canvas or SVG, uses `view-only`) and `TileMap` for tiles and pins | own wheel, drag, double-click or zoom buttons, own zoom controls per game |
@@ -213,6 +214,13 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
   `@tavora/official-ui` (`modules/shared/src/optimistic.ts`). It handles two quick changes: the later one wins, and an
   earlier failure never overwrites a newer value. Not for what can't be put back: deleting, publishing, money, keys,
   security. No disabled controls or "Saving…" while a local save runs.
+- **One value per flow**: work with steps (a load, a save, an install, a gesture, a dialog that waits) keeps its state in
+  one `status` or `phase` union, not in several flags that can disagree (`loading` and `error` set at once, `dragging`
+  left on after a pinch). Async work goes through `useTask` (or a run counter), so a late answer is dropped and nothing
+  stays busy after a throw. A gesture is one union (`idle | pressing | panning | …`) that `pointerup` and
+  `pointercancel` of its own pointer end. With real transitions, write a pure step function over the union and test it
+  (the dock's `dockDragStep` in `apps/desktop/src/renderer/dock-drag.ts` is the model). Put the current value on the
+  view's root as `data-status`, so tests and tools read one value.
 - **Add, edit, delete**: What people can add, they can edit and delete; deletes of restorable things use Undo. Fixed built-ins are the exception.
 - **Deleting**<a id="deleting"></a>: what can be put back exactly as it was (an item of the module's own document: a to-do, a
   group, a saved value) is deleted at once and saved, then `undoable({ title, undo })` shows "<Thing> deleted" with Undo
@@ -288,6 +296,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Every visible text is in `en` and `de`; `checkCatalogs` passes; no glued sentences.
 - [ ] Saves through the SDK store; panel state is read back after a reload.
 - [ ] `onSuspend` / `onDispose` flush; nothing is lost when the panel is hidden or closed mid-edit.
+- [ ] Each flow keeps one status value (no flags that can disagree); async work uses `useTask` or a run counter.
 - [ ] Empty, loading and error states exist and use the kit; what loads is a `Skeleton` over the real template, a late picture a `FadeImage`.
 - [ ] Menus and tooltips anchor to their element; no hover-only actions.
 - [ ] Where a user would wonder why a control is off, it has a `disabled-reason`; no reason squeezed into a label.

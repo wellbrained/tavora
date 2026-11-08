@@ -7,13 +7,14 @@ import type { Component } from "vue";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { Dialog, DialogContent, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 
-defineProps<{ title: string; description?: string; icon?: Component; testid?: string; class?: string }>();
+// `status`: what the dialog waits for, when it does (a task's `state.status`), as `data-status` for tests and tools.
+defineProps<{ title: string; description?: string; icon?: Component; testid?: string; class?: string; status?: string }>();
 const emit = defineEmits<{ close: [] }>();
 </script>
 
 <template>
   <Dialog :open="true" @update:open="(open: boolean) => !open && emit('close')">
-    <DialogContent :class="cn('top-[12vh] max-h-[calc(88vh-1rem)] translate-y-0 overflow-y-auto sm:max-w-[420px]', $props.class)" :data-testid="testid">
+    <DialogContent :class="cn('top-[12vh] max-h-[calc(88vh-1rem)] translate-y-0 overflow-y-auto sm:max-w-[420px]', $props.class)" :data-testid="testid" :data-status="status">
       <DialogHeader :icon="icon" :title="title" :description="description" />
       <div class="flex flex-col gap-4 [&_[data-slot=dialog-footer]]:mt-2"><slot /></div>
     </DialogContent>
