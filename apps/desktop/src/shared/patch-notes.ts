@@ -28,6 +28,57 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.5",
+    date: "2026-11-08",
+    title: "Maps and lists let go",
+    notes: [
+      "After a pinch on a map, the grabbing hand no longer stays.",
+      "Grabbing a list item again right after a drop works.",
+    ],
+    prs: [
+      { number: 714, title: "Kit: one gesture value in ZoomPane; reorder and DataGrid drags keep to their own" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
+    version: "0.24.4",
+    date: "2026-11-08",
+    title: "Dialogs stay put",
+    notes: [
+      "Closing a dialog while it works no longer closes a question that comes up meanwhile.",
+      "Switching conversations quickly always shows the one you picked.",
+      "What you type in your profile while it saves stays.",
+    ],
+    prs: [
+      { number: 713, title: "Kit: useTask, one status for work a view waits for; dialogs close only themselves" },
+    ],
+    tags: ["accounts", "catalog", "games", "ui-kit"],
+  },
+  {
+    version: "0.24.3",
+    date: "2026-11-08",
+    title: "Clock & Counter rests at 0",
+    notes: [
+      "A finished countdown no longer keeps your PC busy.",
+    ],
+    prs: [
+      { number: 712, title: "Clock & Counter: a finished countdown stops the panel's ticker" },
+    ],
+    tags: ["clock-counter"],
+  },
+  {
+    version: "0.24.2",
+    date: "2026-11-08",
+    title: "Whiteboard keeps saving",
+    notes: [
+      "A board you couldn't delete keeps saving what you draw.",
+    ],
+    prs: [
+      { number: 711, title: "Whiteboard: a board that could not be deleted keeps saving" },
+    ],
+    tags: ["whiteboard"],
+  },
+  {
     version: "0.24.1",
     date: "2026-11-07",
     title: "Whiteboard keeps your last stroke",
