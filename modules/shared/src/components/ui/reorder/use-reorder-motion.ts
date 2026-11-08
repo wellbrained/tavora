@@ -41,6 +41,8 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
   let lifted: HTMLElement | null = null
   let cleanup: ReturnType<typeof setTimeout> | undefined
   let settling = false
+  /** Raised by every grab: a drop that waits for its list must not touch a drag that began meanwhile. */
+  let grabs = 0
 
   const items = (): HTMLElement[] => [...(container.value?.querySelectorAll<HTMLElement>(`[${attribute}]`) ?? [])]
   const idOf = (el: HTMLElement) => el.getAttribute(attribute)!
@@ -70,6 +72,7 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
   }
 
   function begin(id: string, { lift = false } = {}) {
+    grabs++
     clearTimeout(cleanup)
     reset()
     if (!container.value) return
@@ -132,9 +135,10 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
    */
   async function drop(commit: () => void | Promise<void>) {
     const el = container.value
+    const grab = grabs
     if (!el || !dragId || reducedMotion()) {
       await commit()
-      reset()
+      if (grab === grabs) reset()
       return
     }
     settling = true
@@ -142,6 +146,8 @@ export function useReorderMotion(container: Ref<HTMLElement | null>, options: Re
     const first = new Map(items().map((item) => [idOf(item), item.getBoundingClientRect()]))
     // The owner of the list may take a moment to change it, and a failed change must not leave the items stuck.
     const result = await commitAndWait(commit, () => items().map(idOf).join("\n") !== before)
+    // Grabbed again while the list took its time: the new drag owns the items now.
+    if (grab !== grabs) return
     if (result !== "changed") {
       settling = false
       cancel()

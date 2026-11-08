@@ -29,3 +29,18 @@ describe("useReorderMotion.over", () => {
     expect(reorder.over(10, 70)).toBeNull()
   })
 })
+
+describe("useReorderMotion.drop", () => {
+  it("leaves a drag that began while the drop waited for its list alone", async () => {
+    const reorder = useReorderMotion(ref(list({ y: 0 })))
+    reorder.begin("a")
+    let finish!: () => void
+    const dropping = reorder.drop(() => new Promise<void>((resolve) => (finish = resolve)))
+    // Grabbed again before the owner changed the order.
+    reorder.begin("b")
+    finish()
+    await dropping
+    // The new drag still finds places; a reset by the old drop would have ended it.
+    expect(reorder.over(10, 170)).toEqual({ id: "d", after: false })
+  })
+})
