@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.29",
+    "date": "2026-11-08",
+    "notes": [
+      "A finished countdown no longer keeps your PC busy."
+    ]
+  },
+  {
     "version": "0.1.28",
     "date": "2026-11-03",
     "notes": [

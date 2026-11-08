@@ -17,7 +17,7 @@ import { ACTIVE_GROUP, ROW_FADE } from "./active";
 import ItemCard from "./ItemCard.vue";
 import ItemEditor from "./ItemEditor.vue";
 import SettingsSkeleton from "./SettingsSkeleton.vue";
-import { count, find, groupOf, insert, lap, linkedGroups, MAX, move, moveTo, newItem, parseList, remove, resetClock, resetCounter, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
+import { clocksRunning, count, find, groupOf, insert, lap, linkedGroups, MAX, move, moveTo, newItem, parseList, remove, resetClock, resetCounter, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
 import { buildLiveState } from "./live";
 import { de, en } from "./locales";
 import { PANEL, UNDO_MS } from "./panel";
@@ -49,7 +49,8 @@ const hotkeys = ref<ReadonlySet<string>>(new Set());
 const suspended = ref(false);
 
 const list = computed<ItemList>(() => store.value?.list.value ?? EMPTY);
-const running = computed(() => list.value.items.some((item) => item.kind !== "counter" && item.since !== null));
+// A finished countdown keeps its start time (Start again begins from the full time), so the reading says whether it counts.
+const running = computed(() => clocksRunning(list.value.items, now.value));
 
 // ── What the panel shows: counters joined by links stand together in one frame ──
 

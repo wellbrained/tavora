@@ -298,6 +298,11 @@ export function readClock(clock: Clock, now: number): ClockReading {
   return { seconds: Math.ceil(left / 1000), running: clock.since !== null && left > 0, done: left === 0 };
 }
 
+/** Whether a clock still counts at `now`, so the panel's time must tick: a countdown that reached 0 has stopped. */
+export function clocksRunning(items: readonly Item[], now: number): boolean {
+  return items.some((item) => item.kind !== "counter" && readClock(item, now).running);
+}
+
 /** The clock's time as its format shows it. */
 export function clockText(clock: Clock, now: number): string {
   return formatSeconds(readClock(clock, now).seconds, clock.format);

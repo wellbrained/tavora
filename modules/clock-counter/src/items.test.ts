@@ -22,6 +22,7 @@ import {
   overlayState,
   parseList,
   readClock,
+  clocksRunning,
   remove,
   resetClock,
   setStream,
@@ -69,6 +70,21 @@ describe("clocks", () => {
     startPause(timer, 0);
     startPause(timer, 20_000);
     expect(readClock(timer, 21_000)).toEqual({ seconds: 9, running: true, done: false });
+  });
+
+  it("say the panel's time must tick only while a clock still counts", () => {
+    const timer = clock("countdown", { duration: 10_000 });
+    const watch = clock("stopwatch");
+    expect(clocksRunning([timer, watch, counter("n")], 0)).toBe(false);
+    startPause(timer, 0);
+    expect(clocksRunning([timer, counter("n")], 9_000)).toBe(true);
+    // Reached 0: it keeps its start time but has stopped.
+    expect(clocksRunning([timer, counter("n")], 10_000)).toBe(false);
+    startPause(watch, 0);
+    expect(clocksRunning([timer, watch], 10_000)).toBe(true);
+    const looping = clock("countdown", { duration: 10_000, repeat: true });
+    startPause(looping, 0);
+    expect(clocksRunning([looping], 50_000)).toBe(true);
   });
 
   it("start a repeating countdown over at 0, never done", () => {
