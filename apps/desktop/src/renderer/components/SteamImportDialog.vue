@@ -5,8 +5,9 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { useTask } from "@tavora/official-ui/use-task";
 import type { SteamGameView } from "../../shared/host-api";
-import { act, api, dialog, showToast, state } from "../host";
+import { act, api, closeDialog, dialog, showToast, state } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
@@ -16,9 +17,12 @@ const remember = ref(state.value?.library.steamProfile != null);
 const games = ref<SteamGameView[] | null>(null);
 const ticked = ref(new Set<number>());
 const filter = ref("");
-const looking = ref(false);
-const busy = ref(false);
-const error = ref<string | null>(null);
+// One thing at a time: the look-up while no list is shown, then the import. The step says which one runs.
+const task = useTask({ describe: () => t("error.generic") });
+const looking = computed(() => !games.value && task.busy.value);
+const busy = computed(() => !!games.value && task.busy.value);
+const error = task.error;
+const shownRequest = dialog.value;
 
 const fresh = computed(() => (games.value ?? []).filter((game) => game.status === "new"));
 const shown = computed(() => {
@@ -29,15 +33,10 @@ const count = computed(() => fresh.value.filter((game) => ticked.value.has(game.
 const owned = computed(() => (games.value?.length ?? 0) - fresh.value.length);
 
 async function lookUp() {
-  if (looking.value || !profile.value.trim()) return;
-  looking.value = true;
-  error.value = null;
-  const result = await api.steamLibrary(profile.value);
-  looking.value = false;
-  if (result.status === "error") {
-    error.value = result.error;
-    return;
-  }
+  if (!profile.value.trim()) return;
+  const result = await task.run(() => api.steamLibrary(profile.value));
+  if (!result) return;
+  if (result.status === "error") return task.fail(result.error);
   games.value = result.games;
   const wanted = remember.value ? profile.value.trim() : null;
   if (wanted !== (state.value?.library.steamProfile ?? null)) void act({ type: "set-steam-profile", profile: wanted }, { quiet: true });
@@ -58,20 +57,16 @@ function tickAll(on: boolean) {
 
 function back() {
   games.value = null;
-  error.value = null;
+  task.reset();
 }
 
 async function runImport() {
-  busy.value = true;
-  error.value = null;
   const chosen = fresh.value.filter((game) => ticked.value.has(game.appid)).map(({ appid, name, id }) => ({ appid, name, id }));
-  const result = await act({ type: "import-steam-games", games: chosen }, { quiet: true });
-  busy.value = false;
-  if (!result.ok) {
-    error.value = result.error;
-    return;
-  }
-  dialog.value = null;
+  const result = await task.run(() => act({ type: "import-steam-games", games: chosen }, { quiet: true }));
+  if (!result) return;
+  if (!result.ok) return task.fail(result.error);
+  // Closed meanwhile: the games were added all the same, and whatever is shown now stays.
+  closeDialog(shownRequest);
   const added = result.added ?? 0;
   showToast(added === 0 ? t("steamImport.added.zero") : t("steamImport.added", { count: added }));
 }
@@ -92,6 +87,7 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
     :icon="Gamepad2"
     testid="steam-import-dialog"
     class="sm:max-w-[500px]"
+    :status="task.state.value.status"
     @close="dialog = null"
   >
     <div class="flex flex-col gap-4">

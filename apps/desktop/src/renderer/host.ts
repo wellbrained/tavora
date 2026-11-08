@@ -432,6 +432,14 @@ export const dialog = computed<DialogRequest | null>({
   set: (request) => (request ? dialogQueue.open(request) : (dialogSlot.value = null)),
 });
 
+/**
+ * Closes `request`'s dialog if it is still the one shown. Work a dialog waits for can end after the user closed it, and
+ * then it must not close whatever is shown now (a question that came up meanwhile).
+ */
+export function closeDialog(request: DialogRequest | null): void {
+  if (request && dialogSlot.value === request) dialog.value = null;
+}
+
 // Just signed in, on a PC without the account's recovery key while the account has one: ask for it
 // now, once (the decision log: asked at sign-in, made only when the cloud copy or publishing needs it).
 let askAfterSignIn = false;

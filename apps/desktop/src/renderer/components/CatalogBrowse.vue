@@ -55,10 +55,15 @@ const sorters: Record<Sort, (a: CatalogModuleView, b: CatalogModuleView) => numb
   newest: (a, b) => (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0),
 };
 
+/** Raised by every load, so a retry while one is on its way keeps only the newest answer. */
+let loads = 0;
 async function load() {
+  const mine = ++loads;
   result.value = null;
-  result.value = await api.browseCatalog();
-  if (props.open && result.value.status === "ok") info.value = result.value.modules.find((module) => module.id === props.open) ?? null;
+  const next = await api.browseCatalog();
+  if (mine !== loads) return;
+  result.value = next;
+  if (props.open && next.status === "ok") info.value = next.modules.find((module) => module.id === props.open) ?? null;
 }
 onMounted(load);
 

@@ -12,9 +12,10 @@ import type { CatalogModuleView, CatalogPageResult } from "../../shared/host-api
 import type { InstalledModule } from "../module-page";
 import { formatSize } from "../catalog-size";
 import { PLACEHOLDER_README } from "../catalog-placeholder";
-import { act, api, dialog, state } from "../host";
+import { act, api, closeDialog, dialog, state } from "../host";
 import { compareModuleVersions } from "../../shared/module-version";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { useTask } from "@tavora/official-ui/use-task";
 import { FadeImage } from "@tavora/official-ui/components/ui/fade-image";
 import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { ProgressButton, type ProgressButtonStatus } from "@tavora/official-ui/components/ui/progress-button";
@@ -39,8 +40,10 @@ const reported = ref(false);
 
 const page = ref<CatalogPageResult | null>(null);
 const shown = ref(0);
-const opening = ref(false);
-const homepageError = ref<string | null>(null);
+// Opening the support or home page link: one at a time, and it always ends (a throw shows as an error).
+const opener = useTask({ describe: () => t("error.generic") });
+const opening = opener.busy;
+const homepageError = opener.error;
 
 const reviews = ref<HTMLElement | null>(null);
 /** The page is built from the module's own files, so what only the catalog knows is left out. */
@@ -101,25 +104,21 @@ const notHere = computed(() => {
 
 /** Opens the support link after a click: the main process reads it again from the module's manifest or the listing. */
 async function openSupport() {
-  opening.value = true;
-  homepageError.value = null;
   const library = dialog.value;
-  const outcome = await act({ type: "open-module-support", moduleId: module.value.id, source: fromFiles.value ? "installed" : "catalog" }, { quiet: true });
-  opening.value = false;
-  if (!outcome.ok) homepageError.value = outcome.error;
+  const outcome = await opener.run(() => act({ type: "open-module-support", moduleId: module.value.id, source: fromFiles.value ? "installed" : "catalog" }, { quiet: true }));
+  if (!outcome) return;
+  if (!outcome.ok) opener.fail(outcome.error);
   // A web address opens in a Browser panel, so close the library; an email address opens the mail app and the page stays.
-  else if (module.value.support?.startsWith("https://") && dialog.value === library) dialog.value = null;
+  else if (module.value.support?.startsWith("https://")) closeDialog(library);
 }
 
 async function openHomepage() {
-  opening.value = true;
-  homepageError.value = null;
   const library = dialog.value;
-  const outcome = await act({ type: "open-catalog-homepage", moduleId: module.value.id }, { quiet: true });
-  opening.value = false;
-  if (!outcome.ok) homepageError.value = outcome.error;
+  const outcome = await opener.run(() => act({ type: "open-catalog-homepage", moduleId: module.value.id }, { quiet: true }));
+  if (!outcome) return;
+  if (!outcome.ok) opener.fail(outcome.error);
   // Opened in a Browser panel: close the library so the user sees it. Asking where to open replaces it already.
-  else if (dialog.value === library) dialog.value = null;
+  else closeDialog(library);
 }
 </script>
 
