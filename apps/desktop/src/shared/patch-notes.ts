@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.8",
+    date: "2026-11-09",
+    title: "Pickers and Tab keys behave",
+    notes: [
+      "A picker always shows the current name of what you picked, also after a rename or a language switch.",
+      "A long choice in a picker breaks between words and ends in \"…\" instead of being cut off.",
+      "The Tab key reaches the zoom buttons of a map or tree before its content, and the toasts last (or first, when they sit at the top).",
+      "While a dialog or menu is open, the page behind it can't be reached with Tab.",
+    ],
+    prs: [
+      { number: 717, title: "Kit: pickers show the current label, Tab order follows what is drawn, page behind modals is inert" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.24.7",
     date: "2026-11-08",
     title: "Updates and layouts hold",
