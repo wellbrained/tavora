@@ -113,6 +113,47 @@ describe("mountPanel", () => {
     expect(again.host.storage.get("draft")).toBe("hello");
   });
 
+  it("hands start the panel's host before the page makes a call, so a test can script what it asks for first", async () => {
+    let answered: unknown;
+    const panel = await mount({
+      start: async (container, { host, sdk }) => {
+        host.answer("panel.getState", () => ({ tab: "scripted" }));
+        const got = await connect();
+        expect(got).toBe(sdk);
+        answered = await got.panel.getState();
+        container.textContent = "ready";
+      },
+    });
+    expect(answered).toEqual({ tab: "scripted" });
+    expect(panel.host.calls["panel.getState"]).toHaveLength(1);
+  });
+
+  it("restores a closed panel as Tavora does: its state and content back, with share for the storage", async () => {
+    const panel = await mount({
+      start: async () => {
+        const sdk = await connect();
+        await sdk.panel.setState({ tab: "maps" });
+        await sdk.panel.setContent({ id: "b1", title: "Build 1" });
+        await sdk.storage.set("draft", "hello");
+      },
+    });
+    await panel.unmount();
+    let seen: unknown[] = [];
+    const again = await mount({
+      share: panel.host,
+      state: panel.host.state,
+      launch: { reason: "restore", content: panel.host.content },
+      start: async () => {
+        const sdk = await connect();
+        seen = [await sdk.panel.getState(), await sdk.panel.getLaunch(), await sdk.storage.get("draft")];
+      },
+    });
+    expect(seen).toEqual([{ tab: "maps" }, { reason: "restore", content: { id: "b1", title: "Build 1" } }, "hello"]);
+    expect(again.host.state).toEqual({ tab: "maps" });
+    // Nothing was called to put the state back: the panel's own log starts with what the page did.
+    expect(again.host.calls["panel.setState"]).toBeUndefined();
+  });
+
   it("draws into a container the test gives, and leaves it on the page", async () => {
     const container = document.body.appendChild(document.createElement("section"));
     const panel = await mountPanel({ container, start: page() });
