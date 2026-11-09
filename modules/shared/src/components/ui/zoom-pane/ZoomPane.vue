@@ -544,23 +544,13 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
     @dblclick="onDoubleClick"
     @keydown="onKeyDown"
   >
-    <div
-      ref="content"
-      data-slot="zoom-pane-content"
-      :class="cn(viewOnly ? 'absolute inset-0' : 'absolute top-0 left-0 w-max origin-top-left', restoring && 'invisible')"
-      :style="viewOnly ? undefined : { transform }"
-    >
-      <slot :view="view" :pane="paneSize" />
-    </div>
-    <div v-if="$slots.overlay" data-slot="zoom-pane-overlay" :class="cn('pointer-events-none absolute inset-0 overflow-hidden', restoring && 'invisible')">
-      <slot name="overlay" :view="view" :pane="paneSize" />
-    </div>
+    <!-- First in the page so Tab reaches the zoom controls before the content, though they are drawn over its corner (z-10). -->
     <div
       data-slot="zoom-controls"
       role="group"
       :aria-label="uiText.zoomControls"
       data-zoom-pane-ignore
-      class="bg-background/90 absolute right-2 bottom-2 flex cursor-default items-center gap-0.5 rounded-md border p-0.5 shadow-sm"
+      class="bg-background/90 absolute z-10 right-2 bottom-2 flex cursor-default items-center gap-0.5 rounded-md border p-0.5 shadow-sm"
       @pointerdown.stop
       @dblclick.stop
     >
@@ -578,6 +568,17 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
         <Maximize />
       </Button>
       <slot name="extras" />
+    </div>
+    <div
+      ref="content"
+      data-slot="zoom-pane-content"
+      :class="cn(viewOnly ? 'absolute inset-0' : 'absolute top-0 left-0 w-max origin-top-left', restoring && 'invisible')"
+      :style="viewOnly ? undefined : { transform }"
+    >
+      <slot :view="view" :pane="paneSize" />
+    </div>
+    <div v-if="$slots.overlay" data-slot="zoom-pane-overlay" :class="cn('pointer-events-none absolute inset-0 overflow-hidden', restoring && 'invisible')">
+      <slot name="overlay" :view="view" :pane="paneSize" />
     </div>
     <Transition enter-from-class="opacity-0" leave-to-class="opacity-0" enter-active-class="transition-opacity" leave-active-class="transition-opacity">
       <p

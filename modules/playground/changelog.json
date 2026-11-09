@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.35",
+    "date": "2026-11-09",
+    "notes": [
+      "The Select examples show a long choice wrapped between words, and a name that changes shows at once."
+    ]
+  },
+  {
     "version": "0.1.34",
     "date": "2026-11-07",
     "notes": [

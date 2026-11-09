@@ -84,6 +84,25 @@ describe("disabledReason", () => {
     expect(clicked).not.toHaveBeenCalled()
   })
 
+  it("Button with only a title stays focusable and announced as off, shows its title in the tooltip and does nothing", async () => {
+    const clicked = vi.fn()
+    mount(defineComponent({ render: () => h(Button, { disabled: true, title: REASON, onClick: clicked }, () => "Pin") }))
+    await wait(20)
+    const button = document.querySelector("button")!
+    // Announced as off, not natively disabled: it can be reached with Tab, so the reason can be read and heard.
+    expect(button.hasAttribute("disabled")).toBe(false)
+    expect(button.getAttribute("aria-disabled")).toBe("true")
+    expect(button.tabIndex).toBe(0)
+    tabTo(button)
+    expect(document.activeElement).toBe(button)
+    hover(button)
+    await wait()
+    expect(tooltip()?.textContent).toContain(REASON)
+    button.click()
+    for (const key of ["Enter", " "]) button.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }))
+    expect(clicked).not.toHaveBeenCalled()
+  })
+
   it("Button without a reason, a title or hinted is still a plain disabled button", async () => {
     const root = mount(defineComponent({ render: () => h(Button, { disabled: true }, () => "Pin") }))
     await wait(20)

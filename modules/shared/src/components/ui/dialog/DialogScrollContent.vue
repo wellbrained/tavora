@@ -10,6 +10,7 @@ import {
   DialogPortal,
   useForwardPropsEmits,
 } from "reka-ui"
+import { InertBehind } from "../../../lib/inert-behind"
 import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
 import { provideDialogInstant } from "./instant"
@@ -55,6 +56,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
           }
         }"
       >
+        <InertBehind />
         <slot />
 
         <DialogClose

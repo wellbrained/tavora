@@ -4,9 +4,9 @@ import type { HTMLAttributes } from "vue"
 import { Check } from "@lucide/vue"
 import { reactiveOmit } from "@vueuse/core"
 import { SelectItem, SelectItemIndicator, SelectItemText, useForwardProps } from "reka-ui"
-import { computed, inject, onBeforeUnmount, onMounted } from "vue"
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { cn } from "../../../lib/utils"
-import { EMPTY_CHOICE, emptyChoicesKey } from "./empty"
+import { choiceLabelsKey, EMPTY_CHOICE, emptyChoicesKey } from "./empty"
 
 // `description` is a short line under the name, so each choice says what it does; it shows only in the open list.
 const props = defineProps<SelectItemProps & { class?: HTMLAttributes["class"], description?: string }>()
@@ -16,6 +16,33 @@ const isEmpty = computed(() => props.value === "")
 const choices = inject(emptyChoicesKey, null)
 onMounted(() => isEmpty.value && choices?.add())
 onBeforeUnmount(() => isEmpty.value && choices?.remove())
+
+// Keep the closed select's words current: Reka reads the text once, so watch it ourselves.
+const labels = inject(choiceLabelsKey, null)
+const text = ref<{ $el?: Element } | null>(null)
+const innerValue = computed(() => (isEmpty.value ? EMPTY_CHOICE : props.value))
+let observer: MutationObserver | undefined
+let published: unknown
+function publish() {
+  const label = text.value?.$el?.textContent?.trim()
+  if (label === undefined) return
+  if (published !== undefined && published !== innerValue.value) labels?.remove(published)
+  published = innerValue.value
+  labels?.set(innerValue.value, label)
+}
+onMounted(() => {
+  publish()
+  const element = text.value?.$el
+  if (element && labels && typeof MutationObserver !== "undefined") {
+    observer = new MutationObserver(publish)
+    observer.observe(element, { childList: true, characterData: true, subtree: true })
+  }
+})
+watch(innerValue, publish)
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  if (published !== undefined) labels?.remove(published)
+})
 
 const delegatedProps = reactiveOmit(props, "class", "value", "description")
 
@@ -42,12 +69,12 @@ const forwardedProps = useForwardProps(delegatedProps)
     <!-- An optional small picture before the name, such as how a style looks; only the name shows in the closed select. -->
     <slot name="thumb" />
     <span v-if="description" class="flex min-w-0 flex-col gap-0.5">
-      <SelectItemText>
+      <SelectItemText ref="text">
         <slot />
       </SelectItemText>
       <span class="text-muted-foreground text-xs whitespace-normal">{{ description }}</span>
     </span>
-    <SelectItemText v-else>
+    <SelectItemText v-else ref="text">
       <slot />
     </SelectItemText>
   </SelectItem>

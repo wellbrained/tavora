@@ -911,3 +911,15 @@ describe("a hidden pane (display: none)", () => {
     expect(store.set).not.toHaveBeenCalled()
   })
 })
+
+describe("Tab order", () => {
+  it("reaches the zoom controls before the content, though they are drawn over its corner", async () => {
+    const { root } = mount({}, { default: () => h("button", { "data-testid": "in-content" }, "Inside") })
+    await flush()
+    const controls = root.querySelector("[data-slot=zoom-controls]")!
+    const content = root.querySelector("[data-testid=in-content]")!
+    expect(controls.compareDocumentPosition(content) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // Drawn on top of the content and the overlay, so it can still be pressed.
+    expect(controls.className).toContain("z-10")
+  })
+})
