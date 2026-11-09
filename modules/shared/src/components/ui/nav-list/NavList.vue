@@ -65,7 +65,7 @@ function onKey(event: KeyboardEvent) {
         :style="item.level ? { paddingLeft: `calc(0.75rem + ${item.level} * 1rem)` } : undefined"
         :class="
           cn(
-            'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring group flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap transition-colors duration-(--duration-press) ease-(--ease-out-strong) outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
+            'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring group flex h-9 shrink-0 items-center gap-3 rounded-lg px-3 text-left font-medium whitespace-nowrap transition-colors duration-(--duration-press) ease-(--ease-out-strong) outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2',
             item.id === modelValue && 'bg-primary/10 text-foreground hover:bg-primary/15',
           )
         "

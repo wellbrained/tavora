@@ -35,7 +35,7 @@ function isLight(hex: string): boolean {
 const count = computed(() => props.colors.length + (isCustom.value ? 1 : 0) + (props.allowCustom ? 1 : 0));
 const grid = computed(() => (props.columns ? { gridTemplateColumns: `repeat(${Math.min(props.columns, count.value)}, 1.5rem)` } : undefined));
 const hexForInput = computed(() => (/^#[0-9a-f]{6}$/i.test(model.value) ? model.value : "#000000"));
-const swatch = "grid size-6 flex-none cursor-pointer place-items-center rounded-full border outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 data-[state=checked]:ring-2 data-[state=checked]:ring-ring data-[state=checked]:ring-offset-1 data-[state=checked]:ring-offset-background";
+const swatch = "grid size-6 flex-none cursor-pointer place-items-center rounded-full border outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 data-[state=checked]:ring-2 data-[state=checked]:ring-ring data-[state=checked]:ring-offset-1 data-[state=checked]:ring-offset-background";
 </script>
 
 <template>

@@ -34,6 +34,8 @@ describe("tab panel focus", () => {
   // (a box-shadow ring would be cut off by a scrolling panel). No transition, so it is there from the first frame.
   it("draws the theme's ring when focused with the keyboard", () => {
     const classes = mount().className.split(/\s+/)
+    // outline-none sets the outline style to none, so the ring needs its style back (Tailwind 4).
+    expect(classes).toContain("focus-visible:outline-solid")
     expect(classes).toContain("focus-visible:outline-2")
     expect(classes).toContain("focus-visible:outline-offset-2")
     expect(classes).toContain("focus-visible:outline-ring")

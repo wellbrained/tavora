@@ -33,7 +33,7 @@ const scenes: Record<Backdrop, string> = {
         role="radio"
         :aria-checked="backdrop === option.value"
         :data-testid="`settings-backdrop-${option.value}`"
-        :class="cn('h-6 rounded-md px-2 text-xs text-white/75 outline-none hover:text-white focus-visible:outline-2 focus-visible:outline-white', backdrop === option.value && 'bg-white/15 text-white')"
+        :class="cn('h-6 rounded-md px-2 text-xs text-white/75 outline-none hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-white', backdrop === option.value && 'bg-white/15 text-white')"
         @click="backdrop = option.value"
       >
         {{ option.label }}
