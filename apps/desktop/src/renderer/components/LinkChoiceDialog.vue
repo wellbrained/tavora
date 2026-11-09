@@ -2,15 +2,20 @@
 // A module asked to open a link and the workspace has no Browser panel: ask where it should open.
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { AppWindow, ExternalLink, Link } from "@lucide/vue";
-import { act, dialog } from "../host";
+import { act, closeDialog, dialog } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
 defineProps<{ url: string }>();
 
-async function choose(choice: "panel" | "system" | "cancel") {
-  dialog.value = null;
-  await act({ type: "link-choice", choice }, { quiet: true });
+function choose(choice: "panel" | "system" | "cancel") {
+  // Cancel is both a button and the dialog closing: only the first choice answers. The question may be updated in
+  // place while it shows (new details), so it is found by its kind.
+  const request = dialog.value;
+  if (request?.kind !== "link-choice") return;
+  closeDialog(request);
+  // Returned, so a failure is reported as a click's is.
+  return act({ type: "link-choice", choice }, { quiet: true });
 }
 </script>
 

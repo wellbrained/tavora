@@ -8,7 +8,7 @@
 // library open for the next. A module
 // made for other games (its manifest's `games`) is not listed at all. A card's icon or name opens the
 // module's page (CatalogModuleDialog.vue), from the catalog or, without it, from the module's own files.
-import { computed, ref } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import { useEventListener } from "@vueuse/core";
 import { account, addModule, dialog, makesModules, openSettings, publishModule, saveModuleZip, state, type AddModuleRequest, type MenuItem } from "../host";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
@@ -46,9 +46,23 @@ function kindOf(module: ModuleView): Kind {
   return module.development ? "development" : module.provenance;
 }
 
-/** A module whose catalog page to open, such as one just published: the library starts in the catalog. */
-const browse = (dialog.value as AddModuleRequest).browse;
-const view = ref<View>(browse ? "catalog" : ((dialog.value as AddModuleRequest).view ?? "all"));
+/** The view a request opens on: the catalog for a module page to open (`browse`, such as one just published). */
+const viewOf = (request: AddModuleRequest): View => (request.browse ? "catalog" : (request.view ?? "all"));
+/**
+ * What the library was opened for. A new request while it is open (Browse after a Publish, Updates from the rail)
+ * takes its place: the library moves to that view.
+ */
+const request = shallowRef(dialog.value as AddModuleRequest);
+const browse = computed(() => request.value.browse);
+const view = ref<View>(viewOf(request.value));
+/** Raised by each new module page to open, so the catalog opens it again, the same one too. */
+const browsed = ref(0);
+watch(dialog, (next) => {
+  if (next?.kind !== "add-module" || next === request.value) return;
+  request.value = next;
+  view.value = viewOf(next);
+  if (next.browse) browsed.value++;
+});
 /** How many modules have an update waiting. The Updates entry is listed while there are some (and while it is open, so it can say all is done). */
 const updateCount = computed(() => state.value!.modules.filter((module) => module.update).length);
 const query = ref("");
@@ -133,7 +147,7 @@ function openCount(moduleId: string, panelType?: string): number {
  * with panel types keeps the library open, so the user can add several of its panels in a row.
  */
 function add(moduleId: string, panelTypes: string[] = []) {
-  addModule(moduleId, (dialog.value as AddModuleRequest).slot ?? null, panelTypes, { stay: panelTypes.length > 0 });
+  addModule(moduleId, request.value.slot ?? null, panelTypes, { stay: panelTypes.length > 0 });
 }
 
 /** The module whose page is open. */
@@ -301,7 +315,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
           </DialogClose>
         </header>
 
-        <CatalogBrowse v-if="view === 'catalog'" :query="query" :open="browse" @count="catalogCount = $event" />
+        <CatalogBrowse v-if="view === 'catalog'" :key="browsed" :query="query" :open="browse" @count="catalogCount = $event" />
         <ModuleUpdates v-else-if="view === 'updates'" :query="query" />
         <div v-else class="thin-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-8 [scrollbar-gutter:stable] lg:px-10" data-testid="module-results">
           <section v-for="group in groups" :key="group.id" :aria-label="group.label" class="pt-6">

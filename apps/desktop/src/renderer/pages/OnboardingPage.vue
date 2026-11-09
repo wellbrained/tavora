@@ -36,46 +36,66 @@ function pick(kind: FirstChoice) {
   go(2);
 }
 
-/** Ends the welcome: lands in the workspace made here, if any, with its panels open, and never shows the welcome again. */
+/**
+ * Where the welcome is: on its steps, waiting for the account dialog it opened (Sign in), or finishing. Finishing runs
+ * once: Skip pressed twice, or Later while the sign-in closes, must not open the workspace and its panels twice.
+ */
+type Phase = "steps" | "signing-in" | "finishing";
+const phase = ref<Phase>("steps");
+
+/**
+ * Ends the welcome: lands in the workspace made here, if any, with its panels open, and never shows the welcome again.
+ * When that does not get through (its message shows), the welcome stays and Skip can try again.
+ */
 async function finish() {
+  if (phase.value === "finishing") return;
+  phase.value = "finishing";
   // A dry run writes nothing: it just closes, and the library is as it was.
   if (props.dry) {
     trialWelcome.value = false;
     return;
   }
-  const started = choice.value === "personal" ? personal.value : choice.value === "game" ? game.value : null;
-  if (started) {
-    const opened = await act({ type: "open-workspace", workspaceId: started.id });
-    if (opened.ok) {
-      await act({ type: "set-onboarded", done: true });
-      for (const moduleId of started.moduleIds) {
-        await nextTick();
-        await openPanels(moduleId, null, []);
-      }
-      return;
-    }
+  let done = false;
+  try {
+    done = await land();
+  } finally {
+    if (!done) phase.value = "steps";
   }
-  await act({ type: "set-onboarded", done: true });
+}
+
+/** The workspace made here was opened with its panels: trying again only marks the welcome done. */
+let landed = false;
+
+async function land(): Promise<boolean> {
+  const started = choice.value === "personal" ? personal.value : choice.value === "game" ? game.value : null;
+  if (started && !landed && (await act({ type: "open-workspace", workspaceId: started.id })).ok) {
+    landed = true;
+    // In the workspace now: its panels open, even when the welcome couldn't be marked done.
+    const done = (await act({ type: "set-onboarded", done: true })).ok;
+    for (const moduleId of started.moduleIds) {
+      await nextTick();
+      await openPanels(moduleId, null, []);
+    }
+    return done;
+  }
+  return (await act({ type: "set-onboarded", done: true })).ok;
 }
 
 // Sign in opens the account over the welcome; it ends when that closes, signed in or not.
-const signingIn = ref(false);
 function signIn() {
   // A dry run does not open the real sign-in.
-  if (props.dry) return void finish();
-  signingIn.value = true;
+  if (props.dry) return finish();
+  phase.value = "signing-in";
   openProfile("account");
 }
+// Returned, so a failure is reported as a click's is.
 watch(profileOpen, (open) => {
-  if (!open && signingIn.value) {
-    signingIn.value = false;
-    void finish();
-  }
+  if (!open && phase.value === "signing-in") return finish();
 });
 </script>
 
 <template>
-  <main class="relative flex h-full flex-col items-center overflow-y-auto px-8 py-8 max-[760px]:px-4 [@media(max-height:640px)]:pt-10 [@media(max-height:640px)]:pb-4" data-testid="onboarding">
+  <main class="relative flex h-full flex-col items-center overflow-y-auto px-8 py-8 max-[760px]:px-4 [@media(max-height:640px)]:pt-10 [@media(max-height:640px)]:pb-4" data-testid="onboarding" :data-status="phase">
     <p v-if="dry" class="bg-warning/15 text-warning absolute top-4 left-6 rounded-md px-2 py-1 text-xs" data-testid="onboarding-dry">{{ t("onboarding.dry") }}</p>
     <!-- Skips the whole welcome. -->
     <button

@@ -3,15 +3,20 @@
 // time) and kept what it showed. Offer the explicit way out: the content in a new panel (named panels round 6).
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { PanelsTopLeft, Plus } from "@lucide/vue";
-import { act, dialog } from "../host";
+import { act, closeDialog, dialog } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
 defineProps<{ panel: string; content: string }>();
 
-async function choose(choice: "new-panel" | "cancel") {
-  dialog.value = null;
-  await act({ type: "navigation-choice", choice }, { quiet: true });
+function choose(choice: "new-panel" | "cancel") {
+  // Cancel is both a button and the dialog closing: only the first choice answers. The question may be updated in
+  // place while it shows (new details), so it is found by its kind.
+  const request = dialog.value;
+  if (request?.kind !== "navigation-choice") return;
+  closeDialog(request);
+  // Returned, so a failure is reported as a click's is.
+  return act({ type: "navigation-choice", choice }, { quiet: true });
 }
 </script>
 

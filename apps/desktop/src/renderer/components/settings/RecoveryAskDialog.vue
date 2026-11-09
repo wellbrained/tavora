@@ -7,7 +7,7 @@ import { ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
-import { act, developerKeys, dialog, showToast } from "../../host";
+import { act, closeDialog, developerKeys, dialog, showToast } from "../../host";
 import { t } from "../../i18n";
 import ModalDialog from "../ModalDialog.vue";
 import PairingAsk from "./PairingAsk.vue";
@@ -25,8 +25,10 @@ async function enter() {
   }
 }
 
+/** The question this dialog shows: closing closes only it. */
+const request = dialog.value;
 function close() {
-  dialog.value = null;
+  closeDialog(request);
 }
 
 watch(

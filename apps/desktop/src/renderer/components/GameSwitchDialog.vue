@@ -3,16 +3,21 @@
 import { computed } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { ArrowRightLeft, Gamepad2 } from "@lucide/vue";
-import { act, dialog, state } from "../host";
+import { act, closeDialog, dialog, state } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
 const props = defineProps<{ gameId: string }>();
 const name = computed(() => state.value?.library.workspaces[props.gameId]?.name ?? "");
 
-async function choose(choice: "switch" | "cancel") {
-  dialog.value = null;
-  await act({ type: "game-switch", choice }, { quiet: true });
+function choose(choice: "switch" | "cancel") {
+  // Cancel is both a button and the dialog closing: only the first choice answers. The question may be updated in
+  // place while it shows (new details), so it is found by its kind.
+  const request = dialog.value;
+  if (request?.kind !== "game-switch") return;
+  closeDialog(request);
+  // Returned, so a failure is reported as a click's is.
+  return act({ type: "game-switch", choice }, { quiet: true });
 }
 </script>
 

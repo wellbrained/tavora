@@ -7,7 +7,7 @@ import { CircleAlert, CloudDownload, ShieldQuestion } from "@lucide/vue";
 import { computed, reactive, shallowRef, watch } from "vue";
 import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
 import { useActionStatus } from "../action-status";
-import { act, askForUpdate, state, updateQueue } from "../host";
+import { act, askForUpdate, dialog, state, updateQueue } from "../host";
 import { formatDate, t } from "../i18n";
 import { asksMore, updateAllPlan, waitingUpdates } from "../../shared/module-updates";
 import ModuleIcon from "./ModuleIcon.vue";
@@ -70,7 +70,8 @@ async function updateAll() {
     return every && plan.now.length > 0 && plan.ask.length === 0;
   });
   const [first, ...rest] = plan.ask;
-  if (first === undefined) return;
+  // The questions come only while the library still shows: the user may have closed it, or a question come up.
+  if (first === undefined || dialog.value?.kind !== "add-module") return;
   updateQueue.value = rest;
   askForUpdate(first);
 }
