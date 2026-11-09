@@ -32,7 +32,7 @@ const travel = useKeyTravel();
       :key="option.value"
       :value="option.value"
       :data-testid="option.testid"
-      class="tavora-quiet-travel group bg-background hover:border-input focus-visible:outline-ring data-[state=checked]:border-primary data-[state=checked]:bg-primary/10 flex flex-col gap-1.5 rounded-lg border p-1.5 text-left transition-[background-color,border-color,scale] duration-(--duration-press) ease-(--ease-out-strong) [@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-disabled:active:scale-95 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50"
+      class="tavora-quiet-travel group bg-background hover:border-input focus-visible:outline-ring data-[state=checked]:border-primary data-[state=checked]:bg-primary/10 flex flex-col gap-1.5 rounded-lg border p-1.5 text-left transition-[background-color,border-color,scale] duration-(--duration-press) ease-(--ease-out-strong) [@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-disabled:active:scale-95 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50"
     >
       <span class="bg-muted relative block aspect-[16/9] w-full overflow-hidden rounded-md" aria-hidden="true"><slot name="tile" :option="option" :selected="option.value === model" /></span>
       <span class="tavora-quiet-travel text-muted-foreground group-data-[state=checked]:text-foreground truncate px-0.5 text-xs font-medium transition-colors duration-(--duration-press) ease-(--ease-out-strong)">{{ option.label }}</span>

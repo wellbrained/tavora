@@ -241,7 +241,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
             type="button"
             :class="
               cn(
-                'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
+                'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2',
                 view === 'catalog' && 'bg-primary/10 text-foreground hover:bg-primary/15',
               )
             "
@@ -276,7 +276,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
         <!-- Module settings, as Settings' Updates & About: rarely needed, so it sits at the foot. -->
         <button
           type="button"
-          class="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring flex h-9 flex-none items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 sm:mt-auto"
+          class="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring flex h-9 flex-none items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 sm:mt-auto"
           data-testid="manage-modules"
           @click="manage"
         >

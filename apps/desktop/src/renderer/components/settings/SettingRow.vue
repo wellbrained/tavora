@@ -32,7 +32,7 @@ const tip = useDetails();
     :class="
       cn(
         'group/row -mx-5 flex min-h-16 flex-wrap items-center gap-x-6 gap-y-3 border-b px-5 py-3.5 text-left transition-colors duration-500 last:border-b-0',
-        opens && 'hover:bg-accent/60 focus-visible:outline-ring w-[calc(100%+2.5rem)] cursor-pointer outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
+        opens && 'hover:bg-accent/60 focus-visible:outline-ring w-[calc(100%+2.5rem)] cursor-pointer outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2',
         highlighted && 'bg-primary/10',
       )
     "

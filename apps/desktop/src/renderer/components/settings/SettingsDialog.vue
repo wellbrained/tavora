@@ -254,7 +254,7 @@ function onSearchKey(event: KeyboardEvent) {
           type="button"
           :class="
             cn(
-              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mt-auto flex h-9 flex-none items-center gap-3 rounded-xl border border-transparent px-4 text-left text-sm outline-none focus-visible:outline-2 focus-visible:-outline-offset-2',
+              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mt-auto flex h-9 flex-none items-center gap-3 rounded-xl border border-transparent px-4 text-left text-sm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2',
               !query && entry === 'about' && 'bg-primary/10 text-foreground',
             )
           "

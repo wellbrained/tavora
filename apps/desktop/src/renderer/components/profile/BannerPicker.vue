@@ -25,7 +25,7 @@ function pick(id: BannerId) {
     <PopoverTrigger as-child>
       <button
         type="button"
-        class="focus-visible:outline-ring absolute top-2 right-2 flex items-center gap-1.5 rounded-md bg-black/45 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur-sm transition-colors outline-none hover:bg-black/60 focus-visible:outline-2"
+        class="focus-visible:outline-ring absolute top-2 right-2 flex items-center gap-1.5 rounded-md bg-black/45 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur-sm transition-colors outline-none hover:bg-black/60 focus-visible:outline-solid focus-visible:outline-2"
         data-testid="profile-banner-change"
       >
         <Pencil class="size-3" :stroke-width="2" aria-hidden="true" />
@@ -43,7 +43,7 @@ function pick(id: BannerId) {
           :aria-checked="id === banner"
           :class="
             cn(
-              'group focus-visible:outline-ring flex flex-col gap-1 rounded-lg p-1 text-left outline-none focus-visible:outline-2',
+              'group focus-visible:outline-ring flex flex-col gap-1 rounded-lg p-1 text-left outline-none focus-visible:outline-solid focus-visible:outline-2',
               id === banner ? 'bg-primary/15' : 'hover:bg-accent',
             )
           "
