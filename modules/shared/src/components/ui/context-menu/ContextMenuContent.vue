@@ -5,10 +5,8 @@ import { reactiveOmit } from "@vueuse/core"
 import {
   ContextMenuContent,
   ContextMenuPortal,
-  injectContextMenuRootContext,
   useForwardPropsEmits,
 } from "reka-ui"
-import { InertBehind } from "../../../lib/inert-behind"
 import { cn } from "../../../lib/utils"
 
 defineOptions({
@@ -21,7 +19,6 @@ const emits = defineEmits<ContextMenuContentEmits>()
 const delegatedProps = reactiveOmit(props, "class")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
-const root = injectContextMenuRootContext()
 </script>
 
 <template>
@@ -34,7 +31,6 @@ const root = injectContextMenuRootContext()
         props.class,
       )"
     >
-      <InertBehind :active="root.modal.value" />
       <slot />
     </ContextMenuContent>
   </ContextMenuPortal>

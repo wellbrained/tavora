@@ -57,7 +57,7 @@ export function inertCount(): number {
 }
 
 /**
- * Put it inside the content of a modal dialog or menu (it draws nothing): while that content is on the page, the page
+ * Put it inside the content of a modal dialog or dropdown menu (it draws nothing): while that content is on the page, the page
  * around it is inert. `active` false (a menu that is not modal) leaves the page alone.
  */
 export const InertBehind = defineComponent({
