@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { LIMITS, MIN_TAVORA, TavoraError } from "./index.js";
 import { METHOD_INFO, versionAtLeast } from "./protocol.js";
-import { createMemoryHost, GESTURE_MS, LATEST_TAVORA } from "./testing.js";
+import { ADD_DIALOG_MS, createMemoryHost, GESTURE_MS, LATEST_TAVORA } from "./testing.js";
 
 const failure = (promise: Promise<unknown>) => promise.then(() => undefined, (error: unknown) => error);
 
@@ -694,29 +694,82 @@ describe("gestures", () => {
   });
 
   it("keeps one press, as Tavora does: presses don't add up, and one lasts GESTURE_MS", async () => {
-    vi.useFakeTimers();
-    try {
-      const { sdk, host } = createMemoryHost({ gestures: "enforce" });
-      const open = () => sdk.links.open("https://example.com");
-      host.gesture(3);
-      host.gesture();
+    let time = 1_000;
+    const { sdk, host } = createMemoryHost({ gestures: "enforce", now: () => time });
+    const open = () => sdk.links.open("https://example.com");
+    host.gesture(3);
+    host.gesture();
+    await open();
+    expect(await failure(open())).toMatchObject({ code: "PERMISSION_DENIED" });
+    const twice = host.click(async () => {
       await open();
-      expect(await failure(open())).toMatchObject({ code: "PERMISSION_DENIED" });
-      const twice = host.click(async () => {
-        await open();
-        await open();
-      });
-      expect(await failure(twice)).toMatchObject({ code: "PERMISSION_DENIED" });
+      await open();
+    });
+    expect(await failure(twice)).toMatchObject({ code: "PERMISSION_DENIED" });
 
-      host.gesture();
-      vi.advanceTimersByTime(GESTURE_MS);
-      await open();
-      host.gesture();
-      vi.advanceTimersByTime(GESTURE_MS + 1);
-      expect(await failure(open())).toMatchObject({ code: "PERMISSION_DENIED" });
-    } finally {
-      vi.useRealTimers();
+    host.gesture();
+    time += GESTURE_MS;
+    await open();
+    host.gesture();
+    time += GESTURE_MS + 1;
+    expect(await failure(open())).toMatchObject({ code: "PERMISSION_DENIED" });
+  });
+
+  it("checks a link before it takes the press, as Tavora does", async () => {
+    const { sdk, host } = createMemoryHost({ gestures: "enforce" });
+    // Without a press, a bad link is still a bad link.
+    expect(await failure(sdk.links.open("javascript:alert(1)"))).toMatchObject({ code: "INVALID_PARAMS" });
+    host.gesture();
+    expect(await failure(sdk.links.open("not a link"))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.links.open("ftp://example.com/a"))).toMatchObject({ code: "INVALID_PARAMS" });
+    for (const local of ["http://localhost:3000", "http://127.0.0.1/", "http://192.168.1.1", "http://router/", "http://nas.local", "http://[::1]/"]) {
+      expect(await failure(sdk.links.open(local))).toMatchObject({ code: "PERMISSION_DENIED", message: expect.stringContaining("public addresses") });
     }
+    // None of those used the press.
+    await sdk.links.open("https://example.com");
+    expect(await failure(sdk.links.open("https://example.com"))).toMatchObject({ code: "PERMISSION_DENIED" });
+  });
+
+  it("lets a panel just added open its dialog once without a click, within ADD_DIALOG_MS", async () => {
+    let time = 0;
+    const added = createMemoryHost({ gestures: "enforce", now: () => time });
+    time = ADD_DIALOG_MS;
+    await added.sdk.panel.openDialog();
+    expect(added.host.dialog.open).toBe(true);
+    added.host.setDialog(false);
+    expect(await failure(added.sdk.panel.openDialog())).toMatchObject({ code: "PERMISSION_DENIED" });
+
+    // Too late: the pass is gone.
+    time = 0;
+    const late = createMemoryHost({ gestures: "enforce", now: () => time });
+    time = ADD_DIALOG_MS + 1;
+    expect(await failure(late.sdk.panel.openDialog())).toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(late.host.dialog.open).toBe(false);
+  });
+
+  it("gives the add pass only to a panel just added, only for its dialog, and not when turned off", async () => {
+    const restored = createMemoryHost({ gestures: "enforce", launch: { reason: "restore", content: null } });
+    expect(await failure(restored.sdk.panel.openDialog())).toMatchObject({ code: "PERMISSION_DENIED" });
+    const off = createMemoryHost({ gestures: "enforce", addPass: false });
+    expect(await failure(off.sdk.panel.openDialog())).toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(off.host.dialog.open).toBe(false);
+
+    // Other calls that need a click don't get it, and leave it for the dialog.
+    const { sdk, host } = createMemoryHost({ gestures: "enforce" });
+    expect(await failure(sdk.panel.setMaximized(true))).toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(await failure(sdk.links.open("https://example.com"))).toMatchObject({ code: "PERMISSION_DENIED" });
+    await sdk.panel.openDialog();
+    expect(host.dialog.open).toBe(true);
+  });
+
+  it("uses a waiting press before the add pass, and the pass is gone after the first dialog either way", async () => {
+    const { sdk, host } = createMemoryHost({ gestures: "enforce" });
+    host.gesture();
+    await sdk.panel.openDialog();
+    host.setDialog(false);
+    // The press went to the dialog, and the pass went with it.
+    expect(await failure(sdk.links.open("https://example.com"))).toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(await failure(sdk.panel.openDialog())).toMatchObject({ code: "PERMISSION_DENIED" });
   });
 
   it("does not ask for a click where the host does not", async () => {

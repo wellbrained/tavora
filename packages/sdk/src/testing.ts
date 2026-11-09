@@ -91,6 +91,12 @@ export interface MemoryHostOptions {
    * keeps only its latest press: it lets one call through, within `GESTURE_MS` (2 s). Presses don't add up.
    */
   gestures?: "ignore" | "enforce";
+  /**
+   * The add pass, as in Tavora: a panel just added (`launch.reason` "add") may open its dialog once without a click,
+   * within `ADD_DIALOG_MS` (10 s) of starting, for a welcome. Its first `panel.openDialog` uses it up either way, and a
+   * press waiting to be used goes first. Default: true. `false` is a Tavora that holds the welcome back (over the game).
+   */
+  addPass?: boolean;
   /** This panel's type (one of the manifest's `panels`). Default: null, a module without panel types. */
   panelType?: string | null;
   /** The panel types of the manifest; `panels.open` refuses another one with INVALID_PARAMS. Default: any. */
@@ -108,7 +114,7 @@ export interface MemoryHostOptions {
   language?: string;
   /** Lower limits for a test that wants to hit a quota without writing megabytes. */
   limits?: Partial<Limits>;
-  /** The clock for `updatedAt` and `createdAt`. Default: the real time. */
+  /** The clock for `updatedAt` and `createdAt`, and for how long a press and the add pass last. Default: the real time. */
   now?: () => number;
   /** Another memory host to share its storage, documents and workspace with: a second panel of the same module. */
   share?: MemoryHost;
@@ -214,6 +220,8 @@ export const LATEST_TAVORA: string = [...Object.values(METHOD_INFO).map((info) =
 );
 /** How long a click or key press lets a call through, as in Tavora (module-view.ts). */
 export const GESTURE_MS = 2_000;
+/** How long after it starts a panel just added may open its dialog without a click, as in Tavora (module-view.ts). */
+export const ADD_DIALOG_MS = 10_000;
 /** Most panel types one call may name: as many as a manifest may declare (MAX_PANEL_TYPES in @tavora/module-schema). */
 const MAX_PANEL_TYPES = 16;
 
@@ -346,6 +354,8 @@ interface Panel {
   gestures: "ignore" | "enforce";
   /** The latest click or key press: one call may use it, within GESTURE_MS. */
   press: { at: number; used: boolean } | null;
+  /** Until when a panel just added may open its dialog once without a click, or null. */
+  addPass: { until: number } | null;
   state: string | null;
   content: PanelContent | null;
   maximized: boolean;
@@ -780,6 +790,57 @@ async function navigatePanel(panel: Panel, content: PanelContent): Promise<{ han
   return { handled: handler !== null, ok };
 }
 
+/** The press is recent and no call has used it yet. */
+function unusedPress(panel: Panel): boolean {
+  const { press } = panel;
+  return press !== null && !press.used && panel.shared.now() - press.at <= GESTURE_MS;
+}
+
+function takePress(panel: Panel, method: CallName): void {
+  if (!unusedPress(panel)) fail("PERMISSION_DENIED", `${method} must be called right after a click or key press`);
+  panel.press!.used = true;
+}
+
+/** Opening the dialog: the add pass lets it through once, unless a press is waiting to be used. Used up either way. */
+function useAddPass(panel: Panel): boolean {
+  const pass = panel.addPass;
+  panel.addPass = null;
+  return pass !== null && !unusedPress(panel) && panel.shared.now() <= pass.until;
+}
+
+const LOCAL_SUFFIXES = [".localhost", ".local", ".lan", ".home", ".home.arpa", ".internal", ".intranet", ".localdomain", ".corp", ".private"];
+
+/** A page on this PC or the local network, as Tavora's links.open sees it (the desktop's browser-url.ts, in short). */
+function isPrivateHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (host === "localhost" || LOCAL_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(host);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  if (!host.startsWith("[")) return host !== "" && !host.includes(".");
+  const v6 = host.slice(1, -1);
+  if (v6 === "::" || v6 === "::1" || v6.startsWith("::ffff:")) return true;
+  const first = parseInt(v6.split(":")[0] || "0", 16);
+  return (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80;
+}
+
+/** The checks Tavora makes before it takes the press. */
+const CHECKS_BEFORE_PRESS: Partial<Record<CallName, (params: unknown) => void>> = {
+  "links.open": (params) => {
+    const raw = (params as { url?: unknown } | undefined)?.url;
+    let url: URL | null = null;
+    try {
+      url = typeof raw === "string" ? new URL(raw) : null;
+    } catch {
+      url = null;
+    }
+    if (!url || (url.protocol !== "http:" && url.protocol !== "https:") || url.hostname === "") fail("INVALID_PARAMS", "params.url must be an http or https address");
+    if (isPrivateHost(url.hostname)) fail("PERMISSION_DENIED", "links.open opens only public addresses, not this PC or the local network");
+  },
+};
+
 async function invoke<M extends CallName>(panel: Panel, method: M, params?: Params<M>): Promise<Result<M>> {
   (panel.calls[method] ??= []).push(params);
   panel.log.push({ method, params });
@@ -790,11 +851,9 @@ async function invoke<M extends CallName>(panel: Panel, method: M, params?: Para
   if (capability && !shared.capabilities.has(capability)) {
     fail("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
   }
-  if (panel.gestures === "enforce" && needsGesture(method, params)) {
-    const { press } = panel;
-    if (!press || press.used || Date.now() - press.at > GESTURE_MS) fail("PERMISSION_DENIED", `${method} must be called right after a click or key press`);
-    press.used = true;
-  }
+  // A call's own checks that Tavora makes before it takes the press, so a refused call leaves the press unused.
+  CHECKS_BEFORE_PRESS[method]?.(params);
+  if (panel.gestures === "enforce" && needsGesture(method, params) && !(method === "panel.setDialog" && useAddPass(panel))) takePress(panel, method);
 
   const script = panel.scripts.get(method);
   if (script) return structuredClone(await (script as (params: unknown) => Result<M>)(params));
@@ -857,6 +916,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     launch: options.launch ?? { reason: "add" },
     gestures: options.gestures ?? "ignore",
     press: null,
+    addPass: (options.addPass ?? true) && (options.launch ?? { reason: "add" }).reason === "add" ? { until: shared.now() + ADD_DIALOG_MS } : null,
     state,
     content: null,
     maximized: false,
@@ -1131,9 +1191,9 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       deliver(panel, "lifecycle.dispose", null);
       shared.panels.delete(panel);
     },
-    gesture: () => void (panel.press = { at: Date.now(), used: false }),
+    gesture: () => void (panel.press = { at: shared.now(), used: false }),
     click: async (fn) => {
-      panel.press = { at: Date.now(), used: false };
+      panel.press = { at: shared.now(), used: false };
       return fn();
     },
     setMaximized: (maximized) => setMaximized(panel, maximized),
