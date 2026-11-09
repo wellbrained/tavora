@@ -26,7 +26,7 @@ function mount(): () => string {
   document.body.append(root);
   app = createApp({ render: () => h(Toaster) });
   app.mount(root);
-  return () => root.querySelector("[role=status]")!.textContent ?? "";
+  return () => document.querySelector("[role=status]")!.textContent ?? "";
 }
 
 describe("Toaster live region", () => {
@@ -131,10 +131,10 @@ describe("Toaster morph", () => {
     app.mount(root);
     return root;
   };
-  const pill = (root: HTMLElement, id: number) => root.querySelector<HTMLElement>(`[data-id="${id}"] .tavora-toast`)!;
+  const pill = (_root: HTMLElement, id: number) => document.querySelector<HTMLElement>(`[data-id="${id}"] .tavora-toast`)!;
   /** What the browser would say about a toast's content once it laid it out. */
   const measure = (root: HTMLElement, id: number, width: number, height: number) => {
-    const content = root.querySelector(`[data-id="${id}"] .tavora-toast-content`)!;
+    const content = document.querySelector(`[data-id="${id}"] .tavora-toast-content`)!;
     observed.get(content)!([{ borderBoxSize: [{ inlineSize: width, blockSize: height }] }]);
   };
 
@@ -179,5 +179,69 @@ describe("Toaster morph", () => {
     const fresh = toast({ title: "Fresh" });
     await nextTick();
     expect(pill(root, fresh.id).style.width).toBe("");
+  });
+});
+
+describe("Toaster in the Tab order", () => {
+  const mountAt = (position: "bottom-center" | "top-center") => {
+    const root = document.createElement("div");
+    root.innerHTML = '<button id="before">Before</button>';
+    document.body.append(root);
+    const inner = document.createElement("div");
+    root.append(inner);
+    app = createApp({ render: () => h(Toaster, { position }) });
+    app.mount(inner);
+    root.insertAdjacentHTML("beforeend", '<button id="after">After</button>');
+    return root;
+  };
+  const follows = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it("comes after the page when it is drawn at the bottom, wherever it was mounted", async () => {
+    mountAt("bottom-center");
+    toast({ title: "Saved" });
+    await nextTick();
+    const toaster = document.querySelector("[data-slot=toaster]")!;
+    expect(follows(document.getElementById("after")!, toaster)).toBe(true);
+    expect(toaster.closest("[data-slot=toaster-host]")?.parentElement).toBe(document.body);
+    expect(document.body.lastElementChild).toBe(toaster.closest("[data-slot=toaster-host]"));
+  });
+
+  it("comes before the page when it is drawn at the top, and lists the newest first", async () => {
+    mountAt("top-center");
+    toast({ title: "First" });
+    toast({ title: "Second" });
+    await nextTick();
+    const toaster = document.querySelector("[data-slot=toaster]")!;
+    expect(follows(toaster, document.getElementById("before")!)).toBe(true);
+    const titles = [...toaster.querySelectorAll(".tavora-toast-title")].map((p) => p.textContent);
+    expect(titles).toEqual(["Second", "First"]);
+  });
+
+  it("lists the oldest first at the bottom, where the newest is drawn lowest", async () => {
+    mountAt("bottom-center");
+    toast({ title: "First" });
+    toast({ title: "Second" });
+    await nextTick();
+    const titles = [...document.querySelectorAll(".tavora-toast-title")].map((p) => p.textContent);
+    expect(titles).toEqual(["First", "Second"]);
+  });
+
+  it("leaves nothing behind when it goes", async () => {
+    mountAt("bottom-center");
+    await nextTick();
+    app?.unmount();
+    app = undefined;
+    expect(document.querySelector("[data-slot=toaster-host]")).toBeNull();
+  });
+
+  it("takes no Tab stop on a toast that is leaving", async () => {
+    mountAt("bottom-center");
+    const shown = toast({ title: "Going" });
+    await nextTick();
+    shown.dismiss();
+    await nextTick();
+    // jsdom has no transitions, so the slot may be gone already; if it is still there it is inert.
+    const left = document.querySelector<HTMLElement>(".tavora-toast-slot");
+    if (left) expect(left.getAttribute("inert")).toBe("");
   });
 });

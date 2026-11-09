@@ -3,6 +3,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSepa
 import { ref } from "vue";
 
 const game = ref("poe2");
+const long = ref("a");
 </script>
 
 <template>
@@ -33,6 +34,16 @@ const game = ref("poe2");
       <SelectContent>
         <SelectItem value="recent">Recently changed</SelectItem>
         <SelectItem value="name">Name</SelectItem>
+      </SelectContent>
+    </Select>
+    <!-- A long choice wraps between words and ends in an ellipsis; the field grows a line instead of squeezing it. -->
+    <Select v-model="long">
+      <SelectTrigger class="w-40" aria-label="Long choice">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="a">A rather long choice that needs several lines to be read in full</SelectItem>
+        <SelectItem value="b">Short</SelectItem>
       </SelectContent>
     </Select>
   </div>

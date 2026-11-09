@@ -59,3 +59,13 @@ describe("ModuleSettings", () => {
     }
   });
 });
+
+describe("Tab order", () => {
+  it("puts the Reset button after everything on the page", () => {
+    const root = mount(["one", "two"]);
+    const page = root.querySelector("[data-slot=settings-page]")!;
+    const reset = root.querySelector("[data-testid=settings-reset]")!;
+    expect(page.compareDocumentPosition(reset) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(page.contains(reset)).toBe(false);
+  });
+});

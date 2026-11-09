@@ -11,6 +11,7 @@ import {
   useForwardPropsEmits,
 } from "reka-ui"
 import { nextTick, provide, ref, shallowRef, toRef, watch } from "vue"
+import { InertBehind } from "../../../lib/inert-behind"
 import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
 import { dialogChromeKey, dialogCloseClass } from "./chrome"
@@ -116,6 +117,7 @@ useEventListener(window, "resize", place)
           props.class,
         )"
     >
+      <InertBehind />
       <slot />
 
       <DialogClose

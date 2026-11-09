@@ -3,7 +3,7 @@
 // them (Settings > Appearance): the newest in front, older ones peeking out behind. Pointing at
 // or focusing the stack spreads it out and stops every timer. Two hidden live regions read each
 // new toast out, errors as alerts.
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from "vue";
 import "./toast.css";
 import ToastItem from "./ToastItem.vue";
 import { GAP, PEEK, SHRINK, stackExtent, toastPosition, toasts, type ToastPosition } from "./toast";
@@ -14,11 +14,21 @@ import { toastsPaused, trackDocumentVisibility } from "./visibility";
  * is out of sight (Tavora hidden). The Toaster says its `extent` (see stackExtent) when a page of its own, the host's
  * toast view, has to be as big as the stack.
  */
+defineOptions({ inheritAttrs: false });
 const props = defineProps<{ position?: ToastPosition; paused?: boolean }>();
 const emit = defineEmits<{ extent: [value: { width: number; height: number }] }>();
 
 const position = computed(() => props.position ?? toastPosition.value);
 const fromTop = computed(() => position.value === "top-center");
+
+// Tab follows what is drawn: a stack at the bottom of the screen comes last in the page, one at the top comes first, wherever
+// the module mounted the Toaster. So it lives in a holder of its own at the end (or start) of the body, and takes Tab there.
+// `display: contents` keeps the holder out of the layout. A dialog or menu that shuts the page behind it leaves this holder alone.
+const holder = document.createElement("div");
+holder.dataset.slot = "toaster-host";
+holder.style.display = "contents";
+watchEffect(() => (fromTop.value ? document.body.prepend(holder) : document.body.append(holder)));
+onBeforeUnmount(() => holder.remove());
 
 // Timers stand still while the page is hidden or its panel is suspended, so a toast is never gone before it was seen.
 let stopVisibility: (() => void) | undefined;
@@ -81,6 +91,9 @@ const placed = computed(() => {
   return newestFirst.reverse();
 });
 
+/** The DOM order is the reading order: oldest first from the bottom edge up, so at the top edge (newest first there) it is reversed. */
+const ordered = computed(() => (fromTop.value ? [...placed.value].reverse() : placed.value));
+
 // What the two live regions say. Each toast is read once when it arrives and once more only when its content changes
 // (loading turning into done). When a toast leaves, the one behind it is not read again, and the same words twice in a
 // row (two to-dos deleted) are still read twice: the region gets a hidden space added or taken away.
@@ -110,11 +123,12 @@ function forget(id: number) {
 </script>
 
 <template>
-  <div data-slot="toaster" :data-position="position" class="tavora-toaster">
-    <TransitionGroup name="tavora-toast" @after-leave="(el: Element) => forget(Number((el as HTMLElement).dataset.id))">
+  <Teleport :to="holder">
+  <div data-slot="toaster" :data-position="position" class="tavora-toaster" v-bind="$attrs">
+    <TransitionGroup name="tavora-toast" @before-leave="(el: Element) => el.setAttribute('inert', '')" @after-leave="(el: Element) => forget(Number((el as HTMLElement).dataset.id))">
       <!-- The slot comes and goes; the layer inside it moves within the stack. Kept apart so the
            list transition never touches the layer's transform. -->
-      <div v-for="{ item, depth, behind, style } in placed" :key="item.id" :data-id="item.id" class="tavora-toast-slot" :style="{ zIndex: style.zIndex }" :inert="!expanded && depth > 0">
+      <div v-for="{ item, depth, behind, style } in ordered" :key="item.id" :data-id="item.id" class="tavora-toast-slot" :style="{ zIndex: style.zIndex }" :inert="!expanded && depth > 0">
         <div class="tavora-toast-layer" :style="{ transform: style.transform, opacity: style.opacity }" @pointerenter="open" @pointerleave="close" @focusin="open" @focusout="close">
           <ToastItem :item="item" :paused="expanded || toastsPaused || !!paused" :behind="behind" :from="startSizes.get(item.id)" @size="(value) => sizes.set(item.id, value)" />
         </div>
@@ -123,4 +137,5 @@ function forget(id: number) {
     <div class="sr-only" role="status" aria-live="polite" data-testid="toast-status">{{ said.normal }}</div>
     <div class="sr-only" role="alert">{{ said.error }}</div>
   </div>
+  </Teleport>
 </template>
