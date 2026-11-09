@@ -116,7 +116,7 @@ import { CHECK_INTERVAL_MS } from "./catalog-updates";
 import { isReleaseCopies, releaseStatuses } from "./release-pending";
 import { OnlineSearch } from "./online";
 import { countAppUpdate } from "./usage-counts";
-import { newInstallId, sendModuleRequest } from "./module-request";
+import { askedName, newInstallId, sendModuleRequest } from "./module-request";
 import { askKey, type AskedGame } from "../shared/module-request";
 import { PublisherNames } from "./publisher-names";
 import { PreviewUpdater, UpdateManager, type UpdaterLike } from "./updates";
@@ -2630,7 +2630,7 @@ export class Host {
         if (failed && updated + waiting === 0) throw new UserError("error.updatesFailed");
         return { ok: true, updated, waiting };
       },
-      "ask-module": (action) => this.askModule({ name: action.name.replace(/s+/g, " ").trim(), steamAppId: action.steamAppId, gameId: action.gameId }),
+      "ask-module": (action) => this.askModule({ name: askedName(action.name), steamAppId: action.steamAppId, gameId: action.gameId }),
       "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId, { reason: action.reason, note: action.note }),
       "inbox-send-request": (action) => this.inboxAction(() => this.inbox.sendRequest(action.moduleId, action.requestType, action.text, action.previousId)),
       "inbox-reply": (action) => this.inboxAction(() => this.inbox.reply(action.id, action.text)),

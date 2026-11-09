@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { askKey } from "../shared/module-request";
-import { newInstallId, sendModuleRequest, voterFor } from "./module-request";
+import { askedName, newInstallId, sendModuleRequest, voterFor } from "./module-request";
 
 const valheim = { name: "Valheim", steamAppId: 892970, gameId: null };
 
@@ -10,6 +10,14 @@ describe("which games count as the same", () => {
     expect(askKey({ name: "Elden Ring", steamAppId: null, gameId: "elden-ring" })).toBe("game:elden-ring");
     expect(askKey({ name: "Siedler 3!", steamAppId: null, gameId: null })).toBe("name:siedler3");
     expect(askKey({ name: "SIEDLER  3", steamAppId: null, gameId: null })).toBe("name:siedler3");
+  });
+});
+
+describe("the name sent for a vote", () => {
+  it("keeps every letter and squeezes only whitespace", () => {
+    expect(askedName("Satisfactory")).toBe("Satisfactory");
+    expect(askedName("  Assassin's   Creed\tOrigins \n")).toBe("Assassin's Creed Origins");
+    expect(askedName("Siedler  3")).toBe("Siedler 3");
   });
 });
 

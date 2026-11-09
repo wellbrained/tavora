@@ -6,7 +6,7 @@ import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/di
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { MAX_SHARE_BATCH } from "../../shared/host-actions";
 import type { HostAction } from "../../shared/host-api";
-import { account, act, api, dialog, openProfile, showToast, state, type ShareIconsRequest } from "../host";
+import { account, act, api, closeDialog, dialog, openProfile, showToast, state, type ShareIconsRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
@@ -105,7 +105,7 @@ async function share() {
       // The service takes only so many an hour: the rest stay to be shared later.
       busy.value = false;
       progress.value = null;
-      dialog.value = null;
+      closeDialog(props.request);
       showToast(t("shareIcons.limited", { count: shared }));
       return;
     }
@@ -113,7 +113,7 @@ async function share() {
   busy.value = false;
   progress.value = null;
   if (!sentAny) return;
-  dialog.value = null;
+  closeDialog(props.request);
   showToast(shared ? t("shareIcons.thanks") : t("shareIcons.nothingNeeded"));
 }
 </script>

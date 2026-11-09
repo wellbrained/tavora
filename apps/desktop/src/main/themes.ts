@@ -99,6 +99,19 @@ export const OPTIONAL_TOKEN_SINCE = {
   "toast-foreground": "0.22.0",
 } as const satisfies Record<keyof typeof OPTIONAL_THEME_TOKENS, string>;
 
+/** The first Tavora that reads `minTavora`. Every older one refuses a theme that has the field ("Unknown fields: minTavora"). */
+export const MIN_TAVORA_SINCE = "0.24.0";
+
+/**
+ * The `minTavora` to suggest to a theme's author, or null. `needs` is what the theme's optional tokens need. Never
+ * one before 0.24.0: on a Tavora from before that, the field costs the theme the versions that could open it
+ * (0.23.89 to 0.23.117 load the button fill) and helps none, since the older ones refuse the colour anyway.
+ */
+export function minTavoraTip(needs: string | null, minTavora: string | null): string | null {
+  if (needs === null || compareModuleVersions(needs, MIN_TAVORA_SINCE) < 0) return null;
+  return minTavora === null || needsNewerTavora({ minTavora: needs }, minTavora) ? needs : null;
+}
+
 /** The `minTavora` a theme needs for the optional tokens it sets, or null when it sets none. */
 function neededMinTavora(tokens: ThemeToken[]): string | null {
   let needs: string | null = null;
@@ -289,8 +302,8 @@ export function validateTheme(raw: unknown, tavoraVersion?: string): ThemeCheck 
     for (const token of parsed.set) set.add(token);
   }
   const minTavora = typeof raw.minTavora === "string" ? raw.minTavora : null;
-  const needs = neededMinTavora([...set]);
-  const hint = needs !== null && (minTavora === null || needsNewerTavora({ minTavora: needs }, minTavora)) ? { needs } : undefined;
+  const needs = minTavoraTip(neededMinTavora([...set]), minTavora);
+  const hint = needs !== null ? { needs } : undefined;
   return {
     ok: true,
     ...(hint ? { hint } : {}),
