@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.10",
+    date: "2026-11-09",
+    title: "Small fixes",
+    notes: [
+      "Asking for a module sends the game's name as you see it again: an \"s\" in it no longer turns into a space.",
+      "A dialog that finishes saving no longer closes a question that came up meanwhile.",
+      "Appearance no longer suggests a `minTavora` that older Tavoras can't read.",
+    ],
+    prs: [
+      { number: 720, title: "App: module votes keep their \"s\", dialogs close only themselves, no minTavora tip before 0.24.0" },
+    ],
+    tags: ["icons", "modules", "privacy", "publishing", "website"],
+  },
+  {
     version: "0.24.9",
     date: "2026-11-09",
     title: "Focus rings you can see",
