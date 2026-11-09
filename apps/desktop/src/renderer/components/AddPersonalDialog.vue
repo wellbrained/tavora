@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Plus, UserRoundPlus } from "@lucide/vue";
 import { ref } from "vue";
-import { act, dialog, state } from "../host";
+import { act, closeDialog, dialog, state } from "../host";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { t } from "../i18n";
@@ -11,6 +11,8 @@ import ModalDialog from "./ModalDialog.vue";
 const name = ref("");
 const error = ref<string | null>(null);
 const busy = ref(false);
+/** This dialog's request: what is shown once the workspace is added may be another dialog by then. */
+const shownRequest = dialog.value;
 
 async function submit() {
   const value = name.value.replace(/\s+/g, " ").trim();
@@ -19,7 +21,7 @@ async function submit() {
   error.value = null;
   const added = await act({ type: "add-workspace", personal: value }, { quiet: true });
   if (added.ok && added.id) {
-    dialog.value = null;
+    closeDialog(shownRequest);
     if (state.value?.library.onboarded) await act({ type: "open-workspace", workspaceId: added.id });
   } else if (!added.ok) {
     error.value = added.error;

@@ -11,6 +11,8 @@ import {
   discoverThemes,
   FALLBACK_THEME,
   isThemeRadius,
+  MIN_TAVORA_SINCE,
+  minTavoraTip,
   moduleTheme,
   OPTIONAL_TOKEN_SINCE,
   resolveTheme,
@@ -75,7 +77,6 @@ describe("validateTheme", () => {
         minTavora: null,
         variations: [{ id: "dark", name: "Dark", mode: "dark", contrast: "normal", radius: THEME.radius, colors: THEME.tokens }],
       },
-      hint: { needs: "0.23.89" },
     });
   });
 
@@ -234,19 +235,29 @@ describe("minTavora", () => {
     expect(validateTheme(plainTheme({ minTavora: "99.0.0" }))).toMatchObject({ ok: true });
   });
 
-  it("hints at the version of the newest optional token a theme sets", () => {
+  it("never tips a minTavora older than the first Tavora that reads it", () => {
     const hint = (overrides: Record<string, unknown>, extra: Record<string, string>) => {
       const result = validateTheme(plainTheme(overrides, extra), "0.30.0");
       return result.ok ? result.hint : "not ok";
     };
+    // Every optional token so far is older than 0.24.0: the field would only cost the Tavoras that load them.
+    expect(MIN_TAVORA_SINCE).toBe("0.24.0");
     expect(hint({}, {})).toBeUndefined();
-    expect(hint({}, FILL)).toEqual({ needs: "0.23.89" });
-    expect(hint({}, { toast: "#e8dcc0" })).toEqual({ needs: "0.22.0" });
-    expect(hint({}, { ...FILL, toast: "#e8dcc0" })).toEqual({ needs: "0.23.89" });
-    expect(hint({ minTavora: "0.23.88" }, FILL)).toEqual({ needs: "0.23.89" });
-    expect(hint({ minTavora: "0.23.89" }, FILL)).toBeUndefined();
-    expect(hint({ minTavora: "0.24.0" }, { ...FILL, toast: "#e8dcc0" })).toBeUndefined();
-    expect(hint({ minTavora: "0.22.0" }, { toast: "#e8dcc0" })).toBeUndefined();
+    expect(hint({}, FILL)).toBeUndefined();
+    expect(hint({}, { toast: "#e8dcc0" })).toBeUndefined();
+    expect(hint({ minTavora: "0.23.88" }, FILL)).toBeUndefined();
+    expect(minTavoraTip("0.23.89", null)).toBeNull();
+    expect(minTavoraTip("0.22.0", "0.20.0")).toBeNull();
+  });
+
+  it("tips the version of a token from 0.24.0 on, unless minTavora is that new already", () => {
+    expect(minTavoraTip(null, null)).toBeNull();
+    expect(minTavoraTip("0.24.0", null)).toBe("0.24.0");
+    expect(minTavoraTip("0.24.3", null)).toBe("0.24.3");
+    expect(minTavoraTip("0.24.3", "0.23.89")).toBe("0.24.3");
+    expect(minTavoraTip("0.24.3", "0.24.2")).toBe("0.24.3");
+    expect(minTavoraTip("0.24.3", "0.24.3")).toBeNull();
+    expect(minTavoraTip("0.24.3", "0.25.0")).toBeNull();
   });
 
   it("knows the version of every optional token", () => {
@@ -328,7 +339,7 @@ describe("discoverThemes", () => {
     ]);
   });
 
-  it("lists a theme that needs a newer Tavora as a problem, offers no way to pick it, and hints to authors", async () => {
+  it("lists a theme that needs a newer Tavora as a problem, offers no way to pick it, and tips no minTavora before 0.24.0", async () => {
     const local = await mkdtemp(path.join(tmpdir(), "tavora-themes-"));
     await themeFolder(local, "future", plainTheme({ id: "community.future", minTavora: "0.24.0", glow: 1 }));
     await themeFolder(local, "fill", plainTheme({ id: "community.fill" }, FILL));
@@ -339,7 +350,7 @@ describe("discoverThemes", () => {
     expect(problems).toEqual([
       { folder: "future", message: "Needs Tavora 0.24.0 or newer. You have 0.23.118.", kind: "needs-newer", values: { needs: "0.24.0", current: "0.23.118" } },
     ]);
-    expect(hints).toEqual([{ folder: "fill", needs: "0.23.89" }]);
+    expect(hints).toEqual([]);
     // A chosen theme that is too new falls back to the default, as a broken one does.
     expect(resolveTheme(themes, { id: "community.future", variation: "dark" }).theme.id).toBe(DEFAULT_THEME.id);
     // On a Tavora that is new enough it loads.

@@ -47,7 +47,7 @@ Unknown fields are refused, so a typo fails loudly rather than being ignored.
 | `description` | no | At most 200 characters. |
 | `author` | no | At most 60 characters. |
 | `version` | yes | `major.minor.patch`. |
-| `minTavora` | no | The oldest Tavora that can open the theme, as `major.minor.patch` (like `0.23.89`). A Tavora older than that lists the folder in Appearance with "Needs Tavora 0.23.89 or newer. You have …" and does not offer the theme. See [Older Tavora](#older-tavora). |
+| `minTavora` | no | The oldest Tavora that can open the theme, as `major.minor.patch` (like `0.24.0`). A Tavora older than that lists the folder in Appearance with "Needs Tavora 0.24.0 or newer. You have …" and does not offer the theme. Tavora reads it from 0.24.0 on; see [Older Tavora](#older-tavora) before you set it. |
 | `variations` | yes | 1 to 4 variations. Users switch between them in Settings. |
 
 Each variation:
@@ -82,7 +82,7 @@ A variation that misses one is not loaded, and Settings shows which pair failed 
 
 ## Older Tavora
 
-Unknown colours are refused, so a theme that uses a newer colour does not load on a Tavora that doesn't know it. Set `minTavora` to the Tavora that brought the colour, and a Tavora older than that says "Needs Tavora 0.23.89 or newer. You have 0.23.50." instead of listing unknown colours; the same goes for any unknown field or colour in a theme that names a newer `minTavora`. Unknown colours and fields are still refused when `minTavora` is not newer than the Tavora running it, so a typo is still caught.
+Unknown colours are refused, so a theme that uses a newer colour does not load on a Tavora that doesn't know it. For a colour that came in 0.24.0 or later, set `minTavora` to the Tavora that brought it, and a Tavora older than that says "Needs Tavora 0.24.2 or newer. You have 0.24.0." instead of listing unknown colours; the same goes for any unknown field or colour in a theme that names a newer `minTavora`. Unknown colours and fields are still refused when `minTavora` is not newer than the Tavora running it, so a typo is still caught.
 
 The colours a theme may leave out arrived in these versions:
 
@@ -91,6 +91,6 @@ The colours a theme may leave out arrived in these versions:
 | `toast`, `toast-foreground` | 0.22.0 |
 | `primary-fill`, `primary-fill-hover`, `primary-fill-foreground` | 0.23.89 |
 
-A theme that sets one of them without a `minTavora` at least that new still loads, and Appearance shows a tip with the `minTavora` to set. Tavora's own themes ship with the app and need none. Leave the colours out if your theme should work everywhere.
+These all came before `minTavora` did, so don't set `minTavora` for them. Tavora 0.24.0 is the first that reads the field; every Tavora before it refuses a theme that has it ("Unknown fields: minTavora"). Setting it for the button fill would lock the theme out of 0.23.89 to 0.23.117, which open it fine without the field. Leave the colours out if your theme should work everywhere.
 
-`minTavora` itself is new: a Tavora from before it was added refuses a theme that has the field ("Unknown fields: minTavora"). That is the safe outcome, since such a Tavora could not open a theme that needs a newer one anyway.
+A theme that sets a colour from 0.24.0 or later without a `minTavora` at least that new still loads, and Appearance shows a tip with the `minTavora` to set. It never suggests a version before 0.24.0. Tavora's own themes ship with the app and need none.

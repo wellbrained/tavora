@@ -4,7 +4,7 @@ import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/di
 import { Pencil } from "@lucide/vue";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
-import { dialog, type PromptRequest } from "../host";
+import { closeDialog, dialog, type PromptRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
@@ -17,7 +17,7 @@ async function submit() {
   busy.value = true;
   error.value = await props.request.submit(value.value);
   busy.value = false;
-  if (!error.value) dialog.value = null;
+  if (!error.value) closeDialog(props.request);
 }
 </script>
 

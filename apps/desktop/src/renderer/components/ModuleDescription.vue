@@ -8,7 +8,7 @@ import { Expandable } from "@tavora/official-ui/components/ui/expandable";
 import { BookOpen, Bug, Ellipsis, ListChecks, SlidersHorizontal, Sparkles } from "@lucide/vue";
 import type { ReadmeBlock } from "../../shared/host-api";
 import { sortReadme, type ReadmeSectionId } from "../../shared/readme-sections";
-import { act, dialog } from "../host";
+import { act, closeDialog, dialog } from "../host";
 import { t } from "../i18n";
 import ReadmeText from "./ReadmeText.vue";
 
@@ -54,7 +54,7 @@ async function openLink(url: string) {
   const outcome = await act({ type: "open-readme-link", moduleId: props.moduleId, url }, { quiet: true });
   if (!outcome.ok) error.value = outcome.error;
   // Opened in a Browser panel: close the library so the user sees it, as the homepage button does.
-  else if (dialog.value === library) dialog.value = null;
+  else closeDialog(library);
 }
 </script>
 

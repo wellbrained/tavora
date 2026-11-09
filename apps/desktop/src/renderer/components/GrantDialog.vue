@@ -14,7 +14,7 @@ import { Check, Cpu, Folder, Gauge, Globe, Headphones, Monitor, Music, Radio, Sh
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
-import { act, aiUsage, dialog, discord, nextUpdateAsk, openPanels, openSettings, state, stopUpdateAsks, type GrantRequest } from "../host";
+import { act, aiUsage, closeDialog, dialog, discord, nextUpdateAsk, openPanels, openSettings, state, stopUpdateAsks, type GrantRequest } from "../host";
 import { t } from "../i18n";
 import { extensionList } from "../../shared/folder-keys";
 import { folderLabel, foldersOf } from "../folder-label";
@@ -52,6 +52,8 @@ function close() {
     if (!props.request.onRequest) for (const panel of state.value?.panels ?? []) if (panel.moduleId === props.request.moduleId && panel.question) void act({ type: "close-panel", instanceId: panel.instanceId });
     return;
   }
+  // Also after an answer was saved: by then another dialog may be shown, and that one stays.
+  if (dialog.value !== props.request) return;
   dialog.value = props.request.backToLibrary ? { kind: "add-module" } : null;
 }
 
@@ -111,7 +113,7 @@ async function allow() {
     // Only this connector; the module's panels go on running and get it at once.
     await act({ type: "connector-answer", id: props.request.onRequest.id, allow: true }, { quiet: true });
     busy.value = false;
-    if (!props.inPanel) dialog.value = null;
+    if (!props.inPanel) closeDialog(props.request);
     return;
   }
   if (props.request.update) {
@@ -122,8 +124,9 @@ async function allow() {
       error.value = result.error;
       return;
     }
+    if (dialog.value !== props.request) return;
     if (props.request.backToUpdates) nextUpdateAsk();
-    else dialog.value = null;
+    else closeDialog(props.request);
     return;
   }
   // Exactly what this dialog shows: the main process grants only what the module still asks for.

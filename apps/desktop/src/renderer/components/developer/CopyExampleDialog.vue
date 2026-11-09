@@ -9,7 +9,7 @@ import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/di
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
-import { act, dialog, openSettings, settingsOpen, showToast, state } from "../../host";
+import { act, closeDialog, dialog, openSettings, settingsOpen, showToast, state } from "../../host";
 import { t } from "../../i18n";
 import ModalDialog from "../ModalDialog.vue";
 
@@ -29,6 +29,8 @@ const name = ref(t(`examples.defaultName.${short}` as "examples.defaultName.vue"
 const where = ref(folders.value[0] ?? ELSEWHERE);
 const error = ref<string | null>(null);
 const busy = ref(false);
+/** This dialog's request: what is shown once the copy is made may be another dialog by then. */
+const shownRequest = dialog.value;
 
 /** A long path shortened at its start, so the end, which tells folders apart, stays readable. */
 function shortPath(folder: string): string {
@@ -46,7 +48,7 @@ async function submit() {
   busy.value = false;
   if (!result.ok) error.value = result.error;
   else if (result.id) {
-    dialog.value = null;
+    closeDialog(shownRequest);
     if (settingsOpen.value) openSettings({ section: "dev-folders" });
     showToast(t("examples.copied", { folder: result.id.split(/[\\/]/).at(-1) ?? result.id }));
   }

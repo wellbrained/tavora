@@ -9,6 +9,9 @@ import { serviceUrl } from "./service-url";
 
 export { askKey, type AskedGame };
 
+/** The game's name as it is sent: runs of whitespace become one space, and none at either end. */
+export const askedName = (name: string): string => name.replace(/\s+/g, " ").trim();
+
 /** A new random number for this install: 64 lowercase hex digits. */
 export const newInstallId = (): string => randomBytes(32).toString("hex");
 
