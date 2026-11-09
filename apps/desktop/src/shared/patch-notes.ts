@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.9",
+    date: "2026-11-09",
+    title: "Focus rings you can see",
+    notes: [
+      "Moving with the Tab key shows where you are again on settings menus, tab panels, tiles, toggles, colour swatches and the add-module list.",
+    ],
+    prs: [
+      { number: 718, title: "Kit and app: focus rings that never showed" },
+    ],
+    tags: ["accounts", "modules", "settings", "ui-kit"],
+  },
+  {
     version: "0.24.8",
     date: "2026-11-09",
     title: "Pickers and Tab keys behave",
