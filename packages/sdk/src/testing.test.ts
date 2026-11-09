@@ -722,12 +722,54 @@ describe("gestures", () => {
     host.gesture();
     expect(await failure(sdk.links.open("not a link"))).toMatchObject({ code: "INVALID_PARAMS" });
     expect(await failure(sdk.links.open("ftp://example.com/a"))).toMatchObject({ code: "INVALID_PARAMS" });
-    for (const local of ["http://localhost:3000", "http://127.0.0.1/", "http://192.168.1.1", "http://router/", "http://nas.local", "http://[::1]/"]) {
+    expect(await failure(sdk.links.open(`https://example.com/${"a".repeat(2048)}`))).toMatchObject({ code: "INVALID_PARAMS" });
+    for (const local of [
+      "http://localhost:3000",
+      "http://127.0.0.1/",
+      "http://192.168.1.1",
+      "http://router/",
+      "http://nas.local",
+      "http://[::1]/",
+      "http://fritz.box/",
+      "http://routerlogin.net/",
+      "http://[::ffff:192.168.0.1]/",
+      "http://[fe80::1]/",
+    ]) {
       expect(await failure(sdk.links.open(local))).toMatchObject({ code: "PERMISSION_DENIED", message: expect.stringContaining("public addresses") });
     }
-    // None of those used the press.
-    await sdk.links.open("https://example.com");
+    // None of those used the press; a public address mapped into IPv6 is no local one.
+    await sdk.links.open("http://[::ffff:8.8.8.8]/");
     expect(await failure(sdk.links.open("https://example.com"))).toMatchObject({ code: "PERMISSION_DENIED" });
+  });
+
+  it("checks links even when it lets every call through without a click", async () => {
+    const { sdk } = createMemoryHost();
+    expect(await failure(sdk.links.open("http://localhost:5173/"))).toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(await failure(sdk.links.open("mailto:a@example.com"))).toMatchObject({ code: "INVALID_PARAMS" });
+    await sdk.links.open("https://example.com");
+  });
+
+  it("checks the params before it takes the press or the add pass, as Tavora's bridge does", async () => {
+    const { sdk, host } = createMemoryHost({ gestures: "enforce", launch: { reason: "restore", content: null }, panelTypes: ["main", "map"] });
+    host.gesture();
+    expect(await failure(sdk.panel.openDialog({ width: 99999 }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.panel.setMaximized("yes" as never))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.panels.open("map", { content: { id: "", title: "" } }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.panels.openMany(["map", "map"]))).toMatchObject({ code: "INVALID_PARAMS" });
+    // The press is still there.
+    await sdk.panel.openDialog({ width: 600 });
+    expect(host.dialog).toMatchObject({ open: true, width: 600 });
+
+    // Whether the type is the module's own is asked after the press, as in Tavora.
+    host.gesture();
+    expect(await failure(sdk.panels.open("elsewhere"))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.panels.open("map"))).toMatchObject({ code: "PERMISSION_DENIED" });
+
+    // A panel just added keeps its add pass through a dialog Tavora refuses for its size.
+    const added = createMemoryHost({ gestures: "enforce" });
+    expect(await failure(added.sdk.panel.openDialog({ height: 10 }))).toMatchObject({ code: "INVALID_PARAMS" });
+    await added.sdk.panel.openDialog();
+    expect(added.host.dialog.open).toBe(true);
   });
 
   it("lets a panel just added open its dialog once without a click, within ADD_DIALOG_MS", async () => {

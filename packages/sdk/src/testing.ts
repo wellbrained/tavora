@@ -576,13 +576,7 @@ const handlers: Handlers = {
   },
   "panel.setDialog": (panel, params) => {
     if (typeof params.open !== "boolean") fail("INVALID_PARAMS", "params.open must be a boolean");
-    const side = (key: "width" | "height") => {
-      const value = params[key];
-      if (value === undefined) return DIALOG[key];
-      if (!Number.isSafeInteger(value) || value < DIALOG.min || value > DIALOG.max) fail("INVALID_PARAMS", `params.${key} must be a whole number from ${DIALOG.min} to ${DIALOG.max}`);
-      return value;
-    };
-    const next = params.open ? { open: true, width: side("width"), height: side("height") } : { ...panel.dialog, open: false };
+    const next = params.open ? { open: true, width: dialogSide(params, "width"), height: dialogSide(params, "height") } : { ...panel.dialog, open: false };
     const changed = next.open !== panel.dialog.open;
     panel.dialog = next;
     if (!next.open) panel.dialogTitle = null;
@@ -808,36 +802,99 @@ function useAddPass(panel: Panel): boolean {
   return pass !== null && !unusedPress(panel) && panel.shared.now() <= pass.until;
 }
 
+// Tavora's rule for a page on this PC or the local network (apps/desktop/src/main/browser-url.ts, isPrivateHost), copied:
+// the SDK can't import the app. apps/desktop/src/main/browser-url-sdk.test.ts runs both on the same addresses.
+/**
+ * Endings that only a home or office network's own DNS answers (RFC 6762, RFC 8375, ICANN's
+ * reserved `.internal`, and names routers use by habit), so a name with one is on the local network.
+ */
 const LOCAL_SUFFIXES = [".localhost", ".local", ".lan", ".home", ".home.arpa", ".internal", ".intranet", ".localdomain", ".corp", ".private"];
+/** Router and NAS names that are full domains but answered by the device itself on its network. */
+const LOCAL_NAMES = new Set(["fritz.box", "speedport.ip", "myfritz.box", "router.asus.com", "routerlogin.net", "routerlogin.com", "tplinkwifi.net", "tplinklogin.net"]);
 
-/** A page on this PC or the local network, as Tavora's links.open sees it (the desktop's browser-url.ts, in short). */
+function ipv4(host: string): number[] | null {
+  const parts = host.split(".");
+  if (parts.length !== 4) return null;
+  const numbers = parts.map((part) => (/^\d{1,3}$/.test(part) ? Number(part) : NaN));
+  return numbers.every((n) => n >= 0 && n <= 255) ? numbers : null;
+}
+
+function privateIpv4([a, b]: number[]): boolean {
+  return a === 0 || a === 10 || a === 127 || (a === 100 && b! >= 64 && b! <= 127) || (a === 169 && b === 254) || (a === 172 && b! >= 16 && b! <= 31) || (a === 192 && b === 168);
+}
+
+/** Whether a host name (as `URL.hostname` gives it) points at this PC or the local network. */
 function isPrivateHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, "");
-  if (host === "localhost" || LOCAL_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(host);
-  if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
-  }
+  if (host === "localhost" || LOCAL_NAMES.has(host) || LOCAL_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
+  const v4 = ipv4(host);
+  if (v4) return privateIpv4(v4);
   if (!host.startsWith("[")) return host !== "" && !host.includes(".");
   const v6 = host.slice(1, -1);
-  if (v6 === "::" || v6 === "::1" || v6.startsWith("::ffff:")) return true;
+  if (v6 === "::" || v6 === "::1") return true;
+  // IPv4-mapped (::ffff:7f00:1, as the URL parser writes ::ffff:127.0.0.1).
+  const mapped = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(v6);
+  if (mapped) {
+    const high = parseInt(mapped[1]!, 16);
+    const low = parseInt(mapped[2]!, 16);
+    return privateIpv4([high >> 8, high & 255, low >> 8, low & 255]);
+  }
   const first = parseInt(v6.split(":")[0] || "0", 16);
+  // fc00::/7 unique local, fe80::/10 link-local.
   return (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80;
 }
 
-/** The checks Tavora makes before it takes the press. */
-const CHECKS_BEFORE_PRESS: Partial<Record<CallName, (params: unknown) => void>> = {
-  "links.open": (params) => {
-    const raw = (params as { url?: unknown } | undefined)?.url;
+/** Longest link `links.open` takes, as Tavora's bridge (LINK_MAX). */
+const LINK_MAX = 2048;
+
+/** A dialog side as Tavora's bridge checks it: absent, or a whole number in range. */
+function dialogSide(params: { width?: number; height?: number } | undefined, key: "width" | "height"): number {
+  const value = params?.[key];
+  if (value === undefined) return DIALOG[key];
+  if (!Number.isSafeInteger(value) || value < DIALOG.min || value > DIALOG.max) fail("INVALID_PARAMS", `params.${key} must be a whole number from ${DIALOG.min} to ${DIALOG.max}`);
+  return value;
+}
+
+const record = (params: unknown): Record<string, unknown> => (params !== null && typeof params === "object" ? (params as Record<string, unknown>) : {});
+
+/**
+ * The checks Tavora makes before it takes the press or the add pass, so a call refused by them leaves both unused: the
+ * bridge checks the params of its calls first (bridge.ts), and links.open the address too. Whether a panel type is the
+ * module's own is checked after the press, as in Tavora. The calls the page makes over HTTP (files, pictures, the
+ * clipboard) take the press first there, and here too.
+ */
+const CHECKS_BEFORE_PRESS: Partial<Record<CallName, (panel: Panel, params: unknown) => void>> = {
+  "links.open": (_, params) => {
+    const raw = record(params).url;
+    if (typeof raw !== "string" || raw.length === 0 || raw.length > LINK_MAX) fail("INVALID_PARAMS", "params.url must be a web address");
     let url: URL | null = null;
     try {
-      url = typeof raw === "string" ? new URL(raw) : null;
+      url = new URL(raw);
     } catch {
       url = null;
     }
     if (!url || (url.protocol !== "http:" && url.protocol !== "https:") || url.hostname === "") fail("INVALID_PARAMS", "params.url must be an http or https address");
     if (isPrivateHost(url.hostname)) fail("PERMISSION_DENIED", "links.open opens only public addresses, not this PC or the local network");
+  },
+  "panel.setMaximized": (_, params) => {
+    if (typeof record(params).maximized !== "boolean") fail("INVALID_PARAMS", "params.maximized must be a boolean");
+  },
+  "panel.setDialog": (_, params) => {
+    if (typeof record(params).open !== "boolean") fail("INVALID_PARAMS", "params.open must be a boolean");
+    dialogSide(params as { width?: number; height?: number }, "width");
+    dialogSide(params as { width?: number; height?: number }, "height");
+  },
+  "panels.open": (panel, params) => {
+    const { type, content } = record(params);
+    if (typeof type !== "string" || !type) fail("INVALID_PARAMS", "params.type must be a panel type id of this module");
+    if (content !== undefined) checkContent(content, panel.shared.limits);
+  },
+  "panels.openMany": (_, params) => {
+    const { types } = record(params);
+    if (!Array.isArray(types) || types.length === 0 || types.length > MAX_PANEL_TYPES || !types.every((type) => typeof type === "string" && type)) {
+      fail("INVALID_PARAMS", `types must be 1 to ${MAX_PANEL_TYPES} panel types`);
+    }
+    if (new Set(types).size !== types.length) fail("INVALID_PARAMS", "types lists a panel type twice");
   },
 };
 
@@ -852,7 +909,7 @@ async function invoke<M extends CallName>(panel: Panel, method: M, params?: Para
     fail("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
   }
   // A call's own checks that Tavora makes before it takes the press, so a refused call leaves the press unused.
-  CHECKS_BEFORE_PRESS[method]?.(params);
+  CHECKS_BEFORE_PRESS[method]?.(panel, params);
   if (panel.gestures === "enforce" && needsGesture(method, params) && !(method === "panel.setDialog" && useAddPass(panel))) takePress(panel, method);
 
   const script = panel.scripts.get(method);
