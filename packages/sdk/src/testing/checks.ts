@@ -52,6 +52,13 @@ export interface LayoutCheckOptions {
   outside?: string;
   /** Parts not checked, with what is inside them. Default `[aria-hidden=true], .sr-only, [data-slot=skeleton]`. */
   skip?: string;
+  /**
+   * Layers drawn at the end of the page, outside `root`: an open dialog, menu, list or popover. Each one on the page that
+   * isn't inside `root` is checked as well, against the window's edges (in Tavora the panel is the window). Default:
+   * dialogs, the kit's popups and its toasts, `[role=dialog], [role=alertdialog], [data-reka-popper-content-wrapper],
+   * [data-slot=toaster]`. `""` checks `root` only. @since 0.3.15
+   */
+  layers?: string;
 }
 
 /** @since 0.3.14 */
@@ -60,18 +67,30 @@ export interface FocusCheckOptions {
   maxStops?: number;
   /** How long to let anything fading in or out settle before looking for controls Tab missed, in ms. Default 400. */
   settleMs?: number;
-  /** Controls outside the panel's box that still count as stops (a dialog drawn at the end of the page). Default `[data-slot=dialog-content]`. */
+  /**
+   * Controls outside the panel's box that still count as stops: a dialog or the toasts drawn at the end of the page.
+   * Default `[data-slot=dialog-content], [data-slot=toaster]`.
+   */
   outside?: string;
-  /** Where Tab starts when it is on the page: the top of an open dialog. Default `[role=dialog][data-state=open]`; else the panel. */
+  /**
+   * Where Tab starts when it is on the page: the top of the open dialog (the last one, when one is open on top of another),
+   * not the field it focused. Default `[role=dialog][data-state=open]`; else the panel.
+   */
   start?: string;
   /** Controls that need not be reachable. Default: the kit slider's Reset, `[data-slot=slider-reset]`, which shows only now and then. */
   skip?: string;
   /**
-   * Count only a drawn ring (an outline or a box-shadow) as a focus ring. Default false: a control that matches
+   * Count only a drawn ring (an outline or a box-shadow, on the control or on the field around it up to three levels up,
+   * as a number field draws one with `:focus-within`) as a focus ring. Default false: a control that matches
    * `:focus-visible` counts too, which every control Tab reaches does, so a ring taken away by CSS goes unseen. Strict, a
-   * ring that is still fading in when it is measured counts as missing.
+   * ring that is still fading in when it is measured counts as missing: see `ringSettleMs`.
    */
   strictRing?: boolean;
+  /**
+   * How long to wait after each Tab press before looking at the control, in ms, so a ring that fades in has shown (the
+   * kit Button's takes 140 ms). Default 150 with `strictRing`, else 0. @since 0.3.15
+   */
+  ringSettleMs?: number;
 }
 
 /** @since 0.3.14 */
@@ -95,8 +114,9 @@ export interface TestPage {
 /**
  * Looks at everything visible in `root` (a selector or an element, default the whole page) and lists what is wrong: an
  * element that sticks out of the panel's box without anything around it clipping or scrolling it, a page that scrolls
- * sideways, text cut off without an ellipsis, an ellipsis with no title to read the whole text, an input value that is
- * cut off by its field, and text under 12 px. Runs in the page; it needs a browser that lays the page out (not jsdom).
+ * sideways, text cut off without an ellipsis, an ellipsis (or a line clamp) with no title to read the whole text, an
+ * input value that is cut off by its field, and text under 12 px. Dialogs and menus drawn outside `root` (`layers`) are
+ * checked too, against the window. Runs in the page; it needs a browser that lays the page out (not jsdom).
  * Self-contained, so `page.evaluate(inspectLayout, "#panel")` works too; `checkLayout` does that for you.
  *
  * @since 0.3.14
@@ -110,6 +130,7 @@ export function inspectLayout(root: string | Element = "body", options: LayoutCh
   const minFontSize = options.minFontSize ?? 12;
   const outside = options.outside ?? "[data-slot=dialog-content]";
   const skip = options.skip ?? "[aria-hidden=true], .sr-only, [data-slot=skeleton]";
+  const layers = options.layers ?? "[role=dialog], [role=alertdialog], [data-reka-popper-content-wrapper], [data-slot=toaster]";
   const box = typeof root === "string" ? document.querySelector(root) : root;
   const name = typeof root === "string" ? root : describe(root);
   if (!box) return [{ kind: "overflow", where: name, detail: "the panel is not on the page" }];
@@ -129,29 +150,27 @@ export function inspectLayout(root: string | Element = "body", options: LayoutCh
     const rect = el.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
   };
-  // An element may extend past the panel's box when something around it (the box itself too) clips or scrolls it on that axis.
-  const clippedAround = (el: Element) => {
-    for (let parent = el.parentElement; parent && parent !== box.parentElement; parent = parent.parentElement) {
-      if (getComputedStyle(parent).overflowX !== "visible") return true;
+  // An element may extend past its edge when something around it (up to `top`, the panel's box or the layer) clips or
+  // scrolls it on that axis.
+  const clippedAround = (el: Element, top: Element, axis: "x" | "y") => {
+    for (let parent = el.parentElement; parent && parent !== top.parentElement; parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      if ((axis === "x" ? style.overflowX : style.overflowY) !== "visible") return true;
     }
     return false;
   };
   const page = document.documentElement;
   if (page.scrollWidth > window.innerWidth + 1) add("page-overflow", page, `the page is ${page.scrollWidth}px wide in a ${window.innerWidth}px window`);
 
-  for (const el of Array.from(box.querySelectorAll("*"))) {
-    if (!visible(el) || el.closest(skip)) continue;
-    const rect = el.getBoundingClientRect();
-    if ((rect.right > edge.right + 1 || rect.left < edge.left - 1) && !clippedAround(el) && !el.closest(outside)) {
-      add("overflow", el, `extends ${Math.round(Math.max(rect.right - edge.right, edge.left - rect.left))}px past the panel's edge`);
-    }
-    const style = getComputedStyle(el);
-    // The value a text field shows is cut off by the field's own edge.
-    if ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") && (el as HTMLInputElement).value && el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1) {
-      add("clipped", el, `the value is ${el.scrollWidth}px wide in a ${el.clientWidth}px field, so it shows cut off ("${(el as HTMLInputElement).value.slice(0, 40)}")`);
-    }
+  // Shortened text with nothing to read the whole of it from.
+  const untitled = (el: Element) => !el.getAttribute("title") && !el.closest("[title]") && !el.getAttribute("aria-label");
+  const clamped = (style: CSSStyleDeclaration) => {
+    const lines = style.getPropertyValue("-webkit-line-clamp") || style.getPropertyValue("line-clamp");
+    return !!lines && lines !== "none";
+  };
+  const checkText = (el: Element, style: CSSStyleDeclaration) => {
     const hasText = Array.from(el.childNodes).some((node) => node.nodeType === 3 && (node.textContent ?? "").trim().length > 0);
-    if (!hasText) continue;
+    if (!hasText) return;
     const size = parseFloat(style.fontSize);
     if (size < minFontSize - 0.01) add("small-text", el, `${size}px text`);
     // Cut off sideways without an ellipsis (a truncate that shows its ellipsis is fine).
@@ -159,25 +178,73 @@ export function inspectLayout(root: string | Element = "body", options: LayoutCh
       add("clipped", el, `text is ${el.scrollWidth}px wide in a ${el.clientWidth}px box`);
     }
     if ((style.overflowY === "hidden" || style.overflowY === "clip") && el.clientHeight > 0 && el.scrollHeight > el.clientHeight + 2 && style.display !== "inline") {
-      add("clipped", el, `text is ${el.scrollHeight}px tall in a ${el.clientHeight}px box`);
+      // A line clamp ends in an ellipsis, like a truncate: it needs a title, not more room.
+      if (!clamped(style)) add("clipped", el, `text is ${el.scrollHeight}px tall in a ${el.clientHeight}px box`);
+      else if (untitled(el)) add("clipped", el, `shortened to fit its lines (${el.scrollHeight}px in ${el.clientHeight}px) and no title to read it in full`);
     }
     // An ellipsis with nothing to read the whole text from.
-    if (style.textOverflow === "ellipsis" && el.scrollWidth > el.clientWidth + 1 && !el.getAttribute("title") && !el.closest("[title]") && !el.getAttribute("aria-label")) {
+    if (style.textOverflow === "ellipsis" && el.scrollWidth > el.clientWidth + 1 && untitled(el)) {
       add("clipped", el, `shortened with an ellipsis (${el.scrollWidth}px in ${el.clientWidth}px) and no title to read it in full`);
+    }
+  };
+  const checkValue = (el: Element) => {
+    // The value a text field shows is cut off by the field's own edge.
+    if ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") && (el as HTMLInputElement).value && el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1) {
+      add("clipped", el, `the value is ${el.scrollWidth}px wide in a ${el.clientWidth}px field, so it shows cut off ("${(el as HTMLInputElement).value.slice(0, 40)}")`);
+    }
+  };
+
+  for (const el of Array.from(box.querySelectorAll("*"))) {
+    if (!visible(el) || el.closest(skip)) continue;
+    const rect = el.getBoundingClientRect();
+    if ((rect.right > edge.right + 1 || rect.left < edge.left - 1) && !clippedAround(el, box, "x") && !el.closest(outside)) {
+      add("overflow", el, `extends ${Math.round(Math.max(rect.right - edge.right, edge.left - rect.left))}px past the panel's edge`);
+    }
+    checkValue(el);
+    checkText(el, getComputedStyle(el));
+  }
+
+  // Dialogs and menus at the end of the page: in Tavora they are drawn in the panel's window, so nothing may stick out of it.
+  const drawn = layers ? Array.from(document.querySelectorAll(layers)).filter((layer) => !box.contains(layer) && !layer.parentElement?.closest(layers)) : [];
+  for (const layer of drawn) {
+    for (const el of [layer, ...Array.from(layer.querySelectorAll("*"))]) {
+      if (!visible(el) || el.closest(skip)) continue;
+      const rect = el.getBoundingClientRect();
+      const past = Math.max(rect.right - window.innerWidth, -rect.left);
+      const below = Math.max(rect.bottom - window.innerHeight, -rect.top);
+      if (past > 1 && !clippedAround(el, layer, "x")) add("overflow", el, `extends ${Math.round(past)}px past the window's edge`);
+      else if (below > 1 && !clippedAround(el, layer, "y")) add("overflow", el, `extends ${Math.round(below)}px past the window's top or bottom`);
+      checkValue(el);
+      checkText(el, getComputedStyle(el));
     }
   }
   return issues;
 }
 
+/**
+ * Where a stop is in one area that clips or scrolls (or the page): its box in that area's content, so that scrolling the
+ * area doesn't move it. `area` tells areas apart (0 is the page).
+ */
+interface Place {
+  area: number;
+  x: number;
+  y: number;
+}
+
 /** One Tab stop, as the page reports it. */
 interface Stop {
   label: string;
+  /** Its box in the innermost area around it (where it is, however far anything has scrolled). */
   x: number;
   y: number;
   w: number;
   h: number;
+  /** Its box in each area around it, the page first. Two stops are compared in the innermost area they share. */
+  places: Place[];
   ring: boolean;
   group: string | null;
+  /** The layer drawn outside the panel it is in (a dialog, the toasts), or null for the panel itself. */
+  layer: string | null;
   /** A scrollable area the browser itself makes focusable (so keys can scroll it), not a control. */
   scroller: boolean;
 }
@@ -185,7 +252,10 @@ interface Stop {
 /** In the page: blur, and put the focus at the top of what the user is in, so the next Tab goes to the first control. */
 function focusBegin(arg: { root: string; start: string }): void {
   (document.activeElement as HTMLElement | null)?.blur();
-  const start = document.querySelector<HTMLElement>(arg.start) ?? document.querySelector<HTMLElement>(arg.root);
+  // The walk starts at the top of the dialog the user is in (the one opened last, on top of the others), not at the field
+  // the dialog focused when it opened: so a dialog reads from its top (its × first), through its fields, to its buttons.
+  const open = Array.from(document.querySelectorAll<HTMLElement>(arg.start)).filter((one) => one.getClientRects().length > 0);
+  const start = open[open.length - 1] ?? document.querySelector<HTMLElement>(arg.root);
   if (!start) return;
   const had = start.getAttribute("tabindex");
   start.setAttribute("tabindex", "-1");
@@ -207,16 +277,36 @@ function focusStop(arg: { root: string; outside: string; strictRing: boolean }):
   if (!el || el === document.body || !root || !(root.contains(el) || el.closest(arg.outside))) return null;
   const rect = el.getBoundingClientRect();
   const style = getComputedStyle(el);
-  // Where it sits in the page's content, whatever the scroll areas around it have scrolled by.
-  let scrolled = 0;
-  for (let parent = el.parentElement; parent; parent = parent.parentElement) scrolled += parent.scrollTop;
+  // Where it sits in each area around it that clips or scrolls, and in the page: a list scrolled down and the footer
+  // under it are compared where both are drawn, two rows of one list where they are in the list.
+  const registry = window as unknown as Record<symbol, { ids: WeakMap<Element, number>; next: number } | undefined>;
+  const key = Symbol.for("@tavora/sdk/testing:focus-areas");
+  const areas = (registry[key] ??= { ids: new WeakMap(), next: 1 });
+  const places: Place[] = [{ area: 0, x: rect.x + window.scrollX, y: rect.y + window.scrollY }];
+  const around: Element[] = [];
+  for (let parent = el.parentElement; parent && parent !== document.documentElement && parent !== document.body; parent = parent.parentElement) {
+    const own = getComputedStyle(parent);
+    if (!["visible", "clip"].includes(own.overflowY) || !["visible", "clip"].includes(own.overflowX)) around.unshift(parent);
+  }
+  for (const area of around) {
+    let id = areas.ids.get(area);
+    if (id === undefined) areas.ids.set(area, (id = areas.next++));
+    const box = area.getBoundingClientRect();
+    places.push({ area: id, x: rect.x - box.x - area.clientLeft + area.scrollLeft, y: rect.y - box.y - area.clientTop + area.scrollTop });
+  }
+  const inner = places[places.length - 1]!;
   const scroller = !el.matches("button, a[href], input, select, textarea, [role]") && ["auto", "scroll"].includes(style.overflowY);
   // The ring is an outline or a box-shadow; unless strict, a control that matches :focus-visible counts too (so that
   // cannot see a ring removed by CSS: it checks that one is meant to show).
-  const drawn = (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0) || (style.boxShadow !== "none" && style.boxShadow !== "");
-  const ring = drawn || (!arg.strictRing && el.matches(":focus-visible"));
+  const draws = (one: CSSStyleDeclaration) => (one.outlineStyle !== "none" && parseFloat(one.outlineWidth) > 0) || (one.boxShadow !== "none" && one.boxShadow !== "");
+  // A field can draw the ring around the control it holds (a number field's frame, with :focus-within): a few levels up.
+  let field: Element | null = el.parentElement;
+  let framed = false;
+  for (let level = 0; level < 3 && field && field !== root.parentElement && !framed; level++, field = field.parentElement) framed = field.matches(":focus-within") && draws(getComputedStyle(field));
+  const ring = draws(style) || framed || (!arg.strictRing && el.matches(":focus-visible"));
   const group = el.closest("[role=radiogroup], [role=tablist], [role=menu], [role=listbox]");
-  return { label: describe(el), x: rect.x, y: rect.y + scrolled, w: rect.width, h: rect.height, ring, group: group ? describe(group) : null, scroller };
+  const layer = root.contains(el) ? null : el.closest(arg.outside);
+  return { label: describe(el), x: inner.x, y: inner.y, w: rect.width, h: rect.height, places, ring, group: group ? describe(group) : null, layer: layer ? describe(layer) : null, scroller };
 }
 
 /** In the page: visible controls that are no Tab stop (a group counts as reached when one member is), and positive tabindexes. */
@@ -256,10 +346,21 @@ function focusIssues(stops: Stop[], reach: { missing: string[]; positive: string
   for (const stop of stops) if (!stop.ring && !stop.scroller) issues.push({ kind: "focus-ring", where: stop.label, detail: "shows no focus ring" });
   // Reading order: top to bottom, left to right within a row. A stop in the next column (to the right of the one before,
   // such as a settings page's content after its menu) may start higher up; a radio group or tab list may go either way.
+  // Two stops are compared in the innermost area both are in: within one list where they are in it, else where both are
+  // drawn (a list scrolled to its end, then the footer under it).
+  const shared = (a: Stop, b: Stop): [Place, Place] => {
+    let depth = 0;
+    while (depth + 1 < a.places.length && depth + 1 < b.places.length && a.places[depth + 1]!.area === b.places[depth + 1]!.area) depth++;
+    return [a.places[depth]!, b.places[depth]!];
+  };
   for (let index = 1; index < stops.length; index++) {
-    const before = stops[index - 1]!;
-    const stop = stops[index]!;
-    if (before.scroller || stop.scroller) continue;
+    const first = stops[index - 1]!;
+    const next = stops[index]!;
+    // A layer drawn over the panel (a dialog, the toasts at its bottom edge) has no reading order with what is under it.
+    if (first.scroller || next.scroller || first.layer !== next.layer) continue;
+    const [one, two] = shared(first, next);
+    const before = { ...first, x: one.x, y: one.y };
+    const stop = { ...next, x: two.x, y: two.y };
     const overlap = Math.min(before.y + before.h, stop.y + stop.h) - Math.max(before.y, stop.y);
     const sameRow = overlap > Math.min(before.h, stop.h) * 0.5;
     const nextColumn = stop.x >= before.x + before.w - 4;
@@ -278,14 +379,17 @@ function focusIssues(stops: Stop[], reach: { missing: string[]; positive: string
 type Run = <A, R>(fn: (arg: A) => R, arg: A) => Promise<R>;
 
 async function runFocus(run: Run, pressTab: () => Promise<unknown>, root: string, options: FocusCheckOptions): Promise<FocusResult> {
-  const outside = options.outside ?? "[data-slot=dialog-content]";
+  const outside = options.outside ?? "[data-slot=dialog-content], [data-slot=toaster]";
   const max = options.maxStops ?? 90;
+  const strictRing = options.strictRing ?? false;
+  const ringSettleMs = options.ringSettleMs ?? (strictRing ? 150 : 0);
   await run(focusBegin, { root, start: options.start ?? "[role=dialog][data-state=open]" });
   const stops: Stop[] = [];
   let complete = false;
   for (let step = 0; step < max; step++) {
     await pressTab();
-    const stop = await run(focusStop, { root, outside, strictRing: options.strictRing ?? false });
+    if (ringSettleMs > 0) await new Promise((resolve) => setTimeout(resolve, ringSettleMs));
+    const stop = await run(focusStop, { root, outside, strictRing });
     const first = stops[0];
     if (!stop || (first && first.label === stop.label && first.x === stop.x && first.y === stop.y)) {
       complete = true;

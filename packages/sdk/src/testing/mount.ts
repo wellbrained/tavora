@@ -9,22 +9,32 @@ import { themeOf } from "./themes.js";
 /** Takes a started page down again (unmounts the app). May be async. @since 0.3.14 */
 export type StopPanel = () => void | Promise<void>;
 
+/** The panel that is starting, as `start` gets it: its host is ready before the page makes a call. @since 0.3.15 */
+export interface StartingPanel {
+  /** The SDK the page's `connect()` will get. */
+  readonly sdk: TavoraSDK;
+  /** This panel's memory host: script what the page asks for at once (`host.answer`) before the page starts. */
+  readonly host: MemoryHost;
+}
+
 /** @since 0.3.14 */
 export interface MountPanelOptions extends MemoryHostOptions {
   /**
    * Starts the module's page in `container`, the way its entry file does, and returns how to take it down. The page's
    * code calls `connect()` (directly or through `bootstrapModule()` or the kit's `connectModule()`) and gets this panel's
-   * memory host (a later `connect()` of the page gets the same one, as in Tavora).
+   * memory host (a later `connect()` of the page gets the same one, as in Tavora). `panel` (since 0.3.15) has that host
+   * already, so calls the page makes as it starts can be scripted first.
    *
    * ```ts
-   * start: (container) => {
+   * start: (container, { host }) => {
+   *   host.answer("discord.state", () => ({ ...connected }));
    *   const app = createApp(App);
    *   app.mount(container);
    *   return () => app.unmount();
    * }
    * ```
    */
-  start(container: HTMLElement): void | StopPanel | Promise<void | StopPanel>;
+  start(container: HTMLElement, panel: StartingPanel): void | StopPanel | Promise<void | StopPanel>;
   /** Where the panel draws. Default: a new element, as wide as the page and as tall as the window, added to `document.body`. */
   container?: HTMLElement;
   /** How long the page may take to call `connect()`. Default 10000 ms. */
@@ -42,7 +52,9 @@ export interface MountedPanel {
   /**
    * Closes the panel as Tavora does when the user closes it: `lifecycle.onDispose` fires, then the page is taken down
    * (`start`'s stop runs; a container `mountPanel` made is removed). What the module saved stays: mount it again with
-   * `share: panel.host` to reopen it. Safe to call twice.
+   * `share: panel.host` to reopen it. As Tavora restores a panel (after a restart, say), it also gets its own state and
+   * content back: `{ share: panel.host, state: panel.host.state, launch: { reason: "restore", content: panel.host.content } }`.
+   * Safe to call twice.
    */
   unmount(): Promise<void>;
 }
@@ -142,7 +154,7 @@ async function mountNow(options: MountPanelOptions): Promise<MountedPanel> {
     );
   });
   try {
-    stop = (await start(container)) ?? undefined;
+    stop = (await start(container, { sdk, host })) ?? undefined;
     await connected;
   } catch (error) {
     await unmount().catch(() => undefined);

@@ -227,6 +227,14 @@ describe("panel", () => {
     expect(await sdk.panel.getState()).toBeNull();
   });
 
+  it("starts with the state it is given, as a panel Tavora restores, within the same limit", async () => {
+    const { sdk, host } = createMemoryHost({ state: { tab: "maps" } });
+    expect(host.state).toEqual({ tab: "maps" });
+    expect(await sdk.panel.getState()).toEqual({ tab: "maps" });
+    expect(createMemoryHost({ state: null }).host.state).toBeNull();
+    expect(() => createMemoryHost({ limits: { maxPanelStateBytes: 20 }, state: "x".repeat(30) })).toThrow(TypeError);
+  });
+
   it("tells why the page loaded, and keeps the content it shows", async () => {
     const { sdk, host } = createMemoryHost({ launch: { reason: "restore", content: { id: "b1", title: "Build 1" } } });
     expect(await sdk.panel.getLaunch()).toEqual({ reason: "restore", content: { id: "b1", title: "Build 1" } });

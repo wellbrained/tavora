@@ -96,6 +96,48 @@ describe.skipIf(!browser)("checkLayout", () => {
     expect(await checkLayout(page, "#root", { skip: ".mine, [aria-hidden=true]" })).toEqual([]);
   });
 
+  it("accepts a line clamp with a title, and finds one without", async () => {
+    const clamp = "width:80px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden";
+    const text = "A name that is far too long for two short lines of this box";
+    await page.setContent(html(`<p title="${text}" style="${clamp}">${text}</p>`));
+    expect(await checkLayout(page, "#root")).toEqual([]);
+    await page.setContent(html(`<p style="${clamp}">${text}</p>`));
+    const issues = await checkLayout(page, "#root");
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ kind: "clipped", where: `p "${text.slice(0, 40)}"` });
+    expect(issues[0]!.detail).toMatch(/^shortened to fit its lines .* and no title/);
+  });
+
+  it("checks a dialog drawn outside the panel, against the window", async () => {
+    const dialog = (body: string, style = "") => `${html(`<button>Behind</button>`)}<div role="dialog" data-state="open" style="position:fixed;top:20px;left:20px;width:200px;${style}">${body}</div>`;
+    await page.setContent(dialog(`<button>Fine</button>`));
+    expect(await checkLayout(page, "#root")).toEqual([]);
+    await page.setContent(dialog(`<span style="font-size:9px">Tiny</span><div style="width:50px;overflow:hidden;white-space:nowrap">Cut off without any ellipsis</div>`, "left:300px"));
+    const issues = await checkLayout(page, "#root");
+    expect(issues).toContainEqual({ kind: "small-text", where: 'span "Tiny"', detail: "9px text" });
+    expect(issues).toContainEqual({ kind: "overflow", where: 'div "TinyCut off without any ellipsis"', detail: "extends 100px past the window's edge" });
+    expect(issues.some((one) => one.kind === "clipped" && one.detail.startsWith("text is"))).toBe(true);
+    // Below the window counts too; `layers: ""` checks the panel only.
+    await page.setContent(dialog(`<button>Low</button>`, "top:390px;height:40px"));
+    expect(await checkLayout(page, "#root")).toContainEqual({ kind: "overflow", where: 'div "Low"', detail: "extends 30px past the window's top or bottom" });
+    expect(await checkLayout(page, "#root", { layers: "" })).toEqual([]);
+  });
+
+  it("checks the kit's toasts, drawn at the end of the page", async () => {
+    await page.setContent(`${html(`<button>Panel</button>`)}<div data-slot="toaster" style="position:fixed;bottom:8px;left:8px"><span style="font-size:10px">Saved</span><button>Undo</button></div>`);
+    expect(await checkLayout(page, "#root")).toEqual([{ kind: "small-text", where: 'span "Saved"', detail: "10px text" }]);
+    expect((await checkFocus(page, "#root", { settleMs: 0 })).stops).toEqual(['button "Panel"', 'button "Undo"']);
+  });
+
+  it("reads no order between the panel and a layer drawn over it", async () => {
+    // Toasts float over the panel's bottom edge, over content that goes on below them; Tab reaches them after that content.
+    const rows = Array.from({ length: 6 }, (_, index) => `<button style="display:block;height:50px">Row ${index + 1}</button>`).join("");
+    await page.setContent(`${html(rows)}<div data-slot="toaster" style="position:fixed;top:200px;left:8px"><button>Undo</button></div>`);
+    const { stops, issues } = await checkFocus(page, "#root", { settleMs: 0 });
+    expect(stops.at(-1)).toBe('button "Undo"');
+    expect(issues).toEqual([]);
+  });
+
   it("takes another smallest size", async () => {
     await page.setContent(html(`<span style="font-size:13px">Small for a game</span>`));
     expect(await checkLayout(page, "#root")).toEqual([]);
@@ -129,6 +171,31 @@ describe.skipIf(!browser)("checkFocus", () => {
     expect(issues[0]!.detail).toContain("Tab goes up the page");
   });
 
+  it("reads a footer after a list scrolled to its end as after the list, and finds a real jump back up", async () => {
+    const list = `<div style="flex:1;overflow:auto">${Array.from({ length: 12 }, (_, index) => `<button style="display:block;height:40px">Row ${index + 1}</button>`).join("")}</div>`;
+    await page.setContent(html(`<div style="display:flex;flex-direction:column;height:300px">${list}<button>Save</button></div>`));
+    const { issues, stops } = await checkFocus(page, "#root", { settleMs: 0 });
+    expect(stops.at(-1)).toBe('button "Save"');
+    expect(issues).toEqual([]);
+    // A control drawn above the list that Tab reaches after it still goes up the page.
+    await page.setContent(html(`<div style="display:flex;flex-direction:column-reverse;height:300px">${list}<button>Top</button></div>`));
+    const back = await checkFocus(page, "#root", { settleMs: 0 });
+    expect(back.issues.map((one) => one.kind)).toEqual(["focus-order"]);
+    expect(back.issues[0]!.where).toBe('button "Top"');
+  });
+
+  it("counts a ring the field around a control draws, when strict", async () => {
+    await page.setContent(html(`<div class="field"><input aria-label="Count" value="3"></div>`, `input:focus-visible{outline:none}.field:focus-within{box-shadow:0 0 0 3px blue}`));
+    expect((await checkFocus(page, "#root", { settleMs: 0, strictRing: true })).issues).toEqual([]);
+    await page.setContent(html(`<div class="field"><input aria-label="Count" value="3"></div>`, `input:focus-visible{outline:none}`));
+    expect((await checkFocus(page, "#root", { settleMs: 0, strictRing: true })).issues.map((one) => one.kind)).toEqual(["focus-ring"]);
+  });
+
+  it("waits for a ring that fades in before calling it missing, when strict", async () => {
+    await page.setContent(html(`<button>Fades in</button>`, `button{outline:0 solid transparent;transition:outline-width 140ms}button:focus-visible{outline:2px solid blue}`));
+    expect((await checkFocus(page, "#root", { settleMs: 0, strictRing: true })).issues).toEqual([]);
+  });
+
   it("finds a positive tabindex, and the control Tab then never reaches", async () => {
     // A tabindex above 0 takes B out of reading order: Tab goes A, then round to the page's tabindex 1 outside the
     // panel (where the check stops), and B would only come after that.
@@ -146,6 +213,16 @@ describe.skipIf(!browser)("checkFocus", () => {
     await page.setContent(`${html(`<button>Behind</button>`)}<div role="dialog" data-state="open"><div data-slot="dialog-content"><button>Cancel</button><button>Save</button></div></div>`);
     const { stops } = await checkFocus(page, "#root", { settleMs: 0 });
     expect(stops.slice(0, 2)).toEqual(['button "Cancel"', 'button "Save"']);
+  });
+
+  it("walks a dialog from its top, not from the field it focused, and the dialog on top of another one", async () => {
+    const dialog = (name: string) => `<div role="dialog" data-state="open" tabindex="-1"><button aria-label="Close ${name}">×</button><input aria-label="${name} name"><button>Save ${name}</button></div>`;
+    // As with a modal dialog, the page behind it is inert.
+    await page.setContent(`${html(`<button>Behind</button>`).replace('<div id="root">', '<div id="root" inert>')}${dialog("Outer")}${dialog("Inner")}`);
+    await page.focus("input[aria-label='Inner name']");
+    // What Tab does after the last control of the page is the browser's own; the walk's start is what this is about.
+    const { stops } = await checkFocus(page, "#root", { settleMs: 0, outside: "[role=dialog]" });
+    expect(stops.slice(0, 3)).toEqual(['button[Close Inner] "×"', "input[Inner name]", 'button "Save Inner"']);
   });
 
   it("finds a ring taken away by CSS only when strict", async () => {

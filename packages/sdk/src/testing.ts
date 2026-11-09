@@ -48,7 +48,7 @@ import {
 
 export { TavoraError } from "./index.js";
 export { themeFromPackage, themeOf, type ThemePackageJson, type ThemeVariationJson } from "./testing/themes.js";
-export { mountPanel, type MountedPanel, type MountPanelOptions, type StopPanel } from "./testing/mount.js";
+export { mountPanel, type MountedPanel, type MountPanelOptions, type StartingPanel, type StopPanel } from "./testing/mount.js";
 export {
   checkFocus,
   checkLayout,
@@ -94,6 +94,11 @@ export interface MemoryHostOptions {
   panelTypes?: string[];
   /** Why the page loads. Default: `{ reason: "add" }`. */
   launch?: PanelLaunch;
+  /**
+   * This panel's own state when it starts (what `panel.getState` answers until the page sets another), as Tavora keeps it
+   * for a panel it restores. Same limits as `panel.setState`. Default: null. @since 0.3.15
+   */
+  state?: JsonValue | null;
   workspace?: TavoraWorkspace;
   viewport?: TavoraViewport;
   theme?: Partial<TavoraTheme>;
@@ -831,13 +836,16 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     panels: new Set(),
   };
 
+  const state = options.state === undefined || options.state === null ? null : serializeJson(options.state, "state");
+  if (state !== null && byteLength(state) > shared.limits.maxPanelStateBytes) throw new TypeError(`state is limited to ${shared.limits.maxPanelStateBytes} bytes, as panel state is`);
+
   const panel: Panel = {
     shared,
     type: options.panelType ?? null,
     launch: options.launch ?? { reason: "add" },
     gestures: options.gestures ?? "ignore",
     presses: 0,
-    state: null,
+    state,
     content: null,
     maximized: false,
     dialog: { open: false, width: DIALOG.width, height: DIALOG.height },

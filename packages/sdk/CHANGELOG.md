@@ -1,3 +1,12 @@
+## 0.3.15
+
+What the tavora-modules acceptance runs found missing in `@tavora/sdk/testing`. Nothing here talks to Tavora, so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `mountPanel`'s `start(container, panel)` gets the panel's `host` and `sdk` before the page starts, so a test can script what the page asks for as it starts (`host.answer`).
+- `createMemoryHost({ state })` (and so `mountPanel`) starts a panel with a saved state of its own, as Tavora restores one. With `share` and a restore `launch`, a closed panel comes back with its state and content.
+- `inspectLayout` / `checkLayout` also check dialogs, menus, lists, popovers and the kit's toasts drawn outside the panel's element (`layers`; Tab counts the toasts too), against the window's edges, and accept a line clamp that has a title, like an ellipsis.
+- `inspectFocus` / `checkFocus` compare two stops in the innermost area both are in, so a footer after a list that scrolled is no longer read as "Tab goes up the page". With a dialog open, the walk starts at the top of the dialog on top (its × first), not at the field it focused. Order is read within one layer: a stop in the panel and the next in a dialog or the toasts drawn over it are not compared. A strict ring check waits for a ring that fades in (`ringSettleMs`, 150 ms with `strictRing`), and counts a ring the field around a control draws (a number field's frame).
+
 ## 0.3.14
 
 Testing a real panel in the browser. Nothing here talks to Tavora, so `MIN_TAVORA` stays (Tavora 0.19.32). All of it is in `@tavora/sdk/testing`, and none of it needs a test runner, framework or browser driver.

@@ -52,7 +52,16 @@ const panel = await mountPanel({
 
 Your page keeps calling `connect()`, `bootstrapModule()` or the kit's `connectModule()` as it does in Tavora; while `mountPanel` starts it, that call gets this panel's memory host. You don't change your module's code for the test.
 
-`panel.host` is the memory host's control side, as in [Testing your module](./testing): `panel.host.storage`, `panel.host.emit(...)`, `panel.host.answer(...)`, `panel.host.calls`. `mountPanel` takes every option of `createMemoryHost`, with two defaults that match Tavora rather than a unit test:
+`panel.host` is the memory host's control side, as in [Testing your module](./testing): `panel.host.storage`, `panel.host.emit(...)`, `panel.host.answer(...)`, `panel.host.calls`. `start` gets it too, as its second argument (SDK 0.3.15), before your page makes its first call, so you can script what the page asks for as it starts:
+
+```ts
+start: (container, { host }) => {
+  host.answer("discord.state", () => ({ ...connected }));
+  createApp(App).mount(container);
+},
+```
+
+`mountPanel` takes every option of `createMemoryHost`, with two defaults that match Tavora rather than a unit test:
 
 - **Calls that need a click are refused without one** (`gestures: "enforce"`). A real press in the panel (a mouse button, a touch, a key) lets one such call through, as in Tavora. A press in a dialog or menu drawn at the end of the page counts for the panel you pressed last. A scripted `element.click()` is no press; use your driver's click, or `panel.host.gesture()`.
 - **The theme is Tavora Dark.**
@@ -67,6 +76,19 @@ By default the panel draws into a new element as tall as the window. Pass `conta
 await panel.unmount();
 const again = await mountPanel({ share: panel.host, start });
 ```
+
+When Tavora restores a panel (after a restart, or when you switch back to its workspace), the panel also gets its own state and what it showed back. Pass them on (SDK 0.3.15):
+
+```ts
+const restored = await mountPanel({
+  share: panel.host,
+  state: panel.host.state,
+  launch: { reason: "restore", content: panel.host.content },
+  start,
+});
+```
+
+`state` works on `createMemoryHost` too: a panel that starts with a saved state of its own.
 
 Panels start one at a time, so each gets its own host even if you start several at once.
 
@@ -91,12 +113,12 @@ For your own theme, `themeFromPackage(json, "light")` turns a `tavora.theme.json
 |---|---|
 | `overflow` | Something sticks out of the panel, and nothing around it clips or scrolls it. |
 | `page-overflow` | The page is wider than the window, so it scrolls sideways. |
-| `clipped` | Text cut off without an ellipsis, an ellipsis with no title to read the whole text, or an input value cut off by its field. |
+| `clipped` | Text cut off without an ellipsis, an ellipsis or a line clamp with no title to read the whole text, or an input value cut off by its field. |
 | `small-text` | Text under 12 px. |
 
 Each finding is `{ kind, where, detail }`. `where` names the element by tag, then `data-testid`, `aria-label` or `title`, then its first words, so give your controls test ids and the report reads well.
 
-The kit's dialogs (`[data-slot=dialog-content]`) may stick out of the panel. Change that with `outside`, leave parts out with `skip`, or set another smallest size with `minFontSize`.
+Dialogs, menus, lists, popovers and toasts the kit draws at the end of the page, outside your panel's element, are checked too (SDK 0.3.15): nothing in them may stick out of the window, which is what the panel is in Tavora. `layers` says what counts as one (default `[role=dialog], [role=alertdialog], [data-reka-popper-content-wrapper], [data-slot=toaster]`; `""` checks the panel only). A kit dialog inside the panel's element (`[data-slot=dialog-content]`) may stick out of it. Change that with `outside`, leave parts out with `skip`, or set another smallest size with `minFontSize`.
 
 The checks need a browser that lays the page out. In jsdom they find nothing.
 
@@ -105,13 +127,13 @@ The checks need a browser that lays the page out. In jsdom they find nothing.
 `checkFocus(page, root)` presses Tab through the panel and checks that:
 
 - every visible control can be reached (a radio group or tab list is one stop),
-- the order follows reading order: top to bottom, left to right within a row,
+- the order follows reading order: top to bottom, left to right within a row (two controls in one list that scrolls are compared where they are in the list; a control in the list and one outside it, such as a footer, where both are drawn),
 - no control has a `tabindex` above 0,
 - every stop shows a focus ring.
 
-It resolves with `{ stops, issues, complete }`: the stops in order, the findings (`unreachable`, `focus-order`, `positive-tabindex`, `focus-ring`) and whether Tab went all the way round. If a dialog is open, it starts there.
+It resolves with `{ stops, issues, complete }`: the stops in order, the findings (`unreachable`, `focus-order`, `positive-tabindex`, `focus-ring`) and whether Tab went all the way round. If a dialog is open, it starts at the top of it (the one on top, when one is open over another), not at the field the dialog focused: so it reads the dialog from its × through its fields to its buttons. Order is read within one layer: going from the panel to the toasts drawn over its bottom edge is never "up the page".
 
-By default a control that matches `:focus-visible` counts as having a ring, so a ring your CSS takes away goes unseen. Pass `strictRing: true` to count only a drawn outline or shadow.
+By default a control that matches `:focus-visible` counts as having a ring, so a ring your CSS takes away goes unseen. Pass `strictRing: true` to count only a drawn outline or shadow, on the control or on the field around it (a number field draws its ring on its frame). A strict check waits 150 ms after each Tab press so a ring that fades in (the kit Button's takes 140 ms) has shown; `ringSettleMs` changes that.
 
 ## Put it together
 
