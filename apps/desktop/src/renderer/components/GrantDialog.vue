@@ -43,25 +43,28 @@ const folders = computed(() => foldersOf(asks.value?.folders ?? []));
 const aiAccounts = computed(() => aiUsage.value?.accounts ?? []);
 const discordUser = computed(() => discord.value?.user ?? null);
 
-/** Cancel goes back to the module library when the request came from there and it stays open. */
-function close() {
-  if (props.request.backToUpdates) return stopUpdateAsks();
-  if (props.request.onRequest) void act({ type: "connector-answer", id: props.request.onRequest.id, allow: false }, { quiet: true });
+/**
+ * Cancel goes back to the module library when the request came from there and it stays open. `request` is the question
+ * answered: after an answer was saved, another may be shown, even this module's next one in this same dialog (it is
+ * keyed by module). That one stays, unanswered.
+ */
+function close(request: GrantRequest = props.request) {
+  if (!props.inPanel && dialog.value !== request) return;
+  if (request.backToUpdates) return stopUpdateAsks();
+  if (request.onRequest) void act({ type: "connector-answer", id: request.onRequest.id, allow: false }, { quiet: true });
   if (props.inPanel) {
     // Not allowed: the panels that were waiting for the answer close; nothing of the module is kept.
-    if (!props.request.onRequest) for (const panel of state.value?.panels ?? []) if (panel.moduleId === props.request.moduleId && panel.question) void act({ type: "close-panel", instanceId: panel.instanceId });
+    if (!request.onRequest) for (const panel of state.value?.panels ?? []) if (panel.moduleId === request.moduleId && panel.question) void act({ type: "close-panel", instanceId: panel.instanceId });
     return;
   }
-  // Also after an answer was saved: by then another dialog may be shown, and that one stays.
-  if (dialog.value !== props.request) return;
-  dialog.value = props.request.backToLibrary ? { kind: "add-module" } : null;
+  dialog.value = request.backToLibrary ? { kind: "add-module" } : null;
 }
 
 // The module went away, or has nothing left to ask: nothing to answer.
 watch(
   [module, hosts, connectors, folders],
   () => {
-    if (!props.inPanel && !busy.value && (!module.value || hosts.value.length + connectors.value.length + folders.value.length === 0)) dialog.value = null;
+    if (!props.inPanel && !busy.value && (!module.value || hosts.value.length + connectors.value.length + folders.value.length === 0)) closeDialog(props.request);
   },
   { immediate: true },
 );
@@ -108,15 +111,17 @@ function editAccounts() {
 async function allow() {
   const current = module.value;
   if (!current) return;
+  // The question this answer is for: once it is saved, the dialog may show another one (see close).
+  const request = props.request;
   busy.value = true;
-  if (props.request.onRequest) {
+  if (request.onRequest) {
     // Only this connector; the module's panels go on running and get it at once.
-    await act({ type: "connector-answer", id: props.request.onRequest.id, allow: true }, { quiet: true });
+    await act({ type: "connector-answer", id: request.onRequest.id, allow: true }, { quiet: true });
     busy.value = false;
-    if (!props.inPanel) closeDialog(props.request);
+    if (!props.inPanel) closeDialog(request);
     return;
   }
-  if (props.request.update) {
+  if (request.update) {
     // Exactly the version this dialog shows; the main process checks the zip again before it installs.
     const result = await act({ type: "apply-module-update", moduleId: current.id, version: update.value?.version ?? "" }, { quiet: true });
     busy.value = false;
@@ -124,9 +129,9 @@ async function allow() {
       error.value = result.error;
       return;
     }
-    if (dialog.value !== props.request) return;
-    if (props.request.backToUpdates) nextUpdateAsk();
-    else closeDialog(props.request);
+    if (dialog.value !== request) return;
+    if (request.backToUpdates) nextUpdateAsk();
+    else closeDialog(request);
     return;
   }
   // Exactly what this dialog shows: the main process grants only what the module still asks for.
@@ -138,9 +143,9 @@ async function allow() {
   }
   // In a panel, the host starts the panels that waited for this answer.
   if (props.inPanel) return;
-  close();
-  if (props.request.review) return;
-  void openPanels(current.id, props.request.slot, props.request.panelTypes ?? []);
+  close(request);
+  if (request.review) return;
+  void openPanels(current.id, request.slot, request.panelTypes ?? []);
 }
 </script>
 
@@ -149,7 +154,7 @@ async function allow() {
     :is="inPanel ? 'section' : ModalDialog"
     v-if="module"
     v-bind="inPanel ? { class: 'flex w-full max-w-[460px] flex-col gap-4', 'aria-labelledby': titleId, 'data-testid': 'grant-question' } : { title, icon: ShieldCheck, class: 'sm:max-w-[480px]', testid: 'grant-dialog' }"
-    @close="close"
+    @close="close()"
   >
     <h2 v-if="inPanel" :id="titleId" class="text-lg font-semibold">{{ title }}</h2>
     <div class="flex items-center gap-3">
@@ -229,7 +234,7 @@ async function allow() {
     <p class="text-muted-foreground text-sm">{{ t("grant.later") }}</p>
     <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
     <DialogFooter>
-      <DialogButton type="button" close autofocus data-testid="grant-cancel" @click="close">
+      <DialogButton type="button" close autofocus data-testid="grant-cancel" @click="close()">
         {{ request.review ? t("grant.notNow") : t("common.cancel") }}
       </DialogButton>
       <DialogButton type="button" :icon="Check" :loading="busy" data-testid="grant-allow" :disabled="busy" @click="allow">{{ update ? t("grant.updateAllow") : t("grant.allow") }}</DialogButton>

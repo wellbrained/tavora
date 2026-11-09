@@ -32,9 +32,9 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     date: "2026-11-09",
     title: "Small fixes",
     notes: [
-      "Asking for a module sends the game's name as you see it again: an \"s\" in it no longer turns into a space.",
-      "A dialog that finishes saving no longer closes a question that came up meanwhile.",
-      "Appearance no longer suggests a `minTavora` that older Tavoras can't read.",
+      "Ask for a module sends the game's name correctly again.",
+      "A window that finishes saving no longer closes a question that popped up in the meantime.",
+      "Appearance no longer gives theme makers a tip that would stop their theme from opening in older Tavora versions.",
     ],
     prs: [
       { number: 720, title: "App: module votes keep their \"s\", dialogs close only themselves, no minTavora tip before 0.24.0" },
