@@ -81,7 +81,7 @@ function onPress(event: Event) {
   if (!panel) panel = lastPressed && mounted.has(lastPressed) ? lastPressed : mounted.size === 1 ? [...mounted][0] : undefined;
   if (!panel) return;
   lastPressed = panel;
-  panel.host.gesture(1);
+  panel.host.gesture();
 }
 
 function listen(doc: Document) {

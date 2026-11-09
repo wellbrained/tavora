@@ -10,6 +10,8 @@ import {
   BLOB_PATH,
   BLOB_TYPES,
   DOCUMENT_ID,
+  FIELD_SINCE,
+  HOST_FEATURES,
   LIMITS,
   METHOD_INFO,
   needsGesture,
@@ -85,7 +87,8 @@ export interface MemoryHostOptions {
   capabilities?: Capability[];
   /**
    * `"ignore"` (default) lets every call through. `"enforce"` refuses calls that need a click or key press with
-   * PERMISSION_DENIED unless the test made one first with `host.gesture()` or `host.click(fn)`; one press allows one call.
+   * PERMISSION_DENIED unless the test made one first with `host.gesture()` or `host.click(fn)`. As in Tavora, the panel
+   * keeps only its latest press: it lets one call through, within `GESTURE_MS` (2 s). Presses don't add up.
    */
   gestures?: "ignore" | "enforce";
   /** This panel's type (one of the manifest's `panels`). Default: null, a module without panel types. */
@@ -153,7 +156,10 @@ export interface MemoryHost {
   behind(behind?: boolean): void;
   /** The page goes away: `lifecycle.onDispose` fires and this panel gets no more events from the others. */
   dispose(): void;
-  /** The user made one click or key press (or `count`), which lets that many gated calls through when gestures are enforced. */
+  /**
+   * The user clicked or pressed a key. With gestures enforced, it lets the next call that needs one through, within
+   * `GESTURE_MS`. Tavora keeps one press, not a count: a new press replaces the one before, and `count` is ignored.
+   */
   gesture(count?: number): void;
   /** Runs `fn` right after a click: one gesture, then `fn`. */
   click<T>(fn: () => T | Promise<T>): Promise<T>;
@@ -202,8 +208,12 @@ export interface MemoryHost {
   setWorkspace(workspace: TavoraWorkspace): void;
 }
 
-/** Newest Tavora the SDK knows, and the default version of a memory host. */
-export const LATEST_TAVORA = "0.23.102";
+/** Newest Tavora the SDK knows, and the default version of a memory host: the newest `since` of every call it has. */
+export const LATEST_TAVORA: string = [...Object.values(METHOD_INFO).map((info) => info.since), ...Object.values(FIELD_SINCE), ...Object.values(HOST_FEATURES)].reduce((a, b) =>
+  versionAtLeast(a, b) ? a : b,
+);
+/** How long a click or key press lets a call through, as in Tavora (module-view.ts). */
+export const GESTURE_MS = 2_000;
 /** Most panel types one call may name: as many as a manifest may declare (MAX_PANEL_TYPES in @tavora/module-schema). */
 const MAX_PANEL_TYPES = 16;
 
@@ -334,7 +344,8 @@ interface Panel {
   type: string | null;
   launch: PanelLaunch;
   gestures: "ignore" | "enforce";
-  presses: number;
+  /** The latest click or key press: one call may use it, within GESTURE_MS. */
+  press: { at: number; used: boolean } | null;
   state: string | null;
   content: PanelContent | null;
   maximized: boolean;
@@ -780,8 +791,9 @@ async function invoke<M extends CallName>(panel: Panel, method: M, params?: Para
     fail("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
   }
   if (panel.gestures === "enforce" && needsGesture(method, params)) {
-    if (panel.presses <= 0) fail("PERMISSION_DENIED", `${method} must be called right after a click or key press`);
-    panel.presses--;
+    const { press } = panel;
+    if (!press || press.used || Date.now() - press.at > GESTURE_MS) fail("PERMISSION_DENIED", `${method} must be called right after a click or key press`);
+    press.used = true;
   }
 
   const script = panel.scripts.get(method);
@@ -844,7 +856,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     type: options.panelType ?? null,
     launch: options.launch ?? { reason: "add" },
     gestures: options.gestures ?? "ignore",
-    presses: 0,
+    press: null,
     state,
     content: null,
     maximized: false,
@@ -1119,9 +1131,9 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       deliver(panel, "lifecycle.dispose", null);
       shared.panels.delete(panel);
     },
-    gesture: (count = 1) => void (panel.presses += count),
+    gesture: () => void (panel.press = { at: Date.now(), used: false }),
     click: async (fn) => {
-      panel.presses++;
+      panel.press = { at: Date.now(), used: false };
       return fn();
     },
     setMaximized: (maximized) => setMaximized(panel, maximized),

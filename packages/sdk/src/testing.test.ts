@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { LIMITS, MIN_TAVORA, TavoraError } from "./index.js";
-import { createMemoryHost, LATEST_TAVORA } from "./testing.js";
+import { METHOD_INFO, versionAtLeast } from "./protocol.js";
+import { createMemoryHost, GESTURE_MS, LATEST_TAVORA } from "./testing.js";
 
 const failure = (promise: Promise<unknown>) => promise.then(() => undefined, (error: unknown) => error);
 
@@ -517,22 +518,22 @@ describe("scripted answers", () => {
     const { sdk, host } = createMemoryHost({ gestures: "enforce" });
     const book = new Uint8Array([0x50, 0x4b, 3, 4]);
     expect(await failure(sdk.files.save("a,b\n", { type: "csv" }))).toMatchObject({ code: "PERMISSION_DENIED" });
-    host.gesture(7);
-    expect(await sdk.files.save("a,b\n1,2\n", { type: "csv", name: "Farm.csv" })).toEqual({ fileName: "Farm.csv" });
-    expect(await sdk.files.save(book, { type: "xlsx", name: "Book" })).toEqual({ fileName: "Book.xlsx" });
-    expect(await sdk.files.save("x", { type: "csv" })).toEqual({ fileName: "Untitled.csv" });
+    // One press per file, as in Tavora.
+    const pressed = <T>(fn: () => Promise<T>) => host.click(fn);
+    expect(await pressed(() => sdk.files.save("a,b\n1,2\n", { type: "csv", name: "Farm.csv" }))).toEqual({ fileName: "Farm.csv" });
+    expect(await pressed(() => sdk.files.save(book, { type: "xlsx", name: "Book" }))).toEqual({ fileName: "Book.xlsx" });
+    expect(await pressed(() => sdk.files.save("x", { type: "csv" }))).toEqual({ fileName: "Untitled.csv" });
     expect(host.saved.map((item) => [item.kind, item.fileName])).toEqual([["csv", "Farm.csv"], ["xlsx", "Book.xlsx"], ["csv", "Untitled.csv"]]);
     expect(host.saved[1]!.value).toEqual(book);
-    expect(await failure(sdk.files.save("x", { type: "pdf" as never }))).toMatchObject({ code: "INVALID_PARAMS" });
-    expect(await failure(sdk.files.save(book, { type: "csv" }))).toMatchObject({ code: "INVALID_PARAMS" });
-    expect(await failure(sdk.files.save("x", { type: "xlsx" }))).toMatchObject({ code: "INVALID_PARAMS" });
-    expect(await failure(sdk.files.save("x".repeat(8 * 1024 * 1024 + 1), { type: "csv" }))).toMatchObject({ code: "QUOTA_EXCEEDED" });
+    expect(await failure(pressed(() => sdk.files.save("x", { type: "pdf" as never })))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(pressed(() => sdk.files.save(book, { type: "csv" })))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(pressed(() => sdk.files.save("x", { type: "xlsx" })))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(pressed(() => sdk.files.save("x".repeat(8 * 1024 * 1024 + 1), { type: "csv" })))).toMatchObject({ code: "QUOTA_EXCEEDED" });
 
-    host.gesture(3);
-    expect(await sdk.files.open()).toBeNull();
-    expect(await failure(sdk.files.open({ types: ["json" as never] }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await pressed(() => sdk.files.open())).toBeNull();
+    expect(await failure(pressed(() => sdk.files.open({ types: ["json" as never] })))).toMatchObject({ code: "INVALID_PARAMS" });
     host.answer("files.open", () => ({ fileName: "a.csv", type: "csv", text: "a;b" }));
-    expect(await sdk.files.open({ types: ["csv"] })).toEqual({ fileName: "a.csv", type: "csv", text: "a;b" });
+    expect(await pressed(() => sdk.files.open({ types: ["csv"] }))).toEqual({ fileName: "a.csv", type: "csv", text: "a;b" });
     expect(await failure(sdk.files.open())).toMatchObject({ code: "PERMISSION_DENIED" });
   });
 
@@ -685,10 +686,37 @@ describe("gestures", () => {
     expect(await failure(sdk.files.saveJson({}))).toMatchObject({ code: "PERMISSION_DENIED" });
     await host.click(() => sdk.links.open("https://example.com"));
     expect(await failure(sdk.links.open("https://example.com"))).toMatchObject({ code: "PERMISSION_DENIED" });
-    host.gesture(2);
+    host.gesture();
     await sdk.panel.setMaximized(true);
+    host.gesture();
     await sdk.ui.showMenu({ items: [], at: { x: 0, y: 0 } });
     expect(await failure(sdk.ui.showMenu({ items: [], at: { x: 0, y: 0 } }))).toMatchObject({ code: "PERMISSION_DENIED" });
+  });
+
+  it("keeps one press, as Tavora does: presses don't add up, and one lasts GESTURE_MS", async () => {
+    vi.useFakeTimers();
+    try {
+      const { sdk, host } = createMemoryHost({ gestures: "enforce" });
+      const open = () => sdk.links.open("https://example.com");
+      host.gesture(3);
+      host.gesture();
+      await open();
+      expect(await failure(open())).toMatchObject({ code: "PERMISSION_DENIED" });
+      const twice = host.click(async () => {
+        await open();
+        await open();
+      });
+      expect(await failure(twice)).toMatchObject({ code: "PERMISSION_DENIED" });
+
+      host.gesture();
+      vi.advanceTimersByTime(GESTURE_MS);
+      await open();
+      host.gesture();
+      vi.advanceTimersByTime(GESTURE_MS + 1);
+      expect(await failure(open())).toMatchObject({ code: "PERMISSION_DENIED" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not ask for a click where the host does not", async () => {
@@ -718,6 +746,14 @@ describe("an older Tavora", () => {
     host.setWorkspace({ id: "poe2", displayName: "Path of Exile 2", kind: "game" });
     expect(await sdk.workspace.getCurrent()).toEqual({ id: "poe2", displayName: "Path of Exile 2", kind: "game" });
     expect(host.calls["game.getCurrent"]).toHaveLength(2);
+  });
+
+  it("is by default the newest Tavora of every call the SDK has", async () => {
+    for (const { since } of Object.values(METHOD_INFO)) expect(versionAtLeast(LATEST_TAVORA, since)).toBe(true);
+    const { sdk } = createMemoryHost({ capabilities: ["folders"] });
+    expect(sdk.supports("folders.list")).toBe(true);
+    expect(sdk.supports("folders.showInFolder")).toBe(true);
+    expect(await sdk.folders.choose("saves")).toBe(false);
   });
 
   it("knows every version up to the newest", async () => {
