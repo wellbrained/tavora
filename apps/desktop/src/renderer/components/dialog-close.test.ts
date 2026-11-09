@@ -191,8 +191,64 @@ describe("a dialog that waits closes only itself", () => {
   });
 });
 
+/** The slot as App.vue draws it: the consent dialog of the request shown now, keyed by its module. */
+function mountSlot() {
+  app = createApp({
+    render: () => {
+      const shown = dialog.value;
+      return shown?.kind === "grant" ? h(GrantDialog, { key: shown.moduleId, request: shown }) : null;
+    },
+  });
+  app.mount(root);
+}
+const asking = (id: number) => ({ ...hostState(), pendingConnector: { id, moduleId: MODULE, connectors: ["media"] } }) as HostViewState;
+
 describe("the consent dialog answers only the question it showed", () => {
   const grant: GrantRequest = { kind: "grant", moduleId: MODULE, slot: null, review: true };
+
+  it("the module's next connector question, put in its place while Allow was saved, stays and waits for the user", async () => {
+    const answered = holdAct("connector-answer");
+    state.value = asking(3);
+    await settle();
+    mountSlot();
+    await settle();
+    button("grant-allow").click();
+    await settle();
+    // The module asks again before the answer is saved: the queue puts the new question in the place of the one shown.
+    state.value = asking(4);
+    await settle();
+    const next = dialog.value as GrantRequest;
+    expect(next).toMatchObject({ kind: "grant", moduleId: MODULE, onRequest: { id: 4 } });
+    answered.resolve({ ok: true });
+    await settle();
+    expect(dialog.value).toBe(next);
+    expect(button("grant-allow")).not.toBeNull();
+    // Only question 3 was answered; 4 waits for the user.
+    expect(bridge.act.mock.calls.map(([action]) => action)).toEqual([{ type: "connector-answer", id: 3, allow: true }]);
+  });
+
+  it("an answer that wasn't saved says so under its own question only", async () => {
+    const saved = holdAct("grant-module");
+    const next: GrantRequest = { kind: "grant", moduleId: MODULE, slot: null, review: true, backToLibrary: true };
+    const shown = shallowRef<GrantRequest>(grant);
+    dialog.value = grant;
+    mount(GrantDialog, () => ({ request: shown.value }));
+    await settle();
+    button("grant-allow").click();
+    await settle();
+    dialog.value = next;
+    shown.value = next;
+    await nextTick();
+    saved.resolve({ ok: false, error: "Couldn't save that." });
+    await settle();
+    expect(root.textContent).not.toContain("Couldn't save that.");
+
+    // Under the question it belongs to, it shows.
+    bridge.act.mockResolvedValue({ ok: false, error: "Couldn't save that." });
+    button("grant-allow").click();
+    await settle();
+    expect(root.querySelector('[role="alert"]')?.textContent).toBe("Couldn't save that.");
+  });
 
   it("another module's question shown while the access was saved stays, unanswered", async () => {
     const saved = holdAct("grant-module");

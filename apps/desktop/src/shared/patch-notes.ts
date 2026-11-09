@@ -32,7 +32,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     date: "2026-11-09",
     title: "Small fixes",
     notes: [
-      "Ask for a module sends the game's name correctly again.",
+      "The Ask for a module button sends the game's name correctly again.",
       "A window that finishes saving no longer closes a question that popped up in the meantime.",
       "Appearance no longer gives theme makers a tip that would stop their theme from opening in older Tavora versions.",
     ],

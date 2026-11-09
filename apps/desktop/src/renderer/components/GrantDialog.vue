@@ -25,7 +25,12 @@ import ModuleNotes from "./settings/ModuleNotes.vue";
 const props = defineProps<{ request: GrantRequest; inPanel?: boolean }>();
 /** Names the question in a panel; two modules can ask at the same time. */
 const titleId = computed(() => `grant-question-${props.request.moduleId}`);
+/** Why the last answer to the question shown now wasn't saved; another question starts without one. */
 const error = ref<string | null>(null);
+watch(
+  () => props.request,
+  () => (error.value = null),
+);
 const busy = ref(false);
 
 const module = computed(() => state.value?.modules.find((item) => item.id === props.request.moduleId) ?? null);
@@ -126,7 +131,7 @@ async function allow() {
     const result = await act({ type: "apply-module-update", moduleId: current.id, version: update.value?.version ?? "" }, { quiet: true });
     busy.value = false;
     if (!result.ok) {
-      error.value = result.error;
+      if (props.request === request) error.value = result.error;
       return;
     }
     if (dialog.value !== request) return;
@@ -138,7 +143,7 @@ async function allow() {
   const result = await act({ type: "grant-module", moduleId: current.id, network: [...hosts.value], connectors: [...connectors.value], folders: folders.value.map((folder) => folder.key) }, { quiet: true });
   busy.value = false;
   if (!result.ok) {
-    error.value = result.error;
+    if (props.request === request) error.value = result.error;
     return;
   }
   // In a panel, the host starts the panels that waited for this answer.
