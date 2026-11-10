@@ -477,13 +477,13 @@ export async function waitForShown(app: ElectronApplication, moduleId: string): 
 
 /**
  * Captures until every picture has something in it: a view that has just been shown can capture empty for a moment.
- * `images` picks the pictures (base64 PNGs) out of what `capture` returns.
+ * `images` picks the pictures (base64 PNGs) out of what `capture` returns; `describe` says, on a failure, what was empty.
  */
-async function untilDrawn<T>(capture: () => Promise<T>, images: (shot: T) => string[] = (shot) => shot as string[]): Promise<T> {
+async function untilDrawn<T>(capture: () => Promise<T>, images: (shot: T) => string[] = (shot) => shot as string[], describe?: (shot: T) => string): Promise<T> {
   for (let tries = 0; ; tries++) {
     const shot = await capture();
     if (images(shot).every((png) => png.length > 0)) return shot;
-    if (tries === 50) throw new Error("a view never drew anything to capture");
+    if (tries === 50) throw new Error(`a view never drew anything to capture${describe ? `: ${describe(shot)}` : ""}`);
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
@@ -493,19 +493,28 @@ async function untilDrawn<T>(capture: () => Promise<T>, images: (shot: T) => str
  * else name-1.png, name-2.png and so on. Returns the files.
  */
 export async function shootPanels(app: ElectronApplication, moduleId: string, file: string): Promise<string[]> {
-  const images = await untilDrawn(() =>
-    app.evaluate(
-      async ({ webContents }, id) =>
-        Promise.all(
+  const shots = await untilDrawn(
+    () =>
+      app.evaluate(async ({ BrowserWindow, WebContentsView, webContents }, id) => {
+        const views = BrowserWindow.getAllWindows()
+          .flatMap((window) => window.contentView.children)
+          .filter((view): view is Electron.WebContentsView => view instanceof WebContentsView);
+        return Promise.all(
           webContents
             .getAllWebContents()
             .filter((contents) => contents.getURL().startsWith(`tavora-module://${id}/`))
             .sort((a, b) => a.id - b.id)
-            .map(async (contents) => (await contents.capturePage()).toPNG().toString("base64")),
-        ),
-      moduleId,
-    ),
+            .map(async (contents) => ({
+              png: (await contents.capturePage()).toPNG().toString("base64"),
+              // A view that is not shown draws nothing, so one never shown captures empty.
+              shown: views.some((view) => view.webContents.id === contents.id && view.getVisible()),
+            })),
+        );
+      }, moduleId),
+    (shots) => shots.map((shot) => shot.png),
+    (shots) => shots.map((shot, i) => `panel ${i + 1} ${shot.png ? "drawn" : "empty"}, ${shot.shown ? "shown" : "hidden"}`).join("; "),
   );
+  const images = shots.map((shot) => shot.png);
   if (images.length === 0) throw new Error(`no panel for ${moduleId}`);
   const files = images.length === 1 ? [file] : images.map((_, i) => file.replace(/(\.png)?$/, `-${i + 1}.png`));
   await Promise.all(images.map((image, i) => writeFile(files[i]!, Buffer.from(image, "base64"))));

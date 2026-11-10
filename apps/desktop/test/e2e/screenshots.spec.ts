@@ -1,13 +1,17 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
-import { expectModuleText, launch, openModule, shootPanels, shootWindow, VANILLA, waitForShown } from "./harness";
+import { expectModuleText, inModule, launch, layOutColumns, openModule, shootPanels, shootWindow, VANILLA, waitForShown } from "./harness";
 
 test("window pictures show the panels, which page.screenshot leaves empty", async ({}, info) => {
   const { app, page } = await launch();
+  // Side by side: a second panel added goes in as a tab over the first, and a panel out of sight draws nothing, so
+  // the first one only had a picture if it drew before the second covered it.
+  await layOutColumns(page, 2);
   await openModule(page, VANILLA);
   await openModule(page, VANILLA);
   await expectModuleText(app, VANILLA, "status", "Connected", 1);
   await waitForShown(app, VANILLA);
+  for (const index of [0, 1]) await expect.poll(() => inModule(app, VANILLA, `document.visibilityState`, index)).toBe("visible");
 
   const panelFiles = await shootPanels(app, VANILLA, info.outputPath("vanilla.png"));
   expect(panelFiles).toEqual([info.outputPath("vanilla-1.png"), info.outputPath("vanilla-2.png")]);
