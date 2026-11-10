@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.12",
+    date: "2026-11-10",
+    title: "Safer overlays",
+    notes: [
+      "Overlay pages can no longer send anything out over WebRTC, the same as panels.",
+    ],
+    prs: [
+      { number: 724, title: "Overlays: WebRTC only through the proxy, so overlay pages can't send data out" },
+    ],
+    tags: ["overlays", "privacy", "website"],
+  },
+  {
     version: "0.24.11",
     date: "2026-11-10",
     title: "Questions wait for you",
