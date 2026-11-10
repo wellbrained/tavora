@@ -135,6 +135,8 @@ export interface FetchPolicy {
   resolve?: typeof dnsLookup;
   /** Tests only: a shorter limit than LIMITS.networkTimeoutMs. */
   timeoutMs?: number;
+  /** Ends the request early: the page that asked went away (its port closed). */
+  signal?: AbortSignal;
 }
 
 /**
@@ -293,12 +295,15 @@ export async function moduleFetch(params: unknown, policy: FetchPolicy): Promise
   let { method, body } = request;
   let headers = request.headers;
   const timeoutMs = policy.timeoutMs ?? LIMITS.networkTimeoutMs;
-  const signal = AbortSignal.timeout(timeoutMs);
+  const timeout = AbortSignal.timeout(timeoutMs);
+  const signal = policy.signal ? AbortSignal.any([timeout, policy.signal]) : timeout;
   for (let redirects = 0; ; redirects++) {
+    if (policy.signal?.aborted) throw new HostError("NETWORK_ERROR", "the page that asked went away");
     let hop: Hop;
     try {
       hop = await send(url, method, headers, body, policy, signal, local);
     } catch (error) {
+      if (policy.signal?.aborted) throw new HostError("NETWORK_ERROR", "the page that asked went away");
       throw networkError(error, url.hostname, signal, timeoutMs);
     }
     if (local && hop.location !== undefined) throw new HostError("NETWORK_ERROR", "a program on this PC answered with a redirect, which is not followed");

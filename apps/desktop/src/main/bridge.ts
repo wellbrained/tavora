@@ -43,6 +43,7 @@ import {
   type TavoraWorkspace,
 } from "@tavora/sdk/protocol";
 import { isActionId, isFolderPath, isPanelTypeId, MAX_PANEL_TYPES } from "@tavora/module-schema";
+import { measureWire } from "../shared/wire";
 import { HostError } from "./errors";
 import { serializeJson } from "./json";
 import { discordCommand, discordSubscription } from "./discord-commands";
@@ -74,10 +75,28 @@ export interface PanelDialogSize {
 export const PANEL_DIALOG = { min: 240, max: 2000, width: 560, height: 640 } as const;
 
 /**
+ * What a panel's calls hold in the main process: requests, network.fetch calls and the bytes of the requests being
+ * handled. The panel's view keeps one for as long as it lives and hands it to every port, so a page that asks for a new
+ * port starts with what its old one still runs, not with nothing.
+ */
+export interface BridgeBudget {
+  inFlight: number;
+  networkInFlight: number;
+  bytes: number;
+}
+
+/** The most request bytes a panel has in the main process at once: as much as its own renderer lets through (preload/relay.ts). */
+export const MAX_IN_FLIGHT_BYTES = 2 * LIMITS.maxMessageBytes;
+
+export const newBridgeBudget = (): BridgeBudget => ({ inFlight: 0, networkInFlight: 0, bytes: 0 });
+
+/**
  * Everything a module may learn about itself. Built by the host from the
  * view that owns the port, never from anything the module sends.
  */
 export interface BridgeContext {
+  /** The view's budget, shared by every port of the panel (BridgeBudget); a session alone gets its own. */
+  budget?: BridgeBudget;
   /**
    * Folders of permissions.folders (main/folder-access.ts). Each call names the folder by its manifest path and checks
    * the user's grant again; none of them ever says where the folder is.
@@ -494,12 +513,12 @@ const handlers = new Map<string, Handler>([
     async (s, params) => {
       // Without any granted host the answer is the same as for every other capability not granted (G9).
       needs(s, "network", "network.fetch");
-      if (s.networkInFlight >= LIMITS.maxNetworkInFlight) throw new HostError("BAD_REQUEST", `at most ${LIMITS.maxNetworkInFlight} network requests at once`);
-      s.networkInFlight++;
+      if (s.budget.networkInFlight >= LIMITS.maxNetworkInFlight) throw new HostError("BAD_REQUEST", `at most ${LIMITS.maxNetworkInFlight} network requests at once`);
+      s.budget.networkInFlight++;
       try {
         return await s.context.fetch(params);
       } finally {
-        s.networkInFlight--;
+        s.budget.networkInFlight--;
       }
     },
   ],
@@ -780,14 +799,15 @@ export class BridgeSession {
   private served = 0;
   private closed = false;
   private handshakeDone = false;
-  /** network.fetch calls of this panel still running. */
-  networkInFlight = 0;
+  /** What the panel's calls hold now, this port's and those of its earlier ports still running. */
+  readonly budget: BridgeBudget;
 
   constructor(
     private readonly port: BridgePort,
     readonly context: BridgeContext,
     private readonly onClosed: () => void = () => {},
   ) {
+    this.budget = context.budget ?? newBridgeBudget();
     port.on("message", (event) => {
       // Modules have no reason to hand ports to the host; drop them.
       for (const extra of event.ports) extra.close();
@@ -847,20 +867,24 @@ export class BridgeSession {
     // Without a usable id there is nobody to answer.
     if (!Number.isSafeInteger(id) || (id as number) < 1) return;
     const requestId = id as number;
+    // A closed port starts nothing more: whatever still arrives on it is dropped.
+    if (this.closed) return;
 
-    if (this.inFlight >= LIMITS.maxInFlight) {
+    // The handshake holds nothing and ends at once: a new page always gets through it, whatever its old one still runs.
+    const budget = (raw as { method?: unknown }).method === "bridge.handshake" ? newBridgeBudget() : this.budget;
+    if (budget.inFlight >= LIMITS.maxInFlight) {
       return this.fail(requestId, new HostError("BAD_REQUEST", "too many concurrent requests"));
     }
+    budget.inFlight++;
     if (this.inFlight++ === 0) this.context.onBusy?.(true, this.served);
     let handshake = false;
+    let held = 0;
     try {
-      let size: number;
-      try {
-        size = JSON.stringify(raw)?.length ?? 0;
-      } catch {
-        throw new HostError("BAD_REQUEST", "message must be plain JSON data");
-      }
-      if (size > LIMITS.maxMessageBytes) throw new HostError("BAD_REQUEST", "message is too large");
+      // Measured as the module's renderer measured it (preload/relay.ts), so what it let through counts the same here.
+      const measured = measureWire(raw, LIMITS.maxMessageBytes);
+      if (!measured.ok) throw measured.reason === "too-large" ? new HostError("BAD_REQUEST", "message is too large") : new HostError("INVALID_PARAMS", "message must be plain JSON data");
+      if (budget.bytes + measured.bytes > MAX_IN_FLIGHT_BYTES) throw new HostError("BAD_REQUEST", "too many concurrent requests");
+      budget.bytes += held = measured.bytes;
 
       const { v, method, params } = raw as { v?: unknown; method?: unknown; params?: unknown };
       if (v !== PROTOCOL_VERSION) {
@@ -899,6 +923,8 @@ export class BridgeSession {
         this.fail(requestId, new HostError("INTERNAL", "internal error"));
       }
     } finally {
+      budget.inFlight--;
+      budget.bytes -= held;
       if (!handshake) this.served++;
       if (--this.inFlight === 0) this.context.onBusy?.(false, this.served);
     }

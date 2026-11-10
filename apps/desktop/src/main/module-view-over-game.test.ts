@@ -73,7 +73,7 @@ vi.mock("electron", () => {
   };
 });
 
-const { ModuleView, allowedHere, ADD_DIALOG_MS } = await import("./module-view");
+const { ModuleView, allowedHere, ADD_DIALOG_MS, CONNECT_GAP_MS } = await import("./module-view");
 const { CLIPBOARD_PATH } = await import("@tavora/sdk/protocol");
 
 function make(extra: Record<string, unknown> = {}) {
@@ -509,5 +509,35 @@ describe("a dialog right after Add", () => {
     await ask(false);
     await expect(ask()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
     expect(opened).toEqual([{ open: true, byClick: true }, { open: false, byClick: undefined }]);
+  });
+});
+
+describe("asking for a port", () => {
+  const connecting = () => {
+    const view = make({ launch: () => ({ reason: "add" }), hostVersion: "0.0.0-test", data: { blobs: {}, documents: { on: () => undefined, off: () => undefined } } });
+    const ports = vi.spyOn(view.view.webContents as unknown as { postMessage(channel: string): void }, "postMessage");
+    return { view, ports: () => ports.mock.calls.filter(([channel]) => channel === "tavora:port").length };
+  };
+
+  it("gives a page at most one port a while, and the asks made meanwhile one port when the time is up", async () => {
+    const { view, ports } = connecting();
+    view.connect();
+    expect(ports()).toBe(1);
+    // A page asking in a loop: no new port at once, and one for all of them later.
+    for (let i = 0; i < 20; i++) view.connect();
+    expect(ports()).toBe(1);
+    await new Promise((resolve) => setTimeout(resolve, CONNECT_GAP_MS + 100));
+    expect(ports()).toBe(2);
+    await new Promise((resolve) => setTimeout(resolve, CONNECT_GAP_MS + 100));
+    expect(ports()).toBe(2);
+  });
+
+  it("hands every port of the panel the same budget, so a new port resets no limit", () => {
+    const { view } = connecting();
+    view.connect();
+    const first = (view as unknown as { bridge: { budget: object } }).bridge.budget;
+    (view as unknown as { lastConnect: number }).lastConnect = 0;
+    view.connect();
+    expect((view as unknown as { bridge: { budget: object } }).bridge.budget).toBe(first);
   });
 });
