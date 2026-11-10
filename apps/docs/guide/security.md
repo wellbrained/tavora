@@ -26,7 +26,7 @@ To report a problem, see [Security policy](https://github.com/wellbrained/tavora
 | G8 | Exhaust the host through the bridge. Messages are plain JSON only, at most 8 MiB each, with at most 64 requests and 16 MiB in flight; an oversized message is refused inside the module's own renderer before the main process sees it. Settings, documents and panel state have quotas. |
 | G9 | Use a capability the user did not grant. Gated calls check the user's grant first, on every call, and answer `PERMISSION_DENIED` otherwise. |
 | G10 | Run code through its icon. Icons are PNG or WebP files inside the package, at most 256 KB, checked by their signature and shown as a plain picture. |
-| G11 | Fill the disk through its own browser storage. Past 256 MB (or 5,000 files) the host ends the module's renderers in that workspace, clears that workspace's storage and tells the user; its panels kept open from other workspaces keep theirs. A module can still write for up to one second before this happens. |
+| G11 | Fill the disk through its own browser storage. Past 256 MB (or 5,000 files) in one workspace, the host ends the module's renderers there, clears that workspace's storage and tells the user; its panels from other workspaces keep theirs. A module can still write for up to one second before this happens. |
 
 ## Grants
 
