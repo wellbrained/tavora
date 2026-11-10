@@ -92,6 +92,22 @@ async function folderSize(dir: string): Promise<number> {
   return total;
 }
 
+test("a module compiles no code from strings and no WebAssembly, not even in a frame of its own origin (W1, W2)", async () => {
+  const { app, page } = await launch();
+  await openModule(page, HOSTILE);
+  await hostileReady(app);
+  type Tried = { ok: boolean };
+  const result = await inModule<{ eval: Tried; wasm: Tried; notFound: { reached: boolean; eval?: Tried; wasm?: Tried }; route: { reached: boolean; eval?: Tried; wasm?: Tried } }>(app, HOSTILE, "codeEscapes()");
+  expect(result.eval.ok, "no eval in the page").toBe(false);
+  expect(result.wasm.ok, "no WebAssembly in a community module").toBe(false);
+  for (const name of ["notFound", "route"] as const) {
+    // A frame that is reached at all (its about:blank keeps the page's policy) still compiles nothing.
+    expect(result[name].eval?.ok ?? false, `no eval in a frame of ${name}`).toBe(false);
+    expect(result[name].wasm?.ok ?? false, `no WebAssembly in a frame of ${name}`).toBe(false);
+  }
+  await app.close();
+});
+
 test("a module cannot fill the disk through its own browser storage (G8)", async () => {
   test.setTimeout(120_000);
   // The limit is 256 MB; the test uses 16 MB so it does not have to write that much.

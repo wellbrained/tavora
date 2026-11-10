@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { contentTypeFor, MODULE_CSP, moduleCsp, resolveAsset } from "./assets";
+import { contentTypeFor, MODULE_CSP, moduleCsp, MODULE_ROUTE_CSP, resolveAsset, withModulePolicy } from "./assets";
 
 describe("moduleCsp", () => {
   it("adds WebAssembly to script-src and changes nothing else", () => {
@@ -12,6 +12,34 @@ describe("moduleCsp", () => {
     expect(withWasm.replace(" 'wasm-unsafe-eval'", "")).toBe(MODULE_CSP);
     expect(withWasm).not.toContain("'unsafe-eval'");
     expect(MODULE_CSP).not.toContain("wasm");
+  });
+
+  it("lets a module frame nothing, not even a page of its own origin", () => {
+    expect(MODULE_CSP).toContain("frame-src 'none'");
+    expect(MODULE_CSP).toContain("child-src 'none'");
+    expect(MODULE_CSP).not.toContain("frame-src 'self'");
+  });
+});
+
+describe("withModulePolicy", () => {
+  it("gives an answer without a policy one that runs nothing and is no document of the module's origin", async () => {
+    // The protocol handler's not found and not allowed, and a route answer that set no headers.
+    for (const bare of [new Response("Not found", { status: 404 }), new Response("Method not allowed", { status: 405 }), Response.json({ ok: true })]) {
+      const answered = withModulePolicy(bare);
+      expect(answered.headers.get("Content-Security-Policy")).toBe(MODULE_ROUTE_CSP);
+      expect(answered.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(answered.status).toBe(bare.status);
+    }
+    expect(MODULE_ROUTE_CSP).toContain("sandbox");
+    expect(await withModulePolicy(new Response("Not found", { status: 404 })).text()).toBe("Not found");
+  });
+
+  it("keeps the policy an answer set itself, such as a bundle file's", async () => {
+    const file = new Response("<p>hi</p>", { headers: { "Content-Type": "text/html", "Content-Security-Policy": MODULE_CSP, "X-Content-Type-Options": "nosniff" } });
+    expect(withModulePolicy(file)).toBe(file);
+    const route = withModulePolicy(new Response(null, { status: 204, headers: { "Content-Security-Policy": "default-src 'none'" } }));
+    expect(route.headers.get("Content-Security-Policy")).toBe("default-src 'none'");
+    expect(route.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 });
 

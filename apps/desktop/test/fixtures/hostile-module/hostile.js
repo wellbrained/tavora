@@ -258,6 +258,49 @@ window.moreEscapes = async ({ serverUrl, stunUrl }) => {
 };
 
 // Blocks the renderer's main thread for good, like an infinite loop in a module.
+// Code from strings and WebAssembly (W1, W2): refused in the page, and in a frame of the module's own origin, such as
+// its not-found page or a route's answer, whose realm would not have the page's policy.
+window.codeEscapes = async () => {
+  const WASM = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]);
+  const run = (target) => {
+    try {
+      return { ok: true, value: target.eval("1 + 1") };
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) };
+    }
+  };
+  const compile = (target) => {
+    try {
+      return settle(target.WebAssembly.compile(WASM).then(() => "compiled"), 2000);
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) };
+    }
+  };
+  const results = { eval: run(window), wasm: await compile(window) };
+  for (const [name, src] of [["notFound", "/does-not-exist.html"], ["route", "/_clipboard/"]]) {
+    const frame = document.createElement("iframe");
+    frame.src = src;
+    document.body.append(frame);
+    await new Promise((resolve) => {
+      frame.onload = resolve;
+      frame.onerror = resolve;
+      setTimeout(resolve, 1500);
+    });
+    let inside;
+    try {
+      inside = frame.contentWindow;
+      void inside.location.href;
+    } catch (error) {
+      results[name] = { reached: false, error: String(error?.message ?? error) };
+      frame.remove();
+      continue;
+    }
+    results[name] = { reached: true, eval: run(inside), wasm: await compile(inside) };
+    frame.remove();
+  }
+  return results;
+};
+
 window.hang = () => {
   setTimeout(() => {
     for (;;);

@@ -6,9 +6,11 @@ export const HOST_SCHEME = "tavora-host";
 /** The address of a game overlay's page inside its own window (game-overlay-page.ts). */
 export const GAME_OVERLAY_SCHEME = "tavora-overlay";
 
-// Applied to every module response. Modules may only load what is inside
-// their own bundle; there is no remote code, no remote connections and no
-// plugins. Inline styles are allowed because most UI frameworks set them.
+// Applied to every file of a module's bundle. Modules may only load what is
+// inside their own bundle; there is no remote code, no remote connections, no
+// plugins and no frames: a frame of the module's own origin would be a realm
+// of its own, where the policy of the page around it no longer counts.
+// Inline styles are allowed because most UI frameworks set them.
 export const MODULE_CSP = [
   "default-src 'self'",
   "script-src 'self'",
@@ -18,8 +20,8 @@ export const MODULE_CSP = [
   "media-src 'self' blob:",
   "connect-src 'self'",
   "worker-src 'self' blob:",
-  "frame-src 'self'",
-  "child-src 'self'",
+  "frame-src 'none'",
+  "child-src 'none'",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
@@ -33,6 +35,26 @@ export const MODULE_CSP = [
  */
 export function moduleCsp(webAssembly: boolean): string {
   return webAssembly ? MODULE_CSP.replace("script-src 'self'", "script-src 'self' 'wasm-unsafe-eval'") : MODULE_CSP;
+}
+
+/**
+ * For every other answer of a module's origin (not found, not allowed, the answers of its routes): nothing in it runs,
+ * and it is never a document of the module's origin. Without it such a page has no policy at all, so code compiled in a
+ * frame of it would get around the module's (W1, W2).
+ */
+export const MODULE_ROUTE_CSP = "default-src 'none'; sandbox";
+
+/**
+ * Every answer of a module's origin with a content security policy and nosniff: one it set itself is kept (a bundle
+ * file has the module's), any other gets MODULE_ROUTE_CSP.
+ */
+export function withModulePolicy(response: Response): Response {
+  const needs = !response.headers.has("Content-Security-Policy") || response.headers.get("X-Content-Type-Options") !== "nosniff";
+  if (!needs) return response;
+  const headers = new Headers(response.headers);
+  if (!headers.has("Content-Security-Policy")) headers.set("Content-Security-Policy", MODULE_ROUTE_CSP);
+  headers.set("X-Content-Type-Options", "nosniff");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 export const HOST_CSP = [

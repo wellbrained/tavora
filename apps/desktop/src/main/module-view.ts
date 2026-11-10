@@ -10,7 +10,7 @@ import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
 import { gestureCounts, type Opacity } from "./game-overlays";
 import { moduleThemeCss } from "./module-style";
-import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
+import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset, withModulePolicy } from "./assets";
 import { APP_BLOB_PATH, BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH, FILE_SAVE_PATH, FILE_OPEN_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, newBridgeBudget, type BridgeContext, type PanelDialogSize } from "./bridge";
 import { moduleReadPage } from "./page-import";
@@ -254,7 +254,9 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
 
   const origin = moduleOrigin(module.manifest.id);
 
-  ses.protocol.handle(MODULE_SCHEME, async (request) => {
+  // Every answer, errors and route answers too, carries a policy (withModulePolicy).
+  ses.protocol.handle(MODULE_SCHEME, async (request) => withModulePolicy(await answerModule(request)));
+  async function answerModule(request: Request): Promise<Response> {
     const module = serving.get(ses)!;
     // WebAssembly only for a module of Tavora's own that asked for it (the registry refuses the request from any other).
     const csp = moduleCsp(module.provenance === "official" && module.manifest.permissions.webAssembly === true);
@@ -300,7 +302,7 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
         "Cache-Control": "no-store",
       },
     });
-  });
+  }
 
   // The page itself gets no network: every request that is not for the
   // module's own bundle is cancelled. Granted hosts are reached only through
