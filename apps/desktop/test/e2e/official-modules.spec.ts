@@ -976,8 +976,8 @@ test("clipboard: a module copies a PNG only right after a key press, once, and o
       async ({ webContents }, moduleId) => {
         const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
         if (!target) throw new Error("no panel");
-        target.sendInputEvent({ type: "keyDown", keyCode: "Shift" });
-        target.sendInputEvent({ type: "keyUp", keyCode: "Shift" });
+        target.sendInputEvent({ type: "keyDown", keyCode: "F24" });
+        target.sendInputEvent({ type: "keyUp", keyCode: "F24" });
       },
       NOTES,
     );

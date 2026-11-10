@@ -90,7 +90,7 @@ A module can still read everything of its types in that folder, including files 
 
 ## Calls that need a click
 
-Some calls change something outside the module's panel. They work only within 2 seconds of a real click or key press in that panel; a script cannot fake one, and each press allows one call, whether the module makes it through the bridge or through an address Tavora answers for the panel (the clipboard, pictures and files).
+Some calls change something outside the module's panel. They work only within 2 seconds of a real click or key press in that panel; a script cannot fake one, a held key is one press however long it repeats, a modifier alone (Ctrl, Shift, Alt, Win) is none, and each press allows one call, whether the module makes it through the bridge or through an address Tavora answers for the panel (the clipboard, pictures and files).
 
 One exception: the click that adds a panel carries over to it once. A panel the user just added (its launch reason is `add`) may call `panel.openDialog()` once without a press, within 10 seconds of its page starting, to show a welcome. It doesn't apply over the game, after a restore or reload, or to a panel another panel opened with `panels.open` or `panels.openMany`, and nothing else gets it. One click gives one such dialog: when Add all or a layout adds several panels, only the last one added gets it.
 
@@ -231,7 +231,7 @@ A module with an overlay page can ask, after a real click in its panel, for `ove
 
 ## Hotkeys
 
-Modules can name actions in their manifest, and the user can bind a key to each in Tavora's own dialog. The module never learns the key, only which action fired for which of its targets.
+Modules can name actions in their manifest, and the user can bind a key to each in Tavora's own dialog. The module never learns the key, only which action fired for which of its targets. `hotkeys.list` and `hotkeys.remove` reach only these keys, never the keys the user set to toggle the module's overlays.
 
 - **Only the user sets keys.** The dialog opens only right after a click in the module's panel, Tavora draws it and catches the key, and the module can't press it or choose for the user.
 - **A key needs a modifier** (Ctrl, Alt or Win) unless it is an F-key or a number-pad key, so a hotkey never takes letters the user types with.
@@ -442,6 +442,8 @@ using a new temporary session for every call. It shares no cookies, storage,
 sign-ins, client certificates, browser tabs or bridge with the user or the module. The module supplies
 only a URL; it cannot inject JavaScript, click, fill forms, choose headers or read
 cookies. Tavora returns bounded page HTML, title, final URL and status after loading.
+It reads them in a script world of its own, which the page's scripts can't change,
+and passes on only those, checked again for type and size.
 The page's own scripts may run, without Node or a preload. Popups, webviews,
 downloads, device access and permission requests are refused. Login and verification
 pages fail instead of asking for interaction.
@@ -463,4 +465,4 @@ requires interaction or changes its page format. No protection or verification i
 
 ## JSON file exports
 
-`files.exportJson` is the older way and stays for modules made before `files.saveJson`; new modules use `files.saveJson`, which asks you where to save. `files.exportJson` accepts at most 8 MiB of valid UTF-8 JSON after a real module click or key press, consumed once per request. The host serializes it as JSON and writes a new `.json` file inside Downloads/Tavora. Suggested names are sanitized, paths and extensions cannot be supplied, and existing files are never replaced. Modules receive only the resulting file name, never a filesystem path. Export does not grant arbitrary filesystem access.
+`files.exportJson` is the older way and stays for modules made before `files.saveJson`; new modules use `files.saveJson`, which asks you where to save. `files.exportJson` accepts at most 8 MiB of valid UTF-8 JSON after a real module click or key press, consumed once per request. The host serializes it as JSON and writes a new `.json` file inside Downloads/Tavora. Suggested names are sanitized, paths and extensions cannot be supplied, and existing files are never replaced. One module can export at most 30 files and 64 MiB an hour. Modules receive only the resulting file name, never a filesystem path. Export does not grant arbitrary filesystem access.

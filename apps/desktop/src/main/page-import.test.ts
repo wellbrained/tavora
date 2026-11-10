@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { beforeEach,expect,it,vi } from 'vitest';
 import { LIMITS } from '@tavora/sdk/protocol';
 
-const state=vi.hoisted(()=>({windows:[] as any[],sessions:[] as any[],partitions:[] as string[],hold:false,title:'Public guide',html:'<main>Public</main>',url:'https://public.test/guide',proxyClose:vi.fn()}));
+const state=vi.hoisted(()=>({windows:[] as any[],sessions:[] as any[],partitions:[] as string[],hold:false,title:'Public guide',html:'<main>Public</main>',url:'https://public.test/guide',capture:undefined as unknown,proxyClose:vi.fn()}));
 vi.mock('./page-proxy',()=>({createPageProxy:async()=>({port:12345,close:state.proxyClose})}));
 vi.mock('electron',()=>({
  session:{fromPartition:(partition:string)=>{
@@ -12,7 +12,7 @@ vi.mock('electron',()=>({
  }},
  BrowserWindow:class extends EventEmitter{
   destroyed=false;rejectLoad:((error:Error)=>void)|undefined;webContents:any;
-  constructor(readonly options:any){super();this.webContents=new EventEmitter();this.webContents.setWindowOpenHandler=vi.fn();this.webContents.setWebRTCIPHandlingPolicy=vi.fn();this.webContents.executeJavaScript=vi.fn(async()=>({url:state.url,title:state.title,html:state.html}));state.windows.push(this);}
+  constructor(readonly options:any){super();this.webContents=new EventEmitter();this.webContents.setWindowOpenHandler=vi.fn();this.webContents.setWebRTCIPHandlingPolicy=vi.fn();this.webContents.executeJavaScript=vi.fn();this.webContents.executeJavaScriptInIsolatedWorld=vi.fn(async()=>state.capture===undefined?{url:state.url,title:state.title,html:state.html}:state.capture);state.windows.push(this);}
   async loadURL(){if(state.hold)return new Promise<void>((_resolve,reject)=>this.rejectLoad=reject);this.webContents.emit('did-navigate',{},state.url,200);}
   isDestroyed(){return this.destroyed;}
   destroy(){this.destroyed=true;this.rejectLoad?.(Error('closed'));}
@@ -20,11 +20,11 @@ vi.mock('electron',()=>({
 }));
 import { moduleReadPage } from './page-import';
 const policy={allowedHosts:()=>new Set(['public.test']),userAgent:'test'};
-beforeEach(()=>{state.windows=[];state.sessions=[];state.partitions=[];state.hold=false;state.title='Public guide';state.html='<main>Public</main>';state.url='https://public.test/guide';state.proxyClose.mockClear();});
+beforeEach(()=>{state.windows=[];state.sessions=[];state.partitions=[];state.hold=false;state.title='Public guide';state.html='<main>Public</main>';state.url='https://public.test/guide';state.capture=undefined;state.proxyClose.mockClear();});
 it('uses fresh hidden sandbox sessions, fixed capture only, and always cleans up',async()=>{
  for(let i=0;i<2;i++)expect(await moduleReadPage({url:state.url},policy,'module',new AbortController().signal)).toMatchObject({status:200,title:'Public guide'});
  expect(new Set(state.partitions).size).toBe(2);expect(state.partitions.every(p=>!p.startsWith('persist:'))).toBe(true);
- for(const win of state.windows){expect(win.options).toMatchObject({show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,webviewTag:false,webSecurity:true}});expect(win.options.webPreferences.preload).toBeUndefined();expect(win.destroyed).toBe(true);expect(win.webContents.setWebRTCIPHandlingPolicy).toHaveBeenCalledWith('disable_non_proxied_udp');}
+ for(const win of state.windows){expect(win.options).toMatchObject({show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,webviewTag:false,webSecurity:true}});expect(win.options.webPreferences.preload).toBeUndefined();expect(win.destroyed).toBe(true);expect(win.webContents.setWebRTCIPHandlingPolicy).toHaveBeenCalledWith('disable_non_proxied_udp');expect(win.webContents.executeJavaScript).not.toHaveBeenCalled();expect(win.webContents.executeJavaScriptInIsolatedWorld.mock.calls[0][0]).not.toBe(0);}
  for(const s of state.sessions){expect(s.clearStorageData).toHaveBeenCalled();expect(s.closeAllConnections).toHaveBeenCalled();expect(s.setProxy).toHaveBeenCalledWith({proxyRules:'http://127.0.0.1:12345',proxyBypassRules:'<-loopback>'});}
  expect(state.proxyClose).toHaveBeenCalledTimes(2);
 });
@@ -52,4 +52,13 @@ it('rejects challenge pages, oversized HTML and final URLs outside the grant',as
  state.title='Public guide';state.html='x'.repeat(LIMITS.maxNetworkResponseBytes+1);await expect(moduleReadPage({url:state.url},policy,'module',new AbortController().signal)).rejects.toMatchObject({code:'QUOTA_EXCEEDED'});
  state.html='small';state.url='https://denied.test/';await expect(moduleReadPage({url:'https://public.test/guide'},policy,'module',new AbortController().signal)).rejects.toMatchObject({code:'PERMISSION_DENIED'});
  expect(state.windows.every(w=>w.destroyed)).toBe(true);
+});
+it('passes on only three strings of bounded size, whatever the page made of them',async()=>{
+ state.capture={url:state.url,title:'Guide',html:'<main/>',extra:'x'.repeat(1000)};
+ expect(await moduleReadPage({url:state.url},policy,'module',new AbortController().signal)).toEqual({url:state.url,title:'Guide',html:'<main/>',status:200});
+ for(const capture of [null,'page',{url:state.url,title:{slice:1},html:''},{url:state.url,title:'x'.repeat(501),html:''},{url:'https://public.test/'+'x'.repeat(8192),title:'',html:''},{url:state.url,title:'',html:42}]){
+  state.capture=capture;await expect(moduleReadPage({url:state.url},policy,'module',new AbortController().signal)).rejects.toMatchObject({code:'NETWORK_ERROR'});
+ }
+ state.capture={url:state.url,title:'',html:'é'.repeat(LIMITS.maxNetworkResponseBytes/2+1)};
+ await expect(moduleReadPage({url:state.url},policy,'module',new AbortController().signal)).rejects.toMatchObject({code:'QUOTA_EXCEEDED'});
 });
