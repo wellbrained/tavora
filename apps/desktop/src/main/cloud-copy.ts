@@ -76,6 +76,11 @@ export interface CopyState {
   /** False when that version left the pictures out to fit. */
   pictures: boolean;
   files: Record<string, SyncedFile>;
+  /**
+   * The user kept this PC's side over the copy (`version` is the copy's then): it counts as changed until an upload
+   * succeeds, also when no file changed here. An older Tavora ignores it.
+   */
+  kept?: boolean;
 }
 
 export const EMPTY_STATE: CopyState = { version: 0, pictures: true, files: {} };
@@ -180,6 +185,7 @@ export async function hasLocalChanges(roots: CopyRoot[], state: CopyState): Prom
 function sameAsSynced(found: Found[], state: CopyState): boolean {
   return (
     state.version > 0 &&
+    state.kept !== true &&
     found.length === Object.keys(state.files).length &&
     found.every((file) => {
       const synced = state.files[file.path];
@@ -573,14 +579,14 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
 
 export async function loadCopyState(file: string): Promise<CopyState> {
   try {
-    const saved = JSON.parse(await readFile(file, "utf8")) as { v?: unknown; version?: unknown; pictures?: unknown; files?: unknown };
+    const saved = JSON.parse(await readFile(file, "utf8")) as { v?: unknown; version?: unknown; pictures?: unknown; files?: unknown; kept?: unknown };
     if (saved.v !== 1 || typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return EMPTY_STATE;
-    return { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile> };
+    return { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}) };
   } catch {
     return EMPTY_STATE;
   }
 }
 
 export async function saveCopyState(file: string, state: CopyState): Promise<void> {
-  await writeFileAtomic(file, JSON.stringify({ v: 1, version: state.version, pictures: state.pictures, files: state.files }));
+  await writeFileAtomic(file, JSON.stringify({ v: 1, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}) }));
 }

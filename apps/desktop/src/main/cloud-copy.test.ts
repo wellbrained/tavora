@@ -1,7 +1,7 @@
 import { mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CloudCopy, CopyError, EMPTY_STATE, hasLocalChanges, safeCopyPath, ServiceStorage, swapInCopy, type CopyState } from "./cloud-copy";
+import { CloudCopy, CopyError, EMPTY_STATE, hasLocalChanges, loadCopyState, safeCopyPath, saveCopyState, ServiceStorage, swapInCopy, type CopyState } from "./cloud-copy";
 import { cleanUp, OWNER, pc, service } from "./cloud-copy.test-helper";
 import { copyKeys, newCopyKey, open, parseRecoveryKey, partId, recoveryKey, seal } from "./copy-crypto";
 
@@ -103,6 +103,29 @@ describe("the cloud copy", () => {
     expect(second).toMatchObject({ status: "uploaded", state: { version: 2 } });
     // One upload of parts (only library.json's), then the new version.
     expect(routes).toEqual(["POST /v1/account/copy/parts", "PUT /v1/account/copy"]);
+  });
+
+  it("saves a new version for a PC whose side was kept although nothing changed, sending no part again, and keeps that mark on disk", async () => {
+    const key = newCopyKey();
+    const { client, routes } = await service();
+    const a = await pc({ "library.json": "{}", "module-data/m/g/storage.json": "x".repeat(1000) });
+    const first = await client().upload(key, a.roots, EMPTY_STATE);
+    if (first.status !== "uploaded") throw new Error(first.status);
+    const kept: CopyState = { ...first.state, kept: true };
+    const file = path.join(a.root, "cloud-copy.json");
+    await saveCopyState(file, kept);
+    expect(await loadCopyState(file)).toEqual(kept);
+    expect(await hasLocalChanges(a.roots, kept)).toBe(true);
+
+    routes.length = 0;
+    const again = await client().upload(key, a.roots, kept);
+    expect(again).toMatchObject({ status: "uploaded", state: { version: 2 } });
+    // Nothing was read or sent again but the new list.
+    expect(routes).toEqual(["PUT /v1/account/copy"]);
+    if (again.status !== "uploaded") return;
+    expect(again.state.kept).toBeUndefined();
+    await saveCopyState(file, again.state);
+    expect(await loadCopyState(file)).toEqual(again.state);
   });
 
   it("gives a conflict to a PC that missed a newer version, instead of overwriting it", async () => {

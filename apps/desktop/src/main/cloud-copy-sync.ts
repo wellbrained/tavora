@@ -698,10 +698,9 @@ export class CopySync {
           await rename(this.stagedData, await this.backupFolder("cloud")).catch(() => undefined);
           // The parts of this PC's last sync may be gone from the service; the upload sends what is missing.
           // This PC's side goes up on top of the copy, even when nothing changed here since its last sync (the copy was
-          // older, or made anew). Dates that match no file keep it "changed" on disk until an upload succeeds, also
-          // across a restart; the parts stay known, so only what the copy lacks is sent.
-          const files = Object.fromEntries(Object.entries(this.state.files).map(([name, file]) => [name, { ...file, mtimeMs: -1 }]));
-          this.state = { ...this.state, version: staged.version, files };
+          // older, or made anew). Marked on disk, so it counts as changed until an upload succeeds, also across a restart;
+          // the files keep their dates and parts, so a retry reads only what really changed.
+          this.state = { ...this.state, version: staged.version, kept: true };
         } else {
           this.state = EMPTY_STATE;
         }
