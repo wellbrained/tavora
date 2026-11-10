@@ -135,7 +135,8 @@ describe("the cloud copy", () => {
     const second = await client().upload(key, a.roots, first.state);
     if (second.status !== "uploaded") throw new Error(second.status);
     const keys = copyKeys(key);
-    expect(JSON.parse(open(keys, (await client().storage.manifest())!.sealed).toString("utf8"))).toMatchObject({ base: 1 });
+    const current = (await client().storage.manifest())!;
+    expect(JSON.parse(open(keys, current.sealed).toString("utf8"))).toMatchObject({ base: 1 });
 
     // A broken-into service keeps the first manifest and serves it with a higher version.
     const replaying = (sealed: Uint8Array, version: number) => {
@@ -144,8 +145,8 @@ describe("the cloud copy", () => {
     };
     const b = await pc();
     await expect(replaying(old!.sealed, 3).download(key, b.roots, path.join(b.root, "staging"), second.state.version)).rejects.toMatchObject({ reason: "older" });
-    // A list that claims to follow a version it can't follow is damaged.
-    await expect(replaying(old!.sealed, 1).download(key, b.roots, path.join(b.root, "staging"))).rejects.toMatchObject({ reason: "damaged" });
+    // A list served as a version it can't be (saved on top of 1, so at least 2) is damaged, though all its parts are there.
+    await expect(replaying(current.sealed, 1).download(key, b.roots, path.join(b.root, "staging"))).rejects.toMatchObject({ reason: "damaged" });
     // The real newer copy still comes down to a PC that has the first.
     expect(await client().download(key, b.roots, path.join(b.root, "staging"), first.state.version)).toMatchObject({ version: second.state.version });
 

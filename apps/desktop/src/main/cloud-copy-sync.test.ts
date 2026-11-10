@@ -194,6 +194,43 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(await read(b.userData, "library.json")).toBe("a1");
   });
 
+  it("still sends this PC's side up after a restart when the upload after Keep this PC failed", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { key } = await startCopy(cloud, a);
+    const b = await pc({ "library.json": "b0" });
+    const atB = tavora(cloud, b);
+    await atB.sync.turnOn();
+    await atB.sync.enterKey(key);
+    await atB.sync.keep("pc");
+    await atB.sync.remove();
+    await atB.sync.turnOn();
+    await until(() => atB.sync.view().on);
+
+    // A is asked, keeps its side, and the upload fails: the service is down for saves.
+    let down = true;
+    const flaky = (async (url: string, init?: RequestInit) => {
+      if (down && (init?.method === "PUT" || (init?.method === "POST" && url.endsWith("/copy/parts")))) return new Response(null, { status: 503 });
+      return cloud.fetch(url, init);
+    }) as typeof fetch;
+    const atA = tavora({ ...cloud, fetch: flaky }, a);
+    await atA.sync.beforeLoad();
+    expect(atA.sync.view().conflict).toBe(true);
+    await expect(atA.sync.keep("pc")).rejects.toMatchObject({ key: "cloudCopy.error.offline" });
+
+    // Tavora closes, and starts again online: the side the user kept still goes up, without a new question.
+    down = false;
+    cloud.routes.length = 0;
+    const again = tavora(cloud, a);
+    await again.sync.beforeLoad();
+    expect(again.sync.view().conflict).toBe(false);
+    await again.sync.sync();
+    expect(cloud.routes).toContain("PUT /v1/account/copy");
+    expect(again.sync.view().problem).toBeNull();
+    await tavora(cloud, b).sync.beforeLoad();
+    expect(await read(b.userData, "library.json")).toBe("a1");
+  });
+
   it("asks a PC that missed a delete before it takes the copy made after it", async () => {
     const cloud = await service();
     const a = await pc({ "library.json": "a1" });
