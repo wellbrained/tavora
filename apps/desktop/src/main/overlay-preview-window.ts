@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
 import { GAME_OVERLAY_ORIGIN, serveGameOverlay } from "./game-overlay-page";
 import type { PreviewRequest, PreviewWindow } from "./overlay-previews";
-import { lockedSession } from "./game-overlay-window";
+import { lockContents, lockedSession } from "./game-overlay-window";
 
 export const PREVIEW_BACKGROUNDS = ["dark", "light", "checker"] as const;
 export type PreviewBackground = (typeof PREVIEW_BACKGROUNDS)[number];
@@ -66,16 +66,14 @@ export class OverlayPreviewWindow implements PreviewWindow {
       webPreferences: locked,
     });
     this.window.removeMenu();
+    lockContents(this.window.webContents);
     // The title stays the module's name, whatever the page calls itself.
     this.window.on("page-title-updated", (event) => event.preventDefault());
 
     this.chrome = new WebContentsView({ webPreferences: { ...locked, session: chromeSession } });
     this.page = new WebContentsView({ webPreferences: { ...locked, session: pageSession } });
     this.page.setBackgroundColor("#00000000");
-    for (const view of [this.chrome, this.page]) {
-      view.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-      view.webContents.on("will-navigate", (event) => event.preventDefault());
-    }
+    for (const view of [this.chrome, this.page]) lockContents(view.webContents);
     this.window.contentView.addChildView(this.chrome);
     this.window.contentView.addChildView(this.page);
     this.layout();

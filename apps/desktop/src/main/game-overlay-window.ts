@@ -9,7 +9,7 @@
 // It is the panel's own view, moved here from the workspace and moved back when the window goes; nothing about the
 // panel changes. While the layer is open that window takes the mouse and the keyboard too, and the frame sits around
 // the panel instead of over it.
-import { BrowserWindow, WebContentsView, app, screen, session, type Session } from "electron";
+import { BrowserWindow, WebContentsView, app, screen, session, type Session, type WebContents } from "electron";
 import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
 import { dragRect, panelBounds, type Opacity, type Rect } from "./game-overlays";
@@ -79,6 +79,17 @@ export function lockedSession(partition: string, allowed: (url: string) => boole
   return ses;
 }
 
+/**
+ * What every view showing an overlay page, or Tavora's own page around one, gets: no new windows, no navigating away,
+ * and WebRTC only through a proxy. The locked session's proxy does not exist, so no WebRTC UDP gets out either, which
+ * webRequest and the CSP would not see (G4). A module panel gets the same in module-view.ts.
+ */
+export function lockContents(contents: WebContents): void {
+  contents.setWindowOpenHandler(() => ({ action: "deny" }));
+  contents.on("will-navigate", (event) => event.preventDefault());
+  contents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
+}
+
 export class GameOverlayWindow {
   private readonly window: BrowserWindow;
   private readonly frame: WebContentsView;
@@ -126,8 +137,7 @@ export class GameOverlayWindow {
     // Visible to screen capture; setHideFromCapture hides it when the user asks.
     if (options.hidden) window.setOpacity(0);
     const contents = window.webContents;
-    contents.setWindowOpenHandler(() => ({ action: "deny" }));
-    contents.on("will-navigate", (event) => event.preventDefault());
+    lockContents(contents);
     contents.on("did-finish-load", () => {
       void this.applyOpacity();
       // The page keeps the zoom it was given, but a load may reset it.
@@ -169,8 +179,7 @@ export class GameOverlayWindow {
       options.panel.suspend();
     }
     const frame = this.frame.webContents;
-    frame.setWindowOpenHandler(() => ({ action: "deny" }));
-    frame.on("will-navigate", (event) => event.preventDefault());
+    lockContents(frame);
     frame.on("did-finish-load", () => this.sendFrameText());
     void frame.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(GAME_OVERLAY_FRAME_DOCUMENT)}`).catch(() => {});
     frame.ipc.on("game-overlay:close", () => this.arranging && options.closeRequested());
