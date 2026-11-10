@@ -19,7 +19,8 @@ export const MODULE_CSP = [
   "font-src 'self' data:",
   "media-src 'self' blob:",
   "connect-src 'self'",
-  "worker-src 'self' blob:",
+  // Workers only from the bundle's files: a blob: worker would be code made from a string.
+  "worker-src 'self'",
   "frame-src 'none'",
   "child-src 'none'",
   "object-src 'none'",

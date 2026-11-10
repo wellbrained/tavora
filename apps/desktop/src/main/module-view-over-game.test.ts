@@ -541,3 +541,18 @@ describe("asking for a port", () => {
     expect((view as unknown as { bridge: { budget: object } }).bridge.budget).toBe(first);
   });
 });
+
+describe("the module's origin", () => {
+  it("puts a policy on every answer: not found, not allowed and a route's answer run nothing", async () => {
+    make();
+    const origin = "tavora-module://tavora.todos";
+    for (const request of [new Request(`${origin}/does-not-exist.html`), new Request(`${origin}/dist/index.html`, { method: "POST" }), new Request(`${origin}${CLIPBOARD_PATH}`)]) {
+      const answer = await made.serve!(request);
+      expect(answer.status, request.url).toBeGreaterThanOrEqual(400);
+      expect(answer.headers.get("Content-Security-Policy"), request.url).toBe("default-src 'none'; sandbox");
+      expect(answer.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    }
+    // Another module's address, too.
+    expect((await made.serve!(new Request("tavora-module://local.other/x"))).headers.get("Content-Security-Policy")).toBe("default-src 'none'; sandbox");
+  });
+});

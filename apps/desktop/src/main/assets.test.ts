@@ -19,6 +19,11 @@ describe("moduleCsp", () => {
     expect(MODULE_CSP).toContain("child-src 'none'");
     expect(MODULE_CSP).not.toContain("frame-src 'self'");
   });
+
+  it("starts workers only from the module's own files, never from a blob: address", () => {
+    expect(MODULE_CSP).toContain("worker-src 'self';");
+    expect(MODULE_CSP).not.toMatch(/worker-src[^;]*blob:/);
+  });
 });
 
 describe("withModulePolicy", () => {

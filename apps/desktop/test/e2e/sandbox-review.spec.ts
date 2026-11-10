@@ -97,9 +97,10 @@ test("a module compiles no code from strings and no WebAssembly, not even in a f
   await openModule(page, HOSTILE);
   await hostileReady(app);
   type Tried = { ok: boolean };
-  const result = await inModule<{ eval: Tried; wasm: Tried; notFound: { reached: boolean; eval?: Tried; wasm?: Tried }; route: { reached: boolean; eval?: Tried; wasm?: Tried } }>(app, HOSTILE, "codeEscapes()");
+  const result = await inModule<{ eval: Tried; wasm: Tried; blobWorker: Tried; notFound: { reached: boolean; eval?: Tried; wasm?: Tried }; route: { reached: boolean; eval?: Tried; wasm?: Tried } }>(app, HOSTILE, "codeEscapes()");
   expect(result.eval.ok, "no eval in the page").toBe(false);
   expect(result.wasm.ok, "no WebAssembly in a community module").toBe(false);
+  expect(result.blobWorker.ok, "no worker made from a string").toBe(false);
   for (const name of ["notFound", "route"] as const) {
     // A frame that is reached at all (its about:blank keeps the page's policy) still compiles nothing.
     expect(result[name].eval?.ok ?? false, `no eval in a frame of ${name}`).toBe(false);

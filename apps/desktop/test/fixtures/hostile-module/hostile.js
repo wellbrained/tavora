@@ -257,7 +257,6 @@ window.moreEscapes = async ({ serverUrl, stunUrl }) => {
   return results;
 };
 
-// Blocks the renderer's main thread for good, like an infinite loop in a module.
 // Code from strings and WebAssembly (W1, W2): refused in the page, and in a frame of the module's own origin, such as
 // its not-found page or a route's answer, whose realm would not have the page's policy.
 window.codeEscapes = async () => {
@@ -277,6 +276,19 @@ window.codeEscapes = async () => {
     }
   };
   const results = { eval: run(window), wasm: await compile(window) };
+  // A worker made from a string is code the module didn't ship, whatever runs in it.
+  results.blobWorker = await settle(
+    new Promise((resolve, reject) => {
+      try {
+        const worker = new Worker(URL.createObjectURL(new Blob(["postMessage(1 + 1)"], { type: "text/javascript" })));
+        worker.onmessage = (event) => resolve(event.data);
+        worker.onerror = () => reject(new Error("refused"));
+      } catch (error) {
+        reject(error);
+      }
+    }),
+    2000,
+  );
   for (const [name, src] of [["notFound", "/does-not-exist.html"], ["route", "/_clipboard/"]]) {
     const frame = document.createElement("iframe");
     frame.src = src;
@@ -301,6 +313,7 @@ window.codeEscapes = async () => {
   return results;
 };
 
+// Blocks the renderer's main thread for good, like an infinite loop in a module.
 window.hang = () => {
   setTimeout(() => {
     for (;;);
