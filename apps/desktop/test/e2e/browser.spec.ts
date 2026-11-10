@@ -64,7 +64,7 @@ function handle(request: IncomingMessage, response: ServerResponse) {
   hits.push(`${request.headers.host?.split(":")[0]}${url.pathname}`);
   if (url.pathname === "/redirect-file") return response.writeHead(302, { Location: "file:///etc/passwd" }).end();
   if (url.pathname === "/redirect-local") return response.writeHead(302, { Location: localUrl("/redirected") }).end();
-  if (url.pathname === "/redirect-other") return response.writeHead(302, { Location: `http://other.test:${port}/page` }).end();
+  if (url.pathname === "/redirect-other") return response.writeHead(302, { Location: `http://other.test:${port}/page?via=redirect` }).end();
   if (url.pathname === "/download") {
     response.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Disposition": 'attachment; filename="tavora-e2e.bin"' });
     return response.end("payload");
@@ -319,8 +319,10 @@ test("sign-ins are per workspace unless the site is shared, and the panel reopen
   await expect(page.getByTestId("browser-shared")).toHaveAttribute("aria-pressed", "false");
   // A redirect from a shared site to another one ends in the game's session too, as a link would.
   await go(page, publicUrl("/redirect-other"));
-  await waitForPage(app, `http://other.test:${port}/page`);
-  const shared = await app.evaluate(({ session, webContents }, prefix) => webContents.getAllWebContents().find((item) => item.getURL().startsWith(prefix))!.session === session.fromPartition("persist:browser"), `http://other.test:${port}/page`);
+  const redirected = `http://other.test:${port}/page?via=redirect`;
+  await waitForPage(app, redirected);
+  expect(hits).toContain("public.test/redirect-other");
+  const shared = await app.evaluate(({ session, webContents }, prefix) => webContents.getAllWebContents().find((item) => item.getURL().startsWith(prefix))!.session === session.fromPartition("persist:browser"), redirected);
   expect(shared).toBe(false);
   await expect(page.getByTestId("browser-shared")).toHaveAttribute("aria-pressed", "false");
 

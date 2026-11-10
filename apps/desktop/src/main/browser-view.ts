@@ -111,6 +111,9 @@ export interface BrowserPanelOptions {
   onChange(): void;
 }
 
+/** How often redirects may move one navigation between the shared and the workspace session (Chromium allows 20 redirects in one). */
+const MAX_REDIRECT_SWITCHES = 5;
+
 /** Corner radius of a panel card in the host UI (dock.css), in px; the page sits below the toolbar. */
 const PAGE_RADIUS = 9;
 
@@ -133,6 +136,8 @@ export class BrowserPanel {
   private fullscreen = false;
   private downloadsRefused = 0;
   private lastGesture = 0;
+  /** Redirects that moved the page to the other session since a page last committed: two sites can't bounce it forever. */
+  private redirectSwitches = 0;
   private changeTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly options: BrowserPanelOptions) {
@@ -240,13 +245,16 @@ export class BrowserPanel {
       const kind = this.kindFor(event.url);
       if (kind !== this.kind) {
         event.preventDefault();
-        if (current()) this.open(event.url, kind);
+        if (!current()) return;
+        if (++this.redirectSwitches > MAX_REDIRECT_SWITCHES) return this.failed(event.url, { kind: "unknown", detail: "ERR_TOO_MANY_REDIRECTS" });
+        this.open(event.url, kind);
         return;
       }
       this.hopUrl = event.url;
     });
     contents.on("did-navigate", (_event, url) => {
       if (!current()) return;
+      this.redirectSwitches = 0;
       this.committedUrl = url;
       this.error = null;
       this.requestedUrl = null;
@@ -263,10 +271,7 @@ export class BrowserPanel {
     contents.on("did-fail-load", (_event, errorCode, description, url, isMainFrame) => {
       // -3 is ERR_ABORTED: a navigation replaced by another, or one we refused.
       if (!current() || !isMainFrame || errorCode === -3) return;
-      this.requestedUrl = url;
-      this.error = loadError(errorCode, description);
-      this.applyVisibility();
-      this.changed();
+      this.failed(url, loadError(errorCode, description));
     });
     for (const name of ["did-start-loading", "did-stop-loading", "page-title-updated", "audio-state-changed"] as const) {
       contents.on(name as "did-start-loading", () => current() && this.changed());
@@ -308,6 +313,14 @@ export class BrowserPanel {
     });
   }
 
+  /** The page could not be loaded: the panel shows why, with the address to try again. */
+  private failed(url: string, error: BrowserError): void {
+    this.requestedUrl = url;
+    this.error = error;
+    this.applyVisibility();
+    this.changed();
+  }
+
   private kindFor(url: string): BrowserKind {
     return this.options.isSharedSite(url) ? "shared" : "workspace";
   }
@@ -319,6 +332,7 @@ export class BrowserPanel {
 
   /** Goes to what the user typed in the address bar. */
   navigate(address: string): void {
+    this.redirectSwitches = 0;
     const url = addressToUrl(address);
     if (url) this.open(url, this.kindFor(url));
   }
