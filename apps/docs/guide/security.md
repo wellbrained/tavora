@@ -53,7 +53,7 @@ A module can also ask to **read a program on this PC**, such as a game's local A
 - Never reachable: the ports Tavora listens on at that moment (stream overlays, page imports, Discord sign-in), and a fixed list of ports that hold control over the PC or a sign-in (Docker 2375/2376, Discord's local RPC 6463–6472, browser and Node debuggers 9222/9229). `network.readPage` and redirects from websites never reach a program on this PC.
 - The other rules above (no cookies, the headers Tavora sets, the limits) hold the same.
 
-A module page still cannot load remote code (`script-src 'self'`), even from a granted host.
+A module page still cannot load remote code (`script-src 'self'`), even from a granted host, or run code from a string (`eval`, `new Function`, a worker made from a `blob:` address): workers start only from its own files (`worker-src 'self'`). It can't frame anything (`frame-src 'none'`), not even a page of its own origin, and every answer of its origin carries a policy: its own files get the module's, everything else (a missing file, a route's answer) one that runs nothing (`default-src 'none'; sandbox`). So no frame of its origin is a realm without the policy.
 
 ### Connectors
 

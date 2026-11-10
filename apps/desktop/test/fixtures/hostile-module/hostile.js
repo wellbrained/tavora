@@ -257,6 +257,62 @@ window.moreEscapes = async ({ serverUrl, stunUrl }) => {
   return results;
 };
 
+// Code from strings and WebAssembly (W1, W2): refused in the page, and in a frame of the module's own origin, such as
+// its not-found page or a route's answer, whose realm would not have the page's policy.
+window.codeEscapes = async () => {
+  const WASM = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]);
+  const run = (target) => {
+    try {
+      return { ok: true, value: target.eval("1 + 1") };
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) };
+    }
+  };
+  const compile = (target) => {
+    try {
+      return settle(target.WebAssembly.compile(WASM).then(() => "compiled"), 2000);
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) };
+    }
+  };
+  const results = { eval: run(window), wasm: await compile(window) };
+  // A worker made from a string is code the module didn't ship, whatever runs in it.
+  results.blobWorker = await settle(
+    new Promise((resolve, reject) => {
+      try {
+        const worker = new Worker(URL.createObjectURL(new Blob(["postMessage(1 + 1)"], { type: "text/javascript" })));
+        worker.onmessage = (event) => resolve(event.data);
+        worker.onerror = () => reject(new Error("refused"));
+      } catch (error) {
+        reject(error);
+      }
+    }),
+    2000,
+  );
+  for (const [name, src] of [["notFound", "/does-not-exist.html"], ["route", "/_clipboard/"]]) {
+    const frame = document.createElement("iframe");
+    frame.src = src;
+    document.body.append(frame);
+    await new Promise((resolve) => {
+      frame.onload = resolve;
+      frame.onerror = resolve;
+      setTimeout(resolve, 1500);
+    });
+    let inside;
+    try {
+      inside = frame.contentWindow;
+      void inside.location.href;
+    } catch (error) {
+      results[name] = { reached: false, error: String(error?.message ?? error) };
+      frame.remove();
+      continue;
+    }
+    results[name] = { reached: true, eval: run(inside), wasm: await compile(inside) };
+    frame.remove();
+  }
+  return results;
+};
+
 // Blocks the renderer's main thread for good, like an infinite loop in a module.
 window.hang = () => {
   setTimeout(() => {
