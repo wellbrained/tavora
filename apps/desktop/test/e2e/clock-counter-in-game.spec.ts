@@ -154,7 +154,12 @@ test("an overlay page on the Overlay page cannot send anything out over WebRTC (
   const udp = dgram.createSocket("udp4");
   udp.on("message", (_message, remote) => hits.push(`udp from ${remote.port}`));
   await new Promise<void>((resolve) => udp.bind(0, "127.0.0.1", resolve));
-  const { app, page } = await inPersonalWorkspace();
+  // A failed start must not leave the socket open.
+  const started = await inPersonalWorkspace().catch((error: unknown) => {
+    udp.close();
+    throw error;
+  });
+  const { app, page } = started;
   try {
     await click(app, "add-counter");
     await closeSettings(page);
@@ -180,6 +185,7 @@ test("an overlay page on the Overlay page cannot send anything out over WebRTC (
       await Promise.all(pages.map((contents) => contents.executeJavaScript(probe).catch(() => "refused")));
       return pages.map((contents) => contents.getWebRTCIPHandlingPolicy());
     }, `stun:127.0.0.1:${udp.address().port}`);
+    // The policy is what keeps UDP in; the listener hearing nothing is a second check on top.
     expect(policies.length).toBeGreaterThan(0);
     for (const policy of policies) expect(policy).toBe("disable_non_proxied_udp");
     expect(hits).toEqual([]);
