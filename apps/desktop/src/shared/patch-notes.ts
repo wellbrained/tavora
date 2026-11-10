@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.19",
+    date: "2026-11-10",
+    title: "Limits that hold",
+    notes: [
+      "A module page can't get around its limits on requests by connecting to Tavora again.",
+    ],
+    prs: [
+      { number: 732, title: "Bridge: a new port keeps the panel's limits and ends the old port's requests" },
+    ],
+    tags: ["modules", "privacy", "website"],
+  },
+  {
     version: "0.24.18",
     date: "2026-11-10",
     title: "Safer module presses",
