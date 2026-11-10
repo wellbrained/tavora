@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.21",
+    date: "2026-11-10",
+    title: "Cloud copy stays current",
+    notes: [
+      "Tavora now asks before it takes a cloud copy older than the one on your PC.",
+      "If the cloud copy was deleted and made again while this PC was off, you choose which side to keep.",
+    ],
+    prs: [
+      { number: 729, title: "Cloud copy: seal the version a service copy follows, refuse older ones" },
+    ],
+    tags: ["cloud-copy", "privacy", "website"],
+  },
+  {
     version: "0.24.20",
     date: "2026-11-10",
     title: "Tighter module pages",
