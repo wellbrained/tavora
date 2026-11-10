@@ -113,6 +113,23 @@ export function verifyFiles(files: readonly ZipFile[]): VerifyResult {
   return { ok: true, owner, signed: true };
 }
 
+/**
+ * The SHA-256 (hex) of what a zip's signature covers (signedBytes: its key and every file's hash), or null for an
+ * unsigned zip or one whose signature file can't be read. Zips with the same signed files have the same one however
+ * they were packed (recompressed, reordered, a zip comment added), so a block by it holds where the zip's own hash
+ * changes (catalog threat model, C14). It says nothing about whether the signature is good: check that with verifyFiles.
+ */
+export function signedHash(files: readonly ZipFile[]): string | null {
+  const signatureFile = files.find((file) => file.name === SIGNATURE_FILE);
+  if (!signatureFile) return null;
+  try {
+    const body = JSON.parse(signatureFile.data.toString("utf8")) as unknown;
+    return isSignature(body) ? sha256(signedBytes(body.publicKey, body.files)) : null;
+  } catch {
+    return null;
+  }
+}
+
 function isSignature(value: unknown): value is PackageSignature {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const body = value as Record<string, unknown>;

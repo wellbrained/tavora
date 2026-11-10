@@ -2,7 +2,7 @@ import { createHash, generateKeyPairSync, type KeyObject } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fingerprint, signFiles, writeZip, type ZipFile } from "@tavora/pack";
+import { fingerprint, readZip, signedHash, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { CatalogClient, type CatalogEntry, type CatalogVersion } from "./catalog-client";
 import { CatalogUpdater, findUpdates, newAsks, notesSince, type CatalogInstalled } from "./catalog-updates";
@@ -160,7 +160,7 @@ describe("CatalogUpdater", () => {
     expect(outcome.updated.map((item) => item.manifest.version)).toEqual(["1.1.0"]);
     expect(outcome.waiting).toEqual([]);
     expect(await page()).toBe("<p>1.1.0</p>");
-    expect((await readOwnerRecords(userData))[ID]).toEqual({ id: ID, owner: fingerprint(key), sha256: createHash("sha256").update(zip).digest("hex"), catalog: true });
+    expect((await readOwnerRecords(userData))[ID]).toEqual({ id: ID, owner: fingerprint(key), sha256: createHash("sha256").update(zip).digest("hex"), signedSha256: signedHash(readZip(zip)), catalog: true });
   });
 
   it("only finds an update that asks for nothing new while the setting is off, and installs it once the setting is on", async () => {

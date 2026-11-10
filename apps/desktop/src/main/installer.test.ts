@@ -2,7 +2,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fingerprint, signFiles, writeZip, type ZipFile } from "@tavora/pack";
+import { fingerprint, readZip, signedHash, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { applyOwners, compareModuleVersions, forgetOwner, installZip, readOwnerRecords } from "./installer";
 import type { InstalledModule } from "./registry";
@@ -60,7 +60,7 @@ describe("installZip", () => {
     const installed = await installZip(await zipFile(userData, [...files, signFiles(files, key)]), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
     expect(installed).toMatchObject({ owner: fingerprint(key), updated: false });
     expect(await readFile(path.join(userModules, "wellbrained.tracker", "dist", "index.html"), "utf8")).toBe("<p>hi</p>");
-    expect(await readOwnerRecords(userData)).toEqual({ "wellbrained.tracker": { id: "wellbrained.tracker", owner: fingerprint(key), sha256: installed.sha256 } });
+    expect(await readOwnerRecords(userData)).toEqual({ "wellbrained.tracker": { id: "wellbrained.tracker", owner: fingerprint(key), sha256: installed.sha256, signedSha256: signedHash([...files, signFiles(files, key)]) } });
     // Nothing is left half-way.
     expect(await readdir(path.join(userData, "module-staging"))).toEqual([]);
   });

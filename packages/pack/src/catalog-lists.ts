@@ -26,8 +26,12 @@ export interface Revocation {
   allow: string[];
 }
 
-/** A zip (SHA-256) that Tavora stopped, and why, in words a user can read (C14). */
+/** A zip that Tavora stopped, and why, in words a user can read (C14). */
 export interface Block {
+  /**
+   * The zip's SHA-256, or the SHA-256 of what its signature covers (signedHash), which holds when the same signed files
+   * are packed again. Older apps match only the zip's.
+   */
   sha256: string;
   reason: string;
 }

@@ -21,7 +21,9 @@
 //   revocations  [{ "fingerprint": "<32 hex>", "revoked": "2026-10-18T12:00:00Z", "allow": ["<zip SHA-256>", ...] }]
 //                allow: zips the key signed before the revocation that users may still install.
 //   blocks       [{ "sha256": "<zip SHA-256>", "reason": "Sends your files to a stranger's server." }]
-//                reason: one line users read in Settings > Modules.
+//                reason: one line users read in Settings > Modules. sha256 may also be the hash of what the zip's
+//                signature covers (signedHash in packages/pack), which a repack of the same files can't change: list
+//                both for each blocked zip, as older apps know only the zip's.
 //   successions  [{ "old": "<32 hex>", "new": "<32 hex>", "account": "<account id>" }]
 //                only after the service checked that the account linked the old key before it was lost.
 import { createPrivateKey, generateKeyPairSync, type KeyObject } from "node:crypto";

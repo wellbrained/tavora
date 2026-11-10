@@ -2,7 +2,7 @@ export { createKeyFile, loadExistingKey } from "./keys.ts";
 export { cleanLinkCode, DEFAULT_API_URL, LINK_STATEMENT, LinkError, linkKey, linkRequest } from "./link.ts";
 export { collectFiles, MANIFEST_FILE, packModule, PackError } from "./pack.ts";
 export { CATALOG_RULES_URL, PUBLISH_STATEMENT, PublishError, publishSignature, publishZip, withdrawVersion, type Published } from "./publish.ts";
-export { fileHashes, fingerprint, publicKeyFromRaw, rawPublicKey, SIGNATURE_FILE, signatureFile, signedBytes, signFiles, verifyFiles, type PackageSignature, type VerifyResult } from "./signature.ts";
+export { fileHashes, fingerprint, publicKeyFromRaw, rawPublicKey, SIGNATURE_FILE, signatureFile, signedBytes, signedHash, signFiles, verifyFiles, type PackageSignature, type VerifyResult } from "./signature.ts";
 export { asSigner, keySigner, type Signer } from "./signer.ts";
 export { isSafeEntryName, readZip, writeZip, ZIP_LIMITS, ZipError, type ZipFile, type ZipLimits } from "./zip.ts";
 export {
