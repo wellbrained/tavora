@@ -7,7 +7,7 @@
 import { lstat, readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOfficialSigner, OFFICIAL_PINS, officialOn, validateManifest, type OfficialPins } from "@tavora/module-schema";
-import { MANIFEST_FILE, verifyFiles, ZIP_LIMITS, type ZipFile } from "@tavora/pack";
+import { MANIFEST_FILE, signedHash, verifyFiles, ZIP_LIMITS, type ZipFile } from "@tavora/pack";
 import { compareModuleVersions } from "../shared/module-version";
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
@@ -28,6 +28,8 @@ export interface OfficialRecord {
   version: string;
   /** The zip's hash, so a blocked zip can be stopped. */
   sha256: string;
+  /** The hash of what its signature covers (signedHash), which a block can name too; records from before have none. */
+  signedSha256?: string;
   /** The key that signed it. */
   signer: string;
   highWater: string;
@@ -54,9 +56,9 @@ export async function readOfficialRecords(userData: string): Promise<OfficialRec
   const modules = parsed?.modules;
   if (typeof modules !== "object" || modules === null) return records;
   for (const [id, value] of Object.entries(modules)) {
-    const { version, sha256, signer, highWater } = (value ?? {}) as Record<string, unknown>;
+    const { version, sha256, signedSha256, signer, highWater } = (value ?? {}) as Record<string, unknown>;
     if (!isModuleId(id) || !isVersion(version) || typeof sha256 !== "string" || !SHA256.test(sha256) || typeof signer !== "string" || !isVersion(highWater)) continue;
-    records[id] = { id, version, sha256, signer, highWater: compareModuleVersions(highWater, version) >= 0 ? highWater : version };
+    records[id] = { id, version, sha256, ...(typeof signedSha256 === "string" && SHA256.test(signedSha256) ? { signedSha256 } : {}), signer, highWater: compareModuleVersions(highWater, version) >= 0 ? highWater : version };
   }
   return records;
 }
@@ -104,6 +106,8 @@ interface Verified {
   signer: string;
   id: string;
   version: string;
+  /** The hash of what the signature covers (signedHash). */
+  signedSha256: string;
 }
 
 export type OfficialSafety = Pick<SafetyCheck, "blocked" | "revoked"> & {
@@ -199,9 +203,10 @@ export class OfficialUpdates {
   async trusted(id: string, dir: string): Promise<boolean> {
     if (!this.on) return false;
     const record = this.records[id];
-    if (!record || record.id !== id || compareModuleVersions(record.version, record.highWater) < 0 || this.options.safety.blocked(record.sha256) || !this.signerTrusted(record.signer, record.sha256)) return false;
+    if (!record || record.id !== id || compareModuleVersions(record.version, record.highWater) < 0 || this.options.safety.blocked(record.sha256, record.signedSha256) || !this.signerTrusted(record.signer, record.sha256)) return false;
     const verified = await this.verify(dir);
-    return verified !== null && verified.id === id && verified.version === record.version && verified.signer === record.signer;
+    // The files on disk say what the signature covers, also for a record from before signedSha256.
+    return verified !== null && verified.id === id && verified.version === record.version && verified.signer === record.signer && this.options.safety.blocked(record.sha256, verified.signedSha256) === null;
   }
 
   /** Reads and checks a folder's files, unless it looks as it did when it was last checked. */
@@ -239,7 +244,7 @@ export class OfficialUpdates {
         !record ||
         gone ||
         (version !== undefined && compareModuleVersions(version, record.version) >= 0) ||
-        this.options.safety.blocked(record.sha256) !== null ||
+        this.options.safety.blocked(record.sha256, record.signedSha256) !== null ||
         !this.signerTrusted(record.signer, record.sha256);
       if (!useless) continue;
       await rm(path.join(this.dir, entry.name), { recursive: true, force: true }).catch(() => undefined);
@@ -263,5 +268,6 @@ function verifyFolder(files: readonly ZipFile[]): Verified | null {
     return null;
   }
   const result = validateManifest(raw);
-  return result.ok ? { signer: verified.owner, id: result.manifest.id, version: result.manifest.version } : null;
+  const signedSha256 = signedHash(files);
+  return result.ok && signedSha256 ? { signer: verified.owner, id: result.manifest.id, version: result.manifest.version, signedSha256 } : null;
 }

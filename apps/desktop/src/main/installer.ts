@@ -7,7 +7,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
-import { MANIFEST_FILE, readZip, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
+import { MANIFEST_FILE, readZip, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { compareModuleVersions } from "../shared/module-version";
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
@@ -25,10 +25,12 @@ export class InstallError extends UserError {}
  * Who signed each module the installer put into the user's modules folder, by folder name.
  * `owner` is whose data it uses: the first key of the publisher's account. `signer` is the key
  * that signed the zip installed now, when a succession made it another key, and `sha256` the
- * zip's hash, so a blocked zip can be stopped (catalog threat model, C7, C14). `catalog` marks a
- * module installed from the catalog: only those are kept up to date from it (catalog-updates.ts).
+ * zip's hash and `signedSha256` the hash of what its signature covers (signedHash), so a blocked
+ * zip can be stopped (catalog threat model, C7, C14); records from before have no `signedSha256`.
+ * `catalog` marks a module installed from the catalog: only those are kept up to date from it
+ * (catalog-updates.ts).
  */
-export type OwnerRecords = Record<string, { id: string; owner: string; signer?: string; sha256?: string; catalog?: true }>;
+export type OwnerRecords = Record<string, { id: string; owner: string; signer?: string; sha256?: string; signedSha256?: string; catalog?: true }>;
 
 export const OWNER_RECORDS_FILE = "module-owners.json";
 const RECORDS = OWNER_RECORDS_FILE;
@@ -43,11 +45,12 @@ export async function readOwnerRecords(userData: string): Promise<OwnerRecords> 
   const folders = parsed?.folders;
   if (typeof folders !== "object" || folders === null) return records;
   for (const [folder, value] of Object.entries(folders)) {
-    const { id, owner, signer, sha256, catalog } = (value ?? {}) as { id?: unknown; owner?: unknown; signer?: unknown; sha256?: unknown; catalog?: unknown };
+    const { id, owner, signer, sha256, signedSha256, catalog } = (value ?? {}) as { id?: unknown; owner?: unknown; signer?: unknown; sha256?: unknown; signedSha256?: unknown; catalog?: unknown };
     if (!isModuleId(folder) || !isModuleId(id) || !isOwnerId(owner)) continue;
     records[folder] = { id, owner };
     if (isOwnerId(signer) && signer !== owner) records[folder].signer = signer;
     if (typeof sha256 === "string" && /^[0-9a-f]{64}$/.test(sha256)) records[folder].sha256 = sha256;
+    if (typeof signedSha256 === "string" && /^[0-9a-f]{64}$/.test(signedSha256)) records[folder].signedSha256 = signedSha256;
     if (catalog === true) records[folder].catalog = true;
   }
   return records;
@@ -131,6 +134,8 @@ export interface CheckedZip extends Installed {
   official?: true;
   /** The key that signed it, when a succession makes it another key than `owner`. */
   signer: string;
+  /** SHA-256 of what its signature covers (signedHash), for a signed zip. */
+  signedSha256?: string;
 }
 
 /**
@@ -170,14 +175,16 @@ export async function checkZipData(zip: Buffer, { userModules, modules, tavoraVe
   // The official path takes nothing else, so a community zip can never use its rules.
   if (official && !claimsOfficial) throw new InstallError("error.installRefused", { reason: "it is not one of Tavora's own modules" });
 
-  const block = safety?.blocked(sha256);
+  // By the zip's hash or by what its signature covers, so packing the same signed files again doesn't lift a block.
+  const signedSha256 = signedHash(files) ?? undefined;
+  const block = safety?.blocked(sha256, signedSha256);
   if (block) throw new InstallError("error.installBlocked", { name: manifest.name, reason: block.reason });
 
   const verified = verifyFiles(files);
   if (!verified.ok) throw new InstallError("error.installRefused", { reason: verified.reason });
   const signer = verified.owner;
   const signed = signer !== LOCAL_OWNER;
-  if (official) return checkOfficial({ official, manifest, files, sha256, signer, modules, expect, safety });
+  if (official) return checkOfficial({ official, manifest, files, sha256, signedSha256, signer, modules, expect, safety });
   // A revoked key installs only what it signed before (C6); a successor key's modules use its first key's data (C7).
   if (signed && safety?.revoked(signer, sha256)) throw new InstallError("error.installRevoked", { name: manifest.name });
   const owner = signed && safety ? safety.firstKey(signer) : signer;
@@ -208,7 +215,7 @@ export async function checkZipData(zip: Buffer, { userModules, modules, tavoraVe
     throw new InstallError("error.installFolderTaken", { folder });
   }
 
-  return { manifest, owner, sha256, updated, files, signer };
+  return { manifest, owner, sha256, updated, files, signer, ...(signed && signedSha256 ? { signedSha256 } : {}) };
 }
 
 /**
@@ -216,7 +223,7 @@ export async function checkZipData(zip: Buffer, { userModules, modules, tavoraVe
  * id (never one that moved to the catalog), when it is not blocked, its signer is trusted, it names the oldest Tavora it
  * needs, and its version is newer than the shipped copy, the one running and the newest ever installed.
  */
-function checkOfficial({ official, manifest, files, sha256, signer, modules, expect, safety }: { official: OfficialUpdates; manifest: ModuleManifest; files: ZipFile[]; sha256: string; signer: string; modules: ReadonlyMap<string, InstalledModule>; expect: InstallOptions["expect"]; safety: InstallOptions["safety"] }): CheckedZip {
+function checkOfficial({ official, manifest, files, sha256, signedSha256, signer, modules, expect, safety }: { official: OfficialUpdates; manifest: ModuleManifest; files: ZipFile[]; sha256: string; signedSha256: string | undefined; signer: string; modules: ReadonlyMap<string, InstalledModule>; expect: InstallOptions["expect"]; safety: InstallOptions["safety"] }): CheckedZip {
   const refuse = (reason: string) => new InstallError("error.installRefused", { reason });
   if (!official.on || !safety) throw refuse("Tavora's own modules do not update from the catalog");
   if (!expect || expect.id !== manifest.id || expect.owner !== signer) throw refuse("it is not the module and publisher key that was listed");
@@ -226,7 +233,7 @@ function checkOfficial({ official, manifest, files, sha256, signer, modules, exp
   if (!manifest.minTavora) throw refuse("it does not name the oldest Tavora it needs (minTavora)");
   // Only plain x.y.z versions are recorded, so a pre-release never becomes the newest.
   if (!/^\d+\.\d+\.\d+$/.test(manifest.version)) throw refuse("its version is not a plain x.y.z");
-  const block = safety.blocked(sha256);
+  const block = safety.blocked(sha256, signedSha256);
   if (block) throw new InstallError("error.installBlocked", { name: manifest.name, reason: block.reason });
   if (signer === LOCAL_OWNER || !official.signerTrusted(signer, sha256)) throw refuse("it is not signed by Tavora's publisher key");
   const mark = official.highWater(manifest.id);
@@ -234,7 +241,7 @@ function checkOfficial({ official, manifest, files, sha256, signer, modules, exp
     if (compareModuleVersions(manifest.version, installed) <= 0) throw new InstallError("error.installNotNewer", { name: running.manifest.name, installed, version: manifest.version });
   }
   // The running module's panels reload with the new copy, also the first time.
-  return { manifest, owner: OFFICIAL_OWNER, sha256, updated: true, files, signer, official: true };
+  return { manifest, owner: OFFICIAL_OWNER, sha256, updated: true, files, signer, official: true, ...(signedSha256 ? { signedSha256 } : {}) };
 }
 
 /** Writes a checked zip into place and records its owner. */
@@ -243,7 +250,7 @@ async function writeChecked(checked: CheckedZip, options: InstallOptions): Promi
   return checked.official && official ? official.install(checked.manifest.id, () => writeFiles(checked, options)) : writeFiles(checked, options);
 }
 
-async function writeFiles({ files, manifest, owner, signer, sha256, updated, official: downloaded }: CheckedZip, { userData, userModules, catalog, official }: InstallOptions): Promise<Installed> {
+async function writeFiles({ files, manifest, owner, signer, sha256, signedSha256, updated, official: downloaded }: CheckedZip, { userData, userModules, catalog, official }: InstallOptions): Promise<Installed> {
   const folder = manifest.id;
   const target = downloaded && official ? path.join(official.dir, folder) : path.join(userModules, folder);
   if (downloaded && !official) throw new InstallError("error.installRefused", { reason: "it is not one of Tavora's own modules" });
@@ -277,12 +284,12 @@ async function writeFiles({ files, manifest, owner, signer, sha256, updated, off
 
   if (downloaded && official) {
     // The folder is in place first: a record without it is ignored, and a folder without its record is not used.
-    await official.save({ id: manifest.id, version: manifest.version, sha256, signer });
+    await official.save({ id: manifest.id, version: manifest.version, sha256, signer, ...(signedSha256 ? { signedSha256 } : {}) });
     return { manifest, owner, sha256, updated };
   }
   const records = await readOwnerRecords(userData);
   if (owner === LOCAL_OWNER) delete records[folder];
-  else records[folder] = { id: manifest.id, owner, ...(signer !== owner ? { signer } : {}), sha256, ...(catalog ? { catalog: true as const } : {}) };
+  else records[folder] = { id: manifest.id, owner, ...(signer !== owner ? { signer } : {}), sha256, ...(signedSha256 ? { signedSha256 } : {}), ...(catalog ? { catalog: true as const } : {}) };
   await writeOwnerRecords(userData, records);
   return { manifest, owner, sha256, updated };
 }

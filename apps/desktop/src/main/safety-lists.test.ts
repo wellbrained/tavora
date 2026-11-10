@@ -2,8 +2,9 @@ import { createHash, generateKeyPairSync, type KeyObject } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { catalogPublicKey, fingerprint, publicKeyFromRaw, signCatalogList, signFiles, writeZip, type CatalogList, type ZipFile } from "@tavora/pack";
+import { catalogPublicKey, fingerprint, publicKeyFromRaw, readZip, signCatalogList, signedHash, signFiles, writeZip, type CatalogList, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
+import { addSignedHashes } from "./installed-modules";
 import { installZip, readOwnerRecords } from "./installer";
 import type { InstalledModule, ModuleProblem } from "./registry";
 import { CATALOGUE_PUBLIC_KEY, SafetyLists, stopBlocked } from "./safety-lists";
@@ -171,7 +172,7 @@ describe("C7: a lost key's successor", () => {
     const next = zip(replacement, "1.1.0", "<p>new</p>");
     const updated = await installZip(await save(userData, next), { userData, userModules, tavoraVersion: TAVORA, modules, safety });
     expect(updated).toMatchObject({ owner: fingerprint(lost), updated: true });
-    expect(await readOwnerRecords(userData)).toEqual({ [ID]: { id: ID, owner: fingerprint(lost), signer: fingerprint(replacement), sha256: sha(next) } });
+    expect(await readOwnerRecords(userData)).toEqual({ [ID]: { id: ID, owner: fingerprint(lost), signer: fingerprint(replacement), sha256: sha(next), signedSha256: signedHash(readZip(next))! } });
     expect(await readFile(path.join(userModules, ID, "dist", "index.html"), "utf8")).toBe("<p>new</p>");
   });
 
@@ -246,5 +247,85 @@ describe("C14: a blocked zip", () => {
     expect(await installZip(await save(userData, fixed), { userData, userModules, tavoraVersion: TAVORA, modules: stopped, safety })).toMatchObject({ updated: true, owner: fingerprint(publisher) });
     const after = new Map([[ID, loaded(root, fingerprint(publisher), "1.0.1")]]);
     expect(stopBlocked(after, userModules, await readOwnerRecords(userData), safety, []).size).toBe(0);
+  });
+
+  it("holds when the same signed files come packed again, by the hash of what the signature covers", async () => {
+    const { userData, userModules } = await setup();
+    const publisher = generateKeyPairSync("ed25519").privateKey;
+    const harmful = zip(publisher, "1.0.0", "<p>harmful</p>");
+    const signed = signedHash(readZip(harmful))!;
+    // The same files in another order, and the same zip with a comment at its end: other zip hashes, the same signature.
+    const reordered = writeZip([...readZip(harmful)].reverse());
+    const commented = Buffer.concat([harmful, Buffer.from("x")]);
+    commented.writeUInt16LE(1, commented.length - 3);
+    for (const repacked of [reordered, commented]) {
+      expect(sha(repacked)).not.toBe(sha(harmful));
+      expect(signedHash(readZip(repacked))).toBe(signed);
+    }
+
+    // A block by the zip's hash alone, as older lists have: the repack slips past it.
+    const { safety: old } = lists(userData);
+    expect(old.accept("blocks", blocks(1, [sha(harmful)]))).toBe(true);
+    await expect(installZip(await save(userData, harmful), { userData, userModules, tavoraVersion: TAVORA, modules: new Map(), safety: old })).rejects.toMatchObject({ key: "error.installBlocked" });
+    const elsewhere = await setup();
+    await expect(installZip(await save(elsewhere.userData, reordered), { ...elsewhere, tavoraVersion: TAVORA, modules: new Map(), safety: old })).resolves.toMatchObject({ owner: fingerprint(publisher) });
+
+    // A block by what the signature covers stops every packing of it.
+    const { safety } = lists(userData);
+    expect(safety.accept("blocks", blocks(1, [sha(harmful), signed]))).toBe(true);
+    for (const repacked of [harmful, reordered, commented]) {
+      await expect(installZip(await save(userData, repacked), { userData, userModules, tavoraVersion: TAVORA, modules: new Map(), safety })).rejects.toMatchObject({ key: "error.installBlocked" });
+    }
+  });
+
+  it("stops an installed copy by the hash of what its signature covers, which the installer records", async () => {
+    const { userData, userModules } = await setup();
+    const publisher = generateKeyPairSync("ed25519").privateKey;
+    const harmful = zip(publisher, "1.0.0", "<p>harmful</p>");
+    const { safety } = lists(userData);
+    // Installed from a repack, so its zip hash is not the one Tavora blocked.
+    const commented = Buffer.concat([harmful, Buffer.from("x")]);
+    commented.writeUInt16LE(1, commented.length - 3);
+    await installZip(await save(userData, commented), { userData, userModules, tavoraVersion: TAVORA, modules: new Map(), safety });
+    const records = await readOwnerRecords(userData);
+    expect(records[ID]?.signedSha256).toBe(signedHash(readZip(harmful)));
+
+    expect(safety.accept("blocks", blocks(1, [sha(harmful), signedHash(readZip(harmful))!]))).toBe(true);
+    const modules = new Map([[ID, loaded(path.join(userModules, ID), fingerprint(publisher))]]);
+    expect([...stopBlocked(modules, userModules, records, safety, []).keys()]).toEqual([ID]);
+  });
+
+  it("reads records from before signedSha256, which a block by the zip's hash still stops", async () => {
+    const { userData, userModules } = await setup();
+    const publisher = generateKeyPairSync("ed25519").privateKey;
+    const harmful = zip(publisher);
+    await writeFile(path.join(userData, "module-owners.json"), JSON.stringify({ version: 1, folders: { [ID]: { id: ID, owner: fingerprint(publisher), sha256: sha(harmful), signedSha256: "not a hash" } } }));
+    const records = await readOwnerRecords(userData);
+    expect(records[ID]).toEqual({ id: ID, owner: fingerprint(publisher), sha256: sha(harmful) });
+    const { safety } = lists(userData);
+    expect(safety.accept("blocks", blocks(1, [sha(harmful)]))).toBe(true);
+    const modules = new Map([[ID, loaded(path.join(userModules, ID), fingerprint(publisher))]]);
+    expect(stopBlocked(modules, userModules, records, safety, []).size).toBe(1);
+  });
+
+  it("stops a copy installed before signedSha256 was recorded, by the signature file in its folder", async () => {
+    const { userData, userModules } = await setup();
+    const publisher = generateKeyPairSync("ed25519").privateKey;
+    const harmful = zip(publisher, "1.0.0", "<p>harmful</p>");
+    const { safety } = lists(userData);
+    await installZip(await save(userData, harmful), { userData, userModules, tavoraVersion: TAVORA, modules: new Map(), safety });
+    // As an older Tavora wrote it.
+    const file = path.join(userData, "module-owners.json");
+    const saved = JSON.parse(await readFile(file, "utf8")) as { folders: Record<string, Record<string, unknown>> };
+    delete saved.folders[ID]!.signedSha256;
+    await writeFile(file, JSON.stringify(saved));
+    const records = await readOwnerRecords(userData);
+    expect(records[ID]?.signedSha256).toBeUndefined();
+
+    expect(safety.accept("blocks", blocks(1, [signedHash(readZip(harmful))!]))).toBe(true);
+    const modules = new Map([[ID, loaded(path.join(userModules, ID), fingerprint(publisher))]]);
+    expect(stopBlocked(new Map(modules), userModules, records, safety, []).size).toBe(0);
+    await addSignedHashes(modules, userModules, records);
+    expect([...stopBlocked(modules, userModules, records, safety, []).keys()]).toEqual([ID]);
   });
 });

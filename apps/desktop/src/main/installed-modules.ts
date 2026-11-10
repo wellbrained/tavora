@@ -1,7 +1,8 @@
-import { realpath } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
+import { SIGNATURE_FILE, signedHash } from "@tavora/pack";
 import type { OfficialUpdates } from "./official-updates";
-import { applyOwners, readOwnerRecords } from "./installer";
+import { applyOwners, readOwnerRecords, type OwnerRecords } from "./installer";
 import { BROWSER_MODULE_ID, browserModule, describeModules, discoverModules, type InstalledModule, type ModuleInfo, type ModuleProblem, type ModuleSources } from "./registry";
 import { stopBlocked, type SafetyCheck } from "./safety-lists";
 
@@ -47,6 +48,7 @@ export async function loadInstalledModules(options: InstalledModulesOptions): Pr
   const userRoot = await realpath(options.userModules).catch(() => path.resolve(options.userModules));
   const records = await readOwnerRecords(options.userData);
   applyOwners(modules, userRoot, records);
+  await addSignedHashes(modules, userRoot, records);
   const blocked = stopBlocked(modules, userRoot, records, options.safety, problems);
   const catalog = new Set(
     [...blocked.values(), ...modules.values()]
@@ -61,6 +63,27 @@ export async function loadInstalledModules(options: InstalledModulesOptions): Pr
   return { modules, blocked, catalog, info, problems };
 }
 
+/** A signature file bigger than this is not read for its hash: a zip holds at most a few thousand files. */
+const MAX_SIGNATURE_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Fills in `signedSha256` for records from before the installer kept it, in memory only, from the signature file the
+ * installer left in the module's folder, so a block by what the signature covers stops those copies too. A file that
+ * is missing or can't be read adds nothing, and the block by the zip's own hash holds whatever the file says.
+ */
+export async function addSignedHashes(modules: ReadonlyMap<string, InstalledModule>, userRoot: string, records: OwnerRecords): Promise<void> {
+  for (const [id, module] of modules) {
+    if (module.provenance !== "local" || path.dirname(module.root) !== userRoot) continue;
+    const record = records[path.basename(module.root)];
+    if (!record || record.id !== id || record.signedSha256) continue;
+    const file = path.join(module.root, SIGNATURE_FILE);
+    const size = await stat(file).then((info) => (info.isFile() ? info.size : -1), () => -1);
+    if (size < 0 || size > MAX_SIGNATURE_BYTES) continue;
+    const data = await readFile(file).catch(() => null);
+    const hash = data ? signedHash([{ name: SIGNATURE_FILE, data }]) : null;
+    if (hash) record.signedSha256 = hash;
+  }
+}
 
 /**
  * The modules installed now, as one object that services hold: a reload replaces what is inside, so they never keep

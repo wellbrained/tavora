@@ -54,8 +54,11 @@ type Held = { [K in CatalogListKind]: { list: CatalogListOf<K>; text: string } |
 
 /** What the installer asks before it installs a zip. */
 export interface SafetyCheck {
-  /** The block on a zip (its SHA-256), or null. */
-  blocked(sha256: string): Block | null;
+  /**
+   * The block on a zip, by its SHA-256 or the SHA-256 of what its signature covers (`signed`, signedHash), or null. The
+   * second holds when the same signed files come packed again, with another zip hash.
+   */
+  blocked(sha256: string, signed?: string | null): Block | null;
   /** Whether a key is revoked and this zip is not one it signed before. */
   revoked(fingerprint: string, sha256: string): boolean;
   /** The first key of a key's account by its successions: whose data its modules use. */
@@ -104,8 +107,8 @@ export class SafetyLists implements SafetyCheck {
     return changed;
   }
 
-  blocked(sha256: string): Block | null {
-    return this.list("blocks")?.blocked.find((block) => block.sha256 === sha256) ?? null;
+  blocked(sha256: string, signed?: string | null): Block | null {
+    return this.list("blocks")?.blocked.find((block) => block.sha256 === sha256 || (signed ? block.sha256 === signed : false)) ?? null;
   }
 
   revoked(fingerprint: string, sha256: string): boolean {
@@ -165,7 +168,7 @@ export function stopBlocked(
   for (const [id, module] of modules) {
     if (module.provenance !== "local" || path.dirname(module.root) !== userModulesRoot) continue;
     const record = records[path.basename(module.root)];
-    const block = record?.id === id && record.sha256 ? lists.blocked(record.sha256) : null;
+    const block = record?.id === id && record.sha256 ? lists.blocked(record.sha256, record.signedSha256) : null;
     if (!block) continue;
     modules.delete(id);
     stopped.set(id, module);

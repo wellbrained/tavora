@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } f
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { firstKeyOf, OFFICIAL_PINS, type SuccessionStatement } from "@tavora/module-schema";
-import { fingerprint, signFiles, writeZip, type ZipFile } from "@tavora/pack";
+import { fingerprint, readZip, signedHash, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { beforeEach, describe, expect, it } from "vitest";
 import { backupData } from "./backup";
 import { CatalogUpdater, findUpdates } from "./catalog-updates";
@@ -54,7 +54,7 @@ interface Lists {
 
 function safetyOf(lists: Lists): OfficialSafety {
   return {
-    blocked: (hash) => (lists.blocked.includes(hash) ? { sha256: hash, reason: "bad" } : null),
+    blocked: (hash, signed) => (lists.blocked.includes(hash) || (signed && lists.blocked.includes(signed)) ? { sha256: hash, reason: "bad" } : null),
     revoked: (key, hash) => {
       const found = lists.revoked.find((entry) => entry.fingerprint === key);
       return found !== undefined && !found.allow.includes(hash);
@@ -97,7 +97,7 @@ async function installOptions(official: OfficialUpdates, zip: Buffer, id = "tavo
     userModules: path.join(userData, "modules"),
     modules: loaded.modules,
     tavoraVersion: TAVORA,
-    safety: { blocked: (hash) => (lists.blocked.includes(hash) ? { sha256: hash, reason: "bad" } : null), revoked: (key, hash) => safetyOf(lists).revoked(key, hash), firstKey: (key) => firstKeyOf(lists.successions, key).key },
+    safety: { blocked: (hash, signed) => (lists.blocked.includes(hash) || (signed && lists.blocked.includes(signed)) ? { sha256: hash, reason: "bad" } : null), revoked: (key, hash) => safetyOf(lists).revoked(key, hash), firstKey: (key) => firstKeyOf(lists.successions, key).key },
     expect: { id, owner: fingerprint(tavoraKey) },
     catalog: true,
     official,
@@ -120,7 +120,7 @@ describe("the official install path", () => {
     const installed = await install(official, zip);
     expect(installed).toMatchObject({ owner: "official", updated: true });
     expect(await readFile(path.join(userData, OFFICIAL_UPDATES_DIR, "tavora.notes", "dist", "index.html"), "utf8")).toBe("<p>1.1.0</p>");
-    expect(await readOfficialRecords(userData)).toEqual({ "tavora.notes": { id: "tavora.notes", version: "1.1.0", sha256: sha(zip), signer: PINNED, highWater: "1.1.0" } });
+    expect(await readOfficialRecords(userData)).toEqual({ "tavora.notes": { id: "tavora.notes", version: "1.1.0", sha256: sha(zip), signedSha256: signedHash(readZip(zip)), signer: PINNED, highWater: "1.1.0" } });
     // Not an installed-from-zip module: the owner records and the user's modules folder are untouched.
     expect(await readOwnerRecords(userData)).toEqual({});
     expect(await readdir(path.join(userData, "module-staging"))).toEqual([]);
@@ -266,6 +266,16 @@ describe("the load-time check", () => {
     expect((await running(official)).downloaded).toBeUndefined();
     lists.revoked = [];
     expect((await running(officialOf({ key: "", account: "" }))).downloaded).toBeUndefined();
+  });
+
+  it("falls back when what the copy's signature covers is blocked, however its zip was packed", async () => {
+    const official = officialOf();
+    const zip = zipOf("tavora.notes", "1.1.0");
+    await install(official, zip);
+    expect((await running(official)).downloaded).toBe(true);
+    lists.blocked.push(signedHash(readZip(zip))!);
+    expect((await running(official)).downloaded).toBeUndefined();
+    lists.blocked = [];
   });
 
   it("stays on the shipped copy when the app already ships the same or a newer version", async () => {
