@@ -67,6 +67,10 @@ describe("approving a new PC through the service", () => {
     await old.pairing.decide(old.pairing.view().approve!.id, true);
     expect(old.pairing.view().approve).toBeNull();
     await fresh.pairing.lookForAnswer();
+    // Add came first: the key waits, unused, until this PC's user says the codes match.
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "code", code });
+    expect(fresh.accountKey.get()).toBeNull();
+    await fresh.pairing.confirm();
     expect(fresh.pairing.view().asking).toBeNull();
     expect(fresh.accountKey.get()?.equals(old.accountKey.get()!)).toBe(true);
     // Done: nothing is left on the service.
@@ -90,6 +94,58 @@ describe("approving a new PC through the service", () => {
     await fresh.pairing.lookForAnswer();
     expect(fresh.pairing.view().asking).toMatchObject({ step: "declined" });
     expect(fresh.accountKey.get()).toBeNull();
+    fresh.pairing.dispose();
+    old.pairing.dispose();
+  });
+
+  it("keeps no key a rogue 'old PC' (or the service) sends before this PC's user says the codes match", async () => {
+    const cloud = await service();
+    // No PC of the account has a key yet: a planted one would become the account's.
+    const fresh = await onPc(cloud.fetch, await cloud.signIn("Laptop"));
+    const rogueToken = await cloud.signIn("Rogue");
+    const rogue = new ServicePairing({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => rogueToken });
+    const rogueKey = newPairingKey();
+
+    await fresh.pairing.start();
+    const asked = (await rogue.read())!;
+    expect(await rogue.answer(asked.id, rogueKey.publicKey.toString("base64url"))).toBe(true);
+    await fresh.pairing.lookForAnswer();
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "code", from: "Rogue" });
+    const revealed = (await rogue.read())!.reveal!;
+    await rogue.sendKey(asked.id, sealForPc(rogueKey, Buffer.from(revealed, "base64url"), newCopyKey()).toString("base64url"));
+
+    await fresh.pairing.lookForAnswer();
+    await fresh.pairing.lookForAnswer();
+    // The user never said the codes match: nothing is kept, and the account gets no vault from it.
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "code" });
+    expect(fresh.accountKey.get()).toBeNull();
+    expect(await fresh.accountKey.exists()).toBe(false);
+    await fresh.pairing.cancel();
+    expect(fresh.pairing.view().asking).toBeNull();
+    expect(fresh.accountKey.get()).toBeNull();
+    expect(await fresh.accountKey.exists()).toBe(false);
+    fresh.pairing.dispose();
+  });
+
+  it("waits after Codes match until the other PC's user clicks Add", async () => {
+    const cloud = await service();
+    const old = await onPc(cloud.fetch, cloud.token);
+    await old.accountKey.setUp();
+    const fresh = await onPc(cloud.fetch, await cloud.signIn("Laptop"));
+    await fresh.pairing.start();
+    // Codes match can't be pressed before there is a code.
+    await expect(fresh.pairing.confirm()).rejects.toMatchObject({ key: "pairing.error.gone" });
+    await old.pairing.lookForRequests();
+    await fresh.pairing.lookForAnswer();
+    await old.pairing.lookForRequests();
+    await fresh.pairing.confirm();
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "confirmed" });
+    await fresh.pairing.lookForAnswer();
+    expect(fresh.accountKey.get()).toBeNull();
+    await old.pairing.decide(old.pairing.view().approve!.id, true);
+    await fresh.pairing.lookForAnswer();
+    expect(fresh.pairing.view().asking).toBeNull();
+    expect(fresh.accountKey.get()?.equals(old.accountKey.get()!)).toBe(true);
     fresh.pairing.dispose();
     old.pairing.dispose();
   });
@@ -133,12 +189,43 @@ describe("approving a new PC through the copy's folder", () => {
     expect(fresh.pairing.view().asking).toMatchObject({ step: "code", from: "Desk" });
     await old.pairing.lookForRequests();
     expect(old.pairing.view().approve).toMatchObject({ name: "Laptop", code: fresh.pairing.view().asking!.code });
+    // The codes match here first; the key comes with the other PC's Add.
+    await fresh.pairing.confirm();
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "confirmed", from: "Desk" });
     await old.pairing.decide(old.pairing.view().approve!.id, true);
     await fresh.pairing.lookForAnswer();
+    expect(fresh.pairing.view().asking).toBeNull();
     expect(fresh.accountKey.get()?.equals(old.accountKey.get()!)).toBe(true);
     expect((await readdir(dir)).filter((name) => !name.includes("(1)"))).toEqual([]);
     fresh.pairing.dispose();
     old.pairing.dispose();
+  });
+
+  it("keeps no key that anyone who can write the folder plants before this PC's user says the codes match", async () => {
+    const { root } = await pc();
+    const folder = path.join(root, "OneDrive");
+    await mkdir(path.join(folder, "Tavora"), { recursive: true });
+    const fresh = await onPc(fetch, null, new FolderPairing(folder, "Laptop"));
+    // Someone else on the share answers as an "old PC" and sends a key of their own.
+    const rogue = new FolderPairing(folder, "Desk");
+    const rogueKey = newPairingKey();
+
+    await fresh.pairing.start();
+    const asked = (await rogue.read())!;
+    expect(await rogue.answer(asked.id, rogueKey.publicKey.toString("base64url"))).toBe(true);
+    await fresh.pairing.lookForAnswer();
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "code" });
+    const revealed = (await rogue.read())!.reveal!;
+    await rogue.sendKey(asked.id, sealForPc(rogueKey, Buffer.from(revealed, "base64url"), newCopyKey()).toString("base64url"));
+
+    await fresh.pairing.lookForAnswer();
+    await fresh.pairing.lookForAnswer();
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "code" });
+    expect(fresh.accountKey.get()).toBeNull();
+    await fresh.pairing.cancel();
+    expect(fresh.accountKey.get()).toBeNull();
+    expect(await readdir(path.join(folder, "Tavora", "pairing"))).toEqual([]);
+    fresh.pairing.dispose();
   });
 
   it("lasts a day, then is gone", async () => {

@@ -15,7 +15,7 @@ Tavora makes and keeps your publisher key for you. The setup under **Settings > 
 The key is used only inside Tavora, when you press Publish or Save as zip. Nothing outside Tavora can ask it to sign.
 
 - **Linked a key file before?** The setup asks for it: press **Pick my key file…** (such as `~/.tavora/publisher-key.pem` from an older `tavora-pack`), since modules you already published update only with that key. Once Tavora keeps it, delete the file. Under **Publisher keys and CI** (press **Show**), **Add from a file** does the same later.
-- **On another PC**, sign in to Tavora, press **Get it from my other PC** under Profile > Account > Recovery key, and click **Add** on a PC that has your keys once both show the same code. Without another PC, type in your recovery key there. Your keys are there.
+- **On another PC**, sign in to Tavora, press **Get it from my other PC** under Profile > Account > Recovery key, and once both show the same code, click **Codes match** there and **Add** on a PC that has your keys. Without another PC, type in your recovery key there. Your keys are there.
 
 ## Back it up
 

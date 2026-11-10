@@ -574,6 +574,8 @@ export function hostActionTable(c: HostChecks) {
     /** Asks another PC of the account for its key, instead of typing the recovery key. */
     "pairing-start": {},
     "pairing-cancel": {},
+    /** This PC's user says the other PC shows the same code: only then is a key from it used. */
+    "pairing-confirm": {},
     /** The user's answer to "Add <PC>?". */
     "pairing-decide": { id: matching(/^[A-Za-z0-9_-]{16}$/), allow: bool },
 

@@ -431,6 +431,9 @@ test("a new PC gets the recovery key from another PC, once both show the same co
     await expect(a.page.getByTestId("pairing-approve-code")).toHaveText(code, { timeout: 20_000 });
     await a.page.getByTestId("pairing-add").click();
     await expect(a.page.getByTestId("pairing-approve")).toHaveCount(0);
+    // B keeps the key only once its own user says the codes match.
+    await expect(ask.getByTestId("pairing-code")).toHaveText(code);
+    await ask.getByTestId("pairing-confirm").click();
 
     // B now has the account's key without anyone typing it, and the question is gone.
     await expect(ask).toHaveCount(0, { timeout: 15_000 });
