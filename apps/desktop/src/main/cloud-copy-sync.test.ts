@@ -130,6 +130,42 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(await read(a.userData, "workspace.json")).toBe('{"b":true}');
   });
 
+  it("doesn't take an older copy the service hands out as a newer version", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { key, sync: atA } = await startCopy(cloud, a);
+    const manifest = "http://tavora.test/v1/account/copy/manifest";
+    const old = Buffer.from(await (await cloud.fetch(manifest, { headers: { authorization: `Bearer ${cloud.token}` } })).arrayBuffer());
+    // The first version's parts stay in the copy: only a file is added.
+    await writeFile(path.join(a.userData, "workspace.json"), "w2");
+    await atA.sync();
+    const b = await pc({ "library.json": "b0" });
+    const setup = tavora(cloud, b);
+    await setup.sync.turnOn();
+    await setup.sync.enterKey(key);
+    await setup.sync.keep("cloud");
+    await tavora(cloud, b).sync.beforeLoad();
+    expect(await read(b.userData, "workspace.json")).toBe("w2");
+
+    // The service serves the first manifest again, as version 9.
+    const replay = (async (url: string, init?: RequestInit) => {
+      const answer = await cloud.fetch(url, init);
+      if ((init?.method ?? "GET") !== "GET") return answer;
+      if (url === manifest) return new Response(old, { headers: { "x-copy-version": "9" } });
+      if (url.endsWith("/copy")) {
+        const body = (await answer.json()) as { copy: Record<string, unknown> };
+        return Response.json({ copy: { ...body.copy, version: 9 } });
+      }
+      return answer;
+    }) as typeof fetch;
+    const atB = tavora({ ...cloud, fetch: replay }, b);
+    await atB.sync.beforeLoad();
+    expect(await read(b.userData, "workspace.json")).toBe("w2");
+    expect(atB.sync.view()).toMatchObject({ problem: "failed", restartToTake: false });
+    await expect(atB.sync.restore()).rejects.toMatchObject({ key: "cloudCopy.error.failed" });
+    expect(atB.events.restarts).toBe(0);
+  });
+
   it("asks which side to keep when both changed, and keeps the other as a local backup", async () => {
     const cloud = await service();
     const a = await pc({ "library.json": "a1" });

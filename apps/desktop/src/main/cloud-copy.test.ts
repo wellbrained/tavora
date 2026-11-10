@@ -124,6 +124,36 @@ describe("the cloud copy", () => {
     expect(await client().upload(key, (await pc({ "library.json": "c" })).roots, EMPTY_STATE)).toEqual({ status: "conflict", version: 2 });
   });
 
+  it("refuses an older copy the service hands out as a newer version, and still reads copies saved without a sealed base", async () => {
+    const key = newCopyKey();
+    const { client } = await service();
+    const a = await pc({ "library.json": "first" });
+    const first = await client().upload(key, a.roots, EMPTY_STATE);
+    if (first.status !== "uploaded") throw new Error(first.status);
+    const old = await client().storage.manifest();
+    await writeFile(path.join(a.userData, "library.json"), "second");
+    const second = await client().upload(key, a.roots, first.state);
+    if (second.status !== "uploaded") throw new Error(second.status);
+    const keys = copyKeys(key);
+    expect(JSON.parse(open(keys, (await client().storage.manifest())!.sealed).toString("utf8"))).toMatchObject({ base: 1 });
+
+    // A broken-into service keeps the first manifest and serves it with a higher version.
+    const replaying = (sealed: Uint8Array, version: number) => {
+      const real = client();
+      return new CloudCopy(Object.assign(Object.create(Object.getPrototypeOf(real.storage)), real.storage, { manifest: async () => ({ version, sealed }) }));
+    };
+    const b = await pc();
+    await expect(replaying(old!.sealed, 3).download(key, b.roots, path.join(b.root, "staging"), second.state.version)).rejects.toMatchObject({ reason: "failed" });
+    // A list that claims to follow a version it can't follow is damaged.
+    await expect(replaying(old!.sealed, 1).download(key, b.roots, path.join(b.root, "staging"))).rejects.toMatchObject({ reason: "damaged" });
+    // The real newer copy still comes down to a PC that has the first.
+    expect(await client().download(key, b.roots, path.join(b.root, "staging"), first.state.version)).toMatchObject({ version: second.state.version });
+
+    // A copy saved by an older Tavora has no base and stays readable.
+    const legacy = seal(keys, Buffer.from(JSON.stringify({ v: 1, pictures: true, files: [] })));
+    expect(await replaying(legacy, 5).download(key, b.roots, path.join(b.root, "staging"), second.state.version)).toMatchObject({ version: 5, files: {} });
+  });
+
   it("cannot be opened with another recovery key", async () => {
     const { client } = await service();
     const a = await pc({ "library.json": "secret" });

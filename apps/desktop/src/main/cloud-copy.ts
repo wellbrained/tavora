@@ -85,6 +85,11 @@ interface Manifest {
   v: 1;
   /** The version it was saved as, where the PC picks it (a folder); the service numbers its own. */
   version?: number;
+  /**
+   * Where the service numbers versions: the version it was saved on top of, so an older manifest can't pose as
+   * a newer one there either. Copies saved before Tavora sealed it have none.
+   */
+  base?: number;
   /** False when pictures were left out to fit; a restore keeps this PC's pictures then. */
   pictures: boolean;
   files: { path: string; size: number; sha256: string; parts: string[] }[];
@@ -427,8 +432,9 @@ export class CloudCopy {
       await flush();
 
       // Where the PC picks the version, it goes inside the sealed manifest too, so an older manifest can't pose as a newer one.
+      // Where the service picks it, the version this one follows goes in instead.
       const version = this.storage.nextVersion(state.version);
-      const manifest: Manifest = { v: 1, ...(version !== null ? { version } : {}), pictures, files: Object.entries(files).map(([name, file]) => ({ path: name, size: file.size, sha256: file.sha256, parts: file.parts })) };
+      const manifest: Manifest = { v: 1, ...(version !== null ? { version } : { base: state.version }), pictures, files: Object.entries(files).map(([name, file]) => ({ path: name, size: file.size, sha256: file.sha256, parts: file.parts })) };
       const sealed = seal(keys, Buffer.from(JSON.stringify(manifest)));
       const ids = [...new Set(manifest.files.flatMap((file) => file.parts))];
       const answer = await this.storage.swap(state.version, version, ids, sealed);
@@ -449,9 +455,10 @@ export class CloudCopy {
   /**
    * Downloads the copy into `staging` (emptied first), checking every part and file against the key and the
    * manifest, and returns its version and the files as they will be synced once swapped in. Nothing outside
-   * `staging` is touched; null when there is no copy.
+   * `staging` is touched; null when there is no copy. `synced` is the version this PC last synced: a copy the
+   * service saved before that one is refused.
    */
-  async download(copyKey: Uint8Array, roots: CopyRoot[], staging: string): Promise<{ version: number; pictures: boolean; files: Record<string, Omit<SyncedFile, "mtimeMs">> } | null> {
+  async download(copyKey: Uint8Array, roots: CopyRoot[], staging: string, synced = 0): Promise<{ version: number; pictures: boolean; files: Record<string, Omit<SyncedFile, "mtimeMs">> } | null> {
     const keys = copyKeys(copyKey);
     const current = await this.storage.manifest();
     if (!current) return null;
@@ -465,6 +472,9 @@ export class CloudCopy {
     }
     if (manifest?.v !== 1 || !Array.isArray(manifest.files)) throw new CopyError("damaged", "the copy's list is off");
     if (manifest.version !== undefined && manifest.version !== version) throw new CopyError("damaged", "the copy's list belongs to another version");
+    if (manifest.base !== undefined && (!Number.isSafeInteger(manifest.base) || manifest.base < 0 || manifest.base >= version)) throw new CopyError("damaged", "the copy's list belongs to another version");
+    // Saved on top of an older version than this PC has: an old copy served as a new one. Not "damaged", which can mean a new key.
+    if (manifest.base !== undefined && manifest.base < synced) throw new CopyError("failed", "the copy is older than the one this PC has");
     const files = manifest.files.filter(
       (file) =>
         safeCopyPath(file?.path, roots) &&
