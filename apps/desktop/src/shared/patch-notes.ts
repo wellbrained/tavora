@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.14",
+    date: "2026-11-10",
+    title: "Right storage cleared",
+    notes: [
+      "When a module fills too much space, Tavora now clears its storage in the workspace where it grew, not in another one.",
+    ],
+    prs: [
+      { number: 730, title: "Modules: clear the storage of the workspace that is over the limit" },
+    ],
+    tags: ["privacy", "website"],
+  },
+  {
     version: "0.24.13",
     date: "2026-11-10",
     title: "Adding a PC, checked on both",
