@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.20",
+    date: "2026-11-10",
+    title: "Tighter module pages",
+    notes: [
+      "Module pages can't open frames or start workers from text any more, so they can't run code they didn't ship.",
+    ],
+    prs: [
+      { number: 733, title: "Module pages: a policy on every answer, no frames, no blob: workers" },
+    ],
+    tags: ["modules", "privacy", "website"],
+  },
+  {
     version: "0.24.19",
     date: "2026-11-10",
     title: "Limits that hold",
