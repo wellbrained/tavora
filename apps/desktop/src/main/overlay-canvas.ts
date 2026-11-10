@@ -11,7 +11,7 @@ import { BrowserWindow, WebContentsView } from "electron";
 import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
 import { GAME_OVERLAY_FRAME_URL, GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
-import { lockedSession } from "./game-overlay-window";
+import { lockContents, lockedSession } from "./game-overlay-window";
 import type { LayoutFrame, LayoutWindow } from "./overlay-layout";
 import type { Rect } from "./game-overlays";
 import type { LayoutStills, LayoutView } from "../shared/layout-view";
@@ -234,8 +234,7 @@ export class OverlayCanvas implements LayoutWindow {
     );
     const contents = entry.view.webContents;
     entry.view.setBackgroundColor("#00000000");
-    contents.setWindowOpenHandler(() => ({ action: "deny" }));
-    contents.on("will-navigate", (event) => event.preventDefault());
+    lockContents(contents);
     contents.on("did-finish-load", () => {
       if (contents.getZoomFactor() !== entry.zoom) contents.setZoomFactor(entry.zoom);
       entry.css = undefined;

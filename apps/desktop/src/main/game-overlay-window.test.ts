@@ -16,6 +16,7 @@ vi.mock("electron", () => {
   };
   const contents = () => ({
     setWindowOpenHandler: () => undefined,
+    setWebRTCIPHandlingPolicy: () => undefined,
     on: () => undefined,
     once: () => undefined,
     loadURL: async () => undefined,

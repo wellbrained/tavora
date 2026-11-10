@@ -51,9 +51,11 @@ app.setPath("userData", userData);
 const grayscaleText = readGrayscaleText(app.getPath("userData"));
 if (grayscaleText) app.commandLine.appendSwitch("disable-lcd-text");
 
-// Last line of defence for any webContents the host did not configure itself.
+// Last line of defence for any webContents the host did not configure itself. WebRTC goes only through a proxy, so
+// no UDP leaves a page the host forgot to lock (G4); the Browser panel sets its own policy after this.
 app.on("web-contents-created", (_event, contents) => {
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
+  contents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
   contents.on("will-attach-webview", (event) => event.preventDefault());
 });
 

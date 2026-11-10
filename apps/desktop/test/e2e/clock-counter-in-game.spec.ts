@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { PROTOCOL_VERSION } from "@tavora/sdk/protocol";
+import dgram from "node:dgram";
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -145,6 +146,46 @@ test("the Overlay page lists a Clock & Counter's things under its panel, adds th
     expect((await state(page)).selection).toBe(item.id);
   } finally {
     await app.close();
+  }
+});
+
+test("an overlay page on the Overlay page cannot send anything out over WebRTC (G4)", async () => {
+  const hits: string[] = [];
+  const udp = dgram.createSocket("udp4");
+  udp.on("message", (_message, remote) => hits.push(`udp from ${remote.port}`));
+  await new Promise<void>((resolve) => udp.bind(0, "127.0.0.1", resolve));
+  const { app, page } = await inPersonalWorkspace();
+  try {
+    await click(app, "add-counter");
+    await closeSettings(page);
+    await overlayPage(app, page);
+    await expect.poll(async () => (await state(page)).sources[0]?.children?.length).toBe(1);
+    const header = (await state(page)).sources[0]!;
+    await page.getByTestId(`layout-source-${header.id}:${header.children![0]!.key}`).getByRole("button").first().click();
+    await expect.poll(async () => (await state(page)).items.length).toBe(1);
+    // The overlay's own page is on the canvas now; it tries a STUN request to a listener on this machine.
+    await expect
+      .poll(() => app.evaluate(({ webContents }) => webContents.getAllWebContents().filter((contents) => contents.getURL().startsWith("tavora-overlay://")).length))
+      .toBeGreaterThan(0);
+    const policies = await app.evaluate(async ({ webContents }, stunUrl) => {
+      const pages = webContents.getAllWebContents().filter((contents) => contents.getURL().startsWith("tavora-overlay://"));
+      const probe = `(async () => {
+        const connection = new RTCPeerConnection({ iceServers: [{ urls: ${JSON.stringify(stunUrl)} }] });
+        connection.createDataChannel("x");
+        await connection.setLocalDescription(await connection.createOffer());
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        connection.close();
+        return "done";
+      })()`;
+      await Promise.all(pages.map((contents) => contents.executeJavaScript(probe).catch(() => "refused")));
+      return pages.map((contents) => contents.getWebRTCIPHandlingPolicy());
+    }, `stun:127.0.0.1:${udp.address().port}`);
+    expect(policies.length).toBeGreaterThan(0);
+    for (const policy of policies) expect(policy).toBe("disable_non_proxied_udp");
+    expect(hits).toEqual([]);
+  } finally {
+    await app.close();
+    udp.close();
   }
 });
 
