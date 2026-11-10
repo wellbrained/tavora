@@ -310,7 +310,7 @@ export const de: Record<keyof typeof en, string> = {
   "pairing.waitingFolder": "Warte auf deinen anderen PC. Das kann ein paar Minuten dauern, bis dein Ordner synchronisiert ist.",
   "pairing.code": "Schau, ob {name} diesen Code zeigt. Wenn ja, klick hier auf Codes stimmen und dort auf Hinzufügen.",
   "pairing.confirm": "Codes stimmen",
-  "pairing.confirmed": "Klick jetzt noch auf Hinzufügen: {name} wartet darauf.",
+  "pairing.confirmed": "Klick jetzt auf Hinzufügen, das {name} dir zeigt.",
   "pairing.otherPc": "dein anderer PC",
   "pairing.declined": "Dein anderer PC hat abgelehnt.",
   "pairing.expired": "Das hat zu lange gedauert. Versuch es noch mal.",

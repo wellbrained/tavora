@@ -127,6 +127,26 @@ describe("approving a new PC through the service", () => {
     fresh.pairing.dispose();
   });
 
+  it("lets go of a key it holds when the recovery key is typed in meanwhile", async () => {
+    const cloud = await service();
+    const old = await onPc(cloud.fetch, cloud.token);
+    await old.accountKey.setUp();
+    const fresh = await onPc(cloud.fetch, await cloud.signIn("Laptop"));
+    await fresh.pairing.start();
+    await old.pairing.lookForRequests();
+    await fresh.pairing.lookForAnswer();
+    await old.pairing.lookForRequests();
+    await old.pairing.decide(old.pairing.view().approve!.id, true);
+    await fresh.pairing.lookForAnswer();
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "code" });
+    await fresh.accountKey.enter(old.accountKey.recoveryKey()!);
+    await fresh.pairing.lookForAnswer();
+    // Done asking, so this PC answers other PCs again.
+    expect(fresh.pairing.view().asking).toBeNull();
+    fresh.pairing.dispose();
+    old.pairing.dispose();
+  });
+
   it("waits after Codes match until the other PC's user clicks Add", async () => {
     const cloud = await service();
     const old = await onPc(cloud.fetch, cloud.token);

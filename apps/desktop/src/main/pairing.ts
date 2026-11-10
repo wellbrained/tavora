@@ -205,18 +205,19 @@ export class Pairing {
   async confirm(): Promise<void> {
     const asking = this.asking;
     if (!asking || asking.step !== "code" || !asking.oldKey) throw new UserError("pairing.error.gone");
+    // The recovery key was typed in meanwhile.
+    if (this.accountKey.get()) return this.cancel();
     asking.step = "confirmed";
-    this.changed();
     if (asking.sealed) return this.finish(asking, asking.sealed);
     // Not sent yet: the old PC's user still has to click Add.
+    this.changed();
     await this.lookForAnswer();
   }
 
   private askSoon(): void {
     clearTimeout(this.askTimer);
     const asking = this.asking;
-    // A key that came before the codes were checked waits here; the service hands it over only once.
-    if (!asking || asking.sealed || (asking.step !== "waiting" && asking.step !== "code" && asking.step !== "confirmed")) return;
+    if (!asking || (asking.step !== "waiting" && asking.step !== "code" && asking.step !== "confirmed")) return;
     this.askTimer = setTimeout(() => void this.lookForAnswer(), ASK_EVERY_MS[asking.transport.via]);
     this.askTimer.unref?.();
   }
@@ -237,7 +238,13 @@ export class Pairing {
     if (!asking) return;
     // The recovery key was typed in meanwhile.
     if (this.accountKey.get()) return this.cancel();
-    if (asking.sealed) return;
+    // A key that came before the codes were checked waits here, unread again (the service hands it over only
+    // once), until the press, the recovery key typed in, or the request running out.
+    if (asking.sealed) {
+      if (this.now() < asking.expiresAt) return this.askSoon();
+      await asking.transport.end(asking.id, false).catch(() => undefined);
+      return this.stop(asking, "expired");
+    }
     let request: PairingRequest | null;
     try {
       request = await asking.transport.read();
@@ -266,10 +273,9 @@ export class Pairing {
       if (request.sealed && asking.oldKey) {
         const sealed = unb64(request.sealed);
         if (asking.step === "confirmed") return this.finish(asking, sealed);
-        // Kept unopened until this PC's user says the codes match (confirm), and nothing more is read.
+        // Kept unopened until this PC's user says the codes match (confirm).
         asking.sealed = sealed;
-        clearTimeout(this.askTimer);
-        return;
+        return this.askSoon();
       }
     } catch (error) {
       return this.fail(asking, error);
