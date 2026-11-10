@@ -236,6 +236,11 @@ export function documentsFolder(): string {
   return path.join(documents, "Tavora");
 }
 
+/** Where downloadJson exports land: a Tavora folder in the user's Downloads (tests point it elsewhere, unpackaged only). */
+export function exportsFolder(): string {
+  return !app.isPackaged && process.env.TAVORA_EXPORTS_DIR ? path.resolve(process.env.TAVORA_EXPORTS_DIR) : path.join(app.getPath("downloads"), "Tavora");
+}
+
 /**
  * Every module gets its own session per workspace: separate cookies, web storage,
  * cache and a separate renderer process from the host and other modules.
@@ -262,8 +267,7 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
     if (url.pathname.startsWith(APP_BLOB_PATH)) return serveBlobs(appBlobs, request, url, APP_BLOB_PATH);
     if (url.pathname === CLIPBOARD_PATH) return serveClipboard(request, { ...pressCheck(gestureOf(ses)), write: writeClipboardPicture });
     if (url.pathname === JSON_EXPORT_PATH) {
-      const downloads = !app.isPackaged && process.env.TAVORA_EXPORTS_DIR ? path.resolve(process.env.TAVORA_EXPORTS_DIR) : path.join(app.getPath('downloads'), 'Tavora');
-      return serveJsonExport(request, url, { ...pressCheck(gestureOf(ses)), save: (data, name) => saveJsonExport(downloads, data, name) });
+      return serveJsonExport(request, url, { ...pressCheck(gestureOf(ses)), save: (data, name) => saveJsonExport(exportsFolder(), data, name) });
     }
     if (url.pathname === PICTURES_PATH) {
       const gesture = gestureOf(ses);

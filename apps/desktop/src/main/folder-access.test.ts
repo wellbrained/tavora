@@ -66,6 +66,36 @@ describe("refused folders", () => {
     expect(isRefusedFolder(path.join(root, "Portable", "Tavora", "data", "grants"), portable)).toBe(true);
     expect(isRefusedFolder(path.join(root, "Portable", "Games"), portable)).toBe(false);
   });
+
+  it("refuses Tavora's own save folders, anything in them and the folders holding them", () => {
+    const tavora = path.join(places.roots.Documents, "Tavora");
+    const keys = path.join(root, "Backups", "Keys");
+    const own = { ...places, own: [tavora, path.join(places.home, "Pictures", "Tavora"), keys] };
+    // Documents\Tavora holds exported key files and every module's saved files.
+    expect(isRefusedFolder(tavora, own)).toBe(true);
+    expect(isRefusedFolder(path.join(tavora, "Saves"), own)).toBe(true);
+    expect(isRefusedFolder(path.join(places.home, "Pictures", "Tavora", "module"), own)).toBe(true);
+    // Where the user last kept a key file, and the folder holding it.
+    expect(isRefusedFolder(keys, own)).toBe(true);
+    expect(isRefusedFolder(path.join(root, "Backups"), own)).toBe(true);
+    // A game's folder next to them stays fine.
+    expect(isRefusedFolder(game, own)).toBe(false);
+    expect(isRefusedFolder(path.join(places.roots.Documents, "Tavora Game"), own)).toBe(false);
+    expect(isRefusedFolder(path.join(root, "Games"), own)).toBe(false);
+  });
+
+  it("finds no folder for a manifest path into Documents\\Tavora, and refuses it when picked", async () => {
+    const tavora = path.join(places.roots.Documents, "Tavora");
+    await mkdir(tavora, { recursive: true });
+    await writeFile(path.join(tavora, "publisher-key-1234abcd.pem"), "-----BEGIN PRIVATE KEY-----");
+    const own = { ...places, own: [tavora] };
+    const keys: FolderAccess = { path: "Documents/Tavora", read: ["pem"] };
+    const chosen = new ChosenFolders(places.userData, "local", "local.game");
+    expect(await findFolder(keys, chosen, own)).toBeNull();
+    // Shown by the user for another manifest path: refused all the same.
+    await chosen.set(replays.path, tavora);
+    expect(await findFolder(replays, chosen, own)).toBeNull();
+  });
 });
 
 describe("listing", () => {

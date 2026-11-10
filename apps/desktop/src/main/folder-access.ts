@@ -44,6 +44,12 @@ export interface FolderPlaces {
    * itself or one holding it is not, so a pick can't take in more than a manifest could name.
    */
   known?: string[];
+  /**
+   * Tavora's own folders on this PC, where it saves things for the user and for every module: Documents\Tavora (key
+   * files, module zips, every module's saved files), Pictures\Tavora, Downloads\Tavora, the module files folder and
+   * the folder a key file was last saved to or opened from. Nothing inside them or holding them may be read.
+   */
+  own?: string[];
 }
 
 const win = process.platform === "win32";
@@ -78,9 +84,9 @@ function forms(place: string): string[] {
 /**
  * A folder no module may read, whatever the user picks: a network or device path, a drive, the user's own folder or
  * one holding it, another user's folder, a dot-folder of the user's (.ssh, .aws...), anything in AppData, ProgramData
- * or Windows, Tavora's data folder (anything in it or holding it), and the known folders themselves (Documents, Saved
- * Games, Desktop, Downloads...) or one holding them. A folder inside a known folder, such as Documents\My Game, is fine.
- * Every place counts as given and with its links resolved.
+ * or Windows, Tavora's data folder and its own folders such as Documents\Tavora (anything in them or holding them),
+ * and the known folders themselves (Documents, Saved Games, Desktop, Downloads...) or one holding them. A folder inside
+ * a known folder, such as Documents\My Game, is fine. Every place counts as given and with its links resolved.
  */
 export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pick<FolderPlaces, "home" | "userData">): boolean {
   const resolved = path.resolve(folder);
@@ -100,7 +106,7 @@ export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pi
     if (within(resolved, path.join(home, "AppData"))) return true;
   }
   for (const closed of (full.closed ?? []).flatMap(forms)) if (within(resolved, closed)) return true;
-  for (const data of forms(full.userData)) if (within(resolved, data) || within(data, resolved)) return true;
+  for (const data of [full.userData, ...(full.own ?? [])].flatMap(forms)) if (within(resolved, data) || within(data, resolved)) return true;
   const known = [...(full.known ?? []), ...Object.values(full.roots ?? {})].flatMap(forms);
   return known.some((place) => within(place, resolved));
 }
