@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BridgeSession, type BridgeContext } from "./bridge";
+import { BridgeSession, MAX_IN_FLIGHT_BYTES, newBridgeBudget, type BridgeContext } from "./bridge";
 import { HostError } from "./errors";
 import { THEME } from "./games";
 import { DataRegistry } from "./storage";
@@ -609,6 +609,70 @@ describe("network.fetch", () => {
     expect(response(first)).toMatchObject({ ok: true });
     // The slots are free again.
     expect(await call(p, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: true });
+  });
+});
+
+describe("asking for a new port", () => {
+  const ANSWER = { status: 200, url: "https://api.example.com/", headers: {}, body: "ok" };
+  const response = (p: FakePort, id: number) => p.sent.find((m) => (m as { id?: number }).id === id) as Record<string, any> | undefined;
+
+  it("resets no limit: the new port starts with the network requests the old one still runs", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const budget = newBridgeBudget();
+    const ctx = { ...makeContext(), budget, capabilities: () => new Set(["network"] as const), fetch: async () => (await gate, ANSWER) };
+    const old = new FakePort();
+    const oldSession = new BridgeSession(old, ctx);
+    expect(await call(old, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" })).toMatchObject({ ok: true });
+    for (let i = 0; i < LIMITS.maxNetworkInFlight; i++) old.receive({ v: 1, id: nextId++, method: "network.fetch", params: { url: "https://api.example.com/" } });
+    await flush();
+    // The page posts tavora:hello again and gets a new port; the old one closes, its requests still running.
+    oldSession.close();
+    const next = await connected(ctx);
+    const refused = nextId;
+    next.receive({ v: 1, id: nextId++, method: "network.fetch", params: { url: "https://api.example.com/" } });
+    await flush();
+    expect(response(next, refused)).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
+    release();
+    await flush();
+    expect(budget.networkInFlight).toBe(0);
+    expect(await call(next, "network.fetch", { url: "https://api.example.com/" })).toMatchObject({ ok: true });
+  });
+
+  it("resets no limit: the requests and bytes the old port still holds count for the new one", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const budget = newBridgeBudget();
+    const ctx = { ...makeContext(), budget, capabilities: () => new Set(["network"] as const), fetch: async () => (await gate, ANSWER) };
+    const old = new FakePort();
+    const oldSession = new BridgeSession(old, ctx);
+    expect(await call(old, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" })).toMatchObject({ ok: true });
+    // Two requests just under the message limit fill what the panel may have in the main process.
+    const big = "x".repeat(LIMITS.maxMessageBytes - 1024);
+    for (let i = 0; i < 2; i++) old.receive({ v: 1, id: nextId++, method: "network.fetch", params: { url: "https://api.example.com/", body: big } });
+    await flush();
+    expect(budget.bytes).toBeGreaterThan(MAX_IN_FLIGHT_BYTES - 4096);
+    oldSession.close();
+    const next = await connected({ ...ctx, budget });
+    const refused = nextId;
+    next.receive({ v: 1, id: nextId++, method: "network.fetch", params: { url: "https://api.example.com/", body: "x".repeat(8192) } });
+    await flush();
+    expect(response(next, refused)).toMatchObject({ ok: false, error: { code: "BAD_REQUEST", message: "too many concurrent requests" } });
+    release();
+    await flush();
+    expect(budget).toEqual({ inFlight: 0, networkInFlight: 0, bytes: 0 });
+  });
+
+  it("starts nothing that arrives on a port that closed", async () => {
+    const asked: unknown[] = [];
+    const p = new FakePort();
+    const session = new BridgeSession(p, { ...makeContext(), capabilities: () => new Set(["network"] as const), fetch: async (params) => (asked.push(params), ANSWER) });
+    expect(await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" })).toMatchObject({ ok: true });
+    session.close();
+    p.receive({ v: 1, id: nextId++, method: "network.fetch", params: { url: "https://api.example.com/" } });
+    await flush();
+    expect(asked).toEqual([]);
+    expect(session.budget.inFlight).toBe(0);
   });
 });
 

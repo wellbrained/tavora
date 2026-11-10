@@ -191,6 +191,18 @@ describe("moduleFetch", () => {
     expect(error.message).toContain("did not answer");
   });
 
+  it("ends the request at once when the page that asked goes away", async () => {
+    const gone = new AbortController();
+    const started = Date.now();
+    const request = failure(moduleFetch({ url: at("/slow") }, policy(undefined, { signal: gone.signal })));
+    setTimeout(() => gone.abort(), 50);
+    const error = await request;
+    expect(error).toMatchObject({ code: "NETWORK_ERROR", message: "the page that asked went away" });
+    expect(Date.now() - started).toBeLessThan(2000);
+    // Already gone: nothing is sent.
+    expect(await failure(moduleFetch({ url: at("/slow") }, policy(undefined, { signal: gone.signal })))).toMatchObject({ message: "the page that asked went away" });
+  });
+
   it("reports a host that cannot be reached as NETWORK_ERROR", async () => {
     const closed = http.createServer();
     await new Promise<void>((resolve) => closed.listen(0, "127.0.0.1", resolve));

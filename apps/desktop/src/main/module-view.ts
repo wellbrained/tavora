@@ -12,7 +12,7 @@ import { gestureCounts, type Opacity } from "./game-overlays";
 import { moduleThemeCss } from "./module-style";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset } from "./assets";
 import { APP_BLOB_PATH, BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH, FILE_SAVE_PATH, FILE_OPEN_PATH } from "@tavora/sdk/protocol";
-import { BridgeSession, type BridgeContext, type PanelDialogSize } from "./bridge";
+import { BridgeSession, newBridgeBudget, type BridgeContext, type PanelDialogSize } from "./bridge";
 import { moduleReadPage } from "./page-import";
 import type { CheckedMenu } from "./module-menu";
 import type {TooltipRequest,TooltipAnchor,FileKind} from "@tavora/sdk/protocol";
@@ -350,6 +350,11 @@ const PANEL_RADIUS = 10;
 export class ModuleView {
   readonly view: WebContentsView;
   private bridge: BridgeSession | undefined;
+  /**
+   * What this panel's calls hold, across every port its pages asked for: a page that asks for a new port (or loads
+   * again) starts with what its old ports still run, so asking again resets no limit.
+   */
+  private readonly bridgeBudget = newBridgeBudget();
   private viewport: TavoraViewport = { width: 0, height: 0 };
   private suspended = false;
   /** Tavora's window is behind another program (the game), as the host last said. The panel is behind only while it is not over the game itself. */
@@ -667,6 +672,7 @@ export class ModuleView {
       port1,
       {
         hostVersion,
+        budget: this.bridgeBudget,
         moduleId: module.manifest.id,
         moduleVersion: module.manifest.version,
         instanceId,
@@ -736,6 +742,8 @@ export class ModuleView {
             allowedHosts: this.options.networkHosts,
             userAgent: `Tavora/${hostVersion} (module ${module.manifest.id})`,
             ...(this.options.testHosts ? { testHosts: this.options.testHosts } : {}),
+            // A port that closes (a new one asked for, a reload, the panel closed) ends its requests.
+            signal: pageImports.signal,
           }),
         getViewport: () => ({ ...this.viewport }),
         isSuspended: () => this.suspended,
