@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.11",
+    date: "2026-11-10",
+    title: "Questions wait for you",
+    notes: [
+      "Allowing a module access no longer answers its next question for you before you see it.",
+    ],
+    prs: [
+      { number: 722, title: "App: the consent dialog answers only the question it showed" },
+    ],
+    tags: ["privacy"],
+  },
+  {
     version: "0.24.10",
     date: "2026-11-09",
     title: "Small fixes",
