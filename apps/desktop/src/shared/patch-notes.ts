@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.13",
+    date: "2026-11-10",
+    title: "Adding a PC, checked on both",
+    notes: [
+      "A new PC now asks you to confirm that both PCs show the same code before it takes the key. Click Codes match on it, and Add on your other PC.",
+    ],
+    prs: [
+      { number: 725, title: "Pairing: a new PC keeps a key only after you confirm the codes match there" },
+    ],
+    tags: ["cloud-copy", "privacy", "settings", "website"],
+  },
+  {
     version: "0.24.12",
     date: "2026-11-10",
     title: "Safer overlays",
