@@ -192,6 +192,7 @@ import { thisDeviceName } from "./device-name";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { discordLogin } from "./discord-login";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
+import { viewsInSession } from "./storage-purge";
 import {
   DEFAULT_THEME,
   discoverThemes,
@@ -3849,7 +3850,11 @@ export class Host {
       getLanguage: () => this.language,
       baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
       ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
-      onStorageOver: () => void this.purgeModuleStorage(module.manifest.id, workspace.id),
+      onStorageOver: () => {
+        // A page closed while it was measured needs no clearing.
+        const contents = view.view.webContents;
+        if (!contents.isDestroyed()) void this.purgeModuleStorage(module.manifest.id, workspace.id, contents.session);
+      },
       onReveal: () => {
         this.panels.applyBounds();
         this.pushStateSoon();
@@ -4234,13 +4239,13 @@ export class Host {
    * A module's browser storage grew past the limit (storage-guard.ts): stop its
    * panels, clear the storage and start the panels again, and say so.
    */
-  private async purgeModuleStorage(moduleId: string, workspaceId: string): Promise<void> {
+  private async purgeModuleStorage(moduleId: string, workspaceId: string, ses: Electron.Session): Promise<void> {
     const key = `${moduleId}@${workspaceId}`;
     if (this.purging.has(key)) return;
     this.purging.add(key);
     try {
-      const views = this.moduleViews().filter((view) => view.moduleId === moduleId);
-      const ses = views[0]?.view.webContents.session;
+      // Only the panels of the session that is over: one of the module kept or lent from another workspace has its own.
+      const views = viewsInSession(this.moduleViews(), moduleId, ses);
       // The renderers must be gone first: one still writing would fill the storage
       // again, and a crash reported after the reload would leave the panel crashed.
       await Promise.all(views.map((view) => view.stop()));
@@ -4249,7 +4254,7 @@ export class Host {
       const name = installed ? this.shown(installed.manifest).name : moduleId;
       this.notice = translate(this.language, "modules.storageCleared", { name });
       this.pushState();
-      await ses?.clearStorageData();
+      await ses.clearStorageData();
       for (const view of views) view.reload();
     } catch (error) {
       console.error("[tavora] clearing a module's storage failed", error);
