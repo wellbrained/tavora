@@ -171,9 +171,10 @@ export class Streaming {
 
   /** hotkeys.* for a panel of `module` in `workspaceId`; the module view checked the action and the click. */
   hotkeysFor(module: StreamingModule, workspaceId: string) {
-    const own = (record: HotkeyRecord) => record.owner === module.owner && record.moduleId === module.manifest.id && record.workspaceId === workspaceId;
+    // The user's own keys for the module's overlays ($overlay, $layer) are Tavora's: the module neither sees nor removes them.
+    const own = (record: HotkeyRecord) => record.owner === module.owner && record.moduleId === module.manifest.id && record.workspaceId === workspaceId && !isOverlayAction(record.action);
     return {
-      list: (): HotkeyBinding[] => this.hotkeys.of(module.owner, module.manifest.id, workspaceId).map(({ action, target }) => ({ action, target })),
+      list: (): HotkeyBinding[] => this.hotkeys.of(module.owner, module.manifest.id, workspaceId).filter((record) => !isOverlayAction(record.action)).map(({ action, target }) => ({ action, target })),
       set: (action: string, target: string, label: string) => this.ask({ owner: module.owner, moduleId: module.manifest.id, workspaceId, action, target }, label),
       remove: (target: string, action: string | null) => {
         if (this.hotkeys.remove((record) => own(record) && record.target === target && (action === null || record.action === action))) this.changed();

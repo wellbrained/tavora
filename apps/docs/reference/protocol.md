@@ -679,7 +679,7 @@ They go through module addresses rather than bridge calls so a document up to 8 
 
 ## JSON exports (Tavora 0.19.17+)
 
-`files.exportJson(value, name?)` (deprecated: use `files.saveJson`, which asks the user where to save) in SDK 0.2.10 POSTs JSON to `/_exports/json/?name=...` in the module origin. Maximum 8 MiB before and after host formatting (1 MiB in Tavora 0.20.7 and older). A trusted click/key press is consumed once, shared with picture operations. Saves a new sanitized `.json` in Downloads/Tavora; no arbitrary paths or overwrite. Returns `{ fileName }`. No extra permission grant.
+`files.exportJson(value, name?)` (deprecated: use `files.saveJson`, which asks the user where to save) in SDK 0.2.10 POSTs JSON to `/_exports/json/?name=...` in the module origin. Maximum 8 MiB before and after host formatting (1 MiB in Tavora 0.20.7 and older). A trusted click/key press is consumed once, shared with picture operations. Saves a new sanitized `.json` in Downloads/Tavora; no arbitrary paths or overwrite. At most 30 exports and 64 MiB per module an hour; past that it fails with `QUOTA_EXCEEDED`. Returns `{ fileName }`. No extra permission grant.
 
 
 ### Remembered read-only files

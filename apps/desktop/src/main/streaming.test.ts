@@ -268,6 +268,21 @@ describe("keys of game overlays", () => {
     expect(streaming.keyOf(toggle)).toEqual({ accelerator: "F8", taken: false });
   });
 
+  it("keeps the user's overlay keys out of the module's hotkeys.list and hotkeys.remove", async () => {
+    const { streaming, hotkeys } = await withKeys();
+    const mine = { ...toggle, workspaceId: "poe2" };
+    const asked = streaming.askOverlayKey(mine, "Clock & Counter", words);
+    streaming.answer(streaming.request()!.id, "set", "F8");
+    await asked;
+    const own = hotkeys.set("reset", "item-1", "Reset");
+    streaming.answer(streaming.request()!.id, "set", "F7");
+    await own;
+    expect(hotkeys.list()).toEqual([{ action: "reset", target: "item-1" }]);
+    hotkeys.remove("item-1", null);
+    expect(hotkeys.list()).toEqual([]);
+    expect(streaming.keyOf(mine)).toEqual({ accelerator: "F8", taken: false });
+  });
+
   it("stays open when the workspace shown changes, unlike a module's own dialog", async () => {
     const { streaming, world } = await withKeys();
     void streaming.askOverlayKey(layer, "Tavora over game", words);

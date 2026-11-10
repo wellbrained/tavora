@@ -6,6 +6,7 @@
 // which checks every message before the main process sees it.
 import { ipcRenderer } from "electron";
 import { HELLO_MESSAGE, PORT_MESSAGE, PROTOCOL_VERSION } from "@tavora/sdk/protocol";
+import { countsAsPress } from "./press";
 import { relayBridge } from "./relay";
 
 window.addEventListener("message", (event) => {
@@ -28,7 +29,7 @@ for (const type of ["pointerdown", "keydown"]) {
   window.addEventListener(
     type,
     (event) => {
-      if (!event.isTrusted) return;
+      if (!countsAsPress(event)) return;
       ipcRenderer.send("tavora:gesture");
     },
     true,

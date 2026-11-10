@@ -7,11 +7,25 @@ import { createPageProxy } from "./page-proxy";
 
 const active = new Set<string>();
 const TYPES = new Set(["mainFrame", "script", "stylesheet", "xhr"]);
+const MAX_TITLE = 500;
+const MAX_URL = 8192;
+// Runs in a world of its own, so the page's scripts can't redefine what it reads (document.title, outerHTML).
 const CAPTURE = `(() => {
   const html = document.documentElement.outerHTML;
   if (html.length > ${5 * 1024 * 1024}) throw Error('Page exceeds 5 MB');
-  return {url: location.href, title: document.title.slice(0, 500), html};
+  return {url: location.href, title: document.title.slice(0, ${MAX_TITLE}), html};
 })()`;
+/** A world id of its own: 0 is the page's, 999 Electron's preload world. */
+const CAPTURE_WORLD = 1077;
+
+/** The capture as the main process passes it on: three strings of bounded size, nothing else. */
+export function checkCapture(value: unknown): Omit<PageResponse, "status"> {
+  const page = value as { url?: unknown; title?: unknown; html?: unknown } | null;
+  if (!page || typeof page !== "object" || typeof page.url !== "string" || typeof page.title !== "string" || typeof page.html !== "string") throw Error("Unexpected page capture");
+  if (page.url.length > MAX_URL || page.title.length > MAX_TITLE) throw Error("Unexpected page capture");
+  if (Buffer.byteLength(page.html, "utf8") > LIMITS.maxNetworkResponseBytes) throw new HostError("QUOTA_EXCEEDED", "The page is larger than 5 MB");
+  return { url: page.url, title: page.title, html: page.html };
+}
 
 /** Fixed read-only page capture. No module JavaScript, user browser state or bridge enters this session. */
 export async function moduleReadPage(params: unknown, policy: FetchPolicy, owner: string, cancelled: AbortSignal): Promise<PageResponse> {
@@ -60,9 +74,8 @@ export async function moduleReadPage(params: unknown, policy: FetchPolicy, owner
     let status = 0;
     win.webContents.on("did-navigate", (_event, _url, code) => { status = code; });
     await win.loadURL(url.href);
-    const page = await win.webContents.executeJavaScript(CAPTURE) as Omit<PageResponse, "status">;
+    const page = checkCapture(await win.webContents.executeJavaScriptInIsolatedWorld(CAPTURE_WORLD, [{ code: CAPTURE }]));
     checkTarget(page.url, policy);
-    if (Buffer.byteLength(page.html, "utf8") > LIMITS.maxNetworkResponseBytes) throw new HostError("QUOTA_EXCEEDED", "The page is larger than 5 MB");
     if (status < 200 || status >= 300 || /^(just a moment|access denied|verify you are human|sign in|log in)/i.test(page.title.trim())) throw new HostError("NETWORK_ERROR", "This page needs sign-in or browser verification. Attach a build file instead.");
     return { ...page, status };
   } catch (error) {

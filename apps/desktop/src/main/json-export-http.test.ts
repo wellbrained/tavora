@@ -6,6 +6,7 @@ import {
   serveJsonExport,
   saveJsonExport,
   MAX_JSON_EXPORT_BYTES,
+  ExportQuota,
   type JsonExportDeps,
 } from "./json-export-http";
 const url = new URL(
@@ -82,5 +83,22 @@ describe("bounded JSON export", () => {
       "../../CON.exe",
     );
     expect(name).not.toMatch(/[\\/]/);
+  });
+  it("limits how much one module exports in a while, and gives back a failed write", async () => {
+    let now = 0;
+    const quota = new ExportQuota({ files: 2, bytes: 1024, windowMs: 1000 }, () => now);
+    const other = new URL("tavora-module://local.other/_exports/json/?name=Build");
+    const press = () => deps().value;
+    const failing = { ...press(), save: async () => { throw new Error("disk full"); } };
+    expect((await serveJsonExport(post("{}"), url, failing, quota)).status).toBe(500);
+    expect((await serveJsonExport(post("{}"), url, press(), quota)).status).toBe(200);
+    expect((await serveJsonExport(post("{}"), url, press(), quota)).status).toBe(200);
+    const refused = await serveJsonExport(post("{}"), url, press(), quota);
+    expect(refused.status).toBe(413);
+    expect((await refused.json()).error.code).toBe("QUOTA_EXCEEDED");
+    expect((await serveJsonExport(new Request(other, { method: "POST", body: "{}" }), other, press(), quota)).status).toBe(200);
+    now = 1001;
+    expect((await serveJsonExport(post("{}"), url, press(), quota)).status).toBe(200);
+    expect((await serveJsonExport(post(JSON.stringify("x".repeat(1100))), url, press(), quota)).status).toBe(413);
   });
 });
