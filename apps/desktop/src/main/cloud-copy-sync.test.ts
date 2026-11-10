@@ -362,6 +362,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     await fromA.lookForRequests();
     await fromA.decide(fromA.view().approve!.id, true);
     await toB.lookForAnswer();
+    await toB.confirm();
     // B has the key and takes up the copy: it has data of its own, so the user keeps one side.
     expect(atB.sync.view()).toMatchObject({ on: true, askKey: false, conflict: true, folder: onedrive });
     fromA.dispose();

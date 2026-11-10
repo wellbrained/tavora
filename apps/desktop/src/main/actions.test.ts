@@ -94,6 +94,7 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "cloud-copy-close-anyway" }],
   [{ type: "pairing-start" }],
   [{ type: "pairing-cancel" }],
+  [{ type: "pairing-confirm" }],
   [{ type: "pairing-decide", id: "0123456789abcdef", allow: true }],
   [{ type: "add-development-folder" }],
   [{ type: "remove-development-folder", folder: "D:\Code\my-tracker" }],

@@ -2845,6 +2845,7 @@ export class Host {
       "developer-copy-create-command": () => clipboard.writeText(CREATE_MODULE_COMMAND),
       "pairing-start": () => this.pairing.start(),
       "pairing-cancel": () => this.pairing.cancel(),
+      "pairing-confirm": () => this.pairing.confirm(),
       "pairing-decide": (action) => this.pairing.decide(action.id, action.allow),
 
       // Cloud copy

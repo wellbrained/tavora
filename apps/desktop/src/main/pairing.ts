@@ -17,6 +17,10 @@ import { UserError } from "./messages";
 // (apps/api/src/pairing.ts); signed out with the cloud copy in a folder of the user's own, through files
 // in that folder's pairing/ folder, which a sync app may take minutes to carry. Either way, what passes
 // on the way opens nothing, and the matching codes show that nobody swapped a one-time key.
+//
+// Both users check the codes: the old PC sends nothing before Add, and the new PC keeps nothing before its
+// own user says the codes match. Without that second check, whoever carries the messages (the service, or
+// anyone who can write the folder) could answer as an "old PC" and plant a key of their own on the new PC.
 
 /** How long a request through the folder lasts: a sync app can be slow. */
 export const FOLDER_PAIRING_MS = 24 * 60 * 60_000;
@@ -84,6 +88,8 @@ interface Asking {
   oldKey: Buffer | null;
   code: string | null;
   from: string | null;
+  /** The sealed key, when it came before this PC's user said the codes match; opened only after that. */
+  sealed: Buffer | null;
 }
 
 interface Answering {
@@ -107,6 +113,7 @@ export class Pairing {
   private watchTimer: ReturnType<typeof setInterval> | undefined;
   private followTimer: ReturnType<typeof setTimeout> | undefined;
   private looking = false;
+  private askLooking = false;
 
   private readonly servicePairing: ServicePairing;
   /** One per folder, so it remembers what it asked and answered. */
@@ -176,7 +183,7 @@ export class Pairing {
     } catch (error) {
       throw toUserError(error);
     }
-    this.asking = { transport, id: asked.id, key, expiresAt: asked.expiresAt, step: "waiting", oldKey: null, code: null, from: null };
+    this.asking = { transport, id: asked.id, key, expiresAt: asked.expiresAt, step: "waiting", oldKey: null, code: null, from: null, sealed: null };
     this.changed();
     this.askSoon();
   }
@@ -188,23 +195,56 @@ export class Pairing {
     this.asking = null;
     clearTimeout(this.askTimer);
     this.changed();
-    if (asking.step === "waiting" || asking.step === "code") await asking.transport.end(asking.id, false).catch(() => undefined);
+    if (asking.step === "waiting" || asking.step === "code" || asking.step === "confirmed") await asking.transport.end(asking.id, false).catch(() => undefined);
+  }
+
+  /**
+   * This PC's user says the other PC shows the same code. Only then is a key from it used: the code covers
+   * both one-time keys, so a key sealed by anyone else can't be opened with the one that was checked.
+   */
+  async confirm(): Promise<void> {
+    const asking = this.asking;
+    if (!asking || asking.step !== "code" || !asking.oldKey) throw new UserError("pairing.error.gone");
+    // The recovery key was typed in meanwhile.
+    if (this.accountKey.get()) return this.cancel();
+    asking.step = "confirmed";
+    if (asking.sealed) return this.finish(asking, asking.sealed);
+    // Not sent yet: the old PC's user still has to click Add.
+    this.changed();
+    await this.lookForAnswer();
   }
 
   private askSoon(): void {
     clearTimeout(this.askTimer);
     const asking = this.asking;
-    if (!asking || (asking.step !== "waiting" && asking.step !== "code")) return;
+    if (!asking || (asking.step !== "waiting" && asking.step !== "code" && asking.step !== "confirmed")) return;
     this.askTimer = setTimeout(() => void this.lookForAnswer(), ASK_EVERY_MS[asking.transport.via]);
     this.askTimer.unref?.();
   }
 
-  /** One look at the request this PC asked. Public for tests. */
+  /** One look at the request this PC asked; none while one is under way (the service hands the key over only once). Public for tests. */
   async lookForAnswer(): Promise<void> {
+    if (this.askLooking) return;
+    this.askLooking = true;
+    try {
+      await this.lookOnce();
+    } finally {
+      this.askLooking = false;
+    }
+  }
+
+  private async lookOnce(): Promise<void> {
     const asking = this.asking;
     if (!asking) return;
     // The recovery key was typed in meanwhile.
     if (this.accountKey.get()) return this.cancel();
+    // A key that came before the codes were checked waits here, unread again (the service hands it over only
+    // once), until the press, the recovery key typed in, or the request running out.
+    if (asking.sealed) {
+      if (this.now() < asking.expiresAt) return this.askSoon();
+      await asking.transport.end(asking.id, false).catch(() => undefined);
+      return this.stop(asking, "expired");
+    }
     let request: PairingRequest | null;
     try {
       request = await asking.transport.read();
@@ -231,20 +271,36 @@ export class Pairing {
         this.changed();
       }
       if (request.sealed && asking.oldKey) {
-        const root = openFromPc(asking.key, asking.oldKey, unb64(request.sealed));
-        await asking.transport.end(asking.id, false).catch(() => undefined);
-        await this.received(root, asking.transport.via);
-        if (this.asking === asking) this.asking = null;
-        clearTimeout(this.askTimer);
-        this.changed();
-        return;
+        const sealed = unb64(request.sealed);
+        if (asking.step === "confirmed") return this.finish(asking, sealed);
+        // Kept unopened until this PC's user says the codes match (confirm).
+        asking.sealed = sealed;
+        return this.askSoon();
       }
     } catch (error) {
-      this.options.log?.(`pairing: ${error instanceof Error ? error.message : String(error)}`);
-      await asking.transport.end(asking.id, false).catch(() => undefined);
-      return this.stop(asking, "failed");
+      return this.fail(asking, error);
     }
     this.askSoon();
+  }
+
+  /** The codes match and the key came: it is opened with the checked one-time key, then kept. */
+  private async finish(asking: Asking, sealed: Buffer): Promise<void> {
+    clearTimeout(this.askTimer);
+    try {
+      const root = openFromPc(asking.key, asking.oldKey!, sealed);
+      await asking.transport.end(asking.id, false).catch(() => undefined);
+      await this.received(root, asking.transport.via);
+    } catch (error) {
+      return this.fail(asking, error);
+    }
+    if (this.asking === asking) this.asking = null;
+    this.changed();
+  }
+
+  private async fail(asking: Asking, error: unknown): Promise<void> {
+    this.options.log?.(`pairing: ${error instanceof Error ? error.message : String(error)}`);
+    await asking.transport.end(asking.id, false).catch(() => undefined);
+    return this.stop(asking, "failed");
   }
 
   private stop(asking: Asking, step: "expired" | "gone" | "declined" | "failed"): void {

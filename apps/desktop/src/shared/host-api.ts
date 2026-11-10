@@ -457,8 +457,11 @@ export interface PairingView {
   asking: {
     /** Through Tavora's service (signed in), or the cloud copy's folder (signed out), which can take minutes. */
     via: "service" | "folder";
-    /** "code": another PC answered; both show `code`. The rest end it: the user starts again or types the key in. */
-    step: "waiting" | "code" | "declined" | "expired" | "failed";
+    /**
+     * "code": another PC answered; both show `code`, and this PC's user says whether they match. "confirmed": they
+     * do, and the other PC's Add is still to come. The rest end it: the user starts again or types the key in.
+     */
+    step: "waiting" | "code" | "confirmed" | "declined" | "expired" | "failed";
     code: string | null;
     /** The name of the PC that answered. */
     from: string | null;

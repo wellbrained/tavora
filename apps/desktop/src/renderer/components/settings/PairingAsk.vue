@@ -31,6 +31,13 @@ async function run(action: HostAction) {
     <template v-else-if="asking.step === 'code'">
       <p class="text-sm" role="status">{{ t("pairing.code", { name: asking.from ?? t("pairing.otherPc") }) }}</p>
       <code class="bg-muted rounded px-3 py-2 font-mono text-2xl tracking-widest" data-testid="pairing-code">{{ asking.code }}</code>
+      <div class="flex gap-2">
+        <Button type="button" size="sm" :disabled="busy" data-testid="pairing-confirm" @click="run({ type: 'pairing-confirm' })">{{ t("pairing.confirm") }}</Button>
+        <Button type="button" variant="ghost" size="sm" :disabled="busy" @click="run({ type: 'pairing-cancel' })">{{ t("common.cancel") }}</Button>
+      </div>
+    </template>
+    <template v-else-if="asking.step === 'confirmed'">
+      <p class="text-sm" role="status" data-testid="pairing-confirmed">{{ t("pairing.confirmed", { name: asking.from ?? t("pairing.otherPc") }) }}</p>
       <Button type="button" variant="ghost" size="sm" :disabled="busy" @click="run({ type: 'pairing-cancel' })">{{ t("common.cancel") }}</Button>
     </template>
     <template v-else>
