@@ -1,4 +1,4 @@
 # Cloud copy stays current
 
-- Your PC no longer takes an older cloud copy that's handed out as a newer one.
+- Tavora now asks before it takes a cloud copy older than the one on your PC.
 - If the cloud copy was deleted and made again while this PC was off, you choose which side to keep.
