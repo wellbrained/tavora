@@ -130,7 +130,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(await read(a.userData, "workspace.json")).toBe('{"b":true}');
   });
 
-  it("doesn't take an older copy the service hands out as a newer version", async () => {
+  it("doesn't take an older copy the service hands out as a newer version without asking", async () => {
     const cloud = await service();
     const a = await pc({ "library.json": "a1" });
     const { key, sync: atA } = await startCopy(cloud, a);
@@ -161,9 +161,40 @@ describe("the cloud copy, as Tavora runs it", () => {
     const atB = tavora({ ...cloud, fetch: replay }, b);
     await atB.sync.beforeLoad();
     expect(await read(b.userData, "workspace.json")).toBe("w2");
-    expect(atB.sync.view()).toMatchObject({ problem: "failed", restartToTake: false });
-    await expect(atB.sync.restore()).rejects.toMatchObject({ key: "cloudCopy.error.failed" });
+    expect(atB.sync.view()).toMatchObject({ conflict: true, restartToTake: false });
     expect(atB.events.restarts).toBe(0);
+    // Keeping this PC answers it; the replayed copy only goes aside as a backup. (The upload after it fails here
+    // only because this fake service's version 9 doesn't exist.)
+    await atB.sync.keep("pc").catch(() => undefined);
+    expect(atB.sync.view().conflict).toBe(false);
+    expect(await read(b.userData, "workspace.json")).toBe("w2");
+  });
+
+  it("asks a PC that missed a delete before it takes the copy made after it", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { key } = await startCopy(cloud, a);
+    await writeFile(path.join(a.userData, "library.json"), "a2");
+    await tavora(cloud, a).sync.sync();
+    // While A is off, B deletes the copy and starts a new one from its own data.
+    const b = await pc({ "library.json": "b0" });
+    const atB = tavora(cloud, b);
+    await atB.sync.turnOn();
+    await atB.sync.enterKey(key);
+    await atB.sync.keep("pc");
+    await atB.sync.remove();
+    await atB.sync.turnOn();
+    await until(() => atB.sync.view().on);
+
+    const atA = tavora(cloud, a);
+    await atA.sync.beforeLoad();
+    expect(await read(a.userData, "library.json")).toBe("a2");
+    expect(atA.sync.view()).toMatchObject({ on: true, conflict: true });
+    // Taking the cloud side works: the user chose it.
+    await atA.sync.keep("cloud");
+    expect(atA.events.restarts).toBe(1);
+    await tavora(cloud, a).sync.beforeLoad();
+    expect(await read(a.userData, "library.json")).toBe("b0");
   });
 
   it("asks which side to keep when both changed, and keeps the other as a local backup", async () => {

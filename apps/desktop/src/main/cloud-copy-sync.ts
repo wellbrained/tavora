@@ -354,14 +354,23 @@ export class CopySync {
       this.changed();
       return false;
     }
-    return (await this.stage(false)) !== null;
+    try {
+      return (await this.stage(false, this.state.version)) !== null;
+    } catch (error) {
+      // Saved on top of an older version than this PC has: made anew after a delete, or an old copy served as a newer
+      // one. It isn't taken without the user: they choose, as when both changed.
+      if (!(error instanceof CopyError) || error.reason !== "older") throw error;
+      this.ask("conflict");
+      this.changed();
+      return false;
+    }
   }
 
   /**
    * Downloads the copy into the staging folder, to be taken at the next start. A copy saved on top of an older
-   * version than `since` (by default the one this PC has) is refused: an old copy served as a new one.
+   * version than `since` is refused ("older"); only the check at start passes one, the user's own choices take any.
    */
-  private async stage(take: boolean, since = this.state.version): Promise<Staged | null> {
+  private async stage(take: boolean, since = 0): Promise<Staged | null> {
     await rm(this.stagingDir, { recursive: true, force: true });
     let copy: Awaited<ReturnType<CloudCopy["download"]>>;
     try {
@@ -382,10 +391,10 @@ export class CopySync {
   }
 
   /** The copy as it is now in the staging folder: the one staged already when it is still current, else downloaded. */
-  private async stageCurrent(take: boolean, since = this.state.version): Promise<Staged | null> {
+  private async stageCurrent(take: boolean): Promise<Staged | null> {
     const staged = await this.readStaged();
     const remote = staged ? await this.cloud.remote() : null;
-    if (!staged || !remote || remote.version !== staged.version) return this.stage(take, since);
+    if (!staged || !remote || remote.version !== staged.version) return this.stage(take);
     if (staged.take !== take) await writeFileAtomic(this.stagedFile, JSON.stringify({ ...staged, take }));
     return { ...staged, take };
   }
@@ -684,8 +693,7 @@ export class CopySync {
     if (side === "cloud") return this.takeCopy();
     await this.exclusive("downloading", async () => {
       try {
-        // Only kept as a backup, so even a copy older than this PC's comes down: keeping this PC must always work.
-        const staged = await this.stageCurrent(false, 0);
+        const staged = await this.stageCurrent(false);
         if (staged) {
           await rename(this.stagedData, await this.backupFolder("cloud")).catch(() => undefined);
           // The parts of this PC's last sync may be gone from the service; the upload sends what is missing.

@@ -97,7 +97,7 @@ interface Manifest {
 
 export class CopyError extends Error {
   constructor(
-    readonly reason: "signed-out" | "unreachable" | "unavailable" | "too-many" | "damaged" | "failed" | "no-folder" | "folder-locked" | "not-arrived",
+    readonly reason: "signed-out" | "unreachable" | "unavailable" | "too-many" | "damaged" | "failed" | "no-folder" | "folder-locked" | "not-arrived" | "older",
     message: string = reason,
   ) {
     super(message);
@@ -456,7 +456,7 @@ export class CloudCopy {
    * Downloads the copy into `staging` (emptied first), checking every part and file against the key and the
    * manifest, and returns its version and the files as they will be synced once swapped in. Nothing outside
    * `staging` is touched; null when there is no copy. `synced` is the version this PC last synced: a copy the
-   * service saved before that one is refused.
+   * service saved on top of an older one is refused ("older").
    */
   async download(copyKey: Uint8Array, roots: CopyRoot[], staging: string, synced = 0): Promise<{ version: number; pictures: boolean; files: Record<string, Omit<SyncedFile, "mtimeMs">> } | null> {
     const keys = copyKeys(copyKey);
@@ -473,8 +473,9 @@ export class CloudCopy {
     if (manifest?.v !== 1 || !Array.isArray(manifest.files)) throw new CopyError("damaged", "the copy's list is off");
     if (manifest.version !== undefined && manifest.version !== version) throw new CopyError("damaged", "the copy's list belongs to another version");
     if (manifest.base !== undefined && (!Number.isSafeInteger(manifest.base) || manifest.base < 0 || manifest.base >= version)) throw new CopyError("damaged", "the copy's list belongs to another version");
-    // Saved on top of an older version than this PC has: an old copy served as a new one. Not "damaged", which can mean a new key.
-    if (manifest.base !== undefined && manifest.base < synced) throw new CopyError("failed", "the copy is older than the one this PC has");
+    // Saved on top of an older version than this PC has: an old copy served as a new one, or a copy made anew after a
+    // delete. The two look the same, so the caller asks instead of taking it. Not "damaged", which can mean a new key.
+    if (manifest.base !== undefined && manifest.base < synced) throw new CopyError("older", "the copy was saved on top of an older version than this PC has");
     const files = manifest.files.filter(
       (file) =>
         safeCopyPath(file?.path, roots) &&

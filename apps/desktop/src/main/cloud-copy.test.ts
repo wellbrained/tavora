@@ -143,7 +143,7 @@ describe("the cloud copy", () => {
       return new CloudCopy(Object.assign(Object.create(Object.getPrototypeOf(real.storage)), real.storage, { manifest: async () => ({ version, sealed }) }));
     };
     const b = await pc();
-    await expect(replaying(old!.sealed, 3).download(key, b.roots, path.join(b.root, "staging"), second.state.version)).rejects.toMatchObject({ reason: "failed" });
+    await expect(replaying(old!.sealed, 3).download(key, b.roots, path.join(b.root, "staging"), second.state.version)).rejects.toMatchObject({ reason: "older" });
     // A list that claims to follow a version it can't follow is damaged.
     await expect(replaying(old!.sealed, 1).download(key, b.roots, path.join(b.root, "staging"))).rejects.toMatchObject({ reason: "damaged" });
     // The real newer copy still comes down to a PC that has the first.
