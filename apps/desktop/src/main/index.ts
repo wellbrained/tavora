@@ -10,6 +10,7 @@ import { parseTestInstalled } from "./installed-list";
 import { readGrayscaleText } from "./saved-data";
 import { reportStartupFailure } from "./startup-failure";
 import { findUnsafeSwitch } from "./unsafe-switches";
+import { refuseClientCertificates } from "./client-certificates";
 
 // The last errors of this run, for Settings > Copy diagnostic info.
 errorLog.capture();
@@ -58,6 +59,7 @@ app.on("web-contents-created", (_event, contents) => {
   contents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
   contents.on("will-attach-webview", (event) => event.preventDefault());
 });
+refuseClientCertificates(app);
 
 // `pnpm dev` serves the host UI with hot reload and restarts Tavora when
 // main code changes. Packaged builds always use the built files.

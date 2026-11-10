@@ -56,6 +56,7 @@ const PAGES: Record<string, (request: IncomingMessage) => string> = {
   "/download-page": () => `<title>Download</title>`,
   "/redirect-file": () => "",
   "/redirect-local": () => "",
+  "/redirect-other": () => "",
 };
 
 function handle(request: IncomingMessage, response: ServerResponse) {
@@ -63,6 +64,7 @@ function handle(request: IncomingMessage, response: ServerResponse) {
   hits.push(`${request.headers.host?.split(":")[0]}${url.pathname}`);
   if (url.pathname === "/redirect-file") return response.writeHead(302, { Location: "file:///etc/passwd" }).end();
   if (url.pathname === "/redirect-local") return response.writeHead(302, { Location: localUrl("/redirected") }).end();
+  if (url.pathname === "/redirect-other") return response.writeHead(302, { Location: `http://other.test:${port}/page` }).end();
   if (url.pathname === "/download") {
     response.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Disposition": 'attachment; filename="tavora-e2e.bin"' });
     return response.end("payload");
@@ -314,6 +316,12 @@ test("sign-ins are per workspace unless the site is shared, and the panel reopen
   // Other sites stay per game.
   await go(page, `http://other.test:${port}/page`);
   await waitForPage(app, `http://other.test:${port}/page`);
+  await expect(page.getByTestId("browser-shared")).toHaveAttribute("aria-pressed", "false");
+  // A redirect from a shared site to another one ends in the game's session too, as a link would.
+  await go(page, publicUrl("/redirect-other"));
+  await waitForPage(app, `http://other.test:${port}/page`);
+  const shared = await app.evaluate(({ session, webContents }, prefix) => webContents.getAllWebContents().find((item) => item.getURL().startsWith(prefix))!.session === session.fromPartition("persist:browser"), `http://other.test:${port}/page`);
+  expect(shared).toBe(false);
   await expect(page.getByTestId("browser-shared")).toHaveAttribute("aria-pressed", "false");
 
   // The panel opens where it was after a restart.

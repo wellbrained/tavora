@@ -305,12 +305,13 @@ When a game has no modules, Add a game offers **Ask for a &lt;game&gt; module**.
 The Browser panel shows any website, so here the attacker is any page:
 
 - A page cannot reach Node, Electron or the host. It has no preload and no bridge.
-- Each workspace gets its own browser session, and a page cannot read module bundles.
+- Each workspace gets its own browser session, and a page cannot read module bundles. Only sites you sign in to for all workspaces open in the shared one, also when another site redirects there.
 - Only `http` and `https` pages open. `file:`, `tavora-module:` and other app protocols are refused, including through redirects.
 - No new windows open. A clicked link that asks for one opens as one new tab.
 - Downloads never write a file. Permissions are denied, except writing to the clipboard and fullscreen inside the panel.
 - A public page cannot reach the user's PC or local network: requests to loopback, private and link-local addresses, local name endings and common router names are cancelled.
 - Bad certificates are refused, with no way to click through. The toolbar shows the true address, with non-Latin labels shown as punycode.
+- A site that asks for a client certificate gets none, so no page learns who you are from one.
 - Ads and trackers are blocked in the main process, with EasyList and EasyPrivacy rules. No script is added to pages.
 
 ## Accounts and modules
@@ -438,7 +439,7 @@ inside Tavora's content bounds and do not open remote pages.
 
 `network.readPage` renders one public HTTPS address in a hidden, sandboxed browser,
 using a new temporary session for every call. It shares no cookies, storage,
-sign-ins, browser tabs or bridge with the user or the module. The module supplies
+sign-ins, client certificates, browser tabs or bridge with the user or the module. The module supplies
 only a URL; it cannot inject JavaScript, click, fill forms, choose headers or read
 cookies. Tavora returns bounded page HTML, title, final URL and status after loading.
 The page's own scripts may run, without Node or a preload. Popups, webviews,

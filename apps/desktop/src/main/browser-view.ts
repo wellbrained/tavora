@@ -236,6 +236,13 @@ export class BrowserPanel {
       if (!event.isMainFrame) return;
       const from = this.hopUrl ?? this.committedUrl ?? "";
       if (!isWebUrl(event.url) || (isPrivateUrl(event.url) && !isPrivateUrl(from))) return event.preventDefault();
+      // A redirect to a site of the other session goes there, as a link does (will-navigate): only shared sites sit in the shared session.
+      const kind = this.kindFor(event.url);
+      if (kind !== this.kind) {
+        event.preventDefault();
+        if (current()) this.open(event.url, kind);
+        return;
+      }
       this.hopUrl = event.url;
     });
     contents.on("did-navigate", (_event, url) => {
