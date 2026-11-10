@@ -28,6 +28,44 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.17",
+    date: "2026-11-10",
+    title: "Blocked modules stay blocked",
+    notes: [
+      "A module Tavora blocked stays blocked when someone packs the same files into a new zip.",
+    ],
+    prs: [
+      { number: 731, title: "Safety lists: a block also matches what the zip's signature covers" },
+    ],
+    tags: ["catalog", "privacy", "publishing", "updates", "website"],
+  },
+  {
+    version: "0.24.16",
+    date: "2026-11-10",
+    title: "Your Tavora folders stay yours",
+    notes: [
+      "Modules can't be allowed to read Documents\\Tavora or Tavora's other folders, where your key files and saved files are.",
+      "Modules never read key files from a folder, wherever you keep them.",
+    ],
+    prs: [
+      { number: 728, title: "Folder access: refuse Tavora's own folders and never read key files" },
+    ],
+    tags: ["modules", "privacy", "website"],
+  },
+  {
+    version: "0.24.15",
+    date: "2026-11-10",
+    title: "Safer Browser panel",
+    notes: [
+      "Websites no longer get a client certificate from your PC.",
+      "A redirect to a site you don't sign in to everywhere now keeps this workspace's own sign-ins.",
+    ],
+    prs: [
+      { number: 727, title: "Browser: no client certificates, redirects switch session like links" },
+    ],
+    tags: ["privacy", "website"],
+  },
+  {
     version: "0.24.14",
     date: "2026-11-10",
     title: "Right storage cleared",
