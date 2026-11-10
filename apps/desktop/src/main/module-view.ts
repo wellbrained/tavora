@@ -324,6 +324,8 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
  */
 export const SETTLE_MS = 150;
 export const NO_BRIDGE_MS = 400;
+/** The least time between two ports for one document: asking sooner waits, and asks made meanwhile get one port. */
+export const CONNECT_GAP_MS = 250;
 export const REVEAL_CAP_MS = 2_000;
 /** Where a panel's page is, from its start to its first frame (`ModuleView.phase`), or what went wrong. */
 export type PagePhase = Exclude<InstanceStatus, "ready"> | "settling" | "revealed" | "drawn";
@@ -355,6 +357,10 @@ export class ModuleView {
    * again) starts with what its old ports still run, so asking again resets no limit.
    */
   private readonly bridgeBudget = newBridgeBudget();
+  /** When this document last got a port (connect); 0 for a new document. */
+  private lastConnect = 0;
+  /** A port asked for too soon after the last one, given when the gap is over; never to another document. */
+  private connectTimer: ReturnType<typeof setTimeout> | undefined;
   private viewport: TavoraViewport = { width: 0, height: 0 };
   private suspended = false;
   /** Tavora's window is behind another program (the game), as the host last said. The panel is behind only while it is not over the game itself. */
@@ -444,6 +450,7 @@ export class ModuleView {
     // ask for a new port; the old one is closed so it cannot be reused.
     contents.on("did-start-navigation", (event) => {
       if (event.isMainFrame && !event.isSameDocument) {
+        this.lastConnect = 0;
         this.disconnect();
         this.setStatus("loading");
         this.hideUntilSettled();
@@ -660,8 +667,21 @@ export class ModuleView {
     return this.options.module.manifest.id;
   }
 
-  /** Called when the module's main frame asks for a bridge port. */
+  /**
+   * Called when the module's main frame asks for a bridge port. A document gets at most one every CONNECT_GAP_MS: one
+   * that asks sooner gets its port when the time is up, and asks made meanwhile share it, so asking in a loop can't keep
+   * the main process busy. A new document asks at once.
+   */
   connect(): void {
+    const wait = this.lastConnect + CONNECT_GAP_MS - Date.now();
+    if (wait > 0) {
+      this.connectTimer ??= setTimeout(() => {
+        this.connectTimer = undefined;
+        this.connect();
+      }, wait);
+      return;
+    }
+    this.lastConnect = Date.now();
     this.disconnect();
     const launch = this.options.launch();
     this.startPage(launch);
@@ -750,7 +770,10 @@ export class ModuleView {
         isBehind: () => this.behind,
         getTheme: this.options.getTheme,
         getLanguage: this.options.getLanguage,
-        onBusy: (busy, served) => this.onBridgeBusy(busy, served),
+        // Only the page's current port says whether it is busy; an old port's calls ending say nothing about the new page.
+        onBusy: (busy, served) => {
+          if (this.bridge === bridge) this.onBridgeBusy(busy, served);
+        },
         openLink: (url) => this.openLink(url),
         tooltip:{
           show:async request=>{
@@ -1458,6 +1481,8 @@ export class ModuleView {
   }
 
   private disconnect(): void {
+    clearTimeout(this.connectTimer);
+    this.connectTimer = undefined;
     this.options.tooltip?.close();this.pointer=null;
     this.addPass = null;
     // A page that goes away answers nothing more.

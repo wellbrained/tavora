@@ -43,6 +43,7 @@ import {
   type TavoraWorkspace,
 } from "@tavora/sdk/protocol";
 import { isActionId, isFolderPath, isPanelTypeId, MAX_PANEL_TYPES } from "@tavora/module-schema";
+import { measureWire } from "../shared/wire";
 import { HostError } from "./errors";
 import { serializeJson } from "./json";
 import { discordCommand, discordSubscription } from "./discord-commands";
@@ -869,7 +870,8 @@ export class BridgeSession {
     // A closed port starts nothing more: whatever still arrives on it is dropped.
     if (this.closed) return;
 
-    const budget = this.budget;
+    // The handshake holds nothing and ends at once: a new page always gets through it, whatever its old one still runs.
+    const budget = (raw as { method?: unknown }).method === "bridge.handshake" ? newBridgeBudget() : this.budget;
     if (budget.inFlight >= LIMITS.maxInFlight) {
       return this.fail(requestId, new HostError("BAD_REQUEST", "too many concurrent requests"));
     }
@@ -878,15 +880,11 @@ export class BridgeSession {
     let handshake = false;
     let held = 0;
     try {
-      let size: number;
-      try {
-        size = JSON.stringify(raw)?.length ?? 0;
-      } catch {
-        throw new HostError("BAD_REQUEST", "message must be plain JSON data");
-      }
-      if (size > LIMITS.maxMessageBytes) throw new HostError("BAD_REQUEST", "message is too large");
-      if (budget.bytes + size > MAX_IN_FLIGHT_BYTES) throw new HostError("BAD_REQUEST", "too many concurrent requests");
-      budget.bytes += held = size;
+      // Measured as the module's renderer measured it (preload/relay.ts), so what it let through counts the same here.
+      const measured = measureWire(raw, LIMITS.maxMessageBytes);
+      if (!measured.ok) throw measured.reason === "too-large" ? new HostError("BAD_REQUEST", "message is too large") : new HostError("INVALID_PARAMS", "message must be plain JSON data");
+      if (budget.bytes + measured.bytes > MAX_IN_FLIGHT_BYTES) throw new HostError("BAD_REQUEST", "too many concurrent requests");
+      budget.bytes += held = measured.bytes;
 
       const { v, method, params } = raw as { v?: unknown; method?: unknown; params?: unknown };
       if (v !== PROTOCOL_VERSION) {
