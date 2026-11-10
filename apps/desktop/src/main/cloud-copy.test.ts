@@ -1,7 +1,7 @@
 import { mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CloudCopy, CopyError, EMPTY_STATE, hasLocalChanges, safeCopyPath, ServiceStorage, swapInCopy, type CopyState } from "./cloud-copy";
+import { CloudCopy, CopyError, EMPTY_STATE, hasLocalChanges, loadCopyState, safeCopyPath, saveCopyState, ServiceStorage, swapInCopy, type CopyState } from "./cloud-copy";
 import { cleanUp, OWNER, pc, service } from "./cloud-copy.test-helper";
 import { copyKeys, newCopyKey, open, parseRecoveryKey, partId, recoveryKey, seal } from "./copy-crypto";
 
@@ -105,6 +105,31 @@ describe("the cloud copy", () => {
     expect(routes).toEqual(["POST /v1/account/copy/parts", "PUT /v1/account/copy"]);
   });
 
+  it("saves a new version for a PC whose side was kept although nothing changed, sending no part again, and keeps that mark on disk", async () => {
+    const key = newCopyKey();
+    const { client, routes } = await service();
+    const a = await pc({ "library.json": "{}", "module-data/m/g/storage.json": "x".repeat(1000) });
+    const first = await client().upload(key, a.roots, EMPTY_STATE);
+    if (first.status !== "uploaded") throw new Error(first.status);
+    const kept: CopyState = { ...first.state, kept: true };
+    const file = path.join(a.root, "cloud-copy.json");
+    await saveCopyState(file, kept);
+    expect(await loadCopyState(file)).toEqual(kept);
+    expect(await hasLocalChanges(a.roots, kept)).toBe(true);
+
+    routes.length = 0;
+    const totals: number[] = [];
+    const again = await client().upload(key, a.roots, kept, (_done, total) => totals.push(total));
+    expect(again).toMatchObject({ status: "uploaded", state: { version: 2 } });
+    // No file was read again (nothing to read, by size and date), and only the new list was sent.
+    expect(totals).toEqual([0]);
+    expect(routes).toEqual(["PUT /v1/account/copy"]);
+    if (again.status !== "uploaded") return;
+    expect(again.state.kept).toBeUndefined();
+    await saveCopyState(file, again.state);
+    expect(await loadCopyState(file)).toEqual(again.state);
+  });
+
   it("gives a conflict to a PC that missed a newer version, instead of overwriting it", async () => {
     const key = newCopyKey();
     const { client } = await service();
@@ -122,6 +147,37 @@ describe("the cloud copy", () => {
     expect(await client().upload(key, a.roots, fromA.state)).toEqual({ status: "conflict", version: 2 });
     // A new PC that turns the copy on where one exists gets the same question.
     expect(await client().upload(key, (await pc({ "library.json": "c" })).roots, EMPTY_STATE)).toEqual({ status: "conflict", version: 2 });
+  });
+
+  it("refuses an older copy the service hands out as a newer version, and still reads copies saved without a sealed base", async () => {
+    const key = newCopyKey();
+    const { client } = await service();
+    const a = await pc({ "library.json": "first" });
+    const first = await client().upload(key, a.roots, EMPTY_STATE);
+    if (first.status !== "uploaded") throw new Error(first.status);
+    const old = await client().storage.manifest();
+    await writeFile(path.join(a.userData, "library.json"), "second");
+    const second = await client().upload(key, a.roots, first.state);
+    if (second.status !== "uploaded") throw new Error(second.status);
+    const keys = copyKeys(key);
+    const current = (await client().storage.manifest())!;
+    expect(JSON.parse(open(keys, current.sealed).toString("utf8"))).toMatchObject({ base: 1 });
+
+    // A broken-into service keeps the first manifest and serves it with a higher version.
+    const replaying = (sealed: Uint8Array, version: number) => {
+      const real = client();
+      return new CloudCopy(Object.assign(Object.create(Object.getPrototypeOf(real.storage)), real.storage, { manifest: async () => ({ version, sealed }) }));
+    };
+    const b = await pc();
+    await expect(replaying(old!.sealed, 3).download(key, b.roots, path.join(b.root, "staging"), second.state.version)).rejects.toMatchObject({ reason: "older" });
+    // A list served as a version it can't be (saved on top of 1, so at least 2) is damaged, though all its parts are there.
+    await expect(replaying(current.sealed, 1).download(key, b.roots, path.join(b.root, "staging"))).rejects.toMatchObject({ reason: "damaged" });
+    // The real newer copy still comes down to a PC that has the first.
+    expect(await client().download(key, b.roots, path.join(b.root, "staging"), first.state.version)).toMatchObject({ version: second.state.version });
+
+    // A copy saved by an older Tavora has no base and stays readable.
+    const legacy = seal(keys, Buffer.from(JSON.stringify({ v: 1, pictures: true, files: [] })));
+    expect(await replaying(legacy, 5).download(key, b.roots, path.join(b.root, "staging"), second.state.version)).toMatchObject({ version: 5, files: {} });
   });
 
   it("cannot be opened with another recovery key", async () => {

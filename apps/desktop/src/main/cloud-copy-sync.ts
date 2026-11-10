@@ -354,15 +354,27 @@ export class CopySync {
       this.changed();
       return false;
     }
-    return (await this.stage(false)) !== null;
+    try {
+      return (await this.stage(false, this.state.version)) !== null;
+    } catch (error) {
+      // Saved on top of an older version than this PC has: made anew after a delete, or an old copy served as a newer
+      // one. It isn't taken without the user: they choose, as when both changed.
+      if (!(error instanceof CopyError) || error.reason !== "older") throw error;
+      this.ask("conflict");
+      this.changed();
+      return false;
+    }
   }
 
-  /** Downloads the copy into the staging folder, to be taken at the next start. */
-  private async stage(take: boolean): Promise<Staged | null> {
+  /**
+   * Downloads the copy into the staging folder, to be taken at the next start. A copy saved on top of an older
+   * version than `since` is refused ("older"); only the check at start passes one, the user's own choices take any.
+   */
+  private async stage(take: boolean, since = 0): Promise<Staged | null> {
     await rm(this.stagingDir, { recursive: true, force: true });
     let copy: Awaited<ReturnType<CloudCopy["download"]>>;
     try {
-      copy = await this.cloud.download(this.key!, this.roots(), this.stagedData);
+      copy = await this.cloud.download(this.key!, this.roots(), this.stagedData, since);
     } catch (error) {
       // Another PC started over with a new key: this one's key and copy are forgotten, and turning on asks for the new key.
       if (error instanceof CopyError && error.reason === "damaged" && !this.keyHere && !(await this.accountKeys.fits())) {
@@ -685,7 +697,10 @@ export class CopySync {
         if (staged) {
           await rename(this.stagedData, await this.backupFolder("cloud")).catch(() => undefined);
           // The parts of this PC's last sync may be gone from the service; the upload sends what is missing.
-          this.state = { ...this.state, version: staged.version };
+          // This PC's side goes up on top of the copy, even when nothing changed here since its last sync (the copy was
+          // older, or made anew). Marked on disk, so it counts as changed until an upload succeeds, also across a restart;
+          // the files keep their dates and parts, so a retry reads only what really changed.
+          this.state = { ...this.state, version: staged.version, kept: true };
         } else {
           this.state = EMPTY_STATE;
         }
