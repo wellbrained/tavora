@@ -4145,8 +4145,8 @@ export class Host {
     // A test run that points Documents into the temp folder (under Local AppData) keeps Local AppData open, only there.
     const testDocuments = !app.isPackaged && Boolean(process.env.TAVORA_DOCUMENTS_DIR);
     const closed = [at("appData"), testDocuments ? null : env("LOCALAPPDATA"), env("APPDATA"), env("ProgramData"), env("SystemRoot"), env("windir")];
-    // Where Tavora saves for the user and for every module (key files, zips, every module's saved files and pictures),
-    // and where the user last kept a key file: never a module's to read.
+    // Where Tavora saves for the user and for every module (key files, zips, every module's saved files and pictures,
+    // the cloud copy): never a module's to read.
     const tavora = (find: () => string): string | null => {
       try {
         return find();
@@ -4154,7 +4154,7 @@ export class Host {
         return null;
       }
     };
-    const own = [tavora(documentsFolder), tavora(picturesFolder), tavora(exportsFolder), this.files.root(), this.library.dialogFolders["publisher-key"] ?? null];
+    const own = [tavora(documentsFolder), tavora(picturesFolder), tavora(exportsFolder), this.files.root(), this.copySync.view().folder];
     return {
       roots: { Documents: documents, "Saved Games": path.join(home, "Saved Games") },
       home,

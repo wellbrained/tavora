@@ -69,19 +69,35 @@ describe("refused folders", () => {
 
   it("refuses Tavora's own save folders, anything in them and the folders holding them", () => {
     const tavora = path.join(places.roots.Documents, "Tavora");
-    const keys = path.join(root, "Backups", "Keys");
-    const own = { ...places, own: [tavora, path.join(places.home, "Pictures", "Tavora"), keys] };
+    const copy = path.join(root, "Backups", "Copy");
+    const own = { ...places, own: [tavora, path.join(places.home, "Pictures", "Tavora"), copy] };
     // Documents\Tavora holds exported key files and every module's saved files.
     expect(isRefusedFolder(tavora, own)).toBe(true);
     expect(isRefusedFolder(path.join(tavora, "Saves"), own)).toBe(true);
     expect(isRefusedFolder(path.join(places.home, "Pictures", "Tavora", "module"), own)).toBe(true);
-    // Where the user last kept a key file, and the folder holding it.
-    expect(isRefusedFolder(keys, own)).toBe(true);
+    // One outside the user's folder, such as the cloud copy's, and the folder holding it.
+    expect(isRefusedFolder(copy, own)).toBe(true);
     expect(isRefusedFolder(path.join(root, "Backups"), own)).toBe(true);
     // A game's folder next to them stays fine.
     expect(isRefusedFolder(game, own)).toBe(false);
     expect(isRefusedFolder(path.join(places.roots.Documents, "Tavora Game"), own)).toBe(false);
     expect(isRefusedFolder(path.join(root, "Games"), own)).toBe(false);
+  });
+
+  it("ignores a drive given as one of Tavora's own folders", () => {
+    expect(isRefusedFolder(game, { ...places, own: [path.parse(root).root] })).toBe(false);
+  });
+
+  it("refuses Documents\\Tavora made after it was first looked at, behind a junction", async () => {
+    // The real Documents is elsewhere, reached through a junction; Documents\Tavora isn't there yet.
+    const real = path.join(root, "Elsewhere", "Documents");
+    await mkdir(real, { recursive: true });
+    const linked = path.join(root, "Linked");
+    await symlink(path.join(root, "Elsewhere"), linked, "junction");
+    const own = { ...places, own: [path.join(linked, "Documents", "Tavora")] };
+    expect(isRefusedFolder(path.join(real, "Game"), own)).toBe(false);
+    await mkdir(path.join(real, "Tavora"));
+    expect(isRefusedFolder(realpathSync.native(path.join(linked, "Documents", "Tavora")), own)).toBe(true);
   });
 
   it("finds no folder for a manifest path into Documents\\Tavora, and refuses it when picked", async () => {
@@ -95,6 +111,17 @@ describe("refused folders", () => {
     // Shown by the user for another manifest path: refused all the same.
     await chosen.set(replays.path, tavora);
     expect(await findFolder(replays, chosen, own)).toBeNull();
+  });
+});
+
+describe("key files", () => {
+  it("never reads a key or certificate file, even when the manifest asks to: it is only a name", async () => {
+    await writeFile(path.join(game, "publisher-key-1234abcd.pem"), "-----BEGIN PRIVATE KEY-----");
+    const keys: FolderAccess = { path: "Documents/Game", read: ["pem", "key", "pfx", "txt"] };
+    const listing = await listFolder(game, keys);
+    expect(listing.files.find((file) => file.path === "publisher-key-1234abcd.pem")?.readable).toBe(false);
+    expect(listing.files.find((file) => file.path === "Variables.txt")?.readable).toBe(true);
+    await expect(readFolderFile(game, keys, "publisher-key-1234abcd.pem", "test")).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
   });
 });
 
