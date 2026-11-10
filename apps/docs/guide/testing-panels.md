@@ -63,7 +63,7 @@ start: (container, { host }) => {
 
 `mountPanel` takes every option of `createMemoryHost`, with two defaults that match Tavora rather than a unit test:
 
-- **Calls that need a click are refused without one** (`gestures: "enforce"`). A real press in the panel (a mouse button, a touch, a key) lets one such call through, as in Tavora. A press in a dialog or menu drawn at the end of the page counts for the panel you pressed last. A scripted `element.click()` is no press; use your driver's click, or `panel.host.gesture()`.
+- **Calls that need a click are refused without one** (`gestures: "enforce"`). A real press in the panel (a mouse button, a touch, a key) lets one such call through within 2 seconds, as in Tavora. Presses don't add up: the panel keeps only the latest one. A panel just added may open its dialog once without a press within 10 seconds, as Tavora allows for a welcome; `addPass: false` turns that off. A press in a dialog or menu drawn at the end of the page counts for the panel you pressed last. A scripted `element.click()` is no press; use your driver's click, or `panel.host.gesture()`.
 - **The theme is Tavora Dark.**
 
 By default the panel draws into a new element as tall as the window. Pass `container` to put it somewhere else, for example two panels side by side.
