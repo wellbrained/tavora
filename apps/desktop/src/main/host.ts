@@ -149,7 +149,7 @@ import { readSteamLastPlayed } from "./steam-played";
 import { readIcoFromFile } from "./pe-icon";
 import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
-import { documentsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
+import { documentsFolder, exportsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
 import { readJsonText } from "./json-file-http";
 import { kindOfName, readTableFile } from "./table-file-http";
 import { freeFileName } from "./picture-save-http";
@@ -4150,12 +4150,23 @@ export class Host {
     // A test run that points Documents into the temp folder (under Local AppData) keeps Local AppData open, only there.
     const testDocuments = !app.isPackaged && Boolean(process.env.TAVORA_DOCUMENTS_DIR);
     const closed = [at("appData"), testDocuments ? null : env("LOCALAPPDATA"), env("APPDATA"), env("ProgramData"), env("SystemRoot"), env("windir")];
+    // Where Tavora saves for the user and for every module (key files, zips, every module's saved files and pictures,
+    // the cloud copy): never a module's to read.
+    const tavora = (find: () => string): string | null => {
+      try {
+        return find();
+      } catch {
+        return null;
+      }
+    };
+    const own = [tavora(documentsFolder), tavora(picturesFolder), tavora(exportsFolder), this.files.root(), this.copySync.view().folder];
     return {
       roots: { Documents: documents, "Saved Games": path.join(home, "Saved Games") },
       home,
       userData: app.getPath("userData"),
       known: known.filter((place): place is string => place !== null),
       closed: closed.filter((place): place is string => place !== null),
+      own: own.filter((place): place is string => place !== null),
     };
   }
 

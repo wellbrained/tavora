@@ -26,6 +26,11 @@ export const MAX_FOLDER_READ_BYTES = 50 * 1024 * 1024;
 /** How long changes gather before the module hears of them, and most changed paths in one notice. */
 const CHANGE_WAIT_MS = 400;
 const MAX_CHANGES = 500;
+/**
+ * Key and certificate files: never read from a folder, at most seen by name, wherever they are. Tavora's own key files
+ * are .pem; a module has no use for a private key.
+ */
+const KEY_EXTENSIONS: readonly string[] = ["pem", "key", "p12", "pfx", "ppk"];
 /** A Windows 8.3 short name, such as PASSWO~1.TXT. */
 const SHORT_NAME = /^[^.~]{1,6}~[0-9]+(?:\.[^.]{0,3})?$/;
 
@@ -44,6 +49,12 @@ export interface FolderPlaces {
    * itself or one holding it is not, so a pick can't take in more than a manifest could name.
    */
   known?: string[];
+  /**
+   * Tavora's own folders on this PC, where it saves things for the user and for every module: Documents\Tavora (key
+   * files, module zips, every module's saved files), Pictures\Tavora, Downloads\Tavora, the module files folder and
+   * the cloud copy's folder. Nothing inside them or holding them may be read. A drive given here counts for nothing.
+   */
+  own?: string[];
 }
 
 const win = process.platform === "win32";
@@ -57,18 +68,29 @@ function within(inner: string, outer: string): boolean {
 
 const resolvedPlaces = new Map<string, { forms: string[]; at: number }>();
 /**
- * A place as given and with its links resolved (a profile on a junction, a redirected AppData), when that differs.
- * Kept for a minute, so a folder call doesn't ask the system about every place each time.
+ * A place as given and with its links resolved (a profile on a junction, a redirected AppData), when that differs. A
+ * place that isn't there yet (Documents\Tavora before the first save) resolves through the nearest folder above it
+ * that is, so it is the same place once it is made. Kept for a minute, so a folder call doesn't ask the system about
+ * every place each time.
  */
 function forms(place: string): string[] {
   const kept = resolvedPlaces.get(place);
   if (kept && Date.now() - kept.at < 60_000) return kept.forms;
   let found = [place];
-  try {
-    const real = realpathSync.native(place);
-    if (same(real) !== same(path.resolve(place))) found = [place, real];
-  } catch {
-    // A place that isn't there counts as given.
+  const given = path.resolve(place);
+  const rest: string[] = [];
+  for (let at = given; ; ) {
+    try {
+      const real = path.join(realpathSync.native(at), ...rest);
+      if (same(real) !== same(given)) found = [place, real];
+      break;
+    } catch {
+      // Not there: try the folder above, up to the drive, which counts as given.
+      const up = path.dirname(at);
+      if (up === at) break;
+      rest.unshift(path.basename(at));
+      at = up;
+    }
   }
   if (resolvedPlaces.size > 200) resolvedPlaces.clear();
   resolvedPlaces.set(place, { forms: found, at: Date.now() });
@@ -78,9 +100,9 @@ function forms(place: string): string[] {
 /**
  * A folder no module may read, whatever the user picks: a network or device path, a drive, the user's own folder or
  * one holding it, another user's folder, a dot-folder of the user's (.ssh, .aws...), anything in AppData, ProgramData
- * or Windows, Tavora's data folder (anything in it or holding it), and the known folders themselves (Documents, Saved
- * Games, Desktop, Downloads...) or one holding them. A folder inside a known folder, such as Documents\My Game, is fine.
- * Every place counts as given and with its links resolved.
+ * or Windows, Tavora's data folder and its own folders such as Documents\Tavora (anything in them or holding them),
+ * and the known folders themselves (Documents, Saved Games, Desktop, Downloads...) or one holding them. A folder inside
+ * a known folder, such as Documents\My Game, is fine. Every place counts as given and with its links resolved.
  */
 export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pick<FolderPlaces, "home" | "userData">): boolean {
   const resolved = path.resolve(folder);
@@ -100,7 +122,9 @@ export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pi
     if (within(resolved, path.join(home, "AppData"))) return true;
   }
   for (const closed of (full.closed ?? []).flatMap(forms)) if (within(resolved, closed)) return true;
-  for (const data of forms(full.userData)) if (within(resolved, data) || within(data, resolved)) return true;
+  // A drive as one of Tavora's own folders would shut every folder on it: drives are refused on their own above.
+  const own = (full.own ?? []).filter((place) => same(path.parse(path.resolve(place)).root) !== same(path.resolve(place)));
+  for (const data of [full.userData, ...own].flatMap(forms)) if (within(resolved, data) || within(data, resolved)) return true;
   const known = [...(full.known ?? []), ...Object.values(full.roots ?? {})].flatMap(forms);
   return known.some((place) => within(place, resolved));
 }
@@ -158,7 +182,7 @@ export async function findFolder(entry: FolderAccess, chosen: ChosenFolders, pla
 export function kindOf(name: string, entry: FolderAccess): "read" | "name" | null {
   const extension = path.extname(name).slice(1).toLowerCase();
   if (!extension) return null;
-  if (entry.read?.includes(extension)) return "read";
+  if (entry.read?.includes(extension)) return KEY_EXTENSIONS.includes(extension) ? "name" : "read";
   if (entry.names?.includes(extension)) return "name";
   return null;
 }
