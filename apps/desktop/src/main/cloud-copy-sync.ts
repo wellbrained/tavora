@@ -127,6 +127,8 @@ export class CopySync {
   private folder: string | null = null;
   private cloud: CloudCopy;
   private state: CopyState = EMPTY_STATE;
+  /** The user kept this PC's side: the next upload goes up even when nothing changed here since the last sync. */
+  private keptPc = false;
   private activity: CloudCopyActivity = { phase: "idle" };
   private copy: CloudCopyView["copy"] = null;
   private shownKey: string | null = null;
@@ -487,7 +489,9 @@ export class CopySync {
       if (!this.on || (this.waiting && !loud)) return;
       await this.hooks?.flush();
       try {
-        const result = await this.cloud.upload(this.key!, this.roots(), this.state, (done, total) => this.uploaded(done, total));
+        const result = await this.cloud.upload(this.key!, this.roots(), this.state, (done, total) => this.uploaded(done, total), this.keptPc);
+        // Answered (sent, or a new question): a failed attempt keeps it for the retry.
+        this.keptPc = false;
         if (result.status === "uploaded") {
           this.state = result.state;
           await saveCopyState(this.stateFile, this.state);
@@ -698,6 +702,8 @@ export class CopySync {
           await rename(this.stagedData, await this.backupFolder("cloud")).catch(() => undefined);
           // The parts of this PC's last sync may be gone from the service; the upload sends what is missing.
           this.state = { ...this.state, version: staged.version };
+          // This PC may not have changed since its last sync (the copy was older, or made anew), so it goes up anyway.
+          this.keptPc = true;
         } else {
           this.state = EMPTY_STATE;
         }

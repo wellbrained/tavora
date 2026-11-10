@@ -367,9 +367,10 @@ export class CloudCopy {
   /**
    * Uploads what changed since `state` and makes it the copy's new version. Unchanged files are not read
    * again, and parts the copy already has are not sent again. Returns the state to keep on success.
-   * `progress` hears how much of what changed is read and sent so far.
+   * `progress` hears how much of what changed is read and sent so far. `force` saves a new version even when
+   * nothing changed here: the user kept this PC's side over a copy that differs from it.
    */
-  async upload(copyKey: Uint8Array, roots: CopyRoot[], state: CopyState, progress?: (done: number, total: number) => void): Promise<UploadResult> {
+  async upload(copyKey: Uint8Array, roots: CopyRoot[], state: CopyState, progress?: (done: number, total: number) => void, force = false): Promise<UploadResult> {
     const keys = copyKeys(copyKey);
     const limit = this.storage.limit;
     let found = await scanCopy(roots);
@@ -381,7 +382,7 @@ export class CloudCopy {
       total = found.reduce((sum, file) => sum + file.size, 0);
       if (total > limit) return { status: "too-big", size: total };
     }
-    if (pictures === state.pictures && sameAsSynced(found, state)) return { status: "unchanged" };
+    if (!force && pictures === state.pictures && sameAsSynced(found, state)) return { status: "unchanged" };
 
     const attempt = async (known: Set<string>): Promise<UploadResult | "missing-parts"> => {
       const files: Record<string, SyncedFile> = {};

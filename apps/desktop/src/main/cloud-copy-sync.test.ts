@@ -163,11 +163,35 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(await read(b.userData, "workspace.json")).toBe("w2");
     expect(atB.sync.view()).toMatchObject({ conflict: true, restartToTake: false });
     expect(atB.events.restarts).toBe(0);
-    // Keeping this PC answers it; the replayed copy only goes aside as a backup. (The upload after it fails here
-    // only because this fake service's version 9 doesn't exist.)
-    await atB.sync.keep("pc").catch(() => undefined);
-    expect(atB.sync.view().conflict).toBe(false);
+    // Keeping this PC answers it: the replayed copy only goes aside as a backup, and this PC's side goes up.
+    // (This fake hands out version 9 only on reads, so the save on top of it meets the real version and is refused.)
+    cloud.routes.length = 0;
+    await atB.sync.keep("pc");
     expect(await read(b.userData, "workspace.json")).toBe("w2");
+    expect(cloud.routes).toContain("PUT /v1/account/copy");
+  });
+
+  it("asks a PC that missed a delete, and keeping its side sends it up although it didn't change", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { key } = await startCopy(cloud, a);
+    const b = await pc({ "library.json": "b0" });
+    const atB = tavora(cloud, b);
+    await atB.sync.turnOn();
+    await atB.sync.enterKey(key);
+    await atB.sync.keep("pc");
+    await atB.sync.remove();
+    await atB.sync.turnOn();
+    await until(() => atB.sync.view().on);
+
+    const atA = tavora(cloud, a);
+    await atA.sync.beforeLoad();
+    expect(atA.sync.view().conflict).toBe(true);
+    await atA.sync.keep("pc");
+    expect(atA.sync.view()).toMatchObject({ conflict: false, problem: null });
+    // B, unchanged since, gets A's side at its next start.
+    await tavora(cloud, b).sync.beforeLoad();
+    expect(await read(b.userData, "library.json")).toBe("a1");
   });
 
   it("asks a PC that missed a delete before it takes the copy made after it", async () => {
