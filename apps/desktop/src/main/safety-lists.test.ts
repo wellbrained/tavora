@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { catalogPublicKey, fingerprint, publicKeyFromRaw, readZip, signCatalogList, signedHash, signFiles, writeZip, type CatalogList, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
+import { addSignedHashes } from "./installed-modules";
 import { installZip, readOwnerRecords } from "./installer";
 import type { InstalledModule, ModuleProblem } from "./registry";
 import { CATALOGUE_PUBLIC_KEY, SafetyLists, stopBlocked } from "./safety-lists";
@@ -305,5 +306,26 @@ describe("C14: a blocked zip", () => {
     expect(safety.accept("blocks", blocks(1, [sha(harmful)]))).toBe(true);
     const modules = new Map([[ID, loaded(path.join(userModules, ID), fingerprint(publisher))]]);
     expect(stopBlocked(modules, userModules, records, safety, []).size).toBe(1);
+  });
+
+  it("stops a copy installed before signedSha256 was recorded, by the signature file in its folder", async () => {
+    const { userData, userModules } = await setup();
+    const publisher = generateKeyPairSync("ed25519").privateKey;
+    const harmful = zip(publisher, "1.0.0", "<p>harmful</p>");
+    const { safety } = lists(userData);
+    await installZip(await save(userData, harmful), { userData, userModules, tavoraVersion: TAVORA, modules: new Map(), safety });
+    // As an older Tavora wrote it.
+    const file = path.join(userData, "module-owners.json");
+    const saved = JSON.parse(await readFile(file, "utf8")) as { folders: Record<string, Record<string, unknown>> };
+    delete saved.folders[ID]!.signedSha256;
+    await writeFile(file, JSON.stringify(saved));
+    const records = await readOwnerRecords(userData);
+    expect(records[ID]?.signedSha256).toBeUndefined();
+
+    expect(safety.accept("blocks", blocks(1, [signedHash(readZip(harmful))!]))).toBe(true);
+    const modules = new Map([[ID, loaded(path.join(userModules, ID), fingerprint(publisher))]]);
+    expect(stopBlocked(new Map(modules), userModules, records, safety, []).size).toBe(0);
+    await addSignedHashes(modules, userModules, records);
+    expect([...stopBlocked(modules, userModules, records, safety, []).keys()]).toEqual([ID]);
   });
 });

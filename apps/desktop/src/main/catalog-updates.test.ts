@@ -331,7 +331,7 @@ describe("CatalogUpdater", () => {
     const successor = generateKeyPairSync("ed25519").privateKey;
     const lists = { blockedHash: "", revokedKey: "" };
     const safety: SafetyCheck = {
-      blocked: (sha256) => (sha256 === lists.blockedHash ? { sha256, reason: "harmful" } : null) as ReturnType<SafetyCheck["blocked"]>,
+      blocked: (sha256, signed) => (sha256 === lists.blockedHash || signed === lists.blockedHash ? { sha256, reason: "harmful" } : null) as ReturnType<SafetyCheck["blocked"]>,
       revoked: (fingerprintOf) => fingerprintOf === lists.revokedKey,
       firstKey: (fingerprintOf) => (fingerprintOf === fingerprint(successor) ? fingerprint(key) : fingerprintOf),
     };
@@ -340,6 +340,11 @@ describe("CatalogUpdater", () => {
     const blocked = zipOf("1.1.0", key);
     lists.blockedHash = createHash("sha256").update(blocked).digest("hex");
     publish(listing("1.1.0", blocked, fingerprint(key)), blocked);
+    expect(await updater.check()).toEqual({ updated: [], waiting: [] });
+    // Blocked by what its signature covers: the same files packed again, with a new zip hash, are refused too.
+    lists.blockedHash = signedHash(readZip(blocked))!;
+    const repacked = writeZip([...readZip(blocked)].reverse());
+    publish(listing("1.1.0", repacked, fingerprint(key)), repacked);
     expect(await updater.check()).toEqual({ updated: [], waiting: [] });
 
     const revoked = zipOf("1.2.0", key);
