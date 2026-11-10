@@ -217,6 +217,10 @@ describe("the cloud copy, as Tavora runs it", () => {
     await atA.sync.beforeLoad();
     expect(atA.sync.view().conflict).toBe(true);
     await expect(atA.sync.keep("pc")).rejects.toMatchObject({ key: "cloudCopy.error.offline" });
+    // The choice is on disk, and the files keep their real dates, so a retry reads only what really changed.
+    const saved = JSON.parse(await read(a.userData, "cloud-copy.json")) as { kept?: boolean; files: Record<string, { mtimeMs: number }> };
+    expect(saved.kept).toBe(true);
+    expect(Object.values(saved.files).every((file) => file.mtimeMs > 0)).toBe(true);
 
     // Tavora closes, and starts again online: the side the user kept still goes up, without a new question.
     down = false;

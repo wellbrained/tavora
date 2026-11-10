@@ -118,9 +118,11 @@ describe("the cloud copy", () => {
     expect(await hasLocalChanges(a.roots, kept)).toBe(true);
 
     routes.length = 0;
-    const again = await client().upload(key, a.roots, kept);
+    const totals: number[] = [];
+    const again = await client().upload(key, a.roots, kept, (_done, total) => totals.push(total));
     expect(again).toMatchObject({ status: "uploaded", state: { version: 2 } });
-    // Nothing was read or sent again but the new list.
+    // No file was read again (nothing to read, by size and date), and only the new list was sent.
+    expect(totals).toEqual([0]);
     expect(routes).toEqual(["PUT /v1/account/copy"]);
     if (again.status !== "uploaded") return;
     expect(again.state.kept).toBeUndefined();
