@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.18",
+    date: "2026-11-10",
+    title: "Safer module presses",
+    notes: [
+      "Holding a key in a module now counts as one press, and Ctrl or Shift alone counts as none.",
+      "Older modules can save at most 30 files an hour to Downloads\\Tavora.",
+      "Imported web pages can no longer pass a module odd or oversized data.",
+      "Modules no longer see or remove the keys you set for their overlays.",
+    ],
+    prs: [
+      { number: 726, title: "Modules: one press per held key, readPage read apart, overlay keys hidden" },
+    ],
+    tags: ["privacy", "website"],
+  },
+  {
     version: "0.24.17",
     date: "2026-11-10",
     title: "Blocked modules stay blocked",
