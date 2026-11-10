@@ -343,13 +343,13 @@ export async function realClick(app: ElectronApplication, moduleId: string, sele
   );
 }
 
-/** A real key press in a module's page, so what follows counts as the user's own click. */
+/** A real key press in a module's page, so what follows counts as the user's own click. Not a modifier: one alone is no press. A key no page uses, so nothing else happens. */
 export async function gesture(app: ElectronApplication, moduleId: string): Promise<void> {
   await app.evaluate(({ webContents }, moduleId) => {
     const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
     if (!target) throw new Error("no panel");
-    target.sendInputEvent({ type: "keyDown", keyCode: "Shift" });
-    target.sendInputEvent({ type: "keyUp", keyCode: "Shift" });
+    target.sendInputEvent({ type: "keyDown", keyCode: "F24" });
+    target.sendInputEvent({ type: "keyUp", keyCode: "F24" });
   }, moduleId);
 }
 
