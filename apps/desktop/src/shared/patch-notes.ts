@@ -28,6 +28,22 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.22",
+    date: "2026-11-11",
+    title: "Dialogs stay where you are",
+    notes: [
+      "Publish and Update all open their next step only while you're still where you pressed them.",
+      "Browse after publishing, and Updates in the sidebar, now work while the module library is open.",
+      "Cancel on a link, new panel or game question no longer skips the next one.",
+      "Pressing Skip twice on the welcome no longer opens your panels twice, and you can try again when it couldn't finish.",
+      "After you sign in, the recovery key question waits for the open dialog to close instead of being skipped.",
+    ],
+    prs: [
+      { number: 737, title: "App: a dialog that waited goes on only where it started" },
+    ],
+    tags: ["modules", "onboarding", "settings"],
+  },
+  {
     version: "0.24.21",
     date: "2026-11-10",
     title: "Safer modules, steadier app",
