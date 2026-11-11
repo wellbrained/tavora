@@ -154,9 +154,11 @@ export const developerReady = computed(() => developerState.value === "ready");
  * unknown it is read first: offline that fails with its message and nothing opens.
  */
 async function readyToPublish(then?: string): Promise<boolean> {
+  // The dialog Publish was pressed in (none, or the library): the onboarding takes its place only while it still shows.
+  const from = dialog.value;
   if (developerState.value === "unknown" && account.value?.account && !(await act({ type: "account-refresh" })).ok) return false;
   if (developerReady.value) return true;
-  dialog.value = then ? { kind: "developer-start", then } : { kind: "developer-start" };
+  followDialog(from, then ? { kind: "developer-start", then } : { kind: "developer-start" });
   return false;
 }
 
@@ -440,14 +442,28 @@ export function closeDialog(request: DialogRequest | null): void {
   if (request && dialogSlot.value === request) dialog.value = null;
 }
 
+/**
+ * Goes on from `from` to `next` after work it waited for: only while `from` (null: no dialog) is still the one shown.
+ * The user may have opened or closed something meanwhile, or a question may have come up; that stays.
+ */
+export function followDialog(from: DialogRequest | null, next: DialogRequest): void {
+  if (dialogSlot.value === from) dialog.value = next;
+}
+
 // Just signed in, on a PC without the account's recovery key while the account has one: ask for it
 // now, once (the decision log: asked at sign-in, made only when the cloud copy or publishing needs it).
+// While another dialog shows, the question waits for it to close instead of being dropped.
 let askAfterSignIn = false;
 function askForRecoveryKey(): void {
   const status = developerKeys.value?.status;
-  if (!askAfterSignIn || !status || status === "loading" || status === "signed-out") return;
+  // Not known yet (or the vault couldn't be read): it waits for the next read.
+  if (!askAfterSignIn || !status || status === "loading" || status === "signed-out" || status === "offline") return;
+  if (status !== "ask") return void (askAfterSignIn = false);
+  // The publishing setup asks for it in its own key step: once is enough.
+  if (dialogSlot.value?.kind === "developer-start") return void (askAfterSignIn = false);
+  if (dialog.value) return;
   askAfterSignIn = false;
-  if (status === "ask" && !dialog.value) dialog.value = { kind: "recovery-ask" };
+  dialog.value = { kind: "recovery-ask" };
 }
 watch(
   () => (account.value ? Boolean(account.value.account) : null),
@@ -484,6 +500,8 @@ const dialogQueue = createDialogQueue(
 // Something closed: the next waiting question shows. The slot is free, or the last dialog besides the slot's own went.
 watch(dialogSlot, (open) => {
   if (open === null) dialogQueue.next();
+  // On every change: a free slot asks the recovery key question, the publishing setup taking it settles it.
+  askForRecoveryKey();
 });
 watch(openDialogs, () => dialogQueue.next());
 /** A question that ended (answered, or its panel or game went away) must not show later, nor stay on screen. */

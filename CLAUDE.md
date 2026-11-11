@@ -35,7 +35,7 @@ Before building a new module, or a new panel or feature in one (here or in `tavo
 
 ## State
 
-The app follows the module rules' "One value per flow" too ([docs/module-rules.md](docs/module-rules.md#4-behaviour)): one status union per flow instead of flags, `useTask` for work a dialog waits for, and a dialog closes itself with `closeDialog(request)` (renderer `host.ts`), never `dialog.value = null` after an `await`.
+The app follows the module rules' "One value per flow" too ([docs/module-rules.md](docs/module-rules.md#4-behaviour)): one status union per flow instead of flags, `useTask` for work a dialog waits for, and a dialog closes itself with `closeDialog(request)` (renderer `host.ts`), never `dialog.value = null` after an `await`; a flow that goes on to another dialog after an `await` does so with `followDialog(from, next)`. [docs/state-machines.md](docs/state-machines.md) maps the app's flows and their states: keep it current in the pull request that changes one.
 
 ## Menus and tooltips
 
