@@ -1,7 +1,7 @@
 #!/bin/sh
 # Daily backup of the Tavora service's own data (accounts.sqlite, icons.sqlite, reviews.sqlite, conversations.sqlite, leaderboards.sqlite, stats.sqlite, module-requests.sqlite, the module catalog), run as root by
 # tavora-api-backup.timer. Consistent copies (SQLite's backup, safe while the service runs) go into
-# /srv/tavora-api/backups; 14 days are kept, as the privacy page says. No secrets: production.env
+# /srv/tavora-api/backups; 7 days are kept, as the privacy page says. No secrets: production.env
 # (the Brevo key, the admin token) is never part of it. The maintainer copies them off the server. The users'
 # cloud copies (copies.sqlite) are left out on purpose (decided 2026-10-19): they are on the users' PCs, which upload again.
 set -eu
@@ -24,7 +24,8 @@ if [ -f "$state/catalog/catalog.sqlite" ]; then
   if [ -d "$state/catalog/lists" ]; then cp -a "$state/catalog/lists" "$work/catalog/lists"; fi
 fi
 tar -czf "$dir/tavora-api-$stamp.tar.gz" -C "$work" .
-find "$dir" -maxdepth 1 -type f -name 'tavora-api-*.tar.gz' -mtime +14 -delete
+# Up to 7 days (the privacy page): anything older than 6 days 23 hours goes, so 7 daily copies remain, never one a week old.
+find "$dir" -maxdepth 1 -type f -name 'tavora-api-*.tar.gz' -mmin +10020 -delete
 # Tavora Admin shows when the last backup finished: one line with the time, readable by the service (the backups themselves are not).
 # Written as the service's user, never as root: the folder is the service's, and a link in it must not make root write elsewhere.
 if [ -d "$state" ]; then

@@ -185,7 +185,7 @@ Emails to developers go out through the same mailer as the publish emails, never
 
 ## Backups
 
-`tavora-api-backup.timer` (daily, 03:15 UTC) runs `/usr/local/sbin/tavora-api-backup`: consistent copies of `accounts.sqlite`, `icons.sqlite`, `reviews.sqlite`, `conversations.sqlite`, `leaderboards.sqlite` and `catalog.sqlite`, plus the catalog's zips (SQLite's backup, safe while the service runs) packed into `/srv/tavora-api/backups/tavora-api-<time>.tar.gz`, 14 days kept, no secrets (`production.env` is not in it). The server setup (`deploy/README.md`) installs the script and the timer; a deploy doesn't touch them. Copy them off the server regularly; a backup that only lives on the server does not survive losing it. To restore: stop `tavora-api`, unpack a backup into `/var/lib/tavora-api` (owner `tavora-api`, mode 600), start it again.
+`tavora-api-backup.timer` (daily, 03:15 UTC) runs `/usr/local/sbin/tavora-api-backup`: consistent copies of `accounts.sqlite`, `icons.sqlite`, `reviews.sqlite`, `conversations.sqlite`, `leaderboards.sqlite` and `catalog.sqlite`, plus the catalog's zips (SQLite's backup, safe while the service runs) packed into `/srv/tavora-api/backups/tavora-api-<time>.tar.gz`, 7 days kept (none older, so the privacy page's "up to 7 days" holds), no secrets (`production.env` is not in it). The server setup (`deploy/README.md`) installs the script and the timer; a deploy doesn't touch them. Copy them off the server regularly; a backup that only lives on the server does not survive losing it. To restore: stop `tavora-api`, unpack a backup into `/var/lib/tavora-api` (owner `tavora-api`, mode 600), start it again.
 
 ## Tests
 
