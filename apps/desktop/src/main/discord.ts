@@ -33,6 +33,8 @@ export const RETRY_MS = 10_000;
 const EMIT_MS = 50;
 /** Pictures kept in memory for every module together. */
 const MAX_IMAGES = 300;
+/** A picture that did not come is not asked for again until this long after. */
+const PICTURE_RETRY_MS = 60_000;
 
 type SignInErrorCode = NonNullable<DiscordState["error"]>;
 
@@ -106,7 +108,7 @@ export class DiscordConnector {
   private readonly listeners = new Map<string, DiscordListener>();
   /** What each panel subscribed to (keyOf). Discord is asked once per subscription, whoever wants it. */
   private readonly subscribed = new Map<string, Set<string>>();
-  private readonly images = new Map<string, Promise<string | null>>();
+  private readonly images = new Map<string, { picture: Promise<string | null>; missingSince?: number }>();
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private emitTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now: () => number;
@@ -233,13 +235,17 @@ export class DiscordConnector {
   image(url: string): Promise<string | null> {
     const address = imageUrl(url);
     if (!address) return Promise.resolve(null);
-    let picture = this.images.get(address);
-    if (!picture) {
-      if (this.images.size >= MAX_IMAGES) this.images.delete(this.images.keys().next().value!);
-      picture = this.fetchImage(address);
-      this.images.set(address, picture);
-    }
-    return picture;
+    // One that did not come is kept as missing for a minute, then fetched again: a gone avatar isn't asked for on every
+    // redraw, and one that failed offline comes back.
+    const known = this.images.get(address);
+    if (known && (known.missingSince === undefined || this.now() - known.missingSince < PICTURE_RETRY_MS)) return known.picture;
+    if (!known && this.images.size >= MAX_IMAGES) this.images.delete(this.images.keys().next().value!);
+    const entry: { picture: Promise<string | null>; missingSince?: number } = { picture: this.fetchImage(address) };
+    this.images.set(address, entry);
+    void entry.picture.then((url) => {
+      if (url === null) entry.missingSince = this.now();
+    });
+    return entry.picture;
   }
 
   /**

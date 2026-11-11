@@ -20,6 +20,8 @@ export const LIST_TIMEOUT_MS = 8000;
 export const DOWNLOAD_TIMEOUT_MS = 60_000;
 /** Most modules one listing is read for. */
 const MAX_MODULES = 500;
+/** An icon that did not come is not asked for again until this long after. */
+const ICON_RETRY_MS = 60_000;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const TAVORA_VERSION = /^(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})$/;
 const FINGERPRINT = /^[0-9a-f]{32}$/;
@@ -288,6 +290,7 @@ export interface CatalogClientOptions {
   fetchImpl?: typeof fetch;
   listTimeoutMs?: number;
   downloadTimeoutMs?: number;
+  now?: () => number;
 }
 
 const REQUEST = { credentials: "omit", referrerPolicy: "no-referrer", redirect: "error" } as const;
@@ -300,13 +303,17 @@ export class CatalogClient {
   /** The listings of the last list, so their icons are fetched without asking for the list again. */
   private listed = new Map<string, CatalogEntry>();
   /** Icons already checked, by hash; a few hundred at most. */
-  private readonly icons = new Map<string, string | null>();
+  private readonly icons = new Map<string, string>();
+  /** Icons that did not come, by hash, with when: asked for again a minute later, not on every look. */
+  private readonly missingIcons = new Map<string, number>();
+  private readonly now: () => number;
 
   constructor(options: CatalogClientOptions = {}) {
     this.baseUrl = serviceUrl(options.baseUrl);
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.listTimeoutMs = options.listTimeoutMs ?? LIST_TIMEOUT_MS;
     this.downloadTimeoutMs = options.downloadTimeoutMs ?? DOWNLOAD_TIMEOUT_MS;
+    this.now = options.now ?? Date.now;
   }
 
   /**
@@ -443,8 +450,17 @@ export class CatalogClient {
   async icon(id: string): Promise<string | null> {
     const shot = this.listed.get(id)?.icon;
     if (!shot) return null;
-    if (this.icons.has(shot.sha256)) return this.icons.get(shot.sha256)!;
+    const known = this.icons.get(shot.sha256);
+    if (known) return known;
+    const missing = this.missingIcons.get(shot.sha256);
+    if (missing !== undefined && this.now() - missing < ICON_RETRY_MS) return null;
     const url = await this.picture(shot, MAX_MODULE_ICON);
+    if (url === null) {
+      if (this.missingIcons.size >= MAX_MODULES) this.missingIcons.clear();
+      this.missingIcons.set(shot.sha256, this.now());
+      return null;
+    }
+    this.missingIcons.delete(shot.sha256);
     if (this.icons.size >= MAX_MODULES) this.icons.clear();
     this.icons.set(shot.sha256, url);
     return url;

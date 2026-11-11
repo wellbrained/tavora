@@ -44,6 +44,8 @@ export type KeySetUp = { status: "ready"; created: boolean } | { status: "ask" }
 
 export class AccountKey {
   private key: Buffer | null = null;
+  /** Raised by `forget`: a key read or made before it (signed out meanwhile) is not kept. */
+  private generation = 0;
 
   constructor(private readonly options: AccountKeyOptions) {}
 
@@ -78,6 +80,7 @@ export class AccountKey {
    * (`created`: show the recovery key now). When another PC made one, the user types it in ("ask").
    */
   async setUp(): Promise<KeySetUp> {
+    const generation = this.generation;
     const vault = await this.vault();
     if (this.key) {
       if (!vault) {
@@ -94,7 +97,7 @@ export class AccountKey {
     const key = newCopyKey();
     // Another PC may have made one at the same moment: then its key is asked for.
     if (!(await this.putVault(0, key, EMPTY_VAULT))) return { status: "ask" };
-    await this.save(key);
+    await this.save(key, generation);
     return { status: "ready", created: true };
   }
 
@@ -119,11 +122,12 @@ export class AccountKey {
 
   /** The account's key, typed in as the recovery key or sent by another PC (pairing.ts): checked against the vault, then kept. */
   async take(key: Buffer): Promise<void> {
+    const generation = this.generation;
     const vault = await this.vault();
     if (vault && !opens(key, vault.data)) throw new UserError("cloudCopy.error.wrongKey");
     // No vault (the account started over, or it was never made): the typed key becomes the account's.
     if (!vault) await this.putVault(0, key, EMPTY_VAULT);
-    await this.save(key);
+    await this.save(key, generation);
   }
 
   /**
@@ -131,13 +135,14 @@ export class AccountKey {
    * opened again, except the vault itself when this PC still has the old key: its publisher keys move over.
    */
   async startOver(): Promise<void> {
+    const generation = this.generation;
     const old = this.key ? await this.vault().catch(() => null) : null;
     const content = (old && this.key && openContent(this.key, old.data)) || EMPTY_VAULT;
     await this.request("DELETE");
     this.key = null;
     const key = newCopyKey();
     if (!(await this.putVault(0, key, content))) throw new CopyError("failed", "another PC made a key at the same moment");
-    await this.save(key);
+    await this.save(key, generation);
   }
 
   /** What the vault holds; when the service can't be reached, what this PC last read. */
@@ -185,7 +190,7 @@ export class AccountKey {
   async setUpHere(hasCopy: boolean): Promise<KeySetUp> {
     if (this.key) return { status: "ready", created: false };
     if (hasCopy) return { status: "ask" };
-    await this.save(newCopyKey());
+    await this.save(newCopyKey(), this.generation);
     return { status: "ready", created: true };
   }
 
@@ -193,22 +198,23 @@ export class AccountKey {
   async enterHere(text: string): Promise<void> {
     const key = parseRecoveryKey(text);
     if (!key) throw new UserError("cloudCopy.error.badKey");
-    await this.save(key);
+    await this.save(key, this.generation);
   }
 
   /** Signed out: the key another PC sent through the folder (pairing.ts) is kept here, like one typed in. */
   async takeHere(key: Buffer): Promise<void> {
-    await this.save(key);
+    await this.save(key, this.generation);
   }
 
   /** Signed out, a lost key: a new one is made here. */
   async startOverHere(): Promise<void> {
     this.key = null;
-    await this.save(newCopyKey());
+    await this.save(newCopyKey(), this.generation);
   }
 
   /** Signed out: the key belongs to the account, so this PC forgets it. */
   async forget(): Promise<void> {
+    this.generation++;
     this.key = null;
     await rm(this.options.file, { force: true });
     if (this.options.cacheFile) await rm(this.options.cacheFile, { force: true });
@@ -224,9 +230,15 @@ export class AccountKey {
     if (this.options.cacheFile) await writeFileAtomic(this.options.cacheFile, Buffer.from(sealed)).catch(() => undefined);
   }
 
-  private async save(key: Buffer): Promise<void> {
+  /** Keeps the key on this PC, unless it was forgotten since `generation` (signed out meanwhile): then it is not kept. */
+  private async save(key: Buffer, generation: number): Promise<void> {
     if (!this.canKeep) throw new UserError("cloudCopy.error.cantKeep");
+    if (generation !== this.generation) throw new CopyError("signed-out");
     await writeFileAtomic(this.options.file, JSON.stringify({ v: 1, data: this.options.encryptor.encrypt(key.toString("base64")).toString("base64") }));
+    if (generation !== this.generation) {
+      await rm(this.options.file, { force: true });
+      throw new CopyError("signed-out");
+    }
     this.key = key;
   }
 

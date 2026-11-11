@@ -226,6 +226,30 @@ describe("OverlayServer", () => {
     expect(server.status).toBe("off");
     await expect(get(port, "/")).rejects.toThrow();
   });
+
+  it("stopped while it starts: it doesn't run", async () => {
+    await server.stop();
+    const started = server.start(port);
+    await server.stop();
+    await started;
+    expect(server).toMatchObject({ status: "off", port: null });
+    await expect(get(port, "/")).rejects.toThrow();
+  });
+
+  it("two quick port changes leave one server, which stop ends", async () => {
+    // A second free port.
+    const probe = new OverlayServer({ store, page: () => null });
+    let other = port + 1;
+    for (; (await probe.start(other)) !== "running"; other++);
+    await probe.stop();
+    await server.stop();
+    const [first, second] = await Promise.all([server.start(port), server.start(other)]);
+    expect([first, second]).toEqual(["running", "running"]);
+    expect(server.port).toBe(other);
+    await expect(get(port, "/")).rejects.toThrow();
+    await server.stop();
+    await expect(get(other, "/")).rejects.toThrow();
+  });
 });
 
 describe("overlays.json", () => {

@@ -136,6 +136,11 @@ export class CopySync {
   private problem: CloudCopyProblem | null = null;
   /** One thing at a time: an upload, a download, a check. */
   private running: Promise<unknown> = Promise.resolve();
+  /**
+   * Raised each time the copy is forgotten here (turned off, signed out, deleted elsewhere). Work that started under an
+   * older turn (an upload, a move, a download) writes nothing when it ends, so it can't turn the copy back on.
+   */
+  private turn = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
 
   /** The copy on Tavora's service. */
@@ -318,8 +323,10 @@ export class CopySync {
       if (await this.takeStaged()) return;
       if (!this.on) return;
       let late = false;
-      const check = this.fetchNewer().then(async (staged) => {
-        if (!staged) return;
+      const turn = this.turn;
+      const check = this.fetchNewer(turn).then(async (staged) => {
+        // Turned off while it looked: nothing waits for a restart.
+        if (!staged || turn !== this.turn) return;
         if (!late && (await this.takeStaged())) return;
         // Finished after the workspaces loaded: it waits for a restart.
         this.ask("restartToTake");
@@ -339,8 +346,9 @@ export class CopySync {
    * Reads the copy's version; when it is newer and this PC has not changed, downloads it into the
    * staging folder. True when a copy is staged. A changed PC gets the keep-which-side question instead.
    */
-  private async fetchNewer(): Promise<boolean> {
+  private async fetchNewer(turn: number): Promise<boolean> {
     const remote = await this.cloud.remote(this.state.version);
+    if (turn !== this.turn) return false;
     if (!remote) {
       // The copy was deleted (on another PC): it is off here too.
       if (this.state.version > 0) await this.forget("deleted");
@@ -350,6 +358,7 @@ export class CopySync {
     if (remote.version === this.state.version) return false;
     // Changed here, or this PC's last save lost against another PC's (in a synced folder): the user chooses.
     if (remote.follows === false || (await hasLocalChanges(this.roots(), this.state))) {
+      if (turn !== this.turn) return false;
       this.ask("conflict");
       this.changed();
       return false;
@@ -360,6 +369,7 @@ export class CopySync {
       // Saved on top of an older version than this PC has: made anew after a delete, or an old copy served as a newer
       // one. It isn't taken without the user: they choose, as when both changed.
       if (!(error instanceof CopyError) || error.reason !== "older") throw error;
+      if (turn !== this.turn) return false;
       this.ask("conflict");
       this.changed();
       return false;
@@ -485,12 +495,17 @@ export class CopySync {
     await this.exclusive("uploading", async () => {
       // What ran before (a download at start) may have left a question.
       if (!this.on || (this.waiting && !loud)) return;
+      const turn = this.turn;
       await this.hooks?.flush();
+      // Turned off while the panels saved.
+      if (turn !== this.turn) return;
       try {
         const result = await this.cloud.upload(this.key!, this.roots(), this.state, (done, total) => this.uploaded(done, total));
+        // Turned off while it went up: what it knew is forgotten, and stays so.
+        if (turn !== this.turn) return;
         if (result.status === "uploaded") {
           this.state = result.state;
-          await saveCopyState(this.stateFile, this.state);
+          if (!(await this.keepState(turn))) return;
           this.copy = { size: result.size, savedAt: this.now().toISOString() };
           this.problem = null;
         } else if (result.status === "unchanged") {
@@ -503,6 +518,7 @@ export class CopySync {
           this.ask("conflict");
         }
       } catch (error) {
+        if (turn !== this.turn) return;
         const problem = this.noteProblem(error);
         if (loud) throw CopySync.userError(problem);
         return;
@@ -521,6 +537,8 @@ export class CopySync {
   async turnOn(folder: string | null = null): Promise<void> {
     if (this.on) return;
     if (!this.accountKeys.canKeep) throw new UserError("cloudCopy.error.cantKeep");
+    // Turned off or signed out from here on, it stays off.
+    const turn = this.turn;
     this.use(folder);
     const setUp = await this.exclusive("checking", async () => {
       if (folder !== null) await checkFolder(folder);
@@ -531,35 +549,39 @@ export class CopySync {
       if (error instanceof UserError) throw error;
       throw CopySync.userError(this.noteProblem(error));
     });
+    if (turn !== this.turn) return;
     if (setUp.status === "ask") {
       this.ask("askKey");
       this.changed();
       return;
     }
     if (setUp.created) this.shownKey = this.accountKeys.recoveryKey();
-    await this.startCopy();
+    await this.startCopy(turn);
   }
 
   /** The recovery key typed in when another PC made the account's key: checked against the account, then the copy goes on. */
   async enterKey(text: string): Promise<void> {
     const here = this.keyHere;
+    const turn = this.turn;
     await this.exclusive("checking", () => (here ? this.accountKeys.enterHere(text) : this.accountKeys.enter(text))).catch((error: unknown) => {
       if (error instanceof UserError) throw error;
       throw CopySync.userError(this.noteProblem(error));
     });
-    await this.goOnWithKey(here);
+    if (turn !== this.turn) return;
+    await this.goOnWithKey(here, turn);
   }
 
   /** Another PC sent the account's key (pairing.ts), and it is kept: a copy that waited for it goes on. */
   async keyArrived(): Promise<void> {
-    if (this.asked("askKey")) await this.goOnWithKey(this.keyHere);
+    if (this.asked("askKey")) await this.goOnWithKey(this.keyHere, this.turn);
   }
 
-  private async goOnWithKey(here: boolean): Promise<void> {
+  private async goOnWithKey(here: boolean, turn: number): Promise<void> {
     this.clear("askKey");
     try {
-      await this.startCopy();
+      await this.startCopy(turn);
     } catch (error) {
+      if (turn !== this.turn) return;
       // Signed out, the folder's copy is the only check: a key that doesn't open it is not kept.
       if (here && error instanceof UserError && error.key === "cloudCopy.error.wrongKey") {
         await this.accountKeys.forget();
@@ -576,6 +598,7 @@ export class CopySync {
    * new key. The data on every PC stays.
    */
   async startOver(): Promise<void> {
+    const turn = this.turn;
     const base = await this.exclusive("checking", async () => {
       const remote = await this.cloud.remote();
       await (this.keyHere ? this.accountKeys.startOverHere() : this.accountKeys.startOver());
@@ -584,21 +607,24 @@ export class CopySync {
       if (error instanceof UserError) throw error;
       throw CopySync.userError(this.noteProblem(error));
     });
+    // Turned off or signed out meanwhile: it stays off.
+    if (turn !== this.turn) return;
     const folder = this.folder;
     await this.forget(null);
+    const mine = this.turn;
     this.use(folder);
-    await savePlace(this.placeFile, folder);
+    if (!(await this.keepPlace(mine, folder))) return;
     this.shownKey = this.accountKeys.recoveryKey();
     this.copyOn = true;
     // Nothing of the old copy is reused: every file goes up again under the new key.
     this.state = { ...EMPTY_STATE, version: base };
-    await saveCopyState(this.stateFile, this.state);
+    if (!(await this.keepState(mine))) return;
     this.changed();
     await this.sync(true);
   }
 
   /** With the account's key here: takes up a copy that exists (the user keeps one side), or starts a new one. */
-  private async startCopy(): Promise<void> {
+  private async startCopy(turn: number): Promise<void> {
     let staged: Staged | null = null;
     try {
       staged = await this.exclusive("downloading", async () => {
@@ -608,14 +634,17 @@ export class CopySync {
         return this.stage(false);
       });
     } catch (error) {
+      // Turned off meanwhile: nothing to say about a turn-on that no longer counts.
+      if (turn !== this.turn) return;
       // Sealed with another key: a copy from before the account had its key.
       if (error instanceof CopyError && error.reason === "damaged") throw new UserError("cloudCopy.error.wrongKey");
       throw CopySync.userError(this.noteProblem(error));
     }
+    // Turned off (or signed out) while it looked: it stays off.
+    if (turn !== this.turn) return;
     this.copyOn = true;
     this.state = EMPTY_STATE;
-    await saveCopyState(this.stateFile, this.state);
-    await savePlace(this.placeFile, this.folder);
+    if (!(await this.keepState(turn)) || !(await this.keepPlace(turn, this.folder))) return;
     this.problem = null;
     if (staged) {
       // This PC has its own data too: the user keeps one side.
@@ -655,22 +684,41 @@ export class CopySync {
     if (this.waiting) throw new UserError("cloudCopy.error.conflict");
     const from = this.cloud;
     const problem = this.problem;
+    const turn = this.turn;
+    let moved = false;
+    let to: CloudCopy | null = null;
+    /** Something of this move went up to the new place (it held no copy before): only then it may be removed there. */
+    let ours = false;
+    const dropNew = async () => {
+      if (!ours || !to) return;
+      await to.remove().catch((error: unknown) => this.log(`cloud copy: the moved copy was not deleted: ${error instanceof Error ? error.message : String(error)}`));
+    };
     await this.exclusive("uploading", async () => {
       try {
+        if (turn !== this.turn) return;
         await this.hooks?.flush();
         if (folder !== null) await checkFolder(folder);
-        const to = new CloudCopy(this.storageFor(folder));
+        to = new CloudCopy(this.storageFor(folder));
         if (await to.remote()) throw new UserError("cloudCopy.error.moveTaken");
+        ours = true;
         const result = await to.upload(this.key!, this.roots(), EMPTY_STATE, (done, total) => this.uploaded(done, total));
+        // Another PC's copy came first, or nothing went up: not this move's to remove.
+        if (result.status !== "uploaded") ours = false;
         if (result.status === "too-big") throw new UserError("cloudCopy.error.too-big");
         if (result.status !== "uploaded") throw new UserError("cloudCopy.error.moveTaken");
-        await savePlace(this.placeFile, folder);
+        // Turned off while it went up: the new place is not taken up here and loses what went up, and the old copy
+        // stays for the other PCs.
+        if (!(await this.keepPlace(turn, folder))) return void (await dropNew());
         this.use(folder);
         this.state = result.state;
-        await saveCopyState(this.stateFile, this.state);
+        if (!(await this.keepState(turn))) return void (await dropNew());
+        moved = true;
         this.copy = { size: result.size, savedAt: this.now().toISOString() };
         this.problem = null;
       } catch (error) {
+        // Turned off meanwhile (signed out: the key went too): nothing to say about a move that no longer counts, and
+        // what went up to the new place goes.
+        if (turn !== this.turn) return void (await dropNew());
         if (error instanceof UserError) throw error;
         const failed = this.noteProblem(error);
         // The copy where it is now is fine: this was only the move.
@@ -678,6 +726,7 @@ export class CopySync {
         throw CopySync.userError(failed);
       }
     });
+    if (!moved) return;
     await from.remove().catch((error: unknown) => this.log(`cloud copy: the old copy was not deleted: ${error instanceof Error ? error.message : String(error)}`));
   }
 
@@ -691,9 +740,11 @@ export class CopySync {
   async keep(side: "pc" | "cloud"): Promise<void> {
     if (!this.on) return;
     if (side === "cloud") return this.takeCopy();
+    const turn = this.turn;
     await this.exclusive("downloading", async () => {
       try {
         const staged = await this.stageCurrent(false);
+        if (turn !== this.turn) return;
         if (staged) {
           await rename(this.stagedData, await this.backupFolder("cloud")).catch(() => undefined);
           // The parts of this PC's last sync may be gone from the service; the upload sends what is missing.
@@ -705,17 +756,19 @@ export class CopySync {
           this.state = EMPTY_STATE;
         }
         await rm(this.stagingDir, { recursive: true, force: true });
-        await saveCopyState(this.stateFile, this.state);
+        await this.keepState(turn);
       } catch (error) {
         throw CopySync.userError(this.noteProblem(error));
       }
     });
+    if (turn !== this.turn) return;
     this.clear("conflict");
     this.clear("restartToTake");
     await this.sync(true);
   }
 
   private async takeCopy(): Promise<void> {
+    const turn = this.turn;
     await this.exclusive("downloading", async () => {
       try {
         if (!(await this.stageCurrent(true))) throw new UserError("cloudCopy.error.noCopy");
@@ -725,6 +778,8 @@ export class CopySync {
         throw CopySync.userError(this.noteProblem(error));
       }
     });
+    // Turned off while it downloaded: no restart; the start drops what was staged, as the copy is off.
+    if (turn !== this.turn) return;
     this.restart();
   }
 
@@ -757,11 +812,40 @@ export class CopySync {
     // A copy in the user's own folder needs no account: it stays on, with its key.
     if (this.folder !== null && (this.copyOn || this.asked("askKey"))) return;
     if (this.copyOn || this.asked("askKey")) await this.forget(null);
+    else {
+      // Not on yet: a turn-on on its way (checking the key, looking for a copy) stops too, and forgets where it was going.
+      this.turn++;
+      this.use(null);
+      this.copy = null;
+      this.shownKey = null;
+    }
     await this.accountKeys.forget();
     this.changed();
   }
 
+  /**
+   * Writes what this PC knows of the copy, unless it was forgotten since `turn`: forgotten while it wrote, the file goes
+   * again, so the next start doesn't find the copy on. False when it was forgotten.
+   */
+  private async keepState(turn: number): Promise<boolean> {
+    if (turn !== this.turn) return false;
+    await saveCopyState(this.stateFile, this.state);
+    if (turn === this.turn) return true;
+    await rm(this.stateFile, { force: true });
+    return false;
+  }
+
+  /** Writes where the copy is, as `keepState` does. */
+  private async keepPlace(turn: number, folder: string | null): Promise<boolean> {
+    if (turn !== this.turn) return false;
+    await savePlace(this.placeFile, folder);
+    if (turn === this.turn) return true;
+    await rm(this.placeFile, { force: true });
+    return false;
+  }
+
   private async forget(problem: CloudCopyProblem | null): Promise<void> {
+    this.turn++;
     this.copyOn = false;
     this.state = EMPTY_STATE;
     this.shownKey = null;
