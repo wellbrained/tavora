@@ -100,7 +100,7 @@ const catalog = new CatalogStore(path.join(stateDir, "catalog"));
 // The signed hash of each version from before it was kept (S7), so a block can name it too. Only rows still without one
 // are read, so after the first start this is quick; a zip it can't use is named here and the start goes on.
 {
-  const { filled, skipped } = catalog.backfillSignedHashes();
+  const { filled, skipped } = catalog.backfillSignedHashes({ skipStalled: true });
   if (filled > 0) console.log(`[tavora-api] Filled the signed hash of ${filled} catalog versions.`);
   const removed = skipped.filter((version) => version.reason === REMOVED_ZIP).length;
   if (removed > 0) console.log(`[tavora-api] ${removed} catalog versions have no signed hash: their zip was removed to make room.`);

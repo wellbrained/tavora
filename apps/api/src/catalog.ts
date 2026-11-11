@@ -18,6 +18,9 @@ export class CatalogError extends Error {}
 
 /** Why backfillSignedHashes() skips a version whose zip prune() deleted: expected, not a fault. */
 export const REMOVED_ZIP = "its zip was removed to make room";
+/** catalog_state: the zip the backfill is reading now, and the ones a run died reading (see backfillSignedHashes). */
+const BACKFILL_READING = "signed_backfill_reading";
+const BACKFILL_STALLED = "signed_backfill_stalled";
 
 /** Tavora's own modules stay bundled with the app; the catalog holds community modules only. */
 const OFFICIAL_PREFIX = "tavora.";
@@ -847,8 +850,19 @@ export class CatalogStore {
    * Safe to run again: it only reads rows that are still null and never changes a filled one. A zip it can't use (removed
    * to make room, missing, not what its name says, unreadable, or without a readable signature) is skipped and reported,
    * and the rest still go in. The server runs it at every start; `catalog backfill-signed` runs it by hand.
+   *
+   * Reading a zip unpacks all of it, so the zip being read is noted first. If a run dies there (the service's memory
+   * limit), the next run skips that zip for good when `skipStalled` is set (the server's start, so it can't loop on
+   * it); without it (the command, which has no such limit) it tries again.
    */
-  backfillSignedHashes(): { filled: number; skipped: { sha256: string; id: string; version: string; reason: string }[] } {
+  backfillSignedHashes({ skipStalled = false }: { skipStalled?: boolean } = {}): { filled: number; skipped: { sha256: string; id: string; version: string; reason: string }[] } {
+    const stalled = new Set(JSON.parse(this.getState(BACKFILL_STALLED) ?? "[]") as string[]);
+    const died = this.getState(BACKFILL_READING);
+    if (died) {
+      stalled.add(died);
+      this.setState(BACKFILL_STALLED, JSON.stringify([...stalled]));
+      this.setState(BACKFILL_READING, "");
+    }
     const rows = this.db.prepare("select sha256, module_id, version, zip_removed from versions where signed_sha256 is null order by seq").all() as unknown as {
       sha256: string;
       module_id: string;
@@ -864,17 +878,24 @@ export class CatalogStore {
         skip(REMOVED_ZIP);
         continue;
       }
+      if (skipStalled && stalled.has(row.sha256)) {
+        skip("an earlier run stopped while reading its zip; try `catalog backfill-signed`");
+        continue;
+      }
       const bytes = this.zipBytes(row.sha256);
       if (!bytes) {
         skip("its zip is missing or not what its name says");
         continue;
       }
       let hash: string | null;
+      this.setState(BACKFILL_READING, row.sha256);
       try {
         hash = signedHash(readZip(bytes));
       } catch (error) {
         skip(`its zip can't be read: ${error instanceof Error ? error.message : String(error)}`);
         continue;
+      } finally {
+        this.setState(BACKFILL_READING, "");
       }
       if (hash === null) {
         skip("its zip has no readable signature");

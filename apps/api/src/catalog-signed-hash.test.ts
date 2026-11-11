@@ -110,6 +110,25 @@ describe("filling the signed hash of older versions", () => {
     expect(catalog.backfillSignedHashes()).toEqual({ filled: 1, skipped: [expect.objectContaining({ version: "1.0.0", reason: REMOVED_ZIP })] });
   });
 
+  it("skips at start a zip an earlier run died reading, so the server can't loop on it; the command tries again", () => {
+    const { dir, zips } = olderCatalog();
+    let catalog = new CatalogStore(path.join(dir, "catalog"));
+    // As if a start was killed while it read 1.1.0 (the service's memory limit).
+    catalog.setState("signed_backfill_reading", sha(zips[1]!));
+    catalog.close();
+
+    catalog = new CatalogStore(path.join(dir, "catalog"));
+    for (let start = 0; start < 2; start++) {
+      const result = catalog.backfillSignedHashes({ skipStalled: true });
+      expect(result.skipped).toEqual([expect.objectContaining({ version: "1.1.0", reason: expect.stringContaining("stopped while reading") })]);
+    }
+    expect(catalog.versionBySha(sha(zips[0]!))).toMatchObject({ signedSha256: signedHash(readZip(zips[0]!)) });
+    expect(catalog.getState("signed_backfill_reading")).toBe("");
+
+    expect(catalog.backfillSignedHashes()).toEqual({ filled: 1, skipped: [] });
+    expect(catalog.versionBySha(sha(zips[1]!))).toMatchObject({ signedSha256: signedHash(readZip(zips[1]!)) });
+  });
+
   it("names a stored zip that isn't a readable zip, or has no readable signature", () => {
     const { dir } = olderCatalog();
     const broken = Buffer.from("PK this is not a zip at all");

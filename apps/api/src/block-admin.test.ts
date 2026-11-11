@@ -165,6 +165,34 @@ describe("blocking by what a zip's signature covers (S7)", () => {
     expect(await (await get("/api/blocks/blocks.json")).json()).toEqual([{ sha256: first, reason: "Harmful." }]);
   });
 
+  it("keeps a staged block's signed hash when its version row goes, as a declined one does", async () => {
+    const { dir, first, firstSigned, get, post } = setup();
+    await post("/api/blocks", { sha256: first, reason: "Harmful." });
+    const db = new DatabaseSync(path.join(dir, "catalog.sqlite"));
+    db.prepare("delete from versions where sha256 = ?").run(first);
+    db.close();
+    expect(((await (await get("/api/blocks")).json()) as any).blocks).toEqual([expect.objectContaining({ sha256: first, signedSha256: firstSigned, id: null, toSign: [first, firstSigned] })]);
+    expect(((await (await get("/api/blocks/blocks.json")).json()) as Block[]).map((entry) => entry.sha256)).toEqual([first, firstSigned]);
+  });
+
+  it("lifts a block once a list without both of its entries is served", async () => {
+    const { first, second, get, post, serve, signAndUpload, blocksWaiting } = setup();
+    await post("/api/blocks", { sha256: first, reason: "Harmful." });
+    await post("/api/blocks", { sha256: second, reason: "Also harmful." });
+    await signAndUpload();
+    const kept = ((await (await get("/api/blocks/blocks.json")).json()) as Block[]).filter((entry) => entry.reason !== "Harmful.");
+    expect(kept.map((entry) => entry.sha256)).not.toContain(first);
+    serve(kept);
+    // A staged block stays until it is taken back (as before), so the lifted zip shows as to sign again, with both hashes.
+    expect(((await (await get("/api/blocks")).json()) as any).blocks).toEqual([
+      expect.objectContaining({ sha256: second, state: "in-force", toSign: [] }),
+      expect.objectContaining({ sha256: first, state: "to-sign", toSign: [first, expect.any(String)] }),
+    ]);
+    expect((await post("/api/blocks/remove", { sha256: first })).status).toBe(200);
+    expect(((await (await get("/api/blocks")).json()) as any).blocks).toEqual([expect.objectContaining({ sha256: second, state: "in-force" })]);
+    expect(await blocksWaiting()).toMatchObject({ count: 0 });
+  });
+
   it("leaves a list entry the catalog never had as it is", async () => {
     const { get, serve, blocksWaiting } = setup();
     serve([{ sha256: "b".repeat(64), reason: "Added by hand." }]);

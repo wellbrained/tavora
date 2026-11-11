@@ -22,6 +22,8 @@ const MAX_REASON = 300;
 
 interface Staged extends Block {
   stagedAt: string;
+  /** The zip's signed hash when it was staged (added for S7, absent before), so the block keeps it if the row goes. */
+  signedSha256?: string;
 }
 
 /** An entry the next signed list adds: `zip` is the blocked zip it is for, `stagedAt` null for a block already in force. */
@@ -33,12 +35,16 @@ export interface BlockToSign extends Block {
 const staged = (catalog: CatalogStore): Staged[] => JSON.parse(catalog.getState(STAGED) ?? "[]") as Staged[];
 const inForce = (trust: CatalogTrust | null): Block[] => trust?.signed("blocks")?.blocked ?? [];
 
-/** The zip a hash is for, and every hash a block of it names: the zip's own, then its signed hash when known. */
-function zipOf(catalog: CatalogStore, sha256: string) {
+/**
+ * The zip a hash is for, and every hash a block of it names: the zip's own, then its signed hash when known (from the
+ * catalog, else from the staged block, for a version whose row was deleted since, as a declined one is).
+ */
+function zipOf(catalog: CatalogStore, sha256: string, stagedSigned?: string) {
   const version = catalog.versionBySha(sha256);
   const zip = version?.sha256 ?? sha256;
-  const hashes = version?.signedSha256 && version.signedSha256 !== zip ? [zip, version.signedSha256] : [zip];
-  return { zip, hashes, version };
+  const signed = version?.signedSha256 ?? (typeof stagedSigned === "string" && SHA256.test(stagedSigned) ? stagedSigned : null);
+  const hashes = signed && signed !== zip ? [zip, signed] : [zip];
+  return { zip, hashes, signed, version };
 }
 
 /**
@@ -49,8 +55,8 @@ export function blocksToSign(catalog: CatalogStore, trust: CatalogTrust | null):
   const blocked = inForce(trust);
   const listed = new Set(blocked.map((block) => block.sha256));
   const entries: BlockToSign[] = [];
-  const add = (block: Block, stagedAt: string | null) => {
-    const { zip, hashes } = zipOf(catalog, block.sha256);
+  const add = (block: Block, stagedAt: string | null, stagedSigned?: string) => {
+    const { zip, hashes } = zipOf(catalog, block.sha256, stagedSigned);
     for (const sha256 of hashes) {
       if (listed.has(sha256)) continue;
       listed.add(sha256);
@@ -58,7 +64,7 @@ export function blocksToSign(catalog: CatalogStore, trust: CatalogTrust | null):
     }
   };
   for (const block of blocked) add(block, null);
-  for (const block of staged(catalog)) add(block, block.stagedAt);
+  for (const block of staged(catalog)) add(block, block.stagedAt, block.signedSha256);
   return entries;
 }
 
@@ -99,12 +105,12 @@ export function blockRoutes({ catalog, trust }: { catalog: CatalogStore; trust: 
     const signed = lists?.signed("blocks") ?? null;
     const served = new Set(inForce(lists).map((block) => block.sha256));
     const rows = new Map<string, BlockRow>();
-    const describe = (block: Block) => {
-      const { zip, hashes, version } = zipOf(catalog, block.sha256);
+    const describe = (block: Block, stagedSigned?: string) => {
+      const { zip, hashes, signed: signedSha256, version } = zipOf(catalog, block.sha256, stagedSigned);
       if (rows.has(zip)) return;
       rows.set(zip, {
         sha256: zip,
-        signedSha256: version?.signedSha256 ?? null,
+        signedSha256,
         reason: block.reason,
         id: version?.id ?? null,
         name: version?.name ?? null,
@@ -114,7 +120,7 @@ export function blockRoutes({ catalog, trust }: { catalog: CatalogStore; trust: 
       });
     };
     for (const block of inForce(lists)) describe(block);
-    for (const block of staged(catalog)) describe(block);
+    for (const block of staged(catalog)) describe(block, block.signedSha256);
     return context.json({ blocks: [...rows.values()], signed: signed ? { sequence: signed.sequence, issued: signed.issued } : null });
   });
 
@@ -136,7 +142,8 @@ export function blockRoutes({ catalog, trust }: { catalog: CatalogStore; trust: 
     if (!version) return context.json({ error: "The catalog never had this zip." }, 404);
     // In force by either hash: a hash it still lacks is offered to sign already (blocksToSign).
     if (inForce(trust()).some((block) => hashes.includes(block.sha256))) return context.json({ error: "This zip is blocked already." }, 409);
-    save([...staged(catalog).filter((block) => zipOf(catalog, block.sha256).zip !== zip), { sha256: zip, reason: reason.trim(), stagedAt: new Date().toISOString() }]);
+    const block: Staged = { sha256: zip, reason: reason.trim(), stagedAt: new Date().toISOString(), ...(version.signedSha256 ? { signedSha256: version.signedSha256 } : {}) };
+    save([...staged(catalog).filter((other) => zipOf(catalog, other.sha256).zip !== zip), block]);
     return context.json({ ok: true });
   });
 
