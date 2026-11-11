@@ -142,15 +142,18 @@ function save() {
   const img = image.value;
   if (!img) return;
   saving.value = true;
-  const { left, top, scale } = fit.value;
-  const { x, y, side } = frame.value;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = props.size;
-  const context = canvas.getContext("2d")!;
-  context.imageSmoothingQuality = "high";
-  context.drawImage(img, (x - left) / scale, (y - top) / scale, side / scale, side / scale, 0, 0, props.size, props.size);
-  emit("save", canvas.toDataURL("image/png").slice("data:image/png;base64,".length));
-  saving.value = false;
+  try {
+    const { left, top, scale } = fit.value;
+    const { x, y, side } = frame.value;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = props.size;
+    const context = canvas.getContext("2d")!;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(img, (x - left) / scale, (y - top) / scale, side / scale, side / scale, 0, 0, props.size, props.size);
+    emit("save", canvas.toDataURL("image/png").slice("data:image/png;base64,".length));
+  } finally {
+    saving.value = false;
+  }
 }
 
 function onOpenChange(value: boolean) {

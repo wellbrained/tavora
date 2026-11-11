@@ -53,24 +53,39 @@ const catalogParts = computed(() => !fromFiles.value && !(props.local && !props.
 
 /** The page from the module's own folder: its readme and pictures, offline. */
 async function showFiles() {
-  const own = await api.modulePage(props.module.id);
+  let own: Awaited<ReturnType<typeof api.modulePage>>;
+  try {
+    own = await api.modulePage(props.module.id);
+  } catch {
+    page.value = { status: "unreachable" };
+    return;
+  }
   const screenshots = own.status === "ok" ? own.screenshots : [];
   fromFiles.value = true;
   page.value = { status: "ok", module: { ...props.module, support: props.local ? props.local.support : props.module.support, screenshots: screenshots.length }, screenshots, readme: own.status === "ok" ? own.readme : [], versions: [] };
 }
 
-/** Asks for the page again after it could not be loaded. */
-async function retryPage() {
+/** The catalog page's load: it ends as `failed` when the request threw (shown like an unreachable service), and an older answer never lands over a newer one. */
+const loader = useTask({ mode: "latest" });
+const THREW: unique symbol = Symbol("threw");
+/** Asks for the page (again, after it could not be loaded). */
+async function loadPage() {
   page.value = null;
-  page.value = await api.catalogPage(props.module.id);
+  // A request that threw is marked inside the run, so only a newer load's answer is ever dropped; it shows like an
+  // unreachable service, and the load says failed.
+  const answer = await loader.run(() => api.catalogPage(props.module.id).catch((): typeof THREW => THREW));
+  if (answer === undefined) return;
+  if (answer === THREW) loader.fail(t("catalog.pageMissing"));
+  const next: CatalogPageResult = answer === THREW ? { status: "unreachable" } : answer;
+  page.value = next;
+  if (props.local && next.status !== "ok") await showFiles();
 }
 
 onMounted(async () => {
   // Opened from the card's rating: start at the reviews.
   if (props.atReviews) void nextTick(() => reviews.value?.scrollIntoView({ block: "start" }));
   if (props.local && !props.local.fromCatalog) return showFiles();
-  page.value = await api.catalogPage(props.module.id);
-  if (props.local && page.value.status !== "ok") await showFiles();
+  await loadPage();
 });
 
 /** The listing as the main process read it for this page, or the card's until then. */
@@ -127,6 +142,7 @@ async function openHomepage() {
     <DialogContent
       class="bg-card flex h-[min(640px,calc(100vh-96px))] w-[min(960px,calc(100vw-48px))] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
       :data-testid="`catalog-info-${module.id}`"
+      :data-status="loader.state.value.status"
       :show-close-button="false"
     >
       <header class="flex items-start gap-4 border-b p-6">
@@ -179,7 +195,7 @@ async function openHomepage() {
                 <ModuleDescription :blocks="page ? (loaded?.readme ?? []) : PLACEHOLDER_README" :heading="false" :fallback="module.description" :module-id="catalogParts ? module.id : undefined">
                   <div v-if="page && page.status !== 'ok'" class="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" role="status" data-testid="catalog-info-missing">
                     <p>{{ page.status === "gone" ? t("catalog.pageGone") : t("catalog.pageMissing") }}</p>
-                    <Button v-if="page.status !== 'gone' && !fromFiles" size="sm" variant="secondary" data-testid="catalog-info-retry" @click="retryPage">{{ t("catalog.retry") }}</Button>
+                    <Button v-if="page.status !== 'gone' && !fromFiles" size="sm" variant="secondary" data-testid="catalog-info-retry" @click="loadPage">{{ t("catalog.retry") }}</Button>
                   </div>
                 </ModuleDescription>
               </Skeleton>

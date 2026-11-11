@@ -7,9 +7,10 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { Check } from "@lucide/vue";
+import { useTask } from "@tavora/official-ui/use-task";
 import type { ProfileRankBoard, ProfileRankPeriod, ProfileRankStanding, ProfileRanksView } from "../../../shared/host-api";
 import { intlLocale } from "../../../shared/i18n-core";
-import { act, api, state } from "../../host";
+import { act, api, showToast, state } from "../../host";
 import { language, t } from "../../i18n";
 import SettingGroup from "../settings/SettingGroup.vue";
 import SettingRow from "../settings/SettingRow.vue";
@@ -22,17 +23,21 @@ const profile = computed(() => state.value!.profile);
 /** Name and initials as typed, until saved; ProfileDialog shows them beside the avatar as they are typed. */
 const draft = defineModel<{ name: string; initials: string }>("draft", { required: true });
 const dirty = computed(() => draft.value.name !== profile.value.name || draft.value.initials !== profile.value.initials);
-const saving = ref(false);
+/** Saving the name and initials: it always ends (a throw shows a toast), so the next save is not blocked. */
+const saver = useTask({ describe: () => t("error.generic") });
+const saving = saver.busy;
 /** Shows "Saved" for a moment after a save. */
 const saved = ref(false);
 let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function save() {
   if (!dirty.value || saving.value) return;
-  saving.value = true;
   const sent = { name: draft.value.name, initials: draft.value.initials };
-  const result = await act({ type: "save-profile", ...sent });
-  saving.value = false;
+  const result = await saver.run(() => act({ type: "save-profile", ...sent }));
+  if (!result) {
+    if (saver.error.value) showToast(saver.error.value);
+    return;
+  }
   if (!result.ok) return;
   // Main may have tidied the values (spaces in initials, length); what was typed during the save stays.
   if (draft.value.name === sent.name && draft.value.initials === sent.initials) draft.value = { name: profile.value.name, initials: profile.value.initials };
@@ -94,7 +99,7 @@ function numbersOf(board: ProfileRankBoard, standing: ProfileRankStanding): stri
 
 <template>
   <!-- Enter in a field saves; there is no Save button. -->
-  <div>
+  <div :data-status="saver.state.value.status">
     <SettingGroup>
       <SettingRow :label="t('profile.name')" :description="t('profile.nameHint')">
         <Input

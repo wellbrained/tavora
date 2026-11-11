@@ -92,16 +92,28 @@ async function updateModule(module: ModuleView) {
     return;
   }
   updating.value = module.id;
-  await act({ type: "apply-module-update", moduleId: module.id, version: module.update.version });
-  updating.value = null;
+  try {
+    await act({ type: "apply-module-update", moduleId: module.id, version: module.update.version });
+  } catch {
+    showToast(t("error.generic"));
+  } finally {
+    updating.value = null;
+  }
 }
 
 /** Asks the catalog for updates of the modules installed from it now. */
 const checking = ref(false);
 async function checkUpdates() {
   checking.value = true;
-  const result = await act({ type: "check-module-updates" });
-  checking.value = false;
+  let result: Awaited<ReturnType<typeof act>>;
+  try {
+    result = await act({ type: "check-module-updates" });
+  } catch {
+    showToast(t("error.generic"));
+    return;
+  } finally {
+    checking.value = false;
+  }
   if (!result.ok) return;
   const updated = result.updated ?? 0;
   const waiting = result.waiting ?? 0;

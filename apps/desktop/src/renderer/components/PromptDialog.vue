@@ -1,28 +1,34 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Pencil } from "@lucide/vue";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
+import { useTask } from "@tavora/official-ui/use-task";
 import { closeDialog, dialog, type PromptRequest } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
 
 const props = defineProps<{ request: PromptRequest }>();
 const value = ref(props.request.value);
-const error = ref<string | null>(null);
-const busy = ref(false);
+/** The work behind the button: it always ends (a throw shows as an error), so the button is usable again. */
+const task = useTask({ describe: () => t("error.generic") });
+const busy = task.busy;
+/** The service's own answer when it did not go through; a request that threw is the task's error. */
+const answered = ref<string | null>(null);
+const error = computed(() => answered.value ?? task.error.value);
 
 async function submit() {
-  busy.value = true;
-  error.value = await props.request.submit(value.value);
-  busy.value = false;
-  if (!error.value) closeDialog(props.request);
+  answered.value = null;
+  const message = await task.run(() => props.request.submit(value.value));
+  if (message === undefined) return;
+  answered.value = message;
+  if (!message) closeDialog(props.request);
 }
 </script>
 
 <template>
-  <ModalDialog :title="request.title" :icon="Pencil" testid="prompt" @close="dialog = null">
+  <ModalDialog :title="request.title" :icon="Pencil" testid="prompt" :status="task.state.value.status" @close="dialog = null">
     <form class="contents" @submit.prevent="submit">
       <div class="grid gap-2">
         <Label for="prompt-input" class="text-muted-foreground font-normal">{{ request.label }}</Label>

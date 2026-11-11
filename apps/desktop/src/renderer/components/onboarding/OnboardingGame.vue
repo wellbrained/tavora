@@ -10,6 +10,7 @@ import type { CatalogMatch, CatalogModuleView, OnlineGame } from "../../../share
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { useTask } from "@tavora/official-ui/use-task";
 import { useListNav } from "@/lib/list-nav";
 import { addInputFor, type PickerRow } from "../../lib/game-picker";
 import { useGamePicker, whenOf } from "../../lib/use-game-picker";
@@ -33,8 +34,12 @@ const query = ref("");
 // Games the user already has are left out.
 const { name, rows, custom, count, installed, installedLoaded, onlineStatus, modulesOf } = useGamePicker(query, { hideAdded: true });
 const info = (row: PickerRow): PickerBadge => ({ modules: modulesOf(row).length, when: whenOf(row) });
-const error = ref<string | null>(null);
-const busy = ref(false);
+/** Adding the game: it always ends (a throw shows as an error), so the list is usable again. */
+const adder = useTask({ describe: () => t("error.generic") });
+const busy = adder.busy;
+/** The host's own answer when it did not go through; a request that threw is the task's error. */
+const answered = ref<string | null>(null);
+const error = computed(() => answered.value ?? adder.error.value);
 
 // Popular games, one click each; the ones the user has are left out.
 const popular = ref<CatalogMatch[]>([]);
@@ -55,18 +60,19 @@ const activeId = computed(() => (count.value ? `onboarding-results-option-${Math
 const phase = ref<"pick" | "offer" | "ready">(props.started ? "ready" : "pick");
 const offer = ref<CatalogModuleView[] | null>(null);
 const ticked = ref<Set<string>>(new Set());
-const installing = ref(false);
+/** Installing the offered modules: it always ends, so the buttons are usable again. */
+const installer = useTask({ describe: () => t("error.generic") });
+const installing = installer.busy;
 const failed = ref<Record<string, string>>({});
 const game = ref<StartedGame | null>(props.started);
 
 async function add(input: { catalogId: string } | { online: OnlineGame } | { name: string }, label: string) {
   if (busy.value) return;
-  busy.value = true;
-  error.value = null;
-  const result = props.dry ? { ok: true as const, id: pretendId(input, label) } : await act({ type: "add-workspace", ...input }, { quiet: true });
-  busy.value = false;
+  answered.value = null;
+  const result = await adder.run(async () => (props.dry ? { ok: true as const, id: pretendId(input, label) } : await act({ type: "add-workspace", ...input }, { quiet: true })));
+  if (!result) return;
   if (!result.ok || !result.id) {
-    if (!result.ok) error.value = result.error;
+    if (!result.ok) answered.value = result.error;
     return;
   }
   const workspace = props.dry ? undefined : state.value!.library.workspaces[result.id];
@@ -75,8 +81,8 @@ async function add(input: { catalogId: string } | { online: OnlineGame } | { nam
   phase.value = "offer";
   offer.value = null;
   // The catalog's modules for this game (offline or switched off: none, and the offer is skipped).
-  const listed = await api.browseCatalog(props.dry ? { game: result.id } : { workspaceId: result.id });
-  const made = listed.status === "ok" ? listed.modules.filter((module) => module.fits && module.forGames.length > 0).slice(0, 4) : [];
+  const listed = await api.browseCatalog(props.dry ? { game: result.id } : { workspaceId: result.id }).catch(() => null);
+  const made = listed?.status === "ok" ? listed.modules.filter((module) => module.fits && module.forGames.length > 0).slice(0, 4) : [];
   if (!made.length) {
     phase.value = "ready";
     return;
@@ -114,19 +120,26 @@ function toggle(id: string, on: boolean | "indeterminate") {
 /** Installs the ticked modules, one after another; the ones that fail keep their error and stay out. */
 async function setUp() {
   if (installing.value || !offer.value || !game.value) return;
-  installing.value = true;
   failed.value = {};
   const done: string[] = [];
-  for (const module of offer.value.filter((item) => ticked.value.has(item.id))) {
-    if (state.value!.modules.some((installed) => installed.id === module.id)) {
-      done.push(module.id);
-      continue;
+  const chosen = offer.value.filter((item) => ticked.value.has(item.id));
+  const ran = await installer.run(async () => {
+    for (const module of chosen) {
+      if (state.value!.modules.some((installed) => installed.id === module.id)) {
+        done.push(module.id);
+        continue;
+      }
+      try {
+        const result = props.dry ? { ok: true as const } : await act({ type: "install-catalog-module", moduleId: module.id }, { quiet: true });
+        if (result.ok) done.push(module.id);
+        else failed.value = { ...failed.value, [module.id]: result.error };
+      } catch {
+        failed.value = { ...failed.value, [module.id]: t("error.generic") };
+      }
     }
-    const result = props.dry ? { ok: true as const } : await act({ type: "install-catalog-module", moduleId: module.id }, { quiet: true });
-    if (result.ok) done.push(module.id);
-    else failed.value = { ...failed.value, [module.id]: result.error };
-  }
-  installing.value = false;
+    return true;
+  });
+  if (!ran || !game.value) return;
   game.value = { ...game.value, moduleIds: done };
   emit("start", game.value);
   if (!Object.keys(failed.value).length) phase.value = "ready";
@@ -138,7 +151,7 @@ function notNow() {
 </script>
 
 <template>
-  <section class="flex w-full max-w-[560px] flex-col items-center text-center" data-testid="onboarding-game">
+  <section class="flex w-full max-w-[560px] flex-col items-center text-center" data-testid="onboarding-game" :data-status="adder.state.value.status">
     <!-- Pick -->
     <template v-if="phase === 'pick'">
       <h1 class="text-3xl font-semibold">{{ t("onboarding.game.title") }}</h1>
