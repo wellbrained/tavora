@@ -7,6 +7,7 @@
 #   tavora-api-catalog delist <module id>   takes a module out of the catalog; its versions are kept
 #   tavora-api-catalog relist <module id>
 #   tavora-api-catalog list
+#   tavora-api-catalog backfill-signed      fills the signed hash of older versions, names the ones it can't
 #   tavora-api-catalog set-list <revocations|blocks|successions> <file.json>
 #                                           a list signed offline with pnpm tavora-catalog-sign
 set -euo pipefail

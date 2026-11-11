@@ -6,6 +6,8 @@
 //   pnpm --filter @tavora/api catalog list
 //   pnpm --filter @tavora/api catalog set-list <revocations|blocks|successions> <file.json>
 //                                                         a list signed offline with pnpm tavora-catalog-sign, served unchanged
+//   pnpm --filter @tavora/api catalog backfill-signed       fills the signed hash of older versions and names the ones
+//                                                         it can't (the server does the same at every start)
 //
 // It works on the catalog in TAVORA_STATE_DIR (default data/state). On the server it is
 // `tavora-api-catalog`, which runs the release's catalog.mjs as the service's user; `add -` reads the zip from stdin.
@@ -36,12 +38,16 @@ try {
   } else if (command === "set-list" && argument && isSignedList(argument) && rest.length === 1) {
     store.setList(argument, readFileSync(rest[0] === "-" ? 0 : rest[0]!));
     console.log(`Now serving the ${argument} list.`);
+  } else if (command === "backfill-signed" && argument === undefined) {
+    const { filled, skipped } = store.backfillSignedHashes();
+    console.log(`Filled the signed hash of ${filled} versions; ${skipped.length} still have none.`);
+    for (const version of skipped) console.log(`  ${version.id} ${version.version} (${version.sha256}): ${version.reason}`);
   } else if (command === "list" && argument === undefined) {
     const modules = store.modules();
     if (modules.length === 0) console.log("The catalog is empty.");
     for (const module of modules) console.log(`${module.id} ${module.latest} (${module.versions} versions, key ${module.owner})${module.listed ? "" : " delisted"}`);
   } else {
-    console.error(`Usage:\n  catalog add <module.zip | ->\n  catalog delist <module id>\n  catalog relist <module id>\n  catalog list\n  catalog set-list <${SIGNED_LISTS.join("|")}> <file.json | ->`);
+    console.error(`Usage:\n  catalog add <module.zip | ->\n  catalog delist <module id>\n  catalog relist <module id>\n  catalog list\n  catalog backfill-signed\n  catalog set-list <${SIGNED_LISTS.join("|")}> <file.json | ->`);
     process.exitCode = 2;
   }
 } catch (error) {

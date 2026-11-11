@@ -23,7 +23,8 @@
 //   blocks       [{ "sha256": "<zip SHA-256>", "reason": "Sends your files to a stranger's server." }]
 //                reason: one line users read in Settings > Modules. sha256 may also be the hash of what the zip's
 //                signature covers (signedHash in packages/pack), which a repack of the same files can't change: list
-//                both for each blocked zip, as older apps know only the zip's.
+//                both for each blocked zip, as older apps know only the zip's. The admin panel's blocks.json does
+//                (signedSha256 in the catalog), and adds the one a block already in force lacks.
 //   successions  [{ "old": "<32 hex>", "new": "<32 hex>", "account": "<account id>" }]
 //                only after the service checked that the account linked the old key before it was lost.
 import { createPrivateKey, generateKeyPairSync, type KeyObject } from "node:crypto";

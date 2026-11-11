@@ -127,9 +127,10 @@ pnpm --filter @tavora/api catalog delist <module id>       # out of the catalog;
 pnpm --filter @tavora/api catalog relist <module id>
 pnpm --filter @tavora/api catalog list
 pnpm --filter @tavora/api catalog set-list revocations path/to/revocations.json   # also blocks, successions
+pnpm --filter @tavora/api catalog backfill-signed          # fills older versions' signed hash, names the zips it can't
 ```
 
-On the server the same commands are `tavora-api-catalog` (copy the zip there first). A zip is checked the way the app's installer checks it before anything is stored: size and compression caps, a valid manifest with every page and icon it names, a valid changelog if it has one, and a publisher signature over every file. Unsigned zips and `tavora.` ids are refused. A module's first version sets its owner key; later versions must come from the same key and be newer, so no version is ever replaced. Zips are stored as `catalog/zips/<sha256>.zip` and are never unpacked on the server.
+On the server the same commands are `tavora-api-catalog` (copy the zip there first). A zip is checked the way the app's installer checks it before anything is stored: size and compression caps, a valid manifest with every page and icon it names, a valid changelog if it has one, and a publisher signature over every file. Unsigned zips and `tavora.` ids are refused. A module's first version sets its owner key; later versions must come from the same key and be newer, so no version is ever replaced. Zips are stored as `catalog/zips/<sha256>.zip` and are never unpacked on the server. Each version also keeps `signed_sha256`, the SHA-256 of what its signature covers (`signedHash` in `@tavora/pack`), which stays the same when the same signed files are packed again, so a block can name it. It is filled at upload. For versions from before it, the server fills it from the kept zips at every start (only rows still without one, so it is safe to repeat). It logs how many have no zip left (removed to make room) and names each other version it couldn't fill (missing, unreadable or unsigned), without stopping. A zip a start died reading (the memory limit) is skipped at later starts, so the service can't loop on it. `catalog backfill-signed` does the same by hand, tries such a zip again and lists every version left without one.
 
 ### Review before listing
 
@@ -173,10 +174,10 @@ The admin app (`ADMIN_PORT`, token as for the rest) answers JSON under `/api/mod
 
 | Call | What it does |
 | --- | --- |
-| `GET /` | Every block, in force (in the served signed list) or to sign, with its module, version and reason; `signed` is the served list's sequence and date |
-| `POST / { sha256, reason }` | Keeps a block to sign. The reason is what users read, one line of at most 300 characters. 404 for a zip the catalog never had, 409 if it's in force already |
-| `POST /remove { sha256 }` | Takes back a block to sign. 409 for one in force: sign a list without it instead |
-| `GET /blocks.json` | The entries for `pnpm tavora-catalog-sign blocks`: every block in force, then the ones to sign. Sign it on your PC, upload with `catalog set-list blocks`; a block then shows as in force |
+| `GET /` | One row per blocked zip, in force (the served signed list names either of its hashes) or to sign, with its module, version and reason: `sha256` is the zip's hash, `signedSha256` the hash of what its signature covers (`null` when unknown), `toSign` the hashes of it the next list adds; `signed` is the served list's sequence and date |
+| `POST / { sha256, reason }` | Keeps a block to sign. `sha256` may be the zip's hash or its signed hash; the block is kept under the zip's. The reason is what users read, one line of at most 300 characters. 404 for a zip the catalog never had, 409 if it's in force already by either hash |
+| `POST /remove { sha256 }` | Takes back a block to sign, by either hash. 409 for one in force: sign a list without it instead |
+| `GET /blocks.json` | The entries for `pnpm tavora-catalog-sign blocks`: every entry in force, then the ones to sign. A blocked zip gets two plain `{ sha256, reason }` entries: its zip hash, which older apps match, and its signed hash, which a repack can't change. A block in force that lacks one gets it here, so sign and upload once after this lands. Sign it on your PC, upload with `catalog set-list blocks`; a block then shows as in force |
 
 Emails to developers go out through the same mailer as the publish emails, never with the allowance kept for sign-in codes; a mail that can't go out doesn't undo the decision.
 

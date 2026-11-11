@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import type { AccountStore } from "./account-store.ts";
 import { registerPanelRoutes } from "./admin-panel.ts";
 import { createProbes, type Probes } from "./admin-probes.ts";
-import { blockRoutes, blocksToSign } from "./block-admin.ts";
+import { blockRoutes, zipsToSign } from "./block-admin.ts";
 import type { CatalogStore } from "./catalog.ts";
 import { catalogTrust } from "./catalog-trust.ts";
 import { keyRequestStatus, revocationEntries, successionEntries } from "./key-requests.ts";
@@ -477,7 +477,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
       const allowed = new Set(leaderboards?.allowedModules().map((entry) => entry.moduleId));
       return (catalog?.adminModules() ?? []).filter((module) => module.leaderboards !== null && !allowed.has(module.id)).length;
     },
-    blocksToSign: () => (catalog ? blocksToSign(catalog, trust()).length : 0),
+    blocksToSign: () => (catalog ? zipsToSign(catalog, trust()) : 0),
     keysWaiting: () => (accounts?.allKeyRequests() ?? []).filter((request) => keyRequestStatus(request, trust()) === "waiting").length,
     dataset: dataset ?? (() => ({ games: 0, builtAt: null })),
     mailDailyLimit,

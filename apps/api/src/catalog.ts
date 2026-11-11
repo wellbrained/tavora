@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { allowsPersonalWorkspaces, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
-import { MANIFEST_FILE, readZip, SIGNATURE_FILE, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
+import { MANIFEST_FILE, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
 
 /**
@@ -15,6 +15,12 @@ import { inspectPng, isWebp } from "./png.ts";
  */
 
 export class CatalogError extends Error {}
+
+/** Why backfillSignedHashes() skips a version whose zip prune() deleted: expected, not a fault. */
+export const REMOVED_ZIP = "its zip was removed to make room";
+/** catalog_state: the zip the backfill is reading now, and the ones a run died reading (see backfillSignedHashes). */
+const BACKFILL_READING = "signed_backfill_reading";
+const BACKFILL_STALLED = "signed_backfill_stalled";
 
 /** Tavora's own modules stay bundled with the app; the catalog holds community modules only. */
 const OFFICIAL_PREFIX = "tavora.";
@@ -440,6 +446,11 @@ export class CatalogStore {
     if (!columns.includes("status")) this.db.exec("alter table versions add column status text not null default 'listed'");
     if (!columns.includes("review")) this.db.exec("alter table versions add column review text");
     if (!columns.includes("file_hashes")) this.db.exec("alter table versions add column file_hashes text");
+    // The SHA-256 of what the zip's signature covers (signedHash in @tavora/pack), which a repack of the same signed files
+    // can't change, so a block can name it as well as the zip's own hash (S7). Filled at upload; versions from before it
+    // get it from backfillSignedHashes(), and stay null when their zip is gone.
+    if (!columns.includes("signed_sha256")) this.db.exec("alter table versions add column signed_sha256 text");
+    this.db.exec("create index if not exists versions_signed_sha256 on versions (signed_sha256)");
     this.db.exec(`
       create table if not exists trusted_accounts (account_id text primary key, since text not null);
       create table if not exists declined (
@@ -495,7 +506,7 @@ export class CatalogStore {
     try {
       if (!module) this.db.prepare("insert into modules (id, owner, created_at) values (?, ?, ?)").run(manifest.id, stored, at);
       this.db
-        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer, screenshots, icon, readme, status, review, file_hashes) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer, screenshots, icon, readme, status, review, file_hashes, signed_sha256) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .run(
           manifest.id,
           manifest.version,
@@ -512,6 +523,7 @@ export class CatalogStore {
           waits ? "waiting" : "listed",
           review ? JSON.stringify(review) : null,
           JSON.stringify(copyHashes(checked.files)),
+          signedHash(checked.files),
         );
       this.db.exec("commit");
     } catch (error) {
@@ -822,13 +834,83 @@ export class CatalogStore {
     ).map((row) => ({ id: row.id, version: row.version, sha256: row.sha256, owner: row.owner, accountId: row.account_id, manifest: JSON.parse(row.manifest) as ModuleManifest }));
   }
 
-  /** A saved note of the catalog (the one-time run's results), or null. */
-  /** The module and version of a zip the catalog has or had, by its hash; null when it never had it. */
-  versionBySha(sha256: string): { id: string; name: string; version: string } | null {
-    const row = this.db.prepare("select module_id, version, manifest from versions where sha256 = ?").get(sha256) as { module_id: string; version: string; manifest: string } | undefined;
-    return row ? { id: row.module_id, name: (JSON.parse(row.manifest) as { name: string }).name, version: row.version } : null;
+  /**
+   * The module and version of a zip the catalog has or had, by the zip's hash or by the hash of what its signature covers
+   * (signed_sha256); null when it never had it. `sha256` is always the zip's own hash, `signedSha256` null when unknown.
+   */
+  versionBySha(sha256: string): { id: string; name: string; version: string; sha256: string; signedSha256: string | null } | null {
+    const row = this.db.prepare("select module_id, version, manifest, sha256, signed_sha256 from versions where sha256 = ? or signed_sha256 = ? order by sha256 = ? desc, seq limit 1").get(sha256, sha256, sha256) as
+      | { module_id: string; version: string; manifest: string; sha256: string; signed_sha256: string | null }
+      | undefined;
+    return row ? { id: row.module_id, name: (JSON.parse(row.manifest) as { name: string }).name, version: row.version, sha256: row.sha256, signedSha256: row.signed_sha256 } : null;
   }
 
+  /**
+   * Fills signed_sha256 from the stored zip for every version still without one (versions from before the column, S7).
+   * Safe to run again: it only reads rows that are still null and never changes a filled one. A zip it can't use (removed
+   * to make room, missing, not what its name says, unreadable, or without a readable signature) is skipped and reported,
+   * and the rest still go in. The server runs it at every start; `catalog backfill-signed` runs it by hand.
+   *
+   * Reading a zip unpacks all of it, so the zip being read is noted first. If a run dies there (the service's memory
+   * limit), the next run skips that zip for good when `skipStalled` is set (the server's start, so it can't loop on
+   * it); without it (the command, which has no such limit) it tries again.
+   */
+  backfillSignedHashes({ skipStalled = false }: { skipStalled?: boolean } = {}): { filled: number; skipped: { sha256: string; id: string; version: string; reason: string }[] } {
+    const stalled = new Set(JSON.parse(this.getState(BACKFILL_STALLED) ?? "[]") as string[]);
+    const died = this.getState(BACKFILL_READING);
+    if (died) {
+      stalled.add(died);
+      this.setState(BACKFILL_STALLED, JSON.stringify([...stalled]));
+      this.setState(BACKFILL_READING, "");
+    }
+    const rows = this.db.prepare("select sha256, module_id, version, zip_removed from versions where signed_sha256 is null order by seq").all() as unknown as {
+      sha256: string;
+      module_id: string;
+      version: string;
+      zip_removed: string | null;
+    }[];
+    const fill = this.db.prepare("update versions set signed_sha256 = ? where sha256 = ? and signed_sha256 is null");
+    let filled = 0;
+    const skipped: { sha256: string; id: string; version: string; reason: string }[] = [];
+    for (const row of rows) {
+      const skip = (reason: string) => skipped.push({ sha256: row.sha256, id: row.module_id, version: row.version, reason });
+      if (row.zip_removed !== null) {
+        skip(REMOVED_ZIP);
+        continue;
+      }
+      if (skipStalled && stalled.has(row.sha256)) {
+        skip("an earlier run stopped while reading its zip; try `catalog backfill-signed`");
+        continue;
+      }
+      const bytes = this.zipBytes(row.sha256);
+      if (!bytes) {
+        skip("its zip is missing or not what its name says");
+        continue;
+      }
+      let hash: string | null;
+      this.setState(BACKFILL_READING, row.sha256);
+      try {
+        hash = signedHash(readZip(bytes));
+      } catch (error) {
+        skip(`its zip can't be read: ${error instanceof Error ? error.message : String(error)}`);
+        continue;
+      } finally {
+        this.setState(BACKFILL_READING, "");
+      }
+      if (hash === null) {
+        skip("its zip has no readable signature");
+        continue;
+      }
+      try {
+        if (Number(fill.run(hash, row.sha256).changes) > 0) filled++;
+      } catch (error) {
+        skip(`it couldn't be saved: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return { filled, skipped };
+  }
+
+  /** A saved note of the catalog (the one-time run's results), or null. */
   getState(name: string): string | null {
     return (this.db.prepare("select value from catalog_state where name = ?").get(name) as { value: string } | undefined)?.value ?? null;
   }
