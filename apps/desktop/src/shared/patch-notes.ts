@@ -30,269 +30,62 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.24.21",
     date: "2026-11-10",
-    title: "Cloud copy stays current",
+    title: "Safer modules, steadier app",
     notes: [
-      "Tavora now asks before it takes a cloud copy older than the one on your PC.",
-      "If the cloud copy was deleted and made again while this PC was off, you choose which side to keep.",
-    ],
-    prs: [
-      { number: 729, title: "Cloud copy: seal the version a service copy follows, refuse older ones" },
-    ],
-    tags: ["cloud-copy", "privacy", "website"],
-  },
-  {
-    version: "0.24.20",
-    date: "2026-11-10",
-    title: "Tighter module pages",
-    notes: [
+      "A new PC now asks you to confirm that both PCs show the same code before it takes the key. Click Codes match on it, and Add on your other PC.",
+      "Tavora now asks before it takes a cloud copy older than the one on your PC. If the cloud copy was deleted and made again while this PC was off, you choose which side to keep.",
+      "Modules can't be allowed to read Documents\\Tavora or Tavora's other folders, where your key files and saved files are, and never read key files from any folder.",
+      "Overlay pages can no longer send anything out over WebRTC, the same as panels.",
       "Module pages can't open frames or start workers from text any more, so they can't run code they didn't ship.",
+      "A module page can't get around its limits on requests by connecting to Tavora again.",
+      "Modules no longer see or remove the keys you set for their overlays.",
+      "Holding a key in a module now counts as one press, and Ctrl or Shift alone counts as none.",
+      "Imported web pages can no longer pass a module odd or oversized data.",
+      "Older modules can save at most 30 files an hour to Downloads\\Tavora.",
+      "A module Tavora blocked stays blocked when someone packs the same files into a new zip.",
+      "Websites no longer get a client certificate from your PC.",
+      "A redirect to a site you don't sign in to everywhere now keeps this workspace's own sign-ins.",
+      "When a module fills too much space, Tavora now clears its storage in the workspace where it grew, not in another one.",
+      "Allowing a module access no longer answers its next question for you before you see it.",
+      "A dialog or window that finishes its work no longer closes a question that popped up in the meantime.",
+      "The Tab key shows where you are again on settings menus, tab panels, tiles, toggles, colour swatches and the add-module list, and can't reach the page behind an open dialog or menu.",
+      "The Tab key reaches the zoom buttons of a map or tree before its content, and the toasts last (or first, when they sit at the top).",
+      "A picker always shows the current name of what you picked, also after a rename or a language switch, and a long choice breaks between words instead of being cut off.",
+      "The Ask for a module button sends the game's name correctly again.",
+      "Pressing Update twice installs a module update once.",
+      "A panel you move just before switching workspaces stays where you put it.",
+      "Switching conversations quickly always shows the one you picked.",
+      "What you type in your profile while it saves stays.",
+      "After a pinch on a map, the grabbing hand no longer stays, and grabbing a list item again right after a drop works.",
+      "Appearance no longer gives theme makers a tip that would stop their theme from opening in older Tavora versions.",
+      "PDF Viewer: Switching files while one asks for its password opens the right one.",
+      "Clock & Counter: A finished countdown no longer keeps your PC busy.",
+      "Whiteboard: Your last stroke is kept when Tavora closes or sleeps, and a board you couldn't delete keeps saving what you draw.",
     ],
     prs: [
       { number: 733, title: "Module pages: a policy on every answer, no frames, no blob: workers" },
-    ],
-    tags: ["modules", "privacy", "website"],
-  },
-  {
-    version: "0.24.19",
-    date: "2026-11-10",
-    title: "Limits that hold",
-    notes: [
-      "A module page can't get around its limits on requests by connecting to Tavora again.",
-    ],
-    prs: [
       { number: 732, title: "Bridge: a new port keeps the panel's limits and ends the old port's requests" },
-    ],
-    tags: ["modules", "privacy", "website"],
-  },
-  {
-    version: "0.24.18",
-    date: "2026-11-10",
-    title: "Safer module presses",
-    notes: [
-      "Holding a key in a module now counts as one press, and Ctrl or Shift alone counts as none.",
-      "Older modules can save at most 30 files an hour to Downloads\\Tavora.",
-      "Imported web pages can no longer pass a module odd or oversized data.",
-      "Modules no longer see or remove the keys you set for their overlays.",
-    ],
-    prs: [
-      { number: 726, title: "Modules: one press per held key, readPage read apart, overlay keys hidden" },
-    ],
-    tags: ["privacy", "website"],
-  },
-  {
-    version: "0.24.17",
-    date: "2026-11-10",
-    title: "Blocked modules stay blocked",
-    notes: [
-      "A module Tavora blocked stays blocked when someone packs the same files into a new zip.",
-    ],
-    prs: [
       { number: 731, title: "Safety lists: a block also matches what the zip's signature covers" },
-    ],
-    tags: ["catalog", "privacy", "publishing", "updates", "website"],
-  },
-  {
-    version: "0.24.16",
-    date: "2026-11-10",
-    title: "Your Tavora folders stay yours",
-    notes: [
-      "Modules can't be allowed to read Documents\\Tavora or Tavora's other folders, where your key files and saved files are.",
-      "Modules never read key files from a folder, wherever you keep them.",
-    ],
-    prs: [
-      { number: 728, title: "Folder access: refuse Tavora's own folders and never read key files" },
-    ],
-    tags: ["modules", "privacy", "website"],
-  },
-  {
-    version: "0.24.15",
-    date: "2026-11-10",
-    title: "Safer Browser panel",
-    notes: [
-      "Websites no longer get a client certificate from your PC.",
-      "A redirect to a site you don't sign in to everywhere now keeps this workspace's own sign-ins.",
-    ],
-    prs: [
-      { number: 727, title: "Browser: no client certificates, redirects switch session like links" },
-    ],
-    tags: ["privacy", "website"],
-  },
-  {
-    version: "0.24.14",
-    date: "2026-11-10",
-    title: "Right storage cleared",
-    notes: [
-      "When a module fills too much space, Tavora now clears its storage in the workspace where it grew, not in another one.",
-    ],
-    prs: [
       { number: 730, title: "Modules: clear the storage of the workspace that is over the limit" },
-    ],
-    tags: ["privacy", "website"],
-  },
-  {
-    version: "0.24.13",
-    date: "2026-11-10",
-    title: "Adding a PC, checked on both",
-    notes: [
-      "A new PC now asks you to confirm that both PCs show the same code before it takes the key. Click Codes match on it, and Add on your other PC.",
-    ],
-    prs: [
+      { number: 729, title: "Cloud copy: seal the version a service copy follows, refuse older ones" },
+      { number: 728, title: "Folder access: refuse Tavora's own folders and never read key files" },
+      { number: 727, title: "Browser: no client certificates, redirects switch session like links" },
+      { number: 726, title: "Modules: one press per held key, readPage read apart, overlay keys hidden" },
       { number: 725, title: "Pairing: a new PC keeps a key only after you confirm the codes match there" },
-    ],
-    tags: ["cloud-copy", "privacy", "settings", "website"],
-  },
-  {
-    version: "0.24.12",
-    date: "2026-11-10",
-    title: "Safer overlays",
-    notes: [
-      "Overlay pages can no longer send anything out over WebRTC, the same as panels.",
-    ],
-    prs: [
       { number: 724, title: "Overlays: WebRTC only through the proxy, so overlay pages can't send data out" },
-    ],
-    tags: ["overlays", "privacy", "website"],
-  },
-  {
-    version: "0.24.11",
-    date: "2026-11-10",
-    title: "Questions wait for you",
-    notes: [
-      "Allowing a module access no longer answers its next question for you before you see it.",
-    ],
-    prs: [
       { number: 722, title: "App: the consent dialog answers only the question it showed" },
-    ],
-    tags: ["privacy"],
-  },
-  {
-    version: "0.24.10",
-    date: "2026-11-09",
-    title: "Small fixes",
-    notes: [
-      "The Ask for a module button sends the game's name correctly again.",
-      "A window that finishes saving no longer closes a question that popped up in the meantime.",
-      "Appearance no longer gives theme makers a tip that would stop their theme from opening in older Tavora versions.",
-    ],
-    prs: [
       { number: 720, title: "App: module votes keep their \"s\", dialogs close only themselves, no minTavora tip before 0.24.0" },
-    ],
-    tags: ["icons", "modules", "privacy", "publishing", "website"],
-  },
-  {
-    version: "0.24.9",
-    date: "2026-11-09",
-    title: "Focus rings you can see",
-    notes: [
-      "Moving with the Tab key shows where you are again on settings menus, tab panels, tiles, toggles, colour swatches and the add-module list.",
-    ],
-    prs: [
       { number: 718, title: "Kit and app: focus rings that never showed" },
-    ],
-    tags: ["accounts", "modules", "settings", "ui-kit"],
-  },
-  {
-    version: "0.24.8",
-    date: "2026-11-09",
-    title: "Pickers and Tab keys behave",
-    notes: [
-      "A picker always shows the current name of what you picked, also after a rename or a language switch.",
-      "A long choice in a picker breaks between words and ends in \"…\" instead of being cut off.",
-      "The Tab key reaches the zoom buttons of a map or tree before its content, and the toasts last (or first, when they sit at the top).",
-      "While a dialog or menu is open, the page behind it can't be reached with Tab.",
-    ],
-    prs: [
       { number: 717, title: "Kit: pickers show the current label, Tab order follows what is drawn, page behind modals is inert" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.24.7",
-    date: "2026-11-08",
-    title: "Updates and layouts hold",
-    notes: [
-      "Pressing Update twice installs a module update once.",
-      "A panel you move just before switching workspaces stays where you put it.",
-    ],
-    prs: [
       { number: 716, title: "App: one install per module update, layouts saved into their own workspace, one page phase" },
-    ],
-    tags: ["catalog", "modules", "workspace"],
-  },
-  {
-    version: "0.24.6",
-    date: "2026-11-08",
-    title: "PDF passwords",
-    notes: [
-      "Switching files while one asks for its password opens the right one.",
-    ],
-    prs: [
       { number: 715, title: "PDF Viewer: a password question belongs to the load that asked" },
-    ],
-    tags: ["pdf-viewer"],
-  },
-  {
-    version: "0.24.5",
-    date: "2026-11-08",
-    title: "Maps and lists let go",
-    notes: [
-      "After a pinch on a map, the grabbing hand no longer stays.",
-      "Grabbing a list item again right after a drop works.",
-    ],
-    prs: [
       { number: 714, title: "Kit: one gesture value in ZoomPane; reorder and DataGrid drags keep to their own" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.24.4",
-    date: "2026-11-08",
-    title: "Dialogs stay put",
-    notes: [
-      "Closing a dialog while it works no longer closes a question that comes up meanwhile.",
-      "Switching conversations quickly always shows the one you picked.",
-      "What you type in your profile while it saves stays.",
-    ],
-    prs: [
       { number: 713, title: "Kit: useTask, one status for work a view waits for; dialogs close only themselves" },
-    ],
-    tags: ["accounts", "catalog", "games", "ui-kit"],
-  },
-  {
-    version: "0.24.3",
-    date: "2026-11-08",
-    title: "Clock & Counter rests at 0",
-    notes: [
-      "A finished countdown no longer keeps your PC busy.",
-    ],
-    prs: [
       { number: 712, title: "Clock & Counter: a finished countdown stops the panel's ticker" },
-    ],
-    tags: ["clock-counter"],
-  },
-  {
-    version: "0.24.2",
-    date: "2026-11-08",
-    title: "Whiteboard keeps saving",
-    notes: [
-      "A board you couldn't delete keeps saving what you draw.",
-    ],
-    prs: [
       { number: 711, title: "Whiteboard: a board that could not be deleted keeps saving" },
-    ],
-    tags: ["whiteboard"],
-  },
-  {
-    version: "0.24.1",
-    date: "2026-11-07",
-    title: "Whiteboard keeps your last stroke",
-    notes: [
-      "Whiteboard keeps your last stroke when Tavora closes or sleeps.",
-    ],
-    prs: [
       { number: 708, title: "Whiteboard and Playground save before they sleep" },
     ],
-    tags: ["ui-kit", "whiteboard"],
+    tags: ["accounts", "catalog", "clock-counter", "cloud-copy", "games", "icons", "modules", "overlays", "pdf-viewer", "privacy", "publishing", "settings", "ui-kit", "updates", "website", "whiteboard", "workspace"],
   },
   {
     version: "0.24.0",
