@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.23",
+    date: "2026-11-11",
+    title: "Nothing keeps loading",
+    notes: [
+      "The Catalog, a module's page and its reviews now say when they can't load, and have a Try again button.",
+      "A button that was working no longer gets stuck when something goes wrong, so you can press it again.",
+      "A module icon that can't load shows the puzzle piece.",
+    ],
+    prs: [
+      { number: 740, title: "App: nothing keeps loading after a failure" },
+    ],
+    tags: ["accounts", "catalog", "icons", "settings", "workspace"],
+  },
+  {
     version: "0.24.22",
     date: "2026-11-11",
     title: "Dialogs stay where you are",
