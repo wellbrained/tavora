@@ -995,7 +995,7 @@ export class Host {
   }
 
   /**
-   * Starts looking for new versions of Tavora: shortly after start, every hour, and when the computer
+   * Starts looking for new versions of Tavora: right at start, every 5 minutes, and when the computer
    * wakes up. Only an installed app does this; updates come from the feed address built into the
    * installer. pnpm dev and other unpackaged runs never look on their own: there "Check now" in
    * Settings runs a made-up update (PreviewUpdater), so the marker and its steps can be tried.

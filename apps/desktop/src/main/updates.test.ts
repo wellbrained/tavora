@@ -77,7 +77,7 @@ describe("UpdateManager", () => {
     expect(seen).toEqual(["0.3.0"]);
   });
 
-  it("checks once shortly after start and then every hour", async () => {
+  it("checks once right at start and then every 5 minutes", async () => {
     const { manager, pending, updater } = make();
     manager.start();
     expect(pending.map((t) => [t.ms, t.repeat])).toEqual([
@@ -141,6 +141,16 @@ describe("UpdateManager", () => {
     updater.emit("update-available", { version: "0.3.0", releaseNotes: "- One" });
     updater.emit("error", new Error("connection lost"));
     expect(manager.state).toEqual({ status: "available", version: "0.3.0", notes: ["One"], failed: true });
+  });
+
+  it("logs a line only when it differs from the last one, so checks every few minutes don't fill the log", () => {
+    const { updater, logs } = make(false);
+    updater.emit("update-not-available");
+    updater.emit("update-not-available");
+    updater.emit("update-available", { version: "0.3.0" });
+    updater.emit("update-available", { version: "0.3.0" });
+    updater.emit("update-not-available");
+    expect(logs).toEqual(["up to date", "update 0.3.0 available", "up to date"]);
   });
 
   it("asks again about a version whose download failed, so the next check starts it over", async () => {

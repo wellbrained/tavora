@@ -35,8 +35,10 @@ export interface Timers {
  */
 export const UPDATER_HEADER = "X-Tavora-Update";
 
-export const FIRST_CHECK_MS = 60 * 1000;
-export const CHECK_EVERY_MS = 60 * 60 * 1000;
+/** Right at start, so a new version shows in the rail before the user gets going. */
+export const FIRST_CHECK_MS = 0;
+/** The feed is one small file, so asking often costs next to nothing. */
+export const CHECK_EVERY_MS = 5 * 60 * 1000;
 /** The progress goes to the window at most this often: each change sends the whole state. */
 export const PROGRESS_EVERY_MS = 250;
 /** The most notes a found version carries; the release's own list is short anyway. */
@@ -73,7 +75,7 @@ export interface UpdateManagerOptions {
 }
 
 /**
- * Looks for a new Tavora version shortly after start and every hour, downloads it (by itself or when
+ * Looks for a new Tavora version right at start and every 5 minutes, downloads it (by itself or when
  * the user asks) and installs it when Tavora quits or the user presses "Restart now" - never in the
  * middle of a session. Errors (offline, server down) are logged; the next check tries again.
  */
@@ -95,7 +97,14 @@ export class UpdateManager {
     this.updater = options.updater;
     this.onChange = options.onChange;
     this.onDownloaded = options.onDownloaded ?? (() => {});
-    this.log = options.log ?? (() => {});
+    // A check every few minutes says the same thing again and again; the log keeps a line only when it changes.
+    const write = options.log ?? (() => {});
+    let last = "";
+    this.log = (line) => {
+      if (line === last) return;
+      last = line;
+      write(line);
+    };
     this.timers = options.timers ?? {
       setTimeout: (run, ms) => setTimeout(run, ms),
       clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
@@ -146,7 +155,7 @@ export class UpdateManager {
     return this.current;
   }
 
-  /** Starts the schedule: one check shortly after start, then one every hour. */
+  /** Starts the schedule: one check right at start, then one every 5 minutes. */
   start(): void {
     this.first = this.timers.setTimeout(() => void this.check(), this.firstCheckMs);
     this.every = this.timers.setInterval(() => void this.check(), this.everyMs);
