@@ -11,6 +11,7 @@ import { Label } from "@tavora/official-ui/components/ui/label";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
+import { useTask } from "@tavora/official-ui/use-task";
 import { MAX_MESSAGE_LENGTH, messageProblem, REQUEST_TYPES, type ContactDraft, type RequestType } from "../../../shared/conversations";
 import { act, api, openInbox, openProfile, showToast } from "../../host";
 import type { MessageKey } from "../../../shared/i18n";
@@ -23,12 +24,21 @@ const emit = defineEmits<{ close: [] }>();
 const draft = ref<ContactDraft | null>(null);
 const kind = ref<RequestType>("bug");
 const text = ref("");
-const busy = ref(false);
-const error = ref<string | null>(null);
+/** Sending and opening a link: each ends (a throw shows as an error), so the buttons are usable again. */
+const sender = useTask({ describe: () => t("error.generic") });
+const busy = sender.busy;
+/** The service's own answer when it did not go through; a request that threw is the task's error. */
+const answered = ref<string | null>(null);
+const error = computed(() => answered.value ?? sender.error.value);
+/** The draft's load: it ends as `failed` when the request threw, and Try again asks once more. */
+const loader = useTask({ mode: "latest", describe: () => t("error.generic") });
+const status = computed(() => (loader.busy.value ? "running" : loader.error.value ? "failed" : sender.state.value.status));
 
-onMounted(async () => {
-  draft.value = await api.contactDraft(props.moduleId);
-});
+async function loadDraft() {
+  const next = await loader.run(() => api.contactDraft(props.moduleId));
+  if (next) draft.value = next;
+}
+onMounted(loadDraft);
 
 const length = computed(() => [...text.value.trim()].length);
 const problem = computed(() => messageProblem(text.value));
@@ -36,12 +46,11 @@ const name = computed(() => (draft.value && "moduleName" in draft.value ? draft.
 
 async function send() {
   if (problem.value || busy.value) return;
-  busy.value = true;
-  error.value = null;
-  const result = await act({ type: "inbox-send-request", moduleId: props.moduleId, requestType: kind.value, text: text.value.trim(), ...(props.previousId ? { previousId: props.previousId } : {}) }, { quiet: true });
-  busy.value = false;
+  answered.value = null;
+  const result = await sender.run(() => act({ type: "inbox-send-request", moduleId: props.moduleId, requestType: kind.value, text: text.value.trim(), ...(props.previousId ? { previousId: props.previousId } : {}) }, { quiet: true }));
+  if (!result) return;
   if (!result.ok) {
-    error.value = result.error;
+    answered.value = result.error;
     return;
   }
   emit("close");
@@ -49,8 +58,10 @@ async function send() {
 }
 
 async function openLink() {
-  const result = await act({ type: "open-contact-link", moduleId: props.moduleId }, { quiet: true });
-  if (!result.ok) error.value = result.error;
+  answered.value = null;
+  const result = await sender.run(() => act({ type: "open-contact-link", moduleId: props.moduleId }, { quiet: true }));
+  if (!result) return;
+  if (!result.ok) answered.value = result.error;
   else if (result.id === "copied") showToast(t("contact.copied"));
   else emit("close");
 }
@@ -62,8 +73,12 @@ function signIn() {
 </script>
 
 <template>
-  <ModalDialog :title="t('contact.title', { name })" :icon="MessageCircle" class="sm:max-w-[480px]" testid="contact-dialog" @close="emit('close')">
-    <p v-if="!draft" class="text-muted-foreground text-sm" role="status">{{ t("contact.loading") }}</p>
+  <ModalDialog :title="t('contact.title', { name })" :icon="MessageCircle" class="sm:max-w-[480px]" testid="contact-dialog" :status="status" @close="emit('close')">
+    <div v-if="!draft && loader.error.value" class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm" data-testid="contact-load-failed">
+      <p class="text-destructive min-w-0 flex-1" role="alert">{{ loader.error.value }}</p>
+      <Button variant="secondary" size="sm" data-testid="contact-retry" @click="loadDraft">{{ t("catalog.retry") }}</Button>
+    </div>
+    <p v-else-if="!draft" class="text-muted-foreground text-sm" role="status">{{ t("contact.loading") }}</p>
 
     <template v-else-if="draft.status === 'signed-out'">
       <p class="text-sm">{{ t("contact.signIn") }}</p>

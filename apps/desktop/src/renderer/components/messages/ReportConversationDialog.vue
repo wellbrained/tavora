@@ -7,6 +7,7 @@ import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
+import { useTask } from "@tavora/official-ui/use-task";
 import { CONVERSATION_REPORT_REASONS, MAX_NOTE_LENGTH, type ConversationReportReason } from "../../../shared/conversations";
 import { act, showToast } from "../../host";
 import { t } from "../../i18n";
@@ -18,19 +19,23 @@ const emit = defineEmits<{ close: []; done: [] }>();
 const reason = ref<ConversationReportReason>("insults");
 const note = ref("");
 const block = ref(props.canBlock);
-const busy = ref(false);
-const error = ref<string | null>(null);
+/** The work behind the button: it always ends (a throw shows as an error), so the button is usable again. */
+const task = useTask({ describe: () => t("error.generic") });
+const busy = task.busy;
+/** The service's own answer when it did not go through; a request that threw is the task's error. */
+const answered = ref<string | null>(null);
+const error = computed(() => answered.value ?? task.error.value);
 const noteLength = computed(() => [...note.value.trim()].length);
 const tooLong = computed(() => noteLength.value > MAX_NOTE_LENGTH);
 
 async function send() {
   if (busy.value || tooLong.value) return;
-  busy.value = true;
+  answered.value = null;
   const report = { reason: reason.value, note: note.value.trim() || null };
-  const result = await act(block.value && props.canBlock ? { type: "inbox-block", id: props.id, report } : { type: "inbox-report", id: props.id, report }, { quiet: true });
-  busy.value = false;
+  const result = await task.run(() => act(block.value && props.canBlock ? { type: "inbox-block", id: props.id, report } : { type: "inbox-report", id: props.id, report }, { quiet: true }));
+  if (!result) return;
   if (!result.ok) {
-    error.value = result.error;
+    answered.value = result.error;
     return;
   }
   showToast(t("inbox.report.done"));
@@ -40,7 +45,7 @@ async function send() {
 </script>
 
 <template>
-  <ModalDialog :title="t('inbox.report.title')" :description="t('inbox.report.hint')" :icon="Flag" testid="report-conversation" @close="emit('close')">
+  <ModalDialog :title="t('inbox.report.title')" :description="t('inbox.report.hint')" :icon="Flag" testid="report-conversation" :status="task.state.value.status" @close="emit('close')">
     <form class="contents" @submit.prevent="send">
       <div class="grid gap-4">
       <RadioGroup v-model="reason" class="gap-2" :aria-label="t('inbox.report.title')">

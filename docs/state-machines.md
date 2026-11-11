@@ -22,7 +22,8 @@ Update this page in the pull request that adds, removes or changes a flow.
 | --- | --- | --- | --- |
 | Dialog slot and its queue | `renderer/host.ts`, `renderer/dialog-queue.ts` | one request or none; host questions wait by rank (consent 4, new panel 3, link 2, game switch 1) | the dialog's `data-testid` |
 | Dock drag | `renderer/dock-drag.ts` (`dockDragStep`) | `idle → lifted ⇄ aiming → idle` | |
-| Work a dialog waits for | `ConfirmDialog`, `SteamImportDialog`, `CatalogModuleDialog`, `ConversationView` | `useTask`: `idle \| running \| failed` | `data-status` on `ConfirmDialog` and `SteamImportDialog` |
+| Work a dialog waits for | `ConfirmDialog`, `SteamImportDialog`, `PromptDialog`, `AddPersonalDialog`, `ShareIconsDialog`, `CatalogModuleDialog` (its links), `ProfileEditor`, the inbox dialogs, `LeaderboardQuestion`, the welcome's game and personal screens, `PanelContent` (install), `ConversationView` | `useTask`: `idle \| running \| failed` | `data-status` on the view's root, where it has one |
+| Loads in catalog views | `CatalogBrowse`, `CatalogReviews`, `CatalogModuleDialog`, `CatalogIcon`, `ContactDeveloperDialog` | `useTask` (`latest`): a failure says so, with Try again (the icon shows the puzzle piece) | `data-status` on the view |
 | Welcome | `pages/OnboardingPage.vue` | `steps \| signing-in \| finishing` (finishing runs once; back to `steps` when it fails) | `data-status` on `[data-testid=onboarding]` |
 | Host questions (link, new panel, game switch) | `LinkChoiceDialog`, `NavigationChoiceDialog`, `GameSwitchDialog` | shown → answered once (Cancel is a button and the dialog closing) | |
 | Update all's questions | `components/ModuleUpdates.vue`, `renderer/host.ts` (`updateQueue`, `askForUpdate`) | the updates that ask for more, one after another, only while the module library shows | |
@@ -94,12 +95,6 @@ the pull request that makes it explicit.
   that runs; `closing` as a step `open | holding | released`.
 
 - **Developer keys** (`main/developer-keys.ts`): `status` with `signedIn`, overlapping loads → the newest load wins.
-
-- **Loads in catalog views** (`CatalogBrowse`, `CatalogReviews`, `CatalogModuleDialog`, `CatalogIcon`, `ShareIconsDialog`,
-  `ContactDeveloperDialog`): `null` means loading, a failure loads forever → `useTask`, `data-status`.
-
-- **Busy flags without an end** (`ProfileEditor`, `PromptDialog`, `AddPersonalDialog`, inbox dialogs, `LeaderboardQuestion`, onboarding
-  screens, `ModulesSection`, `PanelContent` install, profile picture) → `useTask`.
 
 - **Gestures** (`WorkspaceRail` resize, `LayoutCanvas` drag and band, `WorkspacePage` panel drag) → one `gesture` union
   each, ended by blur too, with `data-gesture`.

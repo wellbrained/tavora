@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Images, Loader, LogIn, Upload } from "@lucide/vue";
-import { computed, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { useTask } from "@tavora/official-ui/use-task";
 import { MAX_SHARE_BATCH } from "../../shared/host-actions";
 import type { HostAction } from "../../shared/host-api";
 import { account, act, api, closeDialog, dialog, openProfile, showToast, state, type ShareIconsRequest } from "../host";
@@ -24,7 +25,12 @@ interface Row {
 const steam = props.request.steam;
 /** The games of the Steam import with an icon on this PC, once main has looked. */
 const steamRows = ref<Row[] | null>(null);
-const looking = ref(steam !== undefined);
+/** Looking for the Steam games' icons: it ends as `failed` when the lookup threw, and Try again looks once more. */
+const looker = useTask({ mode: "latest", describe: () => t("error.generic") });
+const looking = looker.busy;
+/** Sharing the ticked icons: it ends as `failed` when a send threw, so the button is usable again. */
+const sharer = useTask({ describe: () => t("error.generic") });
+const busy = sharer.busy;
 
 // Every game workspace whose game's own icon Tavora does not have yet, with the icon this PC has for it.
 const rows = computed<Row[]>(() => {
@@ -36,9 +42,12 @@ const rows = computed<Row[]>(() => {
 });
 
 const ticked = ref(new Set<string>(props.request.workspaceIds));
-const busy = ref(false);
 const progress = ref<{ done: number; total: number } | null>(null);
-const error = ref<string | null>(null);
+/** The service's own answer when it did not take the icons; a request that threw is the tasks' error. */
+const answered = ref<string | null>(null);
+const error = computed(() => answered.value ?? looker.error.value ?? sharer.error.value);
+/** The task whose state the dialog shows as `data-status`. */
+const status = computed(() => (looker.busy.value ? "running" : looker.error.value ? "failed" : sharer.state.value.status));
 const chosen = computed(() => rows.value.filter((row) => ticked.value.has(row.key)));
 /** Only signed-in users can share. */
 const signedIn = computed(() => Boolean(account.value?.account));
@@ -56,19 +65,21 @@ const description = computed(() => {
   return t(steam ? "shareIcons.foundSteam" : "shareIcons.found", { count: rows.value.length });
 });
 
-onMounted(async () => {
+async function look() {
   if (!steam) return;
-  const result = await api.steamShareIcons(steam);
-  looking.value = false;
+  answered.value = null;
+  const result = await looker.run(() => api.steamShareIcons(steam));
+  if (!result) return;
   if (result.status === "error") {
-    error.value = result.error;
+    answered.value = result.error;
     steamRows.value = [];
     return;
   }
   steamRows.value = result.games.map((game) => ({ key: String(game.appid), name: game.name, icon: game.icon }));
   // Everything is ticked at first: the user asked for these games.
   ticked.value = new Set(steamRows.value.map((row) => row.key));
-});
+}
+void look();
 
 function toggle(key: string, on: boolean) {
   const next = new Set(ticked.value);
@@ -82,39 +93,40 @@ function tickAll(on: boolean) {
 }
 
 async function share() {
-  busy.value = true;
-  error.value = null;
-  const keys = chosen.value.map((row) => row.key);
-  let shared = 0;
-  let sentAny = false;
-  progress.value = { done: 0, total: keys.length };
-  for (let at = 0; at < keys.length; at += BATCH) {
-    const part = keys.slice(at, at + BATCH);
-    const action: HostAction = steam ? { type: "share-steam-icons", appids: part.map(Number) } : { type: "share-icons", workspaceIds: part };
-    const result = await act(action, { quiet: true });
-    if (!result.ok) {
-      // Once a turn went through, a later one with nothing left to send changes nothing.
-      if (sentAny) continue;
-      error.value = result.error;
-      break;
-    }
-    sentAny = true;
-    shared += result.shared ?? 0;
-    progress.value = { done: Math.min(at + BATCH, keys.length), total: keys.length };
-    if (result.limited) {
-      // The service takes only so many an hour: the rest stay to be shared later.
-      busy.value = false;
+  answered.value = null;
+  await sharer.run(async () => {
+    const keys = chosen.value.map((row) => row.key);
+    let shared = 0;
+    let sentAny = false;
+    progress.value = { done: 0, total: keys.length };
+    try {
+      for (let at = 0; at < keys.length; at += BATCH) {
+        const part = keys.slice(at, at + BATCH);
+        const action: HostAction = steam ? { type: "share-steam-icons", appids: part.map(Number) } : { type: "share-icons", workspaceIds: part };
+        const result = await act(action, { quiet: true });
+        if (!result.ok) {
+          // Once a turn went through, a later one with nothing left to send changes nothing.
+          if (sentAny) continue;
+          answered.value = result.error;
+          return;
+        }
+        sentAny = true;
+        shared += result.shared ?? 0;
+        progress.value = { done: Math.min(at + BATCH, keys.length), total: keys.length };
+        if (result.limited) {
+          // The service takes only so many an hour: the rest stay to be shared later.
+          closeDialog(props.request);
+          showToast(t("shareIcons.limited", { count: shared }));
+          return;
+        }
+      }
+    } finally {
       progress.value = null;
-      closeDialog(props.request);
-      showToast(t("shareIcons.limited", { count: shared }));
-      return;
     }
-  }
-  busy.value = false;
-  progress.value = null;
-  if (!sentAny) return;
-  closeDialog(props.request);
-  showToast(shared ? t("shareIcons.thanks") : t("shareIcons.nothingNeeded"));
+    if (!sentAny) return;
+    closeDialog(props.request);
+    showToast(shared ? t("shareIcons.thanks") : t("shareIcons.nothingNeeded"));
+  });
 }
 </script>
 
@@ -124,6 +136,7 @@ async function share() {
     :description="description"
     :icon="Images"
     testid="share-icons-dialog"
+    :status="status"
     class="sm:max-w-[460px]"
     @close="dialog = null"
   >
@@ -166,6 +179,7 @@ async function share() {
     </p>
     <p v-if="!empty && !signedIn" class="text-sm" data-testid="share-icons-sign-in">{{ t("shareIcons.signIn") }}</p>
     <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="share-icons-error">{{ error }}</p>
+    <Button v-if="steam && !looking && !rows.length && error" type="button" variant="secondary" size="sm" class="self-start" data-testid="share-icons-retry" @click="look">{{ t("catalog.retry") }}</Button>
     </div>
     <DialogFooter>
       <span v-if="progress" class="text-muted-foreground mr-auto flex items-center gap-2 text-sm tabular-nums" role="status" data-testid="share-icons-progress">

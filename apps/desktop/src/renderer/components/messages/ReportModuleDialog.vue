@@ -7,6 +7,7 @@ import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/di
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
+import { useTask } from "@tavora/official-ui/use-task";
 import { MAX_NOTE_LENGTH, MODULE_REPORT_REASONS, type ModuleReportReason } from "../../../shared/conversations";
 import { account, act, openProfile, showToast } from "../../host";
 import { t } from "../../i18n";
@@ -17,20 +18,23 @@ const emit = defineEmits<{ close: []; reported: [] }>();
 
 const reason = ref<ModuleReportReason>("unsafe");
 const note = ref("");
-const busy = ref(false);
-const error = ref<string | null>(null);
+/** The work behind the button: it always ends (a throw shows as an error), so the button is usable again. */
+const task = useTask({ describe: () => t("error.generic") });
+const busy = task.busy;
+/** The service's own answer when it did not go through; a request that threw is the task's error. */
+const answered = ref<string | null>(null);
+const error = computed(() => answered.value ?? task.error.value);
 const signedIn = computed(() => account.value?.account != null);
 const noteLength = computed(() => [...note.value.trim()].length);
 const tooLong = computed(() => noteLength.value > MAX_NOTE_LENGTH);
 
 async function send() {
   if (busy.value || tooLong.value) return;
-  busy.value = true;
-  error.value = null;
-  const result = await act({ type: "report-catalog-module", moduleId: props.moduleId, reason: reason.value, note: note.value.trim() || null }, { quiet: true });
-  busy.value = false;
+  answered.value = null;
+  const result = await task.run(() => act({ type: "report-catalog-module", moduleId: props.moduleId, reason: reason.value, note: note.value.trim() || null }, { quiet: true }));
+  if (!result) return;
   if (!result.ok) {
-    error.value = result.error;
+    answered.value = result.error;
     return;
   }
   showToast(t("settings.modules.reported", { name: props.moduleName }));
@@ -45,7 +49,7 @@ function signIn() {
 </script>
 
 <template>
-  <ModalDialog :title="t('report.title', { name: moduleName })" :description="t('catalog.reportHint')" :icon="Flag" testid="report-module-dialog" @close="emit('close')">
+  <ModalDialog :title="t('report.title', { name: moduleName })" :description="t('catalog.reportHint')" :icon="Flag" testid="report-module-dialog" :status="task.state.value.status" @close="emit('close')">
     <template v-if="!signedIn">
       <p class="text-sm">{{ t("error.reportSignIn") }}</p>
       <DialogFooter>

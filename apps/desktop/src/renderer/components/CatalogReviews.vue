@@ -11,6 +11,7 @@ import type { CatalogOwnReview, CatalogReviews, CatalogReviewsResult, CatalogRev
 import { act, api, dialog, notSaved, openProfile } from "../host";
 import { useOptimistic, useOptimisticKeyed } from "@tavora/official-ui/optimistic";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { useTask } from "@tavora/official-ui/use-task";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
@@ -113,9 +114,18 @@ function resetForm() {
   stars.value = own?.stars ?? 0;
   text.value = own?.text ?? "";
 }
-async function load() {
+/** Looks again and resets the form; the list on screen stays when that can't be read. */
+async function reload() {
   await refresh(false);
   resetForm();
+}
+/** The first look (and Try again): it ends as `failed` when the reviews can't be read, never stays loading. */
+const loader = useTask({ mode: "latest" });
+async function load() {
+  await loader.run(async () => {
+    if ((await refresh(false)) === "failed") throw new Error(t("catalog.reviews.missing"));
+    resetForm();
+  });
 }
 onMounted(load);
 async function retry() {
@@ -126,8 +136,14 @@ async function retry() {
 async function run(action: Parameters<typeof act>[0], onError: (message: string) => void = (message) => (error.value = message)) {
   busy.value = true;
   error.value = null;
-  const outcome = await act(action, { quiet: true });
-  busy.value = false;
+  let outcome: Awaited<ReturnType<typeof act>>;
+  try {
+    outcome = await act(action, { quiet: true });
+  } catch {
+    outcome = { ok: false, error: t("error.generic") };
+  } finally {
+    busy.value = false;
+  }
   if (!outcome.ok) {
     onError(outcome.error);
     return false;
@@ -159,7 +175,7 @@ function keep() {
 
 async function remove() {
   if (mineWaiting.value) return;
-  if (await run({ type: "unrate-catalog-module", moduleId: props.moduleId })) await load();
+  if (await run({ type: "unrate-catalog-module", moduleId: props.moduleId })) await reload();
 }
 
 function startReply(review: CatalogReviewView) {
@@ -187,7 +203,7 @@ async function deleteReply(review: CatalogReviewView) {
   const fail = (message: string) => (reviewErrors.value = { ...reviewErrors.value, [review.id]: message });
   if (await run({ type: "reply-catalog-review", moduleId: props.moduleId, reviewId: review.id, text: null }, fail)) {
     replying.value = null;
-    await load();
+    await reload();
   }
 }
 
@@ -208,12 +224,12 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
 </script>
 
 <template>
-  <section data-testid="catalog-reviews" :aria-label="t('catalog.reviews.title')">
+  <section data-testid="catalog-reviews" :data-status="loader.state.value.status" :aria-label="t('catalog.reviews.title')">
     <h3 class="mb-3 font-medium">{{ t("catalog.reviews.title") }}</h3>
-    <p v-if="!result" class="text-muted-foreground text-sm" role="status">{{ t("catalog.reviews.loading") }}</p>
+    <p v-if="!result && !loader.error.value" class="text-muted-foreground text-sm" role="status">{{ t("catalog.reviews.loading") }}</p>
     <div v-else-if="!loaded" class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" role="status" data-testid="catalog-reviews-missing">
-      <p>{{ result.status === "off" ? t("catalog.status.off") : t("catalog.reviews.missing") }}</p>
-      <Button v-if="result.status !== 'off'" size="sm" variant="secondary" data-testid="catalog-reviews-retry" @click="retry">{{ t("catalog.retry") }}</Button>
+      <p>{{ result?.status === "off" ? t("catalog.status.off") : t("catalog.reviews.missing") }}</p>
+      <Button v-if="result?.status !== 'off'" size="sm" variant="secondary" data-testid="catalog-reviews-retry" @click="retry">{{ t("catalog.retry") }}</Button>
     </div>
     <template v-else>
       <div v-if="loaded.rating" class="mb-5 grid items-center gap-x-6 gap-y-3 sm:grid-cols-[auto_minmax(0,1fr)]" data-testid="catalog-reviews-summary">

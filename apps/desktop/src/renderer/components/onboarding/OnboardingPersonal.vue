@@ -5,6 +5,7 @@ import { ArrowLeft } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { useTask } from "@tavora/official-ui/use-task";
 import { act, state } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
@@ -25,8 +26,12 @@ const emit = defineEmits<{ start: [StartedPersonal]; next: []; back: [] }>();
 
 const offered = computed(() => OFFERED.flatMap((id) => state.value!.modules.filter((module) => module.id === id)));
 const ticked = ref<Set<string>>(new Set(props.started?.moduleIds ?? DEFAULT_TICKED));
-const busy = ref(false);
-const error = ref<string | null>(null);
+/** Making the workspace: it always ends (a throw shows as an error), so Next is usable again. */
+const task = useTask({ describe: () => t("error.generic") });
+const busy = task.busy;
+/** The host's own answer when it did not go through; a request that threw is the task's error. */
+const answered = ref<string | null>(null);
+const error = computed(() => answered.value ?? task.error.value);
 
 function toggle(id: string, on: boolean | "indeterminate") {
   const next = new Set(ticked.value);
@@ -41,12 +46,11 @@ async function create() {
   let id = props.started?.id;
   // Back and Continue again keeps the workspace made the first time.
   if (!id) {
-    busy.value = true;
-    error.value = null;
-    const result = props.dry ? { ok: true as const, id: "dry-run" } : await act({ type: "add-workspace", personal: t("onboarding.personal.workspace") }, { quiet: true });
-    busy.value = false;
+    answered.value = null;
+    const result = await task.run(async () => (props.dry ? { ok: true as const, id: "dry-run" } : await act({ type: "add-workspace", personal: t("onboarding.personal.workspace") }, { quiet: true })));
+    if (!result) return;
     if (!result.ok || !result.id) {
-      if (!result.ok) error.value = result.error;
+      if (!result.ok) answered.value = result.error;
       return;
     }
     id = result.id;
@@ -57,7 +61,7 @@ async function create() {
 </script>
 
 <template>
-  <section class="flex w-full max-w-[520px] flex-col items-center text-center" data-testid="onboarding-personal">
+  <section class="flex w-full max-w-[520px] flex-col items-center text-center" data-testid="onboarding-personal" :data-status="task.state.value.status">
     <h1 class="text-3xl font-semibold">{{ t("onboarding.personal.title") }}</h1>
     <p class="text-muted-foreground mt-2 mb-5 [@media(max-height:640px)]:mb-3">{{ t("onboarding.personal.sub") }}</p>
 

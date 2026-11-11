@@ -18,7 +18,8 @@ import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
 import { ShieldAlert } from "@lucide/vue";
-import { act, dialog, frozen, installProgress, needsGrant, state, type GrantRequest } from "../../host";
+import { useTask } from "@tavora/official-ui/use-task";
+import { act, dialog, frozen, installProgress, needsGrant, showToast, state, type GrantRequest } from "../../host";
 import { t } from "../../i18n";
 import GrantDialog from "../GrantDialog.vue";
 import LeaderboardQuestion from "../LeaderboardQuestion.vue";
@@ -52,12 +53,14 @@ const question = computed<GrantRequest | null>(() => {
 const updateWaiting = computed(() => module.value?.update ?? null);
 
 // Discord and AI Usage left Tavora for the catalog: their panels install them from there with one press.
-const installing = ref(false);
+// The install always ends, so the button can be pressed again; a throw says so (a refusal `act` says itself).
+const installer = useTask();
+const installing = installer.busy;
 async function installMoved() {
   if (!panel.value) return;
-  installing.value = true;
-  await act({ type: "install-catalog-module", moduleId: panel.value.moduleId });
-  installing.value = false;
+  const moduleId = panel.value.moduleId;
+  await installer.run(() => act({ type: "install-catalog-module", moduleId }));
+  if (installer.error.value) showToast(t("error.generic"));
 }
 
 // The still image is shown at the size it was taken (its pixels over the

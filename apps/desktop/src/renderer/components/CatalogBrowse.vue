@@ -11,6 +11,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import type { CatalogListResult, CatalogModuleView } from "../../shared/host-api";
 import { act, addModule, api, dialog, installProgress, openSettings, state, type AddModuleRequest } from "../host";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
+import { useTask } from "@tavora/official-ui/use-task";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
 import { useActionStatus } from "../action-status";
@@ -55,16 +56,17 @@ const sorters: Record<Sort, (a: CatalogModuleView, b: CatalogModuleView) => numb
   newest: (a, b) => (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0),
 };
 
-/** Raised by every load, so a retry while one is on its way keeps only the newest answer. */
-let loads = 0;
+/** The list's load: a retry while one is on its way keeps only the newest answer, and a load that threw ends as `failed`. */
+const loader = useTask({ mode: "latest" });
 async function load() {
-  const mine = ++loads;
   result.value = null;
-  const next = await api.browseCatalog();
-  if (mine !== loads) return;
+  const next = await loader.run(() => api.browseCatalog());
+  if (!next) return;
   result.value = next;
   if (props.open && next.status === "ok") info.value = next.modules.find((module) => module.id === props.open) ?? null;
 }
+/** Why there is no list: the service's own status, or `unreachable` when the request itself failed. */
+const problem = computed(() => (loader.state.value.status === "failed" ? "unreachable" : result.value && result.value.status !== "ok" ? result.value.status : null));
 onMounted(load);
 
 const installed = computed(() => new Set(state.value!.modules.map((module) => module.id)));
@@ -126,12 +128,12 @@ function settings() {
 </script>
 
 <template>
-  <div class="min-h-0 flex-1 thin-scroll overflow-y-auto px-6 pb-8 [scrollbar-gutter:stable] lg:px-10" data-testid="catalog-results">
-    <p v-if="!result" class="sr-only" role="status" data-testid="catalog-loading">{{ t("catalog.loading") }}</p>
-    <EmptyState v-if="result && result.status !== 'ok'" class="mt-8" role="status" :title="t(`catalog.problem.${result.status}.title`)" :description="t(`catalog.problem.${result.status}.text`)" :data-testid="`catalog-${result.status}`">
+  <div class="min-h-0 flex-1 thin-scroll overflow-y-auto px-6 pb-8 [scrollbar-gutter:stable] lg:px-10" data-testid="catalog-results" :data-status="loader.state.value.status">
+    <p v-if="!result && !problem" class="sr-only" role="status" data-testid="catalog-loading">{{ t("catalog.loading") }}</p>
+    <EmptyState v-if="problem" class="mt-8" role="status" :title="t(`catalog.problem.${problem}.title`)" :description="t(`catalog.problem.${problem}.text`)" :data-testid="`catalog-${problem}`">
       <template #icon><WifiOff /></template>
       <template #action>
-        <Button v-if="result.status === 'off'" variant="secondary" data-testid="catalog-settings" @click="settings">{{ t("catalog.openSettings") }}</Button>
+        <Button v-if="problem === 'off'" variant="secondary" data-testid="catalog-settings" @click="settings">{{ t("catalog.openSettings") }}</Button>
         <Button v-else variant="secondary" data-testid="catalog-retry" @click="load">{{ t("catalog.retry") }}</Button>
       </template>
     </EmptyState>
