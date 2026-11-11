@@ -42,10 +42,12 @@ Update this page in the pull request that adds, removes or changes a flow.
 | Official publish | `main/official-publish.ts` (`RunState`) | `idle \| building \| preview \| confirming \| uploading \| discarding` | `OfficialPublishView` |
 | Module publish review | `main/module-publish.ts` | `checking \| ready \| publishing \| published`; a newer look drops an older one | `PublishView.status` |
 | Sign-in | `main/account.ts` (`Pending`) | none, or `sign-in` (`code \| create`), `discord-create`, … | `AccountView.pending` |
-| Pairing a new PC | `main/pairing.ts` (`Asking.step`) | `waiting → code → confirmed`, or `declined \| expired \| failed` | `PairingView.asking.step` |
+| Pairing a new PC | `main/pairing.ts` (`Asking.step`) | `waiting → code → confirmed`, or `declined \| expired \| failed`; on the old PC, an answer that did not get through asks again | `PairingView.asking.step` |
 | Discord connector | `main/discord.ts`, `shared/host-api.ts` (`DiscordStatus`) | `off \| signed-out \| connecting \| not-running \| approving \| connected \| error`; a generation drops old attempts | `DiscordView.status` |
 | Media connector | `main/media.ts` | `starting \| ready \| failed \| unavailable` | the SDK's `MediaState.state` |
-| Stream overlay server | `main/overlays.ts` (`OverlayServerStatus`) | `off \| running \| in-use \| failed` | Settings > Streaming |
+| Stream overlay server | `main/overlays.ts` (`OverlayServerStatus`) | `off \| running \| in-use \| failed`; starts and stops run in turn | Settings > Streaming |
+| Cloud copy | `main/cloud-copy-sync.ts` (`CopySync`) | on or off, with the questions it waits on (`askKey`, `conflict`, `restartToTake`) and closing as `open → holding → released`; work started before it was turned off writes nothing (a turn raised by `forget`) | `CloudCopyView` |
+| Developer keys | `main/developer-keys.ts` (`DeveloperKeys`) | `loading \| ready \| none \| ask \| signed-out \| offline`; the newest read wins | `DeveloperKeysView.status` |
 | Connection tracker | `main/connection.ts` | online, or an outage of a kind (`ConnectionTracker.feed`) | Settings > Connections |
 | Questions to the host UI | `main/pending-questions.ts` | asked → answered or cancelled, once | |
 
@@ -90,11 +92,6 @@ the pull request that makes it explicit.
 - **Window visibility** (`main/host.ts`: `windowHidden`, `windowBehind`, `windowClosed`) → `front | behind | hidden | closed`.
 
 - **Press windows** (`main/module-view.ts` `Press`, `browser-view.ts` `lastGesture`, tooltips) → one `GestureWindow`.
-
-- **Cloud copy** (`main/cloud-copy-sync.ts`): `copyOn`, `questions`, `closing`, `running` → turning it off ends the work
-  that runs; `closing` as a step `open | holding | released`.
-
-- **Developer keys** (`main/developer-keys.ts`): `status` with `signedIn`, overlapping loads → the newest load wins.
 
 - **Gestures** (`WorkspaceRail` resize, `LayoutCanvas` drag and band, `WorkspacePage` panel drag) → one `gesture` union
   each, ended by blur too, with `data-gesture`.

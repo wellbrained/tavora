@@ -259,10 +259,30 @@ export class OverlayServer {
     return this.listening;
   }
 
+  /**
+   * Starts and stops run one after the other, in the order asked: a stop while it starts ends that start, and two quick
+   * port changes leave one server, the newest, that `stop` can end.
+   */
+  private queue: Promise<unknown> = Promise.resolve();
+
+  private inTurn<T>(work: () => Promise<T>): Promise<T> {
+    const next = this.queue.then(work, work);
+    this.queue = next.catch(() => undefined);
+    return next;
+  }
+
   /** Listens on 127.0.0.1:port (stopping first if it ran on another one). */
-  async start(port: number): Promise<OverlayServerStatus> {
+  start(port: number): Promise<OverlayServerStatus> {
+    return this.inTurn(() => this.startNow(port));
+  }
+
+  stop(): Promise<void> {
+    return this.inTurn(() => this.stopNow());
+  }
+
+  private async startNow(port: number): Promise<OverlayServerStatus> {
     if (this.server && this.listening === port) return this.status;
-    await this.stop();
+    await this.stopNow();
     const server = createServer((request, response) => void this.handle(request, response, port));
     trackOwnServer(server);
     server.keepAliveTimeout = 5_000;
@@ -280,7 +300,7 @@ export class OverlayServer {
     return this.status;
   }
 
-  async stop(): Promise<void> {
+  private async stopNow(): Promise<void> {
     const server = this.server;
     this.server = null;
     this.listening = null;

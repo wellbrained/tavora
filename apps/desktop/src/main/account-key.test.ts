@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AccountKey } from "./account-key";
@@ -12,7 +12,7 @@ const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.f
 type Service = Awaited<ReturnType<typeof service>>;
 
 /** The account's key on one PC of the test account. */
-async function onPc(cloud: Service, { keyStore = true } = {}) {
+async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch }: { keyStore?: boolean; fetch?: typeof globalThis.fetch } = {}) {
   const { userData } = await pc({ "library.json": "{}" });
   const file = path.join(userData, "account-key.json");
   const key = new AccountKey({
@@ -20,7 +20,7 @@ async function onPc(cloud: Service, { keyStore = true } = {}) {
     legacyFile: path.join(userData, "cloud-copy-key.json"),
     encryptor: keyStore ? encryptor : { ...encryptor, isAvailable: () => false },
     baseUrl: "http://tavora.test/v1/account",
-    fetch: cloud.fetch,
+    fetch,
     token: () => cloud.token,
   });
   return { key, file, userData };
@@ -29,6 +29,24 @@ async function onPc(cloud: Service, { keyStore = true } = {}) {
 const vault = (cloud: Service) => cloud.fetch("http://tavora.test/v1/account/vault", { headers: { authorization: `Bearer ${cloud.token}` } });
 
 describe("the account's key", () => {
+  it("made while signing out is not kept on this PC", async () => {
+    const cloud = await service();
+    let answer: (() => void) | null = null;
+    // The vault's answer waits until the test lets it through.
+    const held = (async (url: string, init?: RequestInit) => {
+      if (init?.method === "PUT") await new Promise<void>((resolve) => (answer = resolve));
+      return cloud.fetch(url, init);
+    }) as typeof fetch;
+    const a = await onPc(cloud, { fetch: held });
+    const setUp = a.key.setUp();
+    for (let tries = 0; tries < 100 && !answer; tries++) await new Promise((resolve) => setTimeout(resolve, 5));
+    await a.key.forget();
+    answer!();
+    await expect(setUp).rejects.toMatchObject({ reason: "signed-out" });
+    expect(a.key.get()).toBeNull();
+    await expect(access(a.file)).rejects.toThrow();
+  });
+
   it("is made on the first PC, kept encrypted there, and asked for on the next", async () => {
     const cloud = await service();
     const a = await onPc(cloud);

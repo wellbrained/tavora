@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import path from "node:path";
 import { fingerprint } from "@tavora/pack";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountKey } from "./account-key";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { DeveloperKeys } from "./developer-keys";
@@ -15,7 +15,7 @@ const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.f
 type Service = Awaited<ReturnType<typeof service>>;
 
 /** Tavora on one PC of the test account. */
-async function tavora(cloud: Service, options: { offline?: () => boolean } = {}) {
+async function tavora(cloud: Service, options: { offline?: () => boolean; signedIn?: () => boolean } = {}) {
   const { userData } = await pc({ "library.json": "{}" });
   const fetchImpl = (async (url: string, init?: RequestInit) => {
     if (options.offline?.()) throw new TypeError("fetch failed");
@@ -33,7 +33,7 @@ async function tavora(cloud: Service, options: { offline?: () => boolean } = {})
   const keys = new DeveloperKeys({
     accountKey,
     account: {
-      signedIn: () => true,
+      signedIn: () => options.signedIn?.() ?? true,
       link: async (key) => void linked.push(fingerprint(key)),
       publish: async () => {
         throw new Error("not in these tests");
@@ -104,6 +104,36 @@ describe("the publisher keys Tavora keeps", () => {
     offline = true;
     await a.keys.refresh();
     expect(a.keys.view()).toMatchObject({ status: "ready", keys: before });
+  });
+
+  it("signed out while the keys load: shows signed out, not the keys of before", async () => {
+    const cloud = await service();
+    let signedIn = true;
+    const a = await tavora(cloud, { signedIn: () => signedIn });
+    await a.keys.create();
+    let answer!: () => void;
+    const content = a.accountKey.content.bind(a.accountKey);
+    vi.spyOn(a.accountKey, "content").mockImplementationOnce(() => new Promise((resolve) => (answer = () => resolve(content()))));
+    const slow = a.keys.refresh();
+    signedIn = false;
+    await a.keys.refresh();
+    answer();
+    await slow;
+    expect(a.keys.view()).toMatchObject({ status: "signed-out", keys: [] });
+  });
+
+  it("signed in while offline: says offline, not signed out", async () => {
+    const cloud = await service();
+    let signedIn = true;
+    const a = await tavora(cloud, { signedIn: () => signedIn });
+    await a.keys.create();
+    signedIn = false;
+    await a.keys.refresh();
+    expect(a.keys.view().status).toBe("signed-out");
+    signedIn = true;
+    vi.spyOn(a.accountKey, "content").mockRejectedValueOnce(new TypeError("fetch failed"));
+    await a.keys.refresh();
+    expect(a.keys.view().status).toBe("offline");
   });
 
   it("moves the publisher keys over when this PC starts over with a new recovery key", async () => {

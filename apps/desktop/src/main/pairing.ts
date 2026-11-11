@@ -404,6 +404,13 @@ export class Pairing {
       if (allow && key) await answering.transport.sendKey(id, b64(sealForPc(answering.key, answering.reveal, key)));
       else await answering.transport.end(id, true);
     } catch (error) {
+      // Add did not get there (offline): the question shows again, so the user can try again before it expires. A No
+      // that did not get there stays a no: the request is left to expire.
+      if (allow && !this.answering) {
+        this.answering = answering;
+        this.refused.delete(id);
+        this.changed();
+      }
       throw toUserError(error);
     }
     if (allow && !key) throw new UserError("pairing.error.gone");

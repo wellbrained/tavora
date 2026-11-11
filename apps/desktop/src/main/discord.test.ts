@@ -30,6 +30,8 @@ interface Setup {
   tokenStatus?: number;
   /** Discord's image server streams a picture far over the limit, with no length said. */
   hugePicture?: boolean;
+  /** Discord's image server fails this many times first. */
+  pictureFails?: number;
 }
 
 /** A panel as the connector sees it: what it was told. */
@@ -40,7 +42,7 @@ function panel() {
   return { states, events, listener };
 }
 
-async function setup({ secrets = { token: null }, running = true, tokenStatus = 200, hugePicture = false }: Setup = {}) {
+async function setup({ secrets = { token: null }, running = true, tokenStatus = 200, hugePicture = false, pictureFails = 0 }: Setup = {}) {
   connector?.dispose();
   await fake?.close();
   fake = await fakeDiscord();
@@ -55,6 +57,7 @@ async function setup({ secrets = { token: null }, running = true, tokenStatus = 
   const requests: { url: string; body: string }[] = [];
   const saved: DiscordSecrets[] = [];
   const timers: (() => void)[] = [];
+  const clock = { now: Date.now() };
   connector = new DiscordConnector({
     clientId: "99",
     connect: (events) => RpcClient.connect("99", events, running ? [discord.path] : ["/nonexistent/discord-ipc-0"]),
@@ -68,6 +71,7 @@ async function setup({ secrets = { token: null }, running = true, tokenStatus = 
         const body = new ReadableStream<Uint8Array>({ pull: (controller) => (sent++ < 64 ? controller.enqueue(chunk) : controller.close()) });
         return new Response(body, { status: 200 });
       }
+      if (url.startsWith("https://cdn.discordapp.com/") && pictureFails-- > 0) throw new TypeError("fetch failed");
       if (url.startsWith("https://cdn.discordapp.com/")) return new Response(PNG, { status: 200 });
       const grant = new URLSearchParams(String(init?.body)).get("grant_type");
       if (tokenStatus !== 200) return Response.json({ error: "invalid_client" }, { status: tokenStatus });
@@ -82,8 +86,9 @@ async function setup({ secrets = { token: null }, running = true, tokenStatus = 
       return 0 as unknown as ReturnType<typeof setTimeout>;
     },
     clearTimer: () => undefined,
+    now: () => clock.now,
   });
-  return { connector, fake: discord, requests, saved, timers };
+  return { connector, fake: discord, requests, saved, timers, clock };
 }
 
 describe("DiscordConnector", () => {
@@ -227,6 +232,16 @@ describe("DiscordConnector", () => {
     expect(await connector.image("https://evil.example/avatars/1/x.png")).toBeNull();
     expect(await connector.image(`https://cdn.discordapp.com/attachments/1/2/${HASH}.png`)).toBeNull();
     expect(requests.map((r) => r.url)).toEqual([`https://cdn.discordapp.com/avatars/1/${HASH}.png?size=64`]);
+  });
+
+  it("fetches a picture again a minute after it did not come, not on every redraw", async () => {
+    const { connector, requests, clock } = await setup({ pictureFails: 1 });
+    const avatar = `https://cdn.discordapp.com/avatars/1/${HASH}.png`;
+    expect(await connector.image(avatar)).toBeNull();
+    expect(await connector.image(avatar)).toBeNull();
+    expect(requests).toHaveLength(1);
+    clock.now += 60_000;
+    expect(await connector.image(avatar)).toMatch(/^data:image\/png;base64,/);
   });
 
   it("stops reading a picture that grows past the limit, even with no length said", async () => {

@@ -193,6 +193,13 @@ export const copyQuestion = computed<"closing" | "conflict" | "newer" | null>(()
   if (view.restartToTake && copyLater.value !== "newer") return "newer";
   return null;
 });
+// Later puts off the question that shows: once it is gone (settled in Settings or on another PC), the next one is asked.
+watch(
+  () => [cloudCopy.value?.conflict, cloudCopy.value?.restartToTake] as const,
+  ([conflict, restartToTake]) => {
+    if ((copyLater.value === "conflict" && !conflict) || (copyLater.value === "newer" && !restartToTake)) copyLater.value = null;
+  },
+);
 
 /** Places the search leaves out on this run: the account until accounts are on. */
 export const hiddenSettings = computed<ReadonlySet<SettingsPlace>>(() => new Set<SettingsPlace>(account.value?.enabled ? [] : ["account"]));

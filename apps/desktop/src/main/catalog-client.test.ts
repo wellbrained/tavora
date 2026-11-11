@@ -239,6 +239,22 @@ describe("CatalogClient.icon", () => {
     expect(await client.icon("wellbrained.other")).toBeNull();
     expect(calls.filter((call) => call.url.includes("/pictures/"))).toHaveLength(1);
   });
+
+  it("fetches an icon again a minute after it did not come", async () => {
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("icon bytes")]);
+    const icon = { sha256: createHash("sha256").update(png).digest("hex"), type: "png", size: png.length };
+    let fails = 1;
+    let now = 0;
+    const { impl, calls } = fakeFetch((url) => (url.includes("/pictures/") ? (fails-- > 0 ? new Response("busy", { status: 503 }) : new Response(new Uint8Array(png))) : json({ modules: [entry({ icon })] })));
+    const client = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl, now: () => now });
+    await client.list({ game: "poe2" }, "en");
+    expect(await client.icon("wellbrained.tracker")).toBeNull();
+    // Not on every look, so an icon that never comes isn't fetched over and over.
+    expect(await client.icon("wellbrained.tracker")).toBeNull();
+    expect(calls.filter((call) => call.url.includes("/pictures/"))).toHaveLength(1);
+    now += 60_000;
+    expect(await client.icon("wellbrained.tracker")).toBe(`data:image/png;base64,${png.toString("base64")}`);
+  });
 });
 
 describe("CatalogClient.report", () => {

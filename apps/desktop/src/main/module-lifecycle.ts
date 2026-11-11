@@ -174,15 +174,25 @@ export class ModuleLifecycle {
     } catch {
       throw new LibraryError("error.removeFailed");
     }
-    this.options.panels.close(moduleId);
-    this.options.removed?.(module.owner, moduleId);
-    // Its data stays under its owner, so the same publisher's module finds it again. Its grants go:
-    // whatever is installed next under this id is asked again.
-    await forgetOwner(this.options.userData, path.basename(module.root));
-    await this.options.grants().revoke(module.owner, moduleId);
-    this.options.grantsChanged?.();
+    // It is gone from the folder. Each step below runs even when one before it failed, so its grants always go
+    // (whatever is installed next under this id is asked again) and the module list is looked at again.
+    const failed: unknown[] = [];
+    const step = async (work: () => unknown) => {
+      try {
+        await work();
+      } catch (error) {
+        failed.push(error);
+      }
+    };
+    await step(() => this.options.panels.close(moduleId));
+    await step(() => this.options.removed?.(module.owner, moduleId));
+    await step(() => this.options.grants().revoke(module.owner, moduleId));
+    await step(() => this.options.grantsChanged?.());
     this.updates.forget(moduleId);
-    await this.options.reload();
+    // Its data stays under its owner, so the same publisher's module finds it again.
+    await step(() => forgetOwner(this.options.userData, path.basename(module.root)));
+    await step(() => this.options.reload());
+    if (failed.length > 0) throw failed[0];
   }
 
   /**

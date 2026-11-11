@@ -79,6 +79,56 @@ describe("approving a new PC through the service", () => {
     old.pairing.dispose();
   });
 
+  it("asks again when Add did not get through, so the user can try again", async () => {
+    const cloud = await service();
+    let offline = false;
+    const flaky = (async (url: string, init?: RequestInit) => {
+      if (offline) throw new TypeError("fetch failed");
+      return cloud.fetch(url, init);
+    }) as typeof fetch;
+    const old = await onPc(flaky, cloud.token);
+    await old.accountKey.setUp();
+    const fresh = await onPc(cloud.fetch, await cloud.signIn("Laptop"));
+    await fresh.pairing.start();
+    await old.pairing.lookForRequests();
+    await fresh.pairing.lookForAnswer();
+    await old.pairing.lookForRequests();
+    const id = old.pairing.view().approve!.id;
+    offline = true;
+    await expect(old.pairing.decide(id, true)).rejects.toMatchObject({ key: "cloudCopy.error.offline" });
+    expect(old.pairing.view().approve).toMatchObject({ id, name: "Laptop" });
+    offline = false;
+    await old.pairing.decide(id, true);
+    await fresh.pairing.lookForAnswer();
+    await fresh.pairing.confirm();
+    expect(fresh.accountKey.get()?.equals(old.accountKey.get()!)).toBe(true);
+    fresh.pairing.dispose();
+    old.pairing.dispose();
+  });
+
+  it("a No that did not get through stays a no", async () => {
+    const cloud = await service();
+    let offline = false;
+    const flaky = (async (url: string, init?: RequestInit) => {
+      if (offline) throw new TypeError("fetch failed");
+      return cloud.fetch(url, init);
+    }) as typeof fetch;
+    const old = await onPc(flaky, cloud.token);
+    await old.accountKey.setUp();
+    const fresh = await onPc(cloud.fetch, await cloud.signIn("Laptop"));
+    await fresh.pairing.start();
+    await old.pairing.lookForRequests();
+    await fresh.pairing.lookForAnswer();
+    await old.pairing.lookForRequests();
+    offline = true;
+    await expect(old.pairing.decide(old.pairing.view().approve!.id, false)).rejects.toMatchObject({ key: "cloudCopy.error.offline" });
+    offline = false;
+    await old.pairing.lookForRequests();
+    expect(old.pairing.view().approve).toBeNull();
+    fresh.pairing.dispose();
+    old.pairing.dispose();
+  });
+
   it("tells the new PC when the old PC's user said no, and isn't asked again", async () => {
     const cloud = await service();
     const old = await onPc(cloud.fetch, cloud.token);

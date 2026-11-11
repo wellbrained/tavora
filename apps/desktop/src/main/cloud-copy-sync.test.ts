@@ -505,8 +505,18 @@ describe("the cloud copy, as Tavora runs it", () => {
 describe("what the copy is doing, and closing while it uploads", () => {
   /** Tavora at PC `at` again, with the copy on: its network and its flush (the start of every upload) in the test's hands. */
   async function running(cloud: Service, at: Pc) {
-    const net = { offline: false };
+    const tavora = gated(cloud, at);
+    await tavora.sync.beforeLoad();
+    expect(tavora.sync.view().on).toBe(true);
+    return tavora;
+  }
+
+  /** Tavora at PC `at`, not started yet, with its network and its flush in the test's hands. */
+  function gated(cloud: Service, at: Pc) {
+    const net = { offline: false, waiting: 0 };
     let gate: Promise<void> | null = null;
+    let netGate: Promise<void> | null = null;
+    let heldRoute = (_route: string) => true;
     const views: CloudCopyView[] = [];
     const sync = new CopySync({
       userData: at.userData,
@@ -514,13 +524,17 @@ describe("what the copy is doing, and closing while it uploads", () => {
       files: { root: () => at.moduleFiles },
       account: { token: () => cloud.token },
       serviceUrl: "http://tavora.test/v1/account",
-      fetch: ((input, init) => (net.offline ? Promise.reject(new TypeError("fetch failed")) : cloud.fetch(input, init))) as typeof fetch,
+      fetch: (async (input, init) => {
+        if (netGate && heldRoute(`${init?.method ?? "GET"} ${new URL(String(input)).pathname}`)) {
+          net.waiting++;
+          await netGate;
+        }
+        return net.offline ? Promise.reject(new TypeError("fetch failed")) : cloud.fetch(input, init);
+      }) as typeof fetch,
       encryptor,
       restart: () => undefined,
     });
     sync.attach({ flush: () => gate ?? Promise.resolve(), onChange: (view) => views.push(view) });
-    await sync.beforeLoad();
-    expect(sync.view().on).toBe(true);
     /** Holds the next uploads at their start until the answer is called. */
     const hold = () => {
       let open!: () => void;
@@ -530,7 +544,17 @@ describe("what the copy is doing, and closing while it uploads", () => {
         open();
       };
     };
-    return { sync, views, net, hold };
+    /** Holds every request to the service (or those whose `METHOD /path` matches) until the answer is called. */
+    const holdNet = (match: (route: string) => boolean = () => true) => {
+      let open!: () => void;
+      heldRoute = match;
+      netGate = new Promise((resolve) => (open = resolve));
+      return () => {
+        netGate = null;
+        open();
+      };
+    };
+    return { sync, views, net, hold, holdNet };
   }
   const remoteVersion = (cloud: Service) => cloud.client().remote().then((remote) => remote?.version);
   /** Progress only ever shows while uploading. */
@@ -588,6 +612,141 @@ describe("what the copy is doing, and closing while it uploads", () => {
     expect(sync.view()).toMatchObject({ busy: null, progress: null, problem: null });
     expect(consistent(views)).toBe(true);
     expect(await remoteVersion(cloud)).toBe(2);
+  });
+
+  it("turned off while it uploads: it stays off, after the upload and after a restart", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    await startCopy(cloud, a);
+    const { sync, net, holdNet } = await running(cloud, a);
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
+    const release = holdNet();
+    const upload = sync.sync(true);
+    // On its way to the service.
+    await until(() => net.waiting > 0);
+    await sync.turnOff();
+    release();
+    await upload;
+    expect(sync.view()).toMatchObject({ on: false, busy: null });
+    // Before, the upload's end wrote what it knew again, and the next start found the copy on.
+    const restarted = tavora(cloud, a);
+    await restarted.sync.beforeLoad();
+    expect(restarted.sync.view().on).toBe(false);
+    // What was already on its way arrives (it can't be called back); nothing goes up after it.
+    expect(await remoteVersion(cloud)).toBe(2);
+    await writeFile(path.join(a.userData, "library.json"), "a3 changed");
+    await sync.sync(true);
+    expect(await remoteVersion(cloud)).toBe(2);
+  });
+
+  it("signed out while it turns on: it stays off, also after a restart", async () => {
+    const cloud = await service();
+    const { key } = await startCopy(cloud, await pc({ "library.json": "a1" }));
+    const b = await pc({ "library.json": "b1" });
+    const { sync, net, holdNet } = gated(cloud, b);
+    await sync.beforeLoad();
+    await sync.turnOn();
+    expect(sync.view().askKey).toBe(true);
+    // The key is fine; held while the copy that exists comes down.
+    const release = holdNet((route) => route.endsWith("/copy/manifest"));
+    const entering = sync.enterKey(key);
+    await until(() => net.waiting > 0);
+    await sync.signedOut();
+    release();
+    await entering;
+    expect(sync.view()).toMatchObject({ on: false, conflict: false });
+    const restarted = tavora(cloud, b);
+    await restarted.sync.beforeLoad();
+    expect(restarted.sync.view().on).toBe(false);
+  });
+
+  it("signed out during Start over: it stays off, and the new key isn't kept", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    await startCopy(cloud, a);
+    const { sync, net, holdNet } = await running(cloud, a);
+    // Held while the new key's vault goes up.
+    const release = holdNet((route) => route === "PUT /v1/account/vault");
+    const starting = sync.startOver().catch(() => undefined);
+    await until(() => net.waiting > 0);
+    await sync.signedOut();
+    release();
+    await starting;
+    expect(sync.view()).toMatchObject({ on: false, recoveryKey: null });
+    const restarted = tavora(cloud, a);
+    await restarted.sync.beforeLoad();
+    expect(restarted.sync.view().on).toBe(false);
+    await expect(readFile(path.join(a.userData, "account-key.json"))).rejects.toThrow();
+  });
+
+  it("turned off while it moves to the service: the copy stays in the folder, and nothing is left on the service", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const folder = await mkdtemp(path.join(os.tmpdir(), "tavora-move-"));
+    const first = tavora(cloud, a);
+    await first.sync.beforeLoad();
+    await first.sync.turnOn(folder);
+    expect(first.sync.view()).toMatchObject({ on: true, folder });
+    const { sync, net, holdNet } = await running(cloud, a);
+    // Held while it goes up to the service.
+    const release = holdNet((route) => !route.startsWith("GET "));
+    const move = sync.move(null);
+    await until(() => net.waiting > 0);
+    await sync.turnOff();
+    release();
+    await move;
+    expect(sync.view().on).toBe(false);
+    expect(await remoteVersion(cloud)).toBeUndefined();
+    expect((await readdir(folder)).length).toBeGreaterThan(0);
+    const restarted = tavora(cloud, a);
+    await restarted.sync.beforeLoad();
+    expect(restarted.sync.view().on).toBe(false);
+    await rm(folder, { recursive: true, force: true });
+  });
+
+  it("turned off while a newer copy comes down after the start: nothing waits for a restart", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { key } = await startCopy(cloud, a);
+    // Another PC saves a newer copy.
+    const b = await pc({ "library.json": "b1" });
+    const atB = tavora(cloud, b);
+    await atB.sync.beforeLoad();
+    await atB.sync.turnOn();
+    await atB.sync.enterKey(key);
+    await atB.sync.keep("pc");
+    expect(await remoteVersion(cloud)).toBe(2);
+    const { sync, net, holdNet } = gated(cloud, a);
+    const release = holdNet((route) => route.endsWith("/copy/manifest"));
+    // Past its budget: the start goes on, the download finishes later.
+    await sync.beforeLoad(0);
+    await until(() => net.waiting > 0);
+    await sync.turnOff();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(sync.view()).toMatchObject({ on: false, restartToTake: false, conflict: false });
+  });
+
+  it("signed out while it moves to a folder: the copy stays where it was, and off here", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    await startCopy(cloud, a);
+    const { sync, hold } = await running(cloud, a);
+    const folder = await mkdtemp(path.join(os.tmpdir(), "tavora-move-"));
+    // Held while the panels save, before anything goes to the folder.
+    const release = hold();
+    const move = sync.move(folder);
+    await until(() => sync.view().busy === "uploading");
+    await sync.signedOut();
+    release();
+    await move;
+    expect(sync.view().on).toBe(false);
+    // The other PCs keep the copy on the service.
+    expect(await remoteVersion(cloud)).toBe(1);
+    const restarted = tavora(cloud, a);
+    await restarted.sync.beforeLoad();
+    expect(restarted.sync.view().on).toBe(false);
+    await rm(folder, { recursive: true, force: true });
   });
 
   it("quit mid-sync: the close waits, says so after a few seconds, and closes once the upload is done", async () => {

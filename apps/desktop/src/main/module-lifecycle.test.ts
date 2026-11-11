@@ -187,6 +187,22 @@ describe("ModuleLifecycle", () => {
     expect(grants.get(owner, ID)).toBeUndefined();
   });
 
+  it("a removal that fails after the bin still takes the grants, so the next module under the id is asked", async () => {
+    const { lifecycle, steps, grants, state, zipFile, modules } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const owner = fingerprint(key);
+    await lifecycle.installFile(await zipFile(zipOf("1.0.0", key)));
+    await grants.grant(modules().get(ID)!);
+    steps.length = 0;
+    state.onClose = () => {
+      throw new Error("a panel would not close");
+    };
+    await expect(lifecycle.remove(ID)).rejects.toThrow("a panel would not close");
+    expect(grants.get(owner, ID)).toBeUndefined();
+    expect(steps.at(-1)).toBe("look for modules");
+    expect(modules().has(ID)).toBe(false);
+  });
+
   it("removes only modules the user may remove, and keeps everything when the bin fails", async () => {
     const { lifecycle, steps, state, zipFile } = await setup();
     await expect(lifecycle.remove(ID)).rejects.toMatchObject({ key: "error.removeOnlyOwn" });

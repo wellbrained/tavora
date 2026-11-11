@@ -58,28 +58,36 @@ export class DeveloperKeys {
     void this.refresh();
   }
 
-  /** Reads the keys the vault holds. Never throws: offline keeps what was read last. */
+  /** Reads the keys the vault holds. Never throws: offline keeps what was read last for this account. */
   async refresh(): Promise<void> {
-    try {
-      await this.load();
-    } catch {
-      if (this.status === "loading") this.status = "offline";
-    }
+    await this.load().catch(() => undefined);
     this.hadKey = this.options.accountKey.get() !== null;
     this.changed();
   }
 
+  /** Raised by every read: only the newest one may set what is shown (signed out while the keys loaded stays out). */
+  private turn = 0;
+
+  /**
+   * Reads the keys. Throws when the vault can't be reached: the keys read last stay, unless they are for no one (still
+   * loading, or signed out while signed in now); then it says offline.
+   */
   private async load(): Promise<void> {
+    const turn = ++this.turn;
+    try {
+      const [status, keys] = await this.read();
+      if (turn === this.turn) this.set(status, keys);
+    } catch (error) {
+      if (turn === this.turn && (this.status === "loading" || this.status === "signed-out")) this.status = "offline";
+      throw error;
+    }
+  }
+
+  private async read(): Promise<[DeveloperKeysView["status"], Kept[]]> {
     const accountKey = this.options.accountKey;
-    if (!this.options.account.signedIn()) {
-      this.set("signed-out", []);
-      return;
-    }
-    if (!accountKey.get()) {
-      this.set((await accountKey.exists()) ? "ask" : "none", []);
-      return;
-    }
-    this.set("ready", parseKeys((await accountKey.content()).publisherKeys ?? []));
+    if (!this.options.account.signedIn()) return ["signed-out", []];
+    if (!accountKey.get()) return [(await accountKey.exists()) ? "ask" : "none", []];
+    return ["ready", parseKeys((await accountKey.content()).publisherKeys ?? [])];
   }
 
   private set(status: DeveloperKeysView["status"], keys: Kept[]): void {
@@ -190,6 +198,8 @@ export class DeveloperKeys {
     if (!accountKey.canKeep) throw new UserError("cloudCopy.error.cantKeep");
     const setUp = await guard(() => accountKey.setUp());
     if (setUp.status === "ask") {
+      // Newer than any read still going.
+      this.turn++;
       this.set("ask", []);
       this.changed();
       throw new UserError("developerKeys.error.needRecoveryKey");
