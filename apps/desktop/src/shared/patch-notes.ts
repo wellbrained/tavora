@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.26",
+    date: "2026-11-12",
+    title: "Adding games from the search",
+    notes: [
+      "Picking a game the online search found now adds it; before, nothing happened.",
+      "A game on your PC that Tavora didn't know is now matched to the one the search finds, so its modules are offered.",
+    ],
+    prs: [
+      { number: 742, title: "Add a game: games from the online search can be added again" },
+    ],
+    tags: ["games"],
+  },
+  {
     version: "0.24.25",
     date: "2026-11-12",
     title: "Updates show up sooner",
