@@ -1504,7 +1504,7 @@ const flag = (key: string, when: string): GestureRule => ({ when, check: (params
  * the one place that number is written. It must be the version the pull request merges as: set it right before merging,
  * then run `pnpm --filter @tavora/docs protocol`. Too low, and the SDK sends a Tavora without them keys it refuses.
  */
-export const ITEM_CARD_TAVORA = "0.24.27";
+export const ITEM_CARD_TAVORA = "0.24.29";
 
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),

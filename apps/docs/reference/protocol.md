@@ -417,7 +417,7 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `ui.tooltip.move` | 0.18.18 |  |  |
 | `ui.tooltip.hide` | 0.18.18 |  |  |
 | `ui.tooltip.close` | 0.18.18 |  |  |
-| `ui.tooltip.defineSkin` | 0.24.27 |  |  |
+| `ui.tooltip.defineSkin` | 0.24.29 |  |  |
 | `links.open` | 0.11.0 |  | always |
 | `blobs.list` | 0.12.0 |  |  |
 | `blobs.usage` | 0.12.0 |  |  |
