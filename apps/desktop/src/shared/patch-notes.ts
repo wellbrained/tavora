@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.36",
+    date: "2026-11-13",
+    title: "Add a game and Personal sit right",
+    notes: [
+      "Add a game opens in the middle of the window, like Settings.",
+      "Personal's name field shows above your panels.",
+    ],
+    prs: [
+      { number: 751, title: "Add a game in the middle; Personal's name field above the panels" },
+    ],
+    tags: ["games"],
+  },
+  {
     version: "0.24.35",
     date: "2026-11-13",
     title: "Item cards: a clearer effect box",
