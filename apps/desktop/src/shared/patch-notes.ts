@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.28",
+    date: "2026-11-12",
+    title: "Playing a game that isn't in your games yet?",
+    notes: [
+      "Your profile card says which game you're playing, even when it isn't in your games.",
+      "Add it in one click from the card above your profile.",
+    ],
+    prs: [
+      { number: 743, title: "Rail: show and offer to add a running game that isn't in your games" },
+    ],
+    tags: ["accounts", "games"],
+  },
+  {
     version: "0.24.27",
     date: "2026-11-12",
     title: "Trash empties sooner",
