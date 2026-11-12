@@ -415,7 +415,7 @@ test("many workspaces are moved to Trash, restored and deleted together from Set
   await app.close();
 });
 
-test("a workspace in Trash is deleted for good after 30 days or when the user says so", async () => {
+test("a workspace in Trash is deleted for good after 7 days or when the user says so", async () => {
   const userData = await newUserData();
   const running = await launch(userData);
   const { page } = running;
@@ -442,10 +442,10 @@ test("a workspace in Trash is deleted for good after 30 days or when the user sa
       .filter((name) => name.endsWith("@satisfactory"));
   expect(await gamePartitions()).toEqual([`module:local:${VANILLA}@satisfactory`]);
 
-  // Thirty-one days later.
+  // Eight days later.
   const libraryFile = path.join(userData, "library.json");
   const library = JSON.parse(await readFile(libraryFile, "utf8"));
-  library.workspaces.satisfactory.trashedAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+  library.workspaces.satisfactory.trashedAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
   await writeFile(libraryFile, JSON.stringify(library));
 
   const again = await launch(userData);

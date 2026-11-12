@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Settings > Games > Trash: removed workspaces, kept for 30 days. Tick several to restore or delete them together.
+// Settings > Games > Trash: removed workspaces, kept for 7 days. Tick several to restore or delete them together.
 import { computed, ref, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
