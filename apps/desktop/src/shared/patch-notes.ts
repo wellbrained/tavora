@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.34",
+    date: "2026-11-12",
+    title: "Item cards show what grows",
+    notes: [
+      "Item cards put their badges beside the name, with the type line right under it.",
+      "A card's stats can show how much they grow, per level for example, in a column of their own.",
+    ],
+    prs: [
+      { number: 750, title: "Item cards: badges beside the title, stats that grow per level" },
+    ],
+    tags: ["publishing", "sdk", "tooltips", "ui-kit", "website"],
+  },
+  {
     version: "0.24.33",
     date: "2026-11-12",
     title: "A quicker personal workspace",
