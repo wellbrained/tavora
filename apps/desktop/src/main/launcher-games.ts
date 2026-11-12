@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { normalizeName } from "../shared/same-game";
 
 /**
  * Finds the games installed on this PC by looking at what the launchers leave
@@ -45,22 +46,6 @@ export interface ScanOptions {
 }
 
 // ── Names ────────────────────────────────────────────────────────────────
-
-const ROMAN: Record<string, string> = { ii: "2", iii: "3", iv: "4", v: "5", vi: "6", vii: "7", viii: "8", ix: "9", x: "10" };
-
-/** A name reduced to what two spellings of one game share: "Diablo® IV" and "Diablo 4" are the same. */
-export function normalizeName(name: string): string {
-  const tokens = name
-    // Steam writes "Battlefield™ 6"; NFKD would turn the sign into the letters "tm".
-    .replace(/[™℠®©]/g, "")
-    .normalize("NFKD")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .split(" ")
-    .filter(Boolean);
-  return tokens.map((token, i) => (i > 0 ? (ROMAN[token] ?? token) : token)).join("");
-}
 
 /**
  * The installed game that goes with a library game, preferring the launchers in `ORDER`.

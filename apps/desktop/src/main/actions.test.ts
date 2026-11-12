@@ -372,6 +372,8 @@ describe("parseAction", () => {
     [{ type: "set-theme", themeId: "tavora.nightfall" }],
     [{ type: "reset-theme", themeId: "tavora.nightfall" }],
     [{ type: "add-workspace", online: { id: "x", name: "X", steamAppId: "5" } }],
+    [{ type: "add-workspace", name: "X", steamAppId: "5" }],
+    [{ type: "add-workspace", name: "X", steamAppId: -1 }],
     [{ type: "add-workspace", online: { id: "x", name: "X", steamAppId: -1 } }],
     [{ type: "add-workspace", online: { id: "x", name: "X", steamAppId: 1.5 } }],
     [{ type: "add-workspace", online: { id: "x", name: "X", steamAppId: 5, extra: true } }],

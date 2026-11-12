@@ -24,6 +24,11 @@ export function findInstalledGames(): Promise<InstalledGameView[]> {
   return running;
 }
 
+/** Marks a game of the last list as added, so the list is right until it is found again. */
+export function noteAdded(key: string, workspaceId: string): void {
+  last = last?.map((game) => (game.key === key ? { ...game, workspaceId } : game)) ?? null;
+}
+
 /** Forgets the list, for tests. */
 export function resetInstalledGames(): void {
   last = null;

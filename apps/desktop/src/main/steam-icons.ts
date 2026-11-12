@@ -281,9 +281,9 @@ export async function fetchPublicIconHash(appid: number, options: { fetchImpl?: 
   }
 }
 
-/** True for a JPEG file, whatever it is called. */
-export function isJpeg(bytes: Uint8Array): boolean {
-  return bytes.byteLength >= 128 && bytes.byteLength <= MAX_STEAM_ICON_BYTES && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+/** True for a JPEG file of a sane size, whatever it is called. */
+export function isJpeg(bytes: Uint8Array, maxBytes = MAX_STEAM_ICON_BYTES): boolean {
+  return bytes.byteLength >= 128 && bytes.byteLength <= maxBytes && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 }
 
 /** The small icon Steam keeps in its library cache for an app: a picture named by a 40-digit hash, straight in the app's folder. */
@@ -304,6 +304,62 @@ export async function readLibraryCacheIcon(steamDir: string, appid: number): Pro
   } catch {
     return null;
   }
+}
+
+/** Largest cover read from Steam's library cache; Steam's own are about 100 KB. */
+const MAX_STEAM_COVER_BYTES = 4 * 1024 * 1024;
+
+/**
+ * The tall cover (600x900) Steam keeps in its library cache for an app: `<appid>/<hash>/library_capsule.jpg` in newer
+ * Steam, `<appid>/library_600x900.jpg` in older. Read on this PC only, never downloaded; null when there is none.
+ */
+export async function readLibraryCover(steamDir: string, appid: number): Promise<Uint8Array | null> {
+  if (!isSteamAppId(appid)) return null;
+  const dir = path.join(steamDir, "appcache", "librarycache", String(appid));
+  let folders: string[];
+  try {
+    folders = (await readdir(dir, { withFileTypes: true })).filter((entry) => entry.isDirectory() && /^[0-9a-f]{40}$/.test(entry.name)).map((entry) => entry.name).slice(0, 20);
+  } catch {
+    return null;
+  }
+  for (const file of [...folders.map((folder) => path.join(dir, folder, "library_capsule.jpg")), path.join(dir, "library_600x900.jpg")]) {
+    try {
+      const info = await stat(file);
+      if (!info.isFile() || info.size > MAX_STEAM_COVER_BYTES) continue;
+      const bytes = new Uint8Array(await readFile(file));
+      if (isJpeg(bytes, MAX_STEAM_COVER_BYTES)) return bytes;
+    } catch {
+      // Not there: try the next place.
+    }
+  }
+  return null;
+}
+
+/**
+ * Steam covers by app id as data addresses (null: none), each read once: `readAll` is asked only for the ones not asked
+ * for before, also while an earlier read still runs. A read that fails counts as none this time and is tried again.
+ */
+export function coverReader(readAll: (appids: number[]) => Promise<(Uint8Array | null)[]>): (appids: readonly number[]) => Promise<Record<number, string | null>> {
+  const known = new Map<number, Promise<string | null>>();
+  return async (appids) => {
+    const missing = [...new Set(appids)].filter((appid) => !known.has(appid));
+    if (missing.length) {
+      const read = readAll(missing).catch(() => {
+        for (const appid of missing) known.delete(appid);
+        return [];
+      });
+      missing.forEach((appid, index) =>
+        known.set(
+          appid,
+          read.then((all) => {
+            const bytes = all[index];
+            return bytes ? `data:image/jpeg;base64,${Buffer.from(bytes).toString("base64")}` : null;
+          }),
+        ),
+      );
+    }
+    return Object.fromEntries(await Promise.all(appids.map(async (appid) => [appid, await known.get(appid)!] as const)));
+  };
 }
 
 /** Saves the icon from Steam's library cache on this PC, with nothing asked of the network. */

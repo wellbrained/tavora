@@ -4,6 +4,8 @@ import type { UnlistedGame } from "../shared/host-api";
 import type { InstalledGame } from "./launcher-games";
 import { addWorkspace, emptyLibrary, liveWorkspaces, markOpened, restoreWorkspace, trashWorkspace } from "./library";
 import type { ProgramLook } from "./program-list";
+import { addOrRestoreWorkspace, gameCopyFinder } from "./game-copy";
+import { addInputForUnlisted } from "../renderer/lib/game-picker";
 
 const day = (n: number) => new Date(Date.UTC(2026, 9, n));
 
@@ -150,6 +152,43 @@ describe("runningNotInLibrary", () => {
     const id = addWorkspace(library, { catalogId: "grand-theft-auto-5" }, day(1));
     expect(runningNotInLibrary(liveWorkspaces(library), [gta], [gta.file], null, GAMES)).toEqual([]);
     expect([...runningGames(liveWorkspaces(library), [gta], [gta.file], null)]).toEqual([id]);
+  });
+
+  it("offers to add a built-in game whose only copy is in Trash, and adding it brings that copy back", () => {
+    const library = emptyLibrary();
+    addWorkspace(library, { catalogId: "fortnite" }, day(1));
+    trashWorkspace(library, "fortnite", day(2));
+    const [offer] = runningNotInLibrary(Object.values(library.workspaces), [FORTNITE], [FORTNITE.file], null, GAMES);
+    expect(offer).toEqual({ name: "Fortnite", steamAppId: null, catalogId: "fortnite" });
+    // Before, add-workspace refused it ("is in Trash").
+    expect(addOrRestoreWorkspace(library, addInputForUnlisted(offer!), day(3))).toEqual({ id: "fortnite", restored: true });
+    expect(runningNotInLibrary(Object.values(library.workspaces), [FORTNITE], [FORTNITE.file], null, GAMES)).toEqual([]);
+    expect([...runningGames(liveWorkspaces(library), [FORTNITE], [FORTNITE.file], null)]).toEqual(["fortnite"]);
+  });
+
+  it("goes by the rule add-workspace uses: what it offers, adding makes a new copy of", () => {
+    const steam = (name: string, steamAppId: number): InstalledGame => ({ source: "steam", name, steamAppId, file: `E:\\Steam\\steamapps\\common\\${name}\\game.exe`, index: 0, folder: `E:\\Steam\\steamapps\\common\\${name}` });
+    const library = emptyLibrary();
+    addWorkspace(library, { name: "Doom", steamAppId: 2280 }, day(1));
+    addWorkspace(library, { catalogId: "apex-legends" }, day(1));
+    addWorkspace(library, { name: "Hollow Knight" }, day(1));
+    const cases: [InstalledGame, boolean][] = [
+      // Both have a Steam id: only that decides, not the name.
+      [steam("DOOM", 379720), true],
+      [steam("Doom", 2280), false],
+      // A namesake of a built-in game with another Steam id is another game.
+      [steam("Apex Legends", 999999), true],
+      [steam("Apex Legends", 1172470), false],
+      // The copy has no Steam id: the name decides.
+      [steam("Hollow Knight", 367520), false],
+    ];
+    for (const [game, offered] of cases) {
+      const entries = Object.values(library.workspaces);
+      const unlisted = runningNotInLibrary(entries, [game], [], game.steamAppId!, new Set([game.steamAppId!]));
+      expect(unlisted.length > 0, game.name).toBe(offered);
+      const copy = gameCopyFinder(library)({ id: null, steamAppId: game.steamAppId!, name: game.name });
+      expect(copy === undefined, game.name).toBe(offered);
+    }
   });
 
   it("ignores helpers in the folder and a folder two games claim", () => {

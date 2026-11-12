@@ -8,9 +8,9 @@ import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { fingerprint, packModule } from "@tavora/pack";
-import { expectModuleText, hostToast, launch, newUserData, openAddGame, openWorkspace, panels, seedLibrary } from "./harness";
+import { expectModuleText, hostToast, launch, newUserData, NOTES, openAddGame, openWorkspace, panels, seedLibrary, TODOS } from "./harness";
 
 interface Listed {
   entry: Record<string, unknown>;
@@ -373,18 +373,22 @@ test("a user sees a module's rating on its card, how many gave each star, and it
   }
 });
 
-test("a game without modules says general modules still work, and Ask for a module sends one anonymous vote that never blocks adding the game", async () => {
+test("a game without modules can ask for one from its empty page, with one anonymous vote that never blocks the game", async () => {
   const { url, server, moduleRequests } = await catalogServer([]);
   const installed = JSON.stringify([{ name: "Valheim", steamAppId: 892970, installedAt: Date.now() - 24 * 60 * 60 * 1000 }]);
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url, TAVORA_TEST_INSTALLED: installed } });
   try {
+    // The dialog asks nothing (the empty poe2 page behind it has its own Ask): a click on the cover adds the game and opens it.
     await openAddGame(page);
-    const none = page.getByTestId("panel-no-modules");
-    // The examples are general modules that ship with Tavora, two at most.
-    await expect(none).toContainText("No modules for Valheim yet. You can still add any general module, like Notes or Clock & Counter, once the game is added.");
+    await expect(page.getByTestId("add-game-dialog").getByTestId("ask-module")).toHaveCount(0);
+    await page.getByTestId("cover-valheim").click();
+    await expect(page.getByTestId("rail-workspace-valheim")).toHaveAttribute("aria-current", "page");
+    // Its empty page says there are no modules for it yet and offers Ask for a module.
+    await emptyTheWorkspace(page);
+    await expect(page.getByTestId("no-modules-yet")).toContainText("No modules for Valheim yet.");
     const ask = page.getByTestId("ask-module");
     await expect(ask).toHaveText("Ask for a Valheim module");
-    // The address does not exist yet (404): it says so, stays clickable, and the game can still be added.
+    // The address does not exist yet (404): it says so and stays clickable.
     await ask.click();
     await expect(page.getByTestId("ask-module-error")).toHaveText("Couldn't send. Try again later.");
     await expect(ask).toBeEnabled();
@@ -403,21 +407,13 @@ test("a game without modules says general modules still work, and Ask for a modu
     expect(saved.askedModules).toEqual(["steam:892970"]);
     expect(saved.installId).toMatch(/^[0-9a-f]{64}$/);
     expect(saved.installId).not.toBe(body.voter);
-    // Asked once for this game on this install: it stays a thanks when the dialog opens again.
-    await page.keyboard.press("Escape");
-    await openAddGame(page);
-    await expect(page.getByTestId("ask-module-thanks")).toBeVisible();
-    expect(moduleRequests.bodies).toHaveLength(2);
-    // Adding the game works as before.
-    await page.getByTestId("panel-add").click();
-    await expect(page.getByTestId("rail-workspace-valheim")).toHaveAttribute("aria-current", "page");
   } finally {
     await app.close();
     server.close();
   }
 });
 
-test("Ask for a module needs Online features, and says so", async () => {
+test("with online features off, an empty game page offers no modules and asks for none", async () => {
   const { url, server, moduleRequests } = await catalogServer([]);
   const installed = JSON.stringify([{ name: "Valheim", steamAppId: 892970, installedAt: Date.now() }]);
   const userData = await newUserData();
@@ -425,8 +421,11 @@ test("Ask for a module needs Online features, and says so", async () => {
   const { app, page } = await launch(userData, [], { seed: false, env: { TAVORA_API_URL: url, TAVORA_TEST_INSTALLED: installed } });
   try {
     await openAddGame(page);
-    await page.getByTestId("ask-module").click();
-    await expect(page.getByTestId("ask-module-error")).toHaveText("Turn on online features in Settings to ask for a module.");
+    await page.getByTestId("cover-valheim").click();
+    await expect(page.getByTestId("rail-workspace-valheim")).toHaveAttribute("aria-current", "page");
+    await emptyTheWorkspace(page);
+    await expect(page.getByTestId("empty-add-module")).toBeVisible();
+    await expect(page.getByTestId("made-for-game")).toHaveCount(0);
     expect(moduleRequests.bodies).toHaveLength(0);
   } finally {
     await app.close();
@@ -434,7 +433,7 @@ test("Ask for a module needs Online features, and says so", async () => {
   }
 });
 
-test("the Add a game picker badges games that have modules and adds the ticked ones with the game", async () => {
+test("the Add a game picker badges games that have modules, and the empty game page adds them with one click", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;
   const owner = fingerprint(key);
   const map = await packed("wellbrained.sat-map", "Sat Map", key);
@@ -447,37 +446,30 @@ test("the Add a game picker badges games that have modules and adds the ticked o
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url, TAVORA_TEST_INSTALLED: installed } });
   try {
     await openAddGame(page);
-    // The badge counts the modules made for the game; a game without any has none, and its panel says so.
+    // Nothing typed: both games are covers, the one installed last first, highlighted.
+    const covers = page.getByTestId("add-game-dialog").locator('[data-testid^="cover-"]');
+    await expect(covers).toHaveCount(2);
+    await expect(page.getByTestId("cover-factorio")).toHaveAttribute("aria-selected", "true");
+    await page.getByTestId("game-search").press("ArrowRight");
+    await expect(page.getByTestId("cover-n:mysterygame")).toHaveAttribute("aria-selected", "true");
+    await page.getByTestId("game-search").press("ArrowLeft");
+    await expect(page.getByTestId("cover-factorio")).toHaveAttribute("aria-selected", "true");
+    // Typed: one list; the badge counts the modules made for the game, a game without any has none.
+    await page.getByTestId("game-search").fill("a");
     await expect(page.getByTestId("module-badge-factorio")).toHaveText("2 modules");
     await expect(page.getByTestId("add-game-dialog").locator('[data-testid^="module-badge-"]')).toHaveCount(1);
-    await expect(page.getByTestId("panel-heading")).toHaveText("Modules for Factorio");
-    await expect(page.getByTestId("pick-module-wellbrained.sat-map")).toBeVisible();
-    await expect(page.getByTestId("pick-module-wellbrained.sat-map")).toContainText("community");
-    await expect(page.getByTestId("panel-add")).toHaveText("Add game");
-    await page.getByTestId("game-search").press("ArrowDown");
-    await expect(page.getByTestId("panel-heading")).toHaveText("Modules for Mystery Game");
-    await expect(page.getByTestId("panel-no-modules")).toBeVisible();
-    await expect(page.getByTestId("panel-add")).toHaveText("Add game");
-    await page.getByTestId("game-search").press("ArrowUp");
 
-    // Tab moves into the ticks, Space ticks, Esc goes back to the search without closing.
-    await page.getByTestId("game-search").press("Tab");
-    const first = page.getByTestId("pick-module-wellbrained.sat-calc").getByRole("checkbox");
-    await expect(first).toBeFocused();
-    await page.keyboard.press("Space");
-    await expect(first).toBeChecked();
-    await expect(page.getByTestId("panel-add")).toHaveText("Add game + 1");
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("game-search")).toBeFocused();
-    await expect(page.getByTestId("add-game-dialog")).toBeVisible();
-    // The tick is remembered for the game while the picker is open.
-    await page.getByTestId("game-search").press("ArrowDown");
-    await page.getByTestId("game-search").press("ArrowUp");
-    await expect(page.getByTestId("panel-add")).toHaveText("Add game + 1");
-
-    // Enter adds the game and the ticked module, which opens in the new workspace.
+    // Enter adds the game and opens it. Community modules are not added with it (only Tavora's own are).
+    await page.getByTestId("game-search").fill("factorio");
     await page.getByTestId("game-search").press("Enter");
     await expect(page.getByTestId("rail-workspace-factorio")).toHaveAttribute("aria-current", "page");
+    await expect(panels(page, "wellbrained.sat-map")).toHaveCount(0);
+
+    // Its empty page lists the modules made for it; Add installs one and opens its panel.
+    await emptyTheWorkspace(page);
+    await expect(page.getByTestId("made-for-game")).toContainText("Made for Factorio");
+    await expect(page.getByTestId("made-for-wellbrained.sat-map")).toContainText("Map and Pings");
+    await page.getByTestId("made-for-add-wellbrained.sat-calc").click();
     await expectModuleText(app, "wellbrained.sat-calc", "version", "1.0.0");
     await expect(panels(page, "wellbrained.sat-map")).toHaveCount(0);
   } finally {
@@ -485,6 +477,15 @@ test("the Add a game picker badges games that have modules and adds the ticked o
     server.close();
   }
 });
+
+/** Closes the starter panels a new game opens with, so its empty page shows. */
+async function emptyTheWorkspace(page: Page): Promise<void> {
+  for (const moduleId of [NOTES, TODOS]) {
+    await expect(panels(page, moduleId)).toHaveCount(1);
+    await panels(page, moduleId).getByTestId("close").click();
+  }
+  await expect(page.getByTestId("empty-workspace")).toBeVisible();
+}
 
 test("a zip that is not the listed one, or not from the listed key, writes nothing", async () => {
   const key = generateKeyPairSync("ed25519").privateKey;

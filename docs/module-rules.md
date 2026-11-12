@@ -63,6 +63,7 @@ classes where you use a control; never copy it.
 | Nothing here yet | `EmptyState` (one sentence, one action) | a bare `<p>` |
 | Loading with a known amount | `Progress` | "Loading…" in a `<p>` |
 | A list, card or page that loads | `Skeleton` around the real template with placeholder data (see [Loading](#loading)) | generic grey bars, a spinner, "Loading…" |
+| A game's tall cover | `GameCover` (2:3, the game's tile as fallback, name beside it) | an own `<img>` box per module |
 | A picture that may arrive late | `FadeImage` (reserved box, fades in, keeps a fallback icon if it fails) | a bare `<img>` that pops in and shifts the layout |
 | Error or warning in place | `Notice` | red text in a `<p>` |
 | Short message | `toast()` from `ui/toast` (the `Toaster` follows the user's toast position) | own status line |

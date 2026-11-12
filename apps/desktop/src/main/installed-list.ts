@@ -1,7 +1,8 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { CATALOG } from "./catalog";
-import { normalizeName, type InstalledGame, type LauncherSource } from "./launcher-games";
+import { normalizeName } from "../shared/same-game";
+import type { InstalledGame, LauncherSource } from "./launcher-games";
 
 /**
  * The games on this PC for the Add a game picker, newest activity first. Everything here is read on this PC and
@@ -35,7 +36,10 @@ export function gameKey(game: Pick<InstalledGame, "name" | "steamAppId">): strin
   return game.steamAppId === undefined ? `n:${normalizeName(game.name)}` : `steam:${game.steamAppId}`;
 }
 
-/** The built-in game a name or Steam id belongs to. */
+/**
+ * The built-in game a name or Steam id belongs to. A Steam game named like a built-in game with another Steam id is
+ * another game ("Doom" 2280 isn't the built-in "DOOM" 379720).
+ */
 export function catalogIdFor(name: string, steamAppId?: number): string | null {
   if (steamAppId !== undefined) {
     const byId = CATALOG.find((game) => game.steamAppId === steamAppId);
@@ -43,7 +47,8 @@ export function catalogIdFor(name: string, steamAppId?: number): string | null {
   }
   const wanted = normalizeName(name);
   if (!wanted) return null;
-  return CATALOG.find((game) => normalizeName(game.name) === wanted || game.aliases?.some((alias) => normalizeName(alias) === wanted))?.id ?? null;
+  const byName = CATALOG.find((game) => normalizeName(game.name) === wanted || game.aliases?.some((alias) => normalizeName(alias) === wanted));
+  return byName && (steamAppId === undefined || byName.steamAppId === undefined) ? byName.id : null;
 }
 
 /**

@@ -1,9 +1,9 @@
 import path from "node:path";
 import type { GameStart, UnlistedGame } from "../shared/host-api";
 import type { WorkspaceEntry } from "./library";
-import { CATALOG } from "./catalog";
 import { catalogIdFor, pickGames, type Signs } from "./installed-list";
-import { NOT_THE_GAME, normalizeName, type InstalledGame } from "./launcher-games";
+import { isSameGame, normalizeName, type GameIdentity } from "../shared/same-game";
+import { NOT_THE_GAME, type InstalledGame } from "./launcher-games";
 import { windowsProgramProbe, type ProgramLook, type ProgramProbe } from "./program-list";
 
 /**
@@ -37,25 +37,27 @@ function folderOf(game: InstalledGame): string {
 /** A game by what names it: an installed game, or one running that is not in the library (which knows its built-in game). */
 type GameRef = { name: string; steamAppId?: number | null; catalogId?: string | null };
 
-/** The built-in game of each installed game, worked out once per game. */
-const catalogIds = new WeakMap<GameRef, string | null>();
+/** Each game as `isSameGame` (shared/same-game.ts) knows it, worked out once per game. */
+const identities = new WeakMap<GameRef, GameIdentity>();
 
-function catalogOf(game: GameRef): string | null {
-  if (game.catalogId !== undefined) return game.catalogId;
-  let id = catalogIds.get(game);
-  if (id === undefined) catalogIds.set(game, (id = catalogIdFor(game.name, game.steamAppId ?? undefined)));
-  return id;
+/** A game by Tavora's rule: its built-in game is its Tavora id (a copy installed as "GTA V" is the built-in "Grand Theft Auto V"). */
+function identityOfRef(game: GameRef): GameIdentity {
+  let identity = identities.get(game);
+  if (!identity) {
+    const id = game.catalogId !== undefined ? game.catalogId : catalogIdFor(game.name, game.steamAppId ?? undefined);
+    identity = { id, steamAppId: game.steamAppId ?? null, name: game.name };
+    identities.set(game, identity);
+  }
+  return identity;
 }
 
 /**
- * Whether a library entry is this game: by Steam id when both have one, else by name or by the built-in game they both
- * are (a copy installed as "GTA V" is the built-in "Grand Theft Auto V").
+ * Whether a library entry is this game, by the rule add-workspace, Add a game and the Steam import use (same Tavora id;
+ * else, when both have one, the Steam id; else the name). An entry made from a built-in game is that game, whatever its id.
  */
-function isSameGame(entry: WorkspaceEntry, game: GameRef): boolean {
-  if (entry.steamAppId !== null && game.steamAppId != null) return entry.steamAppId === game.steamAppId;
-  const name = normalizeName(entry.name);
-  if (name !== "" && name === normalizeName(game.name)) return true;
-  return entry.catalogId !== null && entry.catalogId === catalogOf(game);
+function entryIsGame(entry: WorkspaceEntry, game: GameRef): boolean {
+  const identity = identityOfRef(game);
+  return isSameGame(entry, identity) || (entry.catalogId !== null && entry.catalogId === identity.id);
 }
 
 /** The live game entries of the library: a game in Trash is not in it. */
@@ -65,7 +67,7 @@ function liveGames(entries: readonly WorkspaceEntry[]): WorkspaceEntry[] {
 
 /** Whether the library (not its Trash) holds this game. */
 function inLibrary(entries: readonly WorkspaceEntry[], game: GameRef): boolean {
-  return liveGames(entries).some((entry) => isSameGame(entry, game));
+  return liveGames(entries).some((entry) => entryIsGame(entry, game));
 }
 
 /** No activity: `runningNotInLibrary` only wants the Add a game list's picking, not its order. */
@@ -119,7 +121,7 @@ export function runningGames(entries: readonly WorkspaceEntry[], installed: read
 
   const folders = new Map<string, WorkspaceEntry[]>();
   for (const [key, inFolder] of oneGameFolders(installed)) {
-    const matches = games.filter((entry) => inFolder.some((game) => isSameGame(entry, game)));
+    const matches = games.filter((entry) => inFolder.some((game) => entryIsGame(entry, game)));
     if (matches.length) folders.set(key, matches);
   }
   for (const matches of foldersRunning(folders, programs)) add(matches);
@@ -156,17 +158,8 @@ export function runningNotInLibrary(
 ): UnlistedGame[] {
   const running = [...installedRunning(installed, programs, steamAppId)].filter((game) => game.steamAppId === undefined || steamGames.has(game.steamAppId));
   return pickGames(running, NO_SIGNS)
-    .map(({ name, steamAppId: id, catalogId }) => ({ name, steamAppId: id, catalogId: catalogId && sameSteamGame(catalogId, id) ? catalogId : null }))
+    .map(({ name, steamAppId, catalogId }) => ({ name, steamAppId, catalogId }))
     .filter((game) => !inLibrary(entries, game));
-}
-
-/**
- * Whether a built-in game found by name is the Steam app that runs: a game whose Steam id differs from the built-in
- * game's is another game with the same name, added under its own name (else it would be offered again after adding).
- */
-function sameSteamGame(catalogId: string, steamAppId: number | null): boolean {
-  const known = CATALOG.find((game) => game.id === catalogId)?.steamAppId;
-  return steamAppId === null || known === undefined || known === steamAppId;
 }
 
 /**

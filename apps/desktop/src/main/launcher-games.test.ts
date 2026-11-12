@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { normalizeName } from "../shared/same-game";
 import {
   findInstalledGames,
   findSteamGames,
@@ -9,7 +10,6 @@ import {
   gamesFromGog,
   gamesFromUninstall,
   matchInstalled,
-  normalizeName,
   parseAppManifest,
   parseDisplayIcon,
   parseLibraryFolders,

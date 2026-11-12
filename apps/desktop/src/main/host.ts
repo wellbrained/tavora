@@ -33,6 +33,8 @@ import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
 import type { PanelDialogSize } from "./bridge";
 import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView, UnlistedGame } from "../shared/host-api";
+import { MAX_PICKER_COVERS } from "../shared/host-api";
+import { addOrRestoreWorkspace, gameCopyFinder } from "./game-copy";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -61,7 +63,6 @@ import { shortcutFor } from "./shortcuts";
 import { importIcon, removeIcon } from "./icons";
 import { clipInitials, clipName, type Profile, removePicture, savePicture } from "./profile";
 import {
-  addWorkspace,
   createFolder,
   deleteFolder,
   placeOf,
@@ -142,12 +143,12 @@ import { OverlayPreviews } from "./overlay-previews";
 import { GameWatcher, unlistedToOffer } from "./game-watch";
 import { moveToWorkspaces } from "./workspace-move";
 import { Streaming } from "./streaming";
-import { findInstalledGames, normalizeName, type InstalledGame } from "./launcher-games";
+import { findInstalledGames, type InstalledGame } from "./launcher-games";
 import { GamesSeen } from "./games-seen";
 import { gameKey, pickGames, withInstallDates } from "./installed-list";
 import { readSteamLastPlayed } from "./steam-played";
 import { readIcoFromFile } from "./pe-icon";
-import { findSteamDir, isSteamAppId, loadAppInfo, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
+import { coverReader, findSteamDir, isSteamAppId, loadAppInfo, readLibraryCover, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
 import { documentsFolder, exportsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
 import { readJsonText } from "./json-file-http";
@@ -578,6 +579,11 @@ export class Host {
   private readonly gamesSeen: GamesSeen;
   /** The icons the Add a game list read, by game key, so the PC's programs are opened once. */
   private readonly pickerIcons = new Map<string, string | null>();
+  /** The Add a game covers, by Steam app id: Steam's own cover art from this PC's library cache, read once each. */
+  private readonly pickerCovers = coverReader(async (appids) => {
+    const steamDir = this.options.testInstalled ? null : await findSteamDir();
+    return Promise.all(appids.map((appid) => (steamDir ? readLibraryCover(steamDir, appid) : null)));
+  });
   /** Tavora's module catalog (catalog-client.ts). */
   private readonly catalog: CatalogClient;
   /** Every workspace's panels, layout and snapshots (workspace.ts). */
@@ -1922,11 +1928,14 @@ export class Host {
         : [],
     );
     ipcMain.handle("host:installed-games", async (event): Promise<InstalledGameView[]> => (fromHost(event) ? this.installedGames().catch(() => []) : []));
-    // The first-run welcome's tiles: popular games the user does not have yet (Trash included).
+    ipcMain.handle("host:game-covers", async (event, appids: unknown): Promise<Record<number, string | null>> =>
+      fromHost(event) && Array.isArray(appids) && appids.length <= MAX_PICKER_COVERS && appids.every(isSteamAppId) ? this.pickerCovers(appids).catch(() => ({})) : {},
+    );
+    // The first-run welcome's tiles: popular games the user does not have yet (one in Trash comes back when added).
     ipcMain.handle("host:popular-games", (event) =>
       fromHost(event)
         ? popularGames()
-            .filter((game) => !this.library.workspaces[game.id])
+            .filter((game) => !isLive(this.library, game.id))
             .map(({ id, name }) => ({ id, name }))
         : [],
     );
@@ -1934,8 +1943,8 @@ export class Host {
       if (!fromHost(event) || typeof query !== "string" || query.length > 100) return { status: "ok", games: [] };
       if (!this.library.onlineSearch) return { status: "off", games: [] };
       const result = await this.onlineSearch.search(query);
-      // Games the user already has (Trash included) are not offered again.
-      return { ...result, games: result.games.filter((game) => !this.library.workspaces[game.id]) };
+      // Games the user already has are not offered again; one in Trash is, and adding it brings that copy back.
+      return { ...result, games: result.games.filter((game) => !isLive(this.library, game.id)) };
     });
     ipcMain.handle("host:browse-catalog", async (event, target?: unknown): Promise<CatalogListResult> => {
       if (!fromHost(event)) return { status: "unreachable" };
@@ -2364,14 +2373,27 @@ export class Host {
       // Library
       "open-workspace": (action) => this.openWorkspace(action.workspaceId),
       "add-workspace": (action) => {
-        const id = addWorkspace(this.library, action, new Date());
-        this.workspaces.addWorkspaces([id]);
-        this.startWorkspace(id);
+        // Whoever adds a game (Add a game, the welcome, Ctrl+K): one the user has is answered as it is, and one whose only
+        // copy is in Trash comes back with its panels.
+        const { id, restored, existing, learned } = addOrRestoreWorkspace(this.library, action, new Date());
+        if (existing) {
+          // The copy took the game's Steam id: saved, and the rail may now see it running.
+          if (learned) {
+            this.saveLibrary();
+            if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(id);
+          }
+          return { ok: true, id, existing };
+        }
+        if (!restored) {
+          this.workspaces.addWorkspaces([id]);
+          this.startWorkspace(id);
+        }
         this.saveLibrary();
         this.fetchIconsSoon();
-        // A game running now (the rail offered to add it) shows as running at once.
+        // A game running now (the rail offered to add it) shows as running at once, and the game may have been installed
+        // since the last look.
         if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(id);
-        return id;
+        return restored ? { ok: true, id, restored } : id;
       },
       "rename-workspace": saved((action) => renameWorkspace(this.library, action.workspaceId, action.name)),
       "set-workspace-label": saved(async (action) => {
@@ -3304,7 +3326,8 @@ export class Host {
       this.gamesSeen.all(),
     ]);
     const picks = pickGames(found, { steamPlayed, seen });
-    const own = liveWorkspaces(this.library);
+    // A game whose only copy is in Trash counts as not added: picking it brings that copy back.
+    const copyOf = gameCopyFinder(this.library);
     const clientIcons = await this.pickerClientIcons(steamDir, picks.map((pick) => pick.steamAppId).filter((id): id is number => id !== null));
     const views: InstalledGameView[] = [];
     for (let at = 0; at < picks.length; at += 8) {
@@ -3324,9 +3347,9 @@ export class Host {
               }
               this.pickerIcons.set(pick.key, icon);
             }
-            const name = normalizeName(pick.name);
-            const has = own.find((entry) => entry.id === pick.catalogId || (pick.steamAppId !== null && entry.steamAppId === pick.steamAppId) || normalizeName(entry.name) === name);
-            return { key: pick.key, name: pick.name, steamAppId: pick.steamAppId, catalogId: pick.catalogId, icon: this.pickerIcons.get(pick.key) ?? null, activity: pick.activity, workspaceId: has?.id ?? null };
+            const copy = copyOf({ id: pick.catalogId, steamAppId: pick.steamAppId, name: pick.name });
+            const workspaceId = copy && copy.trashedAt === null ? copy.id : null;
+            return { key: pick.key, name: pick.name, steamAppId: pick.steamAppId, catalogId: pick.catalogId, icon: this.pickerIcons.get(pick.key) ?? null, activity: pick.activity, workspaceId };
           }),
         )),
       );
@@ -3364,9 +3387,10 @@ export class Host {
     const steamDir = await findSteamDir();
     if (steamDir === null) return say("error.steam.notInstalled");
     const wanted = new Set(appids);
+    const copyOf = gameCopyFinder(this.library);
     const games = steamShareGames(
       this.steamLookup.filter((game) => wanted.has(game.appid)),
-      (game) => steamGameStatus(this.library, game) === "new",
+      (game) => steamGameStatus(this.library, game, copyOf) === "new",
       this.library.iconsOffered,
       list,
     );
@@ -4657,6 +4681,7 @@ export class Host {
       iconChoice: workspace.icon.kind === "image" ? "image" : workspace.useOriginalIcon ? "original" : "letters",
       shareIcon: ((file) => (file ? STEAM_ICON_URL + file : null))(this.shareableFile(workspace)),
       builtIn: workspace.catalogId !== null,
+      steamAppId: workspace.steamAppId,
       addedAt: workspace.addedAt,
       lastOpenedAt: workspace.lastOpenedAt,
     };

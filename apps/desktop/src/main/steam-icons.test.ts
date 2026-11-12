@@ -18,6 +18,8 @@ import {
   loadAppInfo,
   needsIcon,
   publicIconFileName,
+  coverReader,
+  readLibraryCover,
   removeSteamIcon,
   saveExeIcon,
   savePublicSteamIcon,
@@ -330,5 +332,50 @@ describe("needsIcon", () => {
     expect(needsIcon(game({ iconCheckedAt: "2026-10-10T00:00:00Z" }), now)).toBe(false);
     expect(needsIcon(game({ iconCheckedAt: "2026-10-01T00:00:00Z" }), now)).toBe(true);
     expect(needsIcon(game({ iconCheckedAt: "not a date" }), now)).toBe(true);
+  });
+});
+
+describe("readLibraryCover", () => {
+  const jpeg = (size: number) => Object.assign(new Uint8Array(size), { 0: 0xff, 1: 0xd8, 2: 0xff });
+  const cache = (appid: number) => path.join(steam, "appcache", "librarycache", String(appid));
+
+  it("reads newer Steam's library_capsule.jpg in a hash folder, else older Steam's library_600x900.jpg", async () => {
+    await mkdir(path.join(cache(570), HASH), { recursive: true });
+    await writeFile(path.join(cache(570), HASH, "library_capsule.jpg"), jpeg(300));
+    await writeFile(path.join(cache(570), "library_600x900.jpg"), jpeg(200));
+    expect((await readLibraryCover(steam, 570))?.byteLength).toBe(300);
+    await mkdir(cache(440), { recursive: true });
+    await writeFile(path.join(cache(440), "library_600x900.jpg"), jpeg(200));
+    expect((await readLibraryCover(steam, 440))?.byteLength).toBe(200);
+  });
+
+  it("has none for a game without art, a file that isn't a JPEG and an odd app id", async () => {
+    expect(await readLibraryCover(steam, 730)).toBeNull();
+    await mkdir(cache(10), { recursive: true });
+    await writeFile(path.join(cache(10), "library_600x900.jpg"), new Uint8Array(300));
+    expect(await readLibraryCover(steam, 10)).toBeNull();
+    expect(await readLibraryCover(steam, -1)).toBeNull();
+  });
+});
+
+describe("coverReader", () => {
+  it("reads each cover once, also while a read still runs, and answers in the order asked", async () => {
+    const asked: number[][] = [];
+    const read = coverReader(async (appids) => {
+      asked.push(appids);
+      return appids.map((appid) => (appid === 570 ? new Uint8Array([1, 2, 3]) : null));
+    });
+    const [first, second] = await Promise.all([read([570, 440]), read([440, 570])]);
+    expect(first).toEqual({ 570: "data:image/jpeg;base64,AQID", 440: null });
+    expect(second).toEqual(first);
+    expect(await read([570])).toEqual({ 570: "data:image/jpeg;base64,AQID" });
+    expect(asked).toEqual([[570, 440]]);
+  });
+
+  it("takes a failed read as no cover, and tries it again next time", async () => {
+    let calls = 0;
+    const read = coverReader(async () => (++calls === 1 ? Promise.reject(new Error("no Steam")) : [new Uint8Array([1, 2, 3])]));
+    expect(await read([570])).toEqual({ 570: null });
+    expect(await read([570])).toEqual({ 570: "data:image/jpeg;base64,AQID" });
   });
 });
