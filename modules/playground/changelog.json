@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.36",
+    "date": "2026-11-12",
+    "notes": [
+      "New specimen: Item cards, the tooltip's card in a panel, plain and in a module's skin."
+    ]
+  },
+  {
     "version": "0.1.35",
     "date": "2026-11-09",
     "notes": [

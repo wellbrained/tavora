@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.31
+
+- New projects start on `@tavora/sdk` 0.3.16: item cards (`layout: "card"`) with an effect box, and skins of your own (`ui.tooltip.defineSkin`).
+
 ## 0.1.30
 
 - The starter knows Bun: `bun create @tavora/module` prints `bun install` and `bun run dev`, and DEVELOP.md uses `bun run` and `bunx`.

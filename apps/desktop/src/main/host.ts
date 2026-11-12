@@ -667,6 +667,7 @@ export class Host {
       removed: (owner, moduleId) => {
         this.gameOverlays.forgetModule(moduleId, owner);
         this.previews.closeModule(moduleId, owner);
+        this.tooltips?.forgetModule(moduleId);
       },
       // Test runs keep the window hidden and have no recycle bin to rely on.
       trash: (dir) => (options.hidden ? rm(dir, { recursive: true, force: true }) : shell.trashItem(dir)),
@@ -760,7 +761,7 @@ export class Host {
         const view=this.moduleView(owner),bounds=this.panels.boundsOf(owner);
         if(!view||!bounds||!this.panels.isShowing(owner))return undefined;
         const module=this.modules.get(view.moduleId);if(!module)return undefined;
-        return{root:module.root,name:this.shown(module.manifest).name,bounds};
+        return{root:module.root,module:view.moduleId,name:this.shown(module.manifest).name,bounds};
       }});
     this.watchShortcuts(this.window.webContents);
     this.cover = new PanelCover({ parent: this.window.contentView, emblem: () => this.emblem });
@@ -1413,6 +1414,8 @@ export class Host {
 
   /** Starts a module's open panels again, so they load a new version or connect with a new grant. */
   private reloadModuleViews(moduleId: string): void {
+    // Its pages start again and define their skins anew (a new version may have other files).
+    this.tooltips?.forgetModule(moduleId);
     const current = this.modules.get(moduleId);
     for (const view of this.moduleViews()) if (view.moduleId === moduleId) view.reload(current);
     // Panels that asked before they could run start now, in the workspace shown (the others start when it opens).
@@ -1462,6 +1465,7 @@ export class Host {
 
   /** Removes a module's panels in every workspace; a slot left with nothing stays as an empty slot. */
   private removeModulePanels(moduleId: string): void {
+    this.tooltips?.forgetModule(moduleId);
     for (const instanceId of this.workspaces.vacate(moduleId)) this.closeView(instanceId);
   }
 
@@ -3905,7 +3909,7 @@ export class Host {
         const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+this.shown(module.manifest).name+' verknüpfen':'Link a file to '+this.shown(module.manifest).name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:multiple?['openFile','multiSelections']:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
         return picked.canceled ? [] : multiple ? picked.filePaths : picked.filePaths.slice(0,1);
       },
-      tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at),close:(id,hoverOnly)=>this.tooltips.close(record.instanceId,id,hoverOnly)},
+      tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at),close:(id,hoverOnly)=>this.tooltips.close(record.instanceId,id,hoverOnly),defineSkin:(name,skin)=>this.tooltips.defineSkin(record.moduleId,module.root,name,skin)},
       launch: () => this.launchOf(record),
       mayWelcome: () => this.panels.takeWelcome(record.instanceId),
       setContent: (content) => this.setPanelContent(record, content),

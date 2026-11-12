@@ -1,12 +1,15 @@
 import { BrowserWindow } from "electron";
 import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
-import type { TooltipRequest, TavoraTheme } from "@tavora/sdk/protocol";
+import type { TooltipRequest, TooltipSkin, TavoraTheme } from "@tavora/sdk/protocol";
 import { resolveAsset, contentTypeFor } from "./assets";
 import { TooltipState, tooltipBounds, type OpenTooltip } from "./tooltip-state";
 import { TOOLTIP_DOCUMENT } from "../shared/tooltip-document";
+import { SkinStore } from "./tooltip-skin";
 interface Source {
     root: string;
+    /** The module's id: its skins are kept by it. */
+    module: string;
     name: string;
     bounds: {
         x: number;
@@ -27,6 +30,10 @@ interface Options {
 /** A small, host-owned surface; never the module's renderer or the host's administrative preload. */
 export class TooltipWindow {
     readonly state = new TooltipState();
+    /** Each module's item-card skins (ui.tooltip.defineSkin), checked and with their files read in. */
+    readonly skins = new SkinStore();
+    /** The skins this tooltip window's page has been sent (by id); each goes over once, a card then names its id. */
+    private sentSkins = new Set<number>();
     private window: BrowserWindow | undefined;
     private ready = false;
     private size = { width: 520, height: 2000 };
@@ -77,6 +84,25 @@ export class TooltipWindow {
             this.render(open);
         return true;
     }
+    /** ui.tooltip.defineSkin: checks the skin and reads its files from the module's bundle (`root`), or refuses it. */
+    async defineSkin(module: string, root: string, name: string, skin: TooltipSkin): Promise<void> {
+        const done = await this.skins.define(module, root, name, skin);
+        if (!done)
+            return;
+        if (done.replaced !== undefined)
+            this.dropSkins([done.replaced]);
+        // A card of this skin already shown (plain, or in the skin's older form) is drawn again in it.
+        const open = this.state.current, c = open?.request.content;
+        if (open && this.ready && c?.layout === "card" && c.skin === name && this.options.source(open.owner)?.module === module)
+            this.render(open);
+    }
+    /** A module reloads, updates, is turned off or removed: its skins go, here and in the tooltip window's page. */
+    forgetModule(module: string) { this.dropSkins(this.skins.forgetModule(module)); }
+    private dropSkins(ids: number[]) {
+        const sent = ids.filter(id => this.sentSkins.delete(id));
+        if (sent.length && this.window && !this.window.isDestroyed())
+            this.window.webContents.send("tooltip:skin-drop", sent);
+    }
     move(owner: string, id: string, at: TooltipRequest["at"]) { if (this.state.move(owner, id, at))
         this.place(); }
     close(owner?: string, id?: string, hoverOnly = false) {
@@ -91,6 +117,7 @@ export class TooltipWindow {
     private ensureWindow(): BrowserWindow {
         if (this.window && !this.window.isDestroyed())
             return this.window;
+        this.sentSkins = new Set();
         const w = this.window = new BrowserWindow({ parent: this.options.parent, show: false, frame: false, transparent: true, resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, focusable: false, hasShadow: true,
             webPreferences: { partition: "tooltip-" + randomUUID(), preload: this.options.preload, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, devTools: false } });
         if (this.options.hidden)
@@ -141,7 +168,14 @@ export class TooltipWindow {
             return;
         }
         this.place();
-        this.window!.webContents.send("tooltip:render", { serial: open.serial, content: open.request.content, pinned: !!open.request.pinned, pinnable: open.request.pinnable !== false, source: source.name, theme: this.options.theme(), language: this.options.language() });
+        // A skin only dresses the card layout; a name the module hasn't defined (yet) shows the plain card. Its data goes
+        // over once per page, then the card names it by id.
+        const c = open.request.content, skin = c.layout === "card" && c.skin ? this.skins.get(source.module, c.skin) : undefined;
+        if (skin && !this.sentSkins.has(skin.id)) {
+            this.window!.webContents.send("tooltip:skin", skin.id, skin.skin);
+            this.sentSkins.add(skin.id);
+        }
+        this.window!.webContents.send("tooltip:render", { serial: open.serial, content: c, pinned: !!open.request.pinned, pinnable: open.request.pinnable !== false, source: source.name, theme: this.options.theme(), language: this.options.language(), ...(skin ? { skin: skin.id } : {}) });
     }
     private place() {
         const c = this.state.current, w = this.window;

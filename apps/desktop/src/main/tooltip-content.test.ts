@@ -26,5 +26,16 @@ describe("tooltip boundary", () => {
         expect(checkTooltip({ ...base, pinnable: false, pinned: false }).pinned).toBe(false);
         expect(checkTooltip({ ...base, pinnable: true, pinned: true }).pinned).toBe(true);
     });
+    it("takes the card layout, an effect and a skin name, and leaves them out when none is asked for", () => {
+        const content = { ...base.content, layout: "card", skin: "chaos-king", effect: [{ text: "Deals " }, { text: "12", accent: true }, { text: " damage", accent: false }] };
+        expect(checkTooltip({ ...base, content }).content).toEqual({ ...content, effect: [{ text: "Deals " }, { text: "12", accent: true }, { text: " damage" }] });
+        expect(checkTooltip({ ...base, content: { title: "x", layout: "rich", effect: "Plain text" } }).content).toEqual({ title: "x", layout: "rich", effect: "Plain text" });
+        for (const key of ["layout", "effect", "skin"])
+            expect(key in checkTooltip(base).content).toBe(false);
+    });
+    it("rejects another layout, a bad skin name and effects that are too long or not text", () => {
+        for (const extra of [{ layout: "grid" }, { layout: "CARD" }, { skin: "Chaos King" }, { skin: "x".repeat(33) }, { skin: "" }, { effect: "" }, { effect: "x".repeat(1001) }, { effect: [] }, { effect: [{ text: " " }] }, { effect: [{ text: "a", accent: "yes" }] }, { effect: [{ text: "a", color: "#ff0000" }] }, { effect: [{ text: "x".repeat(600) }, { text: "x".repeat(401) }] }, { effect: Array.from({ length: 41 }, () => ({ text: "a" })) }, { effect: [{ html: "<b>a</b>" }] }])
+            expect(() => checkTooltip({ ...base, content: { title: "x", ...extra } })).toThrow();
+    });
     it("never interprets text as HTML", () => { expect(checkTooltip({ ...base, content: { title: "<b>literal</b>" } }).content.title).toBe("<b>literal</b>"); });
 });

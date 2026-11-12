@@ -1,5 +1,6 @@
 import type { TooltipAnchor, TooltipContent, TooltipRequest } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
+import { SKIN_NAME } from "./tooltip-skin";
 const ID = /^[a-zA-Z0-9._:-]{1,64}$/;
 function fail(): never { throw new HostError("INVALID_PARAMS", "invalid tooltip content"); }
 function obj(v: unknown, keys: string[]): Record<string, unknown> { if (!v || typeof v !== "object" || Array.isArray(v))
@@ -9,6 +10,18 @@ function text(v: unknown, max = 500): string { if (typeof v !== "string" || !v.t
     fail(); return v; }
 function list<T>(v: unknown, limit: number, fn: (v: unknown) => T): T[] { if (!Array.isArray(v) || v.length > limit)
     fail(); return v.map(fn); }
+/** The card's effect text: one text, or up to 40 runs (some in the accent colour), 1,000 characters in all. */
+function effect(v: unknown): NonNullable<TooltipContent["effect"]> {
+    if (typeof v === "string")
+        return text(v, 1000);
+    let length = 0;
+    const runs = list(v, 40, r => { const run = obj(r, ["text", "accent"]); if (typeof run.text !== "string" || !run.text || (length += run.text.length) > 1000)
+        fail(); if (run.accent !== undefined && typeof run.accent !== "boolean")
+        fail(); return { text: run.text, ...(run.accent === true ? { accent: true } : {}) }; });
+    if (!runs.length || !runs.some(r => r.text.trim()))
+        fail();
+    return runs;
+}
 export function tooltipId(v: unknown): string { const o = obj(v, ["id"]); const id = text(o.id, 64); if (!ID.test(id))
     fail(); return id; }
 export function checkTooltipAnchor(v: unknown): TooltipAnchor {
@@ -27,7 +40,7 @@ export function checkTooltip(v: unknown): TooltipRequest {
     // A card that says it can't be pinned never pins: asking for both is a mistake, not something to guess at.
     if (o.pinnable === false && o.pinned === true)
         fail();
-    const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "badges", "requirements", "properties", "sections"]);
+    const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "requirements", "properties", "sections"]);
     const content: TooltipContent = { title: text(c.title, 200) };
     if (c.subtitle !== undefined)
         content.subtitle = text(c.subtitle, 300);
@@ -46,6 +59,18 @@ export function checkTooltip(v: unknown): TooltipRequest {
         if (!/^dist\/(?:[a-zA-Z0-9_. -]+\/)*[a-zA-Z0-9_. -]+\.(?:png|jpe?g|webp|gif)$/i.test(image) || image.split("/").includes(".."))
             fail();
         content.image = image;
+    }
+    if (c.layout !== undefined) {
+        if (!["rich", "card"].includes(c.layout as string))
+            fail();
+        content.layout = c.layout as NonNullable<TooltipContent["layout"]>;
+    }
+    if (c.effect !== undefined)
+        content.effect = effect(c.effect);
+    if (c.skin !== undefined) {
+        if (typeof c.skin !== "string" || !SKIN_NAME.test(c.skin))
+            fail();
+        content.skin = c.skin;
     }
     if (c.badges !== undefined)
         content.badges = list(c.badges, 8, v => text(v, 100));
