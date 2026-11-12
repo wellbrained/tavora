@@ -972,7 +972,9 @@ export interface InstalledGameView {
 }
 
 /** Most covers the Add a game dialog shows (and asks for) at once. */
-export const MAX_PICKER_COVERS = 4;
+export const MAX_PICKER_COVERS = 6;
+/** With nothing typed, how many of this PC's other games the Add a game list shows under the covers; typing finds the rest. */
+export const MAX_PICKER_LINES = 10;
 
 export interface CatalogMatch {
   id: string;

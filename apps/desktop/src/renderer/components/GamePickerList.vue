@@ -136,7 +136,7 @@ function option(key: string) {
   <div :id="id" role="listbox" :aria-label="label" :aria-busy="adding !== null" :class="cn('flex flex-col gap-1', adding !== null && 'pointer-events-none')" @mousedown.prevent @mousemove="onListMove">
     <div v-if="covers.length" role="group" :aria-labelledby="`${id}-lately`" class="px-2 pb-2">
       <p :id="`${id}-lately`" class="text-muted-foreground px-2 pt-1 pb-1 text-xs font-medium">{{ t("addGame.lately") }}</p>
-      <div class="grid grid-cols-4 gap-1">
+      <div class="grid grid-cols-6 gap-1">
         <div v-for="row in covers" :key="row.key" v-bind="option(row.key)" class="flex min-w-0 flex-col gap-1.5 rounded-lg p-2" :data-testid="`cover-${row.gameId ?? row.key}`">
           <GameCover :src="coverOf(row) ?? null" :pending="coverOf(row) === undefined" :busy="adding === row.key">
             <template #fallback>

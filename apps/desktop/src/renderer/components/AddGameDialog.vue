@@ -26,8 +26,8 @@ const { name, lines, covers, custom, installedLoaded, onlineStatus, info, coverO
 
 /** Made-up games for the Skeleton while the games on this PC are found, with names of a few lengths. */
 const placeholder = (name: string, index: number): PickerRow => ({ key: `placeholder:${index}`, name, gameId: null, icon: null, installed: null, online: null, workspaceId: null, section: "pc" });
-const PLACEHOLDER_COVERS = ["Placeholder", "Game", "Another one", "Game"].map(placeholder);
-const PLACEHOLDER_LINES: PickerLine[] = ["A game with a long name", "Short game", "A middle one"].map((game, index) => ({ key: `placeholder:${index + 4}`, row: placeholder(game, index + 4) }));
+const PLACEHOLDER_COVERS = ["Placeholder", "Game", "Another one", "Game", "One more", "Game"].map(placeholder);
+const PLACEHOLDER_LINES: PickerLine[] = ["A game with a long name", "Short game", "A middle one"].map((game, index) => ({ key: `placeholder:${index + 6}`, row: placeholder(game, index + 6) }));
 
 // ── Adding ─────────────────────────────────────────────────────────────
 
@@ -97,7 +97,7 @@ function focusSearch() {
   <Dialog :open="true" @update:open="(open) => !open && closeDialog(shownRequest)">
     <!-- The search and the footer stay put; the covers and the list between them scroll. -->
     <DialogContent
-      class="bg-card top-[8vh] flex max-h-[calc(100vh-8vh-16px)] w-[min(640px,calc(100vw-48px))] max-w-none translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
+      class="bg-card top-[8vh] flex max-h-[calc(100vh-8vh-16px)] w-[min(920px,calc(100vw-48px))] max-w-none translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
       data-testid="add-game-dialog"
       :data-status="adder.state.value.status"
       :show-close-button="false"

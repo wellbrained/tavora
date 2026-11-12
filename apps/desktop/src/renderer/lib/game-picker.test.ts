@@ -112,7 +112,7 @@ describe("playedLately", () => {
 
   it("takes the games not added yet, the last played first, then the last installed, four at most", () => {
     const games = [added("New Install", 0), played("Old", 30), played("Hades", 1), installed("Never"), played("Owned", 0, { workspaceId: "owned" }), played("Rust", 3), added("Older Install", 9)];
-    expect(playedLately(games).map((game) => game.name)).toEqual(["Hades", "Rust", "Old", "New Install"]);
+    expect(playedLately(games, [], 4).map((game) => game.name)).toEqual(["Hades", "Rust", "Old", "New Install"]);
     expect(playedLately(games, [], 10).map((game) => game.name)).toEqual(["Hades", "Rust", "Old", "New Install", "Older Install", "Never"]);
   });
 
@@ -130,7 +130,7 @@ describe("playedLately", () => {
     const shown = playedLately([played("Hades", 1), played("Rust", 3)]).map((game) => game.key);
     // Found again: Celeste was played since, Hades was added, and a fourth game turned up.
     const again = [played("Celeste", 0), played("Hades", 1, { workspaceId: "local-hades" }), played("Rust", 3), played("Zelda", 5), played("Old", 30)];
-    expect(playedLately(again, shown).map((game) => game.name)).toEqual(["Hades", "Rust", "Celeste", "Zelda"]);
+    expect(playedLately(again, shown, 4).map((game) => game.name)).toEqual(["Hades", "Rust", "Celeste", "Zelda"]);
     // A cover whose game is gone from this PC leaves its place.
     expect(playedLately([played("Rust", 3)], shown).map((game) => game.name)).toEqual(["Rust"]);
   });

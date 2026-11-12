@@ -1,5 +1,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from "vue";
 import type { CatalogMatch, CatalogModuleView, InstalledGameView, OnlineGame, OnlineSearchResult } from "../../shared/host-api";
+import { MAX_PICKER_LINES } from "../../shared/host-api";
 import { api, state } from "../host";
 import { formatDate, t } from "../i18n";
 import {
@@ -163,7 +164,9 @@ export function useGamePicker(query: Ref<string>, options: GamePickerOptions = {
   const shownLines = computed<{ name: string; lines: PickerLine[] }>((previous) => {
     const onCover = new Set(covers.value.map((row) => row.key));
     const fresh: PickerLine[] = [...rows.value.filter((row) => !onCover.has(row.key)).map((row) => ({ key: row.key, row })), ...(custom.value ? [{ key: CUSTOM_KEY, row: null }] : [])];
-    const lines = previous?.name === name.value ? keepOrder(previous.lines.map((line) => line.key), fresh) : fresh;
+    const kept = previous?.name === name.value ? keepOrder(previous.lines.map((line) => line.key), fresh) : fresh;
+    // Under the covers only the first few; typing finds the rest.
+    const lines = options.covers && !name.value ? kept.slice(0, MAX_PICKER_LINES) : kept;
     return { name: name.value, lines };
   });
   const lines = computed(() => shownLines.value.lines);
