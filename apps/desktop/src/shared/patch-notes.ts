@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.33",
+    date: "2026-11-12",
+    title: "A quicker personal workspace",
+    notes: [
+      "Personal now asks only for a name, right next to the button.",
+    ],
+    prs: [
+      { number: 749, title: "Rail: Personal asks for a name in a popover next to it" },
+    ],
+    tags: ["rail"],
+  },
+  {
     version: "0.24.32",
     date: "2026-11-12",
     title: "Add a game stays put",
