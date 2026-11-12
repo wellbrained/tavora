@@ -25,6 +25,7 @@ export default defineConfig({
   head: [
     ["meta", { name: "theme-color", content: "#171412" }],
     ["link", { rel: "icon", type: "image/png", href: "/favicon.png" }],
+    ["script", { defer: "", src: "https://stats.dkiessling.de/script.js", "data-website-id": "df712fc5-6639-49e0-871b-7a34e6d88e95", "data-domains": "docs.mytavora.app" }],
   ],
   themeConfig: {
     logo: { src: "/tavora-emblem.svg", alt: "" },
