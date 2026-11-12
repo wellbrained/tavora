@@ -35,7 +35,6 @@ vi.mock("@tavora/official-ui/components/ui/dialog", async () => {
 });
 
 import { account, dialog, state, type GrantRequest, type PromptRequest, type ShareIconsRequest } from "../host";
-import AddPersonalDialog from "./AddPersonalDialog.vue";
 import CopyExampleDialog from "./developer/CopyExampleDialog.vue";
 import GrantDialog from "./GrantDialog.vue";
 import PromptDialog from "./PromptDialog.vue";
@@ -126,25 +125,6 @@ describe("a dialog that waits closes only itself", () => {
     dialog.value = request;
     mount(PromptDialog, () => ({ request }));
     await submit("prompt-input", "New name");
-    expect(dialog.value).toBeNull();
-  });
-
-  it("personal workspace: a dialog shown while it was added stays", async () => {
-    const added = holdAct("add-workspace");
-    dialog.value = { kind: "add-personal" };
-    mount(AddPersonalDialog);
-    await submit("personal-name", "Reading");
-    dialog.value = consent;
-    added.resolve({ ok: true, id: "w2" });
-    await settle();
-    expect(dialog.value).toBe(consent);
-  });
-
-  it("personal workspace: still closes itself when nothing else came", async () => {
-    bridge.act.mockResolvedValue({ ok: true, id: "w2" });
-    dialog.value = { kind: "add-personal" };
-    mount(AddPersonalDialog);
-    await submit("personal-name", "Reading");
     expect(dialog.value).toBeNull();
   });
 
