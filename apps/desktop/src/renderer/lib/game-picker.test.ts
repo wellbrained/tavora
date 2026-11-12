@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogModuleView, InstalledGameView } from "../../shared/host-api";
-import { buildRows, defaultTicks, describeActivity, initials, modulesFor } from "./game-picker";
+import { addInputFor, buildRows, defaultTicks, describeActivity, initials, modulesFor } from "./game-picker";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date(2026, 10, 1, 12).getTime();
@@ -37,6 +37,41 @@ describe("buildRows", () => {
   it("keeps a game the user has in its place, marked by its workspace", () => {
     const rows = buildRows([installed("Elden Ring", { catalogId: "elden-ring", workspaceId: "elden-ring" })], [], [], "");
     expect(rows[0]!.workspaceId).toBe("elden-ring");
+  });
+});
+
+describe("a game on this PC that only the online search knows", () => {
+  const nineKings = installed("9 Kings", { steamAppId: 2784470 });
+  const online = [{ id: "9-kings", name: "9 Kings", steamAppId: 2784470 }];
+
+  it("is one row, with the online game's id", () => {
+    const rows = buildRows([nineKings], [], online, "9 king");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: "9 Kings", gameId: "9-kings", installed: nineKings });
+  });
+
+  it("is added as the online game, as plain data", () => {
+    const [row] = buildRows([nineKings], [], online, "9 king");
+    const input = addInputFor(row!, "9 king");
+    expect(input).toEqual({ online: { id: "9-kings", name: "9 Kings", steamAppId: 2784470 } });
+    expect((input as { online: object }).online).not.toBe(online[0]);
+  });
+
+  it("still shows when only the online name fits what was typed", () => {
+    const pcName = installed("9 Kings®", { steamAppId: 2784470 });
+    const rows = buildRows([pcName], [], [{ id: "9-kings", name: "Nine Kings", steamAppId: 2784470 }], "nine kings");
+    expect(rows.map((row) => row.gameId)).toEqual(["9-kings"]);
+  });
+
+  it("leaves a game already added as it is", () => {
+    const added = installed("9 Kings", { steamAppId: 2784470, workspaceId: "local-9-kings" });
+    const rows = buildRows([added], [], online, "9 king");
+    expect(rows.find((row) => row.installed)?.gameId).toBeNull();
+  });
+
+  it("stays a game added by name when the search doesn't know it", () => {
+    const [row] = buildRows([nineKings], [], [], "9 king");
+    expect(addInputFor(row!, "9 king")).toEqual({ name: "9 Kings" });
   });
 });
 

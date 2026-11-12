@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from "vue";
 import type { CatalogMatch, CatalogModuleView, InstalledGameView, OnlineGame, OnlineSearchResult } from "../../shared/host-api";
 import { api } from "../host";
 import { formatDate, t } from "../i18n";
@@ -25,7 +25,8 @@ export function whenOf(row: PickerRow): string | null {
  */
 export function useGamePicker(query: Ref<string>, { hideAdded = false } = {}) {
   const matches = ref<CatalogMatch[]>([]);
-  const online = ref<OnlineGame[]>([]);
+  // Plain objects, not reactive ones: a picked result is sent to the main process as it is, and a proxy can't be.
+  const online = shallowRef<OnlineGame[]>([]);
   const onlineStatus = ref<OnlineSearchResult["status"]>("ok");
   // The list from the search the app started at launch (or the last time), shown at once while a fresh one loads.
   const installed = ref<InstalledGameView[]>(lastInstalledGames() ?? []);

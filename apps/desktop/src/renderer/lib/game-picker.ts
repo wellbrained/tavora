@@ -31,6 +31,17 @@ export function buildRows(installed: readonly InstalledGameView[], matches: read
   }));
   const others: PickerRow[] = [];
   const known = new Set(installed.map((game) => game.catalogId).filter((id): id is string => id !== null));
+  // A game on this PC that isn't in the built-in list but that the online search knows by its Steam app is the same
+  // game: one row, added with the online game's id, so the modules made for it are offered.
+  for (const row of own) {
+    // A game already added (by name, before this) keeps its own workspace: nothing to match there.
+    if (row.gameId !== null || row.workspaceId !== null || row.installed?.steamAppId == null) continue;
+    const match = online.find((game) => game.steamAppId === row.installed!.steamAppId);
+    if (!match || known.has(match.id)) continue;
+    row.gameId = match.id;
+    row.online = match;
+    known.add(match.id);
+  }
   if (query.trim()) {
     for (const match of matches) {
       if (known.has(match.id)) continue;
@@ -43,7 +54,8 @@ export function buildRows(installed: readonly InstalledGameView[], matches: read
       others.push({ key: `online:${game.id}`, name: game.name, gameId: game.id, icon: null, installed: null, online: game, workspaceId: null });
     }
     // This PC's games only stay when the words fit them; the lists were already filtered by their search.
-    const rows = [...rank(own, query, (row) => ({ name: row.name })), ...others];
+    // A game matched to an online result also fits by that result's name ("diablo 4" for "Diablo® IV").
+    const rows = [...rank(own, query, (row) => ({ name: row.name, extra: row.online ? [row.online.name] : [] })), ...others];
     return rankByName(rows, query, (row) => row.name);
   }
   return own;
@@ -97,7 +109,8 @@ export function describeActivity(activity: { kind: "played" | "installed"; at: n
 /** The input `add-workspace` takes for a row, or for the typed name (no row) as the user's own game. */
 export function addInputFor(row: PickerRow | null, name: string): { catalogId: string } | { online: OnlineGame } | { name: string } {
   if (!row) return { name };
-  if (row.online) return { online: row.online };
+  // A copy: what is sent to the main process must be plain data.
+  if (row.online) return { online: { id: row.online.id, name: row.online.name, steamAppId: row.online.steamAppId } };
   if (row.gameId && (!row.installed || row.installed.catalogId)) return { catalogId: row.gameId };
   return { name: row.name };
 }
