@@ -28,6 +28,23 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.30",
+    date: "2026-11-12",
+    title: "A simpler Add a game",
+    notes: [
+      "Add a game opens with covers of the games you played lately. Click one, or press Enter, and it's added and opened.",
+      "Type to search: your PC's games come first, more games below. Nothing jumps around while results come in.",
+      "Enter and a click always work, in the welcome too, and the game you're adding shows that it's working.",
+      "Tavora's own modules for the game come along. The rest wait on the game's empty page, one click each.",
+      "A game you already have just opens, and one you put in Trash comes back with its panels. That goes for Add on your profile card too.",
+      "A game from your PC keeps its Steam link, so it isn't added twice.",
+    ],
+    prs: [
+      { number: 744, title: "Add a game: covers of games played lately, one list, Enter and click always work" },
+    ],
+    tags: ["games", "icons", "privacy", "ui-kit", "website", "workspace"],
+  },
+  {
     version: "0.24.29",
     date: "2026-11-12",
     title: "Item cards for modules",
