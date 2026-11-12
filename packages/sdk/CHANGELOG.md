@@ -1,3 +1,12 @@
+## 0.3.16
+
+Item cards and skins for the shared tooltip. They come with Tavora 0.24.27 (`later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- `TooltipContent` takes `layout: "card"` (the picture large on top, a name bar, the type line, badges, an effect box, then properties and sections; `"rich"`, the default, is the tooltip as before), `effect` (a text, or runs `{ text, accent? }` where accent runs take the accent colour) and `skin` (the name of one of the module's skins).
+- `ui.tooltip.defineSkin(name, skin)` defines or replaces a skin (`TooltipSkin`: a nine-slice `frame`, `colors`, a WOFF2 `font` for the title and the effect box, `pixelArt`, `titleCaps`). Tavora checks its files and contrast and refuses one that fails with `INVALID_PARAMS` and the reason.
+- On an older Tavora the SDK leaves `layout`, `effect` and `skin` out, so the card still shows (in the rich layout), and `defineSkin` does nothing. `sdk.supports("ui.tooltip.skin")` tells which case you are in.
+- The memory host answers `ui.tooltip.defineSkin` without checking files.
+
 ## 0.3.15
 
 What the tavora-modules acceptance runs found missing in `@tavora/sdk/testing`. Nothing here talks to Tavora, so `MIN_TAVORA` stays (Tavora 0.19.32).

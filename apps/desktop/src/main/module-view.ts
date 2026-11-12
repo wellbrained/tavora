@@ -15,7 +15,7 @@ import { APP_BLOB_PATH, BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PA
 import { BridgeSession, newBridgeBudget, type BridgeContext, type PanelDialogSize } from "./bridge";
 import { moduleReadPage } from "./page-import";
 import type { CheckedMenu } from "./module-menu";
-import type {TooltipRequest,TooltipAnchor,FileKind} from "@tavora/sdk/protocol";
+import type {TooltipRequest,TooltipAnchor,TooltipSkin,FileKind} from "@tavora/sdk/protocol";
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import { LIMITS, type PanelOpenManyResult, type PanelOpenResult } from "@tavora/sdk/protocol";
 import type { DiscordConnector, DiscordListener } from "./discord";
@@ -89,6 +89,7 @@ export interface ModuleViewOptions {
     show(request:TooltipRequest):Promise<boolean>;
     move(anchor:TooltipAnchor):void;
     close(id?:string,hoverOnly?:boolean):void;
+    defineSkin(name:string,skin:TooltipSkin):Promise<void>;
   };
   /** Why the panel's page is loading (panel.getLaunch); asked once for each page load. */
   launch(): PanelLaunch;
@@ -794,6 +795,7 @@ export class ModuleView {
           },
           move:anchor=>{if(this.tooltipAnchorAllowed(anchor.at)&&this.tooltipPointerMatches(anchor.at))this.options.tooltip?.move(anchor);},
           close:(id,hoverOnly)=>this.options.tooltip?.close(id,hoverOnly),
+          defineSkin:async(name,skin)=>{await this.options.tooltip?.defineSkin(name,skin);},
         },
         ...(this.options.folders ? { folders: this.foldersFor(() => bridge, this.options.folders) } : {}),
         readOnlyFiles: {

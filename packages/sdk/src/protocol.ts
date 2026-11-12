@@ -929,6 +929,12 @@ export interface Methods {
   "ui.tooltip.move": { params: TooltipAnchor; result: null };
   "ui.tooltip.hide": { params: { id: string }; result: null };
   "ui.tooltip.close": { params: { id: string }; result: null };
+  /**
+   * Defines (or replaces) one of this module's item-card skins, for every panel of the module until Tavora restarts.
+   * Names are 1 to 32 of a-z, 0-9 and `-`; at most 32 per module. Tavora checks the files and the colours' contrast and
+   * refuses a skin that fails (INVALID_PARAMS, with the reason). Tavora 0.24.27 and newer.
+   */
+  "ui.tooltip.defineSkin": { params: { name: string; skin: TooltipSkin }; result: null };
   /** Opens a web address in the workspace's Browser panel. Only right after a click or key press in the panel; http and https only. */
   "links.open": { params: { url: string }; result: null };
   "blobs.list": { params: undefined; result: BlobInfo[] };
@@ -1325,8 +1331,8 @@ export type MenuEntry =
       items: MenuEntry[];
     };
 
-export type { TooltipContent, TooltipAnchor, TooltipRequest } from "./tooltip-types.js";
-import type { TooltipRequest, TooltipAnchor } from "./tooltip-types.js";
+export type { TooltipContent, TooltipAnchor, TooltipRequest, TooltipSkin, TooltipEffectRun } from "./tooltip-types.js";
+import type { TooltipRequest, TooltipAnchor, TooltipSkin } from "./tooltip-types.js";
 
 /** What ui.showMenu shows, and where. */
 export interface MenuRequest {
@@ -1531,6 +1537,7 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "ui.tooltip.move": call("0.18.18"),
   "ui.tooltip.hide": call("0.18.18"),
   "ui.tooltip.close": call("0.18.18"),
+  "ui.tooltip.defineSkin": later("0.24.27"),
   "links.open": call("0.11.0", null, true),
   "blobs.list": call("0.12.0"),
   "blobs.usage": call("0.12.0"),
@@ -1642,7 +1649,7 @@ const SDK_CALLS = { "panel.openDialog": "panel.setDialog", "panel.closeDialog": 
  * Params of an existing call that only a newer Tavora knows. An older one rejects the unknown key (INVALID_PARAMS) for the
  * whole call, so the SDK leaves the key out there. They never raise `MIN_TAVORA`.
  */
-export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91" } as const;
+export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91", "ui.tooltip.skin": "0.24.27" } as const;
 
 /** A protocol call, a param only newer Tavoras know (`ui.tooltip.pinnable`), or one of the SDK calls named differently on the wire (`panel.openDialog`). */
 export type SupportedCall = CallName | keyof typeof SDK_CALLS | keyof typeof FIELD_SINCE;

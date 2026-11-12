@@ -327,6 +327,16 @@ it("marshals the shared tooltip lifecycle and close events",async()=>{
  expect(host.requests.filter(r=>r.method.startsWith("ui.tooltip")).map(r=>r.method)).toEqual(["ui.tooltip.show","ui.tooltip.move","ui.tooltip.hide","ui.tooltip.close"]);
 });
 
+it("sends the card's layout, effect and skin only to a Tavora that has skins, and defines a skin only there",async()=>{
+ const run=async(version:string)=>{vi.resetModules();sdk=await import("./index.js");const host=fakeHost(req=>req.method==="bridge.handshake"?{result:{...handshake,host:{...handshake.host,version}}}:{result:req.method==="ui.tooltip.show"?true:null});hosts.push(host);const api=await sdk.connect();
+  const content={title:"Archer",layout:"card" as const,effect:[{text:"Deals "},{text:"12",accent:true}],skin:"progress",badges:["Tower"]};
+  await api.ui.tooltip.show({id:"a",at:{x:1,y:2},content});await api.ui.tooltip.defineSkin("progress",{colors:{surface:"#101010",text:"#f0f0f0"}});
+  expect(content.layout).toBe("card");
+  return {shown:host.requests.filter(r=>r.method==="ui.tooltip.show").map(r=>(r.params as {content:Record<string,unknown>}).content),skins:host.requests.filter(r=>r.method==="ui.tooltip.defineSkin").map(r=>r.params),supports:api.supports("ui.tooltip.skin")};};
+ const now=await run("0.24.27");expect(now.supports).toBe(true);expect(now.shown[0]).toMatchObject({layout:"card",skin:"progress",effect:[{text:"Deals "},{text:"12",accent:true}]});expect(now.skins).toEqual([{name:"progress",skin:{colors:{surface:"#101010",text:"#f0f0f0"}}}]);
+ const old=await run("0.24.26");expect(old.supports).toBe(false);expect(old.shown[0]).toEqual({title:"Archer",badges:["Tower"]});expect(old.skins).toEqual([]);
+});
+
 it("sends pinnable only to a Tavora that knows it, and refuses a pin on a card that can't pin",async()=>{
  const run=async(version:string)=>{vi.resetModules();sdk=await import("./index.js");const host=fakeHost(req=>req.method==="bridge.handshake"?{result:{...handshake,host:{...handshake.host,version}}}:{result:true});hosts.push(host);const api=await sdk.connect();
   await api.ui.tooltip.show({id:"a",at:{x:1,y:2},content:{title:"A"},pinnable:false});await api.ui.tooltip.show({id:"b",at:{x:1,y:2},content:{title:"B"}});

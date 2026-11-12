@@ -417,6 +417,7 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `ui.tooltip.move` | 0.18.18 |  |  |
 | `ui.tooltip.hide` | 0.18.18 |  |  |
 | `ui.tooltip.close` | 0.18.18 |  |  |
+| `ui.tooltip.defineSkin` | 0.24.27 |  |  |
 | `links.open` | 0.11.0 |  | always |
 | `blobs.list` | 0.12.0 |  |  |
 | `blobs.usage` | 0.12.0 |  |  |
@@ -648,6 +649,30 @@ Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain
 total. A row has text, optional right-aligned badges/status and a connected-affix
 marker. Content is limited to 40,000 characters; no HTML, CSS or links. Raster
 assets are capped at 512 KB. See the SDK's exported types for individual bounds.
+
+### Item cards and skins (Tavora 0.24.27+)
+
+- `content.layout` is `"rich"` (the default, the layout above) or `"card"`: the picture large on top, a name bar
+  with the title, the subtitle as the type line, the badges, the effect box, properties and sections.
+- `content.effect` is a text (up to 1,000 characters) or up to 40 runs `{ text, accent? }` (1,000 characters in all);
+  `accent: true` runs take the accent colour.
+- `content.skin` names one of the module's skins; only the card layout wears it. A name that isn't defined shows the
+  plain card, without an error.
+- `ui.tooltip.defineSkin({ name, skin })` defines or replaces a skin for every panel of the module, until Tavora
+  restarts. Names are 1 to 32 of `a-z`, `0-9` and `-`; at most 32 skins per module. `skin` is
+  `{ frame?: { image, slice }, colors?: { surface, text, muted?, accent?, box?, boxText? }, font?, pixelArt?, titleCaps? }`.
+  `frame.image` is a `dist/` path to a PNG or WebP, `font` to a WOFF2, each judged by its first bytes and up to 512 KB,
+  read only from the module's own bundle. `slice` is four whole numbers from 0 to 64 (top, right, bottom, left): the
+  nine-slice insets and the frame's width. Colours are `#rrggbb`; with `colors`, `surface` and `text` are needed,
+  `muted` and `accent` default to `text`, `box` to `surface`, `boxText` to `text`. Text, muted text and the box's text
+  need a contrast of 4.5:1 with what they sit on, the accent 3:1 with the surface and the box. A skin that fails is
+  refused with `INVALID_PARAMS` and the reason, and nothing of it is kept.
+- Tavora sets every size: on a skinned card the title is 17 px and the effect 15 px, on a plain card 15 and 13 px, the
+  rest 13 px. The skin's font is used for the title and the effect box only, with the theme font for letters it lacks;
+  a skin's colours ignore the theme.
+- On an older Tavora the SDK leaves `layout`, `effect` and `skin` out of `ui.tooltip.show` and `defineSkin` does
+  nothing (`sdk.supports("ui.tooltip.skin")` tells); a raw caller checks the version itself, since an older Tavora
+  rejects the unknown keys.
 
 The neutral look draws with Tavora's own colours and follows the user's theme; `tone` and the affix
 colours are ignored there. The `poe` look is the gold, brown and purple one of Path of Exile 2 item

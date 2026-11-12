@@ -227,7 +227,7 @@ const MAX_PANEL_TYPES = 16;
 
 /** Calls that answer with nothing when nobody scripted them. */
 const SILENT = new Set<CallName>([
-  "files.forget", "files.showInFolder", "files.check", "links.open", "ui.tooltip.show", "ui.tooltip.move", "ui.tooltip.hide", "ui.tooltip.close", "ui.showMenu",
+  "files.forget", "files.showInFolder", "files.check", "links.open", "ui.tooltip.show", "ui.tooltip.move", "ui.tooltip.hide", "ui.tooltip.close", "ui.tooltip.defineSkin", "ui.showMenu",
   "systemInfo.watch", "systemInfo.clearConnectionLog", "media.watch", "media.control", "discord.connect", "discord.allowControl",
   "discord.subscribe", "discord.unsubscribe", "overlay.resetLink", "overlay.preview", "clipboard.writeImage", "files.pickReadOnly",
   "files.openJson", "files.open", "discord.image", "folders.watch", "folders.choose", "folders.showInFolder", "hotkeys.set", "overlay.copyLink", "overlay.showOverGame", "overlay.openPage", "panel.navigated",
@@ -1090,6 +1090,9 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
         hide: async (id) => void (await call("ui.tooltip.hide", { id })),
         close: async (id) => void (await call("ui.tooltip.close", { id })),
         onClose: (fn) => on("ui.tooltipClosed", fn),
+        defineSkin: async (name, skin) => {
+          if (supportsCall(shared.version, "ui.tooltip.skin")) await call("ui.tooltip.defineSkin", { name, skin });
+        },
       },
     },
     blobs: {

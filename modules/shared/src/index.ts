@@ -16,6 +16,7 @@ export { createOptimistic, useOptimistic, useOptimisticKeyed, type Optimistic, t
 export { useTask, type Task, type TaskOptions, type TaskState, type TaskStatus } from "./use-task";
 
 export{Tooltip,TooltipRows,type TooltipRow}from"./components/tooltip";
+export{ItemCard,type ItemCardSkin}from"./components/ui/item-card";
 export{installTitleTooltips}from"./title-tooltips";
 /** Writes the views zoomable panes are waiting to save; call it from `onSuspend` and `onDispose`. */
 export { flushViewMemory } from "./components/ui/zoom-pane/view-memory";

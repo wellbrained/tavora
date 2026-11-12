@@ -1,12 +1,15 @@
 import { BrowserWindow } from "electron";
 import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
-import type { TooltipRequest, TavoraTheme } from "@tavora/sdk/protocol";
+import type { TooltipRequest, TooltipSkin, TavoraTheme } from "@tavora/sdk/protocol";
 import { resolveAsset, contentTypeFor } from "./assets";
 import { TooltipState, tooltipBounds, type OpenTooltip } from "./tooltip-state";
 import { TOOLTIP_DOCUMENT } from "../shared/tooltip-document";
+import { SkinStore } from "./tooltip-skin";
 interface Source {
     root: string;
+    /** The module's id: its skins are kept by it. */
+    module: string;
     name: string;
     bounds: {
         x: number;
@@ -27,6 +30,8 @@ interface Options {
 /** A small, host-owned surface; never the module's renderer or the host's administrative preload. */
 export class TooltipWindow {
     readonly state = new TooltipState();
+    /** Each module's item-card skins (ui.tooltip.defineSkin), checked and with their files read in. */
+    readonly skins = new SkinStore();
     private window: BrowserWindow | undefined;
     private ready = false;
     private size = { width: 520, height: 2000 };
@@ -77,6 +82,8 @@ export class TooltipWindow {
             this.render(open);
         return true;
     }
+    /** ui.tooltip.defineSkin: checks the skin and reads its files from the module's bundle (`root`), or refuses it. */
+    defineSkin(module: string, root: string, name: string, skin: TooltipSkin): Promise<void> { return this.skins.define(module, root, name, skin); }
     move(owner: string, id: string, at: TooltipRequest["at"]) { if (this.state.move(owner, id, at))
         this.place(); }
     close(owner?: string, id?: string, hoverOnly = false) {
@@ -141,7 +148,9 @@ export class TooltipWindow {
             return;
         }
         this.place();
-        this.window!.webContents.send("tooltip:render", { serial: open.serial, content: open.request.content, pinned: !!open.request.pinned, pinnable: open.request.pinnable !== false, source: source.name, theme: this.options.theme(), language: this.options.language() });
+        // A skin only dresses the card layout; a name the module hasn't defined shows the plain card.
+        const c = open.request.content, skin = c.layout === "card" && c.skin ? this.skins.get(source.module, c.skin) : undefined;
+        this.window!.webContents.send("tooltip:render", { serial: open.serial, content: c, pinned: !!open.request.pinned, pinnable: open.request.pinnable !== false, source: source.name, theme: this.options.theme(), language: this.options.language(), ...(skin ? { skin } : {}) });
     }
     private place() {
         const c = this.state.current, w = this.window;
