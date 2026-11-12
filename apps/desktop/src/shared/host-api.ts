@@ -657,6 +657,14 @@ export interface AppearanceView {
   hints: { folder: string; needs: string }[];
 }
 
+/** A game running on this PC that is not in the library (HostViewState.unlistedGame). */
+export interface UnlistedGame {
+  name: string;
+  steamAppId: number | null;
+  /** The built-in game it is, when Tavora knows it. */
+  catalogId: string | null;
+}
+
 export interface HostViewState {
   screen: Screen;
   currentWorkspaceId: string | null;
@@ -803,6 +811,12 @@ export interface HostViewState {
   runningGameId: string | null;
   /** Whether the game of the workspace open now runs on this PC; the header says so. False while "When a game starts" is off. */
   workspaceRunning: boolean;
+  /**
+   * A game running on this PC that is not in the library, or only in Trash (main/game-watch.ts): the profile card says
+   * it is played and the rail offers to add it. The one started last; null while a game of the library runs, when none
+   * runs, or while "When a game starts" is off.
+   */
+  unlistedGame: UnlistedGame | null;
   /** A game that just started, while the user chose to be asked; the host UI asks whether to switch to it (game-switch). */
   pendingGameSwitch: string | null;
   snapshots: SnapshotView[];

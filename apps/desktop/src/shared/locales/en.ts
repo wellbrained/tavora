@@ -1442,6 +1442,7 @@ export const en = {
   "rail.running": "{name} is running",
   "rail.playing": "Playing {name}",
   "rail.switchToGame": "Switch to game",
+  "rail.addRunningGame": "Add {name}",
   "rail.folderMore": "+{count} more",
   "rail.newFolder.title": "New folder",
   "rail.folderName": "Folder name",

@@ -1,4 +1,4 @@
-import { MAX_PICKER_COVERS, type CatalogMatch, type CatalogModuleView, type InstalledGameView, type OnlineGame, type OnlineSearchResult, type WorkspaceView } from "../../shared/host-api";
+import { MAX_PICKER_COVERS, type CatalogMatch, type CatalogModuleView, type InstalledGameView, type OnlineGame, type OnlineSearchResult, type UnlistedGame, type WorkspaceView } from "../../shared/host-api";
 import { isSameGame } from "../../shared/same-game";
 import { rank, rankByName } from "./search";
 
@@ -226,6 +226,12 @@ export function describeActivity(activity: { kind: "played" | "installed"; at: n
 }
 
 export type AddInput = { catalogId: string } | { online: OnlineGame } | { name: string; steamAppId?: number };
+
+/** The input `add-workspace` takes for a running game not in the library: the built-in game, else the user's own with its Steam id. */
+export function addInputForUnlisted(game: UnlistedGame): AddInput {
+  if (game.catalogId) return { catalogId: game.catalogId };
+  return game.steamAppId === null ? { name: game.name } : { name: game.name, steamAppId: game.steamAppId };
+}
 
 /**
  * The input `add-workspace` takes for a row, or for the typed name (no row) as the user's own game. A game found on

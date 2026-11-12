@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AppInfoError, readClientIcons } from "./steam-appinfo";
+import { AppInfoError, readClientIcons, readSteamKinds } from "./steam-appinfo";
 import { appInfo, Bytes, type FakeApp } from "./steam-appinfo.fixture";
 
 const HASH_A = "a".repeat(40);
@@ -81,5 +81,28 @@ describe("readClientIcons", () => {
     longEntry.set(new Bytes().u32(0x7fffffff).data, 20);
     expect(() => readClientIcons(longEntry, wanted(20, 999))).toThrow(/does not fit/);
     expect(() => readClientIcons(good.slice(0, 40), wanted(20))).toThrow(AppInfoError);
+  });
+});
+
+describe("readSteamKinds", () => {
+  const apps: FakeApp[] = [
+    { appid: 2784470, common: { name: "9 Kings", type: "Game" } },
+    { appid: 1245620, common: { name: "Elden Ring", type: "game" } },
+    // Software Steam installs like a game, running all day.
+    { appid: 431960, common: { name: "Wallpaper Engine", type: "Application" } },
+    { appid: 629520, common: { name: "Soundpad", type: "Tool" } },
+    { appid: 30, common: { name: "No kind" } },
+    { appid: 40, common: { name: "Odd kind", type: 1 } },
+    { appid: 50, rawKeyValues: [0x09, 0x00] },
+  ];
+
+  it.each([39, 40, 41] as const)("tells the apps Steam calls games from software, version %d", (version) => {
+    const found = readSteamKinds(appInfo(version, apps), wanted(2784470, 1245620, 431960, 629520, 30, 40, 50, 60));
+    expect(Object.fromEntries(found)).toEqual({ 2784470: true, 1245620: true, 431960: false, 629520: false });
+  });
+
+  it("leaves out an app whose kind it can't read", () => {
+    expect(readSteamKinds(appInfo(41, apps), wanted(30, 40, 50, 60)).size).toBe(0);
+    expect(readSteamKinds(appInfo(41, apps), wanted()).size).toBe(0);
   });
 });

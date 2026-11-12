@@ -1,7 +1,8 @@
 /**
- * Reads game icon hashes from Steam's own cache file, `appcache/appinfo.vdf`.
- * Steam keeps, for every game it knows, the hash of the game's client icon
- * (`appinfo.common.clienticon`); the icon itself is `<hash>.ico`. This only
+ * Reads from Steam's own cache file, `appcache/appinfo.vdf`, what Steam keeps
+ * about each app in `appinfo.common`: the hash of the game's client icon
+ * (`clienticon`; the icon itself is `<hash>.ico`) and the kind of app (`type`:
+ * a game, or software such as a tool or an application). This only
  * reads: nothing in the file is run, and a damaged or unexpected file is an
  * error, never a crash or an endless loop.
  *
@@ -145,7 +146,20 @@ const HASH = /^[0-9a-f]{40}$/;
  * the file, or has no icon hash, is simply left out.
  */
 export function readClientIcons(data: Uint8Array, wanted: ReadonlySet<number>): Map<number, string> {
-  const found = new Map<number, string>();
+  return readCommon(data, wanted, (common) => (typeof common.clienticon === "string" && HASH.test(common.clienticon) ? common.clienticon : undefined));
+}
+
+/**
+ * Whether each wanted app is a game rather than software (a tool, or an application such as a wallpaper program), as
+ * Steam notes it. An app that is not in the file, or whose kind can't be read, is left out.
+ */
+export function readSteamKinds(data: Uint8Array, wanted: ReadonlySet<number>): Map<number, boolean> {
+  return readCommon(data, wanted, (common) => (typeof common.type === "string" ? common.type.toLowerCase() === "game" : undefined));
+}
+
+/** What `pick` takes from the `common` block of each wanted app; an app it takes nothing from is left out. */
+function readCommon<T>(data: Uint8Array, wanted: ReadonlySet<number>, pick: (common: KeyValues) => T | undefined): Map<number, T> {
+  const found = new Map<number, T>();
   if (wanted.size === 0) return found;
   if (data.byteLength < 16) throw new AppInfoError("That is not an appinfo.vdf file");
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
@@ -178,16 +192,16 @@ export function readClientIcons(data: Uint8Array, wanted: ReadonlySet<number>): 
     if (wanted.has(appid)) {
       try {
         const reader = new Reader(data, pos + 8 + fixed, end);
-        // The entry is one object (named "appinfo"); its `common` child holds the icon hash.
+        // The entry is one object (named "appinfo"); its `common` child holds what Steam knows about the app.
         if (reader.u8() === 0x00) {
           if (strings === null) reader.cstring();
           else reader.u32();
           const common = readKeyValues(reader, strings, 1).common;
-          const icon = typeof common === "object" ? common.clienticon : undefined;
-          if (typeof icon === "string" && HASH.test(icon)) found.set(appid, icon);
+          const value = typeof common === "object" ? pick(common) : undefined;
+          if (value !== undefined) found.set(appid, value);
         }
       } catch (error) {
-        // One damaged entry only loses that game's icon.
+        // One damaged entry only loses what was wanted of that app.
         if (!(error instanceof AppInfoError)) throw error;
       }
       if (found.size === wanted.size) break;

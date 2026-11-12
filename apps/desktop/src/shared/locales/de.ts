@@ -1444,6 +1444,7 @@ export const de: Record<keyof typeof en, string> = {
   "rail.running": "{name} läuft",
   "rail.playing": "Spielt {name}",
   "rail.switchToGame": "Zum Spiel wechseln",
+  "rail.addRunningGame": "{name} hinzufügen",
   "rail.folderMore": "+{count} weitere",
   "rail.newFolder.title": "Neuer Ordner",
   "rail.folderName": "Ordnername",

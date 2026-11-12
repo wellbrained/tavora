@@ -332,6 +332,7 @@ describe("parseAction", () => {
     [{ type: "add-workspace", workspace: "Notes" }],
     [{ type: "set-startup", startup: "last-game" }],
     [{ type: "add-workspace", name: "x".repeat(201) }],
+    [{ type: "add-workspace", name: "x", steamAppId: -1 }],
     [{ type: "add-workspace", online: { id: "../x", name: "X" } }],
         [{ type: "add-workspace", online: { id: "x" } }],
     [{ type: "add-workspace", online: { id: "x", name: "n".repeat(201) } }],

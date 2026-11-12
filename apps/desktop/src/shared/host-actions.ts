@@ -195,7 +195,10 @@ export function hostActionTable(c: HostChecks) {
      */
     "add-workspace": variants(
       { catalogId: c.gameId },
-      /** A game added by name; with its Steam app id when this PC knows it (a game found here that no list has). */
+      /**
+       * A game added by name; with its Steam app id when this PC knows it (a game found here that no list has, or one
+       * found running).
+       */
       { name: text(), steamAppId: optional(c.steamAppId) },
       { personal: text() },
       /** A game found by the online search. */
