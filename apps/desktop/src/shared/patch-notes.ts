@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.32",
+    date: "2026-11-12",
+    title: "Add a game stays put",
+    notes: [
+      "The window keeps its height while you type.",
+    ],
+    prs: [
+      { number: 748, title: "Add a game: one height, no jumping while typing" },
+    ],
+    tags: ["games"],
+  },
+  {
     version: "0.24.31",
     date: "2026-11-12",
     title: "Add a game shows more at a glance",
