@@ -95,10 +95,11 @@ function focusSearch() {
 
 <template>
   <Dialog :open="true" @update:open="(open) => !open && closeDialog(shownRequest)">
-    <!-- The search and the footer stay put; the covers and the list between them scroll. One height whatever it shows
+    <!-- In the middle of the window, as Settings is. The search and the footer stay put; the covers and the list between
+         them scroll. One height whatever it shows
          (six covers and ten games fit), so the dialog never jumps while you type. -->
     <DialogContent
-      class="bg-card top-[8vh] flex h-[min(944px,calc(100vh-8vh-16px))] w-[min(920px,calc(100vw-48px))] max-w-none translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
+      class="bg-card top-[calc(50%+env(titlebar-area-height,0px)/2)] flex h-[min(944px,calc(100vh-env(titlebar-area-height,0px)-48px))] w-[min(920px,calc(100vw-48px))] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
       data-testid="add-game-dialog"
       :data-status="adder.state.value.status"
       :show-close-button="false"
