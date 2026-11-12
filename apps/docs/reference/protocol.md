@@ -670,13 +670,16 @@ These need a Tavora with `ui.tooltip.defineSkin` (its version is in the table ab
   plain card, without an error.
 - `ui.tooltip.defineSkin({ name, skin })` defines or replaces a skin for every panel of the module, until Tavora
   restarts. Names are 1 to 32 of `a-z`, `0-9` and `-`; at most 32 skins per module. `skin` is
-  `{ frame?: { image, slice }, colors?: { surface, text, muted?, accent?, box?, boxText? }, font?, pixelArt?, titleCaps? }`.
+  `{ frame?: { image, slice }, colors?: { surface, text, muted?, accent?, box?, boxText?, boxBorder? }, font?, pixelArt?, titleCaps? }`.
   `frame.image` is a `dist/` path to a PNG or WebP, `font` to a WOFF2, each judged by its first bytes and up to 512 KB,
   read only from the module's own bundle. `slice` is four whole numbers from 0 to 64 (top, right, bottom, left): the
   nine-slice insets and the frame's width. Colours are `#rrggbb`; with `colors`, `surface` and `text` are needed,
   `muted` and `accent` default to `text`, `box` to `surface`, `boxText` to `text`. Text, muted text and the box's text
   need a contrast of 4.5:1 with what they sit on, and so does the accent with the box (its numbers are text); the
-  accent with the surface (a line there) 3:1. A skin that fails is refused with `INVALID_PARAMS` and the reason, and
+  accent with the surface (a line there) 3:1. `boxBorder` is the effect box's 2 px edge and needs 3:1 with the box;
+  without it a skinned box has no edge (a plain card's box has a 1 px line in the theme's line colour). It needs a
+  Tavora with `sdk.supports("ui.tooltip.boxBorder")`: an older one refuses the unknown colour, and with it the whole
+  skin, so the SDK leaves `boxBorder` out there (a raw caller does that itself). A skin that fails is refused with `INVALID_PARAMS` and the reason, and
   nothing of it is kept. When the same name is defined twice at once, the later call wins. All modules together keep at
   most 16 MB of skin files (each file once); a skin beyond that is refused. A module's skins go when it reloads,
   updates, is turned off or removed, so a page defines its skins when it starts.

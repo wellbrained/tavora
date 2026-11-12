@@ -22,7 +22,7 @@ const levels: TooltipContent = {
 const skin: ItemCardSkin = {
   frame: { image: frame, slice: [6, 6, 6, 6] },
   // rules-allow: color a skin's own game colours, fixed in every theme like a game's card
-  colors: { surface: "#1e1610", text: "#f4e6c8", muted: "#c9b48e", accent: "#f0c86e", box: "#2c2016", boxText: "#f4e6c8" },
+  colors: { surface: "#1e1610", text: "#f4e6c8", muted: "#c9b48e", accent: "#f0c86e", box: "#2c2016", boxText: "#f4e6c8", boxBorder: "#a07c40" },
   pixelArt: true,
   titleCaps: true,
 };

@@ -1,6 +1,6 @@
 // @tavora/sdk: thin typed client for modules running inside Tavora Desktop.
 // The host enforces every check; this package only marshals typed calls.
-import { menuParams, tooltipParams, tooltipShowParams, type MenuOptions, type TooltipMoveOptions, type TooltipShowOptions } from "./anchor.js";
+import { menuParams, skinParams, tooltipParams, tooltipShowParams, type MenuOptions, type TooltipMoveOptions, type TooltipShowOptions } from "./anchor.js";
 import { takeTestSdk } from "./test-slot.js";
 import type { TooltipSkin } from "./tooltip-types.js";
 export type { TooltipAnchor, TooltipRequest, TooltipContent, TooltipSkin, TooltipEffectRun } from "./tooltip-types.js";
@@ -192,7 +192,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.17";
+export const SDK_VERSION = "0.3.18";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -1105,7 +1105,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         hide: async id => { await call("ui.tooltip.hide",{id}); },
         close: async id => { await call("ui.tooltip.close",{id}); },
         onClose: fn => on("ui.tooltipClosed",fn),
-        defineSkin: async (name, skin) => { if (supportsCall(host.host.version, "ui.tooltip.skin")) await call("ui.tooltip.defineSkin",{name,skin}); },
+        defineSkin: async (name, skin) => { if (supportsCall(host.host.version, "ui.tooltip.skin")) await call("ui.tooltip.defineSkin",skinParams(name,skin,host.host.version)); },
       },
     },
     blobs: {

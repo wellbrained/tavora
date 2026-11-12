@@ -3,7 +3,7 @@
 // For tests of a real panel in a browser it also has `mountPanel` (the module's page on a memory host), Tavora's own
 // themes (`themeOf`) and layout and Tab checks (`inspectLayout`, `checkFocus`…): see testing/. Not for use in a
 // module's shipped code. Nothing here needs vitest, Playwright or a framework.
-import { menuParams, tooltipParams, tooltipShowParams } from "./anchor.js";
+import { menuParams, skinParams, tooltipParams, tooltipShowParams } from "./anchor.js";
 import { SDK_VERSION, TavoraError, type KeyValueStore, type TavoraSDK } from "./index.js";
 import {
   APP_BLOB_PATH,
@@ -1091,7 +1091,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
         close: async (id) => void (await call("ui.tooltip.close", { id })),
         onClose: (fn) => on("ui.tooltipClosed", fn),
         defineSkin: async (name, skin) => {
-          if (supportsCall(shared.version, "ui.tooltip.skin")) await call("ui.tooltip.defineSkin", { name, skin });
+          if (supportsCall(shared.version, "ui.tooltip.skin")) await call("ui.tooltip.defineSkin", skinParams(name, skin, shared.version));
         },
       },
     },

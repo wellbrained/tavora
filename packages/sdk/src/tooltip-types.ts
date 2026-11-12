@@ -92,6 +92,11 @@ export interface TooltipSkin {
         accent?: string;
         box?: string;
         boxText?: string;
+        /**
+         * A 2 px edge around the effect box; it needs a contrast of 3:1 with `box`. Left out, a skinned box has no edge.
+         * Needs `sdk.supports("ui.tooltip.boxBorder")`: on an older Tavora the SDK leaves it out of `defineSkin`.
+         */
+        boxBorder?: string;
     };
     /** A WOFF2 font (up to 512 KB) for the title and the effect box only; letters it lacks come from the theme font. */
     font?: string;

@@ -1,5 +1,5 @@
 import { TavoraError } from "./index.js";
-import { supportsCall, type MenuRequest, type TooltipAnchor, type TooltipContent, type TooltipRequest } from "./protocol.js";
+import { supportsCall, type MenuRequest, type TooltipAnchor, type TooltipContent, type TooltipRequest, type TooltipSkin } from "./protocol.js";
 
 /** What a menu or tooltip is for: an element (its box is read when you call) or a box you measured yourself. */
 export type AnchorTarget = Element | { x: number; y: number; width?: number; height?: number };
@@ -80,6 +80,16 @@ function withEffectRow(sections: TooltipContent["sections"], effect: NonNullable
   if (list.length < 12) return [{ rows: [row] }, ...list];
   const [first, ...rest] = list;
   return [{ ...first!, rows: [row, ...first!.rows] }, ...rest];
+}
+
+/**
+ * The wire form of `ui.tooltip.defineSkin`. An older Tavora refuses a colour it doesn't know, and with it the whole
+ * skin, so `colors.boxBorder` is left out before `ui.tooltip.boxBorder` (the box then has no edge there).
+ */
+export function skinParams(name: string, skin: TooltipSkin, hostVersion: string): { name: string; skin: TooltipSkin } {
+  if (skin.colors?.boxBorder === undefined || supportsCall(hostVersion, "ui.tooltip.boxBorder")) return { name, skin };
+  const { boxBorder: _edge, ...colors } = skin.colors;
+  return { name, skin: { ...skin, colors } };
 }
 
 export function tooltipParams<T extends TooltipMoveOptions | TooltipShowOptions>(request: T): Omit<T, "anchor" | "at"> & { at: TooltipAnchor["at"] } {
