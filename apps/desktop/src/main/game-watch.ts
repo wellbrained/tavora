@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { GameStart, UnlistedGame } from "../shared/host-api";
 import type { WorkspaceEntry } from "./library";
+import { CATALOG } from "./catalog";
 import { catalogIdFor, pickGames, type Signs } from "./installed-list";
 import { NOT_THE_GAME, normalizeName, type InstalledGame } from "./launcher-games";
 import { windowsProgramProbe, type ProgramLook, type ProgramProbe } from "./program-list";
@@ -155,8 +156,17 @@ export function runningNotInLibrary(
 ): UnlistedGame[] {
   const running = [...installedRunning(installed, programs, steamAppId)].filter((game) => game.steamAppId === undefined || steamGames.has(game.steamAppId));
   return pickGames(running, NO_SIGNS)
-    .filter((game) => !inLibrary(entries, game))
-    .map(({ name, steamAppId: id, catalogId }) => ({ name, steamAppId: id, catalogId }));
+    .map(({ name, steamAppId: id, catalogId }) => ({ name, steamAppId: id, catalogId: catalogId && sameSteamGame(catalogId, id) ? catalogId : null }))
+    .filter((game) => !inLibrary(entries, game));
+}
+
+/**
+ * Whether a built-in game found by name is the Steam app that runs: a game whose Steam id differs from the built-in
+ * game's is another game with the same name, added under its own name (else it would be offered again after adding).
+ */
+function sameSteamGame(catalogId: string, steamAppId: number | null): boolean {
+  const known = CATALOG.find((game) => game.id === catalogId)?.steamAppId;
+  return steamAppId === null || known === undefined || known === steamAppId;
 }
 
 /**

@@ -91,6 +91,13 @@ describe("runningNotInLibrary", () => {
     expect(runningNotInLibrary([], [KINGS, KINGS_LISTED, DIABLO], [], 2784470, GAMES)).toEqual([kings]);
   });
 
+  it("offers a Steam game named like a built-in game with another Steam id under its own name", () => {
+    const namesake: InstalledGame = { source: "steam", name: "Apex Legends", steamAppId: 999999, file: "E:\\Steam\\steamapps\\common\\Namesake\\game.exe", index: 0, folder: "E:\\Steam\\steamapps\\common\\Namesake" };
+    expect(runningNotInLibrary([], [namesake], [], 999999, new Set([999999]))).toEqual([{ name: "Apex Legends", steamAppId: 999999, catalogId: null }]);
+    const real = { ...namesake, steamAppId: 1172470 };
+    expect(runningNotInLibrary([], [real], [], 1172470, new Set([1172470]))).toEqual([{ name: "Apex Legends", steamAppId: 1172470, catalogId: "apex-legends" }]);
+  });
+
   it("leaves out an app Steam runs but did not install", () => {
     expect(runningNotInLibrary([], [DIABLO], [], 2784470, GAMES)).toEqual([]);
   });

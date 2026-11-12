@@ -2384,7 +2384,11 @@ export class Host {
       "import-steam-games": (action) => this.importSteam(action.games),
       // Answers with the token that puts it back (undo-delete).
       "trash-workspace": (action) => this.trashWorkspaces([action.workspaceId], true),
-      "restore-workspace": saved((action) => restoreWorkspace(this.library, action.workspaceId)),
+      "restore-workspace": saved((action) => {
+        restoreWorkspace(this.library, action.workspaceId);
+        // A game running now comes back as running, not as one that just started (no switch or question).
+        if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(action.workspaceId);
+      }),
       "delete-workspace": saved(async (action) => {
         const workspace = deleteTrashedWorkspace(this.library, action.workspaceId);
         this.saveLibrary();
@@ -2393,7 +2397,11 @@ export class Host {
       // Many at once: workspaces already gone are skipped, so a list the screen showed a moment ago still works.
       "trash-workspaces": (action) => this.trashWorkspaces(action.workspaceIds, false),
       "restore-workspaces": saved((action) => {
-        for (const id of action.workspaceIds) if (this.library.workspaces[id]?.trashedAt) restoreWorkspace(this.library, id);
+        for (const id of action.workspaceIds) {
+          if (!this.library.workspaces[id]?.trashedAt) continue;
+          restoreWorkspace(this.library, id);
+          if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(id);
+        }
       }),
       "delete-workspaces": saved(async (action) => {
         const workspaces = action.workspaceIds.filter((id) => this.library.workspaces[id]?.trashedAt).map((id) => deleteTrashedWorkspace(this.library, id));
