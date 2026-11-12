@@ -281,4 +281,4 @@ try {
 }
 
 console.log(`\n${AFTER_RELEASE}`);
-console.log(`\nReleased ${version}. Installed apps find it within an hour (a minute after a restart) and show it in the rail; new installs: ${feed}/${installer}`);
+console.log(`\nReleased ${version}. Installed apps find it within 5 minutes (right away after a restart) and show it in the rail; new installs: ${feed}/${installer}`);

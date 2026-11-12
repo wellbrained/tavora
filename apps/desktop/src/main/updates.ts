@@ -35,8 +35,14 @@ export interface Timers {
  */
 export const UPDATER_HEADER = "X-Tavora-Update";
 
-export const FIRST_CHECK_MS = 60 * 1000;
-export const CHECK_EVERY_MS = 60 * 60 * 1000;
+/** Right at start, so a new version shows in the rail before the user gets going. */
+export const FIRST_CHECK_MS = 0;
+/** The feed is one small file, so asking often costs next to nothing. */
+export const CHECK_EVERY_MS = 5 * 60 * 1000;
+/** A download that failed by itself starts over at most this often, so a broken file isn't fetched every few minutes. */
+export const RETRY_EVERY_MS = 60 * 60 * 1000;
+/** A line the log already has is written again after this long, so the log still shows that checks run. */
+export const LOG_REPEAT_MS = 60 * 60 * 1000;
 /** The progress goes to the window at most this often: each change sends the whole state. */
 export const PROGRESS_EVERY_MS = 250;
 /** The most notes a found version carries; the release's own list is short anyway. */
@@ -73,10 +79,15 @@ export interface UpdateManagerOptions {
 }
 
 /**
- * Looks for a new Tavora version shortly after start and every hour, downloads it (by itself or when
+ * Looks for a new Tavora version right at start and every 5 minutes, downloads it (by itself or when
  * the user asks) and installs it when Tavora quits or the user presses "Restart now" - never in the
  * middle of a session. Errors (offline, server down) are logged; the next check tries again.
  */
+/** Less than `ms` has passed; a clock set back (a negative gap) counts as time passed. */
+function within(elapsed: number, ms: number): boolean {
+  return elapsed >= 0 && elapsed < ms;
+}
+
 export class UpdateManager {
   private current: UpdateState = { status: "idle", checkedAt: null, failed: false };
   private readonly updater: UpdaterLike;
@@ -90,12 +101,27 @@ export class UpdateManager {
   private first: unknown;
   private every: unknown;
   private progressSentAt = 0;
+  /** When a download of the waiting version last failed; checks leave it alone for a while after. */
+  private failedAt = 0;
+  /** The updater sent an "error" during the running call, so its rejection needs no second line. */
+  private errorLogged = false;
 
   constructor(options: UpdateManagerOptions) {
     this.updater = options.updater;
     this.onChange = options.onChange;
     this.onDownloaded = options.onDownloaded ?? (() => {});
-    this.log = options.log ?? (() => {});
+    // A check every few minutes says the same thing again and again; the log keeps a line when it changes,
+    // and repeats one once an hour so it still shows the checks run.
+    const write = options.log ?? (() => {});
+    let last = "";
+    let lastAt = 0;
+    this.log = (line) => {
+      const at = this.now().getTime();
+      if (line === last && within(at - lastAt, LOG_REPEAT_MS)) return;
+      last = line;
+      lastAt = at;
+      write(line);
+    };
     this.timers = options.timers ?? {
       setTimeout: (run, ms) => setTimeout(run, ms),
       clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
@@ -111,9 +137,15 @@ export class UpdateManager {
     this.updater.autoInstallOnAppQuit = true;
     this.updater.requestHeaders = { ...this.updater.requestHeaders, [UPDATER_HEADER]: "1" };
     this.updater.on("update-available", (info) => {
+      // A check that answers while the user's download runs (or is done) changes nothing.
+      if (this.current.status === "downloading" || this.current.status === "ready") return;
       this.log(`update ${info.version} available`);
       const notes = readReleaseNotes(info.releaseNotes);
-      this.set(this.updater.autoDownload ? this.downloading(info.version, notes) : { status: "available", version: info.version, notes, failed: false });
+      if (this.updater.autoDownload) return this.set(this.downloading(info.version, notes));
+      // A failed download stays marked as failed until the user tries again, unless a newer version came out.
+      const u = this.current;
+      const failed = u.status === "available" && u.version === info.version && u.failed;
+      this.set({ status: "available", version: info.version, notes, failed });
     });
     this.updater.on("download-progress", (progress) => {
       const u = this.current;
@@ -136,6 +168,7 @@ export class UpdateManager {
     });
     this.updater.on("error", (error) => {
       this.log(`update error: ${error.message}`);
+      this.errorLogged = true;
       // A failed check goes back to idle; a failed download keeps the version so it can be tried again.
       if (this.current.status === "checking") this.set(this.idle(true));
       else if (this.current.status === "downloading") this.set(this.downloadFailed(this.current));
@@ -146,7 +179,7 @@ export class UpdateManager {
     return this.current;
   }
 
-  /** Starts the schedule: one check shortly after start, then one every hour. */
+  /** Starts the schedule: one check right at start, then one every 5 minutes. */
   start(): void {
     this.first = this.timers.setTimeout(() => void this.check(), this.firstCheckMs);
     this.every = this.timers.setInterval(() => void this.check(), this.everyMs);
@@ -161,16 +194,21 @@ export class UpdateManager {
   /**
    * Asks the server whether there is a newer version. Does nothing while one is downloading or ready.
    * A version that waits (or whose download failed) is asked about again: a newer one may be out, and
-   * with automatic download on, the download starts over.
+   * with automatic download on, the download starts over. After a failed download that waits an hour
+   * (RETRY_EVERY_MS), since the check itself would download again; a newer version is then found late.
    */
   async check(): Promise<void> {
-    const waiting = this.current.status === "available";
-    if (this.current.status !== "idle" && !waiting) return;
+    const u = this.current;
+    const waiting = u.status === "available";
+    if (u.status !== "idle" && !waiting) return;
+    // With automatic download on, a check starts the download over: after a failure, wait a while first.
+    if (waiting && u.failed && this.updater.autoDownload && within(this.now().getTime() - this.failedAt, RETRY_EVERY_MS)) return;
     if (!waiting) this.set({ status: "checking" });
+    this.errorLogged = false;
     try {
       await this.updater.checkForUpdates();
     } catch (error) {
-      this.log(`update check failed: ${error instanceof Error ? error.message : String(error)}`);
+      if (!this.errorLogged) this.log(`update check failed: ${error instanceof Error ? error.message : String(error)}`);
       if (this.is("checking")) this.set(this.idle(true));
     }
     // An answer without any event (nothing to compare) still ends the check.
@@ -188,10 +226,11 @@ export class UpdateManager {
     const u = this.current;
     if (u.status !== "available") return;
     this.set(this.downloading(u.version, u.notes));
+    this.errorLogged = false;
     try {
       await this.updater.downloadUpdate();
     } catch (error) {
-      this.log(`update download failed: ${error instanceof Error ? error.message : String(error)}`);
+      if (!this.errorLogged) this.log(`update download failed: ${error instanceof Error ? error.message : String(error)}`);
       if (this.current.status === "downloading") this.set(this.downloadFailed(this.current));
     }
   }
@@ -218,6 +257,7 @@ export class UpdateManager {
   }
 
   private downloadFailed(u: { version: string; notes: string[] }): UpdateState {
+    this.failedAt = this.now().getTime();
     return { status: "available", version: u.version, notes: u.notes, failed: true };
   }
 
