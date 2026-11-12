@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addOrRestoreWorkspace, findGameCopy } from "./game-copy";
+import { addOrRestoreWorkspace, gameCopyFinder } from "./game-copy";
 import {
   addWorkspace,
   iconFileShared,
@@ -136,21 +136,37 @@ describe("adding games", () => {
     expect(rootIds(library)).toEqual(["workspace:elden-ring", "workspace:local-9-kings", "workspace:local-hollow-knight"]);
   });
 
-  it("adds a new game as before, and keeps a game in use as it is", () => {
+  it("adds a new game as before, and answers a game in use with that copy instead of a second one", () => {
     const library = emptyLibrary();
-    expect(addOrRestoreWorkspace(library, { name: "Rust", steamAppId: 252490 }, day(1))).toEqual({ id: "local-rust", restored: false });
+    expect(addOrRestoreWorkspace(library, { name: "Rust", steamAppId: 252490 }, day(1))).toEqual({ id: "local-rust" });
     expect(library.workspaces["local-rust"]!.steamAppId).toBe(252490);
-    expect(() => addOrRestoreWorkspace(library, { online: { id: "rust", name: "Rust", steamAppId: 252490 } }, day(2))).not.toThrow();
-    expect(() => addOrRestoreWorkspace(library, { catalogId: "elden-ring" }, day(2))).not.toThrow();
-    expect(() => addOrRestoreWorkspace(library, { catalogId: "elden-ring" }, day(3))).toThrow("already in your library");
+    expect(addOrRestoreWorkspace(library, { online: { id: "rust", name: "Rust", steamAppId: 252490 } }, day(2))).toEqual({ id: "local-rust", existing: true });
+    expect(addOrRestoreWorkspace(library, { catalogId: "elden-ring" }, day(2))).toEqual({ id: "elden-ring" });
+    // Typed by hand: "Elden Ring" is the built-in game already there, not a new local-elden-ring.
+    expect(addOrRestoreWorkspace(library, { name: "elden ring" }, day(3))).toEqual({ id: "elden-ring", existing: true });
+    expect(addOrRestoreWorkspace(library, { catalogId: "elden-ring" }, day(3))).toEqual({ id: "elden-ring", existing: true });
+    expect(Object.keys(library.workspaces)).toEqual(["local-rust", "elden-ring"]);
+  });
+
+  it("goes by Steam's app id when both have one: a game of the same name with another id is another game", () => {
+    const library = emptyLibrary();
+    addWorkspace(library, { name: "Doom", steamAppId: 2280 }, day(1));
+    trashWorkspace(library, "local-doom", day(2));
+    const added = addOrRestoreWorkspace(library, { name: "DOOM", steamAppId: 379720 }, day(3));
+    expect(added.restored).toBeUndefined();
+    expect(added.id).not.toBe("local-doom");
+    expect(library.workspaces["local-doom"]!.trashedAt).not.toBeNull();
+    // Without an app id on one side, the name still finds it.
+    expect(gameCopyFinder(library)({ id: null, steamAppId: null, name: "doom" })?.steamAppId).toBe(379720);
+    expect(gameCopyFinder(library)({ id: null, steamAppId: 2280, name: "Something else" })?.id).toBe("local-doom");
   });
 
   it("never takes a personal workspace for a game's copy", () => {
     const library = emptyLibrary();
     const notes = addWorkspace(library, { personal: "Fortnite" }, day(1));
     trashWorkspace(library, notes, day(2));
-    expect(findGameCopy(library, { id: null, steamAppId: null, name: "Fortnite" })).toBeUndefined();
-    expect(addOrRestoreWorkspace(library, { name: "Fortnite" }, day(3)).restored).toBe(false);
+    expect(gameCopyFinder(library)({ id: null, steamAppId: null, name: "Fortnite" })).toBeUndefined();
+    expect(addOrRestoreWorkspace(library, { name: "Fortnite" }, day(3)).restored).toBeUndefined();
   });
 
   it("finds the copy in use before one in Trash", () => {
@@ -158,7 +174,7 @@ describe("adding games", () => {
     addWorkspace(library, { name: "Valheim" }, day(1));
     trashWorkspace(library, "local-valheim", day(2));
     addWorkspace(library, { catalogId: "valheim" }, day(3));
-    expect(findGameCopy(library, { id: null, steamAppId: 892970, name: "Valheim" })?.id).toBe("valheim");
+    expect(gameCopyFinder(library)({ id: null, steamAppId: 892970, name: "Valheim" })?.id).toBe("valheim");
   });
 
   it("has automatic updates on by default and keeps only a real setting", () => {

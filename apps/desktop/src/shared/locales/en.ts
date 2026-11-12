@@ -1564,6 +1564,7 @@ export const en = {
   "workspace.noModulesYet": "No modules for {game} yet.",
   "workspace.askModule": "Ask for a {game} module",
   "workspace.askThanks": "Thanks, we'll count it ✓",
+  "workspace.madeForWait": "Another module is being added.",
   "workspace.orLayout": "Or pick a layout",
   "workspace.panel": "Panel",
   "workspace.options": "{name} options",

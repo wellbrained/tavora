@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogModuleView, InstalledGameView } from "../../shared/host-api";
-import { addedWithGame, addInputFor, buildRows, describeActivity, initials, keepActive, modulesFor, playedLately, stepActive } from "./game-picker";
+import type { WorkspaceView } from "../../shared/host-api";
+import { addedWithGame, addInputFor, buildRows, describeActivity, initials, keepActive, keepOrder, modulesFor, optionId, playedLately, resolveAddInput, stepActive, withLiveCopies } from "./game-picker";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date(2026, 10, 1, 12).getTime();
@@ -112,7 +113,7 @@ describe("playedLately", () => {
   it("takes the games not added yet, the last played first, then the last installed, four at most", () => {
     const games = [added("New Install", 0), played("Old", 30), played("Hades", 1), installed("Never"), played("Owned", 0, { workspaceId: "owned" }), played("Rust", 3), added("Older Install", 9)];
     expect(playedLately(games).map((game) => game.name)).toEqual(["Hades", "Rust", "Old", "New Install"]);
-    expect(playedLately(games, 10).map((game) => game.name)).toEqual(["Hades", "Rust", "Old", "New Install", "Older Install", "Never"]);
+    expect(playedLately(games, [], 10).map((game) => game.name)).toEqual(["Hades", "Rust", "Old", "New Install", "Older Install", "Never"]);
   });
 
   it("counts a game whose only copy is in Trash as not added (it has no workspace)", () => {
@@ -123,6 +124,91 @@ describe("playedLately", () => {
   it("is empty without games on this PC, or with all of them added", () => {
     expect(playedLately([])).toEqual([]);
     expect(playedLately([played("Owned", 0, { workspaceId: "owned" })])).toEqual([]);
+  });
+
+  it("keeps the covers shown in their places when the list is found again, also one added since; only free places fill up", () => {
+    const shown = playedLately([played("Hades", 1), played("Rust", 3)]).map((game) => game.key);
+    // Found again: Celeste was played since, Hades was added, and a fourth game turned up.
+    const again = [played("Celeste", 0), played("Hades", 1, { workspaceId: "local-hades" }), played("Rust", 3), played("Zelda", 5), played("Old", 30)];
+    expect(playedLately(again, shown).map((game) => game.name)).toEqual(["Hades", "Rust", "Celeste", "Zelda"]);
+    // A cover whose game is gone from this PC leaves its place.
+    expect(playedLately([played("Rust", 3)], shown).map((game) => game.name)).toEqual(["Rust"]);
+  });
+});
+
+describe("keepOrder", () => {
+  const item = (key: string) => ({ key });
+  const keys = (items: { key: string }[]) => items.map((entry) => entry.key);
+
+  it("keeps what was shown in its places and adds the rest below, whatever order the new answer has", () => {
+    // Late games from this PC rank first in the new answer, an online one sits above the typed name: neither moves a shown row.
+    expect(keys(keepOrder(["eldoran", "custom:"], [item("elden-ring"), item("eldoran"), item("eldevin"), item("custom:")]))).toEqual(["eldoran", "custom:", "elden-ring", "eldevin"]);
+  });
+
+  it("drops what is gone and starts over from an empty list", () => {
+    expect(keys(keepOrder(["a", "b", "c"], [item("c"), item("a")]))).toEqual(["a", "c"]);
+    expect(keys(keepOrder([], [item("b"), item("a")]))).toEqual(["b", "a"]);
+  });
+});
+
+describe("withLiveCopies", () => {
+  const workspace = (id: string, name: string, extra: Partial<WorkspaceView> = {}) => ({ id, name, kind: "game", steamAppId: null, ...extra }) as WorkspaceView;
+
+  it("marks each game by the library as it is now: added since, put in Trash since, or a personal workspace", () => {
+    const games = [
+      installed("Hades", { steamAppId: 1145360 }),
+      installed("Rust", { workspaceId: "local-rust" }),
+      installed("DOOM", { steamAppId: 379720 }),
+      installed("Fortnite"),
+      installed("Elden Ring", { catalogId: "elden-ring" }),
+    ];
+    const live = withLiveCopies(games, {
+      "local-hades": workspace("local-hades", "Hades II", { steamAppId: 1145360 }),
+      "local-doom": workspace("local-doom", "Doom", { steamAppId: 2280 }),
+      "local-fortnite": workspace("local-fortnite", "Fortnite", { kind: "personal" }),
+      "elden-ring": workspace("elden-ring", "Elden Ring"),
+    });
+    expect(live.map((game) => [game.name, game.workspaceId])).toEqual([
+      ["Hades", "local-hades"],
+      ["Rust", null],
+      ["DOOM", null],
+      ["Fortnite", null],
+      ["Elden Ring", "elden-ring"],
+    ]);
+  });
+});
+
+describe("optionId", () => {
+  it("names an option by its key, the same for the list and the search", () => {
+    expect(optionId("game-results", "steam:570")).toBe("game-results-option-steam:570");
+  });
+});
+
+describe("resolveAddInput", () => {
+  const row = (game: InstalledGameView) => buildRows([game], [], [], "")[0]!;
+  const answer = (games: { id: string; name: string; steamAppId: number | null }[]) => async () => ({ status: "ok" as const, games });
+
+  it("looks a game on this PC that no list knew up online by its Steam app id, so it gets its id and modules", async () => {
+    const pick = row(installed("Nine Kings", { steamAppId: 2784470 }));
+    const search = answer([{ id: "9-kings-x", name: "9 Kings: Other", steamAppId: 1 }, { id: "9-kings", name: "9 Kings", steamAppId: 2784470 }]);
+    expect(await resolveAddInput(pick, pick.name, search)).toEqual({ input: { online: { id: "9-kings", name: "9 Kings", steamAppId: 2784470 } }, gameId: "9-kings" });
+  });
+
+  it("adds it by name with its Steam app id when the search doesn't know it or can't be asked", async () => {
+    const pick = row(installed("Nine Kings", { steamAppId: 2784470 }));
+    expect(await resolveAddInput(pick, pick.name, answer([{ id: "x", name: "Nine Kings", steamAppId: 5 }]))).toEqual({ input: { name: "Nine Kings", steamAppId: 2784470 }, gameId: null });
+    expect(await resolveAddInput(pick, pick.name, () => Promise.reject(new Error("offline")))).toEqual({ input: { name: "Nine Kings", steamAppId: 2784470 }, gameId: null });
+  });
+
+  it("asks nothing for a game a list knows, one without a Steam app id, or the typed name", async () => {
+    const search = async () => {
+      throw new Error("not asked");
+    };
+    const known = row(installed("Elden Ring", { catalogId: "elden-ring", steamAppId: 1245620 }));
+    expect(await resolveAddInput(known, known.name, search)).toEqual({ input: { catalogId: "elden-ring" }, gameId: "elden-ring" });
+    const plain = row(installed("Some Game"));
+    expect(await resolveAddInput(plain, plain.name, search)).toEqual({ input: { name: "Some Game" }, gameId: null });
+    expect(await resolveAddInput(null, "My Game", search)).toEqual({ input: { name: "My Game" }, gameId: null });
   });
 });
 

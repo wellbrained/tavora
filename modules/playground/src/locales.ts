@@ -343,6 +343,9 @@ export const en = {
   "ex.loading.LatePicture": "Picture that loads late",
   "ex.loading.LatePicture.note": "Box first, then it fades in; a failed one keeps the icon.",
   "ex.loading.LatePicture.rule": "A picture that may arrive late is a FadeImage with a sized box, so nothing moves when it loads.",
+  "ex.loading.GameCovers": "Game covers",
+  "ex.loading.GameCovers.note": "Late art fades in; without art the game's tile shows; a spinner while it is added.",
+  "ex.loading.GameCovers.rule": "A game's tall cover is a GameCover: 2:3, with the game's tile as its fallback and its name next to it.",
 
   "ex.notices.Notices": "Notices",
   "ex.notices.Notices.note": "An icon and a sentence; colour only tints. Errors are announced at once.",
@@ -775,6 +778,9 @@ export const de: Record<TextKey, string> = {
   "ex.loading.LatePicture": "Bild, das spät lädt",
   "ex.loading.LatePicture.note": "Erst der Rahmen, dann blendet es ein; ein fehlgeschlagenes behält das Icon.",
   "ex.loading.LatePicture.rule": "Ein Bild, das spät kommen kann, ist ein FadeImage mit fester Größe, damit beim Laden nichts verrutscht.",
+  "ex.loading.GameCovers": "Spiel-Cover",
+  "ex.loading.GameCovers.note": "Spätes Bild blendet ein; ohne Bild zeigt sich die Kachel des Spiels; ein Spinner, während es hinzugefügt wird.",
+  "ex.loading.GameCovers.rule": "Das hohe Cover eines Spiels ist ein GameCover: 2:3, mit der Kachel des Spiels als Ersatz und dem Namen daneben.",
 
   "ex.notices.Notices": "Hinweise",
   "ex.notices.Notices.note": "Ein Icon und ein Satz; die Farbe tönt nur. Fehler werden sofort vorgelesen.",

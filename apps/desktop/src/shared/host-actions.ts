@@ -189,9 +189,9 @@ export function hostActionTable(c: HostChecks) {
     // Library
     "open-workspace": { workspaceId: c.workspaceId },
     /**
-     * A game workspace (a built-in game, a game added by name, or one found online), or a personal workspace. A game
-     * whose only copy is in Trash comes back from there instead. Answers with the workspace's id, and `restored` when it
-     * came back.
+     * A game workspace (a built-in game, a game added by name, or one found online), or a personal workspace. For a
+     * game the user has, nothing is added: answers with that workspace's id and `existing`; a game whose only copy is in
+     * Trash comes back from there instead, answered with `restored`.
      */
     "add-workspace": variants(
       { catalogId: c.gameId },

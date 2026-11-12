@@ -148,7 +148,7 @@ import { GamesSeen } from "./games-seen";
 import { gameKey, pickGames, withInstallDates } from "./installed-list";
 import { readSteamLastPlayed } from "./steam-played";
 import { readIcoFromFile } from "./pe-icon";
-import { findSteamDir, isSteamAppId, loadAppInfo, readLibraryCover, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
+import { coverReader, findSteamDir, isSteamAppId, loadAppInfo, readLibraryCover, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
 import { documentsFolder, exportsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
 import { readJsonText } from "./json-file-http";
@@ -568,8 +568,11 @@ export class Host {
   private readonly gamesSeen: GamesSeen;
   /** The icons the Add a game list read, by game key, so the PC's programs are opened once. */
   private readonly pickerIcons = new Map<string, string | null>();
-  /** The Add a game covers, by Steam app id: Steam's own cover art from this PC as a data address, or null. */
-  private readonly pickerCovers = new Map<number, string | null>();
+  /** The Add a game covers, by Steam app id: Steam's own cover art from this PC's library cache, read once each. */
+  private readonly pickerCovers = coverReader(async (appids) => {
+    const steamDir = this.options.testInstalled ? null : await findSteamDir();
+    return Promise.all(appids.map((appid) => (steamDir ? readLibraryCover(steamDir, appid) : null)));
+  });
   /** Tavora's module catalog (catalog-client.ts). */
   private readonly catalog: CatalogClient;
   /** Every workspace's panels, layout and snapshots (workspace.ts). */
@@ -1911,7 +1914,7 @@ export class Host {
     );
     ipcMain.handle("host:installed-games", async (event): Promise<InstalledGameView[]> => (fromHost(event) ? this.installedGames().catch(() => []) : []));
     ipcMain.handle("host:game-covers", async (event, appids: unknown): Promise<Record<number, string | null>> =>
-      fromHost(event) && Array.isArray(appids) && appids.length <= MAX_PICKER_COVERS && appids.every(isSteamAppId) ? this.pickerCoversOf(appids).catch(() => ({})) : {},
+      fromHost(event) && Array.isArray(appids) && appids.length <= MAX_PICKER_COVERS && appids.every(isSteamAppId) ? this.pickerCovers(appids).catch(() => ({})) : {},
     );
     // The first-run welcome's tiles: popular games the user does not have yet (one in Trash comes back when added).
     ipcMain.handle("host:popular-games", (event) =>
@@ -2355,8 +2358,10 @@ export class Host {
       // Library
       "open-workspace": (action) => this.openWorkspace(action.workspaceId),
       "add-workspace": (action) => {
-        // A game whose only copy is in Trash comes back with its panels, whoever adds it (Add a game, the welcome, Ctrl+K).
-        const { id, restored } = addOrRestoreWorkspace(this.library, action, new Date());
+        // Whoever adds a game (Add a game, the welcome, Ctrl+K): one the user has is answered as it is, and one whose only
+        // copy is in Trash comes back with its panels.
+        const { id, restored, existing } = addOrRestoreWorkspace(this.library, action, new Date());
+        if (existing) return { ok: true, id, existing };
         if (!restored) {
           this.workspaces.addWorkspaces([id]);
           this.startWorkspace(id);
@@ -2365,7 +2370,7 @@ export class Host {
         this.fetchIconsSoon();
         // The game of a game workspace added just now may have been installed since the last look.
         if (this.gameWatcher.active) void this.gameWatcher.refreshInstalled();
-        return restored ? { ok: true, id, restored: true } : id;
+        return restored ? { ok: true, id, restored } : id;
       },
       "rename-workspace": saved((action) => renameWorkspace(this.library, action.workspaceId, action.name)),
       "set-workspace-label": saved(async (action) => {
@@ -3317,19 +3322,6 @@ export class Host {
       );
     }
     return views;
-  }
-
-  /** Steam's cover art for these games from this PC's library cache, read once each; null for a game without. */
-  private async pickerCoversOf(appids: number[]): Promise<Record<number, string | null>> {
-    const missing = appids.filter((appid) => !this.pickerCovers.has(appid));
-    const steamDir = missing.length && !this.options.testInstalled ? await findSteamDir() : null;
-    await Promise.all(
-      missing.map(async (appid) => {
-        const bytes = steamDir ? await readLibraryCover(steamDir, appid) : null;
-        this.pickerCovers.set(appid, bytes ? `data:image/jpeg;base64,${Buffer.from(bytes).toString("base64")}` : null);
-      }),
-    );
-    return Object.fromEntries(appids.map((appid) => [appid, this.pickerCovers.get(appid) ?? null]));
   }
 
   /** Steam's own icon file names for these games, from the client's appinfo; empty when it cannot be read. */

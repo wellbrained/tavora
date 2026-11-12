@@ -11,7 +11,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { useTask } from "@tavora/official-ui/use-task";
-import { addInputFor, type AddInput } from "../../lib/game-picker";
+import type { AddInput } from "../../lib/game-picker";
 import { useGamePicker } from "../../lib/use-game-picker";
 import { act, api, listOf, state } from "../../host";
 import { t } from "../../i18n";
@@ -33,7 +33,7 @@ const query = ref("");
 const list = ref<HTMLElement | null>(null);
 // Games the user already has are left out.
 const picker = useGamePicker(query, { hideAdded: true, listId: "onboarding-results", list, onEnter: (key) => pick(key) });
-const { name, rows, custom, installed, installedLoaded, onlineStatus, info, active, activeId, onKey } = picker;
+const { name, lines, custom, installed, installedLoaded, onlineStatus, info, active, activeId, onKey } = picker;
 /** Adding the game: it always ends (a throw shows as an error), so the list is usable again. */
 const adder = useTask({ describe: () => t("error.generic") });
 const busy = adder.busy;
@@ -49,7 +49,6 @@ onMounted(async () => (popular.value = await api.popularGames()));
 // Only when no games were found on this PC; otherwise the list of the games the user plays is the better start.
 const chips = computed(() => (installedLoaded.value && !installed.value.length ? popular.value.filter((game) => !state.value!.library.workspaces[game.id]).slice(0, 6) : []));
 
-
 /** What is shown under the game: the search, the offer of its modules (loading, or the list), or "ready". */
 const phase = ref<"pick" | "offer" | "ready">(props.started ? "ready" : "pick");
 const offer = ref<CatalogModuleView[] | null>(null);
@@ -60,11 +59,15 @@ const installing = installer.busy;
 const failed = ref<Record<string, string>>({});
 const game = ref<StartedGame | null>(props.started);
 
-async function add(input: AddInput, label: string, key: string | null = null) {
+/** Adds a game: its input, or (a pick from the list) what resolves to it. */
+async function add(input: AddInput | (() => Promise<AddInput>), label: string, key: string | null = null) {
   if (busy.value) return;
   picked.value = key;
   answered.value = null;
-  const result = await adder.run(async () => (props.dry ? { ok: true as const, id: pretendId(input, label) } : await act({ type: "add-workspace", ...input }, { quiet: true })));
+  const result = await adder.run(async () => {
+    const resolved = typeof input === "function" ? await input() : input;
+    return props.dry ? { ok: true as const, id: pretendId(resolved, label) } : await act({ type: "add-workspace", ...resolved }, { quiet: true });
+  });
   if (!result) return;
   if (!result.ok || !result.id) {
     if (!result.ok) answered.value = result.error;
@@ -98,7 +101,7 @@ function pick(key: string) {
   const game = picker.target(key);
   if (!game) return;
   active.value = key;
-  void add(addInputFor(game.row, game.name), game.name, key);
+  void add(async () => (await picker.addInput(game)).input, game.name, key);
 }
 
 function toggle(id: string, on: boolean | "indeterminate") {
@@ -173,7 +176,7 @@ function notNow() {
         <GamePickerList
           id="onboarding-results"
           :label="t('common.games')"
-          :rows="rows"
+          :lines="lines"
           :active="active"
           :custom="custom"
           :typed="!!name"

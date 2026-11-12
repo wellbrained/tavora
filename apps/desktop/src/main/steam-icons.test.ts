@@ -18,6 +18,7 @@ import {
   loadAppInfo,
   needsIcon,
   publicIconFileName,
+  coverReader,
   readLibraryCover,
   removeSteamIcon,
   saveExeIcon,
@@ -354,5 +355,27 @@ describe("readLibraryCover", () => {
     await writeFile(path.join(cache(10), "library_600x900.jpg"), new Uint8Array(300));
     expect(await readLibraryCover(steam, 10)).toBeNull();
     expect(await readLibraryCover(steam, -1)).toBeNull();
+  });
+});
+
+describe("coverReader", () => {
+  it("reads each cover once, also while a read still runs, and answers in the order asked", async () => {
+    const asked: number[][] = [];
+    const read = coverReader(async (appids) => {
+      asked.push(appids);
+      return appids.map((appid) => (appid === 570 ? new Uint8Array([1, 2, 3]) : null));
+    });
+    const [first, second] = await Promise.all([read([570, 440]), read([440, 570])]);
+    expect(first).toEqual({ 570: "data:image/jpeg;base64,AQID", 440: null });
+    expect(second).toEqual(first);
+    expect(await read([570])).toEqual({ 570: "data:image/jpeg;base64,AQID" });
+    expect(asked).toEqual([[570, 440]]);
+  });
+
+  it("takes a failed read as no cover, and tries it again next time", async () => {
+    let calls = 0;
+    const read = coverReader(async () => (++calls === 1 ? Promise.reject(new Error("no Steam")) : [new Uint8Array([1, 2, 3])]));
+    expect(await read([570])).toEqual({ 570: null });
+    expect(await read([570])).toEqual({ 570: "data:image/jpeg;base64,AQID" });
   });
 });

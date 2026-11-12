@@ -335,6 +335,33 @@ export async function readLibraryCover(steamDir: string, appid: number): Promise
   return null;
 }
 
+/**
+ * Steam covers by app id as data addresses (null: none), each read once: `readAll` is asked only for the ones not asked
+ * for before, also while an earlier read still runs. A read that fails counts as none this time and is tried again.
+ */
+export function coverReader(readAll: (appids: number[]) => Promise<(Uint8Array | null)[]>): (appids: readonly number[]) => Promise<Record<number, string | null>> {
+  const known = new Map<number, Promise<string | null>>();
+  return async (appids) => {
+    const missing = [...new Set(appids)].filter((appid) => !known.has(appid));
+    if (missing.length) {
+      const read = readAll(missing).catch(() => {
+        for (const appid of missing) known.delete(appid);
+        return [];
+      });
+      missing.forEach((appid, index) =>
+        known.set(
+          appid,
+          read.then((all) => {
+            const bytes = all[index];
+            return bytes ? `data:image/jpeg;base64,${Buffer.from(bytes).toString("base64")}` : null;
+          }),
+        ),
+      );
+    }
+    return Object.fromEntries(await Promise.all(appids.map(async (appid) => [appid, await known.get(appid)!] as const)));
+  };
+}
+
 /** Saves the icon from Steam's library cache on this PC, with nothing asked of the network. */
 export async function saveLibraryCacheIcon(iconDir: string, steamDir: string, appid: number): Promise<IconResult> {
   const bytes = await readLibraryCacheIcon(steamDir, appid);

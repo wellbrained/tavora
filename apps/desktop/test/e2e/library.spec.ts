@@ -162,11 +162,11 @@ test("the Add a game picker works from the keyboard", async () => {
   await expect(page.getByTestId("catalog-eldoran")).toBeVisible();
   // The top match is highlighted at once; focus stays in the field.
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");
-  await expect(search).toHaveAttribute("aria-activedescendant", "game-results-option-0");
+  await expect(search).toHaveAttribute("aria-activedescendant", (await rows.first().getAttribute("id"))!);
   await expect(rows.first().getByTestId("row-action")).toHaveText("Add ↵");
   await search.press("ArrowDown");
   await expect(rows.nth(1)).toHaveAttribute("aria-selected", "true");
-  await expect(search).toHaveAttribute("aria-activedescendant", "game-results-option-1");
+  await expect(search).toHaveAttribute("aria-activedescendant", (await rows.nth(1).getAttribute("id"))!);
   await expect(search).toBeFocused();
   await search.press("ArrowUp");
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");

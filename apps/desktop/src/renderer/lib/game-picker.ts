@@ -1,4 +1,5 @@
-import { MAX_PICKER_COVERS, type CatalogMatch, type CatalogModuleView, type InstalledGameView, type OnlineGame } from "../../shared/host-api";
+import { MAX_PICKER_COVERS, type CatalogMatch, type CatalogModuleView, type InstalledGameView, type OnlineGame, type OnlineSearchResult, type WorkspaceView } from "../../shared/host-api";
+import { isSameGame } from "../../shared/same-game";
 import { rank, rankByName } from "./search";
 
 /** Where a row of the Add a game list comes from: this PC, the built-in list or the online search. */
@@ -27,8 +28,51 @@ export interface PickerBadge {
   when: string | null;
 }
 
-/** The key of the extra last row that adds the typed name as the user's own game. No game's key has this shape. */
+/** The key of the extra row that adds the typed name as the user's own game. No game's key has this shape. */
 export const CUSTOM_KEY = "custom:";
+
+/** One line of the list as shown: a game's row, or (row null, key CUSTOM_KEY) the typed name as the user's own game. */
+export interface PickerLine {
+  key: string;
+  row: PickerRow | null;
+}
+
+/** The id of an item's element, by its key: the list's options and the search's aria-activedescendant both use it. */
+export function optionId(listId: string, key: string): string {
+  return `${listId}-option-${key}`;
+}
+
+/**
+ * The items in the order to show them, so nothing already shown moves when an answer comes in: the ones of `previous`
+ * (keys, as shown last) that are still there, in their places, then the new ones in their own order, below.
+ */
+export function keepOrder<T extends { key: string }>(previous: readonly string[], next: readonly T[]): T[] {
+  const byKey = new Map(next.map((item) => [item.key, item]));
+  const kept = previous.flatMap((key) => {
+    const item = byKey.get(key);
+    return item ? [item] : [];
+  });
+  const shown = new Set(previous);
+  return [...kept, ...next.filter((item) => !shown.has(item.key))];
+}
+
+/**
+ * The games on this PC with the user's copy of each as it is now (`workspaces`: the library's, not in Trash), by
+ * `isSameGame`: a game added since the list was found shows as added, and one put in Trash since as not added.
+ */
+export function withLiveCopies(installed: readonly InstalledGameView[], workspaces: Readonly<Record<string, WorkspaceView>>): readonly InstalledGameView[] {
+  const games = Object.values(workspaces).filter((workspace) => workspace.kind === "game");
+  let changed = false;
+  const live = installed.map((game) => {
+    const identity = { id: game.catalogId, steamAppId: game.steamAppId, name: game.name };
+    const workspaceId = games.find((workspace) => isSameGame(workspace, identity))?.id ?? null;
+    if (workspaceId === game.workspaceId) return game;
+    changed = true;
+    return { ...game, workspaceId };
+  });
+  // The same list when nothing changed, so what is worked out from it isn't worked out again.
+  return changed ? live : installed;
+}
 
 /**
  * The rows for what was typed. Without a search: the games on this PC, most recently played first. With one, in
@@ -82,15 +126,17 @@ export function buildRows(installed: readonly InstalledGameView[], matches: read
 
 /**
  * The games for the covers of Played lately: on this PC and not added yet (a game whose only copy is in Trash counts
- * as not added), the last played first, then the last installed, at most `max`.
+ * as not added), the last played first, then the last installed, at most `max`. `shown` (keys) are the covers shown
+ * already: they stay, in their places, while their game is on this PC, also once it is added; only free places fill up.
  */
-export function playedLately(installed: readonly InstalledGameView[], max = MAX_PICKER_COVERS): InstalledGameView[] {
+export function playedLately(installed: readonly InstalledGameView[], shown: readonly string[] = [], max = MAX_PICKER_COVERS): InstalledGameView[] {
   const order = (game: InstalledGameView) => (game.activity?.kind === "played" ? 0 : game.activity ? 1 : 2);
   // A stable sort: games alike keep the order they came in.
-  return installed
-    .filter((game) => !game.workspaceId)
-    .sort((a, b) => order(a) - order(b) || (b.activity?.at ?? 0) - (a.activity?.at ?? 0))
-    .slice(0, max);
+  const candidates = installed.filter((game) => !game.workspaceId || shown.includes(game.key));
+  return keepOrder(
+    shown,
+    candidates.sort((a, b) => order(a) - order(b) || (b.activity?.at ?? 0) - (a.activity?.at ?? 0)),
+  ).slice(0, max);
 }
 
 // ── The highlight ──────────────────────────────────────────────────────
@@ -192,4 +238,18 @@ export function addInputFor(row: PickerRow | null, name: string): AddInput {
   if (row.gameId && (!row.installed || row.installed.catalogId)) return { catalogId: row.gameId };
   const steamAppId = row.installed?.steamAppId;
   return steamAppId == null ? { name: row.name } : { name: row.name, steamAppId };
+}
+
+/**
+ * What a pick adds, and the game whose modules come with it. A game on this PC that no list knew when it was shown
+ * (a cover, say: nothing was searched) is looked up online by its Steam app id first, so it gets the id the modules
+ * made for it go by; when the search doesn't know it, or can't be asked, it is added by name with its Steam app id.
+ */
+export async function resolveAddInput(row: PickerRow | null, name: string, searchOnline: (query: string) => Promise<OnlineSearchResult>): Promise<{ input: AddInput; gameId: string | null }> {
+  const input = addInputFor(row, name);
+  const appid = row?.installed?.steamAppId;
+  if (!row || !("name" in input) || appid == null) return { input, gameId: row?.gameId ?? null };
+  const found = await searchOnline(row.name).catch(() => null);
+  const game = found?.games.find((online) => online.steamAppId === appid);
+  return game ? { input: { online: { id: game.id, name: game.name, steamAppId: game.steamAppId } }, gameId: game.id } : { input, gameId: null };
 }

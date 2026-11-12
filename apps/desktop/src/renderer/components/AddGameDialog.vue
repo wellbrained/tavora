@@ -8,10 +8,12 @@ import { computed, nextTick, ref } from "vue";
 import { act, closeDialog, dialog, openPanels, state } from "../host";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
+import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { useTask } from "@tavora/official-ui/use-task";
 import { t } from "../i18n";
-import { addedWithGame, addInputFor, modulesFor, type PickerRow } from "../lib/game-picker";
+import { addedWithGame, modulesFor, type PickerLine, type PickerRow } from "../lib/game-picker";
+import { noteAdded } from "../lib/installed-games";
 import { useGamePicker } from "../lib/use-game-picker";
 import GamePickerList from "./GamePickerList.vue";
 
@@ -20,12 +22,12 @@ const input = ref<HTMLInputElement | null>(null);
 const list = ref<HTMLElement | null>(null);
 const shownRequest = dialog.value;
 const picker = useGamePicker(query, { covers: true, listId: "game-results", list, onEnter: (key) => pick(key) });
-const { name, listRows, covers, custom, installedLoaded, onlineStatus, info, coverOf, active, activeId, onKey } = picker;
+const { name, lines, covers, custom, installedLoaded, onlineStatus, info, coverOf, active, activeId, onKey } = picker;
 
 /** Made-up games for the Skeleton while the games on this PC are found, with names of a few lengths. */
 const placeholder = (name: string, index: number): PickerRow => ({ key: `placeholder:${index}`, name, gameId: null, icon: null, installed: null, online: null, workspaceId: null, section: "pc" });
 const PLACEHOLDER_COVERS = ["Placeholder", "Game", "Another one", "Game"].map(placeholder);
-const PLACEHOLDER_ROWS = ["A game with a long name", "Short game", "A middle one"].map((game, index) => placeholder(game, index + 4));
+const PLACEHOLDER_LINES: PickerLine[] = ["A game with a long name", "Short game", "A middle one"].map((game, index) => ({ key: `placeholder:${index + 4}`, row: placeholder(game, index + 4) }));
 
 // ── Adding ─────────────────────────────────────────────────────────────
 
@@ -35,7 +37,7 @@ const adder = useTask({ describe: () => t("error.generic") });
 const picked = ref<string | null>(null);
 const adding = computed(() => (adder.busy.value ? picked.value : null));
 /** The workspaces added here by key, so picking a game again after a module failed doesn't add it twice. */
-const made = new Map<string, string>();
+const made = new Map<string, { id: string; gameId: string | null; asItIs: boolean }>();
 
 /** Enter, or a click: opens a game the user has, else adds it with Tavora's own modules for it and opens it. */
 async function pick(key: string) {
@@ -48,25 +50,29 @@ async function pick(key: string) {
     await act({ type: "open-workspace", workspaceId: game.row.workspaceId });
     return;
   }
-  const failed = await adder.run(() => add(key, game.row));
+  const failed = await adder.run(() => add(key, game));
   if (failed) adder.fail(failed);
 }
 
-/** Adds the game (or brings its copy back from Trash) and its modules, then opens it. Answers with what went wrong, or null. */
-async function add(key: string, row: PickerRow | null): Promise<string | null> {
-  let id = made.get(key);
-  let restored = false;
-  if (id === undefined) {
-    const added = await act({ type: "add-workspace", ...addInputFor(row, name.value) }, { quiet: true });
+/**
+ * Adds the game and its modules, then opens it. A game the user has already (added since the list was found) just
+ * opens, and one in Trash comes back with its panels. Answers with what went wrong, or null.
+ */
+async function add(key: string, game: { row: PickerRow | null; name: string }): Promise<string | null> {
+  let done = made.get(key);
+  if (!done) {
+    const resolved = await picker.addInput(game);
+    const added = await act({ type: "add-workspace", ...resolved.input }, { quiet: true });
     if (!added.ok) return added.error;
     if (!added.id) return null;
-    id = added.id;
-    made.set(key, id);
-    // A copy back from Trash has its panels: nothing to add to it.
-    restored = added.restored === true;
+    // A copy the user has, or one back from Trash, has its panels: nothing to add to it.
+    done = { id: added.id, gameId: resolved.gameId, asItIs: added.existing === true || added.restored === true };
+    made.set(key, done);
+    if (game.row?.installed) noteAdded(game.row.key, done.id);
   }
+  const { id, gameId, asItIs } = done;
   // Modules install the way Browse installs them; a failure is shown and the game stays added.
-  const moduleIds = restored ? [] : addedWithGame(modulesFor(await picker.catalogReady, row?.gameId ?? null));
+  const moduleIds = asItIs ? [] : addedWithGame(modulesFor(await picker.catalogReady, gameId));
   for (const moduleId of moduleIds) {
     if (state.value?.modules.some((module) => module.id === moduleId)) continue;
     const result = await act({ type: "install-catalog-module", moduleId }, { quiet: true });
@@ -85,6 +91,27 @@ async function add(key: string, row: PickerRow | null): Promise<string | null> {
 function focusSearch() {
   void nextTick(() => input.value?.focus());
 }
+
+/** A button, a link or a field: what takes the focus and its keys for itself. */
+const ownsFocus = (target: EventTarget | null) => target instanceof Element && !!target.closest("button, a, input, textarea, select");
+
+/**
+ * A press anywhere in the dialog but a button or a link leaves the focus in the search, so the arrows and Enter keep
+ * working after a click on the list's padding, a message or the footer. A press on the list's scrollbar still scrolls.
+ */
+function keepSearchFocus(event: MouseEvent) {
+  if (ownsFocus(event.target)) return;
+  const box = list.value;
+  if (box && event.target === box && box.offsetWidth > box.clientWidth && event.offsetX >= box.clientWidth) return;
+  event.preventDefault();
+}
+
+/** Keys pressed while the focus is somewhere else in the dialog (after a scrollbar press, say) go to the search. */
+function keysToSearch(event: KeyboardEvent) {
+  if (ownsFocus(event.target)) return;
+  input.value?.focus();
+  onKey(event);
+}
 </script>
 
 <template>
@@ -96,6 +123,8 @@ function focusSearch() {
       :data-status="adder.state.value.status"
       :show-close-button="false"
       @open-auto-focus.prevent="focusSearch"
+      @mousedown="keepSearchFocus"
+      @keydown="keysToSearch"
     >
       <DialogTitle class="sr-only">{{ t("addGame.title") }}</DialogTitle>
       <DialogDescription class="sr-only">{{ t("addGame.search") }}</DialogDescription>
@@ -122,21 +151,21 @@ function focusSearch() {
         <Kbd class="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 font-sans" aria-hidden="true">{{ t("search.key.esc") }}</Kbd>
       </div>
 
-      <div ref="list" tabindex="-1" class="min-h-0 flex-1 overflow-y-auto py-2 focus-visible:outline-none">
-        <p v-if="adder.error.value" class="text-destructive px-5 pb-2 text-sm" role="alert" data-testid="add-game-error">{{ adder.error.value }}</p>
+      <div ref="list" class="min-h-0 flex-1 overflow-y-auto py-2">
+        <Notice v-if="adder.error.value" variant="error" class="mx-4 mb-2" data-testid="add-game-error">{{ adder.error.value }}</Notice>
         <p v-if="!installedLoaded" class="text-muted-foreground flex items-center gap-2 px-5 pb-1 text-xs font-medium" role="status" data-testid="add-game-loading">
           <Loader class="size-3.5 flex-none animate-spin motion-reduce:animate-none" :stroke-width="1.75" aria-hidden="true" />{{ t("addGame.loadingPc") }}
         </p>
         <!-- While the games on this PC are found, the list drawn with made-up games; typing still searches, and its results show. -->
         <Skeleton v-if="!installedLoaded && !name" :loading="true" data-testid="add-game-skeleton">
-          <GamePickerList id="game-results-placeholder" :label="t('common.games')" :covers="PLACEHOLDER_COVERS" :rows="PLACEHOLDER_ROWS" :active="null" :custom="null" :typed="false" :info="() => ({ modules: 0, when: null })" />
+          <GamePickerList id="game-results-placeholder" :label="t('common.games')" :covers="PLACEHOLDER_COVERS" :lines="PLACEHOLDER_LINES" :active="null" :custom="null" :typed="false" :info="() => ({ modules: 0, when: null })" />
         </Skeleton>
         <GamePickerList
           v-else
           id="game-results"
           :label="t('common.games')"
           :covers="covers"
-          :rows="listRows"
+          :lines="lines"
           :active="active"
           :custom="custom"
           :typed="!!name"
@@ -146,7 +175,7 @@ function focusSearch() {
           @hover="active = $event"
           @pick="pick"
         />
-        <p v-if="installedLoaded && !covers.length && !listRows.length && !custom" class="text-muted-foreground px-5 py-4 text-sm" data-testid="add-game-empty">{{ t("addGame.nothingOnPc") }}</p>
+        <p v-if="installedLoaded && !covers.length && !lines.length" class="text-muted-foreground px-5 py-4 text-sm" data-testid="add-game-empty">{{ t("addGame.nothingOnPc") }}</p>
         <p v-if="onlineStatus === 'unreachable' && name" class="text-muted-foreground px-5 py-2 text-xs" data-testid="online-unreachable">{{ t("addGame.builtInOnly") }}</p>
       </div>
 

@@ -32,6 +32,15 @@ describe("steamGameStatus", () => {
     trashWorkspace(library, hades, day);
     expect(steamGameStatus(library, { appid: 1145360, name: "Hades", id: null })).toBe("trash");
   });
+
+  it("goes by Steam's app id when both have one, and never counts a personal workspace", () => {
+    const library = emptyLibrary();
+    addWorkspace(library, { name: "Doom", steamAppId: 2280 }, day);
+    addWorkspace(library, { personal: "Fortnite" }, day);
+    expect(steamGameStatus(library, { appid: 379720, name: "DOOM", id: null })).toBe("new");
+    expect(steamGameStatus(library, { appid: 2280, name: "Ultimate Doom", id: null })).toBe("owned");
+    expect(steamGameStatus(library, { appid: 1665460, name: "Fortnite", id: null })).toBe("new");
+  });
 });
 
 describe("importSteamGames", () => {

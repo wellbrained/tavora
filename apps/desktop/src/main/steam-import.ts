@@ -11,10 +11,9 @@ export const MAX_IMPORT_GAMES = 5000;
 const IMPORT_TIMEOUT_MS = 20_000;
 
 /**
- * Whether a game from a Steam library is already in the user's library: by its
- * Tavora id, by the Steam appid a game was added with, or by name (a game the
- * user added by hand is the same game; `findGameCopy`). Trash counts, so an
- * import never brings back a game the user removed.
+ * Whether a game from a Steam library is already in the user's library, as
+ * `isSameGame` decides (shared/same-game.ts). Trash counts, so an import never
+ * brings back a game the user removed; a personal workspace never counts.
  */
 export function steamGameStatus(library: Library, game: SteamImportGame, find = gameCopyFinder(library)): "new" | "owned" | "trash" {
   const found = find({ id: game.id, steamAppId: game.appid, name: game.name });

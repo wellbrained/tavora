@@ -938,7 +938,7 @@ export interface ModuleMenu {
 
 /** `limited`: the service took only some icons for now (it takes so many an hour); the rest can be shared later. */
 export type ActionResult =
-  | { ok: true; id?: string; shared?: number; limited?: true; added?: number; updated?: number; waiting?: number; restored?: true }
+  | { ok: true; id?: string; shared?: number; limited?: true; added?: number; updated?: number; waiting?: number; restored?: true; existing?: true }
   | { ok: false; error: string };
 
 /** A game installed on this PC, for the Add a game picker. Everything in it was read on this PC and stays on it. */
