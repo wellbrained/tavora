@@ -162,7 +162,7 @@ export interface Library {
 export const GAME_START_CHOICES: readonly GameStart[] = ["switch", "ask", "show", "off"];
 
 export const RAIL = { compact: 72, minWidth: 200, maxWidth: 420, defaultWidth: 280 } as const;
-export const TRASH_DAYS = 30;
+export const TRASH_DAYS = 7;
 export const MAX_NAME = 80;
 export const MAX_LABEL = 3;
 
@@ -623,7 +623,7 @@ export function deleteTrashedWorkspace(library: Library, id: string): WorkspaceE
   return workspace;
 }
 
-/** Forgets every workspace that has been in Trash for 30 days. Returns them so their data can be deleted. */
+/** Forgets every workspace that has been in Trash for 7 days. Returns them so their data can be deleted. */
 export function purgeExpired(library: Library, now: Date): WorkspaceEntry[] {
   return trashedWorkspaces(library)
     .filter((workspace) => purgeDate(workspace) <= now)

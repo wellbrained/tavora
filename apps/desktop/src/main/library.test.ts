@@ -486,12 +486,12 @@ describe("Trash", () => {
     expect(library.workspaces["local-a"]!.trashedAt).toBeNull();
   });
 
-  it("purges workspaces after 30 days, not before", () => {
+  it("purges workspaces after 7 days, not before", () => {
     const library = libraryWith("A", "B");
     trashWorkspace(library, "local-a", day(1));
-    trashWorkspace(library, "local-b", day(10));
-    expect(purgeExpired(library, new Date(Date.UTC(2026, 9, 31, 11)))).toEqual([]);
-    expect(purgeExpired(library, new Date(Date.UTC(2026, 9, 31, 12))).map((game) => game.id)).toEqual(["local-a"]);
+    trashWorkspace(library, "local-b", day(3));
+    expect(purgeExpired(library, new Date(Date.UTC(2026, 9, 8, 11)))).toEqual([]);
+    expect(purgeExpired(library, new Date(Date.UTC(2026, 9, 8, 12))).map((game) => game.id)).toEqual(["local-a"]);
     expect(library.workspaces["local-a"]).toBeUndefined();
     expect(library.workspaces["local-b"]).toBeDefined();
   });

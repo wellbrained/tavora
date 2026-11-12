@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.27",
+    date: "2026-11-12",
+    title: "Trash empties sooner",
+    notes: [
+      "Removed workspaces stay in Trash for 7 days instead of 30.",
+      "Anything that was in Trash for longer is deleted for good when you update.",
+    ],
+    prs: [
+      { number: 745, title: "Trash: removed workspaces stay 7 days instead of 30" },
+    ],
+    tags: ["games", "settings"],
+  },
+  {
     version: "0.24.26",
     date: "2026-11-12",
     title: "Adding games from the search",
