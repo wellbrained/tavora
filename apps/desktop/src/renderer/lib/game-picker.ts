@@ -248,7 +248,8 @@ export function addInputFor(row: PickerRow | null, name: string): AddInput {
 
 /**
  * What a pick adds, and the game whose modules come with it. A game on this PC that no list knew when it was shown
- * (a cover, say: nothing was searched) is looked up online by its Steam app id first, so it gets the id the modules
+ * (a cover, say: nothing was searched) is looked up first: its name goes to the online search, and the answer with its
+ * Steam app id (matched here, on this PC) is the game, so it gets the id the modules
  * made for it go by; when the search doesn't know it, or can't be asked, it is added by name with its Steam app id.
  */
 export async function resolveAddInput(row: PickerRow | null, name: string, searchOnline: (query: string) => Promise<OnlineSearchResult>): Promise<{ input: AddInput; gameId: string | null }> {

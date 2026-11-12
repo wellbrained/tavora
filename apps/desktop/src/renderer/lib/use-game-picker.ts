@@ -72,6 +72,8 @@ export interface GamePickerOptions {
 
 /** A button, a link or a field: what takes the focus and its keys for itself. */
 const ownsFocus = (target: EventTarget | null) => target instanceof Element && !!target.closest("button, a, input, textarea, select");
+/** Text meant to be selected and copied: a message (kit Notice), or anything marked `select-text`. */
+const selectable = (target: EventTarget | null) => target instanceof Element && !!target.closest('[data-slot="notice"], .select-text');
 
 /**
  * What the Add a game dialog and the first-run welcome share: the games on this PC (most recently played first),
@@ -111,7 +113,7 @@ export function useGamePicker(query: Ref<string>, options: GamePickerOptions = {
     query,
     async (text) => {
       const id = ++searchId;
-      const games = await api.searchCatalog(text);
+      const games = await api.searchCatalog(text).catch(() => [] as CatalogMatch[]);
       if (id === searchId) matches.value = { query: text, games };
     },
     { immediate: true },
@@ -138,13 +140,15 @@ export function useGamePicker(query: Ref<string>, options: GamePickerOptions = {
   onBeforeUnmount(() => clearTimeout(onlineTimer));
 
   const name = computed(() => query.value.replace(/\s+/g, " ").trim());
+  /** The built-in list has answered for what is typed now. */
+  const listedNow = computed(() => matches.value.query === query.value);
   const rows = computed<PickerRow[]>(() => {
-    const listed = matches.value.query === query.value ? matches.value.games : [];
-    const all = buildRows(installed.value, listed, online.value, query.value);
+    const all = buildRows(installed.value, listedNow.value ? matches.value.games : [], online.value, query.value);
     return options.hideAdded ? all.filter((row) => !row.workspaceId) : all;
   });
-  // The typed name can be added as the user's own game unless a row is exactly that.
-  const custom = computed(() => (name.value && !rows.value.some((row) => row.name.toLowerCase() === name.value.toLowerCase()) ? name.value : null));
+  // The typed name can be added as the user's own game unless a row is exactly that. It waits for the built-in list
+  // (an instant, local answer): shown before it, it would keep its place above the built-in matches and take Enter.
+  const custom = computed(() => (name.value && listedNow.value && !rows.value.some((row) => row.name.toLowerCase() === name.value.toLowerCase()) ? name.value : null));
 
   // Each list below starts from what it showed last (`previous`), so what is shown keeps its place while the same thing
   // is typed (see keepOrder).
@@ -183,11 +187,30 @@ export function useGamePicker(query: Ref<string>, options: GamePickerOptions = {
     options.list?.value?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
   }
 
+  /** An Enter is waiting for the built-in list's answer. */
+  let entering = false;
+  /** Enter picks the highlight; pressed right after typing, once the built-in list has answered, so it picks its top match. */
+  async function enter() {
+    if (entering) return;
+    entering = true;
+    if (!listedNow.value) {
+      await new Promise<void>((resolve) => {
+        const stop = watch(listedNow, (now) => {
+          if (!now) return;
+          stop();
+          resolve();
+        });
+      });
+    }
+    entering = false;
+    if (active.value !== null) void options.onEnter?.(active.value);
+  }
+
   /** Put on the search field's keydown: arrows move the highlight, Enter picks it. */
   function onKey(event: KeyboardEvent) {
     if (event.key === "Enter") {
       event.preventDefault();
-      if (active.value !== null) void options.onEnter?.(active.value);
+      void enter();
       return;
     }
     const next = stepActive(items.value, active.value, event.key);
@@ -203,16 +226,19 @@ export function useGamePicker(query: Ref<string>, options: GamePickerOptions = {
    * or the footer. A press on the list's scrollbar still scrolls.
    */
   function keepSearchFocus(event: MouseEvent) {
-    if (!options.search?.() || ownsFocus(event.target)) return;
+    if (!options.search?.() || ownsFocus(event.target) || selectable(event.target)) return;
     const box = options.list?.value;
     if (box && event.target === box && box.offsetWidth > box.clientWidth && event.offsetX >= box.clientWidth) return;
     event.preventDefault();
   }
 
-  /** Put on its keydown: keys pressed while the focus is somewhere else in it (after a scrollbar press, say) go to the search. */
+  /**
+   * Put on its keydown: keys pressed while the focus is somewhere else in it (after a scrollbar press, say) go to the
+   * search. A shortcut (Ctrl+C on a message's text, say) stays where it is.
+   */
   function keysToSearch(event: KeyboardEvent) {
     const search = options.search?.();
-    if (!search || ownsFocus(event.target)) return;
+    if (!search || ownsFocus(event.target) || event.ctrlKey || event.metaKey || event.altKey) return;
     search.focus();
     onKey(event);
   }

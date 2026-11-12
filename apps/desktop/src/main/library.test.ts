@@ -161,6 +161,25 @@ describe("adding games", () => {
     expect(gameCopyFinder(library)({ id: null, steamAppId: 2280, name: "Something else" })?.id).toBe("local-doom");
   });
 
+  it("gives a copy found by its name the Steam id of the game added, in use or in Trash", () => {
+    const library = emptyLibrary();
+    addWorkspace(library, { name: "9 Kings" }, day(1));
+    expect(addOrRestoreWorkspace(library, { name: "9 kings", steamAppId: 2784470 }, day(2))).toEqual({ id: "local-9-kings", existing: true, learned: true });
+    expect(library.workspaces["local-9-kings"]!.steamAppId).toBe(2784470);
+    // Once it has one, it keeps it.
+    expect(addOrRestoreWorkspace(library, { name: "9 Kings" }, day(3))).toEqual({ id: "local-9-kings", existing: true });
+    expect(library.workspaces["local-9-kings"]!.steamAppId).toBe(2784470);
+
+    addWorkspace(library, { name: "Hades" }, day(4));
+    trashWorkspace(library, "local-hades", day(5));
+    expect(addOrRestoreWorkspace(library, { online: { id: "hades", name: "Hades", steamAppId: 1145360 } }, day(6))).toEqual({ id: "local-hades", restored: true, learned: true });
+    expect(library.workspaces["local-hades"]!.steamAppId).toBe(1145360);
+    // An id that isn't a Steam id is not taken.
+    addWorkspace(library, { name: "Rust" }, day(7));
+    expect(addOrRestoreWorkspace(library, { name: "Rust", steamAppId: -1 }, day(8))).toEqual({ id: "local-rust", existing: true });
+    expect(library.workspaces["local-rust"]!.steamAppId).toBeNull();
+  });
+
   it("never takes a personal workspace for a game's copy", () => {
     const library = emptyLibrary();
     const notes = addWorkspace(library, { personal: "Fortnite" }, day(1));

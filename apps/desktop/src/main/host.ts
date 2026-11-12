@@ -2375,8 +2375,15 @@ export class Host {
       "add-workspace": (action) => {
         // Whoever adds a game (Add a game, the welcome, Ctrl+K): one the user has is answered as it is, and one whose only
         // copy is in Trash comes back with its panels.
-        const { id, restored, existing } = addOrRestoreWorkspace(this.library, action, new Date());
-        if (existing) return { ok: true, id, existing };
+        const { id, restored, existing, learned } = addOrRestoreWorkspace(this.library, action, new Date());
+        if (existing) {
+          // The copy took the game's Steam id: saved, and the rail may now see it running.
+          if (learned) {
+            this.saveLibrary();
+            if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(id);
+          }
+          return { ok: true, id, existing };
+        }
         if (!restored) {
           this.workspaces.addWorkspaces([id]);
           this.startWorkspace(id);

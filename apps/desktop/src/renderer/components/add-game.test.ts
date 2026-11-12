@@ -129,6 +129,37 @@ describe("GamePickerList: a click picks what the user saw", () => {
     $("catalog-Delta")!.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
     expect(pick).toHaveBeenLastCalledWith("Delta");
   });
+
+  it("picks at once when rows come in below the one the pointer rests on", async () => {
+    const lines = ref<PickerLine[]>(["Elden Ring"].map((name) => ({ key: name, row: row(name) })));
+    const hover = vi.fn();
+    const pick = vi.fn();
+    mount(GamePickerList, () => ({ id: "list", label: "Games", lines: lines.value, active: "Elden Ring", custom: null, typed: true, info: () => ({ modules: 0, when: null }), onHover: hover, onPick: pick }));
+    move($("catalog-Elden Ring")!, 5);
+    lines.value = [...lines.value, { key: "Eldoran", row: row("Eldoran") }, { key: "Eldevin", row: row("Eldevin") }];
+    await nextTick();
+    click($("catalog-Elden Ring")!);
+    expect(pick).toHaveBeenLastCalledWith("Elden Ring");
+  });
+
+  it("holds back a cover that slid in under a still pointer, but not the highlighted one", async () => {
+    const covers = ref<PickerRow[]>([row("Hades")]);
+    const hover = vi.fn();
+    const pick = vi.fn();
+    mount(GamePickerList, () => ({ id: "list", label: "Games", covers: covers.value, lines: [], active: "Hades", custom: null, typed: false, info: () => ({ modules: 0, when: null }), onHover: hover, onPick: pick }));
+    // Off the covers, then Rust slides in where the pointer rests.
+    root.querySelector('[role="listbox"]')!.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, screenX: 5, screenY: 10 }));
+    covers.value = [row("Hades"), row("Rust")];
+    await nextTick();
+    click($("cover-Rust")!);
+    expect(pick).not.toHaveBeenCalled();
+    expect(hover).toHaveBeenLastCalledWith("Rust");
+    // The items change again: a click on the highlight (where a screen reader routes its click) picks.
+    covers.value = [row("Hades"), row("Rust"), row("Celeste")];
+    await nextTick();
+    click($("cover-Hades")!);
+    expect(pick).toHaveBeenLastCalledWith("Hades");
+  });
 });
 
 describe("AddGameDialog", () => {
@@ -160,6 +191,48 @@ describe("AddGameDialog", () => {
     await nextTick();
     expect(document.activeElement).toBe(search);
     expect(search.getAttribute("aria-activedescendant")).toBe("game-results-option-n:rust");
+  });
+
+  it("lets a press through on an error's text so it can be selected, and leaves shortcuts where they are", async () => {
+    host.api.searchCatalog.mockResolvedValue([{ id: "elden-ring", name: "Elden Ring" }]);
+    const search = await open();
+    search.value = "Elden Ring";
+    search.dispatchEvent(new Event("input"));
+    await settle();
+    host.act.mockResolvedValue({ ok: false, error: "Can't add this game" });
+    press(search, "Enter");
+    await settle();
+    const onError = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    $("add-game-error")!.dispatchEvent(onError);
+    expect(onError.defaultPrevented).toBe(false);
+    // The press left the focus elsewhere in the dialog: Ctrl+C copies there, a plain key goes to the search.
+    const box = $("add-game-error")!.closest(".overflow-y-auto") as HTMLElement;
+    box.tabIndex = -1;
+    box.focus();
+    $("add-game-error")!.dispatchEvent(new KeyboardEvent("keydown", { key: "c", ctrlKey: true, bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(box);
+    $("add-game-error")!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(search);
+  });
+
+  it("lists the typed name as the user's own game after the built-in matches, and Enter right after typing adds the top match", async () => {
+    const answer = deferred<{ id: string; name: string }[]>();
+    host.api.searchCatalog.mockImplementation((text: string) => (text ? answer.promise : Promise.resolve([])));
+    const search = await open();
+    search.value = "eld";
+    search.dispatchEvent(new Event("input"));
+    await settle();
+    // The built-in list hasn't answered: no own-game line yet, and Enter waits for it.
+    expect($("add-custom")).toBeNull();
+    host.act.mockImplementation(async (action: { type: string }) => (action.type === "add-workspace" ? { ok: true, id: "elden-ring" } : { ok: true }));
+    press(search, "Enter");
+    await settle();
+    expect(host.act).not.toHaveBeenCalled();
+    answer.resolve([{ id: "elden-ring", name: "Elden Ring" }]);
+    await settle();
+    const options = [...root.querySelectorAll('[role="option"]')].map((option) => option.getAttribute("data-testid"));
+    expect(options).toEqual(["catalog-elden-ring", "add-custom"]);
+    expect(host.act).toHaveBeenCalledWith({ type: "add-workspace", catalogId: "elden-ring" }, { quiet: true });
   });
 
   it("opens a game added since the list was found instead of adding it again", async () => {

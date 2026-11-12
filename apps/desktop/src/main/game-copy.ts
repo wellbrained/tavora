@@ -33,15 +33,19 @@ function identityOf(input: NewWorkspace): GameIdentity | null {
 
 /**
  * Adds a workspace, unless the user has the game already: a copy in use is answered as it is (`existing`), and one whose
- * only copy is in Trash comes back with its panels (`restored`). Returns the workspace's id.
+ * only copy is in Trash comes back with its panels (`restored`). A copy without a Steam id (found by its name) takes the
+ * added game's (`learned`): only added, so an older version still reads it. Returns the workspace's id.
  */
-export function addOrRestoreWorkspace(library: Library, input: NewWorkspace, now: Date): { id: string; restored?: true; existing?: true } {
+export function addOrRestoreWorkspace(library: Library, input: NewWorkspace, now: Date): { id: string; restored?: true; existing?: true; learned?: true } {
   const game = identityOf(input);
   const copy = game ? gameCopyFinder(library)(game) : undefined;
-  if (copy && copy.trashedAt === null) return { id: copy.id, existing: true };
-  if (copy) {
+  if (game && copy) {
+    const learned = copy.steamAppId === null && game.steamAppId !== null;
+    if (learned) copy.steamAppId = game.steamAppId;
+    const known = learned ? { learned: true as const } : {};
+    if (copy.trashedAt === null) return { id: copy.id, existing: true, ...known };
     restoreWorkspace(library, copy.id);
-    return { id: copy.id, restored: true };
+    return { id: copy.id, restored: true, ...known };
   }
   return { id: addWorkspace(library, input, now) };
 }

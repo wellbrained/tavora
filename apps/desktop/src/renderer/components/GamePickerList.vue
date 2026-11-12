@@ -74,8 +74,8 @@ function toneOf(row: PickerRow) {
 }
 
 // ── Pointer ────────────────────────────────────────────────────────────
-// A click picks what the user saw under the pointer. When the items changed since the pointer last moved, what is
-// under it now may not be what they aimed at: that first click only highlights it, and the next one picks.
+// A click picks what the user saw under the pointer. When the items changed since the pointer last moved and another
+// item slid in under it, that may not be what they aimed at: that first click only highlights it, and the next one picks.
 
 /** The items changed since the pointer last moved. */
 let moved = false;
@@ -85,19 +85,29 @@ watch(
 );
 /** Where the pointer was at its last move: a move event at the same place is the list moving under a still pointer. */
 let at: { x: number; y: number } | null = null;
+/** The item the pointer last moved over (null: off the items). */
+let aimed: string | null = null;
 
-function onMove(key: string, event: MouseEvent) {
+function onMove(key: string | null, event: MouseEvent) {
   if (at?.x === event.screenX && at.y === event.screenY) return;
   at = { x: event.screenX, y: event.screenY };
   moved = false;
-  if (props.adding === null && key !== props.active) emit("hover", key);
+  aimed = key;
+  if (key !== null && props.adding === null && key !== props.active) emit("hover", key);
+}
+
+/** A move over the list but off its items. */
+function onListMove(event: MouseEvent) {
+  if (!(event.target instanceof Element && event.target.closest('[role="option"]'))) onMove(null, event);
 }
 
 function onClick(key: string, event: MouseEvent) {
   if (props.adding !== null) return;
-  // A click from the keyboard or a screen reader (detail 0) has no pointer to have missed.
-  if (moved && event.detail > 0) {
+  // Held back only for an item that came under a still pointer. A click from the keyboard or a screen reader (detail 0)
+  // has no pointer to have missed, and one on the highlight (where a screen reader routes its click) is aimed.
+  if (moved && event.detail > 0 && key !== aimed && key !== props.active) {
     moved = false;
+    aimed = key;
     emit("hover", key);
     return;
   }
@@ -123,7 +133,7 @@ function option(key: string) {
 
 <template>
   <!-- mousedown is kept from moving focus: the search keeps it, so the arrows and Enter still work after a click. -->
-  <div :id="id" role="listbox" :aria-label="label" :aria-busy="adding !== null" :class="cn('flex flex-col gap-1', adding !== null && 'pointer-events-none')" @mousedown.prevent>
+  <div :id="id" role="listbox" :aria-label="label" :aria-busy="adding !== null" :class="cn('flex flex-col gap-1', adding !== null && 'pointer-events-none')" @mousedown.prevent @mousemove="onListMove">
     <div v-if="covers.length" role="group" :aria-labelledby="`${id}-lately`" class="px-2 pb-2">
       <p :id="`${id}-lately`" class="text-muted-foreground px-2 pt-1 pb-1 text-xs font-medium">{{ t("addGame.lately") }}</p>
       <div class="grid grid-cols-4 gap-1">

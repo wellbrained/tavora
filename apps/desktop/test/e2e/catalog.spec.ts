@@ -378,9 +378,9 @@ test("a game without modules can ask for one from its empty page, with one anony
   const installed = JSON.stringify([{ name: "Valheim", steamAppId: 892970, installedAt: Date.now() - 24 * 60 * 60 * 1000 }]);
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url, TAVORA_TEST_INSTALLED: installed } });
   try {
-    // The dialog asks nothing: a click on the cover adds the game and opens it.
+    // The dialog asks nothing (the empty poe2 page behind it has its own Ask): a click on the cover adds the game and opens it.
     await openAddGame(page);
-    await expect(page.getByTestId("ask-module")).toHaveCount(0);
+    await expect(page.getByTestId("add-game-dialog").getByTestId("ask-module")).toHaveCount(0);
     await page.getByTestId("cover-valheim").click();
     await expect(page.getByTestId("rail-workspace-valheim")).toHaveAttribute("aria-current", "page");
     // Its empty page says there are no modules for it yet and offers Ask for a module.
