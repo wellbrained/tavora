@@ -34,7 +34,8 @@ export function buildRows(installed: readonly InstalledGameView[], matches: read
   // A game on this PC that isn't in the built-in list but that the online search knows by its Steam app is the same
   // game: one row, added with the online game's id, so the modules made for it are offered.
   for (const row of own) {
-    if (row.gameId !== null || row.installed?.steamAppId == null) continue;
+    // A game already added (by name, before this) keeps its own workspace: nothing to match there.
+    if (row.gameId !== null || row.workspaceId !== null || row.installed?.steamAppId == null) continue;
     const match = online.find((game) => game.steamAppId === row.installed!.steamAppId);
     if (!match || known.has(match.id)) continue;
     row.gameId = match.id;
@@ -53,7 +54,8 @@ export function buildRows(installed: readonly InstalledGameView[], matches: read
       others.push({ key: `online:${game.id}`, name: game.name, gameId: game.id, icon: null, installed: null, online: game, workspaceId: null });
     }
     // This PC's games only stay when the words fit them; the lists were already filtered by their search.
-    const rows = [...rank(own, query, (row) => ({ name: row.name })), ...others];
+    // A game matched to an online result also fits by that result's name ("diablo 4" for "Diablo® IV").
+    const rows = [...rank(own, query, (row) => ({ name: row.name, extra: row.online ? [row.online.name] : [] })), ...others];
     return rankByName(rows, query, (row) => row.name);
   }
   return own;

@@ -11,7 +11,7 @@ import { rank, rankByName, startsOrIsWord } from "@/lib/search";
 import { cn } from "@tavora/official-ui/lib/utils";
 import type { CatalogMatch, OnlineGame, WorkspaceView } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
-import { act, addModule, api, dialog, hiddenSettingIds, hiddenSettings, openSettings, searchOpen, searchStart, showOrAddPanel, state } from "../host";
+import { act, addModule, api, dialog, hiddenSettingIds, hiddenSettings, openSettings, searchOpen, searchStart, showOrAddPanel, showToast, state } from "../host";
 import { t, templateName } from "../i18n";
 
 import WorkspaceIcon from "./WorkspaceIcon.vue";
@@ -95,8 +95,14 @@ watch(query, (text) => {
 
 type NewGame = { catalogId: string } | { online: OnlineGame };
 async function addAndOpen(input: NewGame) {
-  const added = await act({ type: "add-workspace", ...input });
-  if (added.ok && added.id) await act({ type: "open-workspace", workspaceId: added.id });
+  try {
+    const added = await act({ type: "add-workspace", ...input });
+    if (added.ok && added.id) await act({ type: "open-workspace", workspaceId: added.id });
+  } catch (reason) {
+    // The call itself failed (not an answer from Tavora): say so instead of nothing.
+    console.error("[tavora] adding a game failed", reason);
+    showToast(t("error.generic"));
+  }
 }
 
 const addItems = computed<Item[]>(() => {

@@ -57,6 +57,18 @@ describe("a game on this PC that only the online search knows", () => {
     expect((input as { online: object }).online).not.toBe(online[0]);
   });
 
+  it("still shows when only the online name fits what was typed", () => {
+    const pcName = installed("9 Kings®", { steamAppId: 2784470 });
+    const rows = buildRows([pcName], [], [{ id: "9-kings", name: "Nine Kings", steamAppId: 2784470 }], "nine kings");
+    expect(rows.map((row) => row.gameId)).toEqual(["9-kings"]);
+  });
+
+  it("leaves a game already added as it is", () => {
+    const added = installed("9 Kings", { steamAppId: 2784470, workspaceId: "local-9-kings" });
+    const rows = buildRows([added], [], online, "9 king");
+    expect(rows.find((row) => row.installed)?.gameId).toBeNull();
+  });
+
   it("stays a game added by name when the search doesn't know it", () => {
     const [row] = buildRows([nineKings], [], [], "9 king");
     expect(addInputFor(row!, "9 king")).toEqual({ name: "9 Kings" });
