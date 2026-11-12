@@ -8,7 +8,7 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Popover, PopoverAnchor, PopoverContent } from "@tavora/official-ui/components/ui/popover";
 import { useTask } from "@tavora/official-ui/use-task";
-import { act, state } from "../host";
+import { act, state, useFloating } from "../host";
 import { t } from "../i18n";
 
 const props = defineProps<{ anchor: HTMLElement | null }>();
@@ -21,8 +21,12 @@ const answered = ref<string | null>(null);
 const error = computed(() => answered.value ?? task.error.value);
 const typed = computed(() => name.value.replace(/\s+/g, " ").trim());
 
+// Module panels are native views above this page: while it is open they step aside for their pictures, as for a menu.
+const setFloating = useFloating();
+
 // Each time it opens it starts empty.
 watch(open, (now) => {
+  setFloating(now);
   if (!now) return;
   name.value = "";
   answered.value = null;
