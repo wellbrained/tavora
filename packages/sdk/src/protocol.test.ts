@@ -49,6 +49,8 @@ describe("supports", () => {
     expect(latest.supports("panel.openDialog")).toBe(true);
     expect(old.supports("ui.tooltip.pinnable")).toBe(false);
     expect(latest.supports("ui.tooltip.pinnable")).toBe(true);
+    expect(old.supports("ui.tooltip.skin")).toBe(false);
+    expect(latest.supports("ui.tooltip.skin")).toBe(true);
     await expect(old.storage.compareAndSet("k", null, 1)).rejects.toMatchObject({ code: "UNKNOWN_METHOD" });
   });
 });

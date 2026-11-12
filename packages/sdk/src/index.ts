@@ -2,7 +2,8 @@
 // The host enforces every check; this package only marshals typed calls.
 import { menuParams, tooltipParams, tooltipShowParams, type MenuOptions, type TooltipMoveOptions, type TooltipShowOptions } from "./anchor.js";
 import { takeTestSdk } from "./test-slot.js";
-export type { TooltipAnchor, TooltipRequest, TooltipContent } from "./tooltip-types.js";
+import type { TooltipSkin } from "./tooltip-types.js";
+export type { TooltipAnchor, TooltipRequest, TooltipContent, TooltipSkin, TooltipEffectRun } from "./tooltip-types.js";
 export type { AnchorTarget, MenuOptions, TooltipMoveOptions, TooltipShowOptions } from "./anchor.js";
 // Protocol reference: apps/docs/reference/protocol.md.
 
@@ -191,7 +192,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.15";
+export const SDK_VERSION = "0.3.16";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -415,6 +416,15 @@ export interface TavoraSDK {
       hide(id: string): Promise<void>;
       close(id: string): Promise<void>;
       onClose(fn: (event: { id: string }) => void): Unsubscribe;
+      /**
+       * Defines one of this module's item-card skins (a frame picture, colours, a font for the title and the effect box),
+       * or replaces the one of that name; a card asks for it with `content.skin` and `layout: "card"`. It holds for every
+       * panel of the module until Tavora restarts, so define your skins when a panel starts. Names are 1 to 32 of a-z,
+       * 0-9 and `-`, at most 32 per module. Tavora checks the files (from your own `dist/`, PNG or WebP and WOFF2, up to
+       * 512 KB each) and the colours' contrast, and refuses a skin that fails with INVALID_PARAMS and the reason. On a
+       * Tavora older than `sdk.supports("ui.tooltip.skin")` it does nothing (the cards show plain there).
+       */
+      defineSkin(name: string, skin: TooltipSkin): Promise<void>;
     };
   };
   /**
@@ -1095,6 +1105,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         hide: async id => { await call("ui.tooltip.hide",{id}); },
         close: async id => { await call("ui.tooltip.close",{id}); },
         onClose: fn => on("ui.tooltipClosed",fn),
+        defineSkin: async (name, skin) => { if (supportsCall(host.host.version, "ui.tooltip.skin")) await call("ui.tooltip.defineSkin",{name,skin}); },
       },
     },
     blobs: {

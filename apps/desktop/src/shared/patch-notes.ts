@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.29",
+    date: "2026-11-12",
+    title: "Item cards for modules",
+    notes: [
+      "A module can show its hover details as an item card: a large picture, the name, a highlighted effect text and the details below.",
+      "Game modules can dress their cards like the game, with a frame, colours and a title font. Tavora checks they stay readable.",
+      "The UI Playground shows item cards under Tooltips.",
+    ],
+    prs: [
+      { number: 746, title: "Item cards and module skins for the shared tooltip" },
+    ],
+    tags: ["modules", "privacy", "publishing", "sdk", "tooltips", "ui-kit", "website"],
+  },
+  {
     version: "0.24.28",
     date: "2026-11-12",
     title: "Playing a game that isn't in your games yet?",

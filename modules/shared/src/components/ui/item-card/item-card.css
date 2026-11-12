@@ -1,0 +1,38 @@
+/* The kit's item card (ItemCard.vue): the card of the shared tooltip (`layout: "card"`, and `"rich"`), inside a panel.
+   Neutral, it takes the theme's colours like the tooltip does. A skin's own colours arrive as --skin-* custom properties
+   on the card (ItemCard.vue) and stay the same in every theme; its font is only for the title and the effect box. */
+.tavora-item-card{--ic-surface:color-mix(in srgb,var(--foreground) 6%,var(--popover));--ic-line:color-mix(in srgb,var(--foreground) 9%,transparent);--ic-text:var(--popover-foreground);--ic-muted:color-mix(in srgb,var(--foreground) 72%,var(--popover));--ic-accent:var(--primary);--ic-box:color-mix(in srgb,var(--foreground) 7%,transparent);--ic-box-text:var(--popover-foreground);--ic-art:color-mix(in srgb,var(--foreground) 5%,transparent);
+  box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--ic-line);border-radius:var(--radius-lg);background:var(--ic-surface);color:var(--ic-text);font-family:var(--font-sans);font-size:var(--ic-text-size);line-height:1.45;overflow-wrap:anywhere}
+.tavora-item-card[data-layout=card]{width:280px;max-width:100%}
+.tavora-item-card[data-colors]{--ic-surface:var(--skin-surface);--ic-text:var(--skin-text);--ic-muted:var(--skin-muted);--ic-accent:var(--skin-accent);--ic-box:var(--skin-box);--ic-box-text:var(--skin-box-text);--ic-line:color-mix(in srgb,var(--skin-muted) 35%,var(--skin-surface));--ic-art:color-mix(in srgb,var(--skin-text) 6%,var(--skin-surface))}
+.tavora-item-card[data-skinned]{border-radius:0}
+.tavora-item-card[data-framed]{border-style:solid;border-image-repeat:stretch}
+.tavora-item-card[data-pixel] img,.tavora-item-card[data-pixel]{image-rendering:pixelated}
+
+.tavora-item-card-art{display:flex;justify-content:center;padding:8px;border-radius:var(--radius-md);background:var(--ic-art)}
+.tavora-item-card-art img{display:block;max-width:100%;max-height:168px;width:auto;height:auto;object-fit:contain}
+.tavora-item-card-name{padding-bottom:6px;border-bottom:1px solid var(--ic-line)}
+.tavora-item-card h3{margin:0;font-size:var(--ic-title-size);font-weight:600;line-height:1.3;color:var(--ic-text)}
+.tavora-item-card[data-caps] h3{text-transform:uppercase}
+.tavora-item-card-type,.tavora-item-card-props dt,.tavora-item-card-section>p{color:var(--ic-muted)}
+.tavora-item-card p{margin:0}
+.tavora-item-card-badges{display:flex;flex-wrap:wrap;gap:4px}
+.tavora-item-card-badge{font-size:var(--ic-small-size);line-height:1.4;padding:0 5px;border:1px solid var(--ic-line);border-radius:var(--radius-sm);color:var(--ic-muted);white-space:nowrap}
+.tavora-item-card-effect{padding:6px 8px;border-radius:var(--radius-md);background:var(--ic-box);color:var(--ic-box-text);font-size:var(--ic-effect-size);white-space:pre-wrap}
+.tavora-item-card[data-skinned] .tavora-item-card-effect{border-radius:0}
+.tavora-item-card-effect [data-accent]{color:var(--ic-accent)}
+.tavora-item-card[data-font] h3,.tavora-item-card[data-font] .tavora-item-card-effect{font-family:var(--skin-font),var(--font-sans)}
+.tavora-item-card-props{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin:0}
+.tavora-item-card-props dd{margin:0;font-variant-numeric:tabular-nums}
+.tavora-item-card-section{padding-top:8px;border-top:1px solid var(--ic-line)}
+.tavora-item-card-section>p{margin-bottom:4px}
+.tavora-item-card-section ul{list-style:none;margin:0;padding:0}
+.tavora-item-card-section li{display:flex;justify-content:space-between;gap:8px}
+.tavora-item-card-section li[data-connected]{border-left:2px solid var(--ic-accent);padding-left:8px}
+.tavora-item-card-section li span:last-child{color:var(--ic-muted);white-space:nowrap}
+
+/* The rich layout: the picture beside the text. */
+.tavora-item-card-rich{display:flex;gap:12px}
+.tavora-item-card-rich>img{display:block;width:77px;flex:0 0 77px;height:auto;aspect-ratio:58/80;object-fit:contain;border:1px solid var(--ic-line);border-radius:var(--radius-sm);padding:3px;box-sizing:border-box}
+.tavora-item-card-rich>div{display:flex;flex-direction:column;gap:8px;min-width:0;flex:1}
+.tavora-item-card-heading{display:flex;flex-wrap:wrap;align-items:center;gap:6px}

@@ -417,6 +417,7 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `ui.tooltip.move` | 0.18.18 |  |  |
 | `ui.tooltip.hide` | 0.18.18 |  |  |
 | `ui.tooltip.close` | 0.18.18 |  |  |
+| `ui.tooltip.defineSkin` | 0.24.29 |  |  |
 | `links.open` | 0.11.0 |  | always |
 | `blobs.list` | 0.12.0 |  |  |
 | `blobs.usage` | 0.12.0 |  |  |
@@ -648,6 +649,38 @@ Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain
 total. A row has text, optional right-aligned badges/status and a connected-affix
 marker. Content is limited to 40,000 characters; no HTML, CSS or links. Raster
 assets are capped at 512 KB. See the SDK's exported types for individual bounds.
+
+### Item cards and skins
+
+These need a Tavora with `ui.tooltip.defineSkin` (its version is in the table above; `sdk.supports("ui.tooltip.skin")`).
+
+
+- `content.layout` is `"rich"` (the default, the layout above) or `"card"`: the picture large on top, a name bar
+  with the title, the subtitle as the type line, the badges, the effect box, properties and sections.
+- `content.effect` is a text (up to 1,000 characters) or up to 40 runs `{ text, accent? }` (1,000 characters in all);
+  `accent: true` runs take the accent colour.
+- `content.skin` names one of the module's skins; only the card layout wears it. A name that isn't defined shows the
+  plain card, without an error.
+- `ui.tooltip.defineSkin({ name, skin })` defines or replaces a skin for every panel of the module, until Tavora
+  restarts. Names are 1 to 32 of `a-z`, `0-9` and `-`; at most 32 skins per module. `skin` is
+  `{ frame?: { image, slice }, colors?: { surface, text, muted?, accent?, box?, boxText? }, font?, pixelArt?, titleCaps? }`.
+  `frame.image` is a `dist/` path to a PNG or WebP, `font` to a WOFF2, each judged by its first bytes and up to 512 KB,
+  read only from the module's own bundle. `slice` is four whole numbers from 0 to 64 (top, right, bottom, left): the
+  nine-slice insets and the frame's width. Colours are `#rrggbb`; with `colors`, `surface` and `text` are needed,
+  `muted` and `accent` default to `text`, `box` to `surface`, `boxText` to `text`. Text, muted text and the box's text
+  need a contrast of 4.5:1 with what they sit on, and so does the accent with the box (its numbers are text); the
+  accent with the surface (a line there) 3:1. A skin that fails is refused with `INVALID_PARAMS` and the reason, and
+  nothing of it is kept. When the same name is defined twice at once, the later call wins. All modules together keep at
+  most 16 MB of skin files (each file once); a skin beyond that is refused. A module's skins go when it reloads,
+  updates, is turned off or removed, so a page defines its skins when it starts.
+- Tavora sets every size: on a skinned card the title is 17 px and the effect 15 px, on a plain card 15 and 13 px;
+  badges and the footer 12 px (the kit's small size), the rest 13 px. The skin's font is used for the title and the effect box only, with the theme font for letters it lacks;
+  a skin's colours ignore the theme.
+- A card shown before its skin is defined is plain; when the define lands while it is still shown, it is drawn again
+  in the skin.
+- On an older Tavora the SDK leaves `layout` and `skin` out of `ui.tooltip.show`, puts the `effect` text into a
+  section row (first section, plain text), and `defineSkin` does nothing (`sdk.supports("ui.tooltip.skin")` tells); a raw caller checks the version itself, since an older Tavora
+  rejects the unknown keys.
 
 The neutral look draws with Tavora's own colours and follows the user's theme; `tone` and the affix
 colours are ignored there. The `poe` look is the gold, brown and purple one of Path of Exile 2 item

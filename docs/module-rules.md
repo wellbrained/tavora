@@ -56,6 +56,7 @@ classes where you use a control; never copy it.
 | A list the user reorders by dragging | `useReorderMotion` and `liftedDragImage` from `ui/reorder`: the others slide aside, the dropped item settles; keys reorder at once | a hand-made drop line only |
 | Menu | `ContextMenu`, `DropdownMenu`, or `sdk.ui.showMenu({ anchor: element })` | menu at the pointer, own popup |
 | Tooltip | `Tooltip` / `TooltipRows`, or a `title` (connectModule turns it into the kit tooltip) | own hover box |
+| An item card (a game's card, tower, item) in the shared tooltip or inline in a panel | `sdk.ui.tooltip.show` with `layout: "card"` (picture on top, name bar, type line, badges, `effect` box, rows) and, inline, `ItemCard` with the same content; a game look is a skin (`sdk.ui.tooltip.defineSkin`, see [Item-card skins](#item-card-skins)) | own card markup, own hover card with game colours |
 | Say why a control is off | `disabled-reason` next to `disabled` on `Button`, `Switch` / `SwitchField`, `Checkbox`, `Input`, `Select` (or its `SelectTrigger`), `DropdownMenuItem` and `ContextMenuItem`: the control stays hoverable and focusable, shows the reason in the kit tooltip and does nothing when used. A `Button` also does this with a `title` (or `hinted`, when you show the tooltip yourself) | a wrapper `span` with a `title` around a disabled control, a `title` on a native `disabled` control (it never shows), the reason in the label ("Pin (already pinned)") |
 | Floating panel | `Popover` | absolutely positioned `div` |
 | Dialog | `ConfirmDialog` (asks; only before what can't be put back, see [Deleting](#deleting)), `NameDialog` (asks for a name), else `Dialog` with `DialogHeader`, `DialogFooter`, `DialogButton` (see [Dialogs](#dialogs)) | own overlay |
@@ -96,6 +97,7 @@ themes; anything hard-coded breaks in one of them.
   sizes in between. Body text is 14, buttons and menus 13, hints 12. Weights 400, 500 and 600 only. Changing numbers
   use `tabular-nums`. Sentence case, no all caps; in a short "A & B" name both words start uppercase ("Updates & About").
 - **Font**: the theme's (`font-sans`, `font-mono`, or `var(--font-sans)`); never write out `"Inter Variable"`.
+  The one exception is an [item-card skin](#item-card-skins).
 - **Spacing**: 4, 8, 12, 16, 24, 32 px (Tailwind 1, 2, 3, 4, 6, 8). 8 inside controls, 16 inside a panel area, 24
   between sections.
 - **Corners**: the kit's (`rounded-sm`, `rounded-md`, `rounded-lg`, from `--radius`); never a literal px radius.
@@ -144,6 +146,23 @@ themes; anything hard-coded breaks in one of them.
   Waiting is the one thing that may repeat: a skeleton's slow pulse (`--duration-pulse`), off for reduced motion.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
+
+### Item-card skins
+
+A game module may dress its item cards like the game's (`sdk.ui.tooltip.defineSkin(name, skin)`, then `skin: name` and
+`layout: "card"` on a card; inline, the same skin with URLs on `ItemCard`). A skin is checked values, never CSS: a
+nine-slice frame picture, its colours, a WOFF2 font, hard pixels, a title in capitals. This is a deliberate exception to
+the theme font and to "no all caps", **for skins only** (decided 2026-11-12):
+
+- The skin's font is only for the title and the effect box. The type line, properties, sections and footer always keep
+  the theme font (a pixel font isn't readable enough there); letters the font lacks come from the theme font.
+- Tavora sets every size (a skinned title 17 px, the effect 15 px; a plain card's title 15 px and effect 13 px; badges
+  and the footer 12 px, the kit's small size; the rest 13 px), and refuses a skin whose text is hard to read (4.5:1,
+  the accent on the surface 3:1).
+- A skin's colours are the game's: they stay the same in every theme, like the PoE look. In the module's source they
+  get a `rules-allow: color` comment with that reason.
+- Files come from the module's own `dist/` (PNG or WebP frame, WOFF2 font, up to 512 KB each), and the font must be
+  free to use in the module.
 
 ### Dialogs
 

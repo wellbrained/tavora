@@ -93,6 +93,33 @@ shows, with the old hint.
 Tooltips are neutral (Tavora's own colours) unless `content.look` is `'poe'`, the Path of Exile 2 item look
 (Tavora 0.23.53 and newer; an older Tavora rejects a tooltip with `look`, so catch the failure).
 
+`content.layout: 'card'` shows an item card instead: the picture large on top, a name bar with the title, the subtitle
+as its type line, the badges, an effect box (`content.effect`: a text, or runs where `accent: true` ones take the accent
+colour), then properties and sections. A module can dress its cards in a skin of its own, defined once per name with
+`ui.tooltip.defineSkin` and picked per card with `content.skin`: a nine-slice frame picture, colours (`#rrggbb`), a WOFF2
+font for the title and the effect box only, hard pixels and a title in capitals. Tavora checks the files (only from your
+own `dist/`, PNG or WebP and WOFF2 by their first bytes, up to 512 KB each) and the contrast (text, muted text, the
+effect box's text and the accent in the box 4.5:1, the accent on the surface 3:1), and refuses a skin that fails with
+`INVALID_PARAMS` and the reason. Every size stays Tavora's, and a skin's colours stay the same in every theme. A skin name that isn't defined shows the plain card.
+It needs a Tavora with `sdk.supports("ui.tooltip.skin")`; on an older one the SDK leaves `layout` and `skin` out and
+puts the effect text into a section row (the card shows in the rich layout), and `defineSkin` does nothing. In a panel, the kit's
+`ItemCard` shows the same card.
+
+```ts
+await tavora.ui.tooltip.defineSkin('chaos', {
+  frame: { image: 'dist/assets/frame-chaos.png', slice: [6, 6, 6, 6] },
+  colors: { surface: '#1e1610', text: '#f4e6c8', muted: '#c9b48e', accent: '#f0c86e', box: '#2c2016' },
+  font: 'dist/assets/card-font.woff2',
+  pixelArt: true,
+  titleCaps: true,
+});
+await tavora.ui.tooltip.show({
+  id: 'card:archer', anchor: element, pinnable: false,
+  content: { title: 'Archer Tower', subtitle: 'Tower', layout: 'card', skin: 'chaos', image: 'dist/assets/archer.png',
+    effect: [{ text: 'Shoots for ' }, { text: '12', accent: true }, { text: ' damage.' }] },
+});
+```
+
 ```ts
 await tavora.ui.tooltip.show({
   id: 'item:42', at: { x: event.clientX, y: event.clientY },

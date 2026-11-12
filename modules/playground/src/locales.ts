@@ -220,6 +220,9 @@ export const en = {
   "ex.tooltips.Rich.note": "Title, text, shortcut, warning.",
   "ex.tooltips.Values": "Values",
   "ex.tooltips.Values.note": "A chart bar, a game item.",
+  "ex.tooltips.ItemCards": "Item cards",
+  "ex.tooltips.ItemCards.note": "The tooltip's card in a panel, plain and in a module's skin.",
+  "ex.tooltips.ItemCards.rule": "A skin may give the title and the effect its own font and colours; the rest keeps the theme font.",
 
   "ex.popovers.WithField": "Popover with a field",
   "ex.popovers.WithField.note": "Escape or a click outside closes it.",
@@ -655,6 +658,9 @@ export const de: Record<TextKey, string> = {
   "ex.tooltips.Rich.note": "Titel, Text, Tastenkürzel, Warnung.",
   "ex.tooltips.Values": "Werte",
   "ex.tooltips.Values.note": "Ein Balken im Diagramm, ein Gegenstand im Spiel.",
+  "ex.tooltips.ItemCards": "Gegenstandskarten",
+  "ex.tooltips.ItemCards.note": "Die Karte des Tooltips in einem Panel, schlicht und im Look eines Moduls.",
+  "ex.tooltips.ItemCards.rule": "Ein Look darf Titel und Effekt eine eigene Schrift und Farben geben; der Rest bleibt in der Schrift des Themes.",
 
   "ex.popovers.WithField": "Popover mit einem Feld",
   "ex.popovers.WithField.note": "Escape oder ein Klick daneben schließt es.",

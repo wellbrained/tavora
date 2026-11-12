@@ -49,7 +49,8 @@ import { serializeJson } from "./json";
 import { discordCommand, discordSubscription } from "./discord-commands";
 import { checkMenu, type CheckedMenu } from "./module-menu";
 import {checkTooltip,checkTooltipAnchor,tooltipId} from "./tooltip-content";
-import type {TooltipRequest,TooltipAnchor} from "@tavora/sdk/protocol";
+import {checkSkinRequest} from "./tooltip-skin";
+import type {TooltipRequest,TooltipAnchor,TooltipSkin} from "@tavora/sdk/protocol";
 import { checkPanelContent } from "./panel-content";
 import { parseConnectionSettings, parseWatch, type ConnectionSettingsChange, type WatchRequest } from "./system-info-parse";
 import { parseControlParams, parseWatchParams } from "./media-parse";
@@ -225,6 +226,8 @@ export interface BridgeContext {
     show(request:TooltipRequest):Promise<boolean>;
     move(anchor:TooltipAnchor):void;
     close(id:string,hoverOnly:boolean):void;
+    /** ui.tooltip.defineSkin, its shape already checked: reads and checks the skin's files and keeps it for the module. */
+    defineSkin(name:string,skin:TooltipSkin):Promise<void>;
   };
   /** Overlays of this module in this workspace (overlays.ts, game-overlays.ts); keys already checked, and the `overlay` capability for copyLink and resetLink. */
   overlay: {
@@ -791,6 +794,7 @@ const handlers = new Map<string, Handler>([
   ["ui.tooltip.move",(s,p)=>{s.context.tooltip.move(checkTooltipAnchor(p));return null;}],
   ["ui.tooltip.hide",(s,p)=>{s.context.tooltip.close(tooltipId(p),true);return null;}],
   ["ui.tooltip.close",(s,p)=>{s.context.tooltip.close(tooltipId(p),false);return null;}],
+  ["ui.tooltip.defineSkin",async(s,p)=>{const {name,skin}=checkSkinRequest(p);await s.context.tooltip.defineSkin(name,skin);return null;}],
 ]);
 
 /** Serves one module panel over one port. */
