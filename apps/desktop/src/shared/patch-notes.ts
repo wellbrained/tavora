@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.31",
+    date: "2026-11-12",
+    title: "Add a game shows more at a glance",
+    notes: [
+      "Six of your recent games as covers, in a wider window.",
+      "Below them your next ten games; type to find the rest.",
+    ],
+    prs: [
+      { number: 747, title: "Add a game: wider, six covers, ten games below" },
+    ],
+    tags: ["games"],
+  },
+  {
     version: "0.24.30",
     date: "2026-11-12",
     title: "A simpler Add a game",
