@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.25",
+    date: "2026-11-12",
+    title: "Updates show up sooner",
+    notes: [
+      "Tavora looks for a new version as soon as it starts, so you see it in the rail right away.",
+      "After that it looks every 5 minutes, and still when your PC wakes up.",
+    ],
+    prs: [
+      { number: 741, title: "Updates: check right at start, then every 5 minutes" },
+    ],
+    tags: ["updates"],
+  },
+  {
     version: "0.24.24",
     date: "2026-11-11",
     title: "Off means off",
