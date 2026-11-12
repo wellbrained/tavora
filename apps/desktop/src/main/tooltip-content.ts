@@ -40,7 +40,7 @@ export function checkTooltip(v: unknown): TooltipRequest {
     // A card that says it can't be pinned never pins: asking for both is a mistake, not something to guess at.
     if (o.pinnable === false && o.pinned === true)
         fail();
-    const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "requirements", "properties", "sections"]);
+    const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "requirements", "properties", "perHeading", "sections"]);
     const content: TooltipContent = { title: text(c.title, 200) };
     if (c.subtitle !== undefined)
         content.subtitle = text(c.subtitle, 300);
@@ -77,8 +77,13 @@ export function checkTooltip(v: unknown): TooltipRequest {
     const property = (v: unknown) => { const p = obj(v, ["label", "value"]); return { label: text(p.label, 100), value: text(p.value, 300) }; };
     if (c.requirements !== undefined)
         content.requirements = list(c.requirements, 8, property);
+    // A stat may grow by `per` (a third column on the card); with it, its value may be empty (it only grows).
     if (c.properties !== undefined)
-        content.properties = list(c.properties, 20, property);
+        content.properties = list(c.properties, 20, v => { const p = obj(v, ["label", "value", "per"]); if (p.per === undefined)
+            return property({ label: p.label, value: p.value }); const per = text(p.per, 40); if (typeof p.value !== "string" || p.value.length > 300)
+            fail(); return { label: text(p.label, 100), value: p.value, per }; });
+    if (c.perHeading !== undefined)
+        content.perHeading = text(c.perHeading, 60);
     let rows = 0;
     if (c.sections !== undefined)
         content.sections = list(c.sections, 12, v => { const s = obj(v, ["title", "rows"]); return { ...(s.title === undefined ? {} : { title: text(s.title, 100) }), rows: list(s.rows, 60, v => { if (++rows > 100)

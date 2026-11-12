@@ -1505,6 +1505,12 @@ const flag = (key: string, when: string): GestureRule => ({ when, check: (params
  * then run `pnpm --filter @tavora/docs protocol`. Too low, and the SDK sends a Tavora without them keys it refuses.
  */
 export const ITEM_CARD_TAVORA = "0.24.29";
+/**
+ * The first Tavora with a third stats column on item cards (`per` on a property and `perHeading` on a tooltip): the one
+ * place that number is written. Set it to the version the pull request merges as, right before merging. Too low, and
+ * the SDK sends a Tavora without it keys it refuses.
+ */
+export const ITEM_CARD_PER_TAVORA = "0.24.34";
 
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),
@@ -1656,7 +1662,7 @@ const SDK_CALLS = { "panel.openDialog": "panel.setDialog", "panel.closeDialog": 
  * Params of an existing call that only a newer Tavora knows. An older one rejects the unknown key (INVALID_PARAMS) for the
  * whole call, so the SDK leaves the key out there. They never raise `MIN_TAVORA`.
  */
-export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91", "ui.tooltip.skin": ITEM_CARD_TAVORA } as const;
+export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91", "ui.tooltip.skin": ITEM_CARD_TAVORA, "ui.tooltip.per": ITEM_CARD_PER_TAVORA } as const;
 
 /** A protocol call, a param only newer Tavoras know (`ui.tooltip.pinnable`), or one of the SDK calls named differently on the wire (`panel.openDialog`). */
 export type SupportedCall = CallName | keyof typeof SDK_CALLS | keyof typeof FIELD_SINCE;

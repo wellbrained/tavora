@@ -655,8 +655,15 @@ assets are capped at 512 KB. See the SDK's exported types for individual bounds.
 These need a Tavora with `ui.tooltip.defineSkin` (its version is in the table above; `sdk.supports("ui.tooltip.skin")`).
 
 
-- `content.layout` is `"rich"` (the default, the layout above) or `"card"`: the picture large on top, a name bar
-  with the title, the subtitle as the type line, the badges, the effect box, properties and sections.
+- `content.layout` is `"rich"` (the default, the layout above) or `"card"`: the picture large on top, the title with
+  the badges right-aligned beside it (under it when they don't fit), the subtitle as the type line, the effect box,
+  the stats (properties, label and value in columns, no colon) and sections.
+- A property may have `per` (up to 40 characters, e.g. `"×1.2"`): how much the stat grows, say per level. With it,
+  `value` may be empty. On the card a third column shows it in the accent colour, with `content.perHeading` (up to 60
+  characters, e.g. "Per level") as a small heading over it; the column and heading appear only when a property of the
+  card has `per`. The rich layout shows it after the value ("12 · +3"). `per` and `perHeading` need a Tavora with
+  `sdk.supports("ui.tooltip.per")`; on an older one the SDK puts `per` into the value and leaves the heading out (a raw
+  caller does that itself).
 - `content.effect` is a text (up to 1,000 characters) or up to 40 runs `{ text, accent? }` (1,000 characters in all);
   `accent: true` runs take the accent colour.
 - `content.skin` names one of the module's skins; only the card layout wears it. A name that isn't defined shows the

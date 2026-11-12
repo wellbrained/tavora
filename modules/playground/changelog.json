@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.38",
+    "date": "2026-11-12",
+    "notes": [
+      "The Item cards specimen has the badges beside the title and stats that grow per level."
+    ]
+  },
+  {
     "version": "0.1.37",
     "date": "2026-11-12",
     "notes": [
