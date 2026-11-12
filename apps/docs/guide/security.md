@@ -426,12 +426,14 @@ paths are accepted. Image reads stay inside that bundle and are limited to 512 K
 
 An item card may wear a skin the module defined (`ui.tooltip.defineSkin`). That is the one way a module's own colours,
 a frame picture and a font reach the host's tooltip window, and each is a checked value, never CSS: colours must be
-`#rrggbb` and readable (contrast 4.5:1 for text, 3:1 for the accent), or the skin is refused. The frame picture and the
+`#rrggbb` and readable (contrast 4.5:1 for text, 3:1 for the accent line on the surface), or the skin is refused. The frame picture and the
 font are read only from the module's own bundle under `dist/`, by the same path rules as the item picture (no `..`,
-no link out of the bundle), and must be a PNG or WebP picture or a WOFF2 font by their first bytes, up to 512 KB each.
+no link or junction out of the bundle), and must be a PNG or WebP picture or a WOFF2 font by their first bytes, up to
+512 KB each (checked on the open file; the read stops one byte past the limit).
 Tavora inlines them as `data:` URLs; the window's content policy gains only `font-src data:`, so nothing is loaded from
 anywhere else. The font is used for the card's title and effect box only, and Tavora sets every size. At most 32 skins
-per module are kept, in memory, until Tavora restarts.
+per module and 16 MB of skin files for all modules together are kept, in memory, until the module reloads, updates, is
+turned off or removed.
 The surface has its own sandboxed renderer and session, no administrative host
 bridge, and no permissions. Its footer identifies the source module.
 

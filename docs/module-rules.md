@@ -156,8 +156,9 @@ the theme font and to "no all caps", **for skins only** (decided 2026-11-12):
 
 - The skin's font is only for the title and the effect box. The type line, properties, sections and footer always keep
   the theme font (a pixel font isn't readable enough there); letters the font lacks come from the theme font.
-- Tavora sets every size (a skinned title 17 px, the effect 15 px, the rest 13 px; a plain card's title 15 px and
-  effect 13 px), and refuses a skin whose text is hard to read (4.5:1, the accent 3:1).
+- Tavora sets every size (a skinned title 17 px, the effect 15 px; a plain card's title 15 px and effect 13 px; badges
+  and the footer 12 px, the kit's small size; the rest 13 px), and refuses a skin whose text is hard to read (4.5:1,
+  the accent on the surface 3:1).
 - A skin's colours are the game's: they stay the same in every theme, like the PoE look. In the module's source they
   get a `rules-allow: color` comment with that reason.
 - Files come from the module's own `dist/` (PNG or WebP frame, WOFF2 font, up to 512 KB each), and the font must be

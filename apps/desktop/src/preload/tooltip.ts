@@ -17,8 +17,11 @@ interface Data {
     source: string;
     theme: TavoraTheme;
     language: string;
-    skin?: Skin;
+    /** The id of a skin the host sent before ("tooltip:skin"). */
+    skin?: number;
 }
+/** The skins the host sent this page, by id; it drops them when the module's skin is replaced or gone. */
+const skins = new Map<number, Skin>();
 let current: Data | undefined;
 // The host made these; they are checked again here, so nothing but a colour or a base64 data: URL reaches the styles.
 const HEX = /^#[0-9a-f]{6}$/i, FRAME = /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/]+={0,2}$/, FONT = /^data:font\/woff2;base64,[A-Za-z0-9+/]+={0,2}$/;
@@ -100,8 +103,9 @@ function render(data: Data) {
     const cardLayout = c.layout === "card";
     document.body.classList.toggle("card", cardLayout);
     // A skin's colours ignore the theme, like the PoE look; a skinned card isn't PoE.
-    const frame = applySkin(card, cardLayout ? data.skin : undefined);
-    if (cardLayout && data.skin)
+    const skin = cardLayout && data.skin !== undefined ? skins.get(data.skin) : undefined;
+    const frame = applySkin(card, skin);
+    if (skin)
         document.body.classList.remove("poe");
     if (data.pinned) {
         const close = node("button", "\u00d7");
@@ -115,7 +119,7 @@ function render(data: Data) {
         card.append(close);
     }
     if (cardLayout) {
-        renderCard(card, c);
+        renderCard(card, c, de);
         const footer = node("div", undefined, "footer");
         footer.append(...footerTexts(data.source, data, de).map(t => node("span", t)));
         card.append(footer);
@@ -162,7 +166,7 @@ function render(data: Data) {
     measure();
 }
 /** The item card: the picture large on top, the name bar, type line, badges, effect box, then the rows. */
-function renderCard(card: HTMLElement, c: TooltipContent) {
+function renderCard(card: HTMLElement, c: TooltipContent, de: boolean) {
     const item = node("div", undefined, "item");
     card.append(item);
     if (c.image) {
@@ -187,6 +191,18 @@ function renderCard(card: HTMLElement, c: TooltipContent) {
     if (c.effect)
         item.append(effectBox(c.effect));
     appendRows(item, c);
+    // Requirements come last, as rows like the properties, under their own heading.
+    if (c.requirements?.length) {
+        const section = node("section", undefined, "card-requirements"), rows = node("div", undefined, "properties");
+        section.append(node("small", de ? "Ben\u00f6tigt" : "Requires"));
+        for (const r of c.requirements) {
+            const row = node("div");
+            row.append(node("span", r.label + ": "), node("span", r.value, "value"));
+            rows.append(row);
+        }
+        section.append(rows);
+        item.append(section);
+    }
 }
 /** Properties and sections, the same in both layouts. */
 function appendRows(details: HTMLElement, c: TooltipContent) {
@@ -222,5 +238,8 @@ function appendRows(details: HTMLElement, c: TooltipContent) {
 function measure() { if (!current)
     return; const card = document.getElementById("card")!; if (card.scrollHeight > innerHeight && innerHeight > 100)
     document.body.classList.add("compact"); ipcRenderer.send("tooltip:size", current.serial, card.scrollHeight, Math.ceil(card.getBoundingClientRect().width)); }
+ipcRenderer.on("tooltip:skin", (_event, id: number, skin: Skin) => { skins.set(id, skin); });
+ipcRenderer.on("tooltip:skin-drop", (_event, ids: number[]) => { for (const id of ids)
+    skins.delete(id); });
 ipcRenderer.on("tooltip:render", (_event, data: Data) => render(data));
 window.addEventListener("DOMContentLoaded", () => ipcRenderer.send("tooltip:ready"));

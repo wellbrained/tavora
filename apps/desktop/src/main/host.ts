@@ -656,6 +656,7 @@ export class Host {
       removed: (owner, moduleId) => {
         this.gameOverlays.forgetModule(moduleId, owner);
         this.previews.closeModule(moduleId, owner);
+        this.tooltips?.forgetModule(moduleId);
       },
       // Test runs keep the window hidden and have no recycle bin to rely on.
       trash: (dir) => (options.hidden ? rm(dir, { recursive: true, force: true }) : shell.trashItem(dir)),
@@ -1402,6 +1403,8 @@ export class Host {
 
   /** Starts a module's open panels again, so they load a new version or connect with a new grant. */
   private reloadModuleViews(moduleId: string): void {
+    // Its pages start again and define their skins anew (a new version may have other files).
+    this.tooltips?.forgetModule(moduleId);
     const current = this.modules.get(moduleId);
     for (const view of this.moduleViews()) if (view.moduleId === moduleId) view.reload(current);
     // Panels that asked before they could run start now, in the workspace shown (the others start when it opens).
@@ -1451,6 +1454,7 @@ export class Host {
 
   /** Removes a module's panels in every workspace; a slot left with nothing stays as an empty slot. */
   private removeModulePanels(moduleId: string): void {
+    this.tooltips?.forgetModule(moduleId);
     for (const instanceId of this.workspaces.vacate(moduleId)) this.closeView(instanceId);
   }
 

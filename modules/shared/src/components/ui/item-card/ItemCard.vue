@@ -7,6 +7,7 @@ import type { TooltipContent } from "@tavora/sdk"
 import { computed, onBeforeUnmount, ref, watch, type CSSProperties } from "vue"
 import { ITEM_CARD_TYPE } from "../../tooltip/typography"
 import type { ItemCardSkin } from "."
+import { cssUrl, holdSkinFont, releaseSkinFont } from "./skin-font"
 import "./item-card.css"
 
 const props = defineProps<{
@@ -24,29 +25,18 @@ const runs = computed(() => {
   return typeof effect === "string" ? [{ text: effect }] : (effect ?? [])
 })
 
-// One FontFace per skin font, named after the card, so two cards with different fonts don't share one.
-let face: FontFace | undefined
-const family = `tavora-item-card-${Math.random().toString(36).slice(2, 10)}`
-const hasFont = ref(false)
-/** A URL for CSS `url("…")`: quotes, backslashes and line breaks can't end it early. */
-const cssUrl = (url: string) => `url("${url.replace(/["\\\n\r]/g, (c) => encodeURIComponent(c))}")`
-type FontSet = Set<FontFace>
+// The skin's font: one FontFace per font URL on the page, shared by every card that uses it.
+const family = ref<string>()
 watch(
   () => skin.value?.font,
-  (url) => {
-    if (face) (document.fonts as unknown as FontSet).delete(face)
-    face = undefined
-    hasFont.value = false
-    if (!url || typeof FontFace !== "function") return
-    face = new FontFace(family, cssUrl(url))
-    ;(document.fonts as unknown as FontSet).add(face)
-    hasFont.value = true
-    face.load().catch(() => {})
+  (url, old) => {
+    if (old) releaseSkinFont(old)
+    family.value = url ? holdSkinFont(url) : undefined
   },
   { immediate: true },
 )
 onBeforeUnmount(() => {
-  if (face) (document.fonts as unknown as FontSet).delete(face)
+  if (skin.value?.font) releaseSkinFont(skin.value.font)
 })
 
 const style = computed<CSSProperties>(() => {
@@ -55,6 +45,7 @@ const style = computed<CSSProperties>(() => {
     "--ic-title-size": `${s ? ITEM_CARD_TYPE.skinTitle : ITEM_CARD_TYPE.title}px`,
     "--ic-effect-size": `${s ? ITEM_CARD_TYPE.skinEffect : ITEM_CARD_TYPE.effect}px`,
     "--ic-text-size": `${ITEM_CARD_TYPE.text}px`,
+    "--ic-small-size": `${ITEM_CARD_TYPE.small}px`,
   }
   const c = s?.colors
   if (c?.surface && c.text) {
@@ -71,7 +62,7 @@ const style = computed<CSSProperties>(() => {
     style.borderImageSlice = s.frame.slice.join(" ")
     style.borderWidth = s.frame.slice.map((n) => `${n}px`).join(" ")
   }
-  if (hasFont.value) style["--skin-font"] = `"${family}"`
+  if (family.value) style["--skin-font"] = `"${family.value}"`
   return style as CSSProperties
 })
 </script>
@@ -84,7 +75,7 @@ const style = computed<CSSProperties>(() => {
     :data-skinned="skin ? '' : undefined"
     :data-colors="skin?.colors?.surface && skin.colors.text ? '' : undefined"
     :data-framed="skin?.frame ? '' : undefined"
-    :data-font="skin?.font && hasFont ? '' : undefined"
+    :data-font="skin?.font && family ? '' : undefined"
     :data-caps="skin?.titleCaps ? '' : undefined"
     :data-pixel="skin?.pixelArt ? '' : undefined"
     :style="style"

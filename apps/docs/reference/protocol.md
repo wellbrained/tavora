@@ -650,7 +650,10 @@ total. A row has text, optional right-aligned badges/status and a connected-affi
 marker. Content is limited to 40,000 characters; no HTML, CSS or links. Raster
 assets are capped at 512 KB. See the SDK's exported types for individual bounds.
 
-### Item cards and skins (Tavora 0.24.27+)
+### Item cards and skins
+
+These need a Tavora with `ui.tooltip.defineSkin` (its version is in the table above; `sdk.supports("ui.tooltip.skin")`).
+
 
 - `content.layout` is `"rich"` (the default, the layout above) or `"card"`: the picture large on top, a name bar
   with the title, the subtitle as the type line, the badges, the effect box, properties and sections.
@@ -665,13 +668,18 @@ assets are capped at 512 KB. See the SDK's exported types for individual bounds.
   read only from the module's own bundle. `slice` is four whole numbers from 0 to 64 (top, right, bottom, left): the
   nine-slice insets and the frame's width. Colours are `#rrggbb`; with `colors`, `surface` and `text` are needed,
   `muted` and `accent` default to `text`, `box` to `surface`, `boxText` to `text`. Text, muted text and the box's text
-  need a contrast of 4.5:1 with what they sit on, the accent 3:1 with the surface and the box. A skin that fails is
-  refused with `INVALID_PARAMS` and the reason, and nothing of it is kept.
-- Tavora sets every size: on a skinned card the title is 17 px and the effect 15 px, on a plain card 15 and 13 px, the
-  rest 13 px. The skin's font is used for the title and the effect box only, with the theme font for letters it lacks;
+  need a contrast of 4.5:1 with what they sit on, and so does the accent with the box (its numbers are text); the
+  accent with the surface (a line there) 3:1. A skin that fails is refused with `INVALID_PARAMS` and the reason, and
+  nothing of it is kept. When the same name is defined twice at once, the later call wins. All modules together keep at
+  most 16 MB of skin files (each file once); a skin beyond that is refused. A module's skins go when it reloads,
+  updates, is turned off or removed, so a page defines its skins when it starts.
+- Tavora sets every size: on a skinned card the title is 17 px and the effect 15 px, on a plain card 15 and 13 px;
+  badges and the footer 12 px (the kit's small size), the rest 13 px. The skin's font is used for the title and the effect box only, with the theme font for letters it lacks;
   a skin's colours ignore the theme.
-- On an older Tavora the SDK leaves `layout`, `effect` and `skin` out of `ui.tooltip.show` and `defineSkin` does
-  nothing (`sdk.supports("ui.tooltip.skin")` tells); a raw caller checks the version itself, since an older Tavora
+- A card shown before its skin is defined is plain; when the define lands while it is still shown, it is drawn again
+  in the skin.
+- On an older Tavora the SDK leaves `layout` and `skin` out of `ui.tooltip.show`, puts the `effect` text into a
+  section row (first section, plain text), and `defineSkin` does nothing (`sdk.supports("ui.tooltip.skin")` tells); a raw caller checks the version itself, since an older Tavora
   rejects the unknown keys.
 
 The neutral look draws with Tavora's own colours and follows the user's theme; `tone` and the affix

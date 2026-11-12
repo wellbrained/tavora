@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { createApp, h, nextTick, type App } from "vue"
 import type { TooltipContent } from "@tavora/sdk"
 import { ItemCard, type ItemCardSkin } from "."
 import { ITEM_CARD_TYPE } from "../../tooltip/typography"
+import { heldSkinFonts } from "./skin-font"
 
 let app: App | undefined
 afterEach(() => {
@@ -12,10 +13,10 @@ afterEach(() => {
   document.body.innerHTML = ""
 })
 
-function mount(content: TooltipContent, skin?: ItemCardSkin) {
+function mount(content: TooltipContent, skin?: ItemCardSkin, copies = 1) {
   const root = document.createElement("div")
   document.body.append(root)
-  app = createApp({ render: () => h(ItemCard, { content, skin }) })
+  app = createApp({ render: () => Array.from({ length: copies }, () => h(ItemCard, { content, skin })) })
   app.mount(root)
   return root.querySelector("[data-slot=item-card]") as HTMLElement
 }
@@ -55,6 +56,27 @@ describe("ItemCard", () => {
     expect(el.querySelector(".tavora-item-card-heading h3")!.textContent).toBe("Archer Tower")
     expect(el.hasAttribute("data-skinned")).toBe(false)
     expect(el.style.getPropertyValue("--skin-surface")).toBe("")
+  })
+
+  it("loads a skin's font once for every card that uses it, and lets go of it with the last card", () => {
+    const fonts = new Set<unknown>()
+    vi.stubGlobal("FontFace", class { constructor(readonly family: string, readonly source: string) {} load() { return Promise.resolve(this) } })
+    Object.defineProperty(document, "fonts", { value: fonts, configurable: true })
+    try {
+      mount(card, { ...skin, font: "card.woff2" }, 3)
+      expect(heldSkinFonts()).toBe(1)
+      expect(fonts.size).toBe(1)
+      const cards = document.querySelectorAll<HTMLElement>("[data-slot=item-card]")
+      expect(cards).toHaveLength(3)
+      expect(new Set(Array.from(cards, (c) => c.style.getPropertyValue("--skin-font"))).size).toBe(1)
+      app!.unmount()
+      app = undefined
+      expect(heldSkinFonts()).toBe(0)
+      expect(fonts.size).toBe(0)
+    } finally {
+      vi.unstubAllGlobals()
+      delete (document as { fonts?: unknown }).fonts
+    }
   })
 
   it("keeps text as text, and a plain-text effect as one run", () => {

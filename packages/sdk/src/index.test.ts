@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HELLO_MESSAGE, PORT_MESSAGE, PROTOCOL_VERSION } from "./protocol.js";
+import { HELLO_MESSAGE, ITEM_CARD_TAVORA, PORT_MESSAGE, PROTOCOL_VERSION } from "./protocol.js";
 
 type Request = { v: number; id: number; method: string; params?: unknown };
 type Responder = (request: Request) => { result: unknown } | { error: Record<string, unknown> } | undefined;
@@ -333,8 +333,8 @@ it("sends the card's layout, effect and skin only to a Tavora that has skins, an
   await api.ui.tooltip.show({id:"a",at:{x:1,y:2},content});await api.ui.tooltip.defineSkin("progress",{colors:{surface:"#101010",text:"#f0f0f0"}});
   expect(content.layout).toBe("card");
   return {shown:host.requests.filter(r=>r.method==="ui.tooltip.show").map(r=>(r.params as {content:Record<string,unknown>}).content),skins:host.requests.filter(r=>r.method==="ui.tooltip.defineSkin").map(r=>r.params),supports:api.supports("ui.tooltip.skin")};};
- const now=await run("0.24.27");expect(now.supports).toBe(true);expect(now.shown[0]).toMatchObject({layout:"card",skin:"progress",effect:[{text:"Deals "},{text:"12",accent:true}]});expect(now.skins).toEqual([{name:"progress",skin:{colors:{surface:"#101010",text:"#f0f0f0"}}}]);
- const old=await run("0.24.26");expect(old.supports).toBe(false);expect(old.shown[0]).toEqual({title:"Archer",badges:["Tower"]});expect(old.skins).toEqual([]);
+ const [major,minor,patch]=ITEM_CARD_TAVORA.split(".").map(Number);const now=await run(ITEM_CARD_TAVORA);expect(now.supports).toBe(true);expect(now.shown[0]).toMatchObject({layout:"card",skin:"progress",effect:[{text:"Deals "},{text:"12",accent:true}]});expect(now.skins).toEqual([{name:"progress",skin:{colors:{surface:"#101010",text:"#f0f0f0"}}}]);
+ const old=await run(patch?`${major}.${minor}.${patch-1}`:`${major}.${minor!-1}.999`);expect(old.supports).toBe(false);expect(old.shown[0]).toEqual({title:"Archer",badges:["Tower"],sections:[{rows:[{text:"Deals 12"}]}]});expect(old.skins).toEqual([]);
 });
 
 it("sends pinnable only to a Tavora that knows it, and refuses a pin on a card that can't pin",async()=>{

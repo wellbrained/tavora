@@ -17,7 +17,7 @@
 .tavora-item-card-type,.tavora-item-card-props dt,.tavora-item-card-section>p{color:var(--ic-muted)}
 .tavora-item-card p{margin:0}
 .tavora-item-card-badges{display:flex;flex-wrap:wrap;gap:4px}
-.tavora-item-card-badge{font-size:12px;line-height:1.4;padding:0 5px;border:1px solid var(--ic-line);border-radius:var(--radius-sm);color:var(--ic-muted);white-space:nowrap}
+.tavora-item-card-badge{font-size:var(--ic-small-size);line-height:1.4;padding:0 5px;border:1px solid var(--ic-line);border-radius:var(--radius-sm);color:var(--ic-muted);white-space:nowrap}
 .tavora-item-card-effect{padding:6px 8px;border-radius:var(--radius-md);background:var(--ic-box);color:var(--ic-box-text);font-size:var(--ic-effect-size);white-space:pre-wrap}
 .tavora-item-card[data-skinned] .tavora-item-card-effect{border-radius:0}
 .tavora-item-card-effect [data-accent]{color:var(--ic-accent)}

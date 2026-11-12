@@ -10,9 +10,16 @@ const theme = { colors: { text: "#f2ece0", background: "#171412" }, tokens: { pr
 const FRAME = "data:image/png;base64,iVBORw0KGgo=";
 const FONT = "data:font/woff2;base64,d09GMgAB";
 const skin = { frame: { image: FRAME, slice: [6, 8, 6, 8] }, colors: { surface: "#14110f", text: "#f2ece0", muted: "#b8ad9c", accent: "#e8b04a", box: "#231d18", boxText: "#f2ece0" }, font: FONT, pixelArt: true, titleCaps: true };
-let serial = 0;
+let serial = 0, skinIds = 0;
+const send = (channel: string, ...args: unknown[]) => (ipc.handlers.get(channel) as unknown as (...a: unknown[]) => void)({}, ...args);
+/** Renders a card; a skin given as an object is sent first, once, as the host does, and the card names its id. */
 function render(content: TooltipContent, extra: Record<string, unknown> = {}) {
-    ipc.handlers.get("tooltip:render")!({}, { serial: ++serial, content, pinned: false, pinnable: true, source: "9 Kings", theme, language: "en", ...extra });
+    if (extra.skin && typeof extra.skin === "object") {
+        const id = ++skinIds;
+        send("tooltip:skin", id, extra.skin);
+        extra = { ...extra, skin: id };
+    }
+    send("tooltip:render", { serial: ++serial, content, pinned: false, pinnable: true, source: "9 Kings", theme, language: "en", ...extra });
     return document.getElementById("card")!;
 }
 const card: TooltipContent = { title: "Archer Tower", subtitle: "Tower · Kingdom of Nothing", layout: "card", image: "data:image/png;base64,iVBORw0KGgo=", badges: ["Rare"], effect: [{ text: "Shoots for " }, { text: "12", accent: true }, { text: " damage" }], properties: [{ label: "Range", value: "3" }] };
@@ -63,6 +70,24 @@ describe("tooltip preload", () => {
         expect(el.style.getPropertyValue("border-image-source")).toBe("");
         expect(el.style.getPropertyValue("--skin-surface")).toBe("");
         expect(document.body.classList.contains("framed")).toBe(false);
+    });
+
+    it("finds a skin by the id the host sent it under, shows a plain card for an id it doesn't have, and forgets dropped ones", () => {
+        send("tooltip:skin", 900, skin);
+        render(card, { skin: 900 });
+        expect(document.body.classList.contains("skinned")).toBe(true);
+        render(card, { skin: 901 });
+        expect(document.body.classList.contains("skinned")).toBe(false);
+        send("tooltip:skin-drop", [900]);
+        render(card, { skin: 900 });
+        expect(document.body.classList.contains("skinned")).toBe(false);
+    });
+
+    it("lists a card's requirements last, under their heading", () => {
+        const el = render({ ...card, requirements: [{ label: "Level", value: "12" }] }, { language: "de" });
+        const last = el.querySelector(".item")!.lastElementChild!;
+        expect(last.querySelector("small")!.textContent).toBe("Ben\u00f6tigt");
+        expect(last.querySelector(".properties")!.textContent).toBe("Level: 12");
     });
 
     it("shows the rich layout as before, with no skin even when one is sent", () => {

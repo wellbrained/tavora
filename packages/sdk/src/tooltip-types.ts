@@ -18,7 +18,8 @@ export interface TooltipContent {
      * How the card is laid out. `"rich"` (the default) is the tooltip as it always was: the picture beside the text.
      * `"card"` is an item card: the picture large on top, a name bar with the title, the subtitle as its type line,
      * the badges, the `effect` box, then properties and sections. Needs `sdk.supports("ui.tooltip.skin")`: on an older
-     * Tavora the SDK leaves `layout`, `effect` and `skin` out, so the card shows in the rich layout.
+     * Tavora the SDK leaves `layout` and `skin` out and puts `effect` into a section row, so the card shows in the rich
+     * layout.
      */
     layout?: "rich" | "card";
     /**
@@ -72,8 +73,8 @@ export interface TooltipSkin {
     };
     /**
      * The card's colours as `#rrggbb`. They stay the same in every theme. With `colors`, `surface` and `text` are needed;
-     * `muted` and `accent` default to `text`, `box` to `surface` and `boxText` to `text`. Text, muted text and the
-     * box's text need a contrast of 4.5:1 with what they sit on, the accent 3:1 with the surface and the box.
+     * `muted` and `accent` default to `text`, `box` to `surface` and `boxText` to `text`. Text, muted text, the box's
+     * text and the accent in the box need a contrast of 4.5:1 with what they sit on, the accent on the surface 3:1.
      */
     colors?: {
         surface?: string;

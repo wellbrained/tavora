@@ -932,7 +932,7 @@ export interface Methods {
   /**
    * Defines (or replaces) one of this module's item-card skins, for every panel of the module until Tavora restarts.
    * Names are 1 to 32 of a-z, 0-9 and `-`; at most 32 per module. Tavora checks the files and the colours' contrast and
-   * refuses a skin that fails (INVALID_PARAMS, with the reason). Tavora 0.24.27 and newer.
+   * refuses a skin that fails (INVALID_PARAMS, with the reason). Tavora `ITEM_CARD_TAVORA` and newer.
    */
   "ui.tooltip.defineSkin": { params: { name: string; skin: TooltipSkin }; result: null };
   /** Opens a web address in the workspace's Browser panel. Only right after a click or key press in the panel; http and https only. */
@@ -1499,6 +1499,13 @@ const flag = (key: string, when: string): GestureRule => ({ when, check: (params
  * generated protocol reference all read this table; the host's own checks are in apps/desktop (bridge.ts, module-view.ts), and
  * apps/desktop/src/main/gesture-table.test.ts fails when the host's click checks and `gesture` differ.
  */
+/**
+ * The first Tavora with item cards and skins (`ui.tooltip.defineSkin`, and `layout`, `effect` and `skin` on a tooltip):
+ * the one place that number is written. It must be the version the pull request merges as: set it right before merging,
+ * then run `pnpm --filter @tavora/docs protocol`. Too low, and the SDK sends a Tavora without them keys it refuses.
+ */
+export const ITEM_CARD_TAVORA = "0.24.27";
+
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),
   "workspace.getCurrent": later("0.21.43"),
@@ -1537,7 +1544,7 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "ui.tooltip.move": call("0.18.18"),
   "ui.tooltip.hide": call("0.18.18"),
   "ui.tooltip.close": call("0.18.18"),
-  "ui.tooltip.defineSkin": later("0.24.27"),
+  "ui.tooltip.defineSkin": later(ITEM_CARD_TAVORA),
   "links.open": call("0.11.0", null, true),
   "blobs.list": call("0.12.0"),
   "blobs.usage": call("0.12.0"),
@@ -1649,7 +1656,7 @@ const SDK_CALLS = { "panel.openDialog": "panel.setDialog", "panel.closeDialog": 
  * Params of an existing call that only a newer Tavora knows. An older one rejects the unknown key (INVALID_PARAMS) for the
  * whole call, so the SDK leaves the key out there. They never raise `MIN_TAVORA`.
  */
-export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91", "ui.tooltip.skin": "0.24.27" } as const;
+export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91", "ui.tooltip.skin": ITEM_CARD_TAVORA } as const;
 
 /** A protocol call, a param only newer Tavoras know (`ui.tooltip.pinnable`), or one of the SDK calls named differently on the wire (`panel.openDialog`). */
 export type SupportedCall = CallName | keyof typeof SDK_CALLS | keyof typeof FIELD_SINCE;
