@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { TooltipProvider } from "reka-ui";
 import AddGameDialog from "./components/AddGameDialog.vue";
-import AddPersonalDialog from "./components/AddPersonalDialog.vue";
 import AddModuleDialog from "./components/AddModuleDialog.vue";
 import CloudCopyDialog from "./components/CloudCopyDialog.vue";
 import ProfileDialog from "./components/profile/ProfileDialog.vue";
@@ -77,7 +76,6 @@ const fallbackPosition = computed(() => (settingsOpen.value && state.value ? sta
     <ProfileDialog />
     <SearchDialog />
     <AddGameDialog v-if="dialog?.kind === 'add-game'" />
-    <AddPersonalDialog v-if="dialog?.kind === 'add-personal'" />
     <SteamImportDialog v-else-if="dialog?.kind === 'steam-import'" />
     <AddModuleDialog v-else-if="dialog?.kind === 'add-module'" />
     <ShareIconsDialog v-else-if="dialog?.kind === 'share-icons'" :request="dialog" />

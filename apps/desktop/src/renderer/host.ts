@@ -372,7 +372,6 @@ export type DialogRequest =
   | NavigationChoiceRequest
   | GameSwitchRequest
   | { kind: "add-game" }
-  | { kind: "add-personal" }
   | { kind: "steam-import" }
   | AddModuleRequest
   | GrantRequest
