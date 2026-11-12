@@ -188,10 +188,15 @@ export function hostActionTable(c: HostChecks) {
 
     // Library
     "open-workspace": { workspaceId: c.workspaceId },
-    /** A game workspace (a built-in game, a game added by name, or one found online), or a personal workspace. */
+    /**
+     * A game workspace (a built-in game, a game added by name, or one found online), or a personal workspace. A game
+     * whose only copy is in Trash comes back from there instead. Answers with the workspace's id, and `restored` when it
+     * came back.
+     */
     "add-workspace": variants(
       { catalogId: c.gameId },
-      { name: text() },
+      /** A game added by name; with its Steam app id when this PC knows it (a game found here that no list has). */
+      { name: text(), steamAppId: optional(c.steamAppId) },
       { personal: text() },
       /** A game found by the online search. */
       { online: onlineGame },

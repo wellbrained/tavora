@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { addOrRestoreWorkspace, findGameCopy } from "./game-copy";
 import {
   addWorkspace,
   iconFileShared,
@@ -116,6 +117,48 @@ describe("adding games", () => {
     expect(() => addWorkspace(library, { online }, day(3))).toThrow("is in Trash");
     expect(() => addWorkspace(library, { online: { ...online, id: "../x" } }, day(3))).toThrow(LibraryError);
     expect(() => addWorkspace(library, { online: { id: "local-doom", name: "Doom" } }, day(3))).toThrow(LibraryError);
+  });
+
+  it("brings a game's copy back from Trash instead of adding another: by Tavora's id, Steam's app id or name", () => {
+    const library = emptyLibrary();
+    addWorkspace(library, { catalogId: "elden-ring" }, day(1));
+    addWorkspace(library, { name: "9 Kings", steamAppId: 2784470 }, day(1));
+    addWorkspace(library, { name: "Hollow Knight™" }, day(1));
+    for (const id of ["elden-ring", "local-9-kings", "local-hollow-knight"]) trashWorkspace(library, id, day(2));
+    expect(addOrRestoreWorkspace(library, { catalogId: "elden-ring" }, day(3))).toEqual({ id: "elden-ring", restored: true });
+    expect(addOrRestoreWorkspace(library, { online: { id: "9-kings", name: "Nine Kings", steamAppId: 2784470 } }, day(3))).toEqual({ id: "local-9-kings", restored: true });
+    expect(addOrRestoreWorkspace(library, { name: "hollow knight" }, day(3))).toEqual({ id: "local-hollow-knight", restored: true });
+    expect(Object.values(library.workspaces).map((workspace) => [workspace.id, workspace.trashedAt])).toEqual([
+      ["elden-ring", null],
+      ["local-9-kings", null],
+      ["local-hollow-knight", null],
+    ]);
+    expect(rootIds(library)).toEqual(["workspace:elden-ring", "workspace:local-9-kings", "workspace:local-hollow-knight"]);
+  });
+
+  it("adds a new game as before, and keeps a game in use as it is", () => {
+    const library = emptyLibrary();
+    expect(addOrRestoreWorkspace(library, { name: "Rust", steamAppId: 252490 }, day(1))).toEqual({ id: "local-rust", restored: false });
+    expect(library.workspaces["local-rust"]!.steamAppId).toBe(252490);
+    expect(() => addOrRestoreWorkspace(library, { online: { id: "rust", name: "Rust", steamAppId: 252490 } }, day(2))).not.toThrow();
+    expect(() => addOrRestoreWorkspace(library, { catalogId: "elden-ring" }, day(2))).not.toThrow();
+    expect(() => addOrRestoreWorkspace(library, { catalogId: "elden-ring" }, day(3))).toThrow("already in your library");
+  });
+
+  it("never takes a personal workspace for a game's copy", () => {
+    const library = emptyLibrary();
+    const notes = addWorkspace(library, { personal: "Fortnite" }, day(1));
+    trashWorkspace(library, notes, day(2));
+    expect(findGameCopy(library, { id: null, steamAppId: null, name: "Fortnite" })).toBeUndefined();
+    expect(addOrRestoreWorkspace(library, { name: "Fortnite" }, day(3)).restored).toBe(false);
+  });
+
+  it("finds the copy in use before one in Trash", () => {
+    const library = emptyLibrary();
+    addWorkspace(library, { name: "Valheim" }, day(1));
+    trashWorkspace(library, "local-valheim", day(2));
+    addWorkspace(library, { catalogId: "valheim" }, day(3));
+    expect(findGameCopy(library, { id: null, steamAppId: 892970, name: "Valheim" })?.id).toBe("valheim");
   });
 
   it("has automatic updates on by default and keeps only a real setting", () => {
@@ -543,6 +586,13 @@ describe("catalog search", () => {
     expect(searchCatalog(library, "path").map((game) => game.id)).toEqual(["path-of-exile"]);
     expect(searchCatalog(library, "witcher").map((game) => game.id)).toEqual(["the-witcher-3"]);
     expect(searchCatalog(library, "zzzz")).toEqual([]);
+  });
+
+  it("still offers a game whose copy is in Trash: adding it brings that copy back", () => {
+    const library = emptyLibrary();
+    addWorkspace(library, { catalogId: "poe2" }, day(1));
+    trashWorkspace(library, "poe2", day(2));
+    expect(searchCatalog(library, "path").map((game) => game.id)).toEqual(["path-of-exile", "poe2"]);
   });
 
   it("lists the first games by the name shown when nothing is typed", () => {

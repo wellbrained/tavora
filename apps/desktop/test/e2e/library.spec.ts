@@ -109,7 +109,7 @@ test("the first-run welcome moves with the arrow keys, and makes a personal spac
 });
 
 
-test("the Add a game list starts with this PC's games, newest first, and ranks real name starts first when searching", async () => {
+test("the Add a game list starts with this PC's games as covers, newest first, and searches this PC, then the built-in list, then online", async () => {
   const { url, server } = await gameService([
     { id: "eldoran", name: "Eldoran" },
     { id: "eldevin", name: "Eldevin" },
@@ -124,7 +124,8 @@ test("the Add a game list starts with this PC's games, newest first, and ranks r
   const { app, page } = await launch(undefined, [], { env: { TAVORA_API_URL: url, TAVORA_TEST_INSTALLED: installed } });
   await openAddGame(page);
   const rows = page.getByTestId("add-game-dialog").locator('[role="option"]');
-  // Nothing typed: the games on this PC, the one installed last first.
+  // Nothing typed: the games on this PC as covers (none added yet), the one installed last first.
+  await expect(page.getByTestId("add-game-dialog").locator('[data-testid^="cover-"]')).toHaveCount(3);
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toContainText("Mystery Game");
   await expect(rows.nth(0)).toContainText("Installed 2 days ago");
@@ -134,14 +135,15 @@ test("the Add a game list starts with this PC's games, newest first, and ranks r
   await page.getByTestId("game-search").fill("eld");
   await expect(page.getByTestId("catalog-eldoran")).toBeVisible();
   const ids = await rows.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-testid")).filter((id) => id !== "add-custom"));
+  // Each part ranked on its own, real name starts first; the online answers come last, so nothing above them moves.
   expect(ids).toEqual([
     "catalog-elden-ring",
-    "catalog-eldevin",
-    "catalog-eldgear",
-    "catalog-eldoran",
     "catalog-skyrim",
     "catalog-battlefield-6",
     "catalog-starfield",
+    "catalog-eldevin",
+    "catalog-eldgear",
+    "catalog-eldoran",
   ]);
   await app.close();
   server.close();
@@ -161,10 +163,10 @@ test("the Add a game picker works from the keyboard", async () => {
   // The top match is highlighted at once; focus stays in the field.
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");
   await expect(search).toHaveAttribute("aria-activedescendant", "game-results-option-0");
-  await expect(page.getByTestId("panel-heading")).toHaveText("Modules for Elden Ring");
+  await expect(rows.first().getByTestId("row-action")).toHaveText("Add ↵");
   await search.press("ArrowDown");
   await expect(rows.nth(1)).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("panel-heading")).not.toHaveText("Modules for Elden Ring");
+  await expect(search).toHaveAttribute("aria-activedescendant", "game-results-option-1");
   await expect(search).toBeFocused();
   await search.press("ArrowUp");
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");
@@ -180,11 +182,12 @@ test("the Add a game picker works from the keyboard", async () => {
   await openAddGame(page);
   await page.getByTestId("game-search").fill("My Keyboard Game");
   await expect(page.getByTestId("add-custom")).toBeVisible();
-  await expect(page.getByTestId("panel-heading")).toHaveText("Modules for My Keyboard Game");
   // The footer has no Your own game link: typing the name is the way, and Import from Steam stays.
   await expect(page.getByTestId("add-game-own")).toHaveCount(0);
   await expect(page.getByTestId("open-steam-import")).toBeVisible();
-  await expect(page.getByTestId("panel-no-modules")).toBeVisible();
+  // One column: no module panel and no Add game button beside the list.
+  await expect(page.getByTestId("add-game-panel")).toHaveCount(0);
+  await expect(page.getByTestId("panel-add")).toHaveCount(0);
   await page.getByTestId("game-search").press("Enter");
   await expect(page.getByTestId("rail-workspace-local-my-keyboard-game")).toHaveAttribute("aria-current", "page");
 
@@ -466,6 +469,25 @@ test("a workspace in Trash is deleted for good after 30 days or when the user sa
   await expectModuleText(again.app, VANILLA, "status", "Connected");
   await expectModuleText(again.app, VANILLA, "note-revision", "0");
   await again.app.close();
+});
+
+test("adding a game that is in Trash brings that copy back with its panels instead of a second one", async () => {
+  const { app, page } = await launch();
+  await openWorkspace(page, "satisfactory");
+  await openModule(page, VANILLA);
+  await expect(panels(page, VANILLA)).toHaveCount(1);
+  await page.getByTestId("rail-workspace-satisfactory").click({ button: "right" });
+  await page.locator('[role="menu"][data-state="open"] [data-testid="menu-remove"]').click();
+  await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveCount(0);
+
+  // The search still offers it; adding it brings the copy back, opened, with what it had.
+  await openAddGame(page);
+  await page.getByTestId("game-search").fill("satisf");
+  await page.getByTestId("catalog-satisfactory").click();
+  await expect(page.getByTestId("rail-workspace-satisfactory")).toHaveAttribute("aria-current", "page");
+  await expect(panels(page, VANILLA)).toHaveCount(1);
+  await expect(page.locator('[data-testid^="rail-workspace-satisfactory"]')).toHaveCount(1);
+  await app.close();
 });
 
 test("the rail remembers whether it is expanded and how wide it is", async () => {

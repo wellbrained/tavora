@@ -11,6 +11,7 @@ const api: TavoraHostApi = {
   act: (action) => ipcRenderer.invoke("host:action", action),
   searchCatalog: (query) => ipcRenderer.invoke("host:search-catalog", query),
   installedGames: () => ipcRenderer.invoke("host:installed-games"),
+  gameCovers: (appids) => ipcRenderer.invoke("host:game-covers", appids),
   popularGames: () => ipcRenderer.invoke("host:popular-games"),
   moduleNotes: (moduleId) => ipcRenderer.invoke("host:module-notes", moduleId),
   searchOnline: (query) => ipcRenderer.invoke("host:search-online", query),

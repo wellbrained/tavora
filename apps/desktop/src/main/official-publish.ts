@@ -53,6 +53,7 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/host.ts",
     "main/startup-failure.ts",
     "main/actions.ts",
+    "main/game-copy.ts",
     "main/games-seen.ts",
     "main/steam-played.ts",
     "main/installed-list.ts",

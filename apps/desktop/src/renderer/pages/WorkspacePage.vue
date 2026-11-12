@@ -23,6 +23,7 @@ import { DockPreview } from "../dock-preview";
 import DockPreviewLayer from "../components/workspace/DockPreview.vue";
 import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import EmptySlot from "../components/workspace/EmptySlot.vue";
+import MadeForGame from "../components/workspace/MadeForGame.vue";
 import GroupActions from "../components/workspace/GroupActions.vue";
 import HeaderTools from "../components/workspace/HeaderTools.vue";
 import TemplatePreview from "../components/workspace/TemplatePreview.vue";
@@ -517,6 +518,8 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         <LayoutGrid class="text-muted-foreground mb-2 size-12" :stroke-width="1" />
         <p class="text-lg font-semibold">{{ t("workspace.startTitle") }}</p>
         <p class="text-muted-foreground max-w-sm text-sm">{{ t("workspace.startText") }}</p>
+        <!-- A game's own modules first: one click each. -->
+        <MadeForGame v-if="workspace?.kind === 'game'" :workspace="workspace" class="mt-3" />
         <Button class="mt-3 h-9 text-sm [&_svg]:size-5" data-testid="empty-add-module" @click="dialog = { kind: 'add-module' }">
           <Plus :stroke-width="2" absolute-stroke-width /> {{ t("workspace.addModule") }}
         </Button>

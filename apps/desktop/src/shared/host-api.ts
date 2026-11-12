@@ -104,6 +104,8 @@ export interface WorkspaceView {
   shareIcon: string | null;
   /** Picked from the built-in list rather than added by name. */
   builtIn: boolean;
+  /** The game's Steam app id, null without one: with the id, it names the game when the user asks for a module for it. */
+  steamAppId: number | null;
   addedAt: string;
   lastOpenedAt: string | null;
 }
@@ -936,7 +938,7 @@ export interface ModuleMenu {
 
 /** `limited`: the service took only some icons for now (it takes so many an hour); the rest can be shared later. */
 export type ActionResult =
-  | { ok: true; id?: string; shared?: number; limited?: true; added?: number; updated?: number; waiting?: number }
+  | { ok: true; id?: string; shared?: number; limited?: true; added?: number; updated?: number; waiting?: number; restored?: true }
   | { ok: false; error: string };
 
 /** A game installed on this PC, for the Add a game picker. Everything in it was read on this PC and stays on it. */
@@ -954,6 +956,9 @@ export interface InstalledGameView {
   /** The workspace of this game when the user already has it. */
   workspaceId: string | null;
 }
+
+/** Most covers the Add a game dialog shows (and asks for) at once. */
+export const MAX_PICKER_COVERS = 4;
 
 export interface CatalogMatch {
   id: string;
@@ -1163,6 +1168,8 @@ export interface TavoraHostApi {
   searchCatalog(query: string): Promise<CatalogMatch[]>;
   /** The games installed on this PC, most recently played first, with their icons. Never rejects; empty when nothing was found. */
   installedGames(): Promise<InstalledGameView[]>;
+  /** Steam's cover art from this PC for up to MAX_PICKER_COVERS games, by Steam app id (null: none). Never rejects. */
+  gameCovers(appids: number[]): Promise<Record<number, string | null>>;
   /** Popular built-in games the user does not have yet, for the first-run welcome's tiles. */
   popularGames(): Promise<CatalogMatch[]>;
   /** A module's patch notes, newest first, up to the installed version; empty without any. */

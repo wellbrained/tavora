@@ -1,7 +1,7 @@
 import { isGameId } from "@tavora/module-schema";
 import type { SteamGameView, SteamImportGame, SteamLibraryResult } from "../shared/host-api";
 import { hasMessage, translate, type Language, type MessageKey } from "../shared/i18n";
-import { normalizeName } from "./launcher-games";
+import { gameCopyFinder } from "./game-copy";
 import { addWorkspace, type Library } from "./library";
 import { isSteamAppId } from "./steam-icons";
 
@@ -13,17 +13,11 @@ const IMPORT_TIMEOUT_MS = 20_000;
 /**
  * Whether a game from a Steam library is already in the user's library: by its
  * Tavora id, by the Steam appid a game was added with, or by name (a game the
- * user added by hand is the same game). Trash counts, so an import never
- * brings back a game the user removed.
+ * user added by hand is the same game; `findGameCopy`). Trash counts, so an
+ * import never brings back a game the user removed.
  */
-export function steamGameStatus(library: Library, game: SteamImportGame): "new" | "owned" | "trash" {
-  const name = normalizeName(game.name);
-  let found: Library["workspaces"][string] | undefined = game.id ? library.workspaces[game.id] : undefined;
-  if (!found) {
-    found = Object.values(library.workspaces).find(
-      (own) => own.steamAppId === game.appid || (name !== "" && normalizeName(own.name) === name),
-    );
-  }
+export function steamGameStatus(library: Library, game: SteamImportGame, find = gameCopyFinder(library)): "new" | "owned" | "trash" {
+  const found = find({ id: game.id, steamAppId: game.appid, name: game.name });
   if (!found) return "new";
   return found.trashedAt ? "trash" : "owned";
 }
@@ -113,6 +107,7 @@ export async function fetchSteamLibrary(
 
 /** The list the dialog shows: each game with whether the user already has it. */
 export function steamLibraryView(library: Library, games: SteamImportGame[]): SteamLibraryResult {
-  const views: SteamGameView[] = games.map((game) => ({ ...game, status: steamGameStatus(library, game) }));
+  const find = gameCopyFinder(library);
+  const views: SteamGameView[] = games.map((game) => ({ ...game, status: steamGameStatus(library, game, find) }));
   return { status: "ok", games: views };
 }

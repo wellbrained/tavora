@@ -328,7 +328,8 @@ export function recentWorkspaces(library: Library, limit: number): WorkspaceEntr
  */
 export function searchCatalog(library: Library, query: string, limit = 8) {
   const q = normalize(query);
-  const available = CATALOG.filter((game) => !library.workspaces[game.id]);
+  // A game in Trash is still offered: adding it brings that copy back.
+  const available = CATALOG.filter((game) => !isLive(library, game.id));
   if (!q) return [...available].sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit);
   const score = (text: string) => {
     const t = normalize(text);
