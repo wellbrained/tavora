@@ -12,6 +12,7 @@ import { folderMenu, workspaceMenu } from "../rail-actions";
 import MenuArea from "./menus/MenuArea.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
 import RailFooterTile from "./RailFooterTile.vue";
+import AddPersonalPopover from "./AddPersonalPopover.vue";
 import RailInboxButton from "./RailInboxButton.vue";
 import RailModuleUpdates from "./RailModuleUpdates.vue";
 import RailOverlayButton from "./RailOverlayButton.vue";
@@ -46,8 +47,11 @@ onBeforeUnmount(() => narrowQuery.removeEventListener("change", onNarrowChange))
 // short so both fit side by side in German too; the full name is the tooltip and the accessible name.
 const addButtons = computed(() => [
   { testid: "rail-add-game", name: t("common.addGame"), label: t("rail.addGame.short"), icon: Gamepad2, badge: true, run: () => (dialog.value = { kind: "add-game" }) },
-  { testid: "rail-add-personal", name: t("rail.addPersonal"), label: t("rail.addPersonal.short"), icon: UserRoundPlus, badge: false, run: () => (dialog.value = { kind: "add-personal" }) },
+  { testid: "rail-add-personal", name: t("rail.addPersonal"), label: t("rail.addPersonal.short"), icon: UserRoundPlus, badge: false, run: () => (personalOpen.value = !personalOpen.value) },
 ]);
+/** The Personal button's name popover is open; `personalEntry` is what it opens next to. */
+const personalOpen = ref(false);
+const personalEntry = ref<HTMLElement | null>(null);
 const expanded = computed(() => (narrow.value ? peek.value : library.value.rail.expanded));
 function toggleRail() {
   if (narrow.value) peek.value = !peek.value;
@@ -564,9 +568,15 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       </AnimatedList>
         <!-- Add game and Personal are one more entry under the last workspace: two quiet buttons side by side when
              expanded (an even split), two tiles stacked when compact. -->
+        <AddPersonalPopover v-model:open="personalOpen" :anchor="personalEntry" />
         <div :class="cn('mt-1 flex px-2', expanded ? 'gap-1' : 'flex-col gap-1')" data-testid="rail-add">
-          <div v-for="add in addButtons" :key="add.testid" :class="cn('rail-entry group relative flex', expanded && 'min-w-0 flex-1')">
-            <RailTooltip :text="add.name">
+          <div
+            v-for="add in addButtons"
+            :key="add.testid"
+            :ref="(el) => add.testid === 'rail-add-personal' && (personalEntry = el as HTMLElement | null)"
+            :class="cn('rail-entry group relative flex', expanded && 'min-w-0 flex-1')"
+          >
+            <RailTooltip :text="add.name" :disabled="add.testid === 'rail-add-personal' && personalOpen">
               <button
                 type="button"
                 :class="
@@ -578,6 +588,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 data-rail-item
                 :data-testid="add.testid"
                 :aria-label="add.name"
+                :aria-expanded="add.testid === 'rail-add-personal' ? personalOpen : undefined"
                 @click="add.run()"
               >
                 <template v-if="expanded">
