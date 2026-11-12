@@ -37,10 +37,19 @@ export interface TooltipContent {
         label: string;
         value: string;
     }[];
+    /**
+     * Stats as label and value. A row's `per` (e.g. "×1.2", up to 40 characters) is how much it grows, say per level: the
+     * card layout shows it in a third column, in the accent colour, and the column appears only when a row of the card
+     * has one; with `per`, `value` may be empty (a stat that only grows). The rich layout shows it after the value.
+     * Needs `sdk.supports("ui.tooltip.per")`: on an older Tavora the SDK puts it into the value ("24 · ×1.2").
+     */
     properties?: {
         label: string;
         value: string;
+        per?: string;
     }[];
+    /** The heading over the `per` column ("Per level"), in the user's language, up to 60 characters; shown only with a `per`. */
+    perHeading?: string;
     sections?: {
         title?: string;
         rows: {

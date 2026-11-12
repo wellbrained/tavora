@@ -33,6 +33,13 @@ describe("tooltip boundary", () => {
         for (const key of ["layout", "effect", "skin"])
             expect(key in checkTooltip(base).content).toBe(false);
     });
+    it("takes what a stat grows by and its heading, and an empty value only next to a per", () => {
+        const content = { title: "x", layout: "card", perHeading: "Per level", properties: [{ label: "Damage", value: "12", per: "+3" }, { label: "Speed", value: "", per: "\u00d71.1" }, { label: "Range", value: "3" }] };
+        expect(checkTooltip({ ...base, content }).content).toEqual(content);
+        expect("perHeading" in checkTooltip(base).content).toBe(false);
+        for (const extra of [{ properties: [{ label: "Range", value: "" }] }, { properties: [{ label: "Range", value: "3", per: "" }] }, { properties: [{ label: "Range", value: "3", per: "x".repeat(41) }] }, { properties: [{ label: "Range", value: "3", per: 3 }] }, { properties: [{ label: "Range", value: 3, per: "+1" }] }, { properties: [{ label: "Range", value: "x".repeat(301), per: "+1" }] }, { properties: [{ label: "Range", value: "3", per: "+1", color: "red" }] }, { perHeading: "" }, { perHeading: "x".repeat(61) }, { perHeading: 1 }])
+            expect(() => checkTooltip({ ...base, content: { title: "x", ...extra } })).toThrow();
+    });
     it("rejects another layout, a bad skin name and effects that are too long or not text", () => {
         for (const extra of [{ layout: "grid" }, { layout: "CARD" }, { skin: "Chaos King" }, { skin: "x".repeat(33) }, { skin: "" }, { effect: "" }, { effect: "x".repeat(1001) }, { effect: [] }, { effect: [{ text: " " }] }, { effect: [{ text: "a", accent: "yes" }] }, { effect: [{ text: "a", color: "#ff0000" }] }, { effect: [{ text: "x".repeat(600) }, { text: "x".repeat(401) }] }, { effect: Array.from({ length: 41 }, () => ({ text: "a" })) }, { effect: [{ html: "<b>a</b>" }] }])
             expect(() => checkTooltip({ ...base, content: { title: "x", ...extra } })).toThrow();
