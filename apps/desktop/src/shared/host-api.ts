@@ -655,7 +655,7 @@ export interface AppearanceView {
   hints: { folder: string; needs: string }[];
 }
 
-/** A game running on this PC that is not in the library (HostViewState.runningUnlisted). */
+/** A game running on this PC that is not in the library (HostViewState.unlistedGame). */
 export interface UnlistedGame {
   name: string;
   steamAppId: number | null;
@@ -814,7 +814,7 @@ export interface HostViewState {
    * it is played and the rail offers to add it. The one started last; null while a game of the library runs, when none
    * runs, or while "When a game starts" is off.
    */
-  runningUnlisted: UnlistedGame | null;
+  unlistedGame: UnlistedGame | null;
   /** A game that just started, while the user chose to be asked; the host UI asks whether to switch to it (game-switch). */
   pendingGameSwitch: string | null;
   snapshots: SnapshotView[];

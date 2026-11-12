@@ -20,7 +20,7 @@ const profile = computed(() => state.value!.profile);
 const playing = computed(() => {
   const view = state.value!;
   const id = view.runningGameId ?? (view.workspaceRunning ? view.currentWorkspaceId : null);
-  return (id ? view.library.workspaces[id]?.name : undefined) ?? view.runningUnlisted?.name ?? null;
+  return (id ? view.library.workspaces[id]?.name : undefined) ?? view.unlistedGame?.name ?? null;
 });
 const status = computed(() => (playing.value ? t("rail.playing", { name: playing.value }) : account.value?.account ? t("rail.signedIn") : t("rail.signedOut")));
 </script>

@@ -130,7 +130,7 @@ import { createToneReader, iconVersion } from "./icon-tone";
 import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
 import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
-import { AppInfoError, readClientIcons } from "./steam-appinfo";
+import { AppInfoError, readClientIcons, readSteamKinds } from "./steam-appinfo";
 import { GameOverlayWindow, type OverlayPanel } from "./game-overlay-window";
 import { GameOverlays, layerBinding, toggleBinding, type OverlayWindowRequest, type PanelInfo, type PanelLoan } from "./game-overlay-service";
 import { scopeForKind } from "./game-overlays";
@@ -532,17 +532,22 @@ export class Host {
   }
   private running: string[] = [];
   /** The running games not in the library, the one started last at the end (game-watch.ts). */
-  private runningUnlisted: readonly UnlistedGame[] = [];
+  private unlistedRunning: readonly UnlistedGame[] = [];
   /** When each workspace was last opened as of startup: the rail keeps this order until the next start. */
   private openedAtStart: Record<string, string> = {};
   private readonly gameWatcher = new GameWatcher({
     entries: () => liveWorkspaces(this.library),
     findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
+    steamKinds: async (appIds) => {
+      const steamDir = await findSteamDir();
+      const appInfo = steamDir ? await loadAppInfo(steamDir) : null;
+      return appInfo ? readSteamKinds(appInfo, appIds) : new Map();
+    },
     keyOf: gameKey,
     onSeen: (keys) => void this.gamesSeen.running(keys),
     onChange: (running, initial) => this.gamesRunning(running, initial),
     onUnlisted: (games) => {
-      this.runningUnlisted = games;
+      this.unlistedRunning = games;
       if (!this.windowClosed) this.pushStateSoon();
     },
     testSteamAppId: () => this.options.testSteamAppId,
@@ -2360,12 +2365,8 @@ export class Host {
         this.startWorkspace(id);
         this.saveLibrary();
         this.fetchIconsSoon();
-        if (this.gameWatcher.active) {
-          // A game running now (the rail offered to add it) shows as running at once.
-          this.gameWatcher.libraryChanged();
-          // The game of a game workspace added just now may have been installed since the last look.
-          void this.gameWatcher.refreshInstalled();
-        }
+        // A game running now (the rail offered to add it) shows as running at once.
+        if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(id);
         return id;
       },
       "rename-workspace": saved((action) => renameWorkspace(this.library, action.workspaceId, action.name)),
@@ -2434,6 +2435,8 @@ export class Host {
         this.library.gameStart = action.gameStart;
         if (action.gameStart !== "ask") this.questions.cancelKind("gameSwitch");
         this.syncGameWatcher();
+        // Game overlays may have kept the watcher looking while this was off: take the games running now as already running.
+        if (this.gameWatcher.active) this.gamesRunning(this.gameWatcher.runningNow, true);
       }),
       "set-game-end": saved((action) => {
         if (action.workspaceId !== null && !(isLive(this.library, action.workspaceId) && this.library.workspaces[action.workspaceId]!.kind === "personal")) {
@@ -4824,15 +4827,7 @@ export class Host {
       ...pending,
       runningGameId: this.running.filter((id) => id !== this.workspaceId && isLive(this.library, id)).at(-1) ?? null,
       workspaceRunning: this.workspaceId !== null && this.running.includes(this.workspaceId),
-      // "When a game starts" off leaves `running` empty too: off means off.
-      runningUnlisted:
-        this.library.gameStart === "off" || !this.runningUnlisted.length
-          ? null
-          : unlistedToOffer(
-              this.runningUnlisted,
-              liveWorkspaces(this.library),
-              this.running.some((id) => isLive(this.library, id)),
-            ),
+      unlistedGame: this.unlistedRunning.length ? unlistedToOffer(this.unlistedRunning, liveWorkspaces(this.library), this.running, this.library.gameStart) : null,
       pendingGameSwitch: pending.pendingGameSwitch && isLive(this.library, pending.pendingGameSwitch) ? pending.pendingGameSwitch : null,
       streaming: this.streaming.view(),
       gameOverlays: this.gameOverlays.view(),

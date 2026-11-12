@@ -11,6 +11,7 @@ import { ArrowRight, Plus } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { useTask } from "@tavora/official-ui/use-task";
+import type { UnlistedGame } from "../../shared/host-api";
 import { act, state } from "../host";
 import { t } from "../i18n";
 import { addInputForUnlisted } from "../lib/game-picker";
@@ -23,34 +24,44 @@ const game = computed(() => {
   return id ? (state.value!.library.workspaces[id] ?? null) : null;
 });
 /** A running game that is not in the library; null while a game of the library runs (the host leaves it out then). */
-const unlisted = computed(() => state.value!.runningUnlisted);
+const unlisted = computed(() => state.value!.unlistedGame);
 // runningGameId already leaves out the game of the workspace open now, so the layer slides back there.
 const shown = computed(() => game.value !== null || unlisted.value !== null);
-/** What the layer offers. It keeps the last one while it slides away, so its words don't change on the way out. */
-const offer = ref<{ kind: "switch" } | { kind: "add"; name: string }>({ kind: "switch" });
+/** Adding the game and opening it; a second click meanwhile does nothing. A failure shows its toast (act). */
+const adding = useTask();
+/** The game added and opened from here, until the layer has slid away: it runs, but it is about to be the open one. */
+let opened: string | null = null;
+/**
+ * What the layer offers. It keeps the last one while it slides away, and while adding, so its words don't change on the
+ * way out: the added game runs, and the layer goes as it opens.
+ */
+const offer = ref<{ kind: "switch" } | { kind: "add"; game: UnlistedGame }>({ kind: "switch" });
 watch(
-  [game, unlisted],
+  [game, unlisted, adding.busy],
   () => {
+    if (!shown.value) opened = null;
+    if (adding.busy.value || (opened !== null && game.value?.id === opened)) return;
     if (game.value) offer.value = { kind: "switch" };
-    else if (unlisted.value) offer.value = { kind: "add", name: unlisted.value.name };
+    else if (unlisted.value) offer.value = { kind: "add", game: unlisted.value };
   },
   { immediate: true },
 );
-const label = computed(() => (offer.value.kind === "add" ? t("rail.addRunningGame", { name: offer.value.name }) : t("rail.switchToGame")));
+const label = computed(() => (offer.value.kind === "add" ? t("rail.addRunningGame", { name: offer.value.game.name }) : t("rail.switchToGame")));
+const status = computed(() => (adding.busy.value ? "adding" : offer.value.kind));
 
-/** Adding the game and opening it; a second click meanwhile does nothing. A failure shows its toast (act). */
-const adding = useTask();
 function run() {
-  if (game.value) {
+  const now = offer.value;
+  if (now.kind === "add") {
+    void adding.run(async () => {
+      const added = await act({ type: "add-workspace", ...addInputForUnlisted(now.game) });
+      if (!added.ok || !added.id) return;
+      opened = added.id;
+      // Not opened: the layer becomes the switch to it.
+      if (!(await act({ type: "open-workspace", workspaceId: added.id })).ok) opened = null;
+    });
+  } else if (game.value) {
     void act({ type: "open-workspace", workspaceId: game.value.id });
-    return;
   }
-  const found = unlisted.value;
-  if (!found) return;
-  void adding.run(async () => {
-    const added = await act({ type: "add-workspace", ...addInputForUnlisted(found) });
-    if (added.ok && added.id) await act({ type: "open-workspace", workspaceId: added.id });
-  });
 }
 
 /** How far the row grows and shrinks: the part of the layer that shows above the profile card (h-7). */
@@ -89,7 +100,7 @@ watch(
         "
         data-rail-item
         data-testid="rail-running"
-        :data-status="offer.kind"
+        :data-status="status"
         :aria-label="label"
         :aria-busy="adding.busy.value"
         @click="run"

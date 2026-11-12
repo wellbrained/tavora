@@ -1,7 +1,7 @@
 import path from "node:path";
-import type { UnlistedGame } from "../shared/host-api";
+import type { GameStart, UnlistedGame } from "../shared/host-api";
 import type { WorkspaceEntry } from "./library";
-import { pickGames, type Signs } from "./installed-list";
+import { catalogIdFor, pickGames, type Signs } from "./installed-list";
 import { NOT_THE_GAME, normalizeName, type InstalledGame } from "./launcher-games";
 import { windowsProgramProbe, type ProgramLook, type ProgramProbe } from "./program-list";
 
@@ -33,14 +33,28 @@ function folderOf(game: InstalledGame): string {
   return game.folder ?? path.win32.dirname(game.file);
 }
 
-/** A game by what names it: an installed game, or one running that is not in the library. */
-type GameRef = { name: string; steamAppId?: number | null };
+/** A game by what names it: an installed game, or one running that is not in the library (which knows its built-in game). */
+type GameRef = { name: string; steamAppId?: number | null; catalogId?: string | null };
 
-/** Whether a library entry is this game: by Steam id when both have one, else by name. */
+/** The built-in game of each installed game, worked out once per game. */
+const catalogIds = new WeakMap<GameRef, string | null>();
+
+function catalogOf(game: GameRef): string | null {
+  if (game.catalogId !== undefined) return game.catalogId;
+  let id = catalogIds.get(game);
+  if (id === undefined) catalogIds.set(game, (id = catalogIdFor(game.name, game.steamAppId ?? undefined)));
+  return id;
+}
+
+/**
+ * Whether a library entry is this game: by Steam id when both have one, else by name or by the built-in game they both
+ * are (a copy installed as "GTA V" is the built-in "Grand Theft Auto V").
+ */
 function isSameGame(entry: WorkspaceEntry, game: GameRef): boolean {
   if (entry.steamAppId !== null && game.steamAppId != null) return entry.steamAppId === game.steamAppId;
   const name = normalizeName(entry.name);
-  return name !== "" && name === normalizeName(game.name);
+  if (name !== "" && name === normalizeName(game.name)) return true;
+  return entry.catalogId !== null && entry.catalogId === catalogOf(game);
 }
 
 /** The live game entries of the library: a game in Trash is not in it. */
@@ -53,17 +67,23 @@ function inLibrary(entries: readonly WorkspaceEntry[], game: GameRef): boolean {
   return liveGames(entries).some((entry) => isSameGame(entry, game));
 }
 
-/** No activity: `runningUnlisted` only wants the Add a game list's picking, not its order. */
+/** No activity: `runningNotInLibrary` only wants the Add a game list's picking, not its order. */
 const NO_SIGNS: Signs = { steamPlayed: new Map(), seen: {} };
+
+/** `oneGameFolders` of each list of installed games, worked out once per look for the installed games. */
+const folderLists = new WeakMap<readonly InstalledGame[], Map<string, InstalledGame[]>>();
 
 /** The install folders that stand for one game each, with the installed games in them. A folder two games claim belongs to a launcher. */
 function oneGameFolders(installed: readonly InstalledGame[]): Map<string, InstalledGame[]> {
+  const known = folderLists.get(installed);
+  if (known) return known;
   const folders = new Map<string, InstalledGame[]>();
   for (const game of installed) {
     const key = gameFolderKey(folderOf(game));
     if (key) folders.set(key, [...(folders.get(key) ?? []), game]);
   }
   for (const [key, games] of folders) if (new Set(games.map((game) => normalizeName(game.name))).size > 1) folders.delete(key);
+  folderLists.set(installed, folders);
   return folders;
 }
 
@@ -121,22 +141,36 @@ export function runningInstalled(installed: readonly InstalledGame[], programs: 
 /**
  * The games running now that are not in the library (one in Trash counts as not). Only sure signs count: Steam's
  * running game, named by what Steam installed (an app Steam runs but did not install is left out), or a program in the
- * install folder of a game a launcher installed. Windows' list of installed programs holds every program (Edge, Git),
- * so an entry from it counts only when it is one of the built-in games. Each game once, as the Add a game list has it.
+ * install folder of a game a launcher installed. Steam installs software too (Wallpaper Engine runs all day), so a Steam
+ * app counts only when `steamGames` (Steam's own note of each app's kind) says it is a game. Windows' list of installed
+ * programs holds every program (Edge, Git), so an entry from it counts only when it is one of the built-in games. Each
+ * game once, as the Add a game list has it.
  */
-export function runningUnlisted(entries: readonly WorkspaceEntry[], installed: readonly InstalledGame[], programs: Iterable<string>, steamAppId: number | null): UnlistedGame[] {
-  return pickGames([...installedRunning(installed, programs, steamAppId)], NO_SIGNS)
+export function runningNotInLibrary(
+  entries: readonly WorkspaceEntry[],
+  installed: readonly InstalledGame[],
+  programs: Iterable<string>,
+  steamAppId: number | null,
+  steamGames: ReadonlySet<number>,
+): UnlistedGame[] {
+  const running = [...installedRunning(installed, programs, steamAppId)].filter((game) => game.steamAppId === undefined || steamGames.has(game.steamAppId));
+  return pickGames(running, NO_SIGNS)
     .filter((game) => !inLibrary(entries, game))
     .map(({ name, steamAppId: id, catalogId }) => ({ name, steamAppId: id, catalogId }));
 }
 
 /**
- * The game not in the library that the rail offers to add: the one started last, while no game of the library runs
- * (that one wins). A game added or restored since the last look is left out, so the offer goes as soon as it is in.
+ * The game not in the library that the rail offers to add (HostViewState.unlistedGame): the one started last, while no
+ * game of the library runs (`running`, that one wins) and "When a game starts" is on (off means off). A game added or
+ * restored since the last look is left out, so the offer goes as soon as it is in.
  */
-export function unlistedToOffer(unlisted: readonly UnlistedGame[], entries: readonly WorkspaceEntry[], libraryRunning: boolean): UnlistedGame | null {
-  if (libraryRunning) return null;
+export function unlistedToOffer(unlisted: readonly UnlistedGame[], entries: readonly WorkspaceEntry[], running: readonly string[], gameStart: GameStart): UnlistedGame | null {
+  if (gameStart === "off" || running.some((id) => entries.some((entry) => entry.id === id))) return null;
   return unlisted.filter((game) => !inLibrary(entries, game)).at(-1) ?? null;
+}
+
+function sameIds(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  return a.size === b.size && [...a].every((id) => b.has(id));
 }
 
 /** Seconds between two looks at the running programs. */
@@ -147,6 +181,12 @@ export interface GameWatcherOptions {
   entries: () => readonly WorkspaceEntry[];
   /** The games launchers installed on this PC. */
   findInstalled: () => Promise<InstalledGame[]>;
+  /**
+   * Whether each of these Steam apps is a game rather than software, for the ones whose kind Steam notes. Asked only for
+   * apps not known yet, when the installed games are looked for. Left out, or when it fails, a Steam app whose kind isn't
+   * known doesn't count for `onUnlisted`.
+   */
+  steamKinds?: (appIds: ReadonlySet<number>) => Promise<ReadonlyMap<number, boolean>>;
   /**
    * Called with the running games whenever they change. The first call, once the installed games and the
    * programs are known, is `initial`: games already running then were not just started.
@@ -179,6 +219,10 @@ export class GameWatcher {
   private probe: ProgramProbe | null = null;
   private state: ProgramLook = { programs: new Map(), steamAppId: null };
   private installed: InstalledGame[] = [];
+  /** Whether each Steam app is a game (`steamKinds`); an app's kind doesn't change, so it is asked once. */
+  private readonly steamKinds = new Map<number, boolean>();
+  /** The installed Steam apps that are games, for the same look as `installed`. */
+  private steamGames: ReadonlySet<number> = new Set();
   private running = new Set<string>();
   /** The running games not in the library, the one started last at the end. */
   private unlisted: UnlistedGame[] = [];
@@ -229,23 +273,45 @@ export class GameWatcher {
     }
   }
 
-  /** Looks for the installed games again, e.g. after a game was added. */
-  async refreshInstalled(): Promise<void> {
+  /** Looks for the installed games again, e.g. after a game was added (`added`, see `update`). */
+  async refreshInstalled(added?: string): Promise<void> {
     try {
-      this.installed = await this.options.findInstalled();
+      const installed = await this.options.findInstalled();
+      this.steamGames = await this.findSteamGames(installed);
+      this.installed = installed;
     } catch (error) {
       this.options.log?.(`finding installed games failed: ${String(error)}`);
     }
     this.installedKnown = true;
-    this.update();
+    this.update(added);
+  }
+
+  private async findSteamGames(installed: readonly InstalledGame[]): Promise<ReadonlySet<number>> {
+    const appIds = new Set(installed.flatMap((game) => game.steamAppId ?? []));
+    const unknown = new Set([...appIds].filter((id) => !this.steamKinds.has(id)));
+    if (unknown.size && this.options.steamKinds) {
+      try {
+        for (const [id, game] of await this.options.steamKinds(unknown)) this.steamKinds.set(id, game);
+      } catch (error) {
+        this.options.log?.(`reading which Steam apps are games failed: ${String(error)}`);
+      }
+    }
+    return new Set([...appIds].filter((id) => this.steamKinds.get(id) === true));
   }
 
   /**
-   * Looks again with what is known, after a game was added: one that runs already counts as running straight away,
-   * not as just started (nothing switches or asks for it).
+   * After this game was added: if it runs already, it counts as running straight away, not as just started (nothing
+   * switches or asks for it); other games that started or closed meanwhile count as usual. Then looks for the installed
+   * games again, since the game may have been installed since the last look.
    */
-  libraryChanged(): void {
-    this.update(true);
+  libraryChanged(addedId: string): Promise<void> {
+    this.update(addedId);
+    return this.refreshInstalled(addedId);
+  }
+
+  /** The library games running as of the last look. */
+  get runningNow(): ReadonlySet<string> {
+    return this.running;
   }
 
   /** The library games a program belongs to, by the install folders the watcher knows (the program in front, for game overlays). */
@@ -268,7 +334,8 @@ export class GameWatcher {
     this.update();
   }
 
-  private update(quiet = false): void {
+  /** `added`: a game just added, which counts as already running rather than just started. */
+  private update(added?: string): void {
     if (this.stopped || !this.installedKnown || !this.looked) return;
     if (this.options.onSeen && this.options.keyOf) {
       const seen = runningInstalled(this.installed, this.state.programs.values(), this.state.steamAppId, this.options.keyOf);
@@ -276,16 +343,22 @@ export class GameWatcher {
     }
     this.updateUnlisted();
     const running = runningGames(this.options.entries(), this.installed, this.state.programs.values(), this.state.steamAppId);
-    if (this.reported && running.size === this.running.size && [...running].every((id) => this.running.has(id))) return;
-    const initial = !this.reported || quiet;
+    if (this.reported && sameIds(running, this.running)) return;
+    const first = !this.reported;
     this.reported = true;
+    // The game just added and running already comes first, as running all along; then the rest start and close as usual.
+    if (!first && added !== undefined && running.has(added) && !this.running.has(added)) {
+      this.running = new Set([...this.running, added]);
+      this.options.onChange(this.running, true);
+      if (sameIds(running, this.running)) return;
+    }
     this.running = running;
-    this.options.onChange(running, initial);
+    this.options.onChange(running, first);
   }
 
   private updateUnlisted(): void {
     if (!this.options.onUnlisted) return;
-    const now = runningUnlisted(this.options.entries(), this.installed, this.state.programs.values(), this.state.steamAppId);
+    const now = runningNotInLibrary(this.options.entries(), this.installed, this.state.programs.values(), this.state.steamAppId, this.steamGames);
     const key = (game: UnlistedGame) => normalizeName(game.name);
     const keys = new Set(now.map(key));
     const kept = this.unlisted.filter((game) => keys.has(key(game)));
